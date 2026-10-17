@@ -215,6 +215,21 @@ object Gallery:
     Plot.side(Plot.diagram(d), Plot.barcode(d)).tagged().save(out("board-tagged.svg"))
     (Plot.diagram(loops) + paper + Size.inches(3.4, 2.6) + Labels(tag = "(b)", caption = "a column wide"))
       .save(out("size-column.svg"))
+    // ----- panels on a grid, some spanning cells
+    Plot
+      .layout(2, 3, widths = Seq(2.0, 2.0, 1.0))
+      .place(Plot.diagram(d) + Scale.aspect(free = true), 0, 0, colSpan = 2)
+      .place(Plot.barcode(d), 0, 2)
+      .place(Plot.barcode(d) + Scale.x(Transform.Sqrt), 1, 0, colSpan = 3)
+      .tagged()
+      .save(out("layout-grid.svg"))
+    Plot
+      .layout(2, 2, width = 800, height = 560)
+      .place(Plot.diagram(d), 0, 0, rowSpan = 2)
+      .place(Plot.barcode(d), 0, 1)
+      .place(Plot.persistenceImage(d, 1), 1, 1)
+      .tagged("%s.", "A")
+      .save(out("layout-tall.svg"))
     val before = Plot.barcode(Persistence(noisyCircle(30, 0.03, 4), maxDimension = 1)).copy(title = "tighter")
     val after = Plot.barcode(Persistence(noisyCircle(30, 0.2, 5), maxDimension = 1)).copy(title = "noisier")
     (Plot.side(before, after).shared(y = false) + Style(grid = false)).save(out("custom-board-shared.svg"))

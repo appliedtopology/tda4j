@@ -46,16 +46,56 @@ trait Plot:
     */
   def save(path: String, theme: String): Path = save(path, Some(Theme.named(theme)))
 
-/** Plots side by side, in one row (small multiples: a barcode next to its diagram, a complex at several scales). */
-final case class Board(plots: Seq[Figure], title: String = "") extends Plot:
+/** Plots side by side, in one row (small multiples: a barcode next to its diagram, a complex at several scales), or on
+  * a [[Layout]] grid, where a panel can span several rows and columns (`Plot.layout(2, 3).place(...)`).
+  *
+  * @param layout
+  *   the grid the panels are placed on; none for a row
+  * @param slots
+  *   where each of `plots` sits on `layout`, in the same order
+  */
+final case class Board(
+  plots: Seq[Figure],
+  title: String = "",
+  layout: Option[Layout] = None,
+  slots: Seq[Slot] = Seq.empty
+) extends Plot:
+  require(
+    layout.isEmpty && slots.isEmpty || slots.size == plots.size,
+    "Board: a board on a layout has a slot for each panel; add panels with place(...)"
+  )
   override def toString: String = Plot.describe("Board", title, s"${plots.size} plots")
 
-  /** This board with the change `tweak` makes in every panel (`Labels(title = ...)` titles the board, the page). */
+  /** This board with the change `tweak` makes in every panel (`Labels(title = ...)` titles the board, the page). On a
+    * layout the grid sets the size of a panel, whatever `Size` says.
+    */
   def +(tweak: Tweak): Board = tweak.onBoard(this)
+
+  /** `figure` on the layout, with its top left corner in cell (`row`, `col`) and spanning `rowSpan` rows and `colSpan`
+    * columns: `Plot.layout(2, 3).place(a, 0, 0, colSpan = 2).place(b, 0, 2).place(c, 1, 0, colSpan = 3)`. A panel is as
+    * large as the cells it spans, and its axes run across them. A board that is a row has no cells: start from
+    * [[Plot.layout]].
+    */
+  def place(figure: Figure, row: Int, col: Int, rowSpan: Int = 1, colSpan: Int = 1): Board =
+    val grid = layout.getOrElse(
+      throw IllegalArgumentException(
+        "Board.place: this board is a row of panels; start from Plot.layout(rows, cols) to place panels on a grid"
+      )
+    )
+    val slot = Slot(row, col, rowSpan, colSpan)
+    grid.box(slot) // refuses a panel outside the grid
+    slots.zip(plots).find((taken, _) => taken.overlaps(slot)).foreach { (taken, other) =>
+      throw IllegalArgumentException(
+        s"Board.place: the panel at $slot overlaps ${
+            if other.title.isEmpty then "the panel" else "\"" + other.title + "\""
+          } at $taken"
+      )
+    }
+    copy(plots = plots :+ figure, slots = slots :+ slot)
 
   /** The panels lettered, as a paper does: `tagged()` is `(a)`, `(b)`, ...; `tagged("%s.", "A")` is `A.`, `B.`;
     * `tagged("%s)", "1")` is `1)`, `2)`. `format` takes the letter at its `%s`, and `sequence` is where the letters
-    * start: `a`, `A` or `1`.
+    * start: `a`, `A` or `1`. Panels are lettered in the order they were added.
     */
   def tagged(format: String = "(%s)", sequence: String = "a"): Board =
     require(format.contains("%s"), s"Board.tagged: the format \"$format\" has no %s for the letter, such as \"(%s)\"")
@@ -69,14 +109,78 @@ final case class Board(plots: Seq[Figure], title: String = "") extends Plot:
   /** The panels on one scale, so that what is drawn at the same height means the same in each: every panel takes the
     * union of the panels' ranges on the axes asked for. The panels must draw those axes on the same [[Transform]].
     */
-  def shared(x: Boolean = true, y: Boolean = true): Board =
+  def shared(x: Boolean = true, y: Boolean = true): Board = copy(plots = Board.sharing(plots, x, y))
+
+  /** The panels over the same columns on one x scale (a column of plots of one quantity), each column its own. */
+  def sharedColumns(): Board = sharedBy(s => (s.col, s.colSpan), x = true, y = false)
+
+  /** The panels across the same rows on one y scale, each row its own. */
+  def sharedRows(): Board = sharedBy(s => (s.row, s.rowSpan), x = false, y = true)
+
+  // a board that is a row has one row of columns, one panel each
+  private def placed: Seq[Slot] = if layout.isEmpty then plots.indices.map(Slot(0, _)) else slots
+
+  private def sharedBy(group: Slot => (Int, Int), x: Boolean, y: Boolean): Board =
+    // a panel alone in its group has nothing to share with, and keeps its own axis as it is drawn
+    val groups = plots.indices.groupBy(i => group(placed(i))).values.filter(_.size > 1)
+    val out = groups.foldLeft(plots.toVector) { (all, members) =>
+      val indices = members.toVector.sorted
+      indices.zip(Board.sharing(indices.map(plots), x, y)).foldLeft(all) { case (acc, (i, f)) => acc.updated(i, f) }
+    }
+    copy(plots = out)
+
+  // the panels as they are drawn, each with its left and top and sized to its cells on a layout
+  private def drawn: Seq[(Figure, Int, Int)] = layout match
+    case None =>
+      plots.scanLeft(0)(_ + _.width).zip(plots).map((x, f) => (f, x, 0))
+    case Some(grid) =>
+      plots.zip(slots).map { (f, slot) =>
+        val (x, y, w, h) = grid.box(slot)
+        (f.copy(width = w, height = h), x, y)
+      }
+
+  def fragment(theme: Theme = Theme.Auto): String = layout match
+    case None =>
+      plots.map(_.svg(theme)).mkString("""<div style="display:flex;flex-wrap:wrap;gap:12px">""", "", "</div>")
+    case Some(grid) =>
+      val columns = grid.columnWidths.map(w => s"${w}px").mkString(" ")
+      val rows = grid.rowHeights.map(h => s"${h}px").mkString(" ")
+      val cells = drawn.zip(slots).map { case ((f, _, _), s) =>
+        s"""<div style="grid-area:${s.row + 1} / ${s.col + 1} / span ${s.rowSpan} / span ${s.colSpan}">${f.svg(
+            theme
+          )}</div>"""
+      }
+      cells.mkString(
+        s"""<div style="display:grid;grid-template-columns:$columns;grid-template-rows:$rows;gap:${grid.gap}px">""",
+        "",
+        "</div>"
+      )
+
+  def html(theme: Theme = Theme.Auto): String =
+    Html.page(title, fragment(theme), plots.headOption.fold(Palette.default)(_.palette))
+
+  def svgFile(theme: Theme = Theme.Light): String =
+    val (w, h) = layout match
+      case Some(grid) => (grid.width, grid.height)
+      case None       => (plots.map(_.width).sum, plots.map(_.height).maxOption.getOrElse(0))
+    val inner = drawn.map((f, x, y) => f.svg(theme).replaceFirst("<svg ", s"""<svg x="$x" y="$y" """))
+    val surface = plots.headOption.fold(Palette.default)(_.palette).hex(Paint.Surface, theme)
+    // a board of panels with no background of their own has none either
+    val background =
+      if plots.nonEmpty && plots.forall(_.style.transparent) then ""
+      else s"""<rect width="$w" height="$h" style="fill:$surface"/>"""
+    s"""<?xml version="1.0" encoding="UTF-8"?>
+       |<svg xmlns="http://www.w3.org/2000/svg" width="$w" height="$h" viewBox="0 0 $w $h">$background${inner.mkString}</svg>""".stripMargin
+
+object Board:
+  private[plot] def sharing(members: Seq[Figure], x: Boolean, y: Boolean): Seq[Figure] =
     def one(pick: Figure => Axis, name: String): Option[(Double, Double)] =
-      Option.when(plots.nonEmpty) {
+      Option.when(members.nonEmpty) {
         require(
-          plots.map(p => pick(p).transform).distinct.size == 1,
-          s"Board.shared: the panels draw the $name axis on different scales (${plots.map(p => pick(p).transform.label).distinct.mkString(", ")})"
+          members.map(p => pick(p).transform).distinct.size == 1,
+          s"Board.shared: the panels draw the $name axis on different scales (${members.map(p => pick(p).transform.label).distinct.mkString(", ")})"
         )
-        val ends = plots.map(p => if name == "x" then p.ranges._1 else p.ranges._2)
+        val ends = members.map(p => if name == "x" then p.ranges._1 else p.ranges._2)
         (ends.map(_._1).min, ends.map(_._2).max)
       }
     def shareTicks(t: Ticks): Ticks = t match
@@ -85,7 +189,7 @@ final case class Board(plots: Seq[Figure], title: String = "") extends Plot:
     // a log axis that one panel had to draw as a symmetric log (it has a negative value) is that, alike, in every panel
     def common(pick: Figure => Axis, drawn: Figure => Transform): Option[Transform] =
       val stretches =
-        plots.filter(pick(_).transform == Transform.Log10).map(drawn).collect { case Transform.SymLog(c) => c }
+        members.filter(pick(_).transform == Transform.Log10).map(drawn).collect { case Transform.SymLog(c) => c }
       Option.when(stretches.nonEmpty)(Transform.SymLog(stretches.min))
     def widen(a: Axis, range: Option[(Double, Double)], reserve: Boolean, shared: Option[Transform]): Axis =
       range.fold(a) { (lo, hi) =>
@@ -104,27 +208,10 @@ final case class Board(plots: Seq[Figure], title: String = "") extends Plot:
         )
       }
     val (xr, yr) = (if x then one(_.x, "x") else None, if y then one(_.y, "y") else None)
-    val (xBand, yBand) = (plots.exists(p => Svg.atMinusInfinity(p)._1), plots.exists(p => Svg.atMinusInfinity(p)._2))
+    val (xBand, yBand) =
+      (members.exists(p => Svg.atMinusInfinity(p)._1), members.exists(p => Svg.atMinusInfinity(p)._2))
     val (xCommon, yCommon) = (common(_.x, Svg.resolved(_)._1), common(_.y, Svg.resolved(_)._2))
-    copy(plots = plots.map(p => p.copy(x = widen(p.x, xr, xBand, xCommon), y = widen(p.y, yr, yBand, yCommon))))
-  def fragment(theme: Theme = Theme.Auto): String =
-    plots.map(_.svg(theme)).mkString("""<div style="display:flex;flex-wrap:wrap;gap:12px">""", "", "</div>")
-  def html(theme: Theme = Theme.Auto): String =
-    Html.page(title, fragment(theme), plots.headOption.fold(Palette.default)(_.palette))
-  def svgFile(theme: Theme = Theme.Light): String =
-    val w = plots.map(_.width).sum
-    val h = plots.map(_.height).maxOption.getOrElse(0)
-    val inner = plots
-      .scanLeft(0)(_ + _.width)
-      .zip(plots)
-      .map((x, f) => f.svg(theme).replaceFirst("<svg ", s"""<svg x="$x" y="0" """))
-    val surface = plots.headOption.fold(Palette.default)(_.palette).hex(Paint.Surface, theme)
-    // a board of panels with no background of their own has none either
-    val background =
-      if plots.nonEmpty && plots.forall(_.style.transparent) then ""
-      else s"""<rect width="$w" height="$h" style="fill:$surface"/>"""
-    s"""<?xml version="1.0" encoding="UTF-8"?>
-       |<svg xmlns="http://www.w3.org/2000/svg" width="$w" height="$h" viewBox="0 0 $w $h">$background${inner.mkString}</svg>""".stripMargin
+    members.map(p => p.copy(x = widen(p.x, xr, xBand, xCommon), y = widen(p.y, yr, yBand, yCommon)))
 
 /** How the bars of one degree are ordered in a barcode, top to bottom. */
 enum BarOrder:
@@ -731,6 +818,42 @@ object Plot:
 
   /** Figures side by side in one row. */
   def side(figures: Figure*): Board = Board(figures, figures.map(_.title).filter(_.nonEmpty).mkString(" | "))
+
+  /** An empty board on a grid of `rows` by `cols` cells, in a drawing `width` by `height` pixels, to fill with
+    * `place(figure, row, col, rowSpan, colSpan)`. A panel can span cells, so that one plot runs across a whole row or
+    * column. The columns are equal unless `widths` gives relative sizes (`Seq(1, 3)`), and so the rows with `heights`.
+    * {{{
+    * Plot.layout(2, 3)
+    *   .place(Plot.diagram(d), 0, 0, colSpan = 2)
+    *   .place(Plot.barcode(d), 0, 2)
+    *   .place(Plot.landscape(d, 1), 1, 0, colSpan = 3)
+    * }}}
+    */
+  def layout(
+    rows: Int,
+    cols: Int,
+    width: Int = 960,
+    height: Int = 600,
+    gap: Int = 12,
+    widths: Optional[Seq[Double]] = Optional.empty,
+    heights: Optional[Seq[Double]] = Optional.empty
+  ): Board =
+    Board(
+      Seq.empty,
+      "",
+      Some(
+        Layout(
+          rows,
+          cols,
+          width,
+          height,
+          gap,
+          widths.toOption.fold(Vector.empty)(_.toVector),
+          heights.toOption.fold(Vector.empty)(_.toVector)
+        )
+      ),
+      Seq.empty
+    )
 
   // ----- 3-D
 

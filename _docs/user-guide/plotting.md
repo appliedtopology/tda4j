@@ -626,6 +626,40 @@ val board = Plot.side(Plot.barcode(a).copy(title = "first"), Plot.barcode(b).cop
 (board + Style(grid = false)).save("compare.svg")
 ```
 
+### Panels on a grid
+
+`Plot.side` puts panels in a row. For more, `Plot.layout(rows, cols)` is an empty board on a grid of cells, and
+`place(figure, row, col, rowSpan, colSpan)` puts a panel with its top left corner in a cell and spanning as many rows and
+columns as it is given: a panel is as large as the cells it spans and the gaps between them, so its axes run across all
+of them. Cells count from 0. The drawing is `width` by `height` pixels (960 by 600), `gap` pixels between cells; the
+columns share the width equally unless `widths` gives their relative sizes (`Seq(1.0, 3.0)`: the second column is three
+times as wide as the first), and so the rows with `heights`. The grid sets the size of every panel.
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val d = Persistence(CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv"), maxDimension = 1)
+
+val board = Plot.layout(2, 3, widths = Seq(2.0, 2.0, 1.0))
+  .place(Plot.diagram(d).withAspect(free = true), row = 0, col = 0, colSpan = 2)
+  .place(Plot.barcode(d), row = 0, col = 2)
+  .place(Plot.barcode(d).withXScale(Transform.Sqrt), row = 1, col = 0, colSpan = 3)
+  .tagged()
+board.save("grid.svg")
+```
+
+A persistence diagram keeps equal units, so in a wide cell it would leave room beside the data; `withAspect(free = true)`
+lets it fill the cell, as above. A panel that would cover a cell another one covers, or that runs off the grid, is refused when it is placed, naming the
+panel in the way. `tagged()` letters the panels in the order they were placed.
+
+On a grid, `sharedColumns()` puts the panels over the same columns on one x scale and `sharedRows()` the panels across
+the same rows on one y scale, each column and row its own (`shared()` still takes all panels together). A panel that
+spans columns is a kind of its own: it shares with no panel over one column. A panel alone in its group keeps its own
+axes as they are. The same two methods on a row of panels share nothing along columns (each is in its own) and everything
+along the row.
+
 ### Reference lines and marks of your own
 
 `Mark.Rule` draws a line across the plot at one value, and `Mark.Diagonal(offset)` the line `y = x + offset`: a threshold

@@ -57,6 +57,11 @@ Every plot is an immutable value.
 - for a file, as a static SVG: an orthographic view drawn back to front. The view is the scene's `azimuth`, `elevation`
   and `zoom` (set with the `Camera` tweak); the page's canvas starts from the same three numbers.
 
+A **`Board`** is a row of figures, or figures on a `Layout` (`Layout.scala`): a grid of rows and columns with weights, whose
+tracks are whole pixels that add up exactly to the drawing, and a `Slot` (row, column, spans) for each panel. A panel is
+sized to its slot when the board is drawn (`Layout.box`), never stored resized, so tweaks and `shared` see the figures
+the user placed. A page gets a CSS grid with the same tracks; a file gets nested `<svg x y>` at the same boxes.
+
 **`trait Plot`** is what the viewer shows and `save` writes. It has `view`,
 `save`, `html`, `fragment` and `svgFile`, and is implemented by `Figure`,
 `Scene` and `Board` (plots side by side). `object Plot` holds the TDA
