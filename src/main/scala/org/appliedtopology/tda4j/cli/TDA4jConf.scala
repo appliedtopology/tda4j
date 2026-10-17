@@ -222,6 +222,12 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     descr = "for --plot: light, dark, or auto (follow the reader's setting). Default: light for an .svg file, auto " +
       "for an .html page"
   )
+  val set: ScallopOption[List[String]] = opt[List[String]](
+    noshort = true,
+    descr = "for --plot: a change to the look of one element, as element.property=value (title.size=18, " +
+      "tick-label.angle=45, grid.dash=dotted, ticks.length=4, frame.visible=true, panel.color=#f4f4f4, " +
+      "diagonal.shade=none, x-axis=top); repeat the flag for several"
+  )
   val textScale: ScallopOption[Double] =
     opt[Double](noshort = true, descr = "for --plot: a factor on every text size (1.3 suits a slide)")
   val xScale: ScallopOption[String] = opt[String](

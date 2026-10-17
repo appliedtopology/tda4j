@@ -116,6 +116,30 @@ The two real defects that made customizing hard (both found by reading, not by u
     a `Style` replaces the whole style and two tweaks would have lost the preset's font. Names: `print` and `clear`
     (clear = no background); overturn cheaply, they are four vals and two `named` cases.
 
+12. **Finer-grained elements** (project lead: "certainly for text styling, but arguably also tick marks, grid lines, the
+    shaded half plane in the diagram, axis positions"; asked for the other areas other packages tune, and then for them).
+    The areas, from the theme and axis options of ggplot2, matplotlib rcParams, plotly, Vega-Lite and seaborn: text per role
+    (ggplot `element_text`), lines (`element_line`: grid, minor grid, axis line, frame), tick marks (matplotlib
+    `tick_params`, plotly `ticks`/`ticklen`), a panel fill (`panel.background`), axis sides (ggplot `position`, plotly
+    `side`, Vega `orient`), minor ticks, and slanted tick labels (ggplot `angle`, matplotlib `labelrotation`). (a) The
+    settings live in `Figure.elements`, BESIDE `style`, as `degrees` sit beside `palette` (decision 5): a `Style` replaces
+    the style whole, and a tweak of one element must not be undone by it, nor depend on its order. (b) The layout of
+    `Svg.render` was written for the default size of each text; each constant is now that constant times
+    `sc(role) = textScale * size / defaultSize(role)`, so a role that is at its default gives exactly the old number, and the
+    gallery (41 files: figures, boards, a scene, light and dark) renders byte-identically before and after. That check is the
+    contract; any new layout term must keep it. (c) Eight text roles, not seven: a color bar's title is 11 px and
+    `Secondary`, which is no other role's default (the legend heading is 12 px and bold), so it has its own; a color bar's
+    numbers are `TickLabel`. (d) `angle` is for the x axis's tick labels only: a slanted y label has no obvious anchor and
+    nobody asked. The room a slanted label needs is a guess from the longest label's characters (0.6 em each), because the
+    ticks are chosen after the margins. (e) Tick marks default to `Paint.Muted`, not `Paint.Axis`: the brand's axis color is
+    a pale hairline and tick marks in it are invisible. (f) Minor ticks: on a log axis whose ticks are all a whole number
+    times a power of ten the whole numbers of each decade that are not ticks (so 3, 4, 6, 7, 8, 9 beside 1, 2, 5), else the
+    halves between ticks in the axis's own scale. (g) `Settings.parse("title.size=18")` is the one string grammar for MATLAB
+    (`withSetting`) and the CLI (`--set`), instead of a method per property: MATLAB passes strings and numbers and could not
+    build a `Text`; twenty overloads would have been the other choice. A tweak refuses where it was made (a side the axis
+    cannot be on), so the CLI says so before computing. (h) Bug found by reading while doing this: a board saved as `.svg`
+    always painted a background rectangle from its first panel's palette, so `Style.clear` on a board was not clear.
+
 ## What was verified
 
 - **Default plots are unchanged**: `Gallery` run on the original commit (a `git worktree`) and on the new code, SVGs

@@ -3,7 +3,20 @@ package cli
 
 import org.appliedtopology.tda4j.*
 import org.appliedtopology.tda4j.matlab.{LandmarkSelectionResult, PersistenceResult, TDA4j}
-import org.appliedtopology.tda4j.plot.{Labels, Palette, Plot, Scale, Size, Style, Theme, Transform, Tweak, Viewer}
+import org.appliedtopology.tda4j.plot.{
+  Labels,
+  Palette,
+  Plot,
+  Scale,
+  Scene,
+  Settings,
+  Size,
+  Style,
+  Theme,
+  Transform,
+  Tweak,
+  Viewer
+}
 
 import org.rogach.scallop.ScallopOption
 
@@ -535,6 +548,7 @@ object TDA4jCLI:
       "--style" -> conf.style.isSupplied,
       "--theme" -> conf.theme.isSupplied,
       "--text-scale" -> conf.textScale.isSupplied,
+      "--set" -> conf.set.isSupplied,
       "--x-scale" -> conf.xScale.isSupplied,
       "--y-scale" -> conf.yScale.isSupplied
     ).collect { case (flag, true) => flag }
@@ -570,6 +584,8 @@ object TDA4jCLI:
             if looks.contains(flag) then
               throw new IllegalArgumentException(s"$flag is for 2-D plots, and --plot $kind draws a 3-D scene")
           }
+          // a setting of an element a scene has not (a tick label) is refused now, not after the computation
+          conf.set.toOption.foreach(specs => Settings.parseAll(specs).foreach(change => Scene() + change))
         val others = Seq(
           "--distance-to" -> conf.distanceTo.isSupplied,
           "--select-landmarks" -> conf.selectLandmarks(),
@@ -604,7 +620,8 @@ object TDA4jCLI:
         conf.textScale.toOption.fold(preset)(factor => preset.copy(textScale = factor))
       },
       conf.xScale.toOption.map(name => Scale.x(Transform.named(name))),
-      conf.yScale.toOption.map(name => Scale.y(Transform.named(name)))
+      conf.yScale.toOption.map(name => Scale.y(Transform.named(name))),
+      conf.set.toOption.flatMap(Settings.parseAll)
     )
     asked.flatten.reduceOption(_ + _)
 

@@ -43,6 +43,9 @@ class PlotCustomizationFacadeSpec extends Specification:
       fig.withStyle("print") must beEqualTo(fig + Style.print)
       fig.withPalette("clear") must beEqualTo(fig + Palette.clear)
       fig.withStyle("clear") must beEqualTo(fig + Style.clear)
+      fig.withSetting("grid.dash=dotted") must beEqualTo(fig + Lines.grid(dash = Dash.Dotted))
+      fig.withSetting("title.size=18").withSetting("x-axis=top") must
+        beEqualTo(fig + Text(TextRole.Title, size = 18) + Scale.x(position = Side.Top))
       fig.withDegreeColor(1, "#d62728") must beEqualTo(fig + Scale.degree(1, color = "#d62728"))
       fig.withDegreeLabel(1, "loops") must beEqualTo(fig + Scale.degree(1, label = "loops"))
       fig.withTextScale(1.5) must beEqualTo(fig + fig.style.copy(textScale = 1.5))
@@ -69,6 +72,7 @@ class PlotCustomizationFacadeSpec extends Specification:
         "withYRange",
         "withPalette",
         "withStyle",
+        "withSetting",
         "withDegreeColor",
         "withDegreeLabel",
         "withTextScale",
@@ -83,6 +87,7 @@ class PlotCustomizationFacadeSpec extends Specification:
         "withSize",
         "withPalette",
         "withStyle",
+        "withSetting",
         "withDegreeColor",
         "withTextScale",
         "withMarkScale",
@@ -111,6 +116,8 @@ class PlotCustomizationFacadeSpec extends Specification:
       )
       fig.withPalette("neon") must throwAn[IllegalArgumentException]("expected one of brand, reference, print, clear")
       fig.withStyle("poster") must throwAn[IllegalArgumentException]("expected one of default, slides, print, clear")
+      fig.withSetting("grid.dash=wavy") must throwAn[IllegalArgumentException]("expected one of solid, dashed, dotted")
+      fig.withSetting("title.size") must throwAn[IllegalArgumentException]("should be element.property=value")
       fig.withLegend("left") must throwAn[IllegalArgumentException]("expected one of right, bottom, none")
       fig.withSize(20, 20) must throwAn[IllegalArgumentException]("between 100 and 20000")
       fig.withTextScale(0) must throwAn[IllegalArgumentException]("textScale")
@@ -135,5 +142,7 @@ class PlotCustomizationFacadeSpec extends Specification:
       scene.withMarkScale(2).style.markScale must beEqualTo(2.0)
       scene.withPalette("reference").palette must beEqualTo(Palette.reference)
       scene.withStyle("print").style must beEqualTo(Style.print)
+      scene.withSetting("title.size=18") must beEqualTo(scene + Text(TextRole.Title, size = 18))
+      scene.withSetting("tick-label.size=9") must throwAn[UnsupportedOperationException]("a 3-D scene has a title")
     }
   }

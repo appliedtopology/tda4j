@@ -205,6 +205,10 @@ one (`.withLabels(title = "A").withLabels(title = "B")` titles the plot `B`).
 | the color, legend label and marker of a homological degree | `withDegree(1, color = "#c2185b", label = "loops", shape = Shape.Diamond)` | `Scale.degree(...)` |
 | the color scheme | `withPalette(Palette.reference)` | the `Palette` itself |
 | fonts, size of text and marks, gridlines, the legend's place, the background | `withStyle(Style.slides)` | the `Style` itself |
+| each kind of text: size, weight, slant, alignment, font, color | `withText(TextRole.Title, size = 18, align = Anchor.Middle)` | `Text(TextRole.Title, ...)` |
+| gridlines, axis lines, tick marks, a frame | `withGridLines(dash = Dash.Dotted)`, `withAxisLines(...)`, `withTickMarks(length = 4)`, `withMinorTickMarks(...)`, `withMinorGridLines(...)`, `withFrame()` | `Lines.grid(...)`, `Lines.axis(...)`, `Lines.ticks(...)`, `Lines.minorTicks(...)`, `Lines.minorGrid(...)`, `Lines.frame(...)` |
+| the fill of the plot area, the diagonal and its shaded half plane | `withPanel(color = "#f4f4f4")`, `withDiagonal(shade = false)` | `Guide.panel(...)`, `Guide.diagonal(...)` |
+| which side an axis is on | `withXScale(position = Side.Top)`, `withYScale(position = Side.Right)` | `Scale.x(position = ...)`, `Scale.y(position = ...)` |
 | what is drawn | `plot + mark`: `Mark.Rule.horizontal(0.1)`, `Mark.Diagonal(offset = 0.1)`, your own `Mark.Points(...)` | |
 
 The right-hand column matters when a look is shared. Each change is also a *tweak*, a value: you can keep it in a `val`,
@@ -335,6 +339,69 @@ Plot.points3D(points) + house
 (`Theme`, which `save` and `html` take, is a different thing: whether the colors are light, dark, or follow the reader's
 own setting.)
 
+### Finer control: text, lines, the plot area, the sides of the axes
+
+The style sets what applies to the whole plot. Each piece of text has a *role*, and each can be changed alone: `Title`,
+`Subtitle`, `AxisLabel`, `TickLabel`, `Legend` (the entries), `LegendTitle`, `ColorTitle` (the title of a color bar; its
+numbers are `TickLabel`) and `Note` (the small print under a plot). A text has a size in pixels (before the style's text
+scale, so `Style.slides` still scales it), a weight, a slant, a font of its own, a color, and, for a title, subtitle,
+axis label and note, an alignment along the plot area. The tick labels of the x axis can be slanted by an angle. The
+margins follow the text: a larger tick label makes room for itself.
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val points = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
+val d = Persistence(points, maxDimension = 1)
+
+val figure = Plot.diagram(d)
+  .withLabels(title = "Loops", subtitle = "a noisy circle", x = "birth", y = "death")
+  .withText(TextRole.Title, size = 20, align = Anchor.Middle)
+  .withText(TextRole.Subtitle, italic = true, align = Anchor.Middle)
+  .withText(TextRole.AxisLabel, weight = Weight.Bold)
+  .withText(TextRole.TickLabel, size = 9)
+  .withGridLines(dash = Dash.Dotted)
+  .withTickMarks(length = 4)
+  .withMinorTickMarks(length = 2)
+  .withFrame()
+  .withPanel(color = "#f4f4f4", opacity = 1.0)
+  .withDiagonal(shade = false, dashed = true)
+  .withXScale(position = Side.Top)
+```
+
+The lines are the gridlines, the axis lines, the tick marks and a frame around the plot area, each with a width, a color
+or a palette role (so that it follows the theme), a dash (`Dash.Solid`, `Dashed`, `Dotted`) and an opacity. Minor tick
+marks, minor gridlines and the frame are not drawn unless asked for, and giving any of them a setting asks. On a log axis
+the minor ticks are the whole numbers of each decade that are not ticks; on any other axis, the halves between two ticks.
+Tick marks point out of the plot (`TickDirection.Out`) or into it, and the numbers move out of their way. A tick mark
+asked for with no length is 4 pixels long.
+
+`Guide.panel` fills the plot area, behind the gridlines. `Guide.diagonal` restyles the diagonal of a persistence diagram
+and its shaded half plane (`shade = false` for none, `shadeColor`, `shadeOpacity`); a figure without a diagonal is left as
+it is. `Scale.x(position = Side.Top)` puts the x axis above the plot, with its numbers, label and tick marks, and
+`Scale.y(position = Side.Right)` the y axis at the right, the legend moving out past it.
+
+Each of these is also a value you can keep in a `val` and add to any plot; changes of the same element keep what the
+earlier ones set, and tweaks of different elements come in any order, a `Style` included, which never undoes them.
+
+**As text.** MATLAB, Java and the command line (`--set`) write the same changes as `element.property=value`:
+
+| element | properties |
+|---|---|
+| `title`, `subtitle`, `axis-label`, `tick-label`, `legend`, `legend-title`, `color-title`, `note` | `size`, `weight` (`light`, `normal`, `medium`, `semibold`, `bold`), `italic`, `align` (`start`, `middle`, `end`), `angle` (tick labels only), `font`, `color` |
+| `grid`, `minor-grid`, `axis-line`, `frame` | `visible`, `width`, `color`, `dash` (`solid`, `dashed`, `dotted`), `opacity` |
+| `ticks`, `minor-ticks` | `length`, `direction` (`out`, `in`), `visible`, `width`, `color`, `opacity` |
+| `panel` | `color`, `opacity`, `visible` |
+| `diagonal` | `shade` (`none` or a color), `shade-opacity`, `color`, `width`, `dashed` |
+| `x-axis`, `y-axis` | `bottom` or `top`; `left` or `right` (written `x-axis=top`) |
+
+`fig.withSetting("title.size=18")`, `fig.withSetting("grid.dash=dotted")` and
+`java -jar tda4j-assembly.jar --plot diagram --set title.size=18 --set ticks.length=4 ...` are the same changes. A name that
+is not one, a number that is not a number and a setting a plot cannot have (a tick label of a 3-D scene, which has a title,
+a subtitle and a hint) are errors that say what to write instead.
+
 ### For a paper, and for a page of either color
 
 Two looks are ready-made, each a palette and a style, and they differ in what is behind the figure.
@@ -421,7 +488,8 @@ common changes as methods that take only strings and numbers, and return the cha
 `withPalette('print')` (`'brand'`, `'reference'`, `'print'` or `'clear'`), `withStyle('print')` (`'default'`,
 `'slides'`, `'print'` or `'clear'`), `withDegreeColor(k, '#c2185b')`, `withDegreeLabel(k, 'loops')`,
 `withTextScale(1.3)`, `withMarkScale`, `withLegend('bottom')` (`'right'`, `'bottom'` or `'none'`), `withoutGrid()` and
-`withTransparentBackground()`; a 3-D scene has the ones that need no axes. `save` takes the theme by name:
+`withTransparentBackground()` and, for everything finer, `withSetting('title.size=18')` (see above); a 3-D scene has the
+ones that need no axes. `save` takes the theme by name:
 `fig.save('diagram.svg', 'dark')`.
 
 <div class="tabset">
@@ -458,7 +526,7 @@ result.plotBarcode().withXScale('sqrt').withTextScale(1.3).save('barcode.svg');
 
 The command line has a flag for the same changes of a `--plot`: `--title`, `--x-label`, `--y-label`, `--width`,
 `--height`, `--palette` (`brand`, `reference`, `print` or `clear`), `--style` (`default`, `slides`, `print` or `clear`), `--theme`
-(`light`, `dark` or `auto`), `--text-scale` (applied to the `--style`), `--x-scale` and
+(`light`, `dark` or `auto`), `--text-scale` (applied to the `--style`), `--set` (repeated, `element.property=value`), `--x-scale` and
 `--y-scale` (`linear`, `log`, `sqrt` or `symlog`). A word that is not one, a size out of range and a flag a plot cannot
 use (an x scale for a 3-D scene) are errors, reported before anything is computed:
 

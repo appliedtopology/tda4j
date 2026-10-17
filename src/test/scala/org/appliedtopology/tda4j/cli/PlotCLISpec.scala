@@ -170,6 +170,12 @@ class PlotCLISpec extends Specification:
       // a style replaces the whole style, so --style and --text-scale have to be one change, not two
       drawn("--style", "print", "--text-scale", "1.5") must beEqualTo(expected(_.withStyle("print").withTextScale(1.5)))
       drawn("--style", "slides") must beEqualTo(expected(_.withStyle("slides")))
+      // one flag for each change of an element, repeated
+      drawn("--set", "title.size=18", "--set", "grid.dash=dotted", "--set", "x-axis=top") must
+        beEqualTo(expected(_.withSetting("title.size=18").withSetting("grid.dash=dotted").withSetting("x-axis=top")))
+      drawn("--set", "ticks.length=4") must not(beEqualTo(expected(identity)))
+      drawn("--style", "print", "--set", "title.size=18") must
+        beEqualTo(expected(_.withStyle("print").withSetting("title.size=18")))
       drawn("--palette", "clear", "--style", "clear") must
         beEqualTo(expected(_.withPalette("clear").withStyle("clear")))
       drawn("--style", "print") must contain("Helvetica")
@@ -249,6 +255,10 @@ class PlotCLISpec extends Specification:
       val (c7, e7) = failure("--plot", "diagram", "--text-scale", "0")
       val (c8, e8) = failure("--plot", "diagram", "--style", "poster")
       val (c9, e9) = failure("--style", "print")
+      val (c10, e10) = failure("--plot", "diagram", "--set", "title.size=big")
+      val (c11, e11) = failure("--plot", "diagram", "--set", "x-axis=left")
+      val (c12, e12) = failure("--plot", "input-3d", "--set", "tick-label.size=9")
+      val (c13, e13) = failure("--set", "title.size=18")
       (c1 must beEqualTo(1)) and (e1 must contain("--title is for --plot")) and
         (c2 must beEqualTo(1)) and (e2 must contain(
           "unknown scale 'cubic'; expected one of linear, log, sqrt, symlog"
@@ -256,6 +266,10 @@ class PlotCLISpec extends Specification:
         (c3 must beEqualTo(1)) and (e3 must contain("expected one of brand, reference, print, clear")) and
         (c8 must beEqualTo(1)) and (e8 must contain("expected one of default, slides, print, clear")) and
         (c9 must beEqualTo(1)) and (e9 must contain("--style is for --plot")) and
+        (c10 must beEqualTo(1)) and (e10 must contain("'big' is not a number")) and
+        (c11 must beEqualTo(1)) and (e11 must contain("the x axis is at the bottom or the top")) and
+        (c12 must beEqualTo(1)) and (e12 must contain("a 3-D scene has a title")) and
+        (c13 must beEqualTo(1)) and (e13 must contain("--set is for --plot")) and
         (c4 must beEqualTo(1)) and (e4 must contain("expected one of auto, light, dark")) and
         (c5 must beEqualTo(1)) and (e5 must contain("between 100 and 20000")) and
         (c6 must beEqualTo(1)) and (e6 must contain("--x-scale is for 2-D plots")) and

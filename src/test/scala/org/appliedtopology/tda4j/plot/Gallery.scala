@@ -126,6 +126,29 @@ object Gallery:
     (Plot.diagram(loops) + clear).save(out("custom-clear-diagram-light.svg"), Some(Theme.Light))
     (Plot.diagram(loops) + clear).save(out("custom-clear-diagram-dark.svg"), Some(Theme.Dark))
     (Plot.barcode(d) + clear).save(out("custom-clear-barcode-dark.svg"), Some(Theme.Dark))
+    // the elements: each piece of text, the lines, tick marks, a frame, the plot area, the sides of the axes
+    (Plot.diagram(loops) + Labels(subtitle = "text roles", x = "birth", y = "death") +
+      Text(TextRole.Title, size = 22, align = Anchor.Middle) +
+      Text(TextRole.Subtitle, italic = true, align = Anchor.Middle) +
+      Text(TextRole.AxisLabel, size = 14, weight = Weight.Bold) + Text(TextRole.TickLabel, size = 9) +
+      Text(TextRole.Legend, size = 14)).save(out("elements-text.svg"))
+    (Plot.diagram(loops) + Lines.ticks(length = 4) + Lines.minorTicks(length = 2) + Lines.frame() +
+      Guide.panel(color = "#f4f4f4", opacity = 1.0) + Lines.grid(dash = Dash.Dotted)).save(out("elements-frame.svg"))
+    (Plot.diagram(loops) + Scale.xy(Transform.Log10) + Lines.minorGrid(opacity = 0.5) + Lines.minorTicks(length = 3) +
+      Lines.ticks(length = 5) + Lines.frame()).save(out("elements-log-minor.svg"))
+    (Plot.diagram(loops) + Scale.x(position = Side.Top) + Scale.y(position = Side.Right) +
+      Lines.ticks(length = 5, direction = TickDirection.In) + Labels(x = "birth", y = "death"))
+      .save(out("elements-axes-sides.svg"))
+    (Plot.barcode(d) + Scale.x(breaks = Seq(0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5), format = "%.2f") +
+      Text(TextRole.TickLabel, angle = 45) + Labels(x = "filtration value")).save(out("elements-slanted.svg"))
+    (Plot.diagram(loops) + Guide.diagonal(shade = false, dashed = true)).save(out("elements-diagonal-bare.svg"))
+    (Plot.diagram(loops) + Guide.diagonal(shadeColor = "#c2185b", shadeOpacity = 0.15, width = 2))
+      .save(out("elements-diagonal-tint.svg"))
+    (image1 + Text(TextRole.ColorTitle, size = 14, weight = Weight.Bold) + Text(TextRole.TickLabel, size = 9) +
+      Labels(color = "density")).save(out("elements-colorbar.svg"))
+    (scene + Text(TextRole.Title, size = 22, align = Anchor.Middle) + Text(TextRole.Subtitle, italic = true))
+      .save(out("elements-scene.svg"))
+    (Plot.side(Plot.barcode(d), Plot.diagram(d)) + Palette.clear + Style.clear).save(out("elements-board-clear.svg"))
     val before = Plot.barcode(Persistence(noisyCircle(30, 0.03, 4), maxDimension = 1)).copy(title = "tighter")
     val after = Plot.barcode(Persistence(noisyCircle(30, 0.2, 5), maxDimension = 1)).copy(title = "noisier")
     (Plot.side(before, after).shared(y = false) + Style(grid = false)).save(out("custom-board-shared.svg"))

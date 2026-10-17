@@ -29,7 +29,8 @@ one:
   `input-3d`, `complex-3d`, `representative-3d`) draws the result instead of writing it, into `--output` (`.svg` or
   `.html`) or a page opened in the browser; `--bar`, `--dimension` and `--at` choose what (see
   [plotting](plotting.md#from-matlab-java-and-the-command-line)); `--title`, `--x-label`, `--y-label`, `--width`,
-  `--height`, `--palette`, `--style`, `--theme`, `--text-scale`, `--x-scale` and `--y-scale` change how it looks
+  `--height`, `--palette`, `--style`, `--theme`, `--text-scale`, `--set` (one change of an element, repeated: `--set
+  title.size=18`), `--x-scale` and `--y-scale` change how it looks
   (`--palette print --style print` is a figure for a paper, `--palette clear --style clear` one with no background for
   a page of either color, black or white by `--theme`; see
   [customizing a plot](plotting.md#from-matlab-and-the-command-line));

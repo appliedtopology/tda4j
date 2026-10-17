@@ -599,6 +599,443 @@ class PlotGrammarSpec extends Specification:
     }
   }
 
+  /** The plot area of a rendered figure: the rectangle its marks are clipped to. */
+  private def plotArea(svg: String): (Double, Double, Double, Double) =
+    val r = elements(svg, "rect").find(_.getParentNode.getNodeName == "clipPath").get
+    (number(r, "x"), number(r, "y"), number(r, "width"), number(r, "height"))
+
+  /** Whether every horizontal text of a rendering lies on the page: a baseline with its ascent above and descent below.
+    */
+  private def textsOnPage(svg: String): Boolean =
+    val root = parse(svg).getDocumentElement
+    val (w, h) = (number(root, "width"), number(root, "height"))
+    elements(svg, "text").filter(_.getAttribute("transform").isEmpty).forall { t =>
+      val size = number(t, "font-size")
+      val (x, y) = (number(t, "x"), number(t, "y"))
+      x >= 0 && x <= w && y - 0.8 * size >= -0.01 && y + 0.25 * size <= h + 0.01
+    }
+
+  private def near(a: Double, b: Double): Boolean = math.abs(a - b) < 0.02
+
+  /** The rectangles that are direct children of the document's `<svg>`: a board's own background. */
+  private def topRects(svg: String): Seq[Element] =
+    val children = parse(svg).getDocumentElement.getChildNodes
+    (0 until children.getLength).map(children.item).collect { case e: Element if e.getTagName == "rect" => e }
+  private def textStyles(svg: String): Seq[String] = elements(svg, "text").map(_.getAttribute("style"))
+  private def lines(svg: String): Seq[Element] = elements(svg, "line")
+  private def stroked(svg: String, color: String): Seq[Element] =
+    lines(svg).filter(_.getAttribute("style").startsWith(s"stroke:$color"))
+
+  "the text of a plot" should {
+    val fig = Plot.diagram(circleDiagram) + Labels(subtitle = "twelve")
+    val plain = fig.svg(Theme.Light)
+    val (x0, y0, w0, h0) = plotArea(plain)
+    def sizeOf(svg: String, words: String): Double =
+      number(elements(svg, "text").find(_.getTextContent == words).get, "font-size")
+
+    "make room for a larger title: the plot area starts lower by what the title grew" in {
+      val big = (fig + Text(TextRole.Title, size = 30)).svg(Theme.Light)
+      sizeOf(big, "Persistence diagram") must beEqualTo(30.0)
+      sizeOf(big, "twelve") must beEqualTo(sizeOf(plain, "twelve"))
+      plotArea(big)._2 must beCloseTo(y0 + 22.0, 0.02) // 22 px of margin per 15 px of title, so 15 px more is 22 more
+      textsOnPage(big) must beTrue
+    }
+    "make room for larger tick labels below and beside the axes" in {
+      val big = (fig + Text(TextRole.TickLabel, size = 22)).svg(Theme.Light)
+      val (x1, y1, w1, h1) = plotArea(big)
+      x1 must beCloseTo(x0 + 42.0, 0.02) // the numbers beside the y axis: 42 px at 11 px, 84 at 22
+      h1 must beCloseTo(h0 - 30.0, 0.02) // and 30 px below the x axis, 60 at 22
+      fontSizes(big).count(_ == 22.0) must beGreaterThan(3)
+      textsOnPage(big) must beTrue
+    }
+    "make room for larger axis labels, and for nothing else" in {
+      val big = (fig + Text(TextRole.AxisLabel, size = 24)).svg(Theme.Light)
+      val (x1, y1, w1, h1) = plotArea(big)
+      x1 must beCloseTo(x0 + 16.0, 0.02)
+      h1 must beCloseTo(h0 - 16.0, 0.02)
+      y1 must beCloseTo(y0, 0.02)
+      textsOnPage(big) must beTrue
+    }
+    "weigh, slant and typeset one text without touching the others" in {
+      val svg = (fig + Text(TextRole.Subtitle, weight = Weight.Bold, italic = true, font = "Georgia, serif") +
+        Text(TextRole.Title, weight = Weight.Normal)).svg(Theme.Light)
+      val sub = elements(svg, "text").find(_.getTextContent == "twelve").get
+      sub.getAttribute("font-weight") must beEqualTo("700")
+      sub.getAttribute("font-style") must beEqualTo("italic")
+      sub.getAttribute("font-family") must beEqualTo("Georgia, serif")
+      val title = elements(svg, "text").find(_.getTextContent == "Persistence diagram").get
+      title.getAttribute("font-weight") must beEqualTo("400") // the title was semibold, and now is not
+      elements(svg, "text").count(_.getAttribute("font-family") == "Georgia, serif") must beEqualTo(1)
+      parse(svg).getDocumentElement.getAttribute("font-family") must beEqualTo(Style.DefaultFont)
+    }
+    "colour a text with a palette role or a colour of its own" in {
+      val svg = (fig + Text(TextRole.Title, color = "#aa0000") + Text(TextRole.Subtitle, paint = Paint.Ink))
+        .svg(Theme.Light)
+      elements(svg, "text").find(_.getTextContent == "Persistence diagram").get.getAttribute("style") must
+        beEqualTo("fill:#aa0000")
+      elements(svg, "text").find(_.getTextContent == "twelve").get.getAttribute("style") must
+        beEqualTo(s"fill:${Palette.brand.light.ink}")
+    }
+    "align a title, a subtitle and an axis label along the plot area" in {
+      def at(svg: String, words: String) = elements(svg, "text").find(_.getTextContent == words).get
+      val centered = (fig + Text(TextRole.Title, align = Anchor.Middle)).svg(Theme.Light)
+      at(centered, "Persistence diagram").getAttribute("text-anchor") must beEqualTo("middle")
+      number(at(centered, "Persistence diagram"), "x") must beCloseTo(x0 + w0 / 2, 0.02)
+      val right = (fig + Text(TextRole.Subtitle, align = Anchor.End)).svg(Theme.Light)
+      at(right, "twelve").getAttribute("text-anchor") must beEqualTo("end")
+      number(at(right, "twelve"), "x") must beCloseTo(x0 + w0, 0.02)
+      at(plain, "Persistence diagram").getAttribute("text-anchor") must beEmpty // the default is the left edge
+      val labelled =
+        (fig + Labels(x = "born", y = "dies") + Text(TextRole.AxisLabel, align = Anchor.End)).svg(Theme.Light)
+      number(at(labelled, "born"), "x") must beCloseTo(x0 + w0, 0.02)
+      at(labelled, "born").getAttribute("text-anchor") must beEqualTo("end")
+      number(at(labelled, "dies"), "y") must beCloseTo(y0, 0.02) // the end of a y axis is its top
+      at(labelled, "dies").getAttribute("text-anchor") must beEqualTo("end")
+    }
+    "add up over time, keep the rest of what an earlier one set, and leave a style to be added in any order" in {
+      val a = fig + Text(TextRole.Title, size = 18) + Text(TextRole.Title, align = Anchor.Middle)
+      a.elements.face(TextRole.Title).size must beEqualTo(18.0)
+      a.elements.face(TextRole.Title).align must beEqualTo(Anchor.Middle)
+      (a + Text(TextRole.Title, size = 20)).elements.face(TextRole.Title).size must beEqualTo(20.0)
+      sameUpToIds(
+        (fig + Text(TextRole.Title, size = 18) + Style.slides).svg(Theme.Light),
+        (fig + Style.slides + Text(TextRole.Title, size = 18)).svg(Theme.Light)
+      )
+      sizeOf((fig + Style.slides + Text(TextRole.Title, size = 18)).svg(Theme.Light), "Persistence diagram") must
+        beCloseTo(18.0 * 1.3, 1e-9) // the style's text scale still applies to a size given in pixels
+    }
+    "slant the tick labels of the x axis only, towards their ticks, and make room for them" in {
+      val slanted = (fig + Text(TextRole.TickLabel, angle = 45)).svg(Theme.Light)
+      val turned = elements(slanted, "text").filter(_.getAttribute("transform").startsWith("rotate(-45"))
+      turned.size must beGreaterThan(3)
+      turned.map(_.getAttribute("text-anchor")).toSet must beEqualTo(Set("end"))
+      val backwards = (fig + Text(TextRole.TickLabel, angle = -30)).svg(Theme.Light)
+      elements(backwards, "text")
+        .filter(_.getAttribute("transform").startsWith("rotate(30"))
+        .map(_.getAttribute("text-anchor"))
+        .toSet must
+        beEqualTo(Set("start"))
+      val above = (fig + Text(TextRole.TickLabel, angle = 45) + Scale.x(position = Side.Top)).svg(Theme.Light)
+      elements(above, "text")
+        .filter(_.getAttribute("transform").startsWith("rotate(-45"))
+        .map(_.getAttribute("text-anchor"))
+        .toSet must
+        beEqualTo(Set("start"))
+      plotArea(slanted)._4 must beLessThan(h0 - 5) // room: the plot is shorter for it
+      elements(slanted, "text").count(t =>
+        t.getAttribute("text-anchor") == "end" && t.getAttribute("transform").isEmpty
+      ) must
+        beGreaterThan(3) // the numbers beside the y axis stay level
+    }
+    "refuse what has no meaning, saying what to use" in {
+      Text(TextRole.TickLabel, align = Anchor.Middle) must throwAn[IllegalArgumentException](
+        "align has no meaning here"
+      )
+      Text(TextRole.Title, angle = 45) must throwAn[IllegalArgumentException]("only tick labels can be slanted")
+      Text(TextRole.TickLabel, angle = 120) must throwAn[IllegalArgumentException]("between -90 and 90")
+      Text(TextRole.Title, size = -3) must throwAn[IllegalArgumentException]("size must be a positive number")
+      Text(TextRole.Title, color = "#fff", paint = Paint.Ink) must throwAn[IllegalArgumentException](
+        "color or paint, not both"
+      )
+      Text(TextRole.Title, color = "<script>") must throwAn[IllegalArgumentException]("not a CSS color")
+      Text(TextRole.Title, font = "") must throwAn[IllegalArgumentException]("CSS font-family")
+    }
+    "style the title and subtitle of a 3-D scene, and refuse the rest" in {
+      val scene = Plot.points3D(circle).copy(title = "A cloud", subtitle = "sixteen points")
+      def at(svg: String, words: String) = elements(svg, "text").find(_.getTextContent == words).get
+      val svg = (scene + Text(TextRole.Title, size = 24, align = Anchor.Middle) +
+        Text(TextRole.Subtitle, italic = true)).staticSvg(Theme.Light)
+      number(at(svg, "A cloud"), "font-size") must beEqualTo(24.0)
+      at(svg, "A cloud").getAttribute("text-anchor") must beEqualTo("middle")
+      number(at(svg, "A cloud"), "x") must beEqualTo(scene.width / 2.0)
+      at(svg, "sixteen points").getAttribute("font-style") must beEqualTo("italic")
+      scene + Text(TextRole.TickLabel, size = 9) must throwAn[UnsupportedOperationException](
+        "tick-label text needs axes"
+      )
+      (scene + Text(TextRole.Note, size = 14)).fragment(Theme.Light) must contain("font-size:14px")
+    }
+  }
+
+  "the lines of a plot" should {
+    val fig = Plot.diagram(circleDiagram)
+    val plain = fig.svg(Theme.Light)
+    val gridColor = Palette.brand.light.grid
+    val axisColor = Palette.brand.light.axis
+    val (x0, y0, w0, h0) = plotArea(plain)
+    def count(svg: String, color: String) = stroked(svg, color).size
+
+    "restyle the gridlines, and only them" in {
+      val svg = (fig + Lines.grid(width = 2.5, color = "#aa0000", dash = Dash.Dotted, opacity = 0.5)).svg(Theme.Light)
+      val grid = stroked(svg, "#aa0000")
+      grid.size must beEqualTo(count(plain, gridColor)) // every gridline, none missed, none new
+      grid.map(_.getAttribute("stroke-width")).toSet must beEqualTo(Set("2.5"))
+      grid.map(_.getAttribute("stroke-dasharray")).toSet must beEqualTo(Set("1.5 3"))
+      grid.forall(_.getAttribute("style").contains("stroke-opacity:0.5")) must beTrue
+      count(svg, axisColor) must beEqualTo(count(plain, axisColor)) // the axes are as they were
+      stroked(svg, axisColor).map(_.getAttribute("stroke-width")).toSet must beEqualTo(Set("1"))
+    }
+    "restyle the axis lines, or drop them and keep the numbers" in {
+      val styled = (fig + Lines.axis(width = 3, color = "#00aa00")).svg(Theme.Light)
+      stroked(styled, "#00aa00").size must beEqualTo(2)
+      stroked(styled, "#00aa00").map(_.getAttribute("stroke-width")).toSet must beEqualTo(Set("3"))
+      val bare = (fig + Lines.axis(visible = false)).svg(Theme.Light)
+      count(bare, axisColor) must beEqualTo(count(plain, axisColor) - 2) // the two axes; the `∞` line is not one
+      elements(bare, "text").size must beEqualTo(elements(plain, "text").size)
+    }
+    "draw tick marks of a length and a direction, and push the numbers out of their way" in {
+      def tickLabelY(svg: String) = elements(svg, "text").filter(_.getTextContent == "0.5").map(number(_, "y"))
+      val muted = Palette.brand.light.muted
+      val out = (fig + Lines.ticks(length = 5)).svg(Theme.Light)
+      val (ox, oy, ow, oh) = plotArea(out) // the marks take 5 px of the margins, so the plot area is smaller
+      val marks = stroked(out, muted).filter(l => near(number(l, "y1"), oy + oh))
+      marks.size must beGreaterThan(3) // one for each tick of the x axis
+      marks.forall(l => near(number(l, "y2"), oy + oh + 5)) must beTrue
+      stroked(out, muted).count(l => near(number(l, "x1"), ox)) must beGreaterThan(3) // and of the y axis
+      tickLabelY(out).head - (oy + oh) must beCloseTo(tickLabelY(plain).head - (y0 + h0) + 5, 0.02) // 5 px farther out
+      val in = (fig + Lines.ticks(length = 5, direction = TickDirection.In)).svg(Theme.Light)
+      val (ix, iy, iw, ih) = plotArea(in)
+      val inside = stroked(in, muted).filter(l => near(number(l, "y1"), iy + ih))
+      inside.size must beGreaterThan(3)
+      inside.forall(l => near(number(l, "y2"), iy + ih - 5)) must beTrue
+      tickLabelY(in).head - (iy + ih) must beCloseTo(
+        tickLabelY(plain).head - (y0 + h0),
+        0.02
+      ) // marks inside leave them
+      stroked(plain, muted) must beEmpty // none unless asked for
+      stroked((fig + Lines.ticks(length = 0)).svg(Theme.Light), muted) must beEmpty
+    }
+    "give tick marks a length of their own when asked for with none" in {
+      val svg = (fig + Lines.ticks(color = "#123456")).svg(Theme.Light)
+      val (ax, ay, aw, ah) = plotArea(svg)
+      val bottom = stroked(svg, "#123456").filter(l => near(number(l, "y1"), ay + ah))
+      bottom must not(beEmpty)
+      bottom.forall(l => near(number(l, "y2"), ay + ah + 4)) must beTrue
+    }
+    "put minor ticks halfway between the majors of a linear axis" in {
+      val fig = dots(1, 2, 3, 4, 5) + Scale.x(breaks = Seq(1.0, 2.0, 3.0, 4.0, 5.0), min = 1, max = 5) +
+        Lines.minorTicks(color = "#123456", length = 2)
+      val svg = fig.svg(Theme.Light)
+      val (ax, ay, aw, ah) = plotArea(svg)
+      val atBottom = stroked(svg, "#123456").filter(l => near(number(l, "y1"), ay + ah))
+      val xs = atBottom.map(number(_, "x1")).sorted
+      xs.size must beEqualTo(4)
+      xs.zipWithIndex.foreach((x, i) => x must beCloseTo(ax + aw * (i + 0.5) / 4, 0.02))
+      atBottom.forall(l => near(number(l, "y2"), ay + ah + 2)) must beTrue
+    }
+    "put the 2 to 9 of each decade on a log axis whose ticks are the decades" in {
+      val fig = dots(1, 10, 100, 1000) + Scale.x(Transform.Log10, min = 1, max = 1000, breaks = Seq(1, 10, 100, 1000)) +
+        Lines.minorGrid(color = "#123456")
+      val svg = fig.svg(Theme.Light)
+      val (ax, ay, aw, ah) = plotArea(svg)
+      val minors =
+        stroked(svg, "#123456").filter(l => l.getAttribute("x1") == l.getAttribute("x2")).map(number(_, "x1")).sorted
+      minors.size must beEqualTo(24) // 2..9, 20..90, 200..900
+      minors.head must beCloseTo(ax + aw * math.log10(2.0) / 3, 0.02)
+      minors(8) must beCloseTo(ax + aw * (1 + math.log10(2.0)) / 3, 0.02) // 20 starts the second decade
+      stroked(plain, "#123456") must beEmpty
+    }
+    "put the whole numbers between the ticks of a log axis that has 1, 2, 5 as its ticks" in {
+      val fig = dots(1, 10, 100, 1000) + Scale.x(Transform.Log10, min = 1, max = 1000) +
+        Lines.minorGrid(color = "#123456")
+      val svg = fig.svg(Theme.Light)
+      val (ax, ay, aw, ah) = plotArea(svg)
+      val minors =
+        stroked(svg, "#123456").filter(l => l.getAttribute("x1") == l.getAttribute("x2")).map(number(_, "x1"))
+      minors.size must beEqualTo(18) // 3, 4, 6, 7, 8, 9 of each decade: 1, 2 and 5 are ticks
+      val atMajor =
+        Seq(1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0, 1000.0).map(v => ax + aw * math.log10(v) / 3)
+      minors.exists(m => atMajor.exists(near(_, m))) must beFalse
+      minors.exists(near(_, ax + aw * math.log10(3.0) / 3)) must beTrue
+    }
+    "frame the plot area over the marks, and only when asked" in {
+      val svg = (fig + Lines.frame(width = 3, color = "#aa0000")).svg(Theme.Light)
+      val frame = elements(svg, "rect").filter(_.getAttribute("fill") == "none")
+      frame.size must beEqualTo(1)
+      (number(frame.head, "x"), number(frame.head, "y"), number(frame.head, "width"), number(frame.head, "height")) must
+        beEqualTo((x0, y0, w0, h0))
+      frame.head.getAttribute("stroke-width") must beEqualTo("3")
+      frame.head.getAttribute("style") must beEqualTo("stroke:#aa0000")
+      elements(plain, "rect").count(_.getAttribute("fill") == "none") must beEqualTo(0)
+      elements((fig + Lines.frame(width = 3) + Lines.frame(visible = false)).svg(Theme.Light), "rect")
+        .count(_.getAttribute("fill") == "none") must beEqualTo(0)
+    }
+    "fill the plot area behind everything else" in {
+      val svg = (fig + Guide.panel(color = "#eeeeee", opacity = 1.0)).svg(Theme.Light)
+      val all = elements(svg, "*")
+      val panel = all.indexWhere(e => e.getTagName == "rect" && e.getAttribute("style").startsWith("fill:#eeeeee"))
+      panel must beGreaterThan(-1)
+      panel must beLessThan(all.indexWhere(_.getTagName == "line")) // before the gridlines, which are before the marks
+      elements(svg, "rect")
+        .find(_.getAttribute("style").startsWith("fill:#eeeeee"))
+        .map(r => (number(r, "x"), number(r, "y"), number(r, "width"), number(r, "height"))) must
+        beSome((x0, y0, w0, h0))
+      elements((fig + Guide.panel(color = "#eeeeee") + Guide.panel(visible = false)).svg(Theme.Light), "rect")
+        .count(_.getAttribute("style").startsWith("fill:#eeeeee")) must beEqualTo(0)
+    }
+    "refuse numbers that mean nothing" in {
+      Lines.grid(width = 0) must throwAn[IllegalArgumentException]("width must be a positive number")
+      Lines.grid(opacity = 2) must throwAn[IllegalArgumentException]("opacity must be between 0 and 1")
+      Lines.ticks(length = -1) must throwAn[IllegalArgumentException]("length must be 0 or more")
+      Lines.frame(color = "red", paint = Paint.Ink) must throwAn[IllegalArgumentException]("color or paint, not both")
+    }
+  }
+
+  "the diagonal of a diagram" should {
+    val fig = Plot.diagram(circleDiagram)
+    def shades(svg: String) = elements(svg, "polygon").count(_.getAttribute("style").contains("fill-opacity:0.6"))
+    "lose its shaded half plane, or take a colour and an opacity of its own" in {
+      shades(fig.svg(Theme.Light)) must beEqualTo(1)
+      shades((fig + Guide.diagonal(shade = false)).svg(Theme.Light)) must beEqualTo(0)
+      val tinted = (fig + Guide.diagonal(shadeColor = "#c2185b", shadeOpacity = 0.15)).svg(Theme.Light)
+      elements(tinted, "polygon").count(_.getAttribute("style") == "fill:#c2185b;fill-opacity:0.15") must beEqualTo(1)
+      val noneThenBack = (fig + Guide.diagonal(shade = false) + Guide.diagonal(shade = true)).svg(Theme.Light)
+      shades(noneThenBack) must beEqualTo(1) // the default shade comes back
+    }
+    "restyle the line, wherever it is, and leave a figure without one as it is" in {
+      val svg = (fig + Guide.diagonal(color = "#00aa00", width = 3, dashed = true)).svg(Theme.Light)
+      val line = elements(svg, "polyline").filter(_.getAttribute("style") == "fill:none;stroke:#00aa00")
+      line.size must beEqualTo(1)
+      line.head.getAttribute("stroke-width") must beEqualTo("3")
+      line.head.getAttribute("stroke-dasharray") must beEqualTo("5 4")
+      val barcode = Plot.barcode(circleDiagram)
+      barcode + Guide.diagonal(shade = false) must beEqualTo(barcode)
+    }
+  }
+
+  "the sides of the axes" should {
+    val fig = Plot.diagram(circleDiagram) + Labels(x = "born", y = "dies")
+    val plain = fig.svg(Theme.Light)
+    val (x0, y0, w0, h0) = plotArea(plain)
+
+    "put the x axis above the plot, its numbers and its label above that, and the room for them there" in {
+      val svg = (fig + Scale.x(position = Side.Top)).svg(Theme.Light)
+      val (x1, y1, w1, h1) = plotArea(svg)
+      y1 must beCloseTo(y0 + 46.0, 0.02) // the axis band moved from under the plot to over it
+      val across = lines(svg).filter(l =>
+        l.getAttribute("style") == s"stroke:${Palette.brand.light.axis}" && l.getAttribute("y1") == l.getAttribute(
+          "y2"
+        ) && near(number(l, "x1"), x1) && near(number(l, "x2"), x1 + w1)
+      )
+      across.exists(l => near(number(l, "y1"), y1)) must beTrue // an axis line is the top of the plot
+      across.exists(l => near(number(l, "y1"), y1 + h1)) must beFalse // and none is at the bottom
+      val numbers = elements(svg, "text").filter(t =>
+        t.getAttribute("text-anchor") == "middle" && t.getAttribute("transform").isEmpty && t.getTextContent != "born"
+      )
+      numbers.forall(number(_, "y") < y1) must beTrue
+      number(elements(svg, "text").find(_.getTextContent == "born").get, "y") must beLessThan(
+        numbers.map(number(_, "y")).min
+      )
+      textsOnPage(svg) must beTrue
+    }
+    "put the y axis at the right, its numbers and label beyond it, and the legend beyond them" in {
+      val svg = (fig + Scale.y(position = Side.Right)).svg(Theme.Light)
+      val (x1, y1, w1, h1) = plotArea(svg)
+      x1 must beCloseTo(14.0, 0.02) // nothing at the left now
+      val numbers = elements(svg, "text").filter(t =>
+        t.getAttribute("text-anchor") == "start" && t.getTextContent.matches("[0-9.]+")
+      )
+      numbers.size must beGreaterThan(3)
+      numbers.forall(number(_, "x") > x1 + w1) must beTrue
+      number(elements(svg, "text").find(_.getTextContent == "dies").get, "x") must beGreaterThan(
+        numbers.map(number(_, "x")).max
+      )
+      val legend = elements(svg, "text").find(_.getTextContent == "H1").get
+      number(legend, "x") must beGreaterThan(x1 + w1 + 42)
+      textsOnPage(svg) must beTrue
+    }
+    "carry the tick marks and the -∞ line with them" in {
+      val fig = Figure(marks =
+        Vector(
+          Mark.Points(IndexedSeq((0.0, 0.0), (1.0, 1.0), (10.0, 10.0), (100.0, 100.0)), IndexedSeq(Paint.Series(0)))
+        )
+      ) +
+        Scale.xy(Transform.Log10) + Lines.ticks(length = 4) + Scale.x(position = Side.Top) + Scale.y(position =
+          Side.Right
+        )
+      val svg = fig.svg(Theme.Light)
+      val (ax, ay, aw, ah) = plotArea(svg)
+      val marks = stroked(svg, Palette.brand.light.muted)
+      marks
+        .filter(l => near(number(l, "y1"), ay))
+        .forall(l => near(number(l, "y2"), ay - 4)) must beTrue // above the top axis
+      marks
+        .filter(l => near(number(l, "x1"), ax + aw))
+        .forall(l => near(number(l, "x2"), ax + aw + 4)) must beTrue // right of the right axis
+      elements(svg, "text").count(_.getTextContent == "-∞") must beEqualTo(2) // both bands have their label
+      marks.count(l => near(number(l, "y1"), ay)) must beGreaterThan(2) // the -∞ line has its mark too
+    }
+    "refuse a side the axis cannot be on" in {
+      Scale.x(position = Side.Left) must throwAn[IllegalArgumentException](
+        "the x axis is at the bottom or the top, not the left"
+      )
+      Scale.y(position = Side.Top) must throwAn[IllegalArgumentException](
+        "the y axis is at the left or the right, not the top"
+      )
+    }
+  }
+
+  "settings written as text" should {
+    val fig = Plot.diagram(circleDiagram)
+    "stand for the tweaks they name" in {
+      def same(spec: String, tweak: Tweak) = (fig + Settings.parse(spec)) must beEqualTo(fig + tweak)
+      same("title.size=18", Text(TextRole.Title, size = 18))
+      same("Axis-Label.Weight=Bold", Text(TextRole.AxisLabel, weight = Weight.Bold))
+      same("tick-label.angle=45", Text(TextRole.TickLabel, angle = 45))
+      same("subtitle.align=center", Text(TextRole.Subtitle, align = Anchor.Middle))
+      same("legend.font=Georgia, serif", Text(TextRole.Legend, font = "Georgia, serif"))
+      same("note.italic=true", Text(TextRole.Note, italic = true))
+      same("title.color=#aa0000", Text(TextRole.Title, color = "#aa0000"))
+      same("grid.dash=dotted", Lines.grid(dash = Dash.Dotted))
+      same("minor-grid.width=0.5", Lines.minorGrid(width = 0.5))
+      same("axis-line.visible=false", Lines.axis(visible = false))
+      same("frame.color=#333333", Lines.frame(color = "#333333"))
+      same("ticks.length=4", Lines.ticks(length = 4))
+      same("minor-ticks.direction=in", Lines.minorTicks(direction = TickDirection.In))
+      same("panel.color=#f4f4f4", Guide.panel(color = "#f4f4f4"))
+      same("diagonal.shade=none", Guide.diagonal(shade = false))
+      same("diagonal.shade=#c2185b", Guide.diagonal(shadeColor = "#c2185b"))
+      same("diagonal.dashed=true", Guide.diagonal(dashed = true))
+      same("x-axis=top", Scale.x(position = Side.Top))
+      same("y-axis=RIGHT", Scale.y(position = Side.Right))
+    }
+    "be added to a figure, a scene and a list in order" in {
+      fig.withSetting("title.size=18") must beEqualTo(fig + Text(TextRole.Title, size = 18))
+      val scene = Plot.points3D(circle)
+      scene.withSetting("title.size=18") must beEqualTo(scene + Text(TextRole.Title, size = 18))
+      scene.withSetting("tick-label.size=9") must throwAn[UnsupportedOperationException]("a 3-D scene has a title")
+      Settings.parseAll(Seq("title.size=18", "title.size=20")).map(fig + _).get.elements.face(TextRole.Title).size must
+        beEqualTo(20.0) // the later wins
+      Settings.parseAll(Nil) must beNone
+    }
+    "say what is wrong, and what to say instead" in {
+      Settings.parse("title.size") must throwAn[IllegalArgumentException]("should be element.property=value")
+      Settings.parse("size=18") must throwAn[IllegalArgumentException]("should be element.property=value")
+      Settings.parse("titel.size=18") must throwAn[IllegalArgumentException](
+        "unknown element 'titel'; expected one of title, subtitle"
+      )
+      Settings.parse("title.colour=red") must throwAn[IllegalArgumentException](
+        "unknown property 'colour' of title; expected one of size, weight"
+      )
+      Settings.parse("title.size=big") must throwAn[IllegalArgumentException]("'big' is not a number")
+      Settings.parse("note.italic=maybe") must throwAn[IllegalArgumentException]("should be true or false")
+      Settings.parse("title.weight=heavy") must throwAn[IllegalArgumentException]("expected one of light, normal")
+      Settings.parse("grid.dash=wavy") must throwAn[IllegalArgumentException]("expected one of solid, dashed, dotted")
+      Settings.parse("x-axis=left") must throwAn[IllegalArgumentException]("the x axis is at the bottom or the top")
+      Settings.parse("x-axis=middle") must throwAn[IllegalArgumentException]("expected one of bottom, top, left, right")
+    }
+  }
+
+  "a board of panels with no background" should {
+    "have none either, and keep its own when one panel has a background" in {
+      val a = Plot.diagram(circleDiagram)
+      val b = Plot.barcode(circleDiagram)
+      val clear = (Plot.side(a, b) + Style.clear).svgFile(Theme.Light)
+      topRects(clear) must beEmpty
+      val mixed = Plot.side(a + Style.clear, b).svgFile(Theme.Light)
+      topRects(mixed).size must beEqualTo(1)
+    }
+  }
+
   "labels and size" should {
     val fig = Plot.diagram(circleDiagram)
     "put the words given in the places they belong" in {

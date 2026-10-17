@@ -38,6 +38,14 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   page color. By name in MATLAB (`withPalette('print')`, `withStyle('clear')`) and on the command line (`--palette
   print --style print`, `--palette clear --style clear --theme dark`); `Style.named` and `withStyle(name)` take
   `default`, `slides`, `print` or `clear`.
+- Finer control of a plot's look, by element: `Text(role, size, weight, italic, align, angle, font, color)` for each of the
+  eight pieces of text (`Title`, `Subtitle`, `AxisLabel`, `TickLabel`, `Legend`, `LegendTitle`, `ColorTitle`, `Note`),
+  with the margins following the text; `Lines.grid`, `minorGrid`, `axis`, `ticks`, `minorTicks` and `frame` (width, color,
+  dash, opacity, tick-mark length and direction); `Guide.panel` (the plot area's fill) and `Guide.diagonal` (the shaded
+  half plane of a diagram); `Scale.x(position = Side.Top)` and `Scale.y(position = Side.Right)`. Chained as `withText`,
+  `withGridLines`, `withTickMarks`, `withFrame`, `withPanel`, `withDiagonal`, ...; written as text for MATLAB and Java
+  (`withSetting("title.size=18")`) and the command line (`--set title.size=18`, repeated). They sit beside the style, so a
+  `Style` added later does not undo them. Default output is unchanged.
 - `Board.shared()` puts the panels on one scale; `Mark.Rule` (a line across the plot at one value) and
   `Mark.Diagonal(offset)` (the line `y = x + offset`, drawn in the plot's own scales).
 - MATLAB: the figures returned by the `plot...` methods have the common tweaks as methods that take strings and numbers
@@ -47,6 +55,7 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Changed
 
+- A board of panels with no background (`Style.clear`) saved as an `.svg` has no background rectangle of its own either.
 - A plot's colors for data follow its palette: a persistence image, an image, a cocycle and circular coordinates hold
   their values (`Paint.Value`) and a `ColorScale` colors them when drawn.
 - The `∞` line of a persistence diagram and its diagonal run across the whole plot.

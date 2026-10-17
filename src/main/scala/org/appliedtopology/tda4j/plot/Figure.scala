@@ -145,8 +145,9 @@ enum Ticks:
   * (the `∞` mark); `format` is a printf pattern for the numbers; `visible = false` drops ticks, labels and baseline (a
   * point cloud's frame). On a log axis what is at 0 (an `H0` bar's birth) sits on a `-∞` line below the lowest number,
   * as an essential bar ends at `∞`: `minusInfinity = None` draws the line when something is there, `Some(true)` always
-  * (panels that must line up), `Some(false)` never, leaving what is at 0 out and counting it. Change an axis of a
-  * figure with `Scale.x(...)` and `Labels(x = ...)`.
+  * (panels that must line up), `Some(false)` never, leaving what is at 0 out and counting it. `side` puts the axis on
+  * the other side of the plot (an x axis at the `Top`, a y axis at the `Right`). Change an axis of a figure with
+  * `Scale.x(...)` and `Labels(x = ...)`.
   */
 final case class Axis(
   label: String = "",
@@ -158,8 +159,12 @@ final case class Axis(
   visible: Boolean = true,
   transform: Transform = Transform.Identity,
   format: Option[String] = None,
-  minusInfinity: Option[Boolean] = None
+  minusInfinity: Option[Boolean] = None,
+  side: Option[Side] = None
 ):
+  /** Where the axis sits: `side`, or the bottom of an x axis and the left of a y axis, which are the defaults. */
+  def sideOr(default: Side): Side = side.getOrElse(default)
+
   /** Both ends, when both are fixed. */
   def range: Option[(Double, Double)] = for l <- min; h <- max yield (l, h)
 
@@ -180,7 +185,8 @@ object LegendItem:
   * ([[Svg]]); `view()` shows it live; `save("f.svg")` writes it.
   *
   * The parts follow the grammar of graphics: the `marks` are the data drawn, `x` and `y` the position scales, `palette`
-  * with `degrees` and `colorScale` the color scales, `legend` and the color bar their guides, `style` the look.
+  * with `degrees` and `colorScale` the color scales, `legend` and the color bar their guides, `style` the look and
+  * `elements` its finer parts (each text, the lines, the plot area).
   */
 final case class Figure(
   marks: Vector[Mark] = Vector.empty,
@@ -196,7 +202,8 @@ final case class Figure(
   palette: Palette = Palette.default,
   style: Style = Style.default,
   degrees: Map[Int, DegreeStyle] = Map.empty,
-  legendTitle: String = ""
+  legendTitle: String = "",
+  elements: Elements = Elements()
 ) extends Plot:
   def +(mark: Mark): Figure = copy(marks = marks :+ mark)
   def ++(more: IterableOnce[Mark]): Figure = copy(marks = marks ++ more)
@@ -221,7 +228,8 @@ final case class Figure(
   def withSize(width: Optional[Int] = Optional.empty, height: Optional[Int] = Optional.empty): Figure =
     this + Size(width, height)
 
-  /** The x axis: its scale, visible range, ticks, number format, gridlines. See [[Scale.x]]. */
+  /** The x axis: its scale, visible range, ticks, number format, gridlines, and its side (`Side.Top`). See [[Scale.x]].
+    */
   def withXScale(
     transform: Optional[Transform] = Optional.empty,
     min: Optional[Double] = Optional.empty,
@@ -230,8 +238,9 @@ final case class Figure(
     format: Optional[String] = Optional.empty,
     grid: Optional[Boolean] = Optional.empty,
     visible: Optional[Boolean] = Optional.empty,
-    minusInfinity: Optional[Boolean] = Optional.empty
-  ): Figure = this + Scale.x(transform, min, max, breaks, format, grid, visible, minusInfinity)
+    minusInfinity: Optional[Boolean] = Optional.empty,
+    position: Optional[Side] = Optional.empty
+  ): Figure = this + Scale.x(transform, min, max, breaks, format, grid, visible, minusInfinity, position)
 
   /** The y axis; as [[withXScale]]. */
   def withYScale(
@@ -242,8 +251,9 @@ final case class Figure(
     format: Optional[String] = Optional.empty,
     grid: Optional[Boolean] = Optional.empty,
     visible: Optional[Boolean] = Optional.empty,
-    minusInfinity: Optional[Boolean] = Optional.empty
-  ): Figure = this + Scale.y(transform, min, max, breaks, format, grid, visible, minusInfinity)
+    minusInfinity: Optional[Boolean] = Optional.empty,
+    position: Optional[Side] = Optional.empty
+  ): Figure = this + Scale.y(transform, min, max, breaks, format, grid, visible, minusInfinity, position)
 
   /** Both axes alike: a log-log diagram is `withXYScale(Transform.Log10)`. */
   def withXYScale(
@@ -280,6 +290,101 @@ final case class Figure(
 
   /** This style, in place of the figure's. */
   def withStyle(style: Style): Figure = this + style
+
+  /** The look of one kind of text: `withText(TextRole.Title, size = 18, align = Anchor.Middle)`. See [[Text]]. */
+  def withText(
+    role: TextRole,
+    size: Optional[Double] = Optional.empty,
+    weight: Optional[Weight] = Optional.empty,
+    italic: Optional[Boolean] = Optional.empty,
+    align: Optional[Anchor] = Optional.empty,
+    angle: Optional[Double] = Optional.empty,
+    font: Optional[String] = Optional.empty,
+    color: Optional[String] = Optional.empty,
+    paint: Optional[Paint] = Optional.empty
+  ): Figure = this + Text(role, size, weight, italic, align, angle, font, color, paint)
+
+  /** The gridlines: width, color, dash, opacity. See [[Lines.grid]]. */
+  def withGridLines(
+    width: Optional[Double] = Optional.empty,
+    color: Optional[String] = Optional.empty,
+    paint: Optional[Paint] = Optional.empty,
+    dash: Optional[Dash] = Optional.empty,
+    opacity: Optional[Double] = Optional.empty,
+    visible: Optional[Boolean] = Optional.empty
+  ): Figure = this + Lines.grid(width, color, paint, dash, opacity, visible)
+
+  /** Minor gridlines between the ticks (drawn once any setting is given). See [[Lines.minorGrid]]. */
+  def withMinorGridLines(
+    width: Optional[Double] = Optional.empty,
+    color: Optional[String] = Optional.empty,
+    paint: Optional[Paint] = Optional.empty,
+    dash: Optional[Dash] = Optional.empty,
+    opacity: Optional[Double] = Optional.empty,
+    visible: Optional[Boolean] = Optional.empty
+  ): Figure = this + Lines.minorGrid(width, color, paint, dash, opacity, visible)
+
+  /** The axis lines. See [[Lines.axis]]. */
+  def withAxisLines(
+    width: Optional[Double] = Optional.empty,
+    color: Optional[String] = Optional.empty,
+    paint: Optional[Paint] = Optional.empty,
+    dash: Optional[Dash] = Optional.empty,
+    opacity: Optional[Double] = Optional.empty,
+    visible: Optional[Boolean] = Optional.empty
+  ): Figure = this + Lines.axis(width, color, paint, dash, opacity, visible)
+
+  /** A frame around the plot area (drawn once any setting is given). See [[Lines.frame]]. */
+  def withFrame(
+    width: Optional[Double] = Optional.empty,
+    color: Optional[String] = Optional.empty,
+    paint: Optional[Paint] = Optional.empty,
+    dash: Optional[Dash] = Optional.empty,
+    opacity: Optional[Double] = Optional.empty,
+    visible: Optional[Boolean] = Optional.empty
+  ): Figure = this + Lines.frame(width, color, paint, dash, opacity, visible)
+
+  /** Tick marks at the major ticks: `withTickMarks(length = 4)`. See [[Lines.ticks]]. */
+  def withTickMarks(
+    length: Optional[Double] = Optional.empty,
+    direction: Optional[TickDirection] = Optional.empty,
+    width: Optional[Double] = Optional.empty,
+    color: Optional[String] = Optional.empty,
+    paint: Optional[Paint] = Optional.empty,
+    opacity: Optional[Double] = Optional.empty,
+    visible: Optional[Boolean] = Optional.empty
+  ): Figure = this + Lines.ticks(length, direction, width, color, paint, opacity, visible)
+
+  /** Minor tick marks between the major ones. See [[Lines.minorTicks]]. */
+  def withMinorTickMarks(
+    length: Optional[Double] = Optional.empty,
+    direction: Optional[TickDirection] = Optional.empty,
+    width: Optional[Double] = Optional.empty,
+    color: Optional[String] = Optional.empty,
+    paint: Optional[Paint] = Optional.empty,
+    opacity: Optional[Double] = Optional.empty,
+    visible: Optional[Boolean] = Optional.empty
+  ): Figure = this + Lines.minorTicks(length, direction, width, color, paint, opacity, visible)
+
+  /** The fill of the plot area. See [[Guide.panel]]. */
+  def withPanel(
+    color: Optional[String] = Optional.empty,
+    paint: Optional[Paint] = Optional.empty,
+    opacity: Optional[Double] = Optional.empty,
+    visible: Optional[Boolean] = Optional.empty
+  ): Figure = this + Guide.panel(color, paint, opacity, visible)
+
+  /** The diagonal of a persistence diagram and its shaded half plane. See [[Guide.diagonal]]. */
+  def withDiagonal(
+    shade: Optional[Boolean] = Optional.empty,
+    shadeColor: Optional[String] = Optional.empty,
+    shadePaint: Optional[Paint] = Optional.empty,
+    shadeOpacity: Optional[Double] = Optional.empty,
+    color: Optional[String] = Optional.empty,
+    paint: Optional[Paint] = Optional.empty,
+    width: Optional[Double] = Optional.empty,
+    dashed: Optional[Boolean] = Optional.empty
+  ): Figure = this + Guide.diagonal(shade, shadeColor, shadePaint, shadeOpacity, color, paint, width, dashed)
 
   // The same with plain arguments only (strings, ints, doubles) and no defaults, for Java and MATLAB, which can neither
   // build a `Labels` nor call a method with defaults: `fig.withTitle('A circle').withSize(800, 500).withXScale('log')`.
@@ -343,6 +448,12 @@ final case class Figure(
 
   /** Without a background, so that the figure takes the color of the page behind it. */
   def withTransparentBackground(): Figure = withStyle(style.copy(transparent = true))
+
+  /** One change written as text, `element.property=value`: `withSetting("title.size=18")`,
+    * `withSetting("tick-label.angle=45")`, `withSetting("grid.dash=dotted")`, `withSetting("x-axis=top")`. See
+    * [[Settings]] for the elements and their properties.
+    */
+  def withSetting(spec: String): Figure = this + Settings.parse(spec)
 
   // One line, so that a REPL echoing the value of `fig.view()` does not print every coordinate of every mark.
   override def toString: String = Plot.describe("Figure", title, s"${marks.size} marks")

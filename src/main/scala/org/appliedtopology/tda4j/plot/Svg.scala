@@ -211,6 +211,19 @@ object Svg:
     val (signsX, signsY) = signs(fig.marks)
     val sb = new StringBuilder
 
+    // The look of each kind of text, and the scale of the layout that was written for its default size: `px` is the size
+    // a text is drawn at, `sc` that over the default's, so a margin made for 11-pixel tick labels follows the tick labels.
+    val el = fig.elements
+    val faces = TextRole.values.map(r => r -> el.face(r)).toMap
+    def face(r: TextRole): TextFace = faces(r)
+    def px(r: TextRole): Double = face(r).size * ts
+    def sc(r: TextRole): Double = ts * (face(r).size / TextRole.defaultSize(r))
+    // what follows `font-size` of a text: its weight, slant and font, only where the plot sets them
+    def extra(r: TextRole): String =
+      val f = face(r)
+      f.weight.fold("")(wt => s""" font-weight="${wt.css}"""") + (if f.italic then """ font-style="italic"""" else "") +
+        f.font.fold("")(ff => s""" font-family="${escape(ff)}"""")
+
     def paint(p: Paint): String = p match
       case Paint.Value(v) =>
         fig.colorScale match
@@ -250,18 +263,48 @@ object Svg:
 
     // layout: the margins make room for the title, the axes, the legend and the color bar
     val legendPlace = if legend.isEmpty then LegendPosition.Hidden else style.legend
+    val (sTick, sAxis, sLegend, sLegendTitle) =
+      (sc(TextRole.TickLabel), sc(TextRole.AxisLabel), sc(TextRole.Legend), sc(TextRole.LegendTitle))
+    val sLegends = math.max(sLegend, sLegendTitle)
     val legendChars = (legend.map(_.label.length) :+ fig.legendTitle.length).max.min(24)
-    val legendWidth = if legendPlace == LegendPosition.Right then (34.0 + 7.5 * legendChars) * ts else 0.0
-    val colorbarWidth = if fig.colorScale.exists(_.guide) then 74.0 * ts else 0.0
+    val legendWidth = if legendPlace == LegendPosition.Right then (34.0 + 7.5 * legendChars) * sLegends else 0.0
+    val colorbarWidth =
+      if fig.colorScale.exists(_.guide) then 74.0 * math.max(sTick, sc(TextRole.ColorTitle)) else 0.0
+    // where the axes are, the tick marks that point away from the plot (they push the numbers outward), and the room
+    // that tick labels slanted by `angle` need (their length is a guess from the longest label's characters)
+    val xTop = fig.x.sideOr(Side.Bottom) == Side.Top
+    val yRight = fig.y.sideOr(Side.Left) == Side.Right
+    val (majorMarks, minorMarks) = (el.tickMarks, el.minorTickMarks)
+    val markOut =
+      Seq(majorMarks, minorMarks)
+        .filter(m => m.drawn && m.direction == TickDirection.Out)
+        .map(_.length)
+        .maxOption
+        .getOrElse(0.0)
+    val slant =
+      val angle = math.toRadians(math.abs(face(TextRole.TickLabel).angle))
+      val chars = fig.x.ticks match
+        case Ticks.Labelled(words) => words.map(_._2.length).maxOption.getOrElse(5)
+        case _                     => 6
+      if angle == 0.0 then 0.0
+      else math.max(0.0, px(TextRole.TickLabel) * (chars * 0.6 * math.sin(angle) + 0.9 * math.cos(angle) - 0.9))
+    val xAxisBand =
+      if fig.x.visible then 30.0 * sTick + (if fig.x.label.nonEmpty then 16.0 * sAxis else 0.0) + markOut + slant
+      else 0.0
+    val yAxisBand = if fig.y.visible then 16.0 * sAxis + 42.0 * sTick + markOut else 0.0
     val top =
-      16.0 + (if fig.title.nonEmpty then 22.0 * ts else 0.0) + (if fig.subtitle.nonEmpty then 16.0 * ts else 0.0)
-    val left = if fig.y.visible then 58.0 * ts else 14.0
-    val axisBand = if fig.x.visible then (if fig.x.label.nonEmpty then 46.0 else 30.0) * ts else 14.0
-    val right = 16.0 + legendWidth + colorbarWidth
+      16.0 + (if fig.title.nonEmpty then 22.0 * sc(TextRole.Title) else 0.0) +
+        (if fig.subtitle.nonEmpty then 16.0 * sc(TextRole.Subtitle) else 0.0) + (if xTop then xAxisBand else 0.0)
+    val left = if fig.y.visible && !yRight then yAxisBand else 14.0
+    val rightAxisBand = if fig.y.visible && yRight then yAxisBand else 0.0
+    // what is below the plot: the axis (or a margin, when it is above or not drawn)
+    val axisBand = if fig.x.visible && !xTop then xAxisBand else 14.0
+    val right = 16.0 + rightAxisBand + legendWidth + colorbarWidth
     val w = math.max(40.0, fig.width - left - right)
 
-    def itemWidth(item: LegendItem): Double = (30.0 + 7.5 * item.label.length.min(24)) * ts
-    val titleWidth = if fig.legendTitle.isEmpty then 0.0 else (14.0 + 7.5 * fig.legendTitle.length.min(24)) * ts
+    def itemWidth(item: LegendItem): Double = (30.0 + 7.5 * item.label.length.min(24)) * sLegend
+    val titleWidth =
+      if fig.legendTitle.isEmpty then 0.0 else (14.0 + 7.5 * fig.legendTitle.length.min(24)) * sLegendTitle
     val legendRows: Vector[Vector[LegendItem]] =
       if legendPlace != LegendPosition.Bottom then Vector.empty
       else
@@ -278,7 +321,7 @@ object Svg:
         }
         rows += row
         rows.result()
-    val legendBand = if legendRows.isEmpty then 0.0 else (10.0 + 20.0 * legendRows.size) * ts
+    val legendBand = if legendRows.isEmpty then 0.0 else (10.0 + 20.0 * legendRows.size) * sLegends
     // small print under the plot: what an axis did instead of what was asked, and what could not be drawn
     val notes: Seq[String] =
       Seq("x" -> (fig.x, xt), "y" -> (fig.y, yt))
@@ -298,7 +341,7 @@ object Svg:
           if withoutLine then "at 0 on a log axis drawn without a -∞ line" else "a position that is not a number"
         s"$notShown ${if notShown == 1 then "mark" else "marks"} not shown: $why"
       }
-    val noteBand = 14.0 * ts * notes.size
+    val noteBand = 14.0 * sc(TextRole.Note) * notes.size
     val bottom = axisBand + legendBand + noteBand
     val h = math.max(40.0, fig.height - top - bottom)
 
@@ -355,88 +398,171 @@ object Svg:
         h
       )}"/></clipPath></defs>"""
 
+    // where a text of `role` starts, in the plot area's width: its x, and the attribute that anchors it there
+    def alignedAt(r: TextRole): (Double, String) = face(r).align match
+      case Anchor.Start  => (left, "")
+      case Anchor.Middle => (left + w / 2, """ text-anchor="middle"""")
+      case Anchor.End    => (left + w, """ text-anchor="end"""")
+
     // title and subtitle
-    val titleSize = 15.0 * ts
+    val titleSize = px(TextRole.Title)
     val titleBase = 9.0 + titleSize
     if fig.title.nonEmpty then
-      sb ++= s"""<text x="${fmt(left)}" y="${fmt(titleBase)}" style="fill:${paint(
-          Paint.Ink
-        )}" font-size="${fmt(titleSize)}" font-weight="600">${escape(fig.title)}</text>"""
+      val (tx, anchor) = alignedAt(TextRole.Title)
+      sb ++= s"""<text x="${fmt(tx)}" y="${fmt(titleBase)}"$anchor style="fill:${paint(
+          face(TextRole.Title).paint
+        )}" font-size="${fmt(titleSize)}"${extra(TextRole.Title)}>${escape(fig.title)}</text>"""
     if fig.subtitle.nonEmpty then
-      val sy = if fig.title.nonEmpty then titleBase + 18.0 * ts else titleBase
-      sb ++= s"""<text x="${fmt(left)}" y="${fmt(sy)}" style="fill:${paint(Paint.Secondary)}" font-size="${fmt(
-          12.0 * ts
-        )}">${escape(fig.subtitle)}</text>"""
+      val (sx, anchor) = alignedAt(TextRole.Subtitle)
+      val subSize = px(TextRole.Subtitle)
+      // the gap between the two baselines grows with the descent of the title and the ascent of the subtitle
+      val sy =
+        if fig.title.nonEmpty then titleBase + 18.0 * ts + 0.25 * (titleSize - 15.0 * ts) + 0.75 * (subSize - 12.0 * ts)
+        else titleBase + (subSize - 12.0 * ts)
+      sb ++= s"""<text x="${fmt(sx)}" y="${fmt(sy)}"$anchor style="fill:${paint(
+          face(TextRole.Subtitle).paint
+        )}" font-size="${fmt(subSize)}"${extra(TextRole.Subtitle)}>${escape(fig.subtitle)}</text>"""
+
+    // the plot area's own fill
+    el.panel.foreach { (fill, opacity) =>
+      sb ++= s"""<rect x="${fmt(left)}" y="${fmt(top)}" width="${fmt(w)}" height="${fmt(h)}" style="fill:${paint(
+          fill
+        )};fill-opacity:$opacity"/>"""
+    }
+
+    // a line as drawn: its color and opacity, width and dash
+    def stroke(s: LineStroke): String =
+      val opacity = if s.opacity == 1.0 then "" else s";stroke-opacity:${s.opacity}"
+      s"""style="stroke:${paint(s.paint)}$opacity" stroke-width="${fmt(s.width)}"${s.dash.pattern.fold("")(d =>
+          s""" stroke-dasharray="$d""""
+        )}"""
+    def line(x1: Double, y1: Double, x2: Double, y2: Double, s: LineStroke): String =
+      s"""<line x1="${fmt(x1)}" y1="${fmt(y1)}" x2="${fmt(x2)}" y2="${fmt(y2)}" ${stroke(s)}/>"""
 
     // grid, ticks, axes
-    def ticksOf(a: Axis, tr: Transform, t0: Double, t1: Double): IndexedSeq[(Double, String)] =
+    def mainTicks(a: Axis, tr: Transform, t0: Double, t1: Double): IndexedSeq[(Double, String)] =
       val text: Double => String = a.format match
         case Some(pattern) => v => String.format(Locale.ROOT, pattern, Double.box(v))
         case None          => tr.tickLabel
       val seen = (tr.inverse(math.min(t0, t1)), tr.inverse(math.max(t0, t1)))
       // an automatic tick keeps clear of an extra one (the `∞`), so that the two labels never overprint
       def clear(v: Double): Boolean = a.extra.forall((at, _) => math.abs(tr(v) - tr(at)) >= 0.05 * math.abs(t1 - t0))
-      val main = a.ticks match
+      a.ticks match
         case Ticks.Auto           => tr.ticks(seen._1, seen._2).filter(clear).map(v => (v, text(v)))
         case Ticks.Within(lo, hi) =>
           tr.ticks(math.max(lo, seen._1), math.min(hi, seen._2)).filter(clear).map(v => (v, text(v)))
         case Ticks.At(positions)   => positions.map(v => (v, text(v)))
         case Ticks.Labelled(words) => words
-      main ++ a.extra
     def within(tr: Transform, t0: Double, t1: Double)(tick: (Double, String)): Boolean =
       val u = tr(tick._1)
       u >= math.min(t0, t1) && u <= math.max(t0, t1)
-    val inX = ticksOf(fig.x, xt, startX, x1).filter(within(xt, x0, x1))
-    val inY = ticksOf(fig.y, yt, startY, y1).filter(within(yt, y0, y1))
-    val tickSize = fmt(11.0 * ts)
-    if style.grid && fig.x.visible && fig.x.grid then
-      inX.foreach((t, _) =>
-        sb ++= s"""<line x1="${fmt(f.px(t))}" y1="${fmt(top)}" x2="${fmt(f.px(t))}" y2="${fmt(
-            top + h
-          )}" style="stroke:${paint(Paint.Grid)}" stroke-width="1"/>"""
-      )
-    if style.grid && fig.y.visible && fig.y.grid then
-      inY.foreach((t, _) =>
-        sb ++= s"""<line x1="${fmt(left)}" y1="${fmt(f.py(t))}" x2="${fmt(left + w)}" y2="${fmt(
-            f.py(t)
-          )}" style="stroke:${paint(Paint.Grid)}" stroke-width="1"/>"""
-      )
+    val mainX = mainTicks(fig.x, xt, startX, x1)
+    val mainY = mainTicks(fig.y, yt, startY, y1)
+    val inX = (mainX ++ fig.x.extra).filter(within(xt, x0, x1))
+    val inY = (mainY ++ fig.y.extra).filter(within(yt, y0, y1))
+    // the minor ticks, between the major ones; a labelled axis (the rows of a barcode) has none
+    def minorOf(a: Axis, tr: Transform, main: IndexedSeq[(Double, String)], t0: Double, t1: Double): Seq[Double] =
+      a.ticks match
+        case Ticks.Labelled(_) => Seq.empty
+        case _                 =>
+          minorPositions(tr, main.map(_._1), (tr.inverse(math.min(t0, t1)), tr.inverse(math.max(t0, t1))))
+            .filter(v => within(tr, t0, t1)((v, "")))
+    val minorX = minorOf(fig.x, xt, mainX, startX, x1)
+    val minorY = minorOf(fig.y, yt, mainY, startY, y1)
+    val (gridStroke, minorGridStroke, axisStroke) = (el.gridStroke, el.minorGridStroke, el.axisStroke)
+    val xAxisY = if xTop then top else top + h
+    val yAxisX = if yRight then left + w else left
+    // a tick mark of `length` pixels on an axis, pointing out of the plot or into it
+    def markEnd(axisAt: Double, outSign: Double, m: TickMarks): Double =
+      axisAt + outSign * m.length * (if m.direction == TickDirection.Out then 1.0 else -1.0)
+    val (xOutSign, yOutSign) = (if xTop then -1.0 else 1.0, if yRight then 1.0 else -1.0)
+    val tickSize = fmt(px(TextRole.TickLabel))
+    val tickFill = paint(face(TextRole.TickLabel).paint)
+    def drawGrid(positions: Seq[Double], s: LineStroke, vertical: Boolean): Unit =
+      if s.visible && style.grid then
+        positions.foreach(t =>
+          sb ++= (
+            if vertical then line(f.px(t), top, f.px(t), top + h, s)
+            else line(left, f.py(t), left + w, f.py(t), s)
+          )
+        )
+    if fig.x.visible && fig.x.grid then
+      drawGrid(minorX, minorGridStroke, vertical = true)
+      drawGrid(inX.map(_._1), gridStroke, vertical = true)
+    if fig.y.visible && fig.y.grid then
+      drawGrid(minorY, minorGridStroke, vertical = false)
+      drawGrid(inY.map(_._1), gridStroke, vertical = false)
     if fig.x.visible then
-      sb ++= s"""<line x1="${fmt(left)}" y1="${fmt(top + h)}" x2="${fmt(left + w)}" y2="${fmt(
-          top + h
-        )}" style="stroke:${paint(Paint.Axis)}" stroke-width="1"/>"""
-      inX.foreach((t, label) =>
-        sb ++= s"""<text x="${fmt(f.px(t))}" y="${fmt(
-            top + h + 16 * ts
-          )}" text-anchor="middle" font-size="$tickSize" style="fill:${paint(
-            Paint.Muted
-          )};font-variant-numeric:tabular-nums">${escape(label)}</text>"""
-      )
+      if axisStroke.visible then sb ++= line(left, xAxisY, left + w, xAxisY, axisStroke)
+      if majorMarks.drawn then
+        inX.foreach((t, _) =>
+          sb ++= line(f.px(t), xAxisY, f.px(t), markEnd(xAxisY, xOutSign, majorMarks), majorMarks.stroke)
+        )
+      if minorMarks.drawn then
+        minorX.foreach(t =>
+          sb ++= line(f.px(t), xAxisY, f.px(t), markEnd(xAxisY, xOutSign, minorMarks), minorMarks.stroke)
+        )
+      // the numbers sit below the axis, or above it; slanted ones end (or start) at their tick
+      val tickAngle = face(TextRole.TickLabel).angle
+      val labelY = if xTop then xAxisY - markOut - 8.0 * sTick else xAxisY + markOut + 16.0 * sTick
+      val tickAnchor =
+        if tickAngle == 0.0 then "middle" else if xTop == (tickAngle < 0) then "end" else "start"
+      def tickText(at: Double, label: String): String =
+        val turn =
+          if tickAngle == 0.0 then "" else s""" transform="rotate(${fmt(-tickAngle)} ${fmt(at)} ${fmt(labelY)})""""
+        s"""<text x="${fmt(at)}" y="${fmt(labelY)}"$turn text-anchor="$tickAnchor" font-size="$tickSize"${extra(
+            TextRole.TickLabel
+          )} style="fill:$tickFill;font-variant-numeric:tabular-nums">${escape(label)}</text>"""
+      inX.foreach((t, label) => sb ++= tickText(f.px(t), label))
       if fig.x.label.nonEmpty then
-        sb ++= s"""<text x="${fmt(left + w / 2)}" y="${fmt(
-            top + h + 36 * ts
-          )}" text-anchor="middle" font-size="${fmt(12.0 * ts)}" style="fill:${paint(Paint.Secondary)}">${escape(
+        val (lx, anchor) = face(TextRole.AxisLabel).align match
+          case Anchor.Start  => (left, "start")
+          case Anchor.Middle => (left + w / 2, "middle")
+          case Anchor.End    => (left + w, "end")
+        val labelBase =
+          if xTop then xAxisY - markOut - 30.0 * sTick - slant + 0.7 * sAxis
+          else xAxisY + markOut + 30.0 * sTick + 6.0 * sAxis + slant
+        sb ++= s"""<text x="${fmt(lx)}" y="${fmt(labelBase)}" text-anchor="$anchor" font-size="${fmt(
+            px(TextRole.AxisLabel)
+          )}"${extra(TextRole.AxisLabel)} style="fill:${paint(face(TextRole.AxisLabel).paint)}">${escape(
             fig.x.label
           )}</text>"""
     if fig.y.visible then
-      sb ++= s"""<line x1="${fmt(left)}" y1="${fmt(top)}" x2="${fmt(left)}" y2="${fmt(top + h)}" style="stroke:${paint(
-          Paint.Axis
-        )}" stroke-width="1"/>"""
+      if axisStroke.visible then sb ++= line(yAxisX, top, yAxisX, top + h, axisStroke)
+      if majorMarks.drawn then
+        inY.foreach((t, _) =>
+          sb ++= line(yAxisX, f.py(t), markEnd(yAxisX, yOutSign, majorMarks), f.py(t), majorMarks.stroke)
+        )
+      if minorMarks.drawn then
+        minorY.foreach(t =>
+          sb ++= line(yAxisX, f.py(t), markEnd(yAxisX, yOutSign, minorMarks), f.py(t), minorMarks.stroke)
+        )
+      val numberX = if yRight then yAxisX + markOut + 6.0 * sTick else yAxisX - markOut - 6.0 * sTick
+      val numberAnchor = if yRight then "start" else "end"
       inY.foreach((t, label) =>
-        sb ++= s"""<text x="${fmt(left - 6 * ts)}" y="${fmt(
-            f.py(t) + 4 * ts
-          )}" text-anchor="end" font-size="$tickSize" style="fill:${paint(
-            Paint.Muted
-          )};font-variant-numeric:tabular-nums">${escape(label)}</text>"""
+        sb ++= s"""<text x="${fmt(numberX)}" y="${fmt(
+            f.py(t) + 4 * sTick
+          )}" text-anchor="$numberAnchor" font-size="$tickSize"${extra(
+            TextRole.TickLabel
+          )} style="fill:$tickFill;font-variant-numeric:tabular-nums">${escape(
+            label
+          )}</text>"""
       )
       if fig.y.label.nonEmpty then
-        val cy = top + h / 2
-        val lx = 14.0 * ts
+        val (cy, anchor) = face(TextRole.AxisLabel).align match
+          case Anchor.Start  => (top + h, "start")
+          case Anchor.Middle => (top + h / 2, "middle")
+          case Anchor.End    => (top, "end")
+        val lx =
+          if yRight then yAxisX + markOut + 42.0 * sTick + 2.0 * sAxis
+          else yAxisX - markOut - (42.0 * sTick + 2.0 * sAxis)
         sb ++= s"""<text x="${fmt(lx)}" y="${fmt(cy)}" transform="rotate(-90 ${fmt(lx)} ${fmt(
             cy
-          )})" text-anchor="middle" font-size="${fmt(12.0 * ts)}" style="fill:${paint(Paint.Secondary)}">${escape(
-            fig.y.label
-          )}</text>"""
+          )})" text-anchor="$anchor" font-size="${fmt(px(TextRole.AxisLabel))}"${extra(
+            TextRole.AxisLabel
+          )} style="fill:${paint(
+            face(TextRole.AxisLabel).paint
+          )}">${escape(fig.y.label)}</text>"""
 
     // the `-∞` line, as the `∞` line of a diagram: where what is at 0 on a log axis sits
     val minusInfinity = number(Double.NegativeInfinity)
@@ -446,11 +572,13 @@ object Svg:
           Paint.Axis
         )}" stroke-width="1"/>"""
       if fig.x.visible then
+        if majorMarks.drawn then sb ++= line(bx, xAxisY, bx, markEnd(xAxisY, xOutSign, majorMarks), majorMarks.stroke)
+        val labelY = if xTop then xAxisY - markOut - 8.0 * sTick else xAxisY + markOut + 16.0 * sTick
         sb ++= s"""<text x="${fmt(bx)}" y="${fmt(
-            top + h + 16 * ts
-          )}" text-anchor="middle" font-size="$tickSize" style="fill:${paint(
-            Paint.Muted
-          )};font-variant-numeric:tabular-nums">$minusInfinity</text>"""
+            labelY
+          )}" text-anchor="middle" font-size="$tickSize"${extra(
+            TextRole.TickLabel
+          )} style="fill:$tickFill;font-variant-numeric:tabular-nums">$minusInfinity</text>"""
     }
     bandY.foreach { _ =>
       val by = f.py(0.0)
@@ -458,11 +586,13 @@ object Svg:
           Paint.Axis
         )}" stroke-width="1"/>"""
       if fig.y.visible then
-        sb ++= s"""<text x="${fmt(left - 6 * ts)}" y="${fmt(
-            by + 4 * ts
-          )}" text-anchor="end" font-size="$tickSize" style="fill:${paint(
-            Paint.Muted
-          )};font-variant-numeric:tabular-nums">$minusInfinity</text>"""
+        if majorMarks.drawn then sb ++= line(yAxisX, by, markEnd(yAxisX, yOutSign, majorMarks), by, majorMarks.stroke)
+        val numberX = if yRight then yAxisX + markOut + 6.0 * sTick else yAxisX - markOut - 6.0 * sTick
+        sb ++= s"""<text x="${fmt(numberX)}" y="${fmt(
+            by + 4 * sTick
+          )}" text-anchor="${if yRight then "start" else "end"}" font-size="$tickSize"${extra(
+            TextRole.TickLabel
+          )} style="fill:$tickFill;font-variant-numeric:tabular-nums">$minusInfinity</text>"""
     }
 
     // marks
@@ -605,48 +735,52 @@ object Svg:
               )}"${dash(m.dashed)}/>"""
     }
     sb ++= "</g>"
+    // the frame, over the marks
+    val frameStroke = el.frameStroke
+    if frameStroke.visible then
+      sb ++= s"""<rect x="${fmt(left)}" y="${fmt(top)}" width="${fmt(w)}" height="${fmt(h)}" fill="none" ${stroke(
+          frameStroke
+        )}/>"""
 
     // legend: beside the plot, or in rows below it
-    val legendFont = fmt(12.0 * ts)
     def legendKey(item: LegendItem, lx: Double, cy: Double): String = item.key match
       case LegendItem.Key.Dot =>
-        marker(lx + 6 * ts, cy, 4.5 * ts, item.shape, paint(item.paint), paint(Paint.Surface))
+        marker(lx + 6 * sLegend, cy, 4.5 * sLegend, item.shape, paint(item.paint), paint(Paint.Surface))
       case LegendItem.Key.Line =>
-        s"""<line x1="${fmt(lx)}" y1="${fmt(cy)}" x2="${fmt(lx + 14 * ts)}" y2="${fmt(cy)}" style="stroke:${paint(
+        s"""<line x1="${fmt(lx)}" y1="${fmt(cy)}" x2="${fmt(lx + 14 * sLegend)}" y2="${fmt(cy)}" style="stroke:${paint(
             item.paint
-          )}" stroke-width="${fmt(2.5 * ts)}" stroke-linecap="round"/>"""
+          )}" stroke-width="${fmt(2.5 * sLegend)}" stroke-linecap="round"/>"""
       case LegendItem.Key.Swatch =>
-        s"""<rect x="${fmt(lx)}" y="${fmt(cy - 6 * ts)}" width="${fmt(12 * ts)}" height="${fmt(
-            12 * ts
+        s"""<rect x="${fmt(lx)}" y="${fmt(cy - 6 * sLegend)}" width="${fmt(12 * sLegend)}" height="${fmt(
+            12 * sLegend
           )}" rx="2" style="fill:${paint(
             item.paint
           )}"/>"""
-    def legendText(text: String, lx: Double, cy: Double, bold: Boolean = false): String =
-      val weight = if bold then " font-weight=\"600\"" else ""
-      s"""<text x="${fmt(lx)}" y="${fmt(cy + 4 * ts)}" font-size="$legendFont"$weight style="fill:${paint(
-          Paint.Secondary
-        )}">${escape(text)}</text>"""
-    var lx = left + w + 18
+    def legendText(text: String, lx: Double, cy: Double, role: TextRole): String =
+      s"""<text x="${fmt(lx)}" y="${fmt(cy + 4 * sc(role))}" font-size="${fmt(px(role))}"${extra(
+          role
+        )} style="fill:${paint(face(role).paint)}">${escape(text)}</text>"""
+    var lx = left + w + rightAxisBand + 18
     if legendPlace == LegendPosition.Right then
       val titleRows = if fig.legendTitle.isEmpty then 0 else 1
-      if titleRows == 1 then sb ++= legendText(fig.legendTitle, lx, top + 8 * ts, bold = true)
+      if titleRows == 1 then sb ++= legendText(fig.legendTitle, lx, top + 8 * sLegends, TextRole.LegendTitle)
       legend.zipWithIndex.foreach { (entry, k) =>
-        val cy = top + 8 * ts + 20 * ts * (k + titleRows)
+        val cy = top + 8 * sLegends + 20 * sLegends * (k + titleRows)
         sb ++= legendKey(entry, lx, cy)
-        sb ++= legendText(entry.label, lx + 20 * ts, cy)
+        sb ++= legendText(entry.label, lx + 20 * sLegend, cy, TextRole.Legend)
       }
       lx += legendWidth
     else if legendPlace == LegendPosition.Bottom then
       val y0Legend = top + h + axisBand
       legendRows.zipWithIndex.foreach { (row, r) =>
-        val cy = y0Legend + 10 * ts + 20 * ts * r
+        val cy = y0Legend + 10 * sLegends + 20 * sLegends * r
         var x = left
         if r == 0 && fig.legendTitle.nonEmpty then
-          sb ++= legendText(fig.legendTitle, x, cy, bold = true)
+          sb ++= legendText(fig.legendTitle, x, cy, TextRole.LegendTitle)
           x += titleWidth
         row.foreach { entry =>
           sb ++= legendKey(entry, x, cy)
-          sb ++= legendText(entry.label, x + 20 * ts, cy)
+          sb ++= legendText(entry.label, x + 20 * sLegend, cy, TextRole.Legend)
           x += itemWidth(entry)
         }
       }
@@ -656,7 +790,7 @@ object Svg:
       val steps = 48
       val bh = math.min(h, 220.0 * ts)
       val bx = lx + 4
-      val small = fmt(11.0 * ts)
+      val numberStyle = s"""font-size="$tickSize"${extra(TextRole.TickLabel)} style="fill:$tickFill""""
       (0 until steps).foreach { s =>
         val t = (s + 0.5) / steps
         val yTop = top + bh * (1 - (s + 1.0) / steps)
@@ -664,27 +798,59 @@ object Svg:
             bh / steps + 0.5
           )}" style="fill:${cb.barColor(t, pal)}"/>"""
       }
-      sb ++= s"""<text x="${fmt(bx + 16 * ts)}" y="${fmt(top + 4 * ts)}" font-size="$small" style="fill:${paint(
-          Paint.Muted
-        )}">${escape(number(cb.hi))}</text>"""
-      sb ++= s"""<text x="${fmt(bx + 16 * ts)}" y="${fmt(top + bh + 4 * ts)}" font-size="$small" style="fill:${paint(
-          Paint.Muted
-        )}">${escape(number(cb.lo))}</text>"""
+      sb ++= s"""<text x="${fmt(bx + 16 * ts)}" y="${fmt(top + 4 * sTick)}" $numberStyle>${escape(
+          number(cb.hi)
+        )}</text>"""
+      sb ++= s"""<text x="${fmt(bx + 16 * ts)}" y="${fmt(top + bh + 4 * sTick)}" $numberStyle>${escape(
+          number(cb.lo)
+        )}</text>"""
       if cb.label.nonEmpty then
-        sb ++= s"""<text x="${fmt(bx)}" y="${fmt(top + bh + 22 * ts)}" font-size="$small" style="fill:${paint(
-            Paint.Secondary
-          )}">${escape(cb.label)}</text>"""
+        sb ++= s"""<text x="${fmt(bx)}" y="${fmt(top + bh + 22 * sc(TextRole.ColorTitle))}" font-size="${fmt(
+            px(TextRole.ColorTitle)
+          )}"${extra(TextRole.ColorTitle)} style="fill:${paint(face(TextRole.ColorTitle).paint)}">${escape(
+            cb.label
+          )}</text>"""
     }
 
     // the small print, one line each, the last at the bottom edge
+    val sNote = sc(TextRole.Note)
+    val (noteX, noteAnchor) = alignedAt(TextRole.Note)
     notes.zipWithIndex.foreach { (note, k) =>
-      val baseline = fig.height - 4 * ts - 14 * ts * (notes.size - 1 - k)
-      sb ++= s"""<text x="${fmt(left)}" y="${fmt(baseline)}" font-size="${fmt(11.0 * ts)}" style="fill:${paint(
-          Paint.Muted
-        )}">${escape(note)}</text>"""
+      val baseline = fig.height - 4 * sNote - 14 * sNote * (notes.size - 1 - k)
+      sb ++= s"""<text x="${fmt(noteX)}" y="${fmt(baseline)}"$noteAnchor font-size="${fmt(px(TextRole.Note))}"${extra(
+          TextRole.Note
+        )} style="fill:${paint(face(TextRole.Note).paint)}">${escape(note)}</text>"""
     }
     sb ++= "</svg>"
     sb.toString
+
+  /** The minor ticks between `majors`, inside `seen` (the visible range in data units): on a log axis whose ticks are
+    * all a whole number times a power of ten (the decades, or 1, 2, 5, 10, ...), the whole numbers of each decade that
+    * are not ticks; otherwise the halves between two ticks, in the axis's own scale, one step beyond the first and the
+    * last. None for fewer than two ticks.
+    */
+  private[plot] def minorPositions(tr: Transform, majors: Seq[Double], seen: (Double, Double)): Seq[Double] =
+    val ms = majors.filter(v => tr(v).isFinite).distinct.sorted
+    if ms.size < 2 then Seq.empty
+    else
+      val (lo, hi) = (math.min(seen._1, seen._2), math.max(seen._1, seen._2))
+      def wholeMultiple(v: Double): Boolean =
+        v > 0 && {
+          val m = v / math.pow(10, math.floor(math.log10(v) + 1e-12))
+          math.abs(m - math.rint(m)) < 1e-9
+        }
+      val candidates =
+        if tr == Transform.Log10 && ms.forall(wholeMultiple) then
+          val (k0, k1) = (math.floor(math.log10(math.max(lo, 1e-300))).toInt, math.ceil(math.log10(hi)).toInt)
+          for k <- k0 to k1; j <- 1 to 9 yield j * math.pow(10, k)
+        else
+          val us = ms.map(tr(_))
+          val steps = us.zip(us.tail).map((a, b) => b - a)
+          val edges = (us.head - steps.head) +: us :+ (us.last + steps.last)
+          edges.zip(edges.tail).map((a, b) => tr.inverse((a + b) / 2))
+      candidates.filter { v =>
+        tr(v).isFinite && v >= lo && v <= hi && !ms.exists(m => math.abs(tr(m) - tr(v)) < 1e-9 * (1 + math.abs(tr(m))))
+      }
 
   /** A marker of `r` pixels centred at `(cx, cy)`, ringed in the surface color. */
   private def marker(cx: Double, cy: Double, r: Double, shape: Shape, fill: String, ring: String): String =

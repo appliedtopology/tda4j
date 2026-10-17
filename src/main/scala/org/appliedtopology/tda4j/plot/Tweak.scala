@@ -14,7 +14,7 @@ import java.util.{IllegalFormatException, Locale}
   *
   * Tweaks change independent parts of a figure (its labels, its axes, its colors, its look), so tweaks of different
   * parts can be added in any order; of the same part, the later one wins. A `Palette`, a [[Style]], [[Labels]],
-  * [[Size]] and the `Scale` constructors are tweaks.
+  * [[Size]], the `Scale` constructors, [[Text]], [[Lines]] and [[Guide]] are tweaks.
   *
   * A tweak that has no meaning for a plot (an axis of a 3-D scene) refuses, saying so; one that merely has nothing to
   * change (a color scale on a figure without one) leaves the plot as it is, so that one bundle fits every plot.
@@ -123,7 +123,8 @@ object Scale:
     * the tick positions; `format` a printf pattern for the tick numbers (`"%.1f"`, `"%.0f%%"`); `grid` and `visible`
     * turn the gridlines and the whole axis (ticks, labels, line) on or off. On a log axis what is at 0 (an `H0` bar's
     * birth) sits on a `-∞` line below the lowest number: `minusInfinity = false` leaves it out and counts it instead,
-    * `true` keeps the line even with nothing on it (panels that must line up).
+    * `true` keeps the line even with nothing on it (panels that must line up). `position` puts the axis at the
+    * `Side.Top` of the plot (or back at the `Side.Bottom`).
     */
   def x(
     transform: Optional[Transform] = Optional.empty,
@@ -133,10 +134,13 @@ object Scale:
     format: Optional[String] = Optional.empty,
     grid: Optional[Boolean] = Optional.empty,
     visible: Optional[Boolean] = Optional.empty,
-    minusInfinity: Optional[Boolean] = Optional.empty
-  ): Tweak = Position(true, false, transform, min, max, breaks, format, grid, visible, minusInfinity)
+    minusInfinity: Optional[Boolean] = Optional.empty,
+    position: Optional[Side] = Optional.empty
+  ): Tweak =
+    checkSide("x", position)
+    Position(true, false, transform, min, max, breaks, format, grid, visible, minusInfinity, position)
 
-  /** The y axis; as [[x]]. */
+  /** The y axis; as [[x]], with `position` the `Side.Left` or `Side.Right` of the plot. */
   def y(
     transform: Optional[Transform] = Optional.empty,
     min: Optional[Double] = Optional.empty,
@@ -145,8 +149,11 @@ object Scale:
     format: Optional[String] = Optional.empty,
     grid: Optional[Boolean] = Optional.empty,
     visible: Optional[Boolean] = Optional.empty,
-    minusInfinity: Optional[Boolean] = Optional.empty
-  ): Tweak = Position(false, true, transform, min, max, breaks, format, grid, visible, minusInfinity)
+    minusInfinity: Optional[Boolean] = Optional.empty,
+    position: Optional[Side] = Optional.empty
+  ): Tweak =
+    checkSide("y", position)
+    Position(false, true, transform, min, max, breaks, format, grid, visible, minusInfinity, position)
 
   /** Both axes alike: a log-log persistence diagram is `Scale.xy(Transform.Log10)`. */
   def xy(
@@ -158,7 +165,7 @@ object Scale:
     grid: Optional[Boolean] = Optional.empty,
     visible: Optional[Boolean] = Optional.empty,
     minusInfinity: Optional[Boolean] = Optional.empty
-  ): Tweak = Position(true, true, transform, min, max, breaks, format, grid, visible, minusInfinity)
+  ): Tweak = Position(true, true, transform, min, max, breaks, format, grid, visible, minusInfinity, Optional.empty)
 
   /** The figure's color scale, if it has one (a heatmap, a persistence image, a cocycle, circular coordinates; any
     * other figure is left as it is). `min` and `max` set the values at the ends of the ramp, so that two figures can
@@ -195,6 +202,16 @@ object Scale:
     }
     DegreeChange(k, DegreeStyle(color.toOption, darkColor.toOption, label.toOption, shape.toOption))
 
+  // an axis is on one of two sides: refused when the tweak is made, so a command line says so before anything is computed
+  private def checkSide(which: String, position: Optional[Side]): Unit =
+    position.toOption.foreach { side =>
+      val allowed = if which == "x" then Seq(Side.Bottom, Side.Top) else Seq(Side.Left, Side.Right)
+      require(
+        allowed.contains(side),
+        s"Scale.$which: the $which axis is at the ${allowed.mkString(" or the ").toLowerCase(Locale.ROOT)}, not the ${side.toString.toLowerCase(Locale.ROOT)}"
+      )
+    }
+
   private final case class Position(
     onX: Boolean,
     onY: Boolean,
@@ -205,10 +222,13 @@ object Scale:
     format: Optional[String],
     grid: Optional[Boolean],
     visible: Optional[Boolean],
-    minusInfinity: Optional[Boolean]
+    minusInfinity: Optional[Boolean],
+    position: Optional[Side]
   ) extends Tweak:
     def onFigure(f: Figure): Figure =
       f.copy(x = if onX then update(f.x, "x") else f.x, y = if onY then update(f.y, "y") else f.y)
+
+    override def toString: String = s"Scale.${if onX && onY then "xy" else if onX then "x" else "y"}(...)"
 
     private def update(a: Axis, which: String): Axis =
       val tr = transform.getOrElse(a.transform)
@@ -240,7 +260,8 @@ object Scale:
         format = format.toOption.orElse(a.format),
         grid = grid.getOrElse(a.grid),
         visible = visible.getOrElse(a.visible),
-        minusInfinity = minusInfinity.toOption.orElse(a.minusInfinity)
+        minusInfinity = minusInfinity.toOption.orElse(a.minusInfinity),
+        side = position.toOption.orElse(a.side)
       )
 
   private final case class ColorChange(

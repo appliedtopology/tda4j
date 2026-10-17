@@ -90,6 +90,13 @@ API). Rules:
   a dark one) and `Style.clear` (no background) are a different spec, for a figure that takes its page's color; `PlotGrammarSpec` pins the contrast of their inks and
   series against the surface. A preset reachable from the Scala API is reachable by name from MATLAB and the CLI
   (`Palette.named`, `Style.named`, `withPalette(name)`, `withStyle(name)`, `--palette`, `--style`).
+- **Finer-grained look lives in `Figure.elements`** (`Elements.scala`: text per `TextRole`, `LineStyle`s, `TickStyle`s, a
+  panel fill; tweaks in `ElementTweaks.scala`: `Text`, `Lines`, `Guide`, `Settings`), beside the style so that tweaks of both
+  commute. A layout constant in `Svg.render` is the old constant times `sc(role)`, never a new constant, so a role at its
+  default gives the old number: after any renderer change, diff the gallery against a build of the previous commit (41 files
+  identical at the time of writing). A new element needs its tweak, a typed `with...` method, a key in `Settings` (the one
+  string grammar for MATLAB and `--set`), a spec that makes the plausible wrong layout fail (a margin that did not follow the
+  size), and a mutation check.
 - Default output is a contract: look at `Gallery` before and after a renderer change and diff the SVGs against a
   `git worktree` build of the old commit (ids normalized: `tda4j[0-9]+`); every difference must be explained.
 

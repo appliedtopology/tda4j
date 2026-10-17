@@ -29,7 +29,8 @@ final case class Scene(
   elevation: Double = 25,
   palette: Palette = Palette.default,
   style: Style = Style.default,
-  degrees: Map[Int, DegreeStyle] = Map.empty
+  degrees: Map[Int, DegreeStyle] = Map.empty,
+  elements: Elements = Elements()
 ) extends Plot:
   def +(layer: Layer): Scene = copy(layers = layers :+ layer)
   def ++(more: IterableOnce[Layer]): Scene = copy(layers = layers ++ more)
@@ -71,6 +72,23 @@ final case class Scene(
 
   /** The size in pixels. */
   def withSize(width: Int, height: Int): Scene = this + Size(width, height)
+
+  /** The look of the title, the subtitle or the hint (`TextRole.Note`): the text a scene has. See [[Text]]. */
+  def withText(
+    role: TextRole,
+    size: Optional[Double] = Optional.empty,
+    weight: Optional[Weight] = Optional.empty,
+    italic: Optional[Boolean] = Optional.empty,
+    align: Optional[Anchor] = Optional.empty,
+    font: Optional[String] = Optional.empty,
+    color: Optional[String] = Optional.empty,
+    paint: Optional[Paint] = Optional.empty
+  ): Scene = this + Text(role, size, weight, italic, align, Optional.empty, font, color, paint)
+
+  /** One change written as text, `element.property=value`: `withSetting("title.size=18")`. See [[Settings]]; a scene
+    * has only the title, subtitle and note.
+    */
+  def withSetting(spec: String): Scene = this + Settings.parse(spec)
 
   /** The palette called `name`: `brand`, `reference`, `print` or `clear`. */
   def withPalette(name: String): Scene = withPalette(Palette.named(name))
@@ -132,7 +150,7 @@ final case class Scene(
       val y2 = y1 * math.cos(el) - z * math.sin(el)
       val z2 = y1 * math.sin(el) + z * math.cos(el)
       (x1, z2, y2) // screen x, screen y (up), depth (away from the viewer)
-    val top = if title.nonEmpty then 16.0 + 24.0 * ts else 12.0
+    val top = if title.nonEmpty then 16.0 + 24.0 * ts * (elements.face(TextRole.Title).size / 15.0) else 12.0
     val scale = 0.46 * math.min(width, height - top)
     val (cx, cy) = (width / 2.0, top + (height - top) / 2.0)
     def sx(v: (Double, Double, Double)) = f"${cx + v._1 * scale}%.2f"
@@ -167,17 +185,38 @@ final case class Scene(
     val id = s"tda4j3d${Scene.counter.incrementAndGet()}"
     val css = if theme == Theme.Auto then s"<style>${pal.cssVariables(s"#$id")}</style>" else ""
     def num(v: Double) = if v == v.toLong then v.toLong.toString else f"$v%.2f"
-    val titleBase = 9.0 + 15.0 * ts
+    // the title and the subtitle, as the style and the text roles have them
+    val (titleFace, subtitleFace) = (elements.face(TextRole.Title), elements.face(TextRole.Subtitle))
+    val (titlePx, subtitlePx) = (titleFace.size * ts, subtitleFace.size * ts)
+    val titleBase = 9.0 + titlePx
+    def at(f: TextFace): (Double, String) = f.align match
+      case Anchor.Start  => (14.0, "")
+      case Anchor.Middle => (width / 2.0, """ text-anchor="middle"""")
+      case Anchor.End    => (width - 14.0, """ text-anchor="end"""")
+    def extras(f: TextFace): String =
+      f.weight.fold("")(wt => s""" font-weight="${wt.css}"""") + (if f.italic then """ font-style="italic"""" else "") +
+        f.font.fold("")(ff => s""" font-family="${Svg.escape(ff)}"""")
     val heading =
       (if title.nonEmpty then
-         s"""<text x="14" y="${num(titleBase)}" font-size="${num(15.0 * ts)}" font-weight="600" style="fill:${paint(
-             Paint.Ink
+         val (tx, anchor) = at(titleFace)
+         s"""<text x="${num(tx)}" y="${num(titleBase)}"$anchor font-size="${num(titlePx)}"${extras(
+             titleFace
+           )} style="fill:${paint(
+             titleFace.paint
            )}">${Svg.escape(title)}</text>"""
-       else "") +
+       else "")
+      +
         (if subtitle.nonEmpty then
-           s"""<text x="14" y="${num(if title.nonEmpty then titleBase + 16.0 * ts else titleBase)}" font-size="${num(
-               12.0 * ts
-             )}" style="fill:${paint(Paint.Secondary)}">${Svg.escape(subtitle)}</text>"""
+           val (sx, anchor) = at(subtitleFace)
+           val sy =
+             if title.nonEmpty then
+               titleBase + 16.0 * ts + 0.25 * (titlePx - 15.0 * ts) + 0.75 * (subtitlePx - 12.0 * ts)
+             else titleBase + (subtitlePx - 12.0 * ts)
+           s"""<text x="${num(sx)}" y="${num(sy)}"$anchor font-size="${num(subtitlePx)}"${extras(
+               subtitleFace
+             )} style="fill:${paint(
+               subtitleFace.paint
+             )}">${Svg.escape(subtitle)}</text>"""
          else "")
     val background =
       if style.transparent then ""
@@ -191,6 +230,17 @@ final case class Scene(
     val pal = palette.withDegrees(degrees)
     val (ts, ink) = (style.textScale, style.markScale)
     def px(v: Double) = if v == v.toLong then v.toLong.toString else f"$v%.2f"
+    // a text's size, weight, slant, font and alignment as CSS, then its color
+    def css(role: TextRole, rest: String): String =
+      val f = elements.face(role)
+      val weight = f.weight.fold("")(wt => s"font-weight:${wt.css};")
+      val slant = if f.italic then "font-style:italic;" else ""
+      val family = f.font.fold("")(ff => s"font-family:${Svg.escape(ff)};")
+      val align = f.align match
+        case Anchor.Start  => ""
+        case Anchor.Middle => "text-align:center;"
+        case Anchor.End    => "text-align:right;"
+      s"font-size:${px(f.size * ts)}px;$weight$slant$family$align$rest"
     val (c, r) = frame
     def num(v: Double) = f"$v%.5f"
     def pos(p: XYZ) = s"[${num((p._1 - c._1) / r)},${num((p._2 - c._2) / r)},${num((p._3 - c._3) / r)}]"
@@ -220,27 +270,25 @@ final case class Scene(
        |<style>$vars #$id canvas{display:block;width:100%;touch-action:none;cursor:grab;border-radius:4px}</style>
        |${
         if title.nonEmpty then
-          s"""<div style="font-size:${px(15.0 * ts)}px;font-weight:600;margin:4px 0 2px;color:${col(Paint.Ink).replace(
-              "\"",
-              ""
-            )}">${Svg
-              .escape(title)}</div>"""
+          s"""<div style="${css(
+              TextRole.Title,
+              s"margin:4px 0 2px;color:${col(elements.face(TextRole.Title).paint).replace("\"", "")}"
+            )}">${Svg.escape(title)}</div>"""
         else ""
       }
        |${
         if subtitle.nonEmpty then
-          s"""<div style="font-size:${px(12.0 * ts)}px;margin:0 0 6px;color:${col(Paint.Secondary).replace(
-              "\"",
-              ""
-            )}">${Svg
-              .escape(subtitle)}</div>"""
+          s"""<div style="${css(
+              TextRole.Subtitle,
+              s"margin:0 0 6px;color:${col(elements.face(TextRole.Subtitle).paint).replace("\"", "")}"
+            )}">${Svg.escape(subtitle)}</div>"""
         else ""
       }
        |<canvas width="$width" height="${height - 40}"></canvas>
-       |<div style="font-size:${px(11.0 * ts)}px;color:${col(Paint.Muted).replace(
-        "\"",
-        ""
-      )};margin-top:4px">drag to turn, scroll to zoom</div>
+       |<div style="${css(
+        TextRole.Note,
+        s"color:${col(elements.face(TextRole.Note).paint).replace("\"", "")};margin-top:4px"
+      )}">drag to turn, scroll to zoom</div>
        |<script>(function(){
        |const root=document.getElementById('$id'),cv=root.querySelector('canvas'),g=cv.getContext('2d');
        |const layers=$json;

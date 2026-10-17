@@ -106,8 +106,12 @@ final case class Board(plots: Seq[Figure], title: String = "") extends Plot:
       .zip(plots)
       .map((x, f) => f.svg(theme).replaceFirst("<svg ", s"""<svg x="$x" y="0" """))
     val surface = plots.headOption.fold(Palette.default)(_.palette).hex(Paint.Surface, theme)
+    // a board of panels with no background of their own has none either
+    val background =
+      if plots.nonEmpty && plots.forall(_.style.transparent) then ""
+      else s"""<rect width="$w" height="$h" style="fill:$surface"/>"""
     s"""<?xml version="1.0" encoding="UTF-8"?>
-       |<svg xmlns="http://www.w3.org/2000/svg" width="$w" height="$h" viewBox="0 0 $w $h"><rect width="$w" height="$h" style="fill:$surface"/>${inner.mkString}</svg>""".stripMargin
+       |<svg xmlns="http://www.w3.org/2000/svg" width="$w" height="$h" viewBox="0 0 $w $h">$background${inner.mkString}</svg>""".stripMargin
 
 /** The plots of persistent homology. Every function returns a [[Figure]] (or a [[Scene]] for 3-D) to `view()`,
   * `save(...)`, or adjust (`copy(title = ...)`, `+ mark`, `over`).
