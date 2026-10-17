@@ -36,6 +36,11 @@ edges (dim 1 before 0), and a vertex with no incident edges is dropped entirely
 (`AlphaComplexDQPVertexAttachmentSpec`, `WORKLOG-dtm-filtrations.md`). Regressions in
 `AlphaComplexDQPRegressionSpec`/`AlphaValidationSpec` (`minTestsOk=2000`).
 
+**`Hyperplane.from` returns a canonically signed normal** (the first coordinate of size at least `0.5/sqrt(d)` is
+positive), whatever the SVD returns; every use that needs a side orients it itself (`reverse`). The sign only breaks
+ties inside exactly cospherical clusters (a 3^4 grid tiles differently with the sign flipped, with the same barcode)
+(`WORKLOG-scalajs-numerics-linear-algebra.md`).
+
 **HelixDelaunay's bootstrap crash is fixed** (`.claude/WORKLOG-helix-bootstrap-fix.md`) via three additive fixes
 routed through one shared `rankAtEpsilon` helper: retry every affinely-independent hyperplane candidate
 (smallest-span first); reject affinely-degenerate candidates outright; project a globally-coplanar cloud onto

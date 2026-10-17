@@ -1,8 +1,5 @@
 package org.appliedtopology.tda4j
 
-import scala.io.Source
-import java.io.PrintWriter
-
 /** GUDHI's OFF/nOFF point-cloud format and its `.pers` persistence-diagram format. For GUDHI's cubical input, which is
   * Perseus's format, see [[Perseus]].
   */
@@ -14,7 +11,7 @@ object Gudhi:
     * either.
     */
   def readOff(path: String): Array[Array[Double]] =
-    val src = Source.fromFile(path)
+    val src = FileAccess.source(path)
     try
       val lines = src.getLines().map(_.trim).filterNot(l => l.isEmpty || l.startsWith("#")).toIndexedSeq
       val header = lines.head.toUpperCase
@@ -36,7 +33,7 @@ object Gudhi:
     require(points.nonEmpty, "cannot write an OFF file for an empty point cloud")
     val dim = points.head.size
     require(points.forall(_.size == dim), "every point must have the same dimension")
-    val out = new PrintWriter(path)
+    val out = FileAccess.printWriter(path)
     try
       out.println(if dim == 3 then "OFF" else s"${dim}OFF")
       out.println(s"${points.size} 0 0")
@@ -50,7 +47,7 @@ object Gudhi:
     * `dimension` defaults to `0`. `inf`/`-inf` (any case) are infinite endpoints.
     */
   def readPersistenceDiagram(path: String): Seq[PersistenceBar[Double, Nothing]] =
-    val src = Source.fromFile(path)
+    val src = FileAccess.source(path)
     try
       src
         .getLines()
@@ -70,7 +67,7 @@ object Gudhi:
 
   /** Writes a 3-column `dim birth death` `.pers` file, or 4-column `field dim birth death` when `field` is given. */
   def writePersistenceDiagram(path: String, bars: Seq[PersistenceBar[Double, ?]], field: Option[Int] = None): Unit =
-    val out = new PrintWriter(path)
+    val out = FileAccess.printWriter(path)
     try
       bars.foreach { bar =>
         val prefix = field.map(f => s"$f ").getOrElse("")

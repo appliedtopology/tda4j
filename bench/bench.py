@@ -6,8 +6,11 @@
     bench.py summarize RESULTS                           tables: per case, and TDA4j's slowdown
 
 Normally driven by bench/run.sh, which builds the tools and sets the environment variables read here
-(TDA4J_CP, RIPSER_BIN, RIPSER_COEFF_BIN, JULIA, RIPSERER_PROJECT, JAVAPLEX_JAR, JAVAPLEX_BUILD). A tool
+(TDA4J_CP, TDA4J_JS, NODE, RIPSER_BIN, RIPSER_COEFF_BIN, JULIA, RIPSERER_PROJECT, JAVAPLEX_JAR, JAVAPLEX_BUILD). A tool
 whose variable is unset, or whose Python package is missing, is skipped and listed as `missing`.
+
+The `tda4j-js*` tools are the Scala.js build, packaged as the npm package and run on Node.js
+(workers/tda4j_js_worker.mjs): the same sources as `tda4j*`, so the pair of rows is the cost of the platform.
 
 Method (see .claude/PLAN-paper.md, section 3.0):
   - Every run is its own process, killed at --timeout; peak RSS comes from wait4.
@@ -104,7 +107,33 @@ TOOLS = [
     ("tda4j-helix", "tda4j", "alpha", {"engine": "auto", "reps": "cycles", "backend": "helix"}),
     ("gudhi", "py", "alpha", {}),
 ]
+# The Scala.js build of TDA4j (the npm package, on Node.js) beside each JVM variant above. A tool named `tda4j-js...`
+# is the JavaScript twin of `tda4j...`: summarize pairs them.
+TOOLS += [
+    ("tda4j-js", "tda4j-js", "vr", {"engine": "auto", "reps": "cycles"}),
+    ("tda4j-js-cocycles", "tda4j-js", "vr", {"engine": "auto", "reps": "cocycles"}),
+    ("tda4j-js", "tda4j-js", "cubical", {"engine": "auto", "reps": "cycles"}),
+    ("tda4j-js-cohomology", "tda4j-js", "cubical", {"engine": "cohomology", "reps": "cocycles"}),
+    ("tda4j-js", "tda4j-js", "alpha", {"engine": "auto", "reps": "cycles"}),
+    ("tda4j-js-fastalpha", "tda4j-js", "alpha", {"engine": "fastalpha", "reps": "cycles"}),
+    ("tda4j-js-bw", "tda4j-js", "alpha", {"engine": "auto", "reps": "cycles", "backend": "bowyer-watson"}),
+    ("tda4j-js-helix", "tda4j-js", "alpha", {"engine": "auto", "reps": "cycles", "backend": "helix"}),
+]
 REFERENCE = {"vr": "ripser.cpp", "cubical": "gudhi", "alpha": "gudhi"}
+
+
+def jvm_twin(name):
+    """`tda4j-js-cocycles` -> `tda4j-cocycles`, `tda4j-js` -> `tda4j`; None for a tool that is not a JavaScript twin."""
+    if name == "tda4j-js":
+        return "tda4j"
+    return "tda4j-" + name[len("tda4j-js-"):] if name.startswith("tda4j-js-") else None
+
+
+def node_heap_mb(spec):
+    """`--max-old-space-size` in MB from a JVM-style heap size (`16g`, `512m`, `1024`)."""
+    spec = str(spec).strip().lower()
+    scale = {"k": 1 / 1024, "m": 1, "g": 1024, "t": 1024 * 1024}.get(spec[-1:], None)
+    return int(float(spec[:-1] if scale else spec) * (scale or 1))
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -226,6 +255,8 @@ def available(kind, opts, python):
     env = os.environ
     if kind == "tda4j":
         return bool(env.get("TDA4J_CP")) and Path(env["TDA4J_CP"]).exists()
+    if kind == "tda4j-js":
+        return bool(env.get("TDA4J_JS")) and Path(env["TDA4J_JS"]).exists() and shutil.which(env.get("NODE", "node")) is not None
     if kind == "ripser":
         return bool(env.get("RIPSER_BIN"))
     if kind == "julia":
@@ -252,6 +283,11 @@ def command(kind, name, opts, case, data, p, threshold, warmup, trials, out, arg
         return (["java", f"-Xmx{args.jvm_heap}"] + args.jvm_opts.split() +
                 ["-cp", cp, "org.appliedtopology.tda4j.PaperBenchmarkDriver",
                  f"engine={opts['engine']}", f"reps={opts['reps']}"] +
+                ([f"backend={opts['backend']}"] if "backend" in opts else []) + common)
+    if kind == "tda4j-js":
+        heap = args.node_heap or args.jvm_heap
+        return ([os.environ.get("NODE", "node"), f"--max-old-space-size={node_heap_mb(heap)}"] + args.node_opts.split() +
+                [str(HERE / "workers" / "tda4j_js_worker.mjs"), f"engine={opts['engine']}", f"reps={opts['reps']}"] +
                 ([f"backend={opts['backend']}"] if "backend" in opts else []) + common)
     if kind == "py":
         extra = [f"tool={opts['pytool']}"]
@@ -417,6 +453,13 @@ def run_one(w, f, data, out, case, p, threshold, name, kind, opts, args):
     record("warm", status, wall, rss, "", j["times_s"] if j else None, j["bars"] if j else None)
 
 
+def js_package_version():
+    """The version in the npm package's package.json (the package TDA4J_JS points into), or ''."""
+    main = os.environ.get("TDA4J_JS")
+    manifest = Path(main).parent / "package.json" if main else None
+    return json.load(open(manifest)).get("version", "") if manifest and manifest.exists() else ""
+
+
 def write_env(out, args):
     def cmd_out(cmd):
         try:
@@ -432,6 +475,8 @@ def write_env(out, args):
         "host": platform.node(), "platform": platform.platform(), "cpu": cpu, "cores": os.cpu_count(),
         "mem_total": next((l.split(":")[1].strip() for l in open("/proc/meminfo")), "") if Path("/proc/meminfo").exists() else "",
         "java": cmd_out(["java", "-version"]),
+        "node": cmd_out([os.environ.get("NODE", "node"), "--version"]),
+        "tda4j_js_package": js_package_version(),
         "python_packages": cmd_out([args.python, "-m", "pip", "freeze"]),
         "julia": cmd_out([os.environ["JULIA"], "--version"]) if os.environ.get("JULIA") else "",
         "ripser_git": cmd_out(["git", "-C", str(Path(os.environ.get("RIPSER_BIN", ".")).parent), "rev-parse", "HEAD"]),
@@ -520,8 +565,46 @@ def summarize(out: Path):
         gr = math.exp(sum(math.log(v) for v in ref_vals) / len(ref_vals)) if ref_vals else float("nan")
         lines.append(f"- {key[0]}, p={key[1]}: {gm:.2f}x the best other tool, {gr:.2f}x the reference "
                      f"({len(vals)} cases)")
+    lines += js_against_jvm(summary)
     (out / "summary.md").write_text("\n".join(lines) + "\n")
     print("\n".join(lines))
+
+
+def js_against_jvm(summary):
+    """The Scala.js build beside the JVM build of the same variant: warm and cold time ratios (JS ÷ JVM) and memory,
+    per case and as geometric means. Empty when no `tda4j-js*` tool ran."""
+    index = {(s["case"], s["p"], s["tool"]): s for s in summary if s["status"] == "ok"}
+    rows, warm_ratios, cold_ratios = [], {}, {}
+    for (cname, p, tool), js in sorted(index.items()):
+        jvm_name = jvm_twin(tool)
+        jvm = index.get((cname, p, jvm_name)) if jvm_name else None
+        if jvm is None:
+            continue
+
+        def ratio(key):
+            a, b = js.get(key, ""), jvm.get(key, "")
+            return float(a) / float(b) if a not in ("", None) and b not in ("", None) and float(b) > 0 else None
+
+        warm, cold = ratio("warm_median_s"), ratio("cold_s")
+        mem = float(js["maxrss_mb"]) / float(jvm["maxrss_mb"]) if float(jvm["maxrss_mb"]) > 0 else None
+        if warm:
+            warm_ratios.setdefault((tool, p), []).append(warm)
+        if cold:
+            cold_ratios.setdefault((tool, p), []).append(cold)
+        fmt = lambda v: "" if v is None else f"{v:.2f}"
+        rows.append(f"| {cname} | {p} | {tool} | {jvm_name} | {fmt(warm)} | {fmt(cold)} | {fmt(mem)} | "
+                    f"{js['agrees']} |")
+    if not rows:
+        return []
+    lines = ["", "## Scala.js against the JVM (JS ÷ JVM; above 1, the JVM is faster)", "",
+             "| case | p | JS tool | JVM twin | warm × | cold × | peak memory × | JS agrees with reference |",
+             "|---|---|---|---|---|---|---|---|"] + rows + ["", "Geometric means of the warm ratio (cold in parentheses):", ""]
+    for key, vals in sorted(warm_ratios.items()):
+        gm = math.exp(sum(math.log(v) for v in vals) / len(vals))
+        cold = cold_ratios.get(key, [])
+        gc = f" ({math.exp(sum(math.log(v) for v in cold) / len(cold)):.2f})" if cold else ""
+        lines.append(f"- {key[0]}, p={key[1]}: {gm:.2f}x{gc} over {len(vals)} cases")
+    return lines
 
 
 def main():
@@ -543,6 +626,9 @@ def main():
                     help="if one cold computation takes longer (s), skip the warm repetitions and reuse it")
     p2.add_argument("--jvm-heap", default="16g")
     p2.add_argument("--jvm-opts", default="")
+    p2.add_argument("--node-heap", default="",
+                    help="--max-old-space-size for the tda4j-js tools, in the JVM's notation (default: --jvm-heap)")
+    p2.add_argument("--node-opts", default="", help="more options for node, e.g. --stack-size=4000")
     p2.add_argument("--javaplex-divisions", type=int, default=1000)
     p2.add_argument("--python", default=sys.executable)
     p3 = sub.add_parser("summarize")

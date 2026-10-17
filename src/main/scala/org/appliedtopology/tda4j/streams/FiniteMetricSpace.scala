@@ -5,9 +5,6 @@ import collection.immutable.Range
 import util.chaining.scalaUtilChainingOps
 import math.Ordering.Implicits.*
 
-import scala.jdk.CollectionConverters.*
-import com.eatthepath.jvptree.*
-
 /** Interface for being a finite metric space
   *
   * @tparam VertexT
@@ -184,16 +181,14 @@ open class EuclideanMetricSpace(val pts: Array[Array[Double]], val cacheDistance
   def distance(x: Int, y: Int): Double =
     if useCache then distanceCache(x * size + y) else sqrt(pointSqDistance(pts(x), pts(y)))
 
-  lazy val vpdf: DistanceFunction[Array[Double]] =
-    new DistanceFunction[Array[Double]]:
-      override def getDistance(firstPoint: Array[Double], secondPoint: Array[Double]): Double =
-        sqrt(pointSqDistance(firstPoint, secondPoint))
+  /** The Euclidean distance between two points, the metric of [[vpt]]. */
+  lazy val vpdf: (Array[Double], Array[Double]) => Double = (x, y) => sqrt(pointSqDistance(x, y))
 
-  lazy val vpt: VPTree[Array[Double], Array[Double]] =
-    new VPTree(vpdf, pts.toSeq.asJavaCollection)
+  /** A vantage-point tree over the points. */
+  lazy val vpt: VantagePointTree[Array[Double]] = VantagePointTree(pts.toSeq, vpdf)
 
-  def neighbors(qp: Array[Double], eps: Double): Seq[Int] =
-    vpt.getAllWithinDistance(qp, eps).asScala.toSeq.map(pts.indexOf(_))
+  /** The indices of the points within distance `eps` of `qp` (ascending), `qp` itself need not be one of them. */
+  def neighbors(qp: Array[Double], eps: Double): Seq[Int] = vpt.indicesWithinDistance(qp, eps)
 
 object EuclideanMetricSpace:
   /** The largest point count whose distances are cached: `8192^2` doubles is 512 MB. */
@@ -216,14 +211,14 @@ trait SpatialQuery[VertexT]:
     */
   def nearestNeighbors(v: VertexT, k: Int): IndexedSeq[VertexT]
 
-open class JVPTree[VertexT](metricSpace: FiniteMetricSpace[VertexT]) extends SpatialQuery[VertexT]:
-  val distanceFunction: DistanceFunction[VertexT] = new DistanceFunction[VertexT]:
-    override def getDistance(firstPoint: VertexT, secondPoint: VertexT): Double =
-      metricSpace.distance(firstPoint, secondPoint)
-  val vpTree: VPTree[VertexT, VertexT] = new VPTree(distanceFunction, metricSpace.elements.asJavaCollection)
+/** Neighbour search by a [[VantagePointTree]] over the points of `metricSpace`. Fast on a genuine metric space; see
+  * [[VantagePointTree]] for the tie-break of `nearestNeighbors` (earlier in `metricSpace.elements` first).
+  */
+open class VantagePointQuery[VertexT](metricSpace: FiniteMetricSpace[VertexT]) extends SpatialQuery[VertexT]:
+  val vpTree: VantagePointTree[VertexT] = VantagePointTree(metricSpace.elements.toIndexedSeq, metricSpace.distance)
 
   override def neighbors(v: VertexT, epsilon: Double): Set[VertexT] =
-    vpTree.getAllWithinDistance(v, epsilon).asScala.toSet
+    vpTree.withinDistance(v, epsilon).toSet
 
   // VP-tree pruning assumes the triangle inequality holds for `metricSpace.distance` -- true of every genuine
   // metric space in this codebase, but NOT of every FiniteMetricSpace instance (ExplicitMetricSpace enforces
@@ -233,7 +228,7 @@ open class JVPTree[VertexT](metricSpace: FiniteMetricSpace[VertexT]) extends Spa
   // defaults to it for exactly this reason.
   override def nearestNeighbors(v: VertexT, k: Int): IndexedSeq[VertexT] =
     require(1 <= k && k <= metricSpace.size, s"k must be between 1 and ${metricSpace.size}, got $k")
-    vpTree.getNearestNeighbors(v, k).asScala.toIndexedSeq
+    vpTree.nearest(v, k)
 
 open class BruteForce[VertexT](metricSpace: FiniteMetricSpace[VertexT]) extends SpatialQuery[VertexT]:
   override def nearestNeighbors(v: VertexT, k: Int): IndexedSeq[VertexT] =
@@ -248,7 +243,7 @@ open class BruteForce[VertexT](metricSpace: FiniteMetricSpace[VertexT]) extends 
 
 open class SparseMetricSpace[VertexT: Ordering](metricSpace: FiniteMetricSpace[VertexT], diameter: Double)
     extends FiniteMetricSpace[VertexT]():
-  val spatialQuery: SpatialQuery[VertexT] = JVPTree(metricSpace)
+  val spatialQuery: SpatialQuery[VertexT] = VantagePointQuery(metricSpace)
 
   val neighborhoods: Map[VertexT, Seq[(VertexT, Double)]] =
     Map.from(

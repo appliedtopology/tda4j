@@ -1,8 +1,8 @@
 package org.appliedtopology.tda4j.plot
 
-import org.appliedtopology.tda4j.*
+import RootText.lowerRoot
 
-import java.util.Locale
+import org.appliedtopology.tda4j.*
 
 /** The starting look of the plots you make: tweaks that every plot constructor (`Plot.barcode`, `Plot.diagram`, ...)
   * applies to what it builds, before anything you add yourself, so that `Plot.barcode(d)` is already in your house
@@ -70,7 +70,7 @@ object Look:
   val clear: Look = Look() + Palette.clear + Style.clear
 
   /** The look called `name`, in any case: `default` (none), `print` or `clear`. */
-  def named(name: String): Look = name.trim.toLowerCase(Locale.ROOT) match
+  def named(name: String): Look = name.trim.lowerRoot match
     case "default" | "none" => none
     case "print"            => print
     case "clear"            => clear

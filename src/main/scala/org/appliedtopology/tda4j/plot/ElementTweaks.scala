@@ -1,5 +1,7 @@
 package org.appliedtopology.tda4j.plot
 
+import RootText.lowerRoot
+
 import org.appliedtopology.tda4j.*
 
 /** Checks shared by the tweaks of this file, each saying which tweak refused and what to give instead. */
@@ -467,12 +469,12 @@ object Settings:
   private def number(spec: String, v: String): Double =
     v.trim.toDoubleOption.filter(_.isFinite).getOrElse(throw IllegalArgumentException(s"$spec: '$v' is not a number"))
 
-  private def flag(spec: String, v: String): Boolean = v.trim.toLowerCase(java.util.Locale.ROOT) match
+  private def flag(spec: String, v: String): Boolean = v.trim.lowerRoot match
     case "true" | "yes" | "on"  => true
     case "false" | "no" | "off" => false
     case _                      => throw IllegalArgumentException(s"$spec: '$v' should be true or false")
 
-  private def anchor(v: String): Anchor = v.trim.toLowerCase(java.util.Locale.ROOT) match
+  private def anchor(v: String): Anchor = v.trim.lowerRoot match
     case "start" | "left"               => Anchor.Start
     case "middle" | "center" | "centre" => Anchor.Middle
     case "end" | "right"                => Anchor.End
@@ -530,7 +532,7 @@ object Settings:
 
   /** A length in pixels, written as a number of pixels or with a unit: `326`, `3.4in`, `8.6cm`, `86mm`, `245pt`. */
   private def pixels(spec: String, value: String): Int =
-    val v = value.trim.toLowerCase(java.util.Locale.ROOT)
+    val v = value.trim.lowerRoot
     val units = Seq("px" -> 1.0, "in" -> 96.0, "cm" -> 96.0 / 2.54, "mm" -> 96.0 / 25.4, "pt" -> 96.0 / 72.0)
     val (digits, factor) =
       units.collectFirst { case (u, f) if v.endsWith(u) => (v.dropRight(2), f) }.getOrElse((v, 1.0))
@@ -580,7 +582,7 @@ object Settings:
   def parse(spec: String): Tweak =
     val eq = spec.indexOf('=')
     require(eq > 0, s"setting '$spec' should be element.property=value, such as title.size=18")
-    val key = spec.take(eq).trim.toLowerCase(java.util.Locale.ROOT)
+    val key = spec.take(eq).trim.lowerRoot
     val raw = spec.drop(eq + 1)
     val value = raw.trim
     // a separator may be a space, which the trim would take away: `numbers.grouping= ` or `numbers.grouping=space`

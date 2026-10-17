@@ -1,6 +1,7 @@
 package org.appliedtopology.tda4j
 package sset
 
+import org.appliedtopology.tda4j.SpecThrows.throwWith
 import org.appliedtopology.tda4j.*
 
 import org.specs2.mutable.Specification
@@ -260,8 +261,8 @@ class ClassifyingSpaceSpec extends Specification:
       } must beTrue
     }
     "reject a filtration that lets a simplex enter before its face" in {
-      nerve.persistentHomology(s => if s.dim == 0 then 1.0 else 0.0, 1, 2) must throwAn[IllegalArgumentException](
-        message = "enter before its face"
+      nerve.persistentHomology(s => if s.dim == 0 then 1.0 else 0.0, 1, 2) must throwWith[IllegalArgumentException](
+        "enter before its face"
       )
     }
   }

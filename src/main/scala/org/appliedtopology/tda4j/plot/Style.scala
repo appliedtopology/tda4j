@@ -1,5 +1,7 @@
 package org.appliedtopology.tda4j.plot
 
+import RootText.lowerRoot
+
 import org.appliedtopology.tda4j.*
 
 /** Where a figure's legend goes. `Right`, `Left`, `Top` and `Bottom` are beside the plot (the sides take the room they
@@ -38,7 +40,7 @@ object LegendPosition:
   /** The position called `name`, in any case: `right`, `left`, `top`, `bottom`, `upper-left`, `upper-right`,
     * `lower-left`, `lower-right`, or `none` (also `hidden`).
     */
-  def named(name: String): LegendPosition = name.trim.toLowerCase(java.util.Locale.ROOT) match
+  def named(name: String): LegendPosition = name.trim.lowerRoot match
     case "right"                        => Right
     case "left"                         => Left
     case "top"                          => Top
@@ -116,7 +118,7 @@ object Style:
   val clear: Style = Style(font = PrintFont, transparent = true)
 
   /** The style called `name`, in any case: `default`, `slides`, `print` or `clear`. */
-  def named(name: String): Style = name.trim.toLowerCase(java.util.Locale.ROOT) match
+  def named(name: String): Style = name.trim.lowerRoot match
     case "default" => default
     case "slides"  => slides
     case "print"   => print

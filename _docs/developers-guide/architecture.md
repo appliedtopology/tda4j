@@ -47,6 +47,33 @@ Outside the core:
   core's public API only and nothing in the core uses it. See [Plotting](../user-guide/plotting.md) for its use and
   [Plotting internals](plotting.md) for how it is built.
 
+## Two platforms: the JVM and Scala.js
+
+The library is built for the JVM and for JavaScript (Scala.js) from the same sources. sbt 2's project matrix has two
+rows, `tda4j` (JVM, artifact `tda4j_3`) and `tda4jJS` (Scala.js, artifact `tda4j_sjs1_3`). Everything under
+`src/main/scala` and `src/test/scala` compiles for both; `src/main/scalajvm` and `src/main/scalajs` (and the matching
+`src/test/...`) hold what exists on one platform only. Write shared code first: it uses no JVM-only library (the
+JVM-only ones are `cask`, the parallel collections, and the Java libraries Scala.js cannot compile) and no
+`java.nio.file`, `java.io.File` or threads.
+
+What differs between the platforms is behind a few small seams, each defined once per platform with the same name:
+
+| seam | JVM | Scala.js |
+|---|---|---|
+| `Parallel.foreach`/`map` (`streams/`) | the common fork-join pool | a loop: JavaScript has one thread |
+| `FileAccess` (`io/`) | `java.nio.file` | Node.js' `fs`, found at run time with `process.getBuiltinModule`; a browser gets an error that says it has no file system |
+| `plot.Viewer` | a small web server (cask) and a browser tab | the plot appended to the page, or written to a temporary HTML file and opened from Node.js |
+| `CubicalImagePlatform` (mixed into `CubicalImage`) | image files, `javax.imageio` | `fromImageData`, the pixels of a canvas; `fromFile` throws |
+| `FiltrationCache` (`streams/`) | a `TrieMap` that several threads can fill | a `HashMap` |
+| `plot.RootText` | `Locale.ROOT` for lower-casing and `String.format`; `DecimalFormatSymbols` | plain lower-casing and `String.format`; `Intl.NumberFormat` for a locale's separators (`java.util.Locale` does not exist on Scala.js) |
+| `cli.ProcessExit` | `sys.exit` | sets `process.exitCode` (no `System.exit` on Scala.js) |
+
+The Scala.js build adds `javascript.Exports` (the functions the npm package exports, a thin layer over the
+[MATLAB facade](../user-guide/matlab.md)) and the `tda4j` command on Node.js (`cli.TDA4jNodeMain`; the command is
+`TDA4jCLI` as on the JVM). The linker writes ES modules: `main.mjs` holds the exports, `cli.mjs` the command. `sbt
+tda4jJS/npmPack` packs them with `npm/package.json` and `npm/index.d.ts` into the npm tarball. The user-facing side is
+[Using it from JavaScript](../user-guide/javascript.md).
+
 **Load-bearing rule for givens**: the core package has no top-level `given`s. Default instances live in the companion
 of the data type they serve (`object Simplex` holds `Simplex[V] is OrderedCell`, the `Ordering` derived from it and
 `Show`; likewise `Cube`, `Chain`, `BarcodeEndpoint`, `Fp`). That puts them in the type's *implicit scope*: they are
@@ -361,10 +388,10 @@ collapse are on their own page: [Nerves and group homology](nerves.md).
 `streams/CechStream.scala` (`CechCofaceSimplexStream`/`CechFiltration`) builds Cech complexes over
 `Simplex[Int]`, reusing `RipserCofaceSimplexStream`'s generic coface-generation loop via its
 `filtrationValueOverride` hook rather than a from-scratch algorithm. The geometric primitive is
-minimum-enclosing-ball radius (`com.dreizak:miniball`), not the Delaunay/QP machinery alpha shapes use —
+minimum-enclosing-ball radius (`MinimumEnclosingBall`, the library's own, so it also builds for Scala.js), not the Delaunay/QP machinery alpha shapes use —
 Cech membership depends only on a simplex's own vertices, not on every other point in the cloud.
 `CechFiltration` caches each simplex's radius and clamps it to the max of its own facets' cached radii,
-since a raw Miniball call can violate monotonicity by a floating-point ULP on near-degenerate input.
+since a raw ball computation can violate monotonicity by a floating-point ULP on near-degenerate input.
 
 Because Cech is not a flag complex, VR-specific packed/coface optimizations do
 not apply. It is consumed by the generic homology engines.
@@ -441,7 +468,7 @@ collapsed graph without special handling.
 ### Metric spaces
 
 `FiniteMetricSpace.scala` abstracts "distance + finite point set": `ExplicitMetricSpace` (raw distance
-matrix), `EuclideanMetricSpace` (coordinate array, on-demand Euclidean distance, VP-tree-backed `neighbors`
+matrix), `EuclideanMetricSpace` (coordinate array, on-demand Euclidean distance, `VantagePointTree`-backed `neighbors`
 query), `IntMetricSpace` (reindexes to contiguous `0 until size`), `SparseMetricSpace` (reports `+Infinity`
 beyond a fixed diameter cutoff, bounding Vietoris-Rips construction to a finite neighborhood per point).
 
@@ -460,7 +487,8 @@ A few of the more expensive per-cell computations can run on the common `ForkJoi
 constructor flag defaulting to `false`, with output that is deterministic either way:
 `AlphaDQPSettings.parallel` (the per-vertex QP solve), `CubicalGridStream.parallelFiltrationValue`, and
 `CechCofaceSimplexStream.parallelFiltrationValue`. These are worth reaching for on large inputs where the
-per-cell cost is real (a QP solve, a Miniball radius.)
+per-cell cost is real (a QP solve, a minimum enclosing ball). On Scala.js the flags are accepted and the work runs on
+the one thread, giving the same answer.
 
 ## `Barcode.scala`: representing the output
 

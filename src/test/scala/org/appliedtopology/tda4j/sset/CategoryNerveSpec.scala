@@ -1,6 +1,7 @@
 package org.appliedtopology.tda4j
 package sset
 
+import org.appliedtopology.tda4j.SpecThrows.throwWith
 import org.appliedtopology.tda4j.*
 
 import org.specs2.mutable.Specification
@@ -60,7 +61,7 @@ class CategoryNerveSpec extends Specification:
       val (n, _) = cosetAction(s3, z2InS3)
       val cosets = (0 until s3.order).map(x => z2InS3.map(s3.multiply(x, _))).distinct
       val right: (Int, Int) => Int = (x, i) => cosets.indexOf(cosets(i).map(s3.multiply(s3.inverse(x), _)))
-      FiniteCategory.actionGroupoid(s3, n, right) must throwAn[IllegalArgumentException](message = "left action")
+      FiniteCategory.actionGroupoid(s3, n, right) must throwWith[IllegalArgumentException]("left action")
     }
   }
 
@@ -123,8 +124,8 @@ class CategoryNerveSpec extends Specification:
         .and(chain.bettiNumbers(2) must beEqualTo(Vector(1, 0, 0, 0)))
     }
     "refuse a quiver with a directed cycle" in {
-      FiniteCategory.freeOnAcyclicQuiver(2, Seq(0 -> 1, 1 -> 0)) must throwAn[IllegalArgumentException](
-        message = "directed cycle"
+      FiniteCategory.freeOnAcyclicQuiver(2, Seq(0 -> 1, 1 -> 0)) must throwWith[IllegalArgumentException](
+        "directed cycle"
       )
     }
   }
@@ -197,7 +198,7 @@ class CategoryNerveSpec extends Specification:
     "refuse an action that does not map simplices to simplices" in {
       val shift: (Int, Int) => Int =
         (g, v) => if g == 0 then v else Seq(1, 0, 2, 3)(v) // swaps 0, 1: edge {1,2} -> {0,2}
-      FiniteCategory.homotopyOrbits(z2, square, shift) must throwAn[IllegalArgumentException](message =
+      FiniteCategory.homotopyOrbits(z2, square, shift) must throwWith[IllegalArgumentException](
         "out of the complex"
       )
     }

@@ -38,27 +38,25 @@ class MetricSpaceSpec extends mutable.Specification with ScalaCheck:
             beGreaterThanOrEqualTo(metricSpace.distance(x, z))
         }
       }
-    "JVP-trees and brute force should find the same neighborhoods" >> {
-      val jvp = JVPTree(metricSpace)
+    "Vantage-point trees and brute force should find the same neighborhoods" >> {
+      val vpq = VantagePointQuery(metricSpace)
       val bf = BruteForce(metricSpace)
       AsResult {
         prop { (x: Int, y: Double) =>
-          jvp.neighbors(x, y).toSeq must containTheSameElementsAs(bf.neighbors(x, y).toSeq)
+          vpq.neighbors(x, y).toSeq must containTheSameElementsAs(bf.neighbors(x, y).toSeq)
         }
       }
     }
-    // Compares the DISTANCES returned, not the point identities: jvptree's own SpatialIndex doc says tie order
-    // ("multiple points have the same distance") is undefined, and this fixture (points on a circle) is generic
-    // enough that ties are vanishingly unlikely but not something to assert against.
-    "JVP-trees and brute force should find the same nearest-neighbour distances" >> {
-      val jvp = JVPTree(metricSpace)
+    // Both break ties by the order of `metricSpace.elements` (BruteForce is a stable sort), so the neighbours
+    // themselves agree, not just their distances.
+    "Vantage-point trees and brute force should find the same nearest neighbours" >> {
+      val vpq = VantagePointQuery(metricSpace)
       val bf = BruteForce(metricSpace)
       AsResult {
         prop { (x: Int, kRaw: Int) =>
           val k = 1 + (((kRaw % metricSpace.size) + metricSpace.size) % metricSpace.size)
-          val jvpDistances = jvp.nearestNeighbors(x, k).map(metricSpace.distance(x, _))
-          val bfDistances = bf.nearestNeighbors(x, k).map(metricSpace.distance(x, _))
-          (jvpDistances.size must be_==(k)) and (jvpDistances must be_==(bfDistances))
+          val vpqNeighbours = vpq.nearestNeighbors(x, k)
+          (vpqNeighbours.size must be_==(k)) and (vpqNeighbours must be_==(bf.nearestNeighbors(x, k)))
         }
       }
     }
@@ -68,21 +66,27 @@ class MetricSpaceSpec extends mutable.Specification with ScalaCheck:
           BruteForce(metricSpace).nearestNeighbors(x, 1) must be_==(IndexedSeq(x))
         }
       }
-    // DistanceToMeasure defaults to BruteForce specifically because JVPTree's pruning assumes the
-    // triangle inequality, which coincident points don't violate but do stress (jvptree's own PartitionException
-    // is a real, documented failure mode on degenerate configurations) -- this fixture duplicates a point so both
+    // DistanceToMeasure defaults to BruteForce specifically because the tree's pruning assumes the triangle
+    // inequality, which coincident points don't violate but do stress -- this fixture duplicates a point so both
     // implementations have to agree on a genuinely tied nearest-neighbour set, not just a generic one.
-    "JVP-trees and brute force agree on nearest-neighbour distances with coincident points" >> {
+    "Vantage-point trees and brute force agree on the nearest neighbours with coincident points" >> {
       val dupPts: Seq[Seq[Double]] = pts ++ Seq(pts.head, pts.head)
       val dupSpace: FiniteMetricSpace[Int] = EuclideanMetricSpace(dupPts)
-      val jvp = JVPTree(dupSpace)
+      val vpq = VantagePointQuery(dupSpace)
       val bf = BruteForce(dupSpace)
       (0 until dupSpace.size).forall { x =>
         (1 to dupSpace.size).forall { k =>
-          jvp.nearestNeighbors(x, k).map(dupSpace.distance(x, _)) ==
-            bf.nearestNeighbors(x, k).map(dupSpace.distance(x, _))
+          vpq.nearestNeighbors(x, k) == bf.nearestNeighbors(x, k)
         }
       } must beTrue
+    }
+    "a Euclidean space finds the indices of every point within a radius of an arbitrary query, repeats included" >> {
+      val shared = Array(0.5, 0.5)
+      val cloud = Array(shared, Array(0.0, 0.0), shared, Array(0.5, 0.5), Array(2.0, 2.0))
+      val space = EuclideanMetricSpace(cloud)
+      (space.neighbors(Array(0.5, 0.5), 0.0) must be_==(Seq(0, 2, 3))) and
+        (space.neighbors(Array(0.0, 0.0), math.sqrt(0.5)) must be_==(Seq(0, 1, 2, 3))) and
+        (space.neighbors(Array(0.0, 0.0), 0.5) must be_==(Seq(1)))
     }
   }
 

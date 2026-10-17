@@ -30,7 +30,7 @@ jobs:
       - name: Build docs site
         env:
           TDA4J_SCALA_VERSION: "3.8.4" # docs only; see build.sbt. TODO: remove when 3.9.1 is released.
-        run: sbt doc
+        run: sbt tda4j/doc
       - name: Publish docs
         run: |
           set -e

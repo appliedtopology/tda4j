@@ -1,7 +1,5 @@
 package org.appliedtopology.tda4j.plot
 
-import java.util.Locale
-
 /** Renders a [[Figure]] as one `<svg>` element: a surface, hairline grid and axes, the marks clipped to the plot area,
   * a legend and a color bar. Under `Theme.Auto` every themed color is a CSS variable of the `<svg>` (both modes
   * declared, `prefers-color-scheme` choosing); under `Light`/`Dark` every color is a plain hex.
@@ -470,7 +468,7 @@ object Svg:
     // grid, ticks, axes
     def mainTicks(a: Axis, tr: Transform, t0: Double, t1: Double): IndexedSeq[(Double, String)] =
       val text: Double => String = a.format match
-        case Some(pattern) => v => String.format(Locale.ROOT, pattern, Double.box(v))
+        case Some(pattern) => v => RootText.format(pattern, Double.box(v))
         case None          => tr.tickLabel
       val seen = (tr.inverse(math.min(t0, t1)), tr.inverse(math.max(t0, t1)))
       // an automatic tick keeps clear of an extra one (the `∞`), so that the two labels never overprint

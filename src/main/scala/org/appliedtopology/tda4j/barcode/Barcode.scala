@@ -7,7 +7,6 @@ package org.appliedtopology.tda4j
   */
 
 import cats.Show
-import org.apache.commons.math3.linear.*
 
 // Sealed on purpose: the four cases are the endpoints of an interval on the extended line, a closed classification that
 // `endpointOrdering` and every reader match on exhaustively.
@@ -272,11 +271,11 @@ object Barcode:
   def isMap[FiltrationT: Ordering, AnnotationT](
     source: List[PersistenceBar[FiltrationT, AnnotationT]],
     target: List[PersistenceBar[FiltrationT, AnnotationT]],
-    matrix: RealMatrix
+    matrix: DenseMatrix
   ): Boolean = (for
-      c <- 0 until matrix.getColumnDimension
-      r <- 0 until matrix.getRowDimension
-      if matrix.getEntry(r, c) != 0
+      c <- 0 until matrix.cols
+      r <- 0 until matrix.rows
+      if matrix(r, c) != 0
     yield source(c).lower >= target(
       r
     ).lower && // target must be born when source is born
@@ -294,24 +293,21 @@ object Barcode:
   def imageMatrix[FiltrationT: Ordering, AnnotationT](
     source: List[PersistenceBar[FiltrationT, AnnotationT]],
     target: List[PersistenceBar[FiltrationT, AnnotationT]],
-    matrix: RealMatrix
-  ): RealMatrix =
-    val matrixT = matrix.transpose()
+    matrix: DenseMatrix
+  ): DenseMatrix =
+    val matrixT = matrix.transpose
     val births = source.map(_.lower)
     val deaths = target.map(_.upper)
     val birthOrder = births.zipWithIndex.sortBy(_._1).map(_._2)
     val deathOrder = deaths.zipWithIndex.sortBy(_._1).map(_._2)
-    val imagematrix = MatrixUtils.createRealMatrix(births.size, deaths.size)
-    for
-      birth <- 0 until births.size
-      death <- 0 until deaths.size
-    do imagematrix.setEntry(birth, death, matrixT.getEntry(birthOrder(birth), deathOrder(death)))
+    val imagematrix =
+      DenseMatrix.tabulate(births.size, deaths.size)((birth, death) => matrixT(birthOrder(birth), deathOrder(death)))
     reduceMatrix(imagematrix)
 
   def image[FiltrationT: Ordering, AnnotationT](
     source: List[PersistenceBar[FiltrationT, AnnotationT]],
     target: List[PersistenceBar[FiltrationT, AnnotationT]],
-    matrix: RealMatrix
+    matrix: DenseMatrix
   ): List[PersistenceBar[FiltrationT, AnnotationT]] =
     val births = source.map(_.lower)
     val deaths = target.map(_.upper)
@@ -327,7 +323,7 @@ object Barcode:
   def kernel[FiltrationT, AnnotationT](
     source: List[PersistenceBar[FiltrationT, AnnotationT]],
     target: List[PersistenceBar[FiltrationT, AnnotationT]],
-    matrix: RealMatrix
+    matrix: DenseMatrix
   )(using
     ord: Ordering[FiltrationT]
   ): List[PersistenceBar[FiltrationT, AnnotationT]] =
@@ -336,34 +332,34 @@ object Barcode:
     val dualTarget: List[PersistenceBar[FiltrationT, AnnotationT]] =
       source.map(pb => PersistenceBar(pb.dim, pb.upper, pb.lower))
     val cokernelIntervals =
-      cokernel(dualSource, dualTarget, matrix.transpose())(using ord = ord.reverse)
+      cokernel(dualSource, dualTarget, matrix.transpose)(using ord = ord.reverse)
     cokernelIntervals.map(pb => PersistenceBar(pb.dim, pb.upper, pb.lower))
 
   def cokernelMatrix[FiltrationT, AnnotationT](
     source: List[PersistenceBar[FiltrationT, AnnotationT]],
     target: List[PersistenceBar[FiltrationT, AnnotationT]],
-    matrix: RealMatrix
+    matrix: DenseMatrix
   )(using
     ord: Ordering[FiltrationT]
-  ): RealMatrix =
+  ): DenseMatrix =
     val births = target.map(_.lower)
     val deaths = source.map(_.lower.flip) ++ target.map(_.upper)
     val birthOrder = births.zipWithIndex.sortBy(_._1).map(_._2)
     val deathOrder = deaths.zipWithIndex.sortBy(_._1).map(_._2)
-    val cokernelmatrix = MatrixUtils.createRealMatrix(births.size, deaths.size)
+    val cokernelmatrix = Array.ofDim[Double](births.size, deaths.size)
     for
       s <- 0 until source.size
       t <- 0 until target.size
-    do cokernelmatrix.setEntry(t, s, matrix.getEntry(birthOrder(t), deathOrder(s)))
+    do cokernelmatrix(t)(s) = matrix(birthOrder(t), deathOrder(s))
     (0 until target.size).foreach { t =>
-      cokernelmatrix.setEntry(birthOrder(t), deathOrder(source.size + t), 1.0)
+      cokernelmatrix(birthOrder(t))(deathOrder(source.size + t)) = 1.0
     }
-    reduceMatrix(cokernelmatrix)
+    reduceMatrix(DenseMatrix(cokernelmatrix))
 
   def cokernel[FiltrationT, AnnotationT](
     source: List[PersistenceBar[FiltrationT, AnnotationT]],
     target: List[PersistenceBar[FiltrationT, AnnotationT]],
-    matrix: RealMatrix
+    matrix: DenseMatrix
   )(using
     ord: Ordering[FiltrationT]
   ): List[PersistenceBar[FiltrationT, AnnotationT]] =
@@ -383,34 +379,36 @@ object Barcode:
       target(birth).annotation
     )).toList
 
-  def reduceMatrix(matrix: RealMatrix): RealMatrix =
-    for
-      col <- 0 until matrix.getColumnDimension
-      pivot <- List(matrix.getColumn(col).iterator.toSeq.lastIndexWhere(_ != 0))
-      if pivot >= 0
-      nextcol <- col + 1 until matrix.getColumnDimension
-      if matrix.getEntry(pivot, nextcol) != 0
-    do
-      matrix.setColumnMatrix(
-        nextcol,
-        matrix
-          .getColumnMatrix(nextcol)
-          .subtract(
-            matrix
-              .getColumnMatrix(col)
-              .scalarMultiply(
-                matrix.getEntry(pivot, nextcol) / matrix.getEntry(pivot, col)
-              )
-          )
-      )
-    matrix
+  /** `matrix` with every column reduced by the columns to its left, by their lowest nonzero entries (the standard
+    * persistence reduction over the reals): afterwards no two nonzero columns have the same lowest nonzero row. The
+    * argument is not changed.
+    */
+  def reduceMatrix(matrix: DenseMatrix): DenseMatrix =
+    val a = matrix.toArray
+    // Each column's pivot is read after the columns to its left have changed it.
+    for col <- 0 until matrix.cols do
+      val pivot = lowestNonzero(a, matrix.rows, col)
+      if pivot >= 0 then
+        for nextcol <- col + 1 until matrix.cols do
+          if a(pivot)(nextcol) != 0 then
+            val ratio = a(pivot)(nextcol) / a(pivot)(col)
+            for row <- 0 until matrix.rows do a(row)(nextcol) = a(row)(nextcol) - a(row)(col) * ratio
+    DenseMatrix(a)
 
-  def pivotsOf(matrix: RealMatrix): Seq[(Int, Int)] =
+  /** The pairs `(row, column)` of the lowest nonzero entry of each nonzero column. */
+  def pivotsOf(matrix: DenseMatrix): Seq[(Int, Int)] =
+    val a = matrix.toArray
     for
-      col <- 0 until matrix.getColumnDimension
-      pivot = matrix.getColumn(col).iterator.toSeq.lastIndexWhere(_ != 0)
+      col <- 0 until matrix.cols
+      pivot = lowestNonzero(a, matrix.rows, col)
       if pivot >= 0
     yield (pivot, col)
+
+  // The last row index of column `col` holding a nonzero entry, or -1.
+  private def lowestNonzero(a: Array[Array[Double]], rows: Int, col: Int): Int =
+    var row = rows - 1
+    while row >= 0 && a(row)(col) == 0 do row -= 1
+    row
 
 type BarcodeGenerators[FiltrationT, CellT, CoefficientT] =
   List[PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]]]

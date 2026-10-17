@@ -251,9 +251,9 @@ classDiagram
         <<typeclass: type VertexT>>
         neighbors(v, epsilon) Set~VertexT~
     }
-    SpatialQuery <|-- JVPTree
+    SpatialQuery <|-- VantagePointQuery
     SpatialQuery <|-- BruteForce
-    SparseMetricSpace --> SpatialQuery : uses (JVPTree)
+    SparseMetricSpace --> SpatialQuery : uses (VantagePointQuery)
 ```
 
 ## Barcode representation (`barcode/Barcode.scala`)

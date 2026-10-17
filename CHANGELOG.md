@@ -9,6 +9,13 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Breaking
 
+- `Plot.save` (and `PersistenceResult.save`, and so the MATLAB `save`) return the absolute path as a `String`, not a
+  `java.nio.file.Path`: the Scala.js build has no `java.nio.file`. Call `Paths.get(result)` where you need a `Path`.
+- `CubicalImage.fromBufferedImage` and `CubicalImage.fromFile` are members of the JVM build only (they are still there, on
+  the JVM); on Scala.js `fromFile` throws and `fromImageData` takes their place.
+- The library no longer depends on Apache Commons Math, Apache Commons Numbers, jvptree or Miniball: none has a Scala.js
+  build. `DenseVector`, `DenseMatrix`, `ConjugateGradient`, `Erf`, `VantagePointTree` and `MinimumEnclosingBall` replace
+  them (see Added); the next three entries list the signatures that changed.
 - `RingModule.scale` is `scalarMultiply`, and so is the infix extension (`r.scalarMultiply(x)`, was `r.scale(x)`). The
   operators `⊠`, `|*|`, `<*` and `mul` are as they were. A `RingModule` instance of your own implements
   `scalarMultiply(x, y)`; the labs (`TDAlab`, `CubicalLab`) lose `scale` and gain `scalarMultiply`.
@@ -17,8 +24,37 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   `Figure.colorbar` and the `Colorbar` class are `Figure.colorScale` and `ColorScale`; `Figure` and `Scene` take a
   `style` and per-degree `degrees` (a `Figure` also a `legendTitle`). The functions of `Plot`, which `matlab` and `cli`
   call, keep their signatures.
+- `Barcode.isMap`, `image`, `imageMatrix`, `kernel`, `cokernel`, `cokernelMatrix`, `reduceMatrix` and `pivotsOf` take and
+  return a `DenseMatrix` (was commons-math3's `RealMatrix`), and `Barcode.reduceMatrix` no longer changes the matrix it
+  is given. `AlphaShapes.Point`, and so the `normal` of a `Hyperplane` and the `center` of a `Hypersphere`, is a
+  `DenseVector` (was a `RealVector`); `Hyperplane.from` returns the normal with a fixed sign. The library no longer
+  uses commons-math3 in code that builds for Scala.js.
+- `JVPTree` is `VantagePointQuery`, and the vantage-point tree behind it is our own `VantagePointTree` instead of the
+  Java library jvptree (the Scala.js build cannot use Java libraries). `nearestNeighbors` breaks ties by the order of
+  `metricSpace.elements` and always returns `k` points; `EuclideanMetricSpace.vpdf` is a Scala function, `vpt` a
+  `VantagePointTree`, and `neighbors(point, eps)` returns every index within `eps`, repeated points included.
 
 ### Added
+
+- **tda4j runs in JavaScript.** The library is built for the JVM and for Scala.js from the same sources (sbt 2 project
+  matrix: `tda4j` and `tda4jJS`). Scala.js programs depend on the same coordinates (`"org.appliedtopology" %% "tda4j"`
+  picks `tda4j_sjs1_3` in a Scala.js project); JavaScript and TypeScript programs install the npm package `@appliedtopology/tda4j`:
+  `npm install @appliedtopology/tda4j`, `import { persistence } from "@appliedtopology/tda4j"`, with `persistence`, `persistenceFromDistances`, `persistenceFromImage`
+  and `persistenceFromGrid` returning a `Result` (bars, representatives, distances, landscapes, plots) and typings. `npx
+  tda4j` is the command line on Node.js. Browsers and Node.js 20.16 or newer; one thread; no file access in a browser. See
+  *Using it from JavaScript* in the user guide.
+- `CubicalImage.fromImageData` (Scala.js) builds a cubical complex from the pixels of a canvas.
+- The benchmark harness (`bench/`) times the Scala.js build, installed as the npm package and run on Node.js, beside the
+  JVM build and the other tools on the same machine and inputs: `bench/run.sh setup tda4j-js`, then the `tda4j-js*` tools
+  of `run` and the `js-*` engines of `sweep-cubical`; `summary.md` has a section comparing each with its JVM twin. `--node-heap`
+  and `--node-opts` set Node's heap and flags. `run.sh setup` can install one tool (`setup tda4j-js`), and takes the JVM
+  classpath from the `tda4j` project (the root only aggregates).
+- `Parallel`, `FileAccess` and `CubicalImagePlatform` exist once per platform; on Scala.js `parallelFiltrationValue` and the
+  DQP alpha complex's `parallel` give the same answer on one thread.
+- `DenseVector` and `DenseMatrix`, small immutable `Double` vectors and matrices with value equality, `matrix.svd` (the
+  compact singular value decomposition by Jacobi rotations, with `rank` and the pseudo-inverse `solve`), `matrix.lu()`
+  (partial pivoting, `isNonSingular`, `solve`); `ConjugateGradient.solve(operator, b)` for a symmetric positive definite
+  operator given as a function; `Erf.erf` and `Erf.erfc`. Pure Scala, so they also build for Scala.js.
 
 - Customizing a plot, by chaining: `Plot.diagram(d).withLabels(title = ..., x = ..., y = ...).withXYScale(Transform.Log10)
   .withSize(960, 540)`, with `withXScale`/`withYScale` (scale, `min`, `max`, `breaks`, `format = "%.1f"`, gridlines),
@@ -85,6 +121,10 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   (`withTitle`, `withSize`, `withXScale('log')`, `withPalette`, `withDegreeColor`, `withTextScale`, `withLegend`, ...,
   and `save(path, 'dark')`); command line: `--title`, `--x-label`, `--y-label`, `--width`, `--height`, `--palette`,
   `--theme`, `--text-scale`, `--x-scale` and `--y-scale` for a `--plot`.
+- `VantagePointTree(elements, distance)`: a vantage-point tree over any metric, with `withinDistance(query, radius)` (the
+  boundary included) and `nearest(query, k)` (the first `k` of the stable sort by distance); and
+  `MinimumEnclosingBall(points)`, the smallest ball around points in any dimension, with `center`, `squaredRadius` and
+  `radius`. `SimplexIndexing.binomialInt` is `binomial` as an `Int`, for enumerating indices.
 
 ### Changed
 
@@ -99,6 +139,8 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 ### Fixed
 
 - `fig.copy(palette = ...)` left heatmaps, cocycles' values and the color bar in the palette the plot was built with.
+- `DistanceToMeasure` through the vantage-point search returned fewer than `k` neighbours for some `k` that is a sizeable
+  fraction of the number of points (a defect of the Java library it used); it returns `k`.
 
 ### Build, CI and Documentation
 

@@ -1,6 +1,6 @@
 package org.appliedtopology.tda4j.plot
 
-import java.util.Locale
+import RootText.lowerRoot
 
 /** The pieces of text of a plot, each of which has a look of its own: a figure's `Text(role, size = ...)` changes one.
   *
@@ -13,7 +13,7 @@ enum TextRole:
   case Title, Subtitle, AxisLabel, TickLabel, Legend, LegendTitle, ColorTitle, Note, Caption, Tag
 
 object TextRole:
-  private def key(s: String): String = s.filter(_.isLetter).toLowerCase(Locale.ROOT)
+  private def key(s: String): String = s.filter(_.isLetter).lowerRoot
 
   /** The name a role has in settings and on the command line: `axis-label`. */
   def hyphenated(role: TextRole): String =
@@ -55,9 +55,9 @@ enum Weight(val css: Int):
 object Weight:
   /** The weight called `name`, in any case: `light`, `normal`, `medium`, `semibold` (or `semi-bold`) and `bold`. */
   def named(name: String): Weight =
-    val key = name.filter(_.isLetter).toLowerCase(Locale.ROOT)
+    val key = name.filter(_.isLetter).lowerRoot
     values
-      .find(_.toString.toLowerCase(Locale.ROOT) == key)
+      .find(_.toString.lowerRoot == key)
       .getOrElse(
         throw IllegalArgumentException(s"unknown weight '$name'; expected one of light, normal, medium, semibold, bold")
       )
@@ -326,5 +326,5 @@ object NumberStyle:
     * plot's four-digit numbers are rarely grouped.
     */
   def locale(tag: String): NumberStyle =
-    val symbols = java.text.DecimalFormatSymbols.getInstance(java.util.Locale.forLanguageTag(tag.trim))
-    NumberStyle(Some(symbols.getDecimalSeparator.toString), None, Some(symbols.getMinusSign.toString))
+    val (decimal, minus) = RootText.decimalAndMinus(tag)
+    NumberStyle(Some(decimal), None, Some(minus))

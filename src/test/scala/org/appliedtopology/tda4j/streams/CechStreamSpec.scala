@@ -79,14 +79,14 @@ class CechStreamSpec extends mutable.Specification with ScalaCheck:
       (radius must beCloseTo(5.0, 1e-6)) and (radius must be_<(naiveCircumradius))
     }
 
-  "Three collinear points: Cech radius is half the maximum span, and Miniball doesn't choke on the degeneracy" >> {
+  "Three collinear points: Cech radius is half the maximum span, and the ball solver doesn't choke on the degeneracy" >> {
     val ms = EuclideanMetricSpace(Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(3.0, 0.0)))
     CechFiltration(ms)(Simplex(0, 1, 2)) must beCloseTo(1.5, 1e-9)
   }
 
   "Repeated calls on the same simplex (even from independently-constructed CechFiltration instances) agree " +
     "exactly -- the correctness property the per-simplex cache exists to guarantee regardless of whether " +
-    "Miniball itself is deterministic across calls" >> {
+    "the ball solver itself is deterministic across calls" >> {
       val ms = EuclideanMetricSpace(
         Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.3, 0.9), Array(-0.4, 0.2))
       )

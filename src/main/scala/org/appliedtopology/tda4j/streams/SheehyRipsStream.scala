@@ -1,7 +1,5 @@
 package org.appliedtopology.tda4j
 
-import scala.collection.concurrent.TrieMap
-
 /** The sparse Vietoris-Rips filtration of Cavanna, Jahanseir and Sheehy, "A Geometric Perspective on Sparse
   * Filtrations" (arXiv:1506.03797, CCCG 2015): the greedy-permutation form of Sheehy's linear-size approximation
   * ("Linear-Size Approximations to the Vietoris-Rips Filtration", DCG 2013, arXiv:1203.6786). Its barcode is a
@@ -119,7 +117,7 @@ object SheehyRipsSimplexStream:
     epsilon: Double
   ): PartialFunction[Simplex[Int], Double] =
     val lambda = permutation.insertionRadius
-    val cache = TrieMap.empty[Simplex[Int], Double]
+    val cache = FiltrationCache.empty[Simplex[Int], Double]
     new PartialFunction[Simplex[Int], Double]:
       def isDefinedAt(spx: Simplex[Int]): Boolean = spx.forall(ambientMetricSpace.contains)
       def apply(spx: Simplex[Int]): Double =
