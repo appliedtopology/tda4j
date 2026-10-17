@@ -632,7 +632,9 @@ Plot.diagram(d, palette = Palette.reference).save("diagram.svg") // a palette na
 `Look.print` and `Look.clear` are the palette and style of the two looks for a paper (see above), `Look.none` is nothing,
 and `Look.named("print")` takes a word. Add tweaks with `+` and looks with `++`; the later one wins. A look serves figures
 and 3-D scenes alike: a tweak that a kind of plot cannot have (the tick labels of a scene) is left out for it, so the same
-look works for `Plot.barcode` and `Plot.points3D`. A `given` in a smaller scope replaces one in a larger.
+look works for `Plot.barcode` and `Plot.points3D`. A `given` in a smaller scope replaces one in a larger, whole: it does not add to it, so to build on a shared look keep that
+in a `val` (`val house = Look.print + ...`, then `given Look = house + Text(...)` where it differs). Two `given Look`s in one
+scope are an ambiguity error, not a silent merge. The default, which changes nothing, is found only when you have given none.
 
 **From MATLAB and Java**, which have no `given`s, a session has defaults of its own: `TDA4j.setPlotDefaults` takes the
 same settings as text (`palette=print`, `style=print`, `title.size=18`, ...), and every plot a result draws afterwards

@@ -99,6 +99,22 @@ class PlotLookSpec extends Specification:
       scene.elements.face(TextRole.Title).size must beEqualTo(21.0) // a scene has a title
       Plot.barcode(d).elements.face(TextRole.TickLabel).size must beEqualTo(9.0) // a figure has tick labels
     }
+    "be the user's: the nearest given wins whole, and the default in the companion never overrides one" in {
+      given Look = Look.print + Text(TextRole.Title, size = 21)
+      val outer = Plot.barcode(d)
+      outer.style must beEqualTo(Style.print)
+      outer.elements.face(TextRole.Title).size must beEqualTo(21.0)
+      val inner =
+        given Look = Look.clear // an inner scope replaces the outer look, it does not add to it
+        Plot.barcode(d)
+      inner.style must beEqualTo(Style.clear)
+      inner.elements.face(TextRole.Title).size must beEqualTo(
+        Plot.barcode(d)(using Look.none).elements.face(TextRole.Title).size
+      )
+      Plot.barcode(d).style must beEqualTo(Style.print) // and the outer one is back
+      // the library's own given is the empty look, found only when none is in scope
+      summon[Look](using Look.standard) must beEqualTo(Look.none)
+    }
     "be nothing at all unless you give one, and a block's own look is its own" in {
       Plot.barcode(d).style must beEqualTo(Style.default)
       {
