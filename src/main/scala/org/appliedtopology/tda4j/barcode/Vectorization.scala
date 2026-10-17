@@ -1,7 +1,5 @@
 package org.appliedtopology.tda4j
 
-import org.apache.commons.math3.special.Erf
-
 /** Persistence landscapes (Bubenik 2013) and persistence images (Adams et al. 2017): fixed-size arrays of numbers from
   * a barcode, for statistics and machine learning.
   *

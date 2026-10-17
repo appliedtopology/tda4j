@@ -2,14 +2,6 @@ package org.appliedtopology.tda4j
 
 import collection.mutable
 import scala.math.{pow, sqrt}
-import org.apache.commons.math3.linear.{
-  LUDecomposition,
-  MatrixUtils,
-  RealMatrix,
-  RealVector,
-  SingularValueDecomposition
-}
-import org.apache.commons.math3.linear.MatrixUtils.createRealVector
 import scala.util.Random
 import scala.util.chaining.*
 
@@ -176,36 +168,49 @@ object AlphaShapes extends PointCloudComplex:
     math.pow(triangulationPerPoint / dqpConstant, 1 / 1.6)
 
   // utilities for Delaunay computations
-  type Point = RealVector
+  type Point = DenseVector
   object Point:
-    def apply(coords: Array[Double]): Point = MatrixUtils.createRealVector(coords)
+    def apply(coords: Array[Double]): Point = DenseVector.fromArray(coords)
 
 import AlphaShapes.Point
 
+/** The hyperplane `{ x : normal . x = offset }`; its "light" side is where `normal . x >= offset`. */
 case class Hyperplane(normal: Point, offset: Double):
-  def isLight(point: Point): Boolean = normal.dotProduct(point) >= offset
+  def isLight(point: Point): Boolean = normal.dot(point) >= offset
 
-  def dist(point: Point): Double = normal.dotProduct(point) - offset
+  /** The signed distance of `point` from the plane (positive on the light side) when `normal` has length 1. */
+  def dist(point: Point): Double = normal.dot(point) - offset
 
-  def reverse: Hyperplane = Hyperplane(normal.mapMultiply(-1.0), -offset)
+  /** The same plane with light and dark sides exchanged. */
+  def reverse: Hyperplane = Hyperplane(-normal, -offset)
 
 object Hyperplane:
+  /** The hyperplane through `pointSet` (at least as many points as the dimension, spanning a hyperplane): its normal is
+    * the unit vector orthogonal to the points' differences from the first. Which of the two unit normals is returned is
+    * fixed (the first coordinate of absolute value at least `0.5 / sqrt(dimension)` is positive), so that the plane
+    * does not depend on the order of the points or on the decomposition that found it; callers that need a particular
+    * side `reverse` it.
+    */
   def from(pointSet: Seq[Point])(using epsilon: Epsilon): Hyperplane =
-    assert(pointSet.size >= pointSet.head.getDimension)
-    val points = pointSet.map(p => p.subtract(pointSet.head))
+    assert(pointSet.size >= pointSet.head.size)
+    val points = pointSet.map(p => p - pointSet.head)
     // now we need to find a basis of orthogonal complement to the space spanned by these
-    val A = MatrixUtils.createRealMatrix(points.toSeq.map(_.toArray).toArray)
-    val svdA = SingularValueDecomposition(A.transpose)
-    val nullSV = svdA.getSingularValues.zipWithIndex.filter(_._1.abs < epsilon.epsilon)
+    val A = DenseMatrix(points.toSeq.map(_.toArray).toArray)
+    val svdA = A.transpose.svd
+    val nullSV = svdA.singularValues.zipWithIndex.filter(_._1.abs < epsilon.epsilon)
+    val found =
+      nullSV.map((s, i) => svdA.u.column(i)).head // should leave out head if we want higher codimensions
+    // A unit vector has a coordinate of absolute value at least 1 / sqrt(dimension), so one is found.
+    val threshold = 0.5 / math.sqrt(found.size.toDouble)
     val n =
-      nullSV.map((s, i) => svdA.getU.getColumnVector(i)).head // should leave out head if we want higher codimensions
-    val offset = n.dotProduct(pointSet.head)
+      if (0 until found.size).find(i => math.abs(found(i)) >= threshold).exists(found(_) < 0.0) then -found else found
+    val offset = n.dot(pointSet.head)
     Hyperplane(n, offset)
 
 case class Hypersphere(center: Point, radius: Double)(using epsilon: Epsilon):
-  def contains(point: Point): Boolean = point.subtract(center).getNorm < radius - epsilon.epsilon
+  def contains(point: Point): Boolean = (point - center).norm < radius - epsilon.epsilon
 
-  def onSphere(point: Point): Boolean = math.abs(point.subtract(center).getNorm - radius) < epsilon.epsilon
+  def onSphere(point: Point): Boolean = math.abs((point - center).norm - radius) < epsilon.epsilon
 
 object Hypersphere:
   def apply(pointSet: Seq[Point])(using epsilon: Epsilon): Hypersphere =
@@ -213,25 +218,24 @@ object Hypersphere:
       v1 <- pointSet.indices
       v2 <- pointSet.indices
       if v1 < v2
-    yield (pointSet(v1).subtract(pointSet(v2)), math.pow(pointSet(v1).getNorm, 2) - math.pow(pointSet(v2).getNorm, 2))
-    val V = MatrixUtils.createRealMatrix(vvs.map(_._1.toArray).toArray)
-    val b = MatrixUtils.createRealVector(vvs.map(_._2).toArray).mapMultiply(0.5)
-    val c = SingularValueDecomposition(V).getSolver.solve(b)
-    new Hypersphere(c, c.getDistance(pointSet.head))
+    yield (pointSet(v1) - pointSet(v2), math.pow(pointSet(v1).norm, 2) - math.pow(pointSet(v2).norm, 2))
+    val V = DenseMatrix(vvs.map(_._1.toArray).toArray)
+    val b = DenseVector.fromArray(vvs.map(_._2).toArray) * 0.5
+    val c = V.svd.solve(b)
+    new Hypersphere(c, c.distance(pointSet.head))
 
 case class DelaunaySimplex(simplex: Simplex[Int], circumsphere: Hypersphere)
 
-/** Rank of `matrix`'s own row space, at THIS codebase's own `epsilon` tolerance -- not `SingularValueDecomposition`'s
-  * default `getRank`, whose internal tolerance (machine-epsilon-scale, relative to the matrix's own norm) is far
-  * tighter than `epsilon.epsilon` (typically `1e-5`) and so treats near-but-not-exactly-degenerate input (e.g. points
-  * jittered at the `1e-7` scale) as full rank when every OTHER degeneracy check in this file -- `Hyperplane. from`'s
-  * own `nullSV` filter included -- would already call that same input degenerate. Used everywhere this file needs "how
-  * many affinely-independent directions does this set of points actually span," so all of them agree on where the line
-  * is.
+/** Rank of `matrix`'s own row space, at THIS codebase's own `epsilon` tolerance -- not the decomposition's own `rank`,
+  * whose internal tolerance (machine-epsilon-scale, relative to the matrix's own norm) is far tighter than
+  * `epsilon.epsilon` (typically `1e-5`) and so treats near-but-not-exactly-degenerate input (e.g. points jittered at
+  * the `1e-7` scale) as full rank when every OTHER degeneracy check in this file -- `Hyperplane. from`'s own `nullSV`
+  * filter included -- would already call that same input degenerate. Used everywhere this file needs "how many
+  * affinely-independent directions does this set of points actually span," so all of them agree on where the line is.
   */
 // File-private: a public top-level def would join every user's `import org.appliedtopology.tda4j.*`.
-private def rankAtEpsilon(matrix: org.apache.commons.math3.linear.RealMatrix)(using epsilon: Epsilon): Int =
-  new SingularValueDecomposition(matrix).getSingularValues.count(_.abs > epsilon.epsilon)
+private def rankAtEpsilon(matrix: DenseMatrix)(using epsilon: Epsilon): Int =
+  matrix.svd.singularValues.count(_.abs > epsilon.epsilon)
 
 /** Runs the frontier-walking bootstrap + main loop that finds every Delaunay simplex of `pts`, holding all of the
   * algorithm's own mutable working state (`validated`, `frontierCases`, `visitedFacets`, `cospherical`) so
@@ -247,7 +251,7 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
   // keeps unseeded call sites deterministic; it does not make the walk order-independent.
   private val rng: Random = new Random(seed)
   val points: Seq[Point] = pts.map(Point.apply).toIndexedSeq
-  val ambientDimension: Int = points.head.getDimension
+  val ambientDimension: Int = points.head.size
   private val validated: mutable.Set[DelaunaySimplex] = mutable.Set.empty
   // The simplices of `validated`, for a hashed "already accepted?" test; a scan of `validated` comparing sorted sets
   // was most of the construction time (`.claude/WORKLOG-helix-construction-speed.md`).
@@ -384,11 +388,11 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
     def dot(a: Array[Double], b: Array[Double]) = a.indices.foldLeft(0.0)((s, j) => s + a(j) * b(j))
     if k == 0 then Some((p0.clone(), 0.0))
     else
-      val gram = MatrixUtils.createRealMatrix(Array.tabulate(k, k)((i, j) => 2 * dot(diffs(i), diffs(j))))
-      val solver = new LUDecomposition(gram, 1e-14).getSolver
+      val gram = DenseMatrix.tabulate(k, k)((i, j) => 2 * dot(diffs(i), diffs(j)))
+      val solver = gram.lu(1e-14)
       if !solver.isNonSingular then None
       else
-        val lambda = solver.solve(createRealVector(Array.tabulate(k)(i => dot(diffs(i), diffs(i))))).toArray
+        val lambda = solver.solve(DenseVector.tabulate(k)(i => dot(diffs(i), diffs(i)))).toArray
         val c0 = Array.tabulate(ambientDimension)(j => p0(j) + (0 until k).map(i => lambda(i) * diffs(i)(j)).sum)
         val r0sq = (0 until ambientDimension).map(j => (c0(j) - p0(j)) * (c0(j) - p0(j))).sum
         Some((c0, r0sq))
@@ -398,7 +402,7 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
     var sq = 0.0
     var i = 0
     while i < p.length do
-      val d = p(i) - c.getEntry(i)
+      val d = p(i) - c(i)
       sq += d * d
       i += 1
     math.sqrt(sq) < sphere.radius - epsilon.epsilon
@@ -410,7 +414,7 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
     val circumsphere = Hypersphere(fc.facet.toSeq.toSeq.map(points))
     (points.indices.toSet -- fc.facet.toSeq).toSeq
       .filter(pi => fc.hyperplane.isLight(points(pi)))
-      .sortBy(pi => circumsphere.center.getDistance(points(pi)))
+      .sortBy(pi => circumsphere.center.distance(points(pi)))
       .view
       .map(pi => DelaunaySimplex(fc.facet + pi, Hypersphere((fc.facet + pi).toSeq.toSeq.map(points))))
       .collectFirst { case ds if !points.exists(ds.circumsphere.contains) => ds }
@@ -497,8 +501,8 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
     val remaining = candidates.tail.iterator
     while chosen.size < ambientDimension && remaining.hasNext do
       val candidate = remaining.next()
-      val trialVecs = chosenVecs :+ points(candidate).subtract(base).toArray
-      val rank = rankAtEpsilon(MatrixUtils.createRealMatrix(trialVecs.toArray))
+      val trialVecs = chosenVecs :+ (points(candidate) - base).toArray
+      val rank = rankAtEpsilon(DenseMatrix(trialVecs.toArray))
       if rank > chosenVecs.size then
         chosen = chosen :+ candidate
         chosenVecs = trialVecs
@@ -612,8 +616,8 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
           .combinations(ambientDimension)
           .filter { combo =>
             val base = points(combo.head)
-            val vecs = combo.tail.map(pi => points(pi).subtract(base).toArray)
-            rankAtEpsilon(MatrixUtils.createRealMatrix(vecs.toArray)) == ambientDimension - 1
+            val vecs = combo.tail.map(pi => (points(pi) - base).toArray)
+            rankAtEpsilon(DenseMatrix(vecs.toArray)) == ambientDimension - 1
           }
           .take(maxCandidates)
           .map(_.toSet)
@@ -622,7 +626,7 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
             (for
               i <- combo.toSeq.indices
               j <- (i + 1) until combo.size
-            yield points(combo.toSeq(i)).getDistance(points(combo.toSeq(j)))).sum
+            yield points(combo.toSeq(i)).distance(points(combo.toSeq(j)))).sum
           )
 
     // brute force search for first delaunay simplex -- retried across every candidate starting simplex above,
@@ -665,7 +669,7 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
 
     val seedDelaunaySimplex: DelaunaySimplex = validated.head
     points.indices
-      .map(i => (i, seedDelaunaySimplex.circumsphere.center.getDistance(points(i))))
+      .map(i => (i, seedDelaunaySimplex.circumsphere.center.distance(points(i))))
       .filter((i, d) => onSphere(d, seedDelaunaySimplex.circumsphere.radius))
       .map(_._1)
       .to(mutable.SortedSet) match
@@ -691,7 +695,7 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
           case Some(newDelaunaySimplex) if !validatedSimplices.contains(newDelaunaySimplex.simplex) =>
             // check whether we have "too many" cospherical points; in that case we have to tile them on our own
             val spherepoints: mutable.SortedSet[Int] = points.indices
-              .map(i => (i, newDelaunaySimplex.circumsphere.center.getDistance(points(i))))
+              .map(i => (i, newDelaunaySimplex.circumsphere.center.distance(points(i))))
               .filter((i, d) => onSphere(d, newDelaunaySimplex.circumsphere.radius))
               .map(_._1)
               .to(mutable.SortedSet)
@@ -966,13 +970,13 @@ object HelixDelaunay:
       val dim = pts.head.length
       val base = pts.head
       val centered = pts.map(p => p.zip(base).map(_ - _))
-      val matrix = MatrixUtils.createRealMatrix(centered)
+      val matrix = DenseMatrix(centered)
       val rank = rankAtEpsilon(matrix)
       if rank >= dim then pts
       else
-        val v = new SingularValueDecomposition(matrix).getV
+        val v = matrix.svd.v
         centered.map { row =>
-          Array.tabulate(rank)(k => (0 until dim).map(j => row(j) * v.getEntry(j, k)).sum)
+          Array.tabulate(rank)(k => (0 until dim).map(j => row(j) * v(j, k)).sum)
         }
 
   private def facetsOf(ds: DelaunaySimplex): Seq[Simplex[Int]] = ds.simplex.toSeq.toSeq.map(v => ds.simplex - v)
@@ -1070,7 +1074,7 @@ object HelixDelaunay:
             (for
               i <- jitterPoints.indices
               j <- (i + 1) until jitterPoints.size
-            yield jitterPoints(i).getDistance(jitterPoints(j))).min
+            yield jitterPoints(i).distance(jitterPoints(j))).min
         // Large enough that the jittered points are comfortably in general position: at 1e-6 of the spacing, a jittered
         // row of grid points is collinear to 1e-6 and its facets' circumcentres are too ill-conditioned for the walk.
         // The jitter only breaks ties; every value is recomputed from the original coordinates below.

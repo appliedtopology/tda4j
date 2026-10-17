@@ -1,7 +1,5 @@
 package org.appliedtopology.tda4j
 
-import org.apache.commons.math3.linear.{ArrayRealVector, ConjugateGradient, RealLinearOperator, RealVector}
-
 import scala.collection.mutable
 
 /** The chosen cocycle has no integer lift at the chosen `prime`: either the class is torsion (as on RP²) and has no
@@ -184,33 +182,26 @@ object CircularCoordinates:
     val reducedVertices: IndexedSeq[Simplex[Int]] = (component - anchor).toIndexedSeq
     val reducedIndexOf: Map[Simplex[Int], Int] = reducedVertices.zipWithIndex.toMap
 
-    val laplacian = new RealLinearOperator:
-      override def getRowDimension: Int = reducedVertices.length
-      override def getColumnDimension: Int = reducedVertices.length
-      override def operate(x: RealVector): RealVector =
-        val g: Map[Simplex[Int], Double] = reducedIndexOf.view.mapValues(i => x.getEntry(i)).toMap
-        def gOf(v: Simplex[Int]): Double = g.getOrElse(v, 0.0) // anchor (and anything outside the component) is 0
-        val acc = mutable.Map.empty[Simplex[Int], Double].withDefaultValue(0.0)
-        for edge <- componentEdges do
-          val terms = edge.boundary[Double]
-          val edgeValue = terms.map((v, c) => c * gOf(v)).sum
-          for (v, c) <- terms do acc(v) = acc(v) + c * edgeValue
-        val out = new ArrayRealVector(reducedVertices.length)
-        for i <- reducedVertices.indices do out.setEntry(i, acc.getOrElse(reducedVertices(i), 0.0))
-        out
+    val laplacian: DenseVector => DenseVector = x =>
+      val g: Map[Simplex[Int], Double] = reducedIndexOf.view.mapValues(i => x(i)).toMap
+      def gOf(v: Simplex[Int]): Double = g.getOrElse(v, 0.0) // anchor (and anything outside the component) is 0
+      val acc = mutable.Map.empty[Simplex[Int], Double].withDefaultValue(0.0)
+      for edge <- componentEdges do
+        val terms = edge.boundary[Double]
+        val edgeValue = terms.map((v, c) => c * gOf(v)).sum
+        for (v, c) <- terms do acc(v) = acc(v) + c * edgeValue
+      DenseVector.tabulate(reducedVertices.length)(i => acc.getOrElse(reducedVertices(i), 0.0))
 
     val rhsAcc = mutable.Map.empty[Simplex[Int], Double].withDefaultValue(0.0)
     for edge <- componentEdges do
       val terms = edge.boundary[Double]
       val zValue = zInt.getOrElse(edge, 0).toDouble
       for (v, c) <- terms do rhsAcc(v) = rhsAcc(v) + c * zValue
-    val rhs = new ArrayRealVector(reducedVertices.length)
-    for i <- reducedVertices.indices do rhs.setEntry(i, rhsAcc.getOrElse(reducedVertices(i), 0.0))
+    val rhs = DenseVector.tabulate(reducedVertices.length)(i => rhsAcc.getOrElse(reducedVertices(i), 0.0))
 
-    val cg = new ConjugateGradient(1000, 1e-10, true)
-    val gReduced = cg.solve(laplacian, rhs)
+    val gReduced = ConjugateGradient.solve(laplacian, rhs, maxIterations = 1000, tolerance = 1e-10, check = true)
 
-    def gOf(v: Simplex[Int]): Double = if v == anchor then 0.0 else gReduced.getEntry(reducedIndexOf(v))
+    def gOf(v: Simplex[Int]): Double = if v == anchor then 0.0 else gReduced(reducedIndexOf(v))
     def frac(x: Double): Double = x - math.floor(x)
 
     val theta: Map[Int, Double] = component.toIndexedSeq.map(v => v.underlying.head -> frac(gOf(v))).toMap
