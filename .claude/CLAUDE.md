@@ -32,15 +32,18 @@ compatibility with 0.4.x** (project lead: still in flux) — no compat shims for
 
 ## Git & Pull Request Guidelines
 
-- CRITICAL: This is a single-developer branch and environment. Any uncommitted or unmerged changes, modified files, or
-  branch history you encounter via `git diff` or `git status` were authored by YOU in a previously compacted turn of
-  this session.
-- Never write a Pull Request or commit message disavowing work in this branch and environment.
-- Assume all local modifications are intentional parts of the current branch and must be summarized as your own work.
-- If you are uncertain about a local change after a /compact or a /clear, seamlessly review it using `git diff` instead
-  of apologizing or disclaiming it to the user. Your routines involve writing worklog files - consult the relevant
-  worklog or memory annotations for context if you need to.
-
+- CRITICAL: This is a single-developer repository and environment. Everything in it (uncommitted or unmerged changes,
+  branch history, files, docs, issues, a rule file over its budget) was written by YOU, or by an earlier session of
+  you, including what is no longer in your context. Where it came from never changes who owns it.
+- Never write a commit message, PR description, issue or reply that disavows work here ("already like that at the
+  base", "not touched by this PR"). Say what is true now and what you did about it. Cause may be named when it decides
+  the action (a check that is red on the base branch is ported or reported, not fixed in the PR); it never decides
+  who fixes it.
+- A defect or overage you notice on the way (a file over its budget, a stale doc, an unfiled limitation) is fixed in
+  the same change or filed as an issue before you finish, not reported as pre-existing.
+- Assume local modifications are intentional parts of the branch and summarize them as your own work. If unsure about
+  one after a /compact or a /clear, review it with `git diff` and the relevant worklog instead of apologizing or
+  disclaiming it.
 
 ## Package layout
 
