@@ -5,7 +5,6 @@ import org.apache.commons.numbers.combinatorics.BinomialCoefficient
 import scala.collection.{immutable, mutable}
 import scala.collection.immutable.{Map, Seq, SortedSet}
 import scala.collection.concurrent.TrieMap
-import scala.collection.parallel.CollectionConverters.*
 import math.Ordering.Implicits.*
 
 trait Filterable[FiltrationT: Ordering]:
@@ -507,7 +506,7 @@ open class RipserCofaceSimplexStream(
         // each applyOrElse call, in parallel; the returned values themselves are discarded, exactly the
         // same "parallel compute, sequential-cache-already-safe" pattern used elsewhere in this arc, except
         // here the safety comes from the TrieMap swap above rather than a separate sequential merge step.
-        rawCandidates.par.foreach(c => filtrationValue.applyOrElse(c, (_: Simplex[Int]) => Double.NaN))
+        Parallel.foreach(rawCandidates)(c => filtrationValue.applyOrElse(c, (_: Simplex[Int]) => Double.NaN))
       currentDimensionCache = sortedByFiltration(
         rawCandidates.filter(keptByThresholdAndCriterion)
       ).to(immutable.Queue) // we _would_ want to avoid creating the entire thing and sort it

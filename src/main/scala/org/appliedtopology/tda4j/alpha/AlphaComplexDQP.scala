@@ -2,7 +2,6 @@ package org.appliedtopology.tda4j
 
 import scala.collection.immutable.ArraySeq
 import scala.collection.mutable
-import scala.collection.parallel.CollectionConverters.*
 
 /*
  * Mikael Vejdemo-Johansson with Claude Opus 5 at Extra effort
@@ -898,7 +897,7 @@ open class AlphaComplexDQPBuilder(
         val (x, cs) = entry
         solveAtVertex(x, cs, nbrs(x), wsCap).to(mutable.IndexedBuffer)
       val perVertex: IndexedSeq[mutable.IndexedBuffer[Found]] =
-        if settings.parallel then vertices.par.map(solveEntry).toIndexedSeq
+        if settings.parallel then Parallel.map(vertices)(solveEntry)
         else vertices.map(solveEntry)
 
       // Merge in vertex order so the output does not depend on scheduling.
