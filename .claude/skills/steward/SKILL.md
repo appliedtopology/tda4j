@@ -70,12 +70,13 @@ Codecov's commit statuses are informational (`codecov.yml`).
   - CI fixes in code the PR touches;
   - lint, in any file;
   - merge conflicts: merge the base in, never rebase a shared branch;
+  - the developer's guide and user guide pages of a subsystem the PR changes (a fact the change makes false, a new
+    capability the page should name);
   - review nits;
   - small asks from a review.
 - **Ask the project lead first** about:
   - API or design changes a reviewer asks for;
   - a change to an engine's algorithm;
-  - edits to the developer's guide beyond fact fixes (a student is editing it);
   - anything sold as faster or leaner.
 - **Performance needs a measurement.** A claim that something is faster or uses less memory needs an isolated A/B
   (`_docs/developers-guide/performance.md`). Report an effect within the noise as unconfirmed.

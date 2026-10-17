@@ -291,8 +291,10 @@ file before changing that subsystem; this table is the index, in case a rule did
   what to call (Li Haoyi's "easy": one import, defaults, errors that say what to do); no "used to", "fixed in session
   X", "confirmed by", worklog pointers or measurements there -- those go in `.claude/`. `//` implementation comments
   MAY carry history and worklog pointers (project lead, 2026-10-03), as long as none of it moves into scaladoc. Error messages and `--help`
-  never name `.claude/` files or private classes. The Developer's Guide is being edited by a student: touch it only to
-  fix facts.
+  never name `.claude/` files or private classes. **The Developer's Guide is kept current with the code like the other
+  docs** (project lead, 2026-10-17: it is no longer off limits): a change to a subsystem updates that subsystem's page
+  with what the code does now, under the same rule (contract, not history), and a fact the code contradicts is fixed in the
+  change that makes it false.
 - **Never revert the formatter's output.** If `scalafmtAll` touches files outside your change, commit that in its OWN
   commit ("Format: ... formatter output only, no behavior change") and say so — reverting only hides the debt, and a
   clean lint beats a minimal diff. Run all three lint checks (Commands) before pushing.
