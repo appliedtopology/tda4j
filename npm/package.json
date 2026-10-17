@@ -1,0 +1,50 @@
+{
+  "name": "tda4j",
+  "version": "@VERSION@",
+  "description": "Persistent homology and topological data analysis: Vietoris-Rips, Cech and alpha complexes, cubical images, barcodes with representatives, and plots.",
+  "type": "module",
+  "main": "./main.mjs",
+  "module": "./main.mjs",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./main.mjs",
+      "default": "./main.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "tda4j": "./cli.mjs"
+  },
+  "files": [
+    "main.mjs",
+    "cli.mjs",
+    "internal-*.mjs",
+    "index.d.ts",
+    "README.md",
+    "LICENSE.md"
+  ],
+  "engines": {
+    "node": ">=20.16"
+  },
+  "keywords": [
+    "topological data analysis",
+    "tda",
+    "persistent homology",
+    "persistence diagram",
+    "barcode",
+    "vietoris-rips",
+    "alpha complex",
+    "cubical complex"
+  ],
+  "license": "MIT",
+  "homepage": "https://tda4j.appliedtopology.org",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/appliedtopology/tda4j.git"
+  },
+  "bugs": {
+    "url": "https://github.com/appliedtopology/tda4j/issues"
+  }
+}

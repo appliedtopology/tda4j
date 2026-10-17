@@ -307,6 +307,10 @@ val patchDocFavicon: Seq[Setting[?]] = Seq(
 // ---------------------------------------------------------------------------------------------------------------
 // The JS row.
 
+lazy val npmPack = taskKey[File](
+  "Builds the npm package of the Scala.js build from the optimized link and returns its tarball (target/npm/)."
+)
+
 val jsSettings: Seq[Setting[?]] = Seq(
   // ES modules, one file per entry: `main.mjs` holds the exports of the JavaScript API, `cli.mjs` is the `tda4j` command
   // (below), and the code they share is in an `internal-*.mjs` next to them. The `.mjs` extension lets Node run the
@@ -317,7 +321,38 @@ val jsSettings: Seq[Setting[?]] = Seq(
       .withOutputPatterns(OutputPatterns.fromJSFile("%s.mjs"))
   },
   Compile / scalaJSModuleInitializers +=
-    ModuleInitializer.mainMethod("org.appliedtopology.tda4j.cli.TDA4jNodeMain", "run").withModuleID("cli")
+    ModuleInitializer.mainMethod("org.appliedtopology.tda4j.cli.TDA4jNodeMain", "run").withModuleID("cli"),
+  // The npm package: the linked modules (without their source maps, whose sources the package does not carry), the
+  // hand-written `npm/package.json` (the version filled in), `npm/index.d.ts` and `npm/README.md`, packed by `npm pack`.
+  // `cli.mjs` is the `bin` of the package and gets its shebang line here.
+  npmPack := Def.uncached {
+    val _ = (Compile / fullLinkJS).value
+    val linked = (Compile / fullLinkJS / scalaJSLinkerOutputDirectory).value
+    val root = checkout.value
+    val out = root / "target" / "npm"
+    val packageDirectory = out / "package"
+    IO.delete(out)
+    IO.createDirectory(packageDirectory)
+    (linked * "*.mjs").get().foreach { module =>
+      val lines = IO.readLines(module).filterNot(_.startsWith("//# sourceMappingURL"))
+      val target = packageDirectory / module.getName
+      IO.writeLines(target, if (module.getName == "cli.mjs") "#!/usr/bin/env node" +: lines else lines)
+      target.setExecutable(module.getName == "cli.mjs")
+    }
+    IO.copyFile(root / "npm" / "index.d.ts", packageDirectory / "index.d.ts")
+    IO.copyFile(root / "npm" / "README.md", packageDirectory / "README.md")
+    IO.copyFile(root / "LICENSE.md", packageDirectory / "LICENSE.md")
+    IO.write(
+      packageDirectory / "package.json",
+      IO.read(root / "npm" / "package.json").replace("@VERSION@", version.value)
+    )
+    import scala.sys.process.*
+    val name = Process(
+      Seq("npm", "pack", "--silent", "--pack-destination", out.getAbsolutePath),
+      packageDirectory
+    ).!!.trim.linesIterator.toList.last
+    out / name
+  }
 )
 
 // ---------------------------------------------------------------------------------------------------------------
