@@ -121,7 +121,7 @@ mirrors only distance. `WORKLOG-bottleneck-wasserstein-vectorizations.md`.
 prime=47,...)` computes cohomology of the *static* truncated complex `K_r` directly (essential there by
 construction, matched to the full-filtration bar by birth value). Odd prime field only (p=2 can hide torsion);
 integer lift checked **exactly** per triangle, `NoIntegerCocycleException` otherwise. Harmonic smoothing via
-`commons-math3` `ConjugateGradient`, restricted to the cocycle's connected component, anchored at `g=0`;
+our `ConjugateGradient` (`algebra/`, `rules/algebra.md`), restricted to the cocycle's connected component, anchored at `g=0`;
 `theta(v)=frac(g(v))` directly, no path integration. MATLAB mirrors this; no CLI (picking `r` is two-step/
 data-dependent). `WORKLOG-circular-coordinates.md`.
 

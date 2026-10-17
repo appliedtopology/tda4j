@@ -24,5 +24,11 @@ only for this subsystem (never test the runtime class of a generic coefficient, 
   (#58): never a `Set`/`Map` key.
 - `Cell`/`OrderedCell`/`OrderedBasis`: anything with a `boundary` and a total order plugs into homology. Concrete
   instances: `Simplex`, `Cube`, `FiniteSimplicialSet` generators.
+- `DenseVector`, `DenseMatrix`, `ConjugateGradient`, `Erf`: small dense `Double` linear algebra in pure Scala (no
+  commons-math3 in shared code; it is a JVM test oracle only, `DenseLinearAlgebraOracleSpec`). Vectors and matrices are
+  immutable values (equality and hash on entries: they sit inside `Hyperplane`/`Hypersphere`, keys of hash sets).
+  `DenseMatrix.svd` is compact one-sided Jacobi (descending; `solve` is the pseudo-inverse with the cutoff
+  `max(m,n) s_1 2^-52`); `lu` is Crout with partial pivoting, bit for bit commons' solutions. `ConjugateGradient.solve`
+  takes the operator as a function. `WORKLOG-scalajs-numerics-linear-algebra.md`.
 - `Cocell`/`OrderedCocell` were **removed on purpose**: coboundary is extrinsic (depends on the ambient complex),
   so a per-cell `coboundary` is the wrong shape. Don't reintroduce (`DESIGN-generic-cohomology.md`).

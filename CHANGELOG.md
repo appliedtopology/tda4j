@@ -18,7 +18,6 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   the library itself. A public signature that took a commons `RealMatrix` or `RealVector` (`Barcode.image`/`kernel`/
   `cokernel`/`isMap`, `AlphaShapes.Point`) takes a `DenseMatrix` or `DenseVector`, and `JVPTree` is `VantagePointTree`-backed
   under a name that does not mention the Java library (the entry is finalized when the replacements are merged).
-
 - `RingModule.scale` is `scalarMultiply`, and so is the infix extension (`r.scalarMultiply(x)`, was `r.scale(x)`). The
   operators `⊠`, `|*|`, `<*` and `mul` are as they were. A `RingModule` instance of your own implements
   `scalarMultiply(x, y)`; the labs (`TDAlab`, `CubicalLab`) lose `scale` and gain `scalarMultiply`.
@@ -27,6 +26,11 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   `Figure.colorbar` and the `Colorbar` class are `Figure.colorScale` and `ColorScale`; `Figure` and `Scene` take a
   `style` and per-degree `degrees` (a `Figure` also a `legendTitle`). The functions of `Plot`, which `matlab` and `cli`
   call, keep their signatures.
+- `Barcode.isMap`, `image`, `imageMatrix`, `kernel`, `cokernel`, `cokernelMatrix`, `reduceMatrix` and `pivotsOf` take and
+  return a `DenseMatrix` (was commons-math3's `RealMatrix`), and `Barcode.reduceMatrix` no longer changes the matrix it
+  is given. `AlphaShapes.Point`, and so the `normal` of a `Hyperplane` and the `center` of a `Hypersphere`, is a
+  `DenseVector` (was a `RealVector`); `Hyperplane.from` returns the normal with a fixed sign. The library no longer
+  uses commons-math3 in code that builds for Scala.js.
 
 ### Added
 
@@ -40,6 +44,10 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 - `CubicalImage.fromImageData` (Scala.js) builds a cubical complex from the pixels of a canvas.
 - `Parallel`, `FileAccess` and `CubicalImagePlatform` exist once per platform; on Scala.js `parallelFiltrationValue` and the
   DQP alpha complex's `parallel` give the same answer on one thread.
+- `DenseVector` and `DenseMatrix`, small immutable `Double` vectors and matrices with value equality, `matrix.svd` (the
+  compact singular value decomposition by Jacobi rotations, with `rank` and the pseudo-inverse `solve`), `matrix.lu()`
+  (partial pivoting, `isNonSingular`, `solve`); `ConjugateGradient.solve(operator, b)` for a symmetric positive definite
+  operator given as a function; `Erf.erf` and `Erf.erfc`. Pure Scala, so they also build for Scala.js.
 
 - Customizing a plot, by chaining: `Plot.diagram(d).withLabels(title = ..., x = ..., y = ...).withXYScale(Transform.Log10)
   .withSize(960, 540)`, with `withXScale`/`withYScale` (scale, `min`, `max`, `breaks`, `format = "%.1f"`, gridlines),

@@ -133,11 +133,7 @@ open class BowyerWatsonTriangulation(
       else
         val scale = rows.map(r => math.sqrt(r.map(x => x * x).sum)).max
         if scale == 0 then 0
-        else
-          val svd = org.apache.commons.math3.linear.SingularValueDecomposition(
-            org.apache.commons.math3.linear.MatrixUtils.createRealMatrix(rows)
-          )
-          svd.getSingularValues.count(_ > 1e-10 * scale)
+        else DenseMatrix(rows).svd.singularValues.count(_ > 1e-10 * scale)
     var k = 1
     while chosen.size < width && k < order.length do
       if rankWith(order(k)) == chosen.size then chosen += order(k)
