@@ -20,7 +20,7 @@ ThisBuild / developers := List(
   )
 )
 
-description := "A Java Platform compatible library for topological data analysis (TDA)."
+ThisBuild / description := "A library for topological data analysis (TDA), on the JVM and in JavaScript."
 
 ThisBuild / licenses := List("MIT" -> uri("https://opensource.org/license/mit"))
 ThisBuild / homepage := Some(uri("https://appliedtopology.github.io/tda4j"))

@@ -1,31 +1,20 @@
-name := "tda4j"
-organization := "org.appliedtopology"
+// One library, two platforms. `tda4j` is the JVM build (artifact `tda4j_3`), `tda4jJS` the Scala.js build (artifact
+// `tda4j_sjs1_3`). sbt 2 has projectMatrix built in (sbt-crossproject is not supported on sbt 2), and its default layout
+// is used as it is: `src/{main,test}/scala` compiles for every row, `src/{main,test}/scalajvm` and `.../scalajs` hold
+// what only one platform has. Commands are project-qualified where they only make sense for one platform
+// (`sbt tda4j/assembly`, `sbt tda4jJS/test`); `sbt test` at the root runs every row that is aggregated below.
+// .claude/DESIGN-scalajs-crossbuild.md has the platform seams and what carries over.
+ThisBuild / organization := "org.appliedtopology"
+
 // Docs are built with 3.8.4 (scaladoc 3.9.0 ships broken JavaScript); docs.yml and test.yml set
 // TDA4J_SCALA_VERSION=3.8.4 for their `sbt doc` step. `sbt "++3.8.4 doc"` does NOT work in sbt 2: "no subprojects
 // list 3.8.4 ... in crossScalaVersions"; `++3.8.4!` does, and release.yml uses it because the env var only reaches a
 // FRESH sbt server: a second `sbt` call in the same job joins the running server (thin client) and ignores it.
 // TODO: delete the override when 3.9.1 is released.
-ThisBuild / scalaVersion := sys.env.getOrElse("TDA4J_SCALA_VERSION", "3.9.0")
+val tda4jScalaVersion = sys.env.getOrElse("TDA4J_SCALA_VERSION", "3.9.0")
+ThisBuild / scalaVersion := tda4jScalaVersion
 
-versionScheme := Some("semver-spec")
-
-assembly / assemblyJarName := s"${name.value}-${version.value}-assembly.jar"
-
-libraryDependencies += "org.specs2"        %% "specs2-core"                   % "5.9.1" % "test"
-libraryDependencies += "org.specs2"        %% "specs2-matcher-extra"          % "5.9.1" % "test"
-libraryDependencies += "org.specs2"        %% "specs2-scalacheck"             % "5.9.1" % "test"
-libraryDependencies += "org.apache.commons" % "commons-numbers-combinatorics" % "1.3"
-libraryDependencies += "org.apache.commons" % "commons-math3"                 % "3.6.1"
-libraryDependencies += "com.eatthepath"     % "jvptree"                       % "0.3.0"
-libraryDependencies += "com.dreizak"        % "miniball"                      % "1.0.3"
-libraryDependencies +=
-  "org.scala-lang.modules"              %% "scala-parallel-collections" % "1.2.0"
-libraryDependencies += "org.scalacheck" %% "scalacheck"                 % "1.20.0" % "test"
-libraryDependencies += "org.rogach"     %% "scallop"                    % "6.0.1"
-libraryDependencies += "org.typelevel"  %% "cats-kernel"                % "2.13.0"
-libraryDependencies += "org.typelevel"  %% "cats-core"                  % "2.13.0"
-libraryDependencies += "org.typelevel"  %% "kittens"                    % "3.5.0"
-libraryDependencies += "com.lihaoyi"    %% "cask"                       % "0.11.3"
+ThisBuild / versionScheme := Some("semver-spec")
 
 // Docs versioning (RELEASE.md step 5): `release.yml` sets TDA4J_DOCS_VERSION to the tag's version
 // (e.g. "0.1.3") when publishing a tagged release; `docs.yml`'s push-to-`scala` build leaves it unset, which
@@ -71,31 +60,6 @@ def scastieLink(version: String): String = {
   "https://scastie.scala-lang.org/?inputs=" + java.net.URLEncoder.encode(json, "UTF-8").replace("+", "%20")
 }
 
-Compile / doc / scalacOptions ++= Seq(
-  "-siteroot",
-  baseDirectory.value.toString,
-  "-project",
-  name.value,
-  "-project-version",
-  docsVersion,
-  "-source-links",
-  "github://appliedtopology/tda4j/scala",
-  "-Yapi-subdirectory",
-  "-project-logo",
-  "_assets/images/header-icon.svg",
-  "-doc-canonical-base-url",
-  "https://tda4j.appliedtopology.org",
-  "-social-links:github::https://github.com/appliedtopology/tda4j",
-  "-doc-footer",
-  "TDA4j is built by the TDA @ CUNY workgroup",
-  s"-quick-links:Applied Topology::https://appliedtopology.org,Playground::${scastieLink(scastieVersion)}",
-  "-scastie-configuration",
-  scastieSettings(scastieVersion).mkString(" ; "),
-  // Every Scala fence in the docs is compiled; mark a purely illustrative fence `scala sc:nocompile` instead.
-  "-snippet-compiler:compile"
-)
-Compile / doc / target := target.value / "api"
-
 // Release tags (`vX.Y.Z`), newest first, read straight from git rather than hand-maintained.
 def releaseTags(baseDir: File): Seq[String] = {
   import scala.sys.process._
@@ -131,8 +95,15 @@ def mimaBaselineVersions(current: String, tags: Seq[String]): Seq[String] = {
   }
 }
 
+// ---------------------------------------------------------------------------------------------------------------
+// Settings of both platforms.
+
+// The matrix rows' `baseDirectory` is sbt's own `.sbt/matrix/<id>`, not the checkout, so everything that names a file
+// of the checkout (`_docs`) is resolved from the build's base directory.
+def checkout: Def.Initialize[File] = Def.setting((ThisBuild / baseDirectory).value)
+
 // Compiler options: language features (implicitConversions, adhocExtensions) and warning flags.
-scalacOptions ++= List(
+val commonScalacOptions = List(
   "-source:future",
   "-language:experimental.modularity",
   "-preview", // for `into` - remove once we're on Scala 3.9.x.
@@ -142,132 +113,207 @@ scalacOptions ++= List(
   "-unchecked"
 )
 
-// Patch the favicon generation
-Compile / doc := {
-  val docDir = (Compile / doc).value
-  val allHTML = (docDir ** "*.html").get()
-  allHTML.filter(_.isFile).foreach { file =>
-    val content = sbt.IO.read(file)
-    val patched = content.replace(
-      "<link rel=\"shortcut icon\" type=\"image/x-icon\" href=\"favicon.ico\">",
-      """
-        |<link rel="shortcut icon" type="image/svg+xml" href="/images/header-icon.svg"/>
-        |<link rel="apple-touch-icon" sizes="180x180" href="/images/header-icon-180.png"/>
-        |<link rel="icon" sizes="16x16" type="image/png" href="/images/favicon-16.png"/>
-        |<link rel="icon" sizes="32x32" type="image/png" href="/images/favicon-32.png"/>
-        |<link rel="icon" sizes="48x48" type="image/png" href="/images/favicon-48.png"/>
-        |<link rel="icon" sizes="64x64" type="image/png" href="/images/favicon-64.png"/>
-        |<link rel="icon" sizes="128x128" type="image/png" href="/images/header-icon-128.png"/>
-        |<link rel="icon" sizes="256x256" type="image/png" href="/images/header-icon-256.png"/>
-        |<link rel="manifest" href="/images/manifest.json"/>
-        |<link rel="shortcut icon" type="image/svg+xml" href="/images/header-icon-dark.svg" media="(prefers-color-scheme: dark)" />
-        |<link rel="apple-touch-icon" sizes="180x180" href="/images/header-icon-dark-180.png" media="(prefers-color-scheme: dark)" />
-        |<link rel="icon" sizes="16x16" type="image/png" href="/images/favicon-16.png" media="(prefers-color-scheme: dark)" />
-        |<link rel="icon" sizes="32x32" type="image/png" href="/images/favicon-32.png" media="(prefers-color-scheme: dark)" />
-        |<link rel="icon" sizes="48x48" type="image/png" href="/images/favicon-48.png" media="(prefers-color-scheme: dark)" />
-        |<link rel="icon" sizes="64x64" type="image/png" href="/images/favicon-64.png" media="(prefers-color-scheme: dark)" />
-        |<link rel="icon" sizes="128x128" type="image/png" href="/images/header-icon-dark-128.png" media="(prefers-color-scheme: dark)" />
-        |<link rel="icon" sizes="256x256" type="image/png" href="/images/header-icon-dark-256.png" media="(prefers-color-scheme: dark)" />
-        |<link rel="manifest" href="/images/manifest-dark.json" media="(prefers-color-scheme: dark)" />
-        |        |""".stripMargin
-    )
-    if (patched != content) sbt.IO.write(file, patched)
-  }
-  val favicon = (docDir ** "favicon.ico").get().foreach(file => sbt.IO.delete(file))
-  docDir
-}
-
-// Both settings are needed, not just one: `Compile / mainClass` is what `sbt run` uses; `assembly /
-// mainClass` is what sbt-assembly writes into the fat jar's manifest (`java -jar ... `). Neither is inferred
-// from the other.
-Compile / mainClass := Some("org.appliedtopology.tda4j.cli.TDA4jCLI")
-assembly / mainClass := Some("org.appliedtopology.tda4j.cli.TDA4jCLI")
-
-// A fat jar is not a Java module, so module descriptors are dropped. sbt-assembly's default already discards a
-// top-level `module-info.class`, but not the multi-release copies under META-INF/versions/<n>/, which several jars
-// carry (each commons-numbers 1.3 jar has its own, so the default deduplication fails on them).
-assembly / assemblyMergeStrategy := {
-  case PathList("META-INF", "versions", _, "module-info.class") => MergeStrategy.discard
-  case other                                                    => (assembly / assemblyMergeStrategy).value(other)
-}
-
-// Workaround for XML versioning issues
-// See: https://github.com/scala/bug/issues/12632
-libraryDependencySchemes ++= Seq(
-  "org.scala-lang.modules" %% "scala-xml" % VersionScheme.Always
+val commonSettings: Seq[Setting[?]] = Seq(
+  name := "tda4j",
+  scalacOptions ++= commonScalacOptions,
+  // `%%` is platform-aware in sbt 2: on the JS row it resolves `..._sjs1_3` artifacts. Only libraries that have a build
+  // for both platforms belong here; JVM-only ones go in `jvmSettings`.
+  libraryDependencies ++= Seq(
+    "org.rogach"     %% "scallop"              % "6.0.1",
+    "org.typelevel"  %% "cats-kernel"          % "2.13.0",
+    "org.typelevel"  %% "cats-core"            % "2.13.0",
+    "org.typelevel"  %% "kittens"              % "3.5.0",
+    "org.specs2"     %% "specs2-core"          % "5.9.1"  % "test",
+    "org.specs2"     %% "specs2-matcher-extra" % "5.9.1"  % "test",
+    "org.specs2"     %% "specs2-scalacheck"    % "5.9.1"  % "test",
+    "org.scalacheck" %% "scalacheck"           % "1.20.0" % "test"
+  ),
+  // Workaround for XML versioning issues
+  // See: https://github.com/scala/bug/issues/12632
+  libraryDependencySchemes ++= Seq(
+    "org.scala-lang.modules" %% "scala-xml" % VersionScheme.Always
+  )
 )
 
-mimaPreviousArtifacts := mimaBaselineVersions(version.value, releaseTags(baseDirectory.value))
-  .map(v => organization.value %% name.value % v)
-  .toSet
+// ---------------------------------------------------------------------------------------------------------------
+// The JVM row.
+
+val jvmSettings: Seq[Setting[?]] = Seq(
+  assembly / assemblyJarName := s"${name.value}-${version.value}-assembly.jar",
+  libraryDependencies ++= Seq(
+    "org.apache.commons"      % "commons-numbers-combinatorics" % "1.3",
+    "org.apache.commons"      % "commons-math3"                 % "3.6.1",
+    "com.eatthepath"          % "jvptree"                       % "0.3.0",
+    "com.dreizak"             % "miniball"                      % "1.0.3",
+    "org.scala-lang.modules" %% "scala-parallel-collections"    % "1.2.0",
+    "com.lihaoyi"            %% "cask"                          % "0.11.3"
+  ),
+  Compile / doc / scalacOptions ++= Seq(
+    "-siteroot",
+    checkout.value.toString,
+    "-project",
+    name.value,
+    "-project-version",
+    docsVersion,
+    "-source-links",
+    "github://appliedtopology/tda4j/scala",
+    "-Yapi-subdirectory",
+    "-project-logo",
+    "_assets/images/header-icon.svg",
+    "-doc-canonical-base-url",
+    "https://tda4j.appliedtopology.org",
+    "-social-links:github::https://github.com/appliedtopology/tda4j",
+    "-doc-footer",
+    "TDA4j is built by the TDA @ CUNY workgroup",
+    s"-quick-links:Applied Topology::https://appliedtopology.org,Playground::${scastieLink(scastieVersion)}",
+    "-scastie-configuration",
+    scastieSettings(scastieVersion).mkString(" ; "),
+    // Every Scala fence in the docs is compiled; mark a purely illustrative fence `scala sc:nocompile` instead.
+    "-snippet-compiler:compile"
+  ),
+  Compile / doc / target := target.value / "api",
+  // Both settings are needed, not just one: `Compile / mainClass` is what `sbt run` uses; `assembly /
+  // mainClass` is what sbt-assembly writes into the fat jar's manifest (`java -jar ... `). Neither is inferred
+  // from the other.
+  Compile / mainClass := Some("org.appliedtopology.tda4j.cli.TDA4jCLI"),
+  assembly / mainClass := Some("org.appliedtopology.tda4j.cli.TDA4jCLI"),
+  // A fat jar is not a Java module, so module descriptors are dropped. sbt-assembly's default already discards a
+  // top-level `module-info.class`, but not the multi-release copies under META-INF/versions/<n>/, which several jars
+  // carry (each commons-numbers 1.3 jar has its own, so the default deduplication fails on them).
+  assembly / assemblyMergeStrategy := {
+    case PathList("META-INF", "versions", _, "module-info.class") => MergeStrategy.discard
+    case other                                                    => (assembly / assemblyMergeStrategy).value(other)
+  },
+  mimaPreviousArtifacts := mimaBaselineVersions(version.value, releaseTags(checkout.value))
+    .map(v => organization.value %% name.value % v)
+    .toSet,
+  // The library's version as a resource: `matlab.ResultFile` records which tda4j wrote a saved result (the class files
+  // carry no manifest version outside a packaged jar).
+  Compile / resourceGenerators += Def.uncached(Def.task {
+    val out = (Compile / resourceManaged).value / "org" / "appliedtopology" / "tda4j" / "version.properties"
+    IO.write(out, s"version=${version.value}\n")
+    Seq(out)
+  }.taskValue),
+  // Tutorial pages are tests: every `_docs/tutorials/*.md` with a "## The whole script" section has that section's first
+  // `scala` fence copied into a generated `object <Page>Script` (package `tutorial`), which `src/test/.../tutorial/*Spec`
+  // asserts on -- the page's code and the code the test runs are one and the same text. The page's narrative
+  // (`scala sc:nocompile`) fences before that heading are joined into an `object <Page>Narrative` whose `narrative()`
+  // is compiled but never called, so a narrative fence that drifts from the script fails `sbt Test/compile`, not just
+  // a reader. See .claude/WORKLOG-tutorial-docs-as-tests.md.
+  Test / sourceGenerators += Def.uncached(Def.task {
+    val docs = checkout.value / "_docs" / "tutorials"
+    val outDir = (Test / sourceManaged).value / "tutorial"
+    def objectName(file: File): String =
+      file.getName.stripSuffix(".md").split("-").map(_.capitalize).mkString
+    // (info string, body) of every fenced block, in order
+    def fences(lines: List[String]): List[(String, String)] = {
+      val out = scala.collection.mutable.ListBuffer.empty[(String, String)]
+      var info: Option[String] = None
+      val body = new StringBuilder
+      lines.foreach { line =>
+        if (line.startsWith("```")) {
+          info match {
+            case None    => info = Some(line.stripPrefix("```").trim); body.clear()
+            case Some(i) => out += ((i, body.toString)); info = None
+          }
+        } else if (info.isDefined) body.append(line).append("\n")
+      }
+      out.toList
+    }
+    def indent(text: String, by: Int): String =
+      text.linesIterator.map(l => if (l.isEmpty) l else (" " * by) + l).mkString("\n")
+    val pages = (docs * "*.md").get().sortBy(_.getName)
+    pages.flatMap { page =>
+      val text = IO.read(page)
+      val marker = "## The whole script"
+      val at = text.indexOf(marker)
+      if (at < 0) Nil
+      else {
+        val narrative = fences(text.substring(0, at).linesIterator.toList).collect { case ("scala sc:nocompile", b) =>
+          b
+        }
+        val script = fences(text.substring(at).linesIterator.toList)
+          .collectFirst { case ("scala", b) => b }
+          .getOrElse(sys.error(s"${page.getName}: no `scala` fence after '$marker'"))
+        val name = objectName(page)
+        val source =
+          s"""// GENERATED by build.sbt from _docs/tutorials/${page.getName}; do not edit.
+             |package org.appliedtopology.tda4j
+             |package tutorial
+             |
+             |object ${name}Script:
+             |${indent(script, 2)}
+             |
+             |object ${name}Narrative:
+             |  def narrative(): Unit =
+             |${indent(narrative.mkString("\n") + "\n()", 4)}
+             |""".stripMargin
+        val out = outDir / s"${name}Script.scala"
+        IO.write(out, source)
+        Seq(out)
+      }
+    }
+  }.taskValue)
+)
+
+// Patch the favicon generation
+val patchDocFavicon: Seq[Setting[?]] = Seq(
+  Compile / doc := {
+    val docDir = (Compile / doc).value
+    val allHTML = (docDir ** "*.html").get()
+    allHTML.filter(_.isFile).foreach { file =>
+      val content = sbt.IO.read(file)
+      val patched = content.replace(
+        "<link rel=\"shortcut icon\" type=\"image/x-icon\" href=\"favicon.ico\">",
+        """
+          |<link rel="shortcut icon" type="image/svg+xml" href="/images/header-icon.svg"/>
+          |<link rel="apple-touch-icon" sizes="180x180" href="/images/header-icon-180.png"/>
+          |<link rel="icon" sizes="16x16" type="image/png" href="/images/favicon-16.png"/>
+          |<link rel="icon" sizes="32x32" type="image/png" href="/images/favicon-32.png"/>
+          |<link rel="icon" sizes="48x48" type="image/png" href="/images/favicon-48.png"/>
+          |<link rel="icon" sizes="64x64" type="image/png" href="/images/favicon-64.png"/>
+          |<link rel="icon" sizes="128x128" type="image/png" href="/images/header-icon-128.png"/>
+          |<link rel="icon" sizes="256x256" type="image/png" href="/images/header-icon-256.png"/>
+          |<link rel="manifest" href="/images/manifest.json"/>
+          |<link rel="shortcut icon" type="image/svg+xml" href="/images/header-icon-dark.svg" media="(prefers-color-scheme: dark)" />
+          |<link rel="apple-touch-icon" sizes="180x180" href="/images/header-icon-dark-180.png" media="(prefers-color-scheme: dark)" />
+          |<link rel="icon" sizes="16x16" type="image/png" href="/images/favicon-16.png" media="(prefers-color-scheme: dark)" />
+          |<link rel="icon" sizes="32x32" type="image/png" href="/images/favicon-32.png" media="(prefers-color-scheme: dark)" />
+          |<link rel="icon" sizes="48x48" type="image/png" href="/images/favicon-48.png" media="(prefers-color-scheme: dark)" />
+          |<link rel="icon" sizes="64x64" type="image/png" href="/images/favicon-64.png" media="(prefers-color-scheme: dark)" />
+          |<link rel="icon" sizes="128x128" type="image/png" href="/images/header-icon-dark-128.png" media="(prefers-color-scheme: dark)" />
+          |<link rel="icon" sizes="256x256" type="image/png" href="/images/header-icon-dark-256.png" media="(prefers-color-scheme: dark)" />
+          |<link rel="manifest" href="/images/manifest-dark.json" media="(prefers-color-scheme: dark)" />
+          |        |""".stripMargin
+      )
+      if (patched != content) sbt.IO.write(file, patched)
+    }
+    val favicon = (docDir ** "favicon.ico").get().foreach(file => sbt.IO.delete(file))
+    docDir
+  }
+)
+
+// ---------------------------------------------------------------------------------------------------------------
+// The JS row.
+
+val jsSettings: Seq[Setting[?]] = Seq.empty
+
+// ---------------------------------------------------------------------------------------------------------------
+
+lazy val tda4j = (projectMatrix in file("."))
+  .settings(commonSettings)
+  .jvmPlatform(scalaVersions = Seq(tda4jScalaVersion), settings = jvmSettings ++ patchDocFavicon)
+  .jsPlatform(scalaVersions = Seq(tda4jScalaVersion), settings = jsSettings)
+
+// The root aggregates the JVM build only while the JS build does not compile yet (.claude/WORKLOG-scalajs-crossbuild.md);
+// it publishes nothing itself.
+lazy val root = (project in file("."))
+  .aggregate(tda4j.jvm.get.map(p => p: ProjectReference) *)
+  .settings(
+    name := "tda4j-root",
+    publish / skip := true
+  )
 
 // No `mimaBinaryIssueFilters`: 0.7.0 starts a fresh series, whose baseline is empty (see mimaBaselineVersions). A
-// deliberate break INSIDE a series is a commented `ProblemFilters.exclude` entry here, and a line under Breaking in the
-// changelog.
-
-// Tutorial pages are tests: every `_docs/tutorials/*.md` with a "## The whole script" section has that section's first
-// `scala` fence copied into a generated `object <Page>Script` (package `tutorial`), which `src/test/.../tutorial/*Spec`
-// asserts on -- the page's code and the code the test runs are one and the same text. The page's narrative
-// (`scala sc:nocompile`) fences before that heading are joined into an `object <Page>Narrative` whose `narrative()`
-// is compiled but never called, so a narrative fence that drifts from the script fails `sbt Test/compile`, not just
-// a reader. See .claude/WORKLOG-tutorial-docs-as-tests.md.
-// The library's version as a resource: `matlab.ResultFile` records which tda4j wrote a saved result (the class files
-// carry no manifest version outside a packaged jar).
-Compile / resourceGenerators += Def.uncached(Def.task {
-  val out = (Compile / resourceManaged).value / "org" / "appliedtopology" / "tda4j" / "version.properties"
-  IO.write(out, s"version=${version.value}\n")
-  Seq(out)
-}.taskValue)
-
-Test / sourceGenerators += Def.uncached(Def.task {
-  val docs = baseDirectory.value / "_docs" / "tutorials"
-  val outDir = (Test / sourceManaged).value / "tutorial"
-  def objectName(file: File): String =
-    file.getName.stripSuffix(".md").split("-").map(_.capitalize).mkString
-  // (info string, body) of every fenced block, in order
-  def fences(lines: List[String]): List[(String, String)] = {
-    val out = scala.collection.mutable.ListBuffer.empty[(String, String)]
-    var info: Option[String] = None
-    val body = new StringBuilder
-    lines.foreach { line =>
-      if (line.startsWith("```")) {
-        info match {
-          case None    => info = Some(line.stripPrefix("```").trim); body.clear()
-          case Some(i) => out += ((i, body.toString)); info = None
-        }
-      } else if (info.isDefined) body.append(line).append("\n")
-    }
-    out.toList
-  }
-  def indent(text: String, by: Int): String =
-    text.linesIterator.map(l => if (l.isEmpty) l else (" " * by) + l).mkString("\n")
-  val pages = (docs * "*.md").get().sortBy(_.getName)
-  pages.flatMap { page =>
-    val text = IO.read(page)
-    val marker = "## The whole script"
-    val at = text.indexOf(marker)
-    if (at < 0) Nil
-    else {
-      val narrative = fences(text.substring(0, at).linesIterator.toList).collect { case ("scala sc:nocompile", b) => b }
-      val script = fences(text.substring(at).linesIterator.toList)
-        .collectFirst { case ("scala", b) => b }
-        .getOrElse(sys.error(s"${page.getName}: no `scala` fence after '$marker'"))
-      val name = objectName(page)
-      val source =
-        s"""// GENERATED by build.sbt from _docs/tutorials/${page.getName}; do not edit.
-           |package org.appliedtopology.tda4j
-           |package tutorial
-           |
-           |object ${name}Script:
-           |${indent(script, 2)}
-           |
-           |object ${name}Narrative:
-           |  def narrative(): Unit =
-           |${indent(narrative.mkString("\n") + "\n()", 4)}
-           |""".stripMargin
-      val out = outDir / s"${name}Script.scala"
-      IO.write(out, source)
-      Seq(out)
-    }
-  }
-}.taskValue)
+// deliberate break INSIDE a series is a commented `ProblemFilters.exclude` entry in `jvmSettings`, and a line under
+// Breaking in the changelog.
