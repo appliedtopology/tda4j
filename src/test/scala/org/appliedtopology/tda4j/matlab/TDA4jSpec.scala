@@ -669,11 +669,9 @@ class TDA4jSpec extends mutable.Specification:
 
   "complex=sparse-rips, option validation" should {
     "say so when the pre-0.5.0 name sheehy-rips is used" in {
-      FullBarcode.computeFromPoints(points, Array("complex", "sheehy-rips", "sparseEpsilon", "0.5")) must throwA[
+      FullBarcode.computeFromPoints(points, Array("complex", "sheehy-rips", "sparseEpsilon", "0.5")) must throwWith[
         IllegalArgumentException
-      ](
-        "renamed 'sparse-rips'"
-      )
+      ]("renamed 'sparse-rips'")
     }
     "require sparseEpsilon" in {
       FullBarcode.computeFromPoints(points, Array("complex", "sparse-rips")) must throwA[IllegalArgumentException]
