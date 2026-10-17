@@ -5,16 +5,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **How this file works.** Each entry is a current rule, invariant, or known limitation, plus a pointer to the
 `.claude/WORKLOG-*.md`/`DESIGN-*.md` that holds its derivation (what was tried, measurements, repros). Derivations
 go in the worklog, not here. Detail that matters for one subsystem only is in `.claude/rules/` (see "Subsystem notes").
-Last condensed 2026-10-17 (the algebraic core to `rules/algebra.md`, test conventions to `rules/testing.md`, style to
-`rules/scala-style.md`); 2026-10-11
-(CI detail to the steward skill, engine detail to `rules/engines.md`); 2026-10-10 (lab detail to `rules/labs.md`);
-2026-10-09. Earlier, longer versions: `git show e5e86ec:.claude/CLAUDE.md` (and the commits named there).
+Last condensed 2026-10-17; earlier, longer versions: `git show e5e86ec:.claude/CLAUDE.md`.
 
 ## What this is
 
 TDA4j is a Scala 3 library for persistent homology and topological data analysis (a spiritual successor to
-JavaPlex/Ripser, from the Stanford Computational Topology workgroup lineage). Single sbt module, root package
-`org.appliedtopology.tda4j`, pre-1.0 (version in `version.sbt`), actively evolving API. **0.5.0 deliberately does not keep binary
+JavaPlex/Ripser, from the Stanford Computational Topology workgroup lineage). One library for the JVM and Scala.js
+(an sbt project matrix), root package `org.appliedtopology.tda4j`, pre-1.0 (version in `version.sbt`), actively evolving API. **0.5.0 deliberately does not keep binary
 compatibility with 0.4.x** (project lead: still in flux) — no compat shims for renames/signature changes.
 
 ## Working stance
@@ -64,7 +61,10 @@ needed, see "Givens"). The core's source directories are **file organization onl
   it only through `TDAlab`'s generated re-exports. `rules/simplicial-sets.md`.
 - leaf subpackages: `matlab` (facade), `cli` (thin translator over `matlab.TDA4j`), `plot` (plots and a live viewer,
   whose one dependency is cask; any other feature needing a library goes in a new module; `rules/plotting.md`,
-  `WORKLOG-plot-into-core.md`).
+  `WORKLOG-plot-into-core.md`), `javascript` (Scala.js only: the npm package's exports over the facade).
+- **two platforms**: sbt 2's project matrix builds the JVM (`tda4j`) and Scala.js (`tda4jJS`); JS-only code is in
+  `src/*/scalajs`, JVM-only in `src/*/scalajvm`, and `src/{main,test}/scala` compiles for BOTH (no JVM-only library, no
+  `java.nio.file`/`java.io.File`/threads there). Seams, limits: `rules/scalajs.md`.
 - `demo/` (not a package): a SEPARATE sbt build for a talk's REPL jar with the library inside (`demo/README.md`,
   `WORKLOG-demo-jar.md`, `WORKLOG-demo-release.md`); the root build neither builds nor sees it, `release.yml` attaches it.
 - Tests mirror this. `src/test/scala/tda4juser/` is deliberately OUTSIDE the package: it checks what a user's code
@@ -94,29 +94,29 @@ has one in its companion; cats' `Show` is invariant, so a hierarchy's instance i
 
 ## Commands
 
-Java 21, Scala 3.9.0 LTS (`WORKLOG-scala-3.9-lts-upgrade.md`). `.jvmopts` sets `-Xmx2G` — the old test-suite OOMs
-were sbt's own 1024MB default, not code (`WORKLOG-test-suite-memory-and-benchmark-gating.md`).
+Java 21, Scala 3.9.0 LTS (`WORKLOG-scala-3.9-lts-upgrade.md`). `.jvmopts` sets `-Xmx2G` (sbt's own 1024MB default caused
+the old test-suite OOMs: `WORKLOG-test-suite-memory-and-benchmark-gating.md`). Node >= 20.16 for the Scala.js tests.
 
 ```
-sbt testFull                    # full test suite, every spec (plain `test` is incremental+disk-cached in sbt 2 and can run 0 specs; CI's fresh runner is fine)
-sbt "testOnly *SimplexSpec"     # single specs2 spec (glob ok)
+sbt tda4j/testFull              # JVM specs (plain `test` is incremental+disk-cached in sbt 2 and can run 0 specs; CI's fresh runner is fine)
+sbt tda4jJS/test                # Scala.js specs, on Node >= 20.16
+sbt "tda4j/testOnly *SimplexSpec"   # single specs2 spec (glob ok)
 sbt scalafmtAll                 # format everything — run before committing
 sbt "scalafmtSbtCheck ; scalafmtCheck ; Test / scalafmtCheck"   # exactly what CI's lint job runs (check only; fix with `sbt scalafmtAll scalafmtSbt`)
-sbt mimaReportBinaryIssues      # binary compat (CI `mima` job)
-TDA4J_SCALA_VERSION=3.8.4 sbt doc   # docs site (_docs/ + sidebar.yml) via scaladoc -> target/out/jvm/scala-3.8.4/tda4j/api
-sbt assembly                    # fat jar for CLI/MATLAB
-sbt -DrunBenchmarks=true test   # also run benchmark/profiling specs — NOT what CI runs
+sbt tda4j/mimaReportBinaryIssues    # binary compat (CI `mima` job; JVM artifact only)
+TDA4J_SCALA_VERSION=3.8.4 sbt tda4j/doc   # docs site (_docs/ + sidebar.yml) via scaladoc -> target/out/jvm/scala-3.8.4/tda4j/api
+sbt tda4j/assembly              # fat jar for CLI/MATLAB
+sbt tda4jJS/npmPack             # the npm package, target/npm/tda4j-<version>.tgz
+sbt -DrunBenchmarks=true tda4j/test   # also run benchmark/profiling specs — NOT what CI runs
 ```
 
-If `sbt` isn't on `PATH`, run `.claude/scripts/install-sbt.sh` (paces around Maven Central's cold-cache rate limits).
-A cloud environment's Setup script should hold `.claude/scripts/cloud-setup-script.sh` (the installer, plus warmed test
-dependencies and scalafmt); without it a session starts cold (~1 h on 2026-10-12).
+No `sbt` on `PATH`: `.claude/scripts/install-sbt.sh` (paced around Maven Central's cold-cache 429s). A cloud Setup script
+should hold `.claude/scripts/cloud-setup-script.sh` (installer plus warmed dependencies); without it a session starts cold (~1 h).
 
-No linter beyond scalafmt; tests are specs2. CI jobs (`test` with a fat-jar smoke run, `docs-build`, `mima`, `lint`) and
+No linter beyond scalafmt; tests are specs2. CI jobs (`test` with a fat-jar smoke run, `test-js`, `npm-package`, `docs-build`, `mima`, `lint`) and
 their local equivalents: steward skill; a weekly `coverage.yml` maps coverage, never gates. A deliberate binary break is
-a commented `mimaBinaryIssueFilters` entry (project lead: not a strong requirement before 1.0). The ~319 `-Wunused:all` warnings are deliberately left alone
-(`WORKLOG-compiler-warnings.md`). Docs build with Scala 3.8.4 (`TDA4J_SCALA_VERSION`, seen only by a FRESH sbt server:
-`rules/docs-and-tutorials.md`). After `sbt package` or a docs build a test compile can miss main classes ("Not found:
+a commented `mimaBinaryIssueFilters` entry (project lead: not a strong requirement before 1.0). The ~319 `-Wunused:all` warnings stay
+(`WORKLOG-compiler-warnings.md`). Docs build with 3.8.4 (only a FRESH sbt server sees `TDA4J_SCALA_VERSION`: `rules/docs-and-tutorials.md`). After `sbt package` or a docs build a test compile can miss main classes ("Not found:
 TDAlab"): `sbt clean`. **scalafmt only sees git-tracked files**: `git add` a new file before `scalafmtAll`.
 
 **Never run two `sbt` invocations against this checkout at once** — the incremental compiler's own class-file
@@ -243,6 +243,7 @@ file before changing that subsystem; this table is the index, in case a rule did
 | `rules/filtered-complexes.md` | Cech, witness, Dowker, DTM, sparse Rips, edge collapse | those files |
 | `rules/alpha.md` | alpha complexes (DQP, Helix, fast alpha) | `alpha/`, alpha files |
 | `rules/facade.md` | MATLAB facade, CLI, file I/O, the persistence threshold (which bars are reported) | `matlab/`, `cli/`, `io/` |
+| `rules/scalajs.md` | the Scala.js build: platform seams, what to avoid in shared code, the JS API and npm package, limits | `scalajs/`, `scalajvm/`, `build.sbt`, `npm/` |
 | `rules/docs-and-tutorials.md` | docs site, tutorial pages (the docs are the tests), language tabs | `_docs/`, tutorial specs, `build.sbt` |
 | `rules/plotting.md` | the `plot` subpackage: scene model, the tweak grammar, looks, live viewer, gallery screenshots | `plot/` (main and test) |
 | `rules/algebra.md` | fields, chains and cells: `RingModule`, `Field`, `Chain`, `Cell` | `algebra/`, `cells/` |
