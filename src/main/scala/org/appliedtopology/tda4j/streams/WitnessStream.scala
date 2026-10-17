@@ -1,6 +1,5 @@
 package org.appliedtopology.tda4j
 
-import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
 import scala.util.Random
 
@@ -227,7 +226,7 @@ object WitnessCofaceSimplexStream:
     * than reading a cache, since only one facet of a candidate has been visited when it is asked.
     */
   def recursiveFiltrationValue(geometry: WitnessGeometry): PartialFunction[Simplex[Int], Double] =
-    val cache = TrieMap.empty[Simplex[Int], Double]
+    val cache = FiltrationCache.empty[Simplex[Int], Double]
     new PartialFunction[Simplex[Int], Double]:
       def isDefinedAt(spx: Simplex[Int]): Boolean = spx.forall(v => 0 <= v && v < geometry.L)
       def apply(spx: Simplex[Int]): Double =
