@@ -17,10 +17,10 @@ import scala.scalajs.js.typedarray.{Int8Array, Uint8Array}
 // shape is what the two platforms have in common, not an API to build on.
 private[tda4j] object FileAccess:
   private def nodeModule(name: String): js.Dynamic =
-    val global = js.Dynamic.global
-    if js.typeOf(global.process) != "undefined" && js.typeOf(global.process.getBuiltinModule) == "function" then
-      global.process.getBuiltinModule("node:" + name)
-    else if js.typeOf(global.require) == "function" then global.require(name)
+    if js.typeOf(js.Dynamic.global.process) != "undefined" &&
+      js.typeOf(js.Dynamic.global.process.getBuiltinModule) == "function"
+    then js.Dynamic.global.process.getBuiltinModule("node:" + name)
+    else if js.typeOf(js.Dynamic.global.require) == "function" then js.Dynamic.global.require(name)
     else
       throw new UnsupportedOperationException(
         "Reading and writing files needs Node.js 20.16 or newer; a browser has no file system. " +

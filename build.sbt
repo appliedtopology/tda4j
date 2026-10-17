@@ -1,3 +1,5 @@
+import org.scalajs.linker.interface.{ModuleInitializer, ModuleSplitStyle, OutputPatterns}
+
 // One library, two platforms. `tda4j` is the JVM build (artifact `tda4j_3`), `tda4jJS` the Scala.js build (artifact
 // `tda4j_sjs1_3`). sbt 2 has projectMatrix built in (sbt-crossproject is not supported on sbt 2), and its default layout
 // is used as it is: `src/{main,test}/scala` compiles for every row, `src/{main,test}/scalajvm` and `.../scalajs` hold
@@ -305,7 +307,18 @@ val patchDocFavicon: Seq[Setting[?]] = Seq(
 // ---------------------------------------------------------------------------------------------------------------
 // The JS row.
 
-val jsSettings: Seq[Setting[?]] = Seq.empty
+val jsSettings: Seq[Setting[?]] = Seq(
+  // ES modules, one file per entry: `main.mjs` holds the exports of the JavaScript API, `cli.mjs` is the `tda4j` command
+  // (below), and the code they share is in an `internal-*.mjs` next to them. The `.mjs` extension lets Node run the
+  // files without a `package.json` that says `"type": "module"`.
+  scalaJSLinkerConfig ~= {
+    _.withModuleKind(ModuleKind.ESModule)
+      .withModuleSplitStyle(ModuleSplitStyle.FewestModules)
+      .withOutputPatterns(OutputPatterns.fromJSFile("%s.mjs"))
+  },
+  Compile / scalaJSModuleInitializers +=
+    ModuleInitializer.mainMethod("org.appliedtopology.tda4j.cli.TDA4jNodeMain", "run").withModuleID("cli")
+)
 
 // ---------------------------------------------------------------------------------------------------------------
 

@@ -21,38 +21,32 @@ object Viewer:
     * Returns whether it started one; a browser page cannot open a local file, so there it returns `false`.
     */
   def browse(address: String): Boolean =
-    val global = js.Dynamic.global
-    val wanted = js.typeOf(global.process) != "undefined" && global.process.env.TDA4J_PLOT_BROWSER.toString != "none"
+    val wanted = js.typeOf(js.Dynamic.global.process) != "undefined" &&
+      js.Dynamic.global.process.env.TDA4J_PLOT_BROWSER.toString != "none"
     wanted && (try
-      val process = global.process
-      val platform = process.platform.toString
+      val platform = js.Dynamic.global.process.platform.toString
       val (command, arguments) = platform match
         case "darwin" => ("open", js.Array(address))
         case "win32"  => ("cmd", js.Array("/c", "start", "", address))
         case _        => ("xdg-open", js.Array(address))
-      val child = process
+      val child = js.Dynamic.global.process
         .getBuiltinModule("node:child_process")
-        .spawn(
-          command,
-          arguments,
-          js.Dynamic.literal(detached = true, stdio = "ignore")
-        )
+        .spawn(command, arguments, js.Dynamic.literal(detached = true, stdio = "ignore"))
       child.on("error", (_: js.Any) => ())
       child.unref()
       true
     catch case _: js.JavaScriptException => false)
 
   private def appendToPage(plot: Plot): Unit =
-    val document = js.Dynamic.global.document
-    val existing = document.getElementById("tda4j-plots")
+    val existing = js.Dynamic.global.document.getElementById("tda4j-plots")
     val host =
       if js.isUndefined(existing) || (existing: Any) == null then
-        val created = document.createElement("div")
+        val created = js.Dynamic.global.document.createElement("div")
         created.id = "tda4j-plots"
-        document.body.appendChild(created)
+        js.Dynamic.global.document.body.appendChild(created)
         created
       else existing
-    val frame = document.createElement("iframe")
+    val frame = js.Dynamic.global.document.createElement("iframe")
     frame.srcdoc = plot.html(Theme.Auto)
     frame.style.cssText = "width:100%;height:520px;border:0;display:block"
     host.appendChild(frame)
