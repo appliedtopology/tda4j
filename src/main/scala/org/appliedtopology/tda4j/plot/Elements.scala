@@ -195,6 +195,8 @@ final case class TickMarks(length: Double, direction: TickDirection, stroke: Lin
   *   the look of each text role that was changed
   * @param panel
   *   the fill of the plot area, if it has one
+  * @param marker
+  *   what to change about every point's marker (the shape, size, opacity, fill and edge)
   */
 final case class Elements(
   text: Map[TextRole, TextStyle] = Map.empty,
@@ -204,7 +206,8 @@ final case class Elements(
   ticks: TickStyle = TickStyle(),
   minorTicks: TickStyle = TickStyle(),
   frame: LineStyle = LineStyle(),
-  panel: Option[(Paint, Double)] = None
+  panel: Option[(Paint, Double)] = None,
+  marker: MarkerStyle = MarkerStyle()
 ):
   /** This with `style` merged into what the text role `role` has. */
   def withText(role: TextRole, style: TextStyle): Elements =

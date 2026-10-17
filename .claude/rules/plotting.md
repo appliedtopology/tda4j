@@ -97,6 +97,10 @@ API). Rules:
   identical at the time of writing). A new element needs its tweak, a typed `with...` method, a key in `Settings` (the one
   string grammar for MATLAB and `--set`), a spec that makes the plausible wrong layout fail (a margin that did not follow the
   size), and a mutation check.
+- **A marker's look is `MarkerStyle` layers** (`Markers.scala`), resolved in one place (`MarkerStyle.resolve`) for plots,
+  legend keys and scenes; never read a shape off a mark directly. A new shape is a case of `Shape`, a drawing in
+  `Svg.marker`, and an entry in `MarkerStyle.named`. The first four cases of `Shape` are the degree shapes, in order.
+- A plot's own default (a diagram's legend place) goes in the `Figure`, never in the `Style`, which a user replaces whole.
 - Default output is a contract: look at `Gallery` before and after a renderer change and diff the SVGs against a
   `git worktree` build of the old commit (ids normalized: `tda4j[0-9]+`); every difference must be explained.
 

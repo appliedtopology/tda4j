@@ -338,8 +338,11 @@ object Guide:
   * `color-title`, `note`) with the properties `size`, `weight`, `italic`, `align`, `angle`, `font` and `color`; `grid`,
   * `minor-grid`, `axis-line` and `frame` with `visible`, `width`, `color`, `dash`, `opacity`; `ticks` and `minor-ticks`
   * with `length`, `direction`, `visible`, `width`, `color`, `opacity`; `panel` with `color`, `opacity`, `visible`;
-  * `diagonal` with `shade` (`none` or a color), `shade-opacity`, `color`, `width`, `dashed`; and `x-axis` (`bottom`,
-  * `top`) and `y-axis` (`left`, `right`).
+  * `diagonal` with `shade` (`none` or a color), `shade-opacity`, `color`, `width`, `dashed`; `marker` with `shape` (a
+  * name, a matplotlib code, an R `pch`, `glyph:text`; see [[MarkerStyle.named]]), `size`, `opacity`, `fill`,
+  * `edge-width` (0 for none), `edge-color`, `edge-opacity`, `edge-dash`, `edge-visible`; `degree-0`, `degree-1`, ...
+  * with `color`, `dark-color`, `label` and the `marker` properties; `segments` (`width`, `opacity`), `polygons` and
+  * `discs` (`opacity`), `lines` (`width`); and `x-axis` (`bottom`, `top`) and `y-axis` (`left`, `right`).
   */
 object Settings:
   private val textProperties = Seq("size", "weight", "italic", "align", "angle", "font", "color")
@@ -347,7 +350,24 @@ object Settings:
   private val tickProperties = Seq("length", "direction", "visible", "width", "color", "opacity")
   private val elementNames =
     TextRole.values.map(TextRole.hyphenated).toSeq ++
-      Seq("grid", "minor-grid", "axis-line", "ticks", "minor-ticks", "frame", "panel", "diagonal", "x-axis", "y-axis")
+      Seq(
+        "grid",
+        "minor-grid",
+        "axis-line",
+        "ticks",
+        "minor-ticks",
+        "frame",
+        "panel",
+        "diagonal",
+        "marker",
+        "degree-<k>",
+        "segments",
+        "polygons",
+        "discs",
+        "lines",
+        "x-axis",
+        "y-axis"
+      )
 
   private def opt[A](a: A): Optional[A] = Optional(Some(a))
 
@@ -385,6 +405,54 @@ object Settings:
     visible: Optional[Boolean] = Optional.empty
   )
 
+  private val markerProperties =
+    Seq("shape", "size", "opacity", "fill", "edge-width", "edge-color", "edge-opacity", "edge-dash", "edge-visible")
+
+  /** The marker change a setting of `marker` or of a degree stands for. */
+  private def markerSetting(spec: String, element: String, property: String, value: String): MarkerStyle =
+    def edge(change: LineStyle) = MarkerStyle(edge = change)
+    property match
+      case "shape" => MarkerStyle.named(value)
+      case "size"  =>
+        val v = number(spec, value)
+        require(v > 0, s"$spec: size must be a positive number")
+        MarkerStyle(size = Some(v))
+      case "opacity" =>
+        val v = number(spec, value)
+        require(v >= 0 && v <= 1, s"$spec: opacity must be between 0 and 1")
+        MarkerStyle(opacity = Some(v))
+      case "fill"       => MarkerStyle(fill = Some(flag(spec, value)))
+      case "edge-width" =>
+        val v = number(spec, value)
+        require(v >= 0, s"$spec: edge-width must be 0 or more")
+        edge(LineStyle(width = Some(v)))
+      case "edge-color"   => edge(LineStyle(paint = Check.paint(spec, opt(value), Optional.empty)))
+      case "edge-opacity" =>
+        val v = number(spec, value)
+        require(v >= 0 && v <= 1, s"$spec: edge-opacity must be between 0 and 1")
+        edge(LineStyle(opacity = Some(v)))
+      case "edge-dash"    => edge(LineStyle(dash = Some(Dash.named(value))))
+      case "edge-visible" => edge(LineStyle(visible = Some(flag(spec, value))))
+      case _              => unknownProperty(element, property, markerProperties)
+
+  /** The degree `degree-1.color=#c2185b` and its markers (`degree-1.size=6`, `degree-1.shape=pch:1`). */
+  private def degreeSetting(spec: String, element: String, property: String, value: String): Tweak =
+    val k = element
+      .drop("degree-".length)
+      .toIntOption
+      .filter(_ >= 0)
+      .getOrElse(
+        throw IllegalArgumentException(s"unknown element '$element'; a degree is written degree-0, degree-1, ...")
+      )
+    property match
+      case "color"      => Scale.degree(k, color = value)
+      case "dark-color" => Scale.degree(k, darkColor = value)
+      case "label"      => Scale.degree(k, label = value)
+      case _            =>
+        if markerProperties.contains(property) then
+          Scale.degree(k, marker = markerSetting(spec, element, property, value))
+        else unknownProperty(element, property, Seq("color", "dark-color", "label") ++ markerProperties)
+
   /** The change `spec` (`element.property=value`) stands for. */
   def parse(spec: String): Tweak =
     val eq = spec.indexOf('=')
@@ -401,7 +469,8 @@ object Settings:
           s"setting '$spec' should be element.property=value, such as title.size=18 (elements: ${elementNames.mkString(", ")})"
         )
         val (element, property) = (key.take(dot), key.drop(dot + 1))
-        if TextRole.values.exists(r => TextRole.hyphenated(r) == element) then
+        if element.startsWith("degree-") then degreeSetting(spec, element, property, value)
+        else if TextRole.values.exists(r => TextRole.hyphenated(r) == element) then
           val role = TextRole.named(element)
           property match
             case "size"   => Text(role, size = number(spec, value))
@@ -445,6 +514,24 @@ object Settings:
                 case "opacity" => Guide.panel(opacity = number(spec, value))
                 case "visible" => Guide.panel(visible = flag(spec, value))
                 case _         => unknownProperty(element, property, Seq("color", "opacity", "visible"))
+            case "marker"   => Geom.pointsOf(markerSetting(spec, element, property, value))
+            case "segments" =>
+              property match
+                case "width"   => Geom.segments(width = number(spec, value))
+                case "opacity" => Geom.segments(opacity = number(spec, value))
+                case _         => unknownProperty(element, property, Seq("width", "opacity"))
+            case "polygons" =>
+              property match
+                case "opacity" => Geom.polygons(opacity = number(spec, value))
+                case _         => unknownProperty(element, property, Seq("opacity"))
+            case "discs" =>
+              property match
+                case "opacity" => Geom.discs(opacity = number(spec, value))
+                case _         => unknownProperty(element, property, Seq("opacity"))
+            case "lines" =>
+              property match
+                case "width" => Geom.lines(width = number(spec, value))
+                case _       => unknownProperty(element, property, Seq("width"))
             case "diagonal" =>
               property match
                 case "shade" =>

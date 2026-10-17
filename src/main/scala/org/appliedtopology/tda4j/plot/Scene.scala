@@ -85,6 +85,23 @@ final case class Scene(
     paint: Optional[Paint] = Optional.empty
   ): Scene = this + Text(role, size, weight, italic, align, Optional.empty, font, color, paint)
 
+  /** The markers of the points of a scene: `size`, `opacity` and the edge (`edgeWidth`, `edgeColor`, `edgeVisible`); a
+    * scene's points are round and filled. See [[Geom.points]].
+    */
+  def withPoints(
+    size: Optional[Double] = Optional.empty,
+    opacity: Optional[Double] = Optional.empty,
+    edgeWidth: Optional[Double] = Optional.empty,
+    edgeColor: Optional[String] = Optional.empty,
+    edgeVisible: Optional[Boolean] = Optional.empty
+  ): Scene = this + Geom.points(
+    size = size,
+    opacity = opacity,
+    edgeWidth = edgeWidth,
+    edgeColor = edgeColor,
+    edgeVisible = edgeVisible
+  )
+
   /** One change written as text, `element.property=value`: `withSetting("title.size=18")`. See [[Settings]]; a scene
     * has only the title, subtitle and note.
     */
@@ -129,6 +146,17 @@ final case class Scene(
       val c = (mid(_._1), mid(_._2), mid(_._3))
       val r = ps.map(p => math.sqrt(math.pow(p._1 - c._1, 2) + math.pow(p._2 - c._2, 2) + math.pow(p._3 - c._3, 2))).max
       (c, if r > 0 then r else 1.0)
+
+  /** A scene's point as it is drawn: round and filled, with a ring of 1.5 pixels in the surface color, then whatever
+    * the scene's marker changes (its size, opacity and edge).
+    */
+  private def sceneMarker(radius: Double, own: Paint): MarkerFace =
+    MarkerStyle.resolve(
+      Shape.Circle,
+      radius,
+      own,
+      Seq(MarkerStyle(edge = LineStyle(width = Some(1.5))), elements.marker)
+    )
 
   // ----- the static view (SVG)
 
@@ -176,9 +204,10 @@ final case class Scene(
       case l: Layer.Points =>
         l.at.indices.map { i =>
           val v = view(l.at(i))
-          v._3 - 2e-6 -> s"""<circle cx="${sx(v)}" cy="${sy(v)}" r="${l.radius * ink}" style="fill:${paint(
-              l.paintAt(i)
-            )};stroke:${paint(Paint.Surface)}" stroke-width="1.5"/>"""
+          val face = sceneMarker(l.radius, l.paintAt(i))
+          val attrs =
+            MarkerStyle.attributes(face, paint(l.paintAt(i)), paint(face.edge.paint), _.toString.stripSuffix(".0"))
+          v._3 - 2e-6 -> s"""<circle cx="${sx(v)}" cy="${sy(v)}" r="${face.size * ink}" $attrs/>"""
         }
     }
     val body = items.sortBy(-_._1).map(_._2).mkString
@@ -248,7 +277,11 @@ final case class Scene(
     val json = layers
       .map {
         case l: Layer.Points =>
-          s"""{"kind":"p","r":${l.radius * ink},"items":[${l.at.indices
+          val face = sceneMarker(l.radius, l.paints.headOption.getOrElse(Paint.Ink))
+          val edge = if face.edge.visible then face.edge.width else 0.0
+          s"""{"kind":"p","r":${face.size * ink},"op":${face.opacity},"ew":$edge,"ec":${col(
+              face.edge.paint
+            )},"items":[${l.at.indices
               .map(i => s"[${pos(l.at(i))},${col(l.paintAt(i))}]")
               .mkString(",")}]}"""
         case l: Layer.Segments =>
@@ -310,7 +343,7 @@ final case class Scene(
        |  for(const [d,k,L,ps,col] of items){const c=color(col);
        |    if(k===0){g.globalAlpha=L.o;g.fillStyle=c;g.beginPath();g.moveTo(X(ps[0]),Y(ps[0]));g.lineTo(X(ps[1]),Y(ps[1]));g.lineTo(X(ps[2]),Y(ps[2]));g.closePath();g.fill();g.globalAlpha=1;}
        |    else if(k===1){g.strokeStyle=c;g.lineWidth=L.w;g.lineCap='round';g.beginPath();g.moveTo(X(ps[0]),Y(ps[0]));g.lineTo(X(ps[1]),Y(ps[1]));g.stroke();}
-       |    else{g.fillStyle=c;g.strokeStyle=surface;g.lineWidth=1.5;g.beginPath();g.arc(X(ps[0]),Y(ps[0]),L.r,0,2*Math.PI);g.fill();g.stroke();}}}
+       |    else{g.globalAlpha=L.op;g.fillStyle=c;g.beginPath();g.arc(X(ps[0]),Y(ps[0]),L.r,0,2*Math.PI);g.fill();if(L.ew>0){g.strokeStyle=color(L.ec);g.lineWidth=L.ew;g.stroke();}g.globalAlpha=1;}}}
        |let drag=null;
        |cv.addEventListener('pointerdown',e=>{drag=[e.clientX,e.clientY,az,el];cv.setPointerCapture(e.pointerId);cv.style.cursor='grabbing';});
        |cv.addEventListener('pointermove',e=>{if(!drag)return;az=drag[2]+(e.clientX-drag[0])*0.01;el=Math.max(-1.55,Math.min(1.55,drag[3]+(e.clientY-drag[1])*0.01));draw();});

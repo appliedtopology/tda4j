@@ -44,6 +44,9 @@ class PlotCustomizationFacadeSpec extends Specification:
       fig.withPalette("clear") must beEqualTo(fig + Palette.clear)
       fig.withStyle("clear") must beEqualTo(fig + Style.clear)
       fig.withSetting("grid.dash=dotted") must beEqualTo(fig + Lines.grid(dash = Dash.Dotted))
+      fig.withSetting("marker.shape=pch:1") must beEqualTo(fig + Geom.points(shape = Shape.Circle, fill = false))
+      fig.withSetting("degree-1.size=8") must beEqualTo(fig + Scale.degree(1, marker = MarkerStyle(size = Some(8))))
+      fig.withLegend("lower-right") must beEqualTo(fig + Style(legend = LegendPosition.LowerRight))
       fig.withSetting("title.size=18").withSetting("x-axis=top") must
         beEqualTo(fig + Text(TextRole.Title, size = 18) + Scale.x(position = Side.Top))
       fig.withDegreeColor(1, "#d62728") must beEqualTo(fig + Scale.degree(1, color = "#d62728"))
@@ -97,6 +100,12 @@ class PlotCustomizationFacadeSpec extends Specification:
       sceneNames.filterNot(callable(classOf[Scene], _)) must beEmpty
       classOf[Plot].getMethod("save", classOf[String], classOf[String]) must not(beNull)
     }
+    "sort the bars of a barcode as asked, from a word" in {
+      val longest = result.plotBarcode("persistence").marks.collectFirst { case m: Mark.Segments => m.ends }.get
+      val lengths = longest.map((a, b) => b._1 - a._1)
+      lengths must beEqualTo(lengths.sorted.reverse)
+      result.plotBarcode("fastest") must throwAn[IllegalArgumentException]("expected one of birth, persistence, death")
+    }
     "chain as MATLAB writes them, and draw the result" in {
       val svg = result.plotDiagram().withTitle("A circle").withXLabel("born").withSize(800, 300).svg()
       texts(svg) must contain(allOf("A circle", "born"))
@@ -118,7 +127,9 @@ class PlotCustomizationFacadeSpec extends Specification:
       fig.withStyle("poster") must throwAn[IllegalArgumentException]("expected one of default, slides, print, clear")
       fig.withSetting("grid.dash=wavy") must throwAn[IllegalArgumentException]("expected one of solid, dashed, dotted")
       fig.withSetting("title.size") must throwAn[IllegalArgumentException]("should be element.property=value")
-      fig.withLegend("left") must throwAn[IllegalArgumentException]("expected one of right, bottom, none")
+      fig.withLegend("middle") must throwAn[IllegalArgumentException](
+        "expected one of right, left, top, bottom, upper-left, upper-right, lower-left, lower-right, none"
+      )
       fig.withSize(20, 20) must throwAn[IllegalArgumentException]("between 100 and 20000")
       fig.withTextScale(0) must throwAn[IllegalArgumentException]("textScale")
     }

@@ -424,7 +424,7 @@ class PlotGrammarSpec extends Specification:
     }
     "move the legend below the plot, or take it away" in {
       def legendAt(f: Figure) = elements(f.svg(), "text").find(_.getTextContent == "H0").get
-      val beside = legendAt(fig)
+      val beside = legendAt(fig + Style(legend = LegendPosition.Right))
       val below = legendAt(fig + Style(legend = LegendPosition.Bottom))
       number(beside, "x") must beGreaterThan(400.0)
       number(below, "x") must beLessThan(150.0)
@@ -928,7 +928,7 @@ class PlotGrammarSpec extends Specification:
       textsOnPage(svg) must beTrue
     }
     "put the y axis at the right, its numbers and label beyond it, and the legend beyond them" in {
-      val svg = (fig + Scale.y(position = Side.Right)).svg(Theme.Light)
+      val svg = (fig + Scale.y(position = Side.Right) + Style(legend = LegendPosition.Right)).svg(Theme.Light)
       val (x1, y1, w1, h1) = plotArea(svg)
       x1 must beCloseTo(14.0, 0.02) // nothing at the left now
       val numbers = elements(svg, "text").filter(t =>
@@ -1033,6 +1033,317 @@ class PlotGrammarSpec extends Specification:
       topRects(clear) must beEmpty
       val mixed = Plot.side(a + Style.clear, b).svgFile(Theme.Light)
       topRects(mixed).size must beEqualTo(1)
+    }
+  }
+
+  /** The marks group of a rendering: what is drawn inside the plot area. */
+  private def drawnMarks(svg: String): Seq[Element] =
+    val group = elements(svg, "g").find(_.getAttribute("clip-path").nonEmpty).get
+    val kids = group.getChildNodes
+    (0 until kids.getLength).map(kids.item).collect { case e: Element => e }
+
+  private def vertices(e: Element): Seq[(Double, Double)] =
+    e.getAttribute("points").split(" ").toSeq.map { p =>
+      val Array(x, y) = p.split(","); (x.toDouble, y.toDouble)
+    }
+
+  "the markers of a plot" should {
+    val point = IndexedSeq((1.0, 1.0))
+    def one(tweaks: Tweak*): Figure =
+      tweaks.foldLeft(
+        Figure(marks = Vector(Mark.Points(point, IndexedSeq(Paint.Series(0)), radius = 4.0)))
+      )(_ + _) + Scale.xy(min = 0, max = 2)
+    def marker(tweaks: Tweak*): Element = drawnMarks(one(tweaks*).svg(Theme.Light)).head
+    val series = Palette.brand.seriesLight(0)
+    val ring = Palette.brand.light.surface
+    val circle = marker()
+    val (cx, cy) = (number(circle, "cx"), number(circle, "cy"))
+    def center(ps: Seq[(Double, Double)]) = (ps.map(_._1).sum / ps.size, ps.map(_._2).sum / ps.size)
+
+    "draw a filled circle with a 2-pixel ring in the surface color, as they always did" in {
+      circle.getTagName must beEqualTo("circle")
+      circle.getAttribute("style") must beEqualTo(s"fill:$series;stroke:$ring")
+      circle.getAttribute("stroke-width") must beEqualTo("2")
+      number(circle, "r") must beEqualTo(4.0)
+    }
+    "draw each shape as what it is, about the same point" in {
+      def polygon(shape: Shape, corners: Int) =
+        val e = marker(Geom.points(shape = shape))
+        e.getTagName must beEqualTo("polygon")
+        val vs = vertices(e)
+        vs.size must beEqualTo(corners)
+        val (mx, my) = center(vs)
+        mx must beCloseTo(cx, 0.05)
+        my must beCloseTo(cy, 0.05)
+        vs
+      val up = polygon(Shape.Triangle, 3)
+      up.head._2 must beLessThan(up.tail.map(_._2).min) // the apex is up
+      val down = polygon(Shape.TriangleDown, 3)
+      down.head._2 must beGreaterThan(down.tail.map(_._2).max)
+      polygon(Shape.TriangleLeft, 3).head._1 must beLessThan(cx)
+      polygon(Shape.TriangleRight, 3).head._1 must beGreaterThan(cx)
+      polygon(Shape.Diamond, 4)
+      polygon(Shape.Pentagon, 5)
+      polygon(Shape.Hexagon, 6)
+      val star = polygon(Shape.Star, 10)
+      val radii = star.map((x, y) => math.hypot(x - cx, y - cy))
+      radii.zipWithIndex.collect { case (r, i) if i % 2 == 0 => r }.forall(r => math.abs(r - 6.0) < 0.05) must beTrue
+      radii.zipWithIndex.collect { case (r, i) if i % 2 == 1 => r }.forall(r => math.abs(r - 2.4) < 0.05) must beTrue
+      marker(Geom.points(shape = Shape.Square)).getTagName must beEqualTo("rect")
+      number(marker(Geom.points(shape = Shape.Dot)), "r") must beCloseTo(2.2, 0.01)
+    }
+    "draw a plus, a cross and a bar as strokes in the marker's own color" in {
+      def strokes(shape: Shape) = marker(Geom.points(shape = shape))
+      val plus = strokes(Shape.Plus)
+      plus.getTagName must beEqualTo("path")
+      plus.getAttribute("d").count(_ == 'M') must beEqualTo(2)
+      plus.getAttribute("style") must beEqualTo(s"fill:none;stroke:$series")
+      plus.getAttribute("stroke-width") must beEqualTo("2")
+      strokes(Shape.Cross).getAttribute("d").count(_ == 'M') must beEqualTo(2)
+      strokes(Shape.VLine).getAttribute("d").count(_ == 'M') must beEqualTo(1)
+      strokes(Shape.HLine).getAttribute("d") must contain("L")
+      marker(Geom.points(shape = Shape.Plus, edgeWidth = 3, edgeColor = "#aa0000")).getAttribute("stroke-width") must
+        beEqualTo("3")
+    }
+    "draw text as a marker, in the marker's color, with a tooltip that keeps the page well-formed" in {
+      val g = marker(Geom.points(shape = Shape.Glyph("★")))
+      g.getTagName must beEqualTo("text")
+      g.getTextContent must beEqualTo("★")
+      g.getAttribute("text-anchor") must beEqualTo("middle")
+      g.getAttribute("style") must beEqualTo(s"fill:$series")
+      number(g, "font-size") must beCloseTo(9.6, 0.01)
+      val tipped =
+        Figure(marks = Vector(Mark.Points(point, IndexedSeq(Paint.Series(0)), tips = IndexedSeq("a star")))) +
+          Geom.points(shape = Shape.Glyph("<&>")) + Scale.xy(min = 0, max = 2)
+      val shown = drawnMarks(tipped.svg(Theme.Light)).head // parses: the glyph is escaped, the tip is inside a group
+      shown.getTagName must beEqualTo("g")
+      shown.getTextContent must contain("a star")
+    }
+    "take the edge away, or change its width, color, opacity and dash" in {
+      marker(Geom.points(edgeWidth = 0)).getAttribute("style") must beEqualTo(s"fill:$series")
+      marker(Geom.points(edgeWidth = 0)).hasAttribute("stroke-width") must beFalse
+      marker(Geom.points(edgeVisible = false)).getAttribute("style") must beEqualTo(s"fill:$series")
+      val styled = marker(Geom.points(edgeWidth = 3, edgeColor = "#aa0000", edgeOpacity = 0.5, edgeDash = Dash.Dashed))
+      styled.getAttribute("style") must beEqualTo(s"fill:$series;stroke:#aa0000;stroke-opacity:0.5")
+      styled.getAttribute("stroke-width") must beEqualTo("3")
+      styled.getAttribute("stroke-dasharray") must beEqualTo("5 4")
+      marker(Geom.points(edgePaint = Paint.Ink)).getAttribute("style") must
+        beEqualTo(s"fill:$series;stroke:${Palette.brand.light.ink}")
+    }
+    "draw an open marker as an outline in its own color" in {
+      val open = marker(Geom.points(fill = false))
+      open.getAttribute("style") must beEqualTo(s"fill:none;stroke:$series")
+      open.getAttribute("stroke-width") must beEqualTo("1.5")
+      marker(Geom.points(fill = false, edgeWidth = 3)).getAttribute("stroke-width") must beEqualTo("3")
+      marker(Geom.points(fill = false, edgeColor = "#aa0000")).getAttribute("style") must
+        beEqualTo("fill:none;stroke:#aa0000")
+    }
+    "change the size and the opacity, and scale with the style" in {
+      number(marker(Geom.points(size = 8)), "r") must beEqualTo(8.0)
+      number(marker(Geom.points(size = 8), Style(markScale = 2)), "r") must beEqualTo(16.0)
+      marker(Geom.points(opacity = 0.5)).getAttribute("style") must
+        beEqualTo(s"fill:$series;fill-opacity:0.5;stroke:$ring;stroke-opacity:0.5")
+    }
+    "let a degree's markers differ from the figure's, which differ from the mark's own" in {
+      val two = Figure(
+        marks = Vector(
+          Mark.Points(IndexedSeq((0.5, 0.5)), IndexedSeq(Paint.Series(0)), radius = 4.0),
+          Mark.Points(IndexedSeq((1.5, 1.5)), IndexedSeq(Paint.Series(1)), radius = 4.0)
+        ),
+        legend = Vector(LegendItem("H0", Paint.Series(0)), LegendItem("H1", Paint.Series(1)))
+      ) + Scale.xy(min = 0, max = 2) + Geom.points(size = 6, shape = Shape.Square) +
+        Scale.degree(1, shape = Shape.Diamond, marker = MarkerStyle(size = Some(9), fill = Some(false)))
+      val svg = two.svg(Theme.Light)
+      val (h0, h1) = (drawnMarks(svg)(0), drawnMarks(svg)(1))
+      h0.getTagName must beEqualTo("rect") // the figure's shape and size over the mark's
+      number(h0, "width") must beCloseTo(2 * 0.9 * 6, 0.01)
+      h1.getTagName must beEqualTo("polygon") // the degree's shape over the figure's
+      h1.getAttribute("style") must startWith("fill:none;stroke:") // and the degree's open markers
+      // the legend's keys follow: the first is a filled square, the second an open diamond
+      val keys = elements(svg, "rect").filter(_.getAttribute("rx").isEmpty).filter(_.getParentNode.getNodeName == "svg")
+      elements(svg, "polygon").filter(_.getParentNode.getNodeName == "svg").map(_.getAttribute("style")).head must
+        startWith("fill:none")
+      keys.exists(_.getAttribute("style").startsWith("fill:")) must beTrue
+      val starred = (two + Scale.degree(1, marker = MarkerStyle(shape = Some(Shape.Star)))).svg(Theme.Light)
+      vertices(drawnMarks(starred)(1)).size must beEqualTo(10) // a marker's shape over the degree's own
+    }
+    "be written as a string: names, matplotlib codes, R's pch numbers, glyphs" in {
+      MarkerStyle.named("Triangle-Down").shape must beSome[Shape](Shape.TriangleDown)
+      Seq(
+        "o" -> Shape.Circle,
+        "^" -> Shape.Triangle,
+        "v" -> Shape.TriangleDown,
+        "<" -> Shape.TriangleLeft,
+        ">" -> Shape.TriangleRight,
+        "s" -> Shape.Square,
+        "D" -> Shape.Diamond,
+        "p" -> Shape.Pentagon,
+        "h" -> Shape.Hexagon,
+        "*" -> Shape.Star,
+        "+" -> Shape.Plus,
+        "x" -> Shape.Cross,
+        "|" -> Shape.VLine,
+        "_" -> Shape.HLine,
+        "." -> Shape.Dot
+      ).foreach((code, shape) => MarkerStyle.named(code).shape must beSome[Shape](shape))
+      MarkerStyle.named("pch:1") must beEqualTo(MarkerStyle(shape = Some(Shape.Circle), fill = Some(false)))
+      MarkerStyle.named("16") must beEqualTo(MarkerStyle(shape = Some(Shape.Circle), fill = Some(true)))
+      MarkerStyle.named("0") must beEqualTo(MarkerStyle(shape = Some(Shape.Square), fill = Some(false)))
+      MarkerStyle.named("17") must beEqualTo(MarkerStyle(shape = Some(Shape.Triangle), fill = Some(true)))
+      MarkerStyle.named("glyph:★").shape must beSome[Shape](Shape.Glyph("★"))
+      MarkerStyle.named("★").shape must beSome[Shape](Shape.Glyph("★"))
+      MarkerStyle.named("x").shape must beSome[Shape](Shape.Cross) // a code wins over the letter
+      MarkerStyle.named("glyph:x").shape must beSome[Shape](Shape.Glyph("x"))
+      Shape.named("D") must beEqualTo(Shape.Diamond)
+      MarkerStyle.named("banana") must throwAn[IllegalArgumentException](
+        "unknown marker 'banana'; expected one of names"
+      )
+      MarkerStyle.named("pch:26") must throwAn[IllegalArgumentException]("unknown pch 26; expected 0 to 25")
+      MarkerStyle.named("glyph:") must throwAn[IllegalArgumentException]("one to four characters")
+    }
+    "keep the shape a degree has, and a degree's shape stays the first four in order" in {
+      (0 until 6).map(Shape.ofDegree) must beEqualTo(
+        Seq(Shape.Circle, Shape.Triangle, Shape.Square, Shape.Diamond, Shape.Circle, Shape.Triangle)
+      )
+    }
+    "be the points of a 3-D scene too, with a size, an opacity and an edge, but round and filled" in {
+      val scene = Plot.points3D(circle3)
+      val plain = elements(scene.staticSvg(Theme.Light), "circle").head
+      plain.getAttribute("stroke-width") must beEqualTo("1.5")
+      val changed = elements(
+        (scene + Geom.points(size = 6, opacity = 0.5, edgeVisible = false)).staticSvg(Theme.Light),
+        "circle"
+      ).head
+      number(changed, "r") must beEqualTo(6.0)
+      changed.getAttribute("style") must contain("fill-opacity:0.5")
+      changed.hasAttribute("stroke-width") must beFalse
+      scene + Geom.points(shape = Shape.Star) must throwAn[UnsupportedOperationException]("round, filled points")
+      scene + Geom.points(fill = false) must throwAn[UnsupportedOperationException]("round, filled points")
+    }
+    "be written as settings, with the same checks" in {
+      def markerOf(spec: String) = (Plot.diagram(circleDiagram) + Settings.parse(spec)).elements.marker
+      markerOf("marker.shape=pch:1") must beEqualTo(MarkerStyle(shape = Some(Shape.Circle), fill = Some(false)))
+      markerOf("marker.size=6") must beEqualTo(MarkerStyle(size = Some(6)))
+      markerOf("marker.edge-width=0") must beEqualTo(MarkerStyle(edge = LineStyle(width = Some(0))))
+      markerOf("marker.edge-visible=false") must beEqualTo(MarkerStyle(edge = LineStyle(visible = Some(false))))
+      markerOf("marker.opacity=0.4") must beEqualTo(MarkerStyle(opacity = Some(0.4)))
+      (Plot.diagram(circleDiagram) + Settings.parse("degree-1.size=8")).degrees(1).marker must
+        beEqualTo(MarkerStyle(size = Some(8)))
+      (Plot.diagram(circleDiagram) + Settings.parse("degree-1.color=#c2185b")).degrees(1).color must beSome("#c2185b")
+      Settings.parse("marker.size=0") must throwAn[IllegalArgumentException]("size must be a positive number")
+      Settings.parse("marker.opacity=2") must throwAn[IllegalArgumentException]("opacity must be between 0 and 1")
+      Settings.parse("marker.shape=banana") must throwAn[IllegalArgumentException]("unknown marker 'banana'")
+      Settings.parse("marker.colour=red") must throwAn[IllegalArgumentException](
+        "unknown property 'colour' of marker; expected one of shape, size"
+      )
+      Settings.parse("degree-x.size=8") must throwAn[IllegalArgumentException]("a degree is written degree-0, degree-1")
+    }
+  }
+
+  private lazy val circle3 =
+    Array.tabulate(16)(i => Array(math.cos(2 * math.Pi * i / 16), math.sin(2 * math.Pi * i / 16), 0.0))
+
+  "the legend of a plot" should {
+    val diagram = Plot.diagram(circleDiagram)
+    val barcode = Plot.barcode(circleDiagram)
+    val (dx, dy, dw, dh) = plotArea(diagram.svg(Theme.Light))
+    def entry(svg: String, words: String) =
+      elements(svg, "text").filter(_.getTextContent == words).last // the legend comes after the axes
+
+    "sit at the lower right of a diagram, inside the shaded half plane, with the plot taking the room" in {
+      val svg = diagram.svg(Theme.Light)
+      val h1 = entry(svg, "H1")
+      number(h1, "x") must beGreaterThan(dx + dw / 2)
+      number(h1, "x") must beLessThan(dx + dw)
+      number(h1, "y") must beGreaterThan(dy + dh / 2)
+      number(h1, "y") must beLessThan(dy + dh)
+      // below the diagonal: on the side of it that the lower right corner is on
+      val diagonal = elements(svg, "polyline").find(_.getAttribute("style").startsWith("fill:none;stroke:")).get
+      val Seq((ax, ay), (bx, by)) = vertices(diagonal)
+      def side(px: Double, py: Double) = math.signum((bx - ax) * (py - ay) - (by - ay) * (px - ax))
+      side(number(h1, "x"), number(h1, "y")) must beEqualTo(side(dx + dw, dy + dh))
+      // no column beside the plot: it is wider than when the legend is beside it
+      val beside = plotArea((diagram + Style(legend = LegendPosition.Right)).svg(Theme.Light))
+      dw must beGreaterThan(beside._3 + 40)
+    }
+    "stay where the plot puts it when a style is added, and go where it is told" in {
+      val slides = (diagram + Style.slides).svg(Theme.Light)
+      val (sx, sy, sw, sh) = plotArea(slides)
+      number(entry(slides, "H1"), "x") must beGreaterThan(sx + sw / 2)
+      number(entry(slides, "H1"), "x") must beLessThan(sx + sw)
+      val right = (diagram + Style(legend = LegendPosition.Right)).svg(Theme.Light)
+      val (rx, ry, rw, rh) = plotArea(right)
+      number(entry(right, "H1"), "x") must beGreaterThan(rx + rw)
+      diagram.withLegend("right") must beEqualTo(diagram + Style(legend = LegendPosition.Right))
+      diagram.withLegend("lower-right") must beEqualTo(diagram + Style(legend = LegendPosition.LowerRight))
+    }
+    "go above or beside the plot, taking room, or in a corner of it, taking none" in {
+      val none = plotArea((barcode + Style(legend = LegendPosition.Hidden)).svg(Theme.Light))
+      def at(position: LegendPosition) =
+        val svg = (barcode + Style(legend = position)).svg(Theme.Light)
+        (plotArea(svg), entry(svg, "H0"), svg)
+      val ((tx, ty, tw, th), top, topSvg) = at(LegendPosition.Top)
+      ty must beCloseTo(none._2 + 30.0, 0.02) // one row of the legend, 10 + 20 px
+      number(top, "y") must beLessThan(ty)
+      textsOnPage(topSvg) must beTrue
+      val ((lx, ly, lw, lh), left, leftSvg) = at(LegendPosition.Left)
+      lx must beCloseTo(none._1 + 49.0, 0.02) // the column: 34 + 7.5 characters
+      number(left, "x") must beEqualTo(34.0) // the column starts at 14, the text is 20 px after its key
+      textsOnPage(leftSvg) must beTrue
+      Seq(LegendPosition.UpperLeft, LegendPosition.UpperRight, LegendPosition.LowerLeft, LegendPosition.LowerRight)
+        .foreach { corner =>
+          val ((cx, cy, cw, ch), text, svg) = at(corner)
+          (cx, cy, cw, ch) must beEqualTo(none) // a corner takes no room
+          val right = corner == LegendPosition.UpperRight || corner == LegendPosition.LowerRight
+          val upper = corner == LegendPosition.UpperLeft || corner == LegendPosition.UpperRight
+          (number(text, "x") > cx + cw / 2) must beEqualTo(right)
+          (number(text, "y") < cy + ch / 2) must beEqualTo(upper)
+          number(text, "x") must beGreaterThan(cx)
+          number(text, "y") must beLessThan(cy + ch)
+          textsOnPage(svg) must beTrue
+        }
+      words((diagram + Style(legend = LegendPosition.Hidden)).svg()) must not(
+        contain("H1")
+      ) // the axes of a diagram are numbers
+    }
+    "be named, in any case, and refused when it is not a place" in {
+      LegendPosition.named("Upper-Right") must beEqualTo(LegendPosition.UpperRight)
+      LegendPosition.named("bottom-left") must beEqualTo(LegendPosition.LowerLeft)
+      LegendPosition.named("left") must beEqualTo(LegendPosition.Left)
+      LegendPosition.named("none") must beEqualTo(LegendPosition.Hidden)
+      LegendPosition.named("middle") must throwAn[IllegalArgumentException](
+        "expected one of right, left, top, bottom, upper-left, upper-right, lower-left, lower-right, none"
+      )
+    }
+  }
+
+  "the bars of a barcode" should {
+    val bars = Persistence(circle, maxDimension = 1).bars
+    def ends(f: Figure) = f.marks.collectFirst { case m: Mark.Segments => m.ends }.get
+    "be in the order asked for within each degree: by birth, by persistence, or by death" in {
+      val byBirth = ends(Plot.barcode(bars)).map(_._1._1)
+      byBirth must beEqualTo(byBirth.sorted)
+      val byLength = ends(Plot.barcode(bars, order = BarOrder.Persistence)).map((a, b) => b._1 - a._1)
+      byLength must beEqualTo(byLength.sorted.reverse) // the longest first
+      val byDeath = ends(Plot.barcode(bars, order = BarOrder.Death)).map(_._2._1)
+      byDeath must beEqualTo(byDeath.sorted)
+      byLength must not(beEqualTo(ends(Plot.barcode(bars)).map((a, b) => b._1 - a._1)))
+      BarOrder.named("Persistence") must beEqualTo(BarOrder.Persistence)
+      BarOrder.named("fastest") must throwAn[IllegalArgumentException]("expected one of birth, persistence, death")
+    }
+    "be thicker or fainter on request, and nothing else is" in {
+      val bc = Plot.barcode(bars)
+      (bc + Geom.segments(width = 3, opacity = 0.5)).marks.collect { case m: Mark.Segments =>
+        (m.width, m.opacity)
+      }.toSet must beEqualTo(Set((3.0, 0.5)))
+      val diagram = Plot.diagram(bars)
+      diagram + Geom.segments(width = 3) must beEqualTo(diagram)
+      Geom.segments(width = 0) must throwAn[IllegalArgumentException]("width must be a positive number")
+      (Plot.complex(circle, 0.5) + Geom.polygons(opacity = 0.4) + Geom.discs(opacity = 0.2)).marks.collect {
+        case m: Mark.Polygons => m.opacity
+      }.toSet must beEqualTo(Set(0.4))
+      (bc + Settings.parse("segments.width=3")).marks.collect { case m: Mark.Segments => m.width }.toSet must
+        beEqualTo(Set(3.0))
     }
   }
 

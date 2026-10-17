@@ -205,6 +205,8 @@ one (`.withLabels(title = "A").withLabels(title = "B")` titles the plot `B`).
 | the color, legend label and marker of a homological degree | `withDegree(1, color = "#c2185b", label = "loops", shape = Shape.Diamond)` | `Scale.degree(...)` |
 | the color scheme | `withPalette(Palette.reference)` | the `Palette` itself |
 | fonts, size of text and marks, gridlines, the legend's place, the background | `withStyle(Style.slides)` | the `Style` itself |
+| the markers of points: shape, size, opacity, open or filled, the edge | `withPoints(shape = Shape.Star, size = 6, fill = false, edgeWidth = 0)` | `Geom.points(...)` |
+| a barcode's bars, a complex's edges, triangles and balls | `withSegments(width = 3)`, `withPolygons(opacity = 0.3)`, `withDiscs(...)`, `withLines(width = 3)` | `Geom.segments(...)`, `Geom.polygons(...)`, `Geom.discs(...)`, `Geom.lines(...)` |
 | each kind of text: size, weight, slant, alignment, font, color | `withText(TextRole.Title, size = 18, align = Anchor.Middle)` | `Text(TextRole.Title, ...)` |
 | gridlines, axis lines, tick marks, a frame | `withGridLines(dash = Dash.Dotted)`, `withAxisLines(...)`, `withTickMarks(length = 4)`, `withMinorTickMarks(...)`, `withMinorGridLines(...)`, `withFrame()` | `Lines.grid(...)`, `Lines.axis(...)`, `Lines.ticks(...)`, `Lines.minorTicks(...)`, `Lines.minorGrid(...)`, `Lines.frame(...)` |
 | the fill of the plot area, the diagonal and its shaded half plane | `withPanel(color = "#f4f4f4")`, `withDiagonal(shade = false)` | `Guide.panel(...)`, `Guide.diagonal(...)` |
@@ -315,7 +317,7 @@ val image = Plot.persistenceImage(d, 1)
 ### The look
 
 A `Style` holds what is not data: the font, a factor on the size of text and one on the size of markers and lines,
-the gridlines, where the legend goes (`LegendPosition.Right`, `Bottom` or `Hidden`) and whether there is a background at
+the gridlines, where the legend goes (see [The legend](#the-legend)) and whether there is a background at
 all. `Style.slides` is a projector-sized preset (text and marks 30% larger); `Style.print` and `Style.clear` are for a paper
 and for a page of either color. A style
 replaces the plot's whole style; to change one setting of a style, copy it. Keep everything that makes a look a `val`, with `+`, and add it to every plot, of
@@ -338,6 +340,56 @@ Plot.points3D(points) + house
 
 (`Theme`, which `save` and `html` take, is a different thing: whether the colors are light, dark, or follow the reader's
 own setting.)
+
+### Markers
+
+A marker is a shape, drawn filled in its degree's color or open, with an edge around it: by default a ring of 2 pixels in
+the background's color, which keeps overlapping markers apart. Every part of that can be changed, for all the points of a
+plot or for one degree, and the edge can be taken away. The plots give each degree its own shape (circle, triangle, square,
+diamond), so that a diagram reads without color; there are more to choose from: `Circle`, `Dot`, `Square`, `Triangle`,
+`TriangleDown`, `TriangleLeft`, `TriangleRight`, `Diamond`, `Pentagon`, `Hexagon`, `Star`, the strokes `Plus`, `Cross`,
+`VLine` and `HLine`, and text, `Shape.Glyph("★")`, drawn in the marker's color.
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val points = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
+val d = Persistence(points, maxDimension = 1)
+
+val dense = Plot.diagram(d).withPoints(size = 3.5, opacity = 0.6, edgeVisible = false)
+val open = Plot.diagram(d).withDegree(1, marker = MarkerStyle(fill = Some(false), size = Some(6)))
+val stars = Plot.diagram(d).withPoints(shape = Shape.Glyph("★"), size = 7, edgeWidth = 0)
+```
+
+`size` is the radius in pixels, before the style's mark scale; `opacity` covers the marker and its edge; `fill = false`
+draws an open marker, an outline in its own color 1.5 pixels wide; the edge has a width (0 for none), a color or a palette
+role, an opacity and a dash, and `edgeVisible = false` takes it away. A plus, a cross and a bar are strokes: their edge is
+their color and their width is the edge's. A degree's markers (`Scale.degree(k, marker = MarkerStyle(...))`) win over the
+plot's, which win over the plot's own. A 3-D scene's points are round and filled, and take a size, an opacity and an edge.
+
+**As text**, a shape is a name (`triangle-down`, `star`, `plus`, ...), a one-letter code of matplotlib (`o . ^ v < > s p h * + x
+D | _`), a number of R and ggplot's `pch` (`pch:16`, or a bare `0` to `25`: 0 to 14 are open shapes, 15 to 25 filled, the
+composite ones, 7 and 9 to 14, drawn as their outer shape) or `glyph:text`; any other single character is a glyph, and a code
+wins over a letter (`glyph:x` for the letter). `marker.shape=pch:1` is an open circle:
+`withSetting("marker.shape=pch:1")`, `withSetting("marker.edge-width=0")`, `withSetting("degree-1.size=6")`,
+`--set marker.shape=triangle-down`.
+
+### The legend
+
+The legend goes beside the plot (`LegendPosition.Right`, the default, or `Left`), above or below it (`Top`, `Bottom`, in rows
+that wrap), or inside the plot area at a corner (`UpperLeft`, `UpperRight`, `LowerLeft`, `LowerRight`), taking no room; or
+nowhere (`Hidden`). A persistence diagram puts it at the lower right by itself, below the diagonal where no point can be, in
+the shaded half plane. `withLegend("right")` or `Style(legend = LegendPosition.Right)` puts it beside the plot again; a style
+that does not name a place leaves each plot's own. A corner of a barcode over its bars covers some of them: choose the place
+for the plot.
+
+### The bars of a barcode
+
+`Plot.barcode(d, order = BarOrder.Persistence)` sorts the bars of each degree longest first (`Birth`, the default, sorts by
+birth, `Death` by death); `result.plotBarcode("persistence")` is the same from MATLAB. `withSegments(width = 3)` sets their
+thickness in pixels.
 
 ### Finer control: text, lines, the plot area, the sides of the axes
 
@@ -395,6 +447,9 @@ earlier ones set, and tweaks of different elements come in any order, a `Style` 
 | `ticks`, `minor-ticks` | `length`, `direction` (`out`, `in`), `visible`, `width`, `color`, `opacity` |
 | `panel` | `color`, `opacity`, `visible` |
 | `diagonal` | `shade` (`none` or a color), `shade-opacity`, `color`, `width`, `dashed` |
+| `marker` | `shape` (a name, a matplotlib code, `pch:N`, `glyph:text`), `size`, `opacity`, `fill`, `edge-width` (0 for none), `edge-color`, `edge-opacity`, `edge-dash`, `edge-visible` |
+| `degree-0`, `degree-1`, ... | `color`, `dark-color`, `label` and the `marker` properties |
+| `segments`, `polygons`, `discs`, `lines` | `width`, `opacity` for segments; `opacity` for polygons and discs; `width` for lines |
 | `x-axis`, `y-axis` | `bottom` or `top`; `left` or `right` (written `x-axis=top`) |
 
 `fig.withSetting("title.size=18")`, `fig.withSetting("grid.dash=dotted")` and
@@ -487,7 +542,7 @@ common changes as methods that take only strings and numbers, and return the cha
 (`'linear'`, `'log'`, `'sqrt'` or `'symlog'`), `withYScale`, `withXRange(min, max)`, `withYRange`,
 `withPalette('print')` (`'brand'`, `'reference'`, `'print'` or `'clear'`), `withStyle('print')` (`'default'`,
 `'slides'`, `'print'` or `'clear'`), `withDegreeColor(k, '#c2185b')`, `withDegreeLabel(k, 'loops')`,
-`withTextScale(1.3)`, `withMarkScale`, `withLegend('bottom')` (`'right'`, `'bottom'` or `'none'`), `withoutGrid()` and
+`withTextScale(1.3)`, `withMarkScale`, `withLegend('lower-right')` (`'right'`, `'left'`, `'top'`, `'bottom'`, `'upper-left'`, `'upper-right'`, `'lower-left'`, `'lower-right'` or `'none'`), `withoutGrid()` and
 `withTransparentBackground()` and, for everything finer, `withSetting('title.size=18')` (see above); a 3-D scene has the
 ones that need no axes. `save` takes the theme by name:
 `fig.save('diagram.svg', 'dark')`.

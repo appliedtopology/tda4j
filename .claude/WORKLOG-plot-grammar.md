@@ -140,6 +140,27 @@ The two real defects that made customizing hard (both found by reading, not by u
     cannot be on), so the CLI says so before computing. (h) Bug found by reading while doing this: a board saved as `.svg`
     always painted a background rectangle from its first panel's palette, so `Style.clear` on a board was not clear.
 
+13. **Markers, legend places, barcode order** (project lead: items 4 to 10 of the survey, "definitely full control (including
+    removal) of the marker stroke", and "default legend placement for diagrams should be in the lower right, contained in the
+    shaded half plane"; asked whether to mirror matplotlib and R shortcuts). (a) A marker is shape x (filled | open) x edge x
+    size x opacity (`MarkerStyle`); the edge is a `LineStyle`, so removal is `visible = false` or width 0. The default edge is
+    the old 2-pixel ring in the surface color (it keeps overlapping points apart, and the gallery is byte-identical); an open
+    shape's and a stroke's edge is its own color (1.5 px, 2 px), because "no inside, outline in the surface color" is
+    invisible. Layers merge later-wins: the mark's own shape and radius, `Elements.marker`, then the degree's. (b) Shapes:
+    the four degree shapes stay the first four of `Shape` in order (`Shape.ofDegree` indexes an explicit list, since an
+    enum's `values` leaves out the parameterized `Glyph`); eleven more, and `Glyph(text)` drawn as text in the marker's color
+    (a tooltip around a text needs a `<g>`, so `item` wraps). (c) Shortcuts mirror matplotlib and R as ALIASES of the string
+    entry points (`MarkerStyle.named`), not as the Scala type: names, matplotlib's one-letter codes, R/ggplot `pch` 0 to 25
+    with the open and filled distinction carried by `fill` (the composite shapes 7 and 9 to 14 are drawn as their outer
+    shape, honestly approximate), and `glyph:text`; a code wins over a letter. matplotlib's `fillstyle` and R's open pch are
+    one setting here, `fill`. (d) The legend: a plot has its own default place (`Figure.legendPlace`), a style's `legend` is
+    now an `Optional`, so `Style.slides` replaces the style whole WITHOUT resetting a diagram's lower-right legend (the same
+    reason as decision 5). The corners take no room; a `Left` column and a `Top` row do. The lower-right corner of a diagram
+    is empty by construction (death is at least birth), which is why it is the default there; a corner of a barcode covers
+    bars (a legend box is the next step, filed with the rest). (e) `Settings` got `marker`, `degree-<k>`, `segments`,
+    `polygons`, `discs`, `lines`, still one grammar for MATLAB and `--set`. (f) A scene's canvas takes the same marker size,
+    opacity and edge (the page's script changed; checked in Chromium: no errors, the same pixels at defaults).
+
 ## What was verified
 
 - **Default plots are unchanged**: `Gallery` run on the original commit (a `git worktree`) and on the new code, SVGs

@@ -88,7 +88,8 @@ object ColorScale:
 
 /** What to change about the look of one homological degree (more exactly, one categorical slot: the `k`-th landscape
   * for `Plot.landscape`) wherever it appears in a figure: its mark color, its legend label and its marker shape.
-  * Whatever is `None` stays as the palette and the plot have it.
+  * Whatever is `None` stays as the palette and the plot have it. `marker` changes the look of the degree's markers
+  * (size, opacity, open or filled, the edge), over the figure's own.
   *
   * @param color
   *   the color in light mode (and dark, unless `darkColor` is given)
@@ -99,7 +100,8 @@ final case class DegreeStyle(
   color: Option[String] = None,
   darkColor: Option[String] = None,
   label: Option[String] = None,
-  shape: Option[Shape] = None
+  shape: Option[Shape] = None,
+  marker: MarkerStyle = MarkerStyle()
 ):
   /** `later` over this one: what `later` sets wins. A new `color` without a `darkColor` is the color of both modes, not
     * only of the light one beside an older dark one.
@@ -108,4 +110,4 @@ final case class DegreeStyle(
     val (light, dark) =
       if later.color.isDefined then (later.color, later.darkColor)
       else (color, later.darkColor.orElse(darkColor))
-    DegreeStyle(light, dark, later.label.orElse(label), later.shape.orElse(shape))
+    DegreeStyle(light, dark, later.label.orElse(label), later.shape.orElse(shape), marker.merge(later.marker))

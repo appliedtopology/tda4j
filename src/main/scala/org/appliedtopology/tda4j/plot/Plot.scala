@@ -113,6 +113,26 @@ final case class Board(plots: Seq[Figure], title: String = "") extends Plot:
     s"""<?xml version="1.0" encoding="UTF-8"?>
        |<svg xmlns="http://www.w3.org/2000/svg" width="$w" height="$h" viewBox="0 0 $w $h">$background${inner.mkString}</svg>""".stripMargin
 
+/** How the bars of one degree are ordered in a barcode, top to bottom. */
+enum BarOrder:
+  /** By birth, then death: the staircase of a Vietoris-Rips barcode. */
+  case Birth
+
+  /** The most persistent first, the essential bars at the top. */
+  case Persistence
+
+  /** By death, then birth. */
+  case Death
+
+object BarOrder:
+  /** The order called `name`, in any case: `birth`, `persistence` or `death`. */
+  def named(name: String): BarOrder =
+    values
+      .find(_.toString.equalsIgnoreCase(name.trim))
+      .getOrElse(
+        throw IllegalArgumentException(s"unknown bar order '$name'; expected one of birth, persistence, death")
+      )
+
 /** The plots of persistent homology. Every function returns a [[Figure]] (or a [[Scene]] for 3-D) to `view()`,
   * `save(...)`, or adjust (`copy(title = ...)`, `+ mark`, `over`).
   *
@@ -156,17 +176,23 @@ object Plot:
     *
     * @param longest
     *   show only the `n` most persistent bars of each degree (a cloud's thousand short `H0` bars hide everything else).
+    * @param order
+    *   how the bars of a degree are sorted: by birth (the default), longest first, or by death.
     */
   def barcode(
     bars: Bars,
     title: String = "Barcode",
     longest: Option[Int] = None,
-    palette: Palette = Palette.default
+    palette: Palette = Palette.default,
+    order: BarOrder = BarOrder.Birth
   ): Figure =
     val all = barsOf(bars)
     val byDegree = all.groupBy(_.dim).toSeq.sortBy(_._1).map { (k, bs) =>
       val kept = longest.fold(bs)(n => bs.sortBy(b => -b.persistence).take(n))
-      k -> kept.sortBy(b => (b.birth, b.death))
+      k -> (order match
+        case BarOrder.Birth       => kept.sortBy(b => (b.birth, b.death))
+        case BarOrder.Persistence => kept.sortBy(b => (-b.persistence, b.birth))
+        case BarOrder.Death       => kept.sortBy(b => (b.death, b.birth)))
     }
     val finite = all.flatMap(b => Seq(b.birth, b.death)).filter(_.isFinite)
     val lo = finite.minOption.getOrElse(0.0)
@@ -221,8 +247,8 @@ object Plot:
     )
 
   /** The persistence diagram: a point `(birth, death)` per bar, colored and shaped by degree, above the diagonal (which
-    * is drawn, with the region below it shaded). Essential classes sit on the line marked `∞` at the top. Points far
-    * from the diagonal are the persistent features.
+    * is drawn, with the region below it shaded, where the legend sits at the lower right). Essential classes sit on the
+    * line marked `∞` at the top. Points far from the diagonal are the persistent features.
     */
   def diagram(bars: Bars, title: String = "Persistence diagram", palette: Palette = Palette.default): Figure =
     val all = barsOf(bars)
@@ -262,7 +288,8 @@ object Plot:
       width = 560,
       height = 520,
       equalAspect = true,
-      palette = palette
+      palette = palette,
+      legendPlace = LegendPosition.LowerRight
     )
 
   /** A persistence image (`Vectorization.persistenceImage`'s `image(r)(c)`: `r` along `birthRange`, `c` along

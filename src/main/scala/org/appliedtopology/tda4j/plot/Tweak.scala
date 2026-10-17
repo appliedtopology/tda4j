@@ -182,14 +182,17 @@ object Scale:
 
   /** Homological degree `k` (a categorical slot, the `k`-th landscape in `Plot.landscape`): its `color` (in dark mode
     * `darkColor`, default the same), its legend `label` (the tooltips keep `H1`) and its marker `shape`. The color
-    * follows the degree through the whole figure, whatever palette it has.
+    * follows the degree through the whole figure, whatever palette it has. `marker` changes how the degree's markers
+    * look (their size, opacity, whether they are open, their edge) over the figure's own: `marker = MarkerStyle(size =
+    * Some(3.5), fill = Some(false))`.
     */
   def degree(
     k: Int,
     color: Optional[String] = Optional.empty,
     darkColor: Optional[String] = Optional.empty,
     label: Optional[String] = Optional.empty,
-    shape: Optional[Shape] = Optional.empty
+    shape: Optional[Shape] = Optional.empty,
+    marker: Optional[MarkerStyle] = Optional.empty
   ): Tweak =
     require(k >= 0, s"Scale.degree: the degree is 0 or more, not $k")
     Seq("color" -> color, "darkColor" -> darkColor).foreach { (name, o) =>
@@ -200,7 +203,16 @@ object Scale:
         )
       )
     }
-    DegreeChange(k, DegreeStyle(color.toOption, darkColor.toOption, label.toOption, shape.toOption))
+    DegreeChange(
+      k,
+      DegreeStyle(
+        color.toOption,
+        darkColor.toOption,
+        label.toOption,
+        shape.toOption,
+        marker.toOption.getOrElse(MarkerStyle())
+      )
+    )
 
   // an axis is on one of two sides: refused when the tweak is made, so a command line says so before anything is computed
   private def checkSide(which: String, position: Optional[Side]): Unit =

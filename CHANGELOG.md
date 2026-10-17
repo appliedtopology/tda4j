@@ -46,6 +46,16 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   `withGridLines`, `withTickMarks`, `withFrame`, `withPanel`, `withDiagonal`, ...; written as text for MATLAB and Java
   (`withSetting("title.size=18")`) and the command line (`--set title.size=18`, repeated). They sit beside the style, so a
   `Style` added later does not undo them. Default output is unchanged.
+- Markers: `Geom.points` (`withPoints`) sets the shape, size, opacity, open or filled, and the **edge** of every point's
+  marker, which can be removed (`edgeWidth = 0`); `Scale.degree(k, marker = MarkerStyle(...))` does it for one degree.
+  Eleven more shapes (`TriangleDown`, `TriangleLeft`, `TriangleRight`, `Pentagon`, `Hexagon`, `Star`, `Dot`, strokes `Plus`,
+  `Cross`, `VLine`, `HLine`) and `Shape.Glyph("★")`, text as a marker. A shape is also a string for MATLAB, Java and the
+  command line: a name, a matplotlib code (`o s ^ v D + x *`), an R or ggplot `pch` number (`pch:1` is an open circle) or
+  `glyph:text` (`withSetting("marker.shape=pch:1")`, `--set degree-1.size=6`). `Geom.segments`, `polygons`, `discs` and
+  `lines` change a barcode's bars, a complex's triangles and balls. A 3-D scene's points take a size, an opacity and an edge.
+- The legend can go to the left, the top, or a corner inside the plot area (`LegendPosition.Left`, `Top`, `UpperLeft`,
+  `UpperRight`, `LowerLeft`, `LowerRight`); `Style.legend` is optional, so that a style that names no place leaves a plot its
+  own. `Plot.barcode(d, order = BarOrder.Persistence)` sorts the bars longest first (or by `Death`).
 - `Board.shared()` puts the panels on one scale; `Mark.Rule` (a line across the plot at one value) and
   `Mark.Diagonal(offset)` (the line `y = x + offset`, drawn in the plot's own scales).
 - MATLAB: the figures returned by the `plot...` methods have the common tweaks as methods that take strings and numbers
@@ -55,6 +65,8 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Changed
 
+- A persistence diagram's legend is at its lower right, inside the shaded half plane, and the plot takes the room the legend
+  column had. (`withLegend("right")` puts it back.)
 - A board of panels with no background (`Style.clear`) saved as an `.svg` has no background rectangle of its own either.
 - A plot's colors for data follow its palette: a persistence image, an image, a cocycle and circular coordinates hold
   their values (`Paint.Value`) and a `ColorScale` colors them when drawn.

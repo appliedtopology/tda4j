@@ -234,10 +234,18 @@ object Svg:
             )
       case _ => if theme == Theme.Auto then pal.css(p) else pal.hex(p, theme)
 
-    // a degree's label and shape, where the figure changes them
-    def shapeOf(m: Mark.Points, i: Int): Shape = m.paintAt(i) match
-      case Paint.Series(k) => fig.degrees.get(k).flatMap(_.shape).getOrElse(m.shape)
-      case _               => m.shape
+    // a marker as it is drawn: the mark's own shape and radius, then the figure's markers, then its degree's
+    val faces2 = scala.collection.mutable.Map.empty[(Shape, Double, Paint), MarkerFace]
+    def faceOf(shape: Shape, radius: Double, own: Paint): MarkerFace =
+      faces2.getOrElseUpdate(
+        (shape, radius, own), {
+          val degree = own match
+            case Paint.Series(k) => fig.degrees.get(k)
+            case _               => None
+          val layers = Seq(el.marker) ++ degree.toSeq.flatMap(d => Seq(MarkerStyle(shape = d.shape), d.marker))
+          MarkerStyle.resolve(shape, radius, own, layers)
+        }
+      )
     val legend = fig.legend.map { item =>
       item.paint match
         case Paint.Series(k) =>
@@ -262,12 +270,15 @@ object Svg:
     }.sum
 
     // layout: the margins make room for the title, the axes, the legend and the color bar
-    val legendPlace = if legend.isEmpty then LegendPosition.Hidden else style.legend
+    val legendPlace =
+      if legend.isEmpty then LegendPosition.Hidden else style.legend.toOption.getOrElse(fig.legendPlace)
     val (sTick, sAxis, sLegend, sLegendTitle) =
       (sc(TextRole.TickLabel), sc(TextRole.AxisLabel), sc(TextRole.Legend), sc(TextRole.LegendTitle))
     val sLegends = math.max(sLegend, sLegendTitle)
     val legendChars = (legend.map(_.label.length) :+ fig.legendTitle.length).max.min(24)
-    val legendWidth = if legendPlace == LegendPosition.Right then (34.0 + 7.5 * legendChars) * sLegends else 0.0
+    val legendColumn = (34.0 + 7.5 * legendChars) * sLegends
+    val legendWidth = if legendPlace == LegendPosition.Right then legendColumn else 0.0
+    val legendWidthLeft = if legendPlace == LegendPosition.Left then legendColumn else 0.0
     val colorbarWidth =
       if fig.colorScale.exists(_.guide) then 74.0 * math.max(sTick, sc(TextRole.ColorTitle)) else 0.0
     // where the axes are, the tick marks that point away from the plot (they push the numbers outward), and the room
@@ -292,10 +303,10 @@ object Svg:
       if fig.x.visible then 30.0 * sTick + (if fig.x.label.nonEmpty then 16.0 * sAxis else 0.0) + markOut + slant
       else 0.0
     val yAxisBand = if fig.y.visible then 16.0 * sAxis + 42.0 * sTick + markOut else 0.0
-    val top =
+    val head =
       16.0 + (if fig.title.nonEmpty then 22.0 * sc(TextRole.Title) else 0.0) +
-        (if fig.subtitle.nonEmpty then 16.0 * sc(TextRole.Subtitle) else 0.0) + (if xTop then xAxisBand else 0.0)
-    val left = if fig.y.visible && !yRight then yAxisBand else 14.0
+        (if fig.subtitle.nonEmpty then 16.0 * sc(TextRole.Subtitle) else 0.0)
+    val left = legendWidthLeft + (if fig.y.visible && !yRight then yAxisBand else 14.0)
     val rightAxisBand = if fig.y.visible && yRight then yAxisBand else 0.0
     // what is below the plot: the axis (or a margin, when it is above or not drawn)
     val axisBand = if fig.x.visible && !xTop then xAxisBand else 14.0
@@ -306,7 +317,7 @@ object Svg:
     val titleWidth =
       if fig.legendTitle.isEmpty then 0.0 else (14.0 + 7.5 * fig.legendTitle.length.min(24)) * sLegendTitle
     val legendRows: Vector[Vector[LegendItem]] =
-      if legendPlace != LegendPosition.Bottom then Vector.empty
+      if legendPlace != LegendPosition.Bottom && legendPlace != LegendPosition.Top then Vector.empty
       else
         val rows = Vector.newBuilder[Vector[LegendItem]]
         var row = Vector.empty[LegendItem]
@@ -322,6 +333,8 @@ object Svg:
         rows += row
         rows.result()
     val legendBand = if legendRows.isEmpty then 0.0 else (10.0 + 20.0 * legendRows.size) * sLegends
+    // the plot area starts below the head, the legend when it is above, and the x axis when it is
+    val top = head + (if legendPlace == LegendPosition.Top then legendBand else 0.0) + (if xTop then xAxisBand else 0.0)
     // small print under the plot: what an axis did instead of what was asked, and what could not be drawn
     val notes: Seq[String] =
       Seq("x" -> (fig.x, xt), "y" -> (fig.y, yt))
@@ -342,7 +355,7 @@ object Svg:
         s"$notShown ${if notShown == 1 then "mark" else "marks"} not shown: $why"
       }
     val noteBand = 14.0 * sc(TextRole.Note) * notes.size
-    val bottom = axisBand + legendBand + noteBand
+    val bottom = axisBand + (if legendPlace == LegendPosition.Bottom then legendBand else 0.0) + noteBand
     val h = math.max(40.0, fig.height - top - bottom)
 
     // the range shown
@@ -600,7 +613,9 @@ object Svg:
     def tip(m: Mark, i: Int): String = m.tipAt(i).fold("")(t => s"<title>${escape(t)}</title>")
     def item(open: String, m: Mark, i: Int): Unit =
       m.tipAt(i) match
-        case Some(_) => sb ++= open.stripSuffix("/>") + ">" + tip(m, i) + "</" + open.drop(1).takeWhile(_ != ' ') + ">"
+        case Some(_) if open.endsWith("/>") =>
+          sb ++= open.stripSuffix("/>") + ">" + tip(m, i) + "</" + open.drop(1).takeWhile(_ != ' ') + ">"
+        case Some(_) => sb ++= "<g>" + tip(m, i) + open + "</g>" // a text, which has content of its own
         case None    => sb ++= open
     def dash(dashed: Boolean): String = if dashed then """ stroke-dasharray="5 4"""" else ""
     fig.marks.foreach {
@@ -677,11 +692,8 @@ object Svg:
         m.at.indices.foreach(i =>
           if ok(m.at(i)) then
             val (x, y) = m.at(i)
-            item(
-              marker(f.px(x), f.py(y), m.radius * ink, shapeOf(m, i), paint(m.paintAt(i)), paint(Paint.Surface)),
-              m,
-              i
-            )
+            val face = faceOf(m.shape, m.radius, m.paintAt(i))
+            item(marker(f.px(x), f.py(y), face.size * ink, face, paint(m.paintAt(i)), paint(face.edge.paint)), m, i)
         )
       case m: Mark.Text =>
         if ok(m.at) then
@@ -745,7 +757,8 @@ object Svg:
     // legend: beside the plot, or in rows below it
     def legendKey(item: LegendItem, lx: Double, cy: Double): String = item.key match
       case LegendItem.Key.Dot =>
-        marker(lx + 6 * sLegend, cy, 4.5 * sLegend, item.shape, paint(item.paint), paint(Paint.Surface))
+        val face = faceOf(item.shape, 4.5, item.paint)
+        marker(lx + 6 * sLegend, cy, 4.5 * sLegend, face, paint(item.paint), paint(face.edge.paint))
       case LegendItem.Key.Line =>
         s"""<line x1="${fmt(lx)}" y1="${fmt(cy)}" x2="${fmt(lx + 14 * sLegend)}" y2="${fmt(cy)}" style="stroke:${paint(
             item.paint
@@ -761,19 +774,19 @@ object Svg:
           role
         )} style="fill:${paint(face(role).paint)}">${escape(text)}</text>"""
     var lx = left + w + rightAxisBand + 18
-    if legendPlace == LegendPosition.Right then
+    // the entries in a column from `x`, the title's line (if there is a title) centred at `firstCy`
+    def legendList(x: Double, firstCy: Double): Unit =
       val titleRows = if fig.legendTitle.isEmpty then 0 else 1
-      if titleRows == 1 then sb ++= legendText(fig.legendTitle, lx, top + 8 * sLegends, TextRole.LegendTitle)
+      if titleRows == 1 then sb ++= legendText(fig.legendTitle, x, firstCy, TextRole.LegendTitle)
       legend.zipWithIndex.foreach { (entry, k) =>
-        val cy = top + 8 * sLegends + 20 * sLegends * (k + titleRows)
-        sb ++= legendKey(entry, lx, cy)
-        sb ++= legendText(entry.label, lx + 20 * sLegend, cy, TextRole.Legend)
+        val cy = firstCy + 20 * sLegends * (k + titleRows)
+        sb ++= legendKey(entry, x, cy)
+        sb ++= legendText(entry.label, x + 20 * sLegend, cy, TextRole.Legend)
       }
-      lx += legendWidth
-    else if legendPlace == LegendPosition.Bottom then
-      val y0Legend = top + h + axisBand
+    // the entries in rows, from `x` along `y0`
+    def legendRowsAt(y0: Double): Unit =
       legendRows.zipWithIndex.foreach { (row, r) =>
-        val cy = y0Legend + 10 * sLegends + 20 * sLegends * r
+        val cy = y0 + 10 * sLegends + 20 * sLegends * r
         var x = left
         if r == 0 && fig.legendTitle.nonEmpty then
           sb ++= legendText(fig.legendTitle, x, cy, TextRole.LegendTitle)
@@ -784,6 +797,25 @@ object Svg:
           x += itemWidth(entry)
         }
       }
+    legendPlace match
+      case LegendPosition.Right =>
+        legendList(lx, top + 8 * sLegends)
+        lx += legendWidth
+      case LegendPosition.Left   => legendList(14.0, top + 8 * sLegends)
+      case LegendPosition.Bottom => legendRowsAt(top + h + axisBand)
+      case LegendPosition.Top    => legendRowsAt(head)
+      case LegendPosition.Hidden => ()
+      case corner                =>
+        // inside the plot area, at a corner, clear of its edges
+        val rowCount = legend.size + (if fig.legendTitle.isEmpty then 0 else 1)
+        val blockWidth = (legend.map(itemWidth) :+ titleWidth).max - 10 * sLegend
+        val pad = 8 * sLegends
+        val onRight = corner == LegendPosition.UpperRight || corner == LegendPosition.LowerRight
+        val onTop = corner == LegendPosition.UpperLeft || corner == LegendPosition.UpperRight
+        val x = if onRight then left + w - pad - blockWidth else left + pad
+        val firstCy =
+          if onTop then top + pad + 8 * sLegends else top + h - pad - 8 * sLegends - 20 * sLegends * (rowCount - 1)
+        legendList(x, firstCy)
 
     // color bar
     fig.colorScale.filter(_.guide).foreach { cb =>
@@ -852,19 +884,70 @@ object Svg:
         tr(v).isFinite && v >= lo && v <= hi && !ms.exists(m => math.abs(tr(m) - tr(v)) < 1e-9 * (1 + math.abs(tr(m))))
       }
 
-  /** A marker of `r` pixels centred at `(cx, cy)`, ringed in the surface color. */
-  private def marker(cx: Double, cy: Double, r: Double, shape: Shape, fill: String, ring: String): String =
-    val style = s"""style="fill:$fill;stroke:$ring" stroke-width="2""""
-    shape match
-      case Shape.Circle => s"""<circle cx="${fmt(cx)}" cy="${fmt(cy)}" r="${fmt(r)}" $style/>"""
+  /** A marker of `r` pixels centred at `(cx, cy)`: `face`'s shape, filled with `fill` or open, with its edge in `edge`.
+    */
+  private def marker(cx: Double, cy: Double, r: Double, face: MarkerFace, fill: String, edge: String): String =
+    val attrs = MarkerStyle.attributes(face, fill, edge, fmt)
+    def points(ps: Seq[(Double, Double)]): String = ps.map((a, b) => s"${fmt(a)},${fmt(b)}").mkString(" ")
+    def polygon(ps: Seq[(Double, Double)]): String = s"""<polygon points="${points(ps)}" $attrs/>"""
+    // the corners of a regular polygon of `n` corners and radius `rad`, the first one up (or `turn` radians round)
+    def regular(n: Int, rad: Double, turn: Double = 0.0): Seq[(Double, Double)] =
+      (0 until n).map { i =>
+        val a = -math.Pi / 2 + turn + 2 * math.Pi * i / n
+        (cx + rad * math.cos(a), cy + rad * math.sin(a))
+      }
+    def strokes(d: String): String =
+      if face.edge.visible then
+        val dash = face.edge.dash.pattern.fold("")(p => s""" stroke-dasharray="$p"""")
+        val o = face.opacity * face.edge.opacity
+        val opacity = if o == 1.0 then "" else s";stroke-opacity:$o"
+        s"""<path d="$d" style="fill:none;stroke:$edge$opacity" stroke-width="${fmt(
+            face.edge.width
+          )}" stroke-linecap="round"$dash/>"""
+      else ""
+    face.shape match
+      case Shape.Circle => s"""<circle cx="${fmt(cx)}" cy="${fmt(cy)}" r="${fmt(r)}" $attrs/>"""
+      case Shape.Dot    => s"""<circle cx="${fmt(cx)}" cy="${fmt(cy)}" r="${fmt(r * 0.55)}" $attrs/>"""
       case Shape.Square =>
         val s = r * 0.9
-        s"""<rect x="${fmt(cx - s)}" y="${fmt(cy - s)}" width="${fmt(2 * s)}" height="${fmt(2 * s)}" $style/>"""
+        s"""<rect x="${fmt(cx - s)}" y="${fmt(cy - s)}" width="${fmt(2 * s)}" height="${fmt(2 * s)}" $attrs/>"""
       case Shape.Triangle =>
         val s = r * 1.25
-        val pts = Seq((cx, cy - s), (cx + s * 0.866, cy + s * 0.5), (cx - s * 0.866, cy + s * 0.5))
-        s"""<polygon points="${pts.map((a, b) => s"${fmt(a)},${fmt(b)}").mkString(" ")}" $style/>"""
+        polygon(Seq((cx, cy - s), (cx + s * 0.866, cy + s * 0.5), (cx - s * 0.866, cy + s * 0.5)))
+      case Shape.TriangleDown =>
+        val s = r * 1.25
+        polygon(Seq((cx, cy + s), (cx + s * 0.866, cy - s * 0.5), (cx - s * 0.866, cy - s * 0.5)))
+      case Shape.TriangleLeft =>
+        val s = r * 1.25
+        polygon(Seq((cx - s, cy), (cx + s * 0.5, cy - s * 0.866), (cx + s * 0.5, cy + s * 0.866)))
+      case Shape.TriangleRight =>
+        val s = r * 1.25
+        polygon(Seq((cx + s, cy), (cx - s * 0.5, cy - s * 0.866), (cx - s * 0.5, cy + s * 0.866)))
       case Shape.Diamond =>
         val s = r * 1.2
-        val pts = Seq((cx, cy - s), (cx + s, cy), (cx, cy + s), (cx - s, cy))
-        s"""<polygon points="${pts.map((a, b) => s"${fmt(a)},${fmt(b)}").mkString(" ")}" $style/>"""
+        polygon(Seq((cx, cy - s), (cx + s, cy), (cx, cy + s), (cx - s, cy)))
+      case Shape.Pentagon => polygon(regular(5, r * 1.2))
+      case Shape.Hexagon  => polygon(regular(6, r * 1.15))
+      case Shape.Star     =>
+        val (outer, inner) = (r * 1.5, r * 0.6)
+        polygon((0 until 10).map { i =>
+          val a = -math.Pi / 2 + math.Pi * i / 5
+          val rad = if i % 2 == 0 then outer else inner
+          (cx + rad * math.cos(a), cy + rad * math.sin(a))
+        })
+      case Shape.Plus =>
+        val s = r * 1.1
+        strokes(
+          s"M${fmt(cx - s)},${fmt(cy)} L${fmt(cx + s)},${fmt(cy)} M${fmt(cx)},${fmt(cy - s)} L${fmt(cx)},${fmt(cy + s)}"
+        )
+      case Shape.Cross =>
+        val s = r * 0.85
+        strokes(
+          s"M${fmt(cx - s)},${fmt(cy - s)} L${fmt(cx + s)},${fmt(cy + s)} M${fmt(cx - s)},${fmt(cy + s)} L${fmt(cx + s)},${fmt(cy - s)}"
+        )
+      case Shape.VLine       => strokes(s"M${fmt(cx)},${fmt(cy - r * 1.2)} L${fmt(cx)},${fmt(cy + r * 1.2)}")
+      case Shape.HLine       => strokes(s"M${fmt(cx - r * 1.2)},${fmt(cy)} L${fmt(cx + r * 1.2)},${fmt(cy)}")
+      case Shape.Glyph(text) =>
+        s"""<text x="${fmt(cx)}" y="${fmt(cy)}" text-anchor="middle" dominant-baseline="central" font-size="${fmt(
+            r * 2.4
+          )}" $attrs>${escape(text)}</text>"""

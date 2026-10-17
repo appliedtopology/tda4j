@@ -5,13 +5,32 @@ import org.appliedtopology.tda4j.*
 /** A point in data coordinates. */
 type XY = (Double, Double)
 
-/** Marker shapes; the plots give each homological degree its own, so degree never rests on color alone. */
+/** Marker shapes; the plots give each homological degree its own (the first four, in order), so degree never rests on
+  * color alone. `Plus`, `Cross`, `VLine` and `HLine` are strokes with no inside; `Glyph` is a few characters of text
+  * drawn as the marker (`Shape.Glyph("★")`), in the marker's color. For a shape written as a string, see
+  * [[Shape.named]].
+  */
 enum Shape:
   case Circle, Triangle, Square, Diamond
+  case TriangleDown, TriangleLeft, TriangleRight, Pentagon, Hexagon, Star, Dot, Plus, Cross, VLine, HLine
+  case Glyph(text: String)
+
+  /** Whether the shape is strokes only, with no inside to fill: a plus, a cross, a bar. */
+  def isLine: Boolean = this match
+    case Plus | Cross | VLine | HLine => true
+    case _                            => false
 
 object Shape:
+  private val byDegree = IndexedSeq(Circle, Triangle, Square, Diamond)
+
   /** The marker of homological degree `k`. */
-  def ofDegree(k: Int): Shape = Shape.fromOrdinal(k % Shape.values.length)
+  def ofDegree(k: Int): Shape = byDegree(k % byDegree.length)
+
+  /** The shape written as `spec`: a name (`circle`, `triangle`, `triangle-down`, `star`, ...), a one-letter matplotlib
+    * code (`o`, `^`, `s`, `D`, `+`, `x`, `*`, ...), an R or ggplot `pch` number (`pch:1`, or a bare `0` to `25`), or
+    * `glyph:text` for text. See [[MarkerStyle.named]] for what each spelling means, and for the open shapes of `pch`.
+    */
+  def named(spec: String): Shape = MarkerStyle.named(spec).shape.get
 
 enum Anchor:
   case Start, Middle, End
@@ -186,7 +205,8 @@ object LegendItem:
   *
   * The parts follow the grammar of graphics: the `marks` are the data drawn, `x` and `y` the position scales, `palette`
   * with `degrees` and `colorScale` the color scales, `legend` and the color bar their guides, `style` the look and
-  * `elements` its finer parts (each text, the lines, the plot area).
+  * `elements` its finer parts (each text, the lines, the plot area). `legendPlace` is where the plot puts its legend
+  * unless the style says otherwise.
   */
 final case class Figure(
   marks: Vector[Mark] = Vector.empty,
@@ -203,7 +223,8 @@ final case class Figure(
   style: Style = Style.default,
   degrees: Map[Int, DegreeStyle] = Map.empty,
   legendTitle: String = "",
-  elements: Elements = Elements()
+  elements: Elements = Elements(),
+  legendPlace: LegendPosition = LegendPosition.Right
 ) extends Plot:
   def +(mark: Mark): Figure = copy(marks = marks :+ mark)
   def ++(more: IterableOnce[Mark]): Figure = copy(marks = marks ++ more)
@@ -282,8 +303,9 @@ final case class Figure(
     color: Optional[String] = Optional.empty,
     darkColor: Optional[String] = Optional.empty,
     label: Optional[String] = Optional.empty,
-    shape: Optional[Shape] = Optional.empty
-  ): Figure = this + Scale.degree(k, color, darkColor, label, shape)
+    shape: Optional[Shape] = Optional.empty,
+    marker: Optional[MarkerStyle] = Optional.empty
+  ): Figure = this + Scale.degree(k, color, darkColor, label, shape, marker)
 
   /** This palette. */
   def withPalette(palette: Palette): Figure = this + palette
@@ -373,6 +395,34 @@ final case class Figure(
     opacity: Optional[Double] = Optional.empty,
     visible: Optional[Boolean] = Optional.empty
   ): Figure = this + Guide.panel(color, paint, opacity, visible)
+
+  /** The markers of the points: `withPoints(size = 3.5, opacity = 0.6, edgeVisible = false)`. See [[Geom.points]]. */
+  def withPoints(
+    shape: Optional[Shape] = Optional.empty,
+    size: Optional[Double] = Optional.empty,
+    opacity: Optional[Double] = Optional.empty,
+    fill: Optional[Boolean] = Optional.empty,
+    edgeWidth: Optional[Double] = Optional.empty,
+    edgeColor: Optional[String] = Optional.empty,
+    edgePaint: Optional[Paint] = Optional.empty,
+    edgeOpacity: Optional[Double] = Optional.empty,
+    edgeDash: Optional[Dash] = Optional.empty,
+    edgeVisible: Optional[Boolean] = Optional.empty
+  ): Figure =
+    this + Geom.points(shape, size, opacity, fill, edgeWidth, edgeColor, edgePaint, edgeOpacity, edgeDash, edgeVisible)
+
+  /** The line segments (a barcode's bars): width, opacity. See [[Geom.segments]]. */
+  def withSegments(width: Optional[Double] = Optional.empty, opacity: Optional[Double] = Optional.empty): Figure =
+    this + Geom.segments(width, opacity)
+
+  /** The filled polygons (a complex's triangles): opacity. See [[Geom.polygons]]. */
+  def withPolygons(opacity: Optional[Double] = Optional.empty): Figure = this + Geom.polygons(opacity)
+
+  /** The discs (the balls of a Cech or alpha complex): opacity. See [[Geom.discs]]. */
+  def withDiscs(opacity: Optional[Double] = Optional.empty): Figure = this + Geom.discs(opacity)
+
+  /** The polylines (a cycle, a landscape): width. See [[Geom.lines]]. */
+  def withLines(width: Optional[Double] = Optional.empty): Figure = this + Geom.lines(width)
 
   /** The diagonal of a persistence diagram and its shaded half plane. See [[Guide.diagonal]]. */
   def withDiagonal(

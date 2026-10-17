@@ -1,24 +1,57 @@
 package org.appliedtopology.tda4j.plot
 
-/** Where a figure's legend goes. */
+import org.appliedtopology.tda4j.*
+
+/** Where a figure's legend goes. `Right`, `Left`, `Top` and `Bottom` are beside the plot (the sides take the room they
+  * need); the four corners are inside the plot area, over its corner, where a plot has room (the lower right of a
+  * persistence diagram, below the diagonal).
+  */
 enum LegendPosition:
   /** Beside the plot, at the top: the default. */
   case Right
 
+  /** Beside the plot, at its left, before the y axis. */
+  case Left
+
+  /** Above the plot, in a row (or several, when the labels are long). */
+  case Top
+
   /** Below the plot, in a row (or several, when the labels are long): for a figure that has little width to spare. */
   case Bottom
+
+  /** Inside the plot area, at its upper left corner. */
+  case UpperLeft
+
+  /** Inside the plot area, at its upper right corner. */
+  case UpperRight
+
+  /** Inside the plot area, at its lower left corner. */
+  case LowerLeft
+
+  /** Inside the plot area, at its lower right corner. */
+  case LowerRight
 
   /** Not drawn. */
   case Hidden
 
 object LegendPosition:
-  /** The position called `name`, in any case: `right`, `bottom` or `none` (also `hidden`). */
+  /** The position called `name`, in any case: `right`, `left`, `top`, `bottom`, `upper-left`, `upper-right`,
+    * `lower-left`, `lower-right`, or `none` (also `hidden`).
+    */
   def named(name: String): LegendPosition = name.trim.toLowerCase(java.util.Locale.ROOT) match
-    case "right"           => Right
-    case "bottom"          => Bottom
-    case "none" | "hidden" => Hidden
-    case other             =>
-      throw IllegalArgumentException(s"unknown legend position '$other'; expected one of right, bottom, none")
+    case "right"                        => Right
+    case "left"                         => Left
+    case "top"                          => Top
+    case "bottom"                       => Bottom
+    case "upper-left" | "top-left"      => UpperLeft
+    case "upper-right" | "top-right"    => UpperRight
+    case "lower-left" | "bottom-left"   => LowerLeft
+    case "lower-right" | "bottom-right" => LowerRight
+    case "none" | "hidden"              => Hidden
+    case other                          =>
+      throw IllegalArgumentException(
+        s"unknown legend position '$other'; expected one of right, left, top, bottom, upper-left, upper-right, lower-left, lower-right, none"
+      )
 
 /** The look of a figure that is not its data: the font, the size of the text and of the marks, the gridlines, the
   * legend's place and the background. A style says nothing about what is drawn, so one value serves every figure of a
@@ -36,7 +69,8 @@ object LegendPosition:
   * @param grid
   *   `false` to draw no gridlines on either axis
   * @param legend
-  *   where the legend goes
+  *   where the legend goes; unset, a plot has its own place (beside the plot, or at the lower right of a persistence
+  *   diagram)
   * @param transparent
   *   `true` to draw no background: the figure takes the color of the page behind it
   */
@@ -45,7 +79,7 @@ final case class Style(
   textScale: Double = 1.0,
   markScale: Double = 1.0,
   grid: Boolean = true,
-  legend: LegendPosition = LegendPosition.Right,
+  legend: Optional[LegendPosition] = Optional.empty,
   transparent: Boolean = false
 ) extends Tweak:
   require(textScale > 0 && textScale.isFinite, s"Style.textScale must be a positive number, not $textScale")

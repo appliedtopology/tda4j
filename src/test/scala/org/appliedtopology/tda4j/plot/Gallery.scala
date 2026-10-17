@@ -149,6 +149,44 @@ object Gallery:
     (scene + Text(TextRole.Title, size = 22, align = Anchor.Middle) + Text(TextRole.Subtitle, italic = true))
       .save(out("elements-scene.svg"))
     (Plot.side(Plot.barcode(d), Plot.diagram(d)) + Palette.clear + Style.clear).save(out("elements-board-clear.svg"))
+    // markers: every shape, open and filled, the edge, per degree; the places of a legend
+    val shapes = Seq(
+      Shape.Circle,
+      Shape.Dot,
+      Shape.Square,
+      Shape.Triangle,
+      Shape.TriangleDown,
+      Shape.TriangleLeft,
+      Shape.TriangleRight,
+      Shape.Diamond,
+      Shape.Pentagon,
+      Shape.Hexagon,
+      Shape.Star,
+      Shape.Plus,
+      Shape.Cross,
+      Shape.VLine,
+      Shape.HLine,
+      Shape.Glyph("★"),
+      Shape.Glyph("α")
+    )
+    val shapeMarks = shapes.zipWithIndex.flatMap { (shape, i) =>
+      Seq(
+        Mark.Points(IndexedSeq((i.toDouble, 1.0)), IndexedSeq(Paint.Series(0)), radius = 7, shape = shape),
+        Mark.Points(IndexedSeq((i.toDouble, 0.0)), IndexedSeq(Paint.Series(1)), radius = 7, shape = shape)
+      )
+    }
+    (Figure(marks = Vector.from(shapeMarks), title = "Markers", width = 760, height = 240) + Geom.points() +
+      Scale.x(visible = false) + Scale.y(visible = false) + Scale.degree(1, marker = MarkerStyle(fill = Some(false))))
+      .save(out("markers-shapes.svg"))
+    (Plot.diagram(loops) + Geom.points(size = 6, opacity = 0.6, edgeWidth = 0) +
+      Scale.degree(1, marker = MarkerStyle(fill = Some(false), edge = LineStyle(width = Some(2)))))
+      .save(out("markers-open.svg"))
+    (Plot.diagram(loops) + Geom.points(shape = Shape.Glyph("★"), size = 7, edgeVisible = false) +
+      Labels(subtitle = "text glyphs")).save(out("markers-glyph.svg"))
+    Seq("top", "left", "upper-right", "lower-left").foreach { place =>
+      Plot.barcode(d).withLegend(place).save(out(s"legend-$place.svg"))
+    }
+    Plot.diagram(loops).withLegend("right").save(out("legend-diagram-right.svg"))
     val before = Plot.barcode(Persistence(noisyCircle(30, 0.03, 4), maxDimension = 1)).copy(title = "tighter")
     val after = Plot.barcode(Persistence(noisyCircle(30, 0.2, 5), maxDimension = 1)).copy(title = "noisier")
     (Plot.side(before, after).shared(y = false) + Style(grid = false)).save(out("custom-board-shared.svg"))
