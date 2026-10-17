@@ -71,7 +71,7 @@ pixels to `persistenceFromImage`.
 In an sbt 2 build (`project/plugins.sbt` has `sbt-scalajs`), `%%` picks the Scala.js artifact by itself in a project that
 is a Scala.js one:
 
-```scala
+```scala sc:nocompile
 libraryDependencies += "org.appliedtopology" %% "tda4j" % "<latest version>"
 ```
 
