@@ -2,19 +2,8 @@ package org.appliedtopology.tda4j
 
 import scala.collection.concurrent.TrieMap
 
-import com.dreizak.miniball.model.PointSet
-import com.dreizak.miniball.highdim.Miniball
-
-// File-private: an adapter to the Miniball library's interface; the radii are public through `CechFiltration`.
-/** Miniball's `PointSet` over a coordinate array. */
-private class MiniballPointSet(points: Array[Array[Double]]) extends PointSet:
-  override def size: Int = points.length
-  override def dimension: Int = points(0).length
-  override def coord(i: Int, j: Int): Double = points(i)(j)
-
-/** The Cech filtration value of a simplex: the radius of the smallest ball containing its vertices (Welzl's algorithm,
-  * via Miniball). Values are cached, which also makes them consistent: Miniball is randomized and could round
-  * differently on a second call.
+/** The Cech filtration value of a simplex: the radius of the smallest ball containing its vertices
+  * ([[MinimumEnclosingBall]]). Values are cached, so a simplex has one value for the whole computation.
   */
 object CechFiltration:
 
@@ -33,14 +22,14 @@ object CechFiltration:
     def computeRadius(spx: Simplex[Int]): Double =
       val vertices = spx.underlying.toArray
       val coords = vertices.map(euclideanMetricSpace.pts)
-      val ball = Miniball(MiniballPointSet(coords))
-      val raw = math.sqrt(ball.squaredRadius())
+      val ball = MinimumEnclosingBall(coords)
+      val raw = ball.radius
       def facet(i: Int) = (spx.underlying - vertices(i)).asSimplex
       val facetFloor = vertices.indices.map(i => cache.getOrElse(facet(i), 0.0)).max
       // A vertex strictly inside the ball is not on its boundary sphere, so the ball is also the smallest ball around
       // the facet without that vertex: reuse that facet's radius exactly, so their pair has length zero rather than a
-      // few ULPs (Miniball computes the two radii along different floating-point paths).
-      val center = ball.center()
+      // few ULPs (the two radii are computed along different floating-point paths).
+      val center = ball.center
       def distanceToCenter(i: Int) = math.sqrt(coords(i).indices.map(k => math.pow(coords(i)(k) - center(k), 2)).sum)
       val radius = vertices.indices
         .find(i => distanceToCenter(i) < raw * (1 - 1e-9))
@@ -64,8 +53,8 @@ open class CechCofaceSimplexStream(
   keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true },
   maxFiltrationValue: Option[Double] = None,
   // Threaded straight through to RipserCofaceSimplexStream's own parameter of the same name -- see its doc
-  // there. Cech's own Miniball-based radius computation is exactly the case this exists for: unlike a
-  // cheap arithmetic filtration value, a real per-candidate Miniball solve is worth parallelizing once a
+  // there. Cech's own minimum-enclosing-ball radius computation is exactly the case this exists for: unlike a
+  // cheap arithmetic filtration value, a real per-candidate ball solve is worth parallelizing once a
   // complex is large enough. See .claude/WORKLOG-parallelization-survey.md item 2.
   parallelFiltrationValue: Boolean = false
 ) extends RipserCofaceSimplexStream(

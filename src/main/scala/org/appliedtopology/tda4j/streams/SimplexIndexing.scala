@@ -1,7 +1,5 @@
 package org.appliedtopology.tda4j
 
-import org.apache.commons.numbers.combinatorics
-
 import scala.annotation.tailrec
 
 open class SimplexIndexing(val vertexCount: Int):
@@ -342,18 +340,41 @@ open class SimplexIndexing(val vertexCount: Int):
 
 object SimplexIndexing:
   /** `n` choose `k` as a `Long` (an index can exceed `Int` long before `n` does: `C(229, 5) > 5·10⁹`), `0` when
-    * `k < 0`, `n < 0` or `k > n`. Throws `IllegalArgumentException` on `Long` overflow.
+    * `k < 0`, `n < 0` or `k > n`. Throws `IllegalArgumentException` when the coefficient does not fit in a `Long`
+    * (`C(66, 33)` is the largest central coefficient that does).
+    *
+    * Exact integer arithmetic: the running value after step `i` is `C(n - k + i, i)`, which only grows, so the
+    * coefficient overflows exactly when some step does. Each step divides out the common factor of the running value
+    * and `i` before multiplying, so a step overflows only if its own result does.
     */
   def binomial(n: Int, k: Int): Long =
     if k < 0 || n < 0 || n < k then 0L
     else
-      try combinatorics.BinomialCoefficient.value(n, k)
-      catch
-        case e: ArithmeticException =>
-          throw new IllegalArgumentException(
-            s"binomial($n, $k) overflows Long -- this complex is too large to index",
-            e
-          )
+      val small = math.min(k, n - k).toLong // C(n, k) = C(n, n - k); the shorter product
+      val top = n.toLong - small
+      var result = 1L
+      var i = 1L
+      while i <= small do
+        // result * (top + i) / i is exact; with g = gcd(result, i), i / g divides top + i
+        val g = gcd(result, i)
+        val factor = (top + i) / (i / g)
+        val kept = result / g
+        if kept > Long.MaxValue / factor then
+          throw new IllegalArgumentException(s"binomial($n, $k) overflows Long -- this complex is too large to index")
+        result = kept * factor
+        i += 1
+      result
+
+  /** [[binomial]] as an `Int`, for enumerating every index `0 until C(n, k)`. Throws `IllegalArgumentException` when
+    * there are more than `Int.MaxValue` of them (such an enumeration cannot be held in a `Range`).
+    */
+  def binomialInt(n: Int, k: Int): Int =
+    val count = binomial(n, k)
+    require(count <= Int.MaxValue, s"binomial($n, $k) = $count is too many simplices to enumerate by index")
+    count.toInt
+
+  @tailrec
+  private def gcd(a: Long, b: Long): Long = if b == 0L then a else gcd(b, a % b)
 
 /** Each vertex's neighbours within a threshold, ascending, with their distances, in compressed rows: vertex `v`'s are
   * `targets(offsets(v) until offsets(v + 1))`. Built by [[NeighbourLists.within]].

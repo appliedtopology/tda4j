@@ -1,7 +1,5 @@
 package org.appliedtopology.tda4j
 
-import org.apache.commons.numbers.combinatorics.BinomialCoefficient
-
 import scala.collection.{immutable, mutable}
 import scala.collection.immutable.{Map, Seq, SortedSet}
 import scala.collection.concurrent.TrieMap
@@ -440,16 +438,15 @@ open class EnumeratingCofaceSimplexStream(
 
   // Bounded at metricSpace.size (a d-simplex needs d+1 distinct vertices, and there are none beyond that): a
   // real bound, not just a defensive one -- StratifiedCellStream's default .iterator relies on isDefinedAt
-  // eventually staying false, and BinomialCoefficient.value(metricSpace.size, d + 1) throws outright for
-  // d + 1 > metricSpace.size, so an unbounded catch-all here was the actual root cause of the "some engines'
-  // .iterator hangs / eventually crashes" bug (see StratifiedCellStream's doc).
+  // eventually staying false (an unbounded catch-all here was the actual root cause of the "some engines' .iterator
+  // hangs / eventually crashes" bug, see StratifiedCellStream's doc).
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
     case 0                                   => metricSpace.elements.map(v => Simplex(v)).iterator
     case 1                                   => sortedByFiltration(edges).iterator
     case d if d >= 0 && d < metricSpace.size =>
       // first, generate all simplices of this dimension
       sortedByFiltration(
-        (0 until BinomialCoefficient.value(metricSpace.size, d + 1).toInt).toSeq
+        (0 until SimplexIndexing.binomialInt(metricSpace.size, d + 1)).toSeq
           .flatMap { ix =>
             Some(simplexIndexing(ix, d + 1)).filter(keptByThresholdAndCriterion)
           }
@@ -489,7 +486,7 @@ open class RipserCofaceSimplexStream(
       if currentDimension != d - 1 then
         // we don't have a good cache, just generate entire previous dimension and deal with it
         lastDimensionCache = sortedByFiltration(
-          (0 until BinomialCoefficient.value(metricSpace.size, d).toInt).toSeq
+          (0 until SimplexIndexing.binomialInt(metricSpace.size, d)).toSeq
             .flatMap { ix =>
               Some(simplexIndexing(ix, d)).filter(keptByThresholdAndCriterion)
             }
@@ -572,7 +569,7 @@ open class InorderCofaceSimplexStream(
       if currentDimension != d - 1 then
         // we don't have a good cache, just generate entire previous dimension and deal with it
         lastDimensionCache = sortedByFiltration(
-          (0 until BinomialCoefficient.value(metricSpace.size, d).toInt).toSeq
+          (0 until SimplexIndexing.binomialInt(metricSpace.size, d)).toSeq
             .flatMap { ix =>
               Some(simplexIndexing(ix, d)).filter(keptByThresholdAndCriterion)
             }

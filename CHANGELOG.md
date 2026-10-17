@@ -13,11 +13,9 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   `java.nio.file.Path`: the Scala.js build has no `java.nio.file`. Call `Paths.get(result)` where you need a `Path`.
 - `CubicalImage.fromBufferedImage` and `CubicalImage.fromFile` are members of the JVM build only (they are still there, on
   the JVM); on Scala.js `fromFile` throws and `fromImageData` takes their place.
-- The library's dependencies on Apache Commons Math, Commons Numbers, jvptree and Miniball are gone (they have no
-  Scala.js build); their replacements are `DenseMatrix`, `DenseVector`, `VantagePointTree` and the minimum enclosing ball in
-  the library itself. A public signature that took a commons `RealMatrix` or `RealVector` (`Barcode.image`/`kernel`/
-  `cokernel`/`isMap`, `AlphaShapes.Point`) takes a `DenseMatrix` or `DenseVector`, and `JVPTree` is `VantagePointTree`-backed
-  under a name that does not mention the Java library (the entry is finalized when the replacements are merged).
+- The library no longer depends on Apache Commons Math, Apache Commons Numbers, jvptree or Miniball: none has a Scala.js
+  build. `DenseVector`, `DenseMatrix`, `ConjugateGradient`, `Erf`, `VantagePointTree` and `MinimumEnclosingBall` replace
+  them (see Added); the next three entries list the signatures that changed.
 - `RingModule.scale` is `scalarMultiply`, and so is the infix extension (`r.scalarMultiply(x)`, was `r.scale(x)`). The
   operators `⊠`, `|*|`, `<*` and `mul` are as they were. A `RingModule` instance of your own implements
   `scalarMultiply(x, y)`; the labs (`TDAlab`, `CubicalLab`) lose `scale` and gain `scalarMultiply`.
@@ -31,6 +29,10 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   is given. `AlphaShapes.Point`, and so the `normal` of a `Hyperplane` and the `center` of a `Hypersphere`, is a
   `DenseVector` (was a `RealVector`); `Hyperplane.from` returns the normal with a fixed sign. The library no longer
   uses commons-math3 in code that builds for Scala.js.
+- `JVPTree` is `VantagePointQuery`, and the vantage-point tree behind it is our own `VantagePointTree` instead of the
+  Java library jvptree (the Scala.js build cannot use Java libraries). `nearestNeighbors` breaks ties by the order of
+  `metricSpace.elements` and always returns `k` points; `EuclideanMetricSpace.vpdf` is a Scala function, `vpt` a
+  `VantagePointTree`, and `neighbors(point, eps)` returns every index within `eps`, repeated points included.
 
 ### Added
 
@@ -114,6 +116,10 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   (`withTitle`, `withSize`, `withXScale('log')`, `withPalette`, `withDegreeColor`, `withTextScale`, `withLegend`, ...,
   and `save(path, 'dark')`); command line: `--title`, `--x-label`, `--y-label`, `--width`, `--height`, `--palette`,
   `--theme`, `--text-scale`, `--x-scale` and `--y-scale` for a `--plot`.
+- `VantagePointTree(elements, distance)`: a vantage-point tree over any metric, with `withinDistance(query, radius)` (the
+  boundary included) and `nearest(query, k)` (the first `k` of the stable sort by distance); and
+  `MinimumEnclosingBall(points)`, the smallest ball around points in any dimension, with `center`, `squaredRadius` and
+  `radius`. `SimplexIndexing.binomialInt` is `binomial` as an `Int`, for enumerating indices.
 
 ### Changed
 
@@ -128,6 +134,8 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 ### Fixed
 
 - `fig.copy(palette = ...)` left heatmaps, cocycles' values and the color bar in the palette the plot was built with.
+- `DistanceToMeasure` through the vantage-point search returned fewer than `k` neighbours for some `k` that is a sizeable
+  fraction of the number of points (a defect of the Java library it used); it returns `k`.
 
 ### Build, CI and Documentation
 
