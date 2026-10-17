@@ -29,7 +29,7 @@ import scala.collection.mutable
 object TDA4jCLI:
   def main(args: Array[String]): Unit =
     val exitCode = run(args.toIndexedSeq, System.out)
-    if exitCode != 0 then sys.exit(exitCode)
+    if exitCode != 0 then ProcessExit.withCode(exitCode)
 
   /** The CLI without the process exit, so it can run in-process: returns `0` on success and `1` on a reported failure
     * (a bad option, a malformed file), which is printed as one line `tda4j: <message>` on standard error.
