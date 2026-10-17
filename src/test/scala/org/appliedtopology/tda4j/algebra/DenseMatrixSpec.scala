@@ -108,7 +108,10 @@ class DenseMatrixSpec extends mutable.Specification:
     }
     "refuse to solve with a singular matrix, saying what to do" in {
       val lu = DenseMatrix(Array(Array(1.0, 2.0), Array(2.0, 4.0))).lu()
-      lu.solve(DenseVector(1.0, 2.0)) must throwAn[IllegalArgumentException]("singular")
+      lu.solve(DenseVector(1.0, 2.0)) must throwAn[IllegalArgumentException].like { case e =>
+        // (not `throwAn[...]("singular")`: specs2 matches a message differently on Scala.js)
+        e.getMessage.contains("singular") must beTrue
+      }
     }
     "refuse a matrix that is not square, and a right-hand side of the wrong length" in {
       DenseMatrix.zeros(2, 3).lu() must throwAn[IllegalArgumentException]

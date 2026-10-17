@@ -5,8 +5,6 @@ import scala.math.{pow, sqrt}
 import scala.util.Random
 import scala.util.chaining.*
 
-import java.util.concurrent.*
-
 /** The numerical tolerance of the triangulation's geometric tests (near-zero singular values and circumsphere margins).
   * `AlphaShapes(...)` supplies `Epsilon(1e-5)`; pass a `given Epsilon` to change it.
   */
@@ -275,7 +273,7 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
         FrontierCase(facet, hyperplane.reverse, complement, cofacet.circumsphere)
       else FrontierCase(facet, hyperplane, complement, cofacet.circumsphere)
 
-  private val frontierCases: LinkedBlockingDeque[FrontierCase] = LinkedBlockingDeque[FrontierCase]()
+  private val frontierCases: mutable.ArrayDeque[FrontierCase] = mutable.ArrayDeque.empty
   private val visitedFacets: mutable.Set[Simplex[Int]] = mutable.Set.empty
   private val cospherical: mutable.Set[Set[Int]] = mutable.Set.empty
 
@@ -287,7 +285,7 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
     java.util.Collections.newSetFromMap(new java.util.IdentityHashMap[FrontierCase, java.lang.Boolean]())
 
   private def enqueue(fc: FrontierCase): Unit =
-    frontierCases.put(fc)
+    frontierCases.append(fc)
     queuedByFacet.getOrElseUpdate(fc.facet, mutable.ArrayBuffer.empty) += fc
 
   private def cancel(facet: Simplex[Int]): Boolean =
@@ -300,8 +298,8 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
   /** The next frontier case that was not cancelled, if any. */
   private def nextFrontierCase(): Option[FrontierCase] =
     var next: Option[FrontierCase] = None
-    while next.isEmpty && !frontierCases.isEmpty do
-      val fc = frontierCases.take()
+    while next.isEmpty && frontierCases.nonEmpty do
+      val fc = frontierCases.removeHead()
       if !cancelled.remove(fc) then
         queuedByFacet.get(fc.facet).foreach { cases =>
           cases.remove(cases.indexWhere(_ eq fc))
