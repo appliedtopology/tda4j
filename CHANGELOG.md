@@ -44,6 +44,11 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   tda4j` is the command line on Node.js. Browsers and Node.js 20.16 or newer; one thread; no file access in a browser. See
   *Using it from JavaScript* in the user guide.
 - `CubicalImage.fromImageData` (Scala.js) builds a cubical complex from the pixels of a canvas.
+- The benchmark harness (`bench/`) times the Scala.js build, installed as the npm package and run on Node.js, beside the
+  JVM build and the other tools on the same machine and inputs: `bench/run.sh setup tda4j-js`, then the `tda4j-js*` tools
+  of `run` and the `js-*` engines of `sweep-cubical`; `summary.md` has a section comparing each with its JVM twin. `--node-heap`
+  and `--node-opts` set Node's heap and flags. `run.sh setup` can install one tool (`setup tda4j-js`), and takes the JVM
+  classpath from the `tda4j` project (the root only aggregates).
 - `Parallel`, `FileAccess` and `CubicalImagePlatform` exist once per platform; on Scala.js `parallelFiltrationValue` and the
   DQP alpha complex's `parallel` give the same answer on one thread.
 - `DenseVector` and `DenseMatrix`, small immutable `Double` vectors and matrices with value equality, `matrix.svd` (the

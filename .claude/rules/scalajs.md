@@ -80,6 +80,13 @@ formatting, sort stability), never loosen it for JS only without a comment namin
 `Double.toString` prints `1.0` as `1` on JS (expected strings in shared specs build their numbers with `${1.0}`), and
 specs2's `throwA[E]("message")` reports a mismatch on JS for a message that matches (use `SpecThrows.throwWith`).
 
+## Benchmarks
+
+`bench/` times the Scala.js build beside the JVM build and the other tools (`bench/run.sh setup tda4j-js`, the `tda4j-js*`
+tools, `workers/tda4j_js_worker.mjs`, which speaks the same `key=value`/JSON-line protocol as `PaperBenchmarkDriver`). The
+worker calls the npm package's API with the facade's option names; a new benchmark case or driver option goes in both
+drivers. `run.sh` takes the JVM classpath from `tda4j/Test/fullClasspath`, never from the aggregating root.
+
 ## Known limits
 
 One thread (a Web Worker is the user's way out); no image files on Node (issue: PNG decoding); no file access in a

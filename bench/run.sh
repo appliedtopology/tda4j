@@ -2,7 +2,8 @@
 # Cross-platform benchmark of TDA4j against the persistent-homology libraries at the frontier.
 # See bench/README.md. Idempotent: re-running skips what is already built or downloaded.
 #
-#   bench/run.sh setup              build/install every tool into $WORKDIR
+#   bench/run.sh setup [tool...]    build/install every tool into $WORKDIR, or only the named ones:
+#                                   python tda4j tda4j-js ripser julia javaplex
 #   bench/run.sh prepare            download and generate the data sets into $WORKDIR/data
 #   bench/run.sh run [bench.py run options...]   e.g. --tasks vr --fields 2,17 --timeout 3600
 #   bench/run.sh all [options...]   setup + prepare + run
@@ -14,6 +15,8 @@
 #   PYTHON         python3 to build the venv from (default: python3)
 #   JULIA          julia binary; Ripserer.jl is skipped if unset and `julia` is not on PATH
 #   JAVAPLEX_JAR   a JavaPlex 4.x jar; JavaPlex is skipped if unset
+#   NODE           node binary for the Scala.js build of TDA4j (20.16 or newer; default: node on PATH); tda4j-js is
+#                  skipped if there is none
 #   SKIP_TDA4J_BUILD=1   reuse the classpath file from a previous setup
 set -euo pipefail
 
@@ -80,7 +83,8 @@ setup_tda4j() {
     echo "sbt not on PATH; .claude/scripts/install-sbt.sh installs it"; exit 1
   fi
   # Never run two sbt processes on one checkout at once (stale class files look like real bugs).
-  (cd "$REPO" && sbt "Test/compile" "export Test/fullClasspath") > "$TOOLS/sbt-export.log" 2>&1 \
+  # `tda4j` is the JVM build (the project matrix also has `tda4jJS`; the root only aggregates).
+  (cd "$REPO" && sbt "tda4j/Test/compile" "export tda4j/Test/fullClasspath") > "$TOOLS/sbt-export.log" 2>&1 \
     || { tail -40 "$TOOLS/sbt-export.log"; exit 1; }
   # sbt 2 prints the classpath with ${OUT}/${CSR_CACHE} placeholders and content hashes; resolve them, and use
   # the class directories rather than the packaged jars.
@@ -121,12 +125,46 @@ PY
     || { echo "TDA4j driver smoke test failed"; exit 1; }
 }
 
+setup_tda4j_js() {
+  local node="${NODE:-$(command -v node || true)}"
+  if [ -z "$node" ]; then echo "node not found: tda4j-js will be reported as missing"; rm -f "$TOOLS/tda4j-js.path"; return; fi
+  if ! "$node" -e 'const v = process.versions.node.split(".").map(Number); process.exit(v[0] > 20 || (v[0] === 20 && v[1] >= 16) ? 0 : 1)'; then
+    echo "WARNING: $("$node" --version) is older than 20.16, which the file access needs: tda4j-js will be reported as missing"
+    rm -f "$TOOLS/tda4j-js.path"; return
+  fi
+  log "TDA4j for JavaScript: the npm package (optimized Scala.js link), installed under $TOOLS/tda4j-js"
+  if ! command -v sbt >/dev/null; then echo "sbt not on PATH; .claude/scripts/install-sbt.sh installs it"; exit 1; fi
+  # Never run two sbt processes on one checkout at once: this runs after setup_tda4j's sbt has finished.
+  if ! (cd "$REPO" && sbt "tda4jJS/npmPack") > "$TOOLS/sbt-npm.log" 2>&1; then
+    tail -40 "$TOOLS/sbt-npm.log"
+    echo "WARNING: sbt tda4jJS/npmPack failed; tda4j-js will be reported as missing"; rm -f "$TOOLS/tda4j-js.path"; return
+  fi
+  local tarball
+  tarball="$(ls -t "$REPO"/target/npm/*.tgz | head -1)"
+  rm -rf "$TOOLS/tda4j-js"; mkdir -p "$TOOLS/tda4j-js"
+  (cd "$TOOLS/tda4j-js" && npm init -y >/dev/null && npm install --no-audit --no-fund "$tarball" >/dev/null)
+  local main="$TOOLS/tda4j-js/node_modules/@appliedtopology/tda4j/main.mjs"
+  if ! TDA4J_JS="$main" "$node" "$BENCH/workers/tda4j_js_worker.mjs" \
+      task=vr input="$BENCH/smoke-points.txt" dim=1 warmup=0 trials=1 >/dev/null; then
+    echo "WARNING: the JavaScript worker's smoke test failed; tda4j-js will be reported as missing"
+    rm -f "$TOOLS/tda4j-js.path"; return
+  fi
+  echo "$main" > "$TOOLS/tda4j-js.path"
+  echo "tda4j-js: $tarball -> $main"
+}
+
 export_env() {
   export TDA4J_CP="$TOOLS/tda4j.classpath"
   # The classpath points at sbt's class directories: after an `sbt clean` (or a docs build) they are gone.
   if [ -s "$TDA4J_CP" ] && ! java -cp "$(cat "$TDA4J_CP")" org.appliedtopology.tda4j.PaperBenchmarkDriver \
       task=vr input="$BENCH/smoke-points.txt" dim=1 warmup=0 trials=1 >/dev/null 2>&1; then
     echo "TDA4j's compiled classes are missing (sbt clean?): rerun 'bench/run.sh setup' first"; exit 1
+  fi
+  # The Scala.js build is the npm package that setup installed; if it is gone (a new WORKDIR), the tool is skipped.
+  if [ -s "$TOOLS/tda4j-js.path" ] && [ -f "$(cat "$TOOLS/tda4j-js.path")" ]; then
+    export TDA4J_JS="$(cat "$TOOLS/tda4j-js.path")"
+    export NODE="${NODE:-$(command -v node || true)}"
+    [ -n "$NODE" ] || unset NODE TDA4J_JS
   fi
   export RIPSER_BIN="$TOOLS/ripser/ripser"
   export RIPSER_COEFF_BIN="$TOOLS/ripser/ripser-coeff"
@@ -144,7 +182,21 @@ cmd="${1:-all}"
 shift || true
 case "$cmd" in
   # TDA4j first: the optional tools after it only warn when they fail.
-  setup) setup_python; setup_tda4j; setup_ripser; setup_julia; setup_javaplex ;;
+  setup)
+    components=("$@")
+    if [ ${#components[@]} -eq 0 ]; then components=(python tda4j tda4j-js ripser julia javaplex); fi
+    for component in "${components[@]}"; do
+      case "$component" in
+        python) setup_python ;;
+        tda4j) setup_tda4j ;;
+        tda4j-js) setup_tda4j_js ;;
+        ripser) setup_ripser ;;
+        julia) setup_julia ;;
+        javaplex) setup_javaplex ;;
+        *) echo "unknown component '$component' (python tda4j tda4j-js ripser julia javaplex)"; exit 2 ;;
+      esac
+    done
+    ;;
   prepare) "$VENV/bin/python" "$BENCH/bench.py" prepare --data "$DATA" ;;
   run)
     export_env
@@ -162,5 +214,5 @@ case "$cmd" in
     "$0" prepare
     "$0" run "$@"
     ;;
-  *) echo "usage: $0 setup|prepare|run|all|summarize|sweep-cubical [options]"; exit 2 ;;
+  *) echo "usage: $0 setup [tool...]|prepare|run|all|summarize|sweep-cubical [options]"; exit 2 ;;
 esac

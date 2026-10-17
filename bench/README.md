@@ -1,7 +1,8 @@
 # Cross-platform benchmark
 
-Times TDA4j against the persistent-homology libraries at the frontier on the same inputs, on one machine. It also
-checks that every tool returns the same barcode. The paper's claim is "what the others do, on the JVM, at a
+Times TDA4j against the persistent-homology libraries at the frontier on the same inputs, on one machine, and the
+Scala.js build of TDA4j (the npm package, on Node.js) beside the JVM build. It also checks that every tool returns the
+same barcode. The paper's claim is "what the others do, on the JVM, at a
 quantified slowdown", so the output is that slowdown, per case and as a geometric mean. The method is in
 `.claude/PLAN-paper.md` §3.0.
 
@@ -12,13 +13,18 @@ quantified slowdown", so the output is that slowdown, per case and as a geometri
 export WORKDIR=/scratch/tda4j-bench        # tools, data and results go here (default ./bench-work)
 export JAVAPLEX_JAR=/path/to/javaplex.jar  # optional: TDA4j's predecessor
 # julia on PATH (or JULIA=/path/to/julia) adds Ripserer.jl
+# node 20.16 or newer on PATH (or NODE=/path/to/node) adds the Scala.js build of TDA4j
 
-bench/run.sh setup        # venv + pip tools, ripser.cpp (Z/2 and coefficient builds), Ripserer.jl, JavaPlex, TDA4j
+bench/run.sh setup        # venv + pip tools, TDA4j (JVM), TDA4j (npm package), ripser.cpp (Z/2 and coefficient builds), Ripserer.jl, JavaPlex
 bench/run.sh prepare      # downloads the Ripser-paper data, generates the synthetic sets (seeded)
 bench/run.sh run --fields 2,17 --timeout 3600 --jvm-heap 32g
 ```
 
 Re-running is safe: `setup` and `prepare` skip what exists, and every `run` writes a new results directory.
+`bench/run.sh setup tda4j-js` redoes one component (`python tda4j tda4j-js ripser julia javaplex`), for example after
+changing the library: the JVM tool uses the compiled classes, the JavaScript one the npm package, and both are rebuilt
+by their own `setup` step. Run the steps one after the other: they use sbt, and two sbt processes on one checkout
+corrupt each other's builds.
 
 To see the harness work before committing hours, run a small subset:
 
@@ -38,6 +44,8 @@ Useful options of `run`:
 | `--timeout S` | seconds per computation; a timeout is recorded, not dropped |
 | `--warm-cap S` | if one cold computation takes longer than this (default 60 s), the warm run reuses it instead of repeating |
 | `--jvm-heap 32g` | `-Xmx` for TDA4j and JavaPlex. fractal-r needs about 12g; clifford50000 more |
+| `--node-heap 32g` | `--max-old-space-size` for the `tda4j-js` tools, in the same notation (default: `--jvm-heap`). Node's own default is a few GB, far below what the large cases need |
+| `--node-opts "--stack-size=4000"` | more options for node |
 
 ## The image-engine size sweep
 
@@ -45,7 +53,9 @@ Useful options of `run`:
 - fast cubical, today's `Auto`;
 - cohomology, with cycles and with cocycles;
 - chunks, 2-D only and capped at 512²;
-- CubicalRipser and GUDHI, alongside for scale.
+- CubicalRipser and GUDHI, alongside for scale;
+- the Scala.js build of TDA4j (`js-fastcubical`, `js-cohomology-cycles`: the first two engines on Node.js) when
+  `setup` installed it, with a `js/jvm` column in `sweep.md`; `--no-js` leaves it out.
 
 The images are noise and a blob, in 2-D up to 4096² and 3-D up to 128³.
 
@@ -65,6 +75,11 @@ bench/run.sh sweep-cubical --dims 2,3 --jvm-heap 32g --timeout 1800
   what a library user in a long-running JVM or MATLAB session sees. For ripser.cpp, which has no loop, warm is the
   median of `--trials` cold runs.
 - **peak RSS** of each process, from `wait4`.
+- **Scala.js:** the `tda4j-js` tools run the optimized link (`fullLinkJS`, what the npm package ships) in Node.js, one
+  process per computation like the others. Cold therefore includes Node's startup and loading the library's module;
+  warm is the V8 JIT after `--warmup` computations. There is one thread (`Parallel` is a loop there). The package's
+  `persistence` call is timed with `minPersistence: 0`, so every bar of positive length is reported, as by the JVM
+  driver. `read=true` (a worker option, not set by the harness) also reads every representative inside the timed region.
 - **agreement:** each barcode is compared with the reference tool's: ripser.cpp for Vietoris–Rips, GUDHI for cubical
   and alpha. The comparison uses the bottleneck distance per degree, and essential bars matched by birth.
   - ripser.cpp computes in float32, so the tolerance is `1e-5 × max(1, threshold)`.
@@ -94,6 +109,8 @@ bench/run.sh sweep-cubical --dims 2,3 --jvm-heap 32g --timeout 1800
 |---|---|---|
 | `tda4j` | `PaperBenchmarkDriver` (test scope) through the `Persistence` verb | the defaults a user gets: cycle representatives, `Engine.Auto` |
 | `tda4j-cocycles` | the same with `Representatives.Cocycles` | the native kind of the Ripser engine; closest to bars-only |
+| `tda4j-js`, `tda4j-js-cocycles` | `workers/tda4j_js_worker.mjs` on Node.js, through the npm package's `persistence`, `persistenceFromDistances` and `persistenceFromGrid` | the Scala.js build of the two rows above: the same library, the same engines, compiled to JavaScript |
+| `tda4j-js-cohomology`, `tda4j-js-fastalpha`, `tda4j-js-bw`, `tda4j-js-helix` | the same, named engines and backends | JavaScript twins of the next row's tools |
 | `tda4j-cohomology`, `tda4j-fastalpha` | named engines | cohomology on images (on a grid: the packed grid engine, the general engine's output); the dual union-find on alpha (on the default triangulation) |
 | `tda4j-bw`, `tda4j-helix` | named alpha backends | `tda4j` uses the default, Bowyer–Watson up to 4 dimensions (every alpha case here); these name each triangulation |
 | `ripser.cpp` | vanilla build for p = 2, `ripser-coeff` for other primes | the reference for Vietoris–Rips |
@@ -111,8 +128,12 @@ against `ripser.cpp` is the like-for-like comparison. `tda4j` against `ripserer-
 - `runs.csv`: one row per process (cold, warm), with every trial's time.
 - `summary.csv`: one row per case, field and tool, with agreement.
 - `summary.md`: the same as a table, then TDA4j's slowdown against the fastest other single-threaded tool and
-  against the reference, per case and as geometric means.
-- `env.json`: the machine, the JVM, every Python package's version, the ripser.cpp and TDA4j commits, the options.
+  against the reference, per case and as geometric means (the `tda4j-js` rows count as TDA4j variants, never as the
+  baseline), then **Scala.js against the JVM**: for each `tda4j-js*` row, the warm and cold time ratios and the
+  peak-memory ratio to its JVM twin (`tda4j-js` to `tda4j`, `tda4j-js-cocycles` to `tda4j-cocycles`, ...), per case and as
+  geometric means.
+- `env.json`: the machine, the JVM, Node.js and the npm package's version, every Python package's version, the
+  ripser.cpp and TDA4j commits, the options.
 - `bars/*.tsv`: every barcode (`dim birth death`); `logs/`: each process's stdout and stderr.
 
 `bench.py summarize RESULTS_DIR` rebuilds the tables, for example after merging the directories of several partial
@@ -122,5 +143,6 @@ runs.
 
 
 - Run on a quiet machine. Record it, and fix its frequency governor if you can.
+- The JavaScript rows depend on the Node.js version (V8): `env.json` records it; use the same one for a comparison.
 - Pin the pip versions for the final run (`setup_python` in `run.sh`). `env.json` records what was used either way.
 - MATLAB is not exercised here. The MATLAB snippets are checked separately; see `.claude/PLAN-paper.md` §2.1.
