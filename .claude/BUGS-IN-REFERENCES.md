@@ -118,3 +118,30 @@ default input format, `distance`, reads "only [the] lower triangular part": row 
 `read_distance_matrix` and help text. On this file, then, tda4j and Ripser compute from different inputs. Whether to
 switch to `dist(max)(min)`, symmetrize the inputs in the benchmark harness, or both is a decision for the lead
 (`PLAN-paper.md` §2.8).
+
+## jvptree 0.3.0's `getNearestNeighbors(q, k)` returns fewer than `k` neighbours on some builds
+
+2026-10-17, while replacing jvptree with our own `VantagePointTree` (`WORKLOG-scalajs-numerics-spatial.md`).
+`com.eatthepath:jvptree` 0.3.0, `VPTree.getNearestNeighbors(queryPoint, maxResults)`, can return fewer than
+`min(maxResults, n)` points, when `maxResults` is a sizeable fraction of the `n` points. The vantage points are random, so
+it varies between builds of the same tree. **Verified** (JVM, 2026-10-17):
+
+- `VantagePointTreeOracleSpec` (`src/test/scalajvm`) builds the tree over the points `0..63` on a line (distance `|a - b|`)
+  100 times and asks for the 64 nearest of the point 21: 17 of 100 builds answered with fewer than 64 points (35 on the
+  first build tried).
+- A sweep over random clouds (n in {5, 20, 33, 40, 64, 100, 150, 300}, dimension 1, 2, 3, 6, three builds each, every third
+  point as the query, k in {1, n/4, n/2, 3n/4, n-1, n}) found short answers in 67 of 5,736 queries with k < n/2 (the
+  smallest k/n was 0.247; none of the k = 1 queries), 135 of 2,880 with n/2 <= k < 3n/4, 292 of 2,880 with 3n/4 <= k < n-1,
+  and 468 of 2,880 for each of k = n-1 and k = n. The points a short answer does contain are not always the nearest ones.
+- **Not checked**: k small against a large n (the distance to measure's k = 15 of 50,000 points: ratio 3e-4; nothing in
+  the sweep covers that), and the cause inside jvptree (the pruning in `getNearestNeighbors` while the result heap is
+  not yet full is the suspect).
+
+**Consequence for tda4j, precisely scoped**: `DistanceToMeasure(space, JVPTree(space), k)` and `AlphaComplexDQP.dtm` (which
+built its `DistanceToMeasure` on `JVPTree`) could average over fewer than `k` neighbours when `k` was a sizeable fraction of
+the number of points; `BruteForce`, the default of `DistanceToMeasure`, was never affected. Not checked: whether any shipped
+example or published number used `JVPTree` with such a `k`.
+
+**What tda4j did**: `VantagePointTree.nearest` is the first `k` of the stable sort by distance (a bounded max-heap searched
+with pruning on strict inequality), compared with a linear scan on Euclidean and non-Euclidean metrics in
+`VantagePointTreeSpec`. Not reported upstream.

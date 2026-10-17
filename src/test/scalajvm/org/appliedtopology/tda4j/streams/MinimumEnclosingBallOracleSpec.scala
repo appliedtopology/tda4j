@@ -52,7 +52,7 @@ class MinimumEnclosingBallOracleSpec extends Specification:
       centerDifference = dist(ours.center, theirs.center()) / math.max(theirRadius, 1e-300)
       _ =
         worstRadius = math.max(worstRadius, radiusDifference); worstCenter = math.max(worstCenter, centerDifference)
-      if radiusDifference > 1e-10 || (theirRadius > 0 && centerDifference > 1e-7)
+      if radiusDifference > 1e-12 || (theirRadius > 0 && centerDifference > 1e-11)
     yield s"$name n=${cloud.length} d=${cloud.head.length}: radius ${ours.radius} vs ${theirRadius}, centre difference $centerDifference"
     println(
       s"MinimumEnclosingBall vs miniball: worst relative radius difference $worstRadius, worst centre difference / radius $worstCenter"
@@ -66,7 +66,7 @@ class MinimumEnclosingBallOracleSpec extends Specification:
       (name, cloud) <- clouds(rng)
       theirs = Miniball(ArrayPointSet(cloud))
       ours = MinimumEnclosingBall(cloud)
-      if ours.radius > math.sqrt(theirs.squaredRadius()) * (1 + 1e-10) + 1e-300
+      if ours.radius > math.sqrt(theirs.squaredRadius()) * (1 + 1e-12) + 1e-300
     yield (name, cloud.length, cloud.head.length)
     problems.take(5) must beEmpty
   }
@@ -109,7 +109,7 @@ class MinimumEnclosingBallOracleSpec extends Specification:
       difference = if before == 0.0 then math.abs(after) else math.abs(after - before) / before
       _ =
         worst = math.max(worst, difference); simplices += 1
-      if difference > 1e-9
+      if difference > 1e-12
     yield s"n=$n d=$d lattice=$lattice $vertices: $before vs $after"
     println(s"Cech radii vs miniball-based radii on $simplices simplices: largest relative difference $worst")
     problems.take(5) must beEmpty

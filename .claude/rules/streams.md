@@ -41,8 +41,15 @@ comparisons must be cheap: `EnumeratingCofaceSimplexStream`/`CubicalGridStream` 
 `RipserCofaceSimplexStream` (+ `SimplexIndexing`), `InorderCofaceSimplexStream`,
 `RecursiveStackVietorisRipsSimplexStream`, `IncrementalVietorisRipsSimplexStream` (Rieser's New-VR, arXiv:2301.07191
 — cross-validation baseline, not a fast engine); `CofacetIterator` for lazy coboundaries. `FiniteMetricSpace` has
-a VP-tree (`jvptree`) impl and `SparseMetricSpace` (+∞ past its cutoff rather than excluding — don't use it as a
+a VP-tree impl (`VantagePointTree`, `VantagePointQuery`; `WORKLOG-scalajs-numerics-spatial.md`) and `SparseMetricSpace` (+∞ past its cutoff rather than excluding — don't use it as a
 thresholded oracle).
+
+**Spatial search, enclosing balls and binomials are our own pure Scala** (Scala.js cannot use Java libraries; nothing in
+`src/main/scala` may import one; `WORKLOG-scalajs-numerics-spatial.md`). `VantagePointTree`: `withinDistance` is
+inclusive, `nearest(k)` is the first `k` of the stable sort by distance (ties by construction order, as `BruteForce`),
+balanced and deterministic, pruning slack `1e-12`; `VantagePointQuery` is its `SpatialQuery`. `MinimumEnclosingBall`:
+Wolfe's active-set method on the dual (Welzl is exponential in the boundary points), the radius IS the largest distance
+to the returned centre. `SimplexIndexing.binomial`: exact `Long`, `IllegalArgumentException` on overflow.
 
 **`maxFiltrationValue` defaults to `metricSpace.minimumEnclosingRadius`** (Ripser's own `enclosing_radius`) in the
 Enumerating/Ripser/Inorder/Incremental streams and both Ripser engines. Pass `Some(Double.PositiveInfinity)` for

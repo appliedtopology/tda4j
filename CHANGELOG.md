@@ -17,6 +17,10 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   `Figure.colorbar` and the `Colorbar` class are `Figure.colorScale` and `ColorScale`; `Figure` and `Scene` take a
   `style` and per-degree `degrees` (a `Figure` also a `legendTitle`). The functions of `Plot`, which `matlab` and `cli`
   call, keep their signatures.
+- `JVPTree` is `VantagePointQuery`, and the vantage-point tree behind it is our own `VantagePointTree` instead of the
+  Java library jvptree (the Scala.js build cannot use Java libraries). `nearestNeighbors` breaks ties by the order of
+  `metricSpace.elements` and always returns `k` points; `EuclideanMetricSpace.vpdf` is a Scala function, `vpt` a
+  `VantagePointTree`, and `neighbors(point, eps)` returns every index within `eps`, repeated points included.
 
 ### Added
 
@@ -85,6 +89,10 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   (`withTitle`, `withSize`, `withXScale('log')`, `withPalette`, `withDegreeColor`, `withTextScale`, `withLegend`, ...,
   and `save(path, 'dark')`); command line: `--title`, `--x-label`, `--y-label`, `--width`, `--height`, `--palette`,
   `--theme`, `--text-scale`, `--x-scale` and `--y-scale` for a `--plot`.
+- `VantagePointTree(elements, distance)`: a vantage-point tree over any metric, with `withinDistance(query, radius)` (the
+  boundary included) and `nearest(query, k)` (the first `k` of the stable sort by distance); and
+  `MinimumEnclosingBall(points)`, the smallest ball around points in any dimension, with `center`, `squaredRadius` and
+  `radius`. `SimplexIndexing.binomialInt` is `binomial` as an `Int`, for enumerating indices.
 
 ### Changed
 
@@ -99,6 +107,8 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 ### Fixed
 
 - `fig.copy(palette = ...)` left heatmaps, cocycles' values and the color bar in the palette the plot was built with.
+- `DistanceToMeasure` through the vantage-point search returned fewer than `k` neighbours for some `k` that is a sizeable
+  fraction of the number of points (a defect of the Java library it used); it returns `k`.
 
 ### Build, CI and Documentation
 

@@ -17,9 +17,9 @@ Loads when you work on one of these complexes. Project-wide rules are in `.claud
 ## Cech complexes
 
 `streams/CechStream.scala`, `WORKLOG-cech-complex.md`. Over `Simplex[Int]`, built on the VR coface machinery via
-`filtrationValueOverride` (valid because Cech is downward-closed). Radius = Miniball minimum enclosing ball.
-`CechFiltration` caches every radius and **clamps each to the max of its facets'** — Miniball can be one ULP
-non-monotone. New-VR's pruning and packed Ripser (proven for diameter only) do **not** carry over; naive/chunks/
+`filtrationValueOverride` (valid because Cech is downward-closed). Radius = `MinimumEnclosingBall` (our own
+active-set solver, `WORKLOG-scalajs-numerics-spatial.md`). `CechFiltration` caches every radius and **clamps each to the max of
+its facets'** — a computed ball can be one ULP non-monotone. New-VR's pruning and packed Ripser (proven for diameter only) do **not** carry over; naive/chunks/
 cohomology only.
 
 ## Witness complexes
@@ -31,7 +31,7 @@ already-chosen points from its own tie-break candidates (`WORKLOG-sheehy-rips.md
 
 Two independent variants, both `Simplex[Int]` over LOCAL landmark indices, both on `RipserCofaceSimplexStream`
 unchanged: **`LazyWitnessSimplexStream`** IS a flag complex, so `WitnessMetricSpace` reifies edge weights as a
-`FiniteMetricSpace[Int]` (NOT a real metric — never hand to `JVPTree`/`SparseMetricSpace`/`alpha`);
+`FiniteMetricSpace[Int]` (NOT a real metric — never hand to `VantagePointQuery`/`SparseMetricSpace`/`alpha`);
 `PackedRipserCohomologyEngine` is *also* valid here (the one exception); `nu ∈ {0,1,2}`, default 2.
 **`WitnessCofaceSimplexStream`** (general) is NOT a flag complex — `filtrationValueOverride` computes a
 recursive `max(own_k(σ), max over facets)`, `TrieMap`-memoized; refuses `engine=ripser`/`chunks`,
@@ -64,7 +64,7 @@ relation doesn't fit the point-cloud/distance-matrix dispatch. `engine` defaults
 `streams/DistanceToMeasure.scala`, `streams/DtmRipsStream.scala`, `AlphaComplexDQP.dtm`,
 `WORKLOG-dtm-filtrations.md`. `DistanceToMeasure(metricSpace, k, q=2)`: Chazal-Cohen-Steiner-Merigot
 2011, generic over any `FiniteMetricSpace[Int]`. `k` is **self-inclusive** (verified vs GUDHI byte-for-byte) —
-`k=1` gives `f=0` everywhere. Defaults to `BruteForce` for k-NN, not `JVPTree` (triangle-inequality assumption
+`k=1` gives `f=0` everywhere. Defaults to `BruteForce` for k-NN, not `VantagePointQuery` (triangle-inequality assumption
 not universal here).
 
 **`DtmRipsSimplexStream`** (Anai et al., arXiv:1811.04757): doubled units, `p∈{1.0,2.0}`, p=1 (default)

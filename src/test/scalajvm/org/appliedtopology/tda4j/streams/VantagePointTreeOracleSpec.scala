@@ -45,7 +45,7 @@ class VantagePointTreeOracleSpec extends Specification:
       val nearest = ks.flatMap { k =>
         val expected = tree.getNearestNeighbors(q, k).asScala.map(i => euclid(pts(qi), pts(i))).toSeq
         val got = ours.nearestIndices(pts(qi), k).map(i => euclid(pts(qi), pts(i)))
-        // jvptree 0.3.0 sometimes returns fewer than `k` neighbours when `k` is a large part of the points (see the
+        // jvptree 0.3.0 sometimes returns fewer than `k` neighbours when `k` is a sizeable fraction of the points (see the
         // example below), and then not even the nearest ones: such answers are not compared.
         if expected.length < math.min(k, pts.length) then
           shortAnswers += 1
