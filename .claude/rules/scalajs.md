@@ -39,7 +39,9 @@ checkout files through `checkout` (the build's base directory), never `baseDirec
 
 ## Shared code: what not to use
 
-No `cask`, `scala-parallel-collections`, `commons-math3`/`commons-numbers`, `jvptree`, `miniball` (the Java libraries cannot
+No `Locale`, `System.exit`, `ThreadLocal.withInitial`, `FileNotFoundException` (`FileAccess.noSuchFile` makes the right
+one per platform), `TrieMap`, `LinkedBlockingDeque`. A Scallop option names itself (`opt[T](name = "max-dimension", ...)`;
+Scallop on Scala.js cannot guess names). No `cask`, `scala-parallel-collections`, `commons-math3`/`commons-numbers`, `jvptree`, `miniball` (the Java libraries cannot
 be compiled by Scala.js at all; they are JVM test-scope oracles for the pure-Scala replacements, see
 `WORKLOG-scalajs-numerics-*.md`); no `java.nio.file`, `java.io.File`, `scala.io.Source.fromFile`, `new PrintWriter(path)`
 (use `FileAccess`); no threads, `LinkedBlockingQueue`, `java.util.Properties`, `ClassLoader` resources (the version is the
@@ -47,9 +49,11 @@ generated `LibraryVersion`); no `.par` (use `Parallel`); no `Path` in a public s
 `PersistenceResult.save` return the absolute path as a `String`). Never test the runtime class of a number
 (`rules/algebra.md`). `Long` is emulated on Scala.js and slow: the packed engines run, not fast.
 
-## The four seams
+## The seams
 
-`Parallel` (a loop on JS), `FileAccess` (Node `fs` found with `process.getBuiltinModule`, so a bundle loads in a browser
+`Parallel` (a loop on JS), `FiltrationCache` (`TrieMap` on the JVM, `HashMap` on JS: `TrieMap` does not link on Scala.js),
+`plot.RootText` (`java.util.Locale` does not exist on Scala.js: lower-case keywords with `.lowerRoot`, format with
+`RootText.format`, locale symbols from `Intl`), `cli.ProcessExit` (`System.exit` does not exist there), `FileAccess` (Node `fs` found with `process.getBuiltinModule`, so a bundle loads in a browser
 and only the file calls fail, with a message that says why; failures are `java.io.IOException`s on both platforms),
 `plot.Viewer` (JVM: cask; JS: iframe in a page, or a temporary HTML file opened from Node), `CubicalImagePlatform` (JVM:
 `fromFile`, `fromBufferedImage`; JS: `fromImageData`, `fromFile` throws). A new JVM-only need gets a seam like these, with
@@ -72,7 +76,9 @@ Specs in `src/test/scala` run on both; one that needs a JVM (temp files, `java.i
 scripts generated from `_docs`, the MATLAB-facing reflection) is in `src/test/scalajvm`. Replacements of JVM libraries have
 their oracle comparisons there (JVM-only, against the old library) and property specs in `src/test/scala` that run on both.
 A spec that passes on the JVM and fails on JS is a finding: root-cause it (`Math.pow` last digit, `Long`, number
-formatting, sort stability), never loosen it for JS only without a comment naming the reason.
+formatting, sort stability), never loosen it for JS only without a comment naming the reason. Two known differences:
+`Double.toString` prints `1.0` as `1` on JS (expected strings in shared specs build their numbers with `${1.0}`), and
+specs2's `throwA[E]("message")` reports a mismatch on JS for a message that matches (use `SpecThrows.throwWith`).
 
 ## Known limits
 

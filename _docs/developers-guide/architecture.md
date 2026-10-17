@@ -56,7 +56,7 @@ rows, `tda4j` (JVM, artifact `tda4j_3`) and `tda4jJS` (Scala.js, artifact `tda4j
 JVM-only ones are `cask`, the parallel collections, and the Java libraries Scala.js cannot compile) and no
 `java.nio.file`, `java.io.File` or threads.
 
-What differs between the platforms is behind four small seams, each defined once per platform with the same name:
+What differs between the platforms is behind a few small seams, each defined once per platform with the same name:
 
 | seam | JVM | Scala.js |
 |---|---|---|
@@ -64,6 +64,9 @@ What differs between the platforms is behind four small seams, each defined once
 | `FileAccess` (`io/`) | `java.nio.file` | Node.js' `fs`, found at run time with `process.getBuiltinModule`; a browser gets an error that says it has no file system |
 | `plot.Viewer` | a small web server (cask) and a browser tab | the plot appended to the page, or written to a temporary HTML file and opened from Node.js |
 | `CubicalImagePlatform` (mixed into `CubicalImage`) | image files, `javax.imageio` | `fromImageData`, the pixels of a canvas; `fromFile` throws |
+| `FiltrationCache` (`streams/`) | a `TrieMap` that several threads can fill | a `HashMap` |
+| `plot.RootText` | `Locale.ROOT` for lower-casing and `String.format`; `DecimalFormatSymbols` | plain lower-casing and `String.format`; `Intl.NumberFormat` for a locale's separators (`java.util.Locale` does not exist on Scala.js) |
+| `cli.ProcessExit` | `sys.exit` | sets `process.exitCode` (no `System.exit` on Scala.js) |
 
 The Scala.js build adds `javascript.Exports` (the functions the npm package exports, a thin layer over the
 [MATLAB facade](../user-guide/matlab.md)) and the `tda4j` command on Node.js (`cli.TDA4jNodeMain`; the command is
@@ -385,10 +388,10 @@ collapse are on their own page: [Nerves and group homology](nerves.md).
 `streams/CechStream.scala` (`CechCofaceSimplexStream`/`CechFiltration`) builds Cech complexes over
 `Simplex[Int]`, reusing `RipserCofaceSimplexStream`'s generic coface-generation loop via its
 `filtrationValueOverride` hook rather than a from-scratch algorithm. The geometric primitive is
-minimum-enclosing-ball radius (`com.dreizak:miniball`), not the Delaunay/QP machinery alpha shapes use —
+minimum-enclosing-ball radius (`MinimumEnclosingBall`, the library's own, so it also builds for Scala.js), not the Delaunay/QP machinery alpha shapes use —
 Cech membership depends only on a simplex's own vertices, not on every other point in the cloud.
 `CechFiltration` caches each simplex's radius and clamps it to the max of its own facets' cached radii,
-since a raw Miniball call can violate monotonicity by a floating-point ULP on near-degenerate input.
+since a raw ball computation can violate monotonicity by a floating-point ULP on near-degenerate input.
 
 Because Cech is not a flag complex, VR-specific packed/coface optimizations do
 not apply. It is consumed by the generic homology engines.
@@ -465,7 +468,7 @@ collapsed graph without special handling.
 ### Metric spaces
 
 `FiniteMetricSpace.scala` abstracts "distance + finite point set": `ExplicitMetricSpace` (raw distance
-matrix), `EuclideanMetricSpace` (coordinate array, on-demand Euclidean distance, VP-tree-backed `neighbors`
+matrix), `EuclideanMetricSpace` (coordinate array, on-demand Euclidean distance, `VantagePointTree`-backed `neighbors`
 query), `IntMetricSpace` (reindexes to contiguous `0 until size`), `SparseMetricSpace` (reports `+Infinity`
 beyond a fixed diameter cutoff, bounding Vietoris-Rips construction to a finite neighborhood per point).
 
