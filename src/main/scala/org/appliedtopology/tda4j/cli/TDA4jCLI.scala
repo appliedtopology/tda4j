@@ -21,9 +21,6 @@ import org.appliedtopology.tda4j.plot.{
 
 import org.rogach.scallop.ScallopOption
 
-import java.io.PrintWriter
-import java.nio.charset.StandardCharsets
-import java.nio.file.{Files, Paths}
 import scala.collection.mutable
 
 /** The `tda4j` executable, a command-line front end for [[org.appliedtopology.tda4j.matlab.TDA4j]] (flags in
@@ -270,10 +267,7 @@ object TDA4jCLI:
     if conf.inputFormat.isSupplied then conf.inputFormat()
     else
       val start =
-        try
-          val in = Files.newInputStream(Paths.get(conf.input()))
-          try String(in.readNBytes(256), StandardCharsets.UTF_8)
-          finally in.close()
+        try String(FileAccess.readHead(conf.input(), 256), "UTF-8")
         catch case _: java.io.IOException => ""
       if start.stripPrefix("\uFEFF").dropWhile(_.isWhitespace).startsWith("{") then "result" else conf.inputFormat()
 
@@ -349,7 +343,7 @@ object TDA4jCLI:
     val lines = s"# coveringRadius=${selection.coveringRadius()}" +: selection.landmarks().map(_.toString).toSeq
     conf.output.toOption match
       case Some(path) =>
-        val writer = new PrintWriter(path)
+        val writer = FileAccess.printWriter(path)
         try lines.foreach(writer.println)
         finally writer.close()
       case None => lines.foreach(out.println)
@@ -366,7 +360,7 @@ object TDA4jCLI:
     * landmarks file is exactly the case where "which line" matters for fixing it.
     */
   private[cli] def readLandmarksFile(path: String): Array[Int] =
-    val source = scala.io.Source.fromFile(path)
+    val source = FileAccess.source(path)
     try
       source
         .getLines()
@@ -476,7 +470,7 @@ object TDA4jCLI:
     val lines = dims.map(d => s"dim $d: bottleneck=${bottleneck(d)} wasserstein=${wasserstein(d)}")
     conf.output.toOption match
       case Some(path) =>
-        val writer = new PrintWriter(path)
+        val writer = FileAccess.printWriter(path)
         try lines.foreach(writer.println)
         finally writer.close()
       case None => lines.foreach(out.println)
@@ -490,7 +484,7 @@ object TDA4jCLI:
         }
         conf.output.toOption match
           case Some(path) =>
-            val writer = new PrintWriter(path)
+            val writer = FileAccess.printWriter(path)
             try lines.foreach(writer.println)
             finally writer.close()
           case None => lines.foreach(out.println)
@@ -662,9 +656,9 @@ object TDA4jCLI:
     conf.output.toOption match
       case Some(path) => drawn.save(path, theme)
       case None       =>
-        val page = Files.createTempFile(s"tda4j-$kind-", ".html")
-        Files.writeString(page, drawn.html(theme.getOrElse(Theme.Auto)), StandardCharsets.UTF_8)
-        val opened = Viewer.browse(page.toUri)
+        val page = FileAccess.tempFile(s"tda4j-$kind-", ".html")
+        FileAccess.writeText(page, drawn.html(theme.getOrElse(Theme.Auto)))
+        val opened = Viewer.browse(FileAccess.fileUri(page))
         System.err.println(
           s"tda4j: wrote $page" + (if opened then " (opened in your browser)" else "; open it in a browser")
         )
