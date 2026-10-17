@@ -37,11 +37,11 @@ diagram.dim(1).longest              // the most persistent loop, with a represen
 From JavaScript or TypeScript (browsers, and Node.js 20.16 or newer):
 
 ```
-npm install tda4j
+npm install @appliedtopology/tda4j
 ```
 
 ```js
-import { persistence } from "tda4j";
+import { persistence } from "@appliedtopology/tda4j";
 const result = persistence([[0, 0], [1, 0], [1, 1], [0, 1]], { maxDimension: 1 });
 result.bars;   // [{ dim: 0, birth: 0, death: Infinity }, ...]
 ```

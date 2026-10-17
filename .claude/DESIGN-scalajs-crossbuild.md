@@ -5,7 +5,7 @@ history of how it was reached; `WORKLOG-scalajs-native-feasibility.md` is the pr
 
 ## Goals (project lead, 2026-10-17)
 
-A tutorial attendee asked for JavaScript. The library cross-builds to Scala.js; the MATLAB surface is not a goal for JS
+The npm package is `@appliedtopology/tda4j` (the project lead created the `@appliedtopology` scope). A tutorial attendee asked for JavaScript. The library cross-builds to Scala.js; the MATLAB surface is not a goal for JS
 (the facade stays an implementation detail of the CLI and of the JS API), the CLI is welcome. Two audiences: Scala.js
 programs (a Maven artifact) and plain JavaScript/TypeScript programs (an npm package with an exported API). Where a
 JVM-only library has no Scala.js build, the library gets its own implementation on both platforms and the Java library

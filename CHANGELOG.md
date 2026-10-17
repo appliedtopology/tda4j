@@ -32,8 +32,8 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 - **tda4j runs in JavaScript.** The library is built for the JVM and for Scala.js from the same sources (sbt 2 project
   matrix: `tda4j` and `tda4jJS`). Scala.js programs depend on the same coordinates (`"org.appliedtopology" %% "tda4j"`
-  picks `tda4j_sjs1_3` in a Scala.js project); JavaScript and TypeScript programs install the npm package: `npm install
-  tda4j`, `import { persistence } from "tda4j"`, with `persistence`, `persistenceFromDistances`, `persistenceFromImage`
+  picks `tda4j_sjs1_3` in a Scala.js project); JavaScript and TypeScript programs install the npm package `@appliedtopology/tda4j`:
+  `npm install @appliedtopology/tda4j`, `import { persistence } from "@appliedtopology/tda4j"`, with `persistence`, `persistenceFromDistances`, `persistenceFromImage`
   and `persistenceFromGrid` returning a `Result` (bars, representatives, distances, landscapes, plots) and typings. `npx
   tda4j` is the command line on Node.js. Browsers and Node.js 20.16 or newer; one thread; no file access in a browser. See
   *Using it from JavaScript* in the user guide.

@@ -3,18 +3,18 @@ layout: main
 title: Using it from JavaScript
 ---
 
-TDA4j runs in JavaScript: the same library, compiled with Scala.js, as an [npm package](https://www.npmjs.com/package/tda4j)
+TDA4j runs in JavaScript: the same library, compiled with Scala.js, as an [npm package](https://www.npmjs.com/package/@appliedtopology/tda4j)
 for JavaScript and TypeScript, and as a Scala.js library for Scala programs that run in a browser or in Node.js. It
 works in browsers and in Node.js 20.16 or newer.
 
 ## From JavaScript or TypeScript
 
 ```
-npm install tda4j
+npm install @appliedtopology/tda4j
 ```
 
 ```js
-import { persistence } from "tda4j";
+import { persistence } from "@appliedtopology/tda4j";
 
 const points = [[0, 0], [1, 0], [1, 1], [0, 1]];
 const result = persistence(points, { maxDimension: 1 });
@@ -48,7 +48,7 @@ A bad option or a malformed input throws an `Error` that says what to change.
 
 ### On the command line
 
-`npx tda4j --max-dimension 1 points.csv` is the [command line](cli.md) of the JVM build, with the same flags, reading
+`npx @appliedtopology/tda4j --max-dimension 1 points.csv` (`tda4j --max-dimension 1 points.csv` once the package is installed) is the [command line](cli.md) of the JVM build, with the same flags, reading
 files through Node.js. It does not read image files (`--input-format image`): decode the image yourself and pass its
 pixels to `persistenceFromImage`.
 

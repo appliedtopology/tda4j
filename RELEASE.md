@@ -111,13 +111,14 @@ already-released coordinate.
   credentials, which cover any git operation against the same repo, not just the checked-out ref).
 
 - **`NPM_TOKEN`** (optional until the first npm release): an [npm](https://www.npmjs.com/) access token that may publish
-  the package `tda4j`. Once: create an npm account (or an organization, if the package should be `@appliedtopology/tda4j`
-  instead: change `name` in `npm/package.json`, nothing else; both `tda4j` and `@appliedtopology/tda4j` were free when
-  this was written), turn on two-factor authentication, create a granular access token with read-and-write permission
-  for packages (the first publish creates the package, so the token cannot yet be limited to it; narrow it to `tda4j`
-  after that), and add it as the repository secret `NPM_TOKEN`. Without the secret, `release.yml` builds the npm
-  tarball, attaches it to the GitHub Release and skips the publish step; `npm publish` of that tarball by hand does the
-  same.
+  to the `@appliedtopology` scope; the package is `@appliedtopology/tda4j` (`name` in `npm/package.json`). The scope
+  exists (the project lead created it). Once: as a member of the scope with publish rights, with two-factor
+  authentication on, create a granular access token with read-and-write permission for packages in the
+  `@appliedtopology` scope (the first publish creates the package, so the token cannot yet be limited to it; narrow it
+  to `@appliedtopology/tda4j` after that), and add it as the repository secret `NPM_TOKEN`. A scoped package is private
+  unless published with `--access public`, which `release.yml` passes. Without the secret, `release.yml` builds the npm
+  tarball, attaches it to the GitHub Release and skips the publish step; `npm publish --access public` of that tarball
+  by hand does the same.
 
 Nothing else is required in CI today. If Maven publishing is later moved into CI (see the note above), add
 `SONATYPE_USERNAME`/`SONATYPE_PASSWORD`/`PGP_PASSPHRASE` (plus the PGP private key itself, e.g. base64 in a
@@ -159,7 +160,7 @@ The tag push from step 3 triggers `.github/workflows/release.yml`, which:
    the version is still `0.x`, with the fat jar, sources jar, scaladoc jar, npm tarball, demo REPL jar, and docs zip
    attached.
 6. Publishes the npm tarball with `npm publish --access public` when the `NPM_TOKEN` secret exists (a version with a
-   suffix, such as `0.8.0-RC1`, under the tag `next`, so `npm install tda4j` keeps giving the last full release).
+   suffix, such as `0.8.0-RC1`, under the tag `next`, so `npm install @appliedtopology/tda4j` keeps giving the last full release).
 
 If it fails partway (e.g. a transient GitHub API error), it's safe to just re-run the workflow from the
 Actions tab — nothing it does touches Maven, and `gh release create`/the docs `git push` are both safe to
@@ -176,8 +177,8 @@ instead, replicate steps 1–4 locally; the commands are in the workflow file.
   series only; a new minor starts with an empty baseline).
 - Skim the new `-SNAPSHOT` commit `sbt release` pushed — confirm it actually landed on `scala` and the version
   bump is sane before walking away.
-- Verify `npm install tda4j@X.Y.Z` in a scratch directory and `import { persistence } from "tda4j"` (skip until the
-  package has been published once).
+- Verify `npm install @appliedtopology/tda4j@X.Y.Z` in a scratch directory and `import { persistence } from
+  "@appliedtopology/tda4j"` (skip until the package has been published once).
 - Confirm `release.yml` finished green in the Actions tab and the GitHub Release looks right (all six files
   attached, the changelog section pasted into its description) before announcing the release anywhere.
 - Add a new, empty `## Unreleased` section at the top of `CHANGELOG.md` if the release commit did not.

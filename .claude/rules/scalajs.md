@@ -61,7 +61,7 @@ the JS side throwing an `UnsupportedOperationException` that says what to do, ne
 `persistenceFromDistances`, `persistenceFromImage`, `persistenceFromGrid`, and the classes `Result` and `Chart`, a thin
 layer over `matlab.TDA4j`. Options are the facade's option names (an object, not a string array); a Scala exception becomes
 a JavaScript `Error` with the same message (`guarded`). It is hand-typed twice: `npm/index.d.ts` must list every option
-the facade accepts and every exported member (change both in one commit). `npm/package.json` has `@VERSION@`, filled in
+the facade accepts and every exported member (change both in one commit). `npm/package.json` (package `@appliedtopology/tda4j`; a scoped package needs `npm publish --access public`) has `@VERSION@`, filled in
 by `tda4jJS/npmPack`, which also adds the shebang to `cli.mjs`; `type: module`, Node >= 20.16 (`process.getBuiltinModule`).
 Pre-release versions publish under the npm tag `next` (`release.yml`). The `npm-package` CI job installs the tarball
 into an empty project and runs the library and `npx tda4j`.

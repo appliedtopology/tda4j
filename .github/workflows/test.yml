@@ -75,7 +75,7 @@ jobs:
 
   # The npm package the release attaches (and publishes to npm once a token is configured, see release.yml): built from
   # the optimized link, installed from its tarball into an empty project, and run the way a user runs it, as a library
-  # (`import { persistence } from "tda4j"`) and as the command (`npx tda4j`). The unit square has one loop.
+  # (`import { persistence } from "@appliedtopology/tda4j"`) and as the command (`npx tda4j`). The unit square has one loop.
   npm-package:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -103,7 +103,7 @@ jobs:
           npm init -y > /dev/null
           npm install "$tarball"
           cat > check.mjs <<'JS'
-          import { persistence } from "tda4j";
+          import { persistence } from "@appliedtopology/tda4j";
           const result = persistence([[0, 0], [1, 0], [1, 1], [0, 1]], { maxDimension: 1 });
           const loops = result.bars.filter((bar) => bar.dim === 1).length;
           if (loops !== 1) { console.error("expected one loop in the unit square, got " + loops); process.exit(1); }

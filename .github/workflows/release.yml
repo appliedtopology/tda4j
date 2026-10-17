@@ -36,7 +36,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     env:
-      # An npm automation token for the `tda4j` package (RELEASE.md, "npm"). Without it the publish step is skipped, and
+      # An npm access token that may publish to the `@appliedtopology` scope (RELEASE.md, "npm"). Without it the publish step is skipped, and
       # the package is still built and attached to the GitHub Release.
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
@@ -174,7 +174,7 @@ jobs:
             "docs-${VERSION}.zip"
       - name: Publish to npm
         # Skipped until the repository has the NPM_TOKEN secret (RELEASE.md, "npm"). A version with a suffix (0.8.0-RC1)
-        # goes out under the `next` tag, so `npm install tda4j` keeps giving the last full release.
+        # goes out under the `next` tag, so `npm install @appliedtopology/tda4j` keeps giving the last full release.
         if: ${{ env.NPM_TOKEN != '' }}
         env:
           VERSION: ${{ steps.version.outputs.version }}

@@ -1,5 +1,5 @@
 {
-  "name": "tda4j",
+  "name": "@appliedtopology/tda4j",
   "version": "@VERSION@",
   "description": "Persistent homology and topological data analysis: Vietoris-Rips, Cech and alpha complexes, cubical images, barcodes with representatives, and plots.",
   "type": "module",
