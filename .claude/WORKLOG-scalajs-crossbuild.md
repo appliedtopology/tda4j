@@ -103,7 +103,9 @@ reports were checked against the merged tree, not taken as given.
 
 ## Open items
 
-Filed as issues (see #81 for the plan this arc executed): Java-style `Double` formatting on JS; image files on Node; browser
-smoke test in CI; JS performance on real sizes and the WebAssembly backend; Web Worker parallelism; string-based parsers for
-the file formats; circular/toroidal coordinates and landmarks in the JS API; bundle size; `rules/engines.md` over its size budget;
-the demo's `JVPTree` references; MiMa/coverage for the Scala.js artifact.
+Filed as issues (#81 is the plan this arc executed, with a summary comment): #112 Java-style `Double` formatting on JS (a
+decision for the project lead); #113 image files on Node; #114 the unverified CI jobs and release steps; #115 browser smoke
+test in CI; #116 JS performance on real sizes, `Long` emulation, the WebAssembly backend; #117 Web Worker parallelism; #118
+string-based parsers for the file formats; #119 circular/toroidal coordinates, landmarks and persistence images in the JS API;
+#120 bundle size; #121 MiMa/coverage for the Scala.js artifact; #122 `rules/engines.md` over its size budget; #123 the demo's
+`JVPTree` references; #124 the engine-level A/B after the linear algebra swap and the sign of `Hyperplane.from`.
