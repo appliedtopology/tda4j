@@ -1133,7 +1133,7 @@ object TDA4j:
         // Just as unboundedly deep as complex=vr/complex=cech -- the same "build one dimension higher, drop it"
         // dance for engine=Naive/Cohomology, for the identical reason (H_k needs (k+1)-dimensional chains).
         // Unlike complex=alpha/complex=cech, needs no real coordinates -- DistanceToMeasure only needs a
-        // FiniteMetricSpace, so this works from computeFromDistanceMatrix too (BruteForce k-NN, not JVPTree:
+        // FiniteMetricSpace, so this works from computeFromDistanceMatrix too (BruteForce k-NN, not VantagePointQuery:
         // metricSpace here may not obey the triangle inequality -- see DistanceToMeasure's own doc).
         val f = DistanceToMeasure(metricSpace, dtmK, dtmQ)
         val dtmStream = DtmRipsSimplexStream(metricSpace, f, dtmP, maxFiltrationValue = maxFiltrationValue)

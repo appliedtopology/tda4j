@@ -27,7 +27,7 @@ class VantagePointTreeSpec extends Specification:
   private def manhattan(a: Pt, b: Pt): Double = a.indices.map(i => math.abs(a(i) - b(i))).sum
   private def chebyshev(a: Pt, b: Pt): Double = a.indices.map(i => math.abs(a(i) - b(i))).max
 
-  private def hamming(a: String, b: String): Double = a.indices.count(i => a(i) != b(i)).toDouble
+  private def hamming(a: String, b: String): Double = a.indices.count(i => a.charAt(i) != b.charAt(i)).toDouble
 
   private def levenshtein(a: String, b: String): Double =
     val prev = Array.tabulate(b.length + 1)(identity)
@@ -36,7 +36,10 @@ class VantagePointTreeSpec extends Specification:
       prev(0) = i
       for j <- 1 to b.length do
         val above = prev(j)
-        prev(j) = math.min(math.min(prev(j) + 1, prev(j - 1) + 1), diagonal + (if a(i - 1) == b(j - 1) then 0 else 1))
+        prev(j) = math.min(
+          math.min(prev(j) + 1, prev(j - 1) + 1),
+          diagonal + (if a.charAt(i - 1) == b.charAt(j - 1) then 0 else 1)
+        )
         diagonal = above
     prev(b.length).toDouble
 
@@ -158,8 +161,8 @@ class VantagePointTreeSpec extends Specification:
 
   "A metric that is not Euclidean: Levenshtein distance on short words, with repeated words" >> {
     val rng = Random(3)
-    val words = IndexedSeq.fill(120)(String(Array.fill(rng.nextInt(6))("abc" (rng.nextInt(3)))))
-    val queries = IndexedSeq.fill(10)(String(Array.fill(rng.nextInt(6))("abc" (rng.nextInt(3))))) ++ words.take(5)
+    val words = IndexedSeq.fill(120)(String(Array.fill(rng.nextInt(6))("abc".charAt(rng.nextInt(3)))))
+    val queries = IndexedSeq.fill(10)(String(Array.fill(rng.nextInt(6))("abc".charAt(rng.nextInt(3))))) ++ words.take(5)
     val problems = for
       leaf <- Seq(1, 8)
       problem <- disagreements(words, levenshtein, queries, (0 to 6).map(_.toDouble), Seq(1, 3, 10, 120), leaf)

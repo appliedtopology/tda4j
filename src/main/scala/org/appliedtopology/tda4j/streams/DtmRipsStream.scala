@@ -78,7 +78,7 @@ object DtmRipsSimplexStream:
   /** Reifies the DTM-Rips 1-skeleton as a `FiniteMetricSpace[Int]` (doubled `2*t`) so it slots into
     * `RipserCofaceSimplexStream` unchanged for every dimension `>= 1`, the same trick `WitnessMetricSpace` uses for the
     * lazy witness complex. '''Not a real metric''' (no triangle-inequality guarantee) -- never hand this to
-    * `JVPTree`/`SparseMetricSpace`/`alpha`, only to combinatorial coface generation.
+    * `VantagePointQuery`/`SparseMetricSpace`/`alpha`, only to combinatorial coface generation.
     */
   class DtmMetricSpace(val ambient: FiniteMetricSpace[Int], val f: IndexedSeq[Double], val p: Double = 1.0)
       extends FiniteMetricSpace[Int]:

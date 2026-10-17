@@ -797,7 +797,7 @@ object AlphaComplexDQP:
     settings: AlphaDQPSettings = AlphaDQPSettings()
   ): AlphaComplexDQP =
     val ambient = EuclideanMetricSpace(points)
-    val f = DistanceToMeasure(ambient, JVPTree(ambient), k, q)
+    val f = DistanceToMeasure(ambient, VantagePointQuery(ambient), k, q)
     weighted(points, f.toArray.map(fi => -fi * fi), maxRadius * maxRadius, maxDimension, settings)
 
   def apply(
@@ -859,7 +859,7 @@ open class AlphaComplexDQPBuilder(
       val aliveRadii = (0 until n).filter(alive).map(radius)
       if aliveRadii.nonEmpty then
         val maxRadiusOverAll = aliveRadii.max
-        val spatialQuery: SpatialQuery[Int] = JVPTree(space.toMetricSpace)
+        val spatialQuery: SpatialQuery[Int] = VantagePointQuery(space.toMetricSpace)
         for i <- 0 until n if alive(i) do
           val queryRadius = (radius(i) + maxRadiusOverAll) * (1.0 + 1e-12)
           for
