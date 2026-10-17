@@ -1,5 +1,6 @@
 package org.appliedtopology.tda4j
 
+import org.appliedtopology.tda4j.SpecThrows.throwWith
 import org.appliedtopology.tda4j.DenseFixtures.*
 import org.specs2.mutable
 
@@ -109,7 +110,7 @@ class DenseMatrixSpec extends mutable.Specification:
     "refuse to solve with a singular matrix, saying what to do" in {
       val lu = DenseMatrix(Array(Array(1.0, 2.0), Array(2.0, 4.0))).lu()
       lu.solve(DenseVector(1.0, 2.0)) must throwAn[IllegalArgumentException].like { case e =>
-        // (not `throwAn[...]("singular")`: specs2 matches a message differently on Scala.js)
+        // (not `throwWith[...]("singular")`: specs2 matches a message differently on Scala.js)
         e.getMessage.contains("singular") must beTrue
       }
     }

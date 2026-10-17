@@ -1,6 +1,7 @@
 package org.appliedtopology.tda4j
 package matlab
 
+import org.appliedtopology.tda4j.SpecThrows.throwWith
 import org.appliedtopology.tda4j.*
 
 import org.specs2.mutable.Specification
@@ -95,12 +96,12 @@ class ToroidalCoordinatesResultSpec extends Specification:
       val svg = result.plot().svg()
       ("<title>point ".r.findAllMatchIn(svg).size must beEqualTo(withBoth)) and
         (result.plot(1, 0).title must contain("1 and 0")) and
-        (result.plot(0, 2) must throwA[IllegalArgumentException](message = "no coordinate 2"))
+        (result.plot(0, 2) must throwWith[IllegalArgumentException]("no coordinate 2"))
     }
     "refuse one coordinate, saying what draws it" >> {
       val points = wedgeOfTwoCircles()
       val bars = TDA4j.h1Bars(points)
       TDA4j.toroidalCoordinates(points, bars(0)(0) + 1e-6, Array(0)).plot() must
-        throwA[IllegalArgumentException](message = "circularCoordinates")
+        throwWith[IllegalArgumentException]("circularCoordinates")
     }
   }

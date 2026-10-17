@@ -1,5 +1,7 @@
 package org.appliedtopology.tda4j.plot
 
+import RootText.lowerRoot
+
 /** What a mark is painted with. A `Series` slot or a role (`Ink`, `Muted`, ...) is resolved by the figure's [[Palette]]
   * and [[Theme]], so the same figure renders light or dark and in another palette; `Value` is a data value (a heatmap
   * cell, an angle, a coefficient) that the figure's [[ColorScale]] turns into a color, again through its palette;
@@ -22,7 +24,7 @@ enum Theme:
 
 object Theme:
   /** The theme called `name`, in any case: `auto`, `light` or `dark`. */
-  def named(name: String): Theme = name.trim.toLowerCase(java.util.Locale.ROOT) match
+  def named(name: String): Theme = name.trim.lowerRoot match
     case "auto"  => Auto
     case "light" => Light
     case "dark"  => Dark
@@ -247,7 +249,7 @@ object Palette:
   val default: Palette = brand
 
   /** The palette called `name`, in any case: `brand` (the default), `reference`, `print` or `clear`. */
-  def named(name: String): Palette = name.trim.toLowerCase(java.util.Locale.ROOT) match
+  def named(name: String): Palette = name.trim.lowerRoot match
     case "brand"     => brand
     case "reference" => reference
     case "print"     => print

@@ -159,12 +159,14 @@ val commonSettings: Seq[Setting[?]] = Seq(
 val jvmSettings: Seq[Setting[?]] = Seq(
   assembly / assemblyJarName := s"${name.value}-${version.value}-assembly.jar",
   libraryDependencies ++= Seq(
-    "org.apache.commons"      % "commons-numbers-combinatorics" % "1.3",
-    "org.apache.commons"      % "commons-math3"                 % "3.6.1",
-    "com.eatthepath"          % "jvptree"                       % "0.3.0",
-    "com.dreizak"             % "miniball"                      % "1.0.3",
-    "org.scala-lang.modules" %% "scala-parallel-collections"    % "1.2.0",
-    "com.lihaoyi"            %% "cask"                          % "0.11.3"
+    "org.scala-lang.modules" %% "scala-parallel-collections" % "1.2.0",
+    "com.lihaoyi"            %% "cask"                       % "0.11.3",
+    // The libraries the pure-Scala replacements stand in for (they have no Scala.js build): oracles of the specs in
+    // `src/test/scalajvm`, nothing else.
+    "org.apache.commons" % "commons-numbers-combinatorics" % "1.3"   % Test,
+    "org.apache.commons" % "commons-math3"                 % "3.6.1" % Test,
+    "com.eatthepath"     % "jvptree"                       % "0.3.0" % Test,
+    "com.dreizak"        % "miniball"                      % "1.0.3" % Test
   ),
   Compile / doc / scalacOptions ++= Seq(
     "-siteroot",
@@ -197,7 +199,7 @@ val jvmSettings: Seq[Setting[?]] = Seq(
   assembly / mainClass := Some("org.appliedtopology.tda4j.cli.TDA4jCLI"),
   // A fat jar is not a Java module, so module descriptors are dropped. sbt-assembly's default already discards a
   // top-level `module-info.class`, but not the multi-release copies under META-INF/versions/<n>/, which several jars
-  // carry (each commons-numbers 1.3 jar has its own, so the default deduplication fails on them).
+  // carry (so the default deduplication fails on them).
   assembly / assemblyMergeStrategy := {
     case PathList("META-INF", "versions", _, "module-info.class") => MergeStrategy.discard
     case other                                                    => (assembly / assemblyMergeStrategy).value(other)
@@ -362,10 +364,10 @@ lazy val tda4j = (projectMatrix in file("."))
   .jvmPlatform(scalaVersions = Seq(tda4jScalaVersion), settings = jvmSettings ++ patchDocFavicon)
   .jsPlatform(scalaVersions = Seq(tda4jScalaVersion), settings = jsSettings)
 
-// The root aggregates the JVM build only while the JS build does not compile yet (.claude/WORKLOG-scalajs-crossbuild.md);
-// it publishes nothing itself.
+// The root aggregates both builds (`sbt test`, `clean`, `scalafmtAll` and `publishSigned` reach each); it publishes nothing
+// itself. A command that means something for one platform names its project: `tda4j/doc`, `tda4jJS/npmPack`.
 lazy val root = (project in file("."))
-  .aggregate(tda4j.jvm.get.map(p => p: ProjectReference) *)
+  .aggregate(tda4j.projectRefs *)
   .settings(
     name := "tda4j-root",
     publish / skip := true

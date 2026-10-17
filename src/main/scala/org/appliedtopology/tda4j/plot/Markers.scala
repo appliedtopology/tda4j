@@ -1,8 +1,8 @@
 package org.appliedtopology.tda4j.plot
 
-import org.appliedtopology.tda4j.*
+import RootText.lowerRoot
 
-import java.util.Locale
+import org.appliedtopology.tda4j.*
 
 /** What to change about how markers (the points of a figure) look. Whatever is `None` stays as the plot has it.
   *
@@ -137,7 +137,7 @@ object MarkerStyle:
     */
   def named(spec: String): MarkerStyle =
     val trimmed = spec.trim
-    val lower = trimmed.toLowerCase(Locale.ROOT)
+    val lower = trimmed.lowerRoot
     def pch(n: Int): MarkerStyle =
       byPch.get(n) match
         case Some((shape, filled)) => MarkerStyle(shape = Some(shape), fill = Some(filled))

@@ -1,6 +1,5 @@
 package org.appliedtopology.tda4j
 
-import scala.collection.concurrent.TrieMap
 import scala.collection.immutable
 
 /** The DTM-filtration of Anai, Chazal, Glisse, Ike, Lecci, Rouvreau, Saulnier and Wasserman, "DTM-based filtrations"
@@ -110,7 +109,7 @@ object DtmRipsSimplexStream:
     */
   def filtrationValueOverride(reified: DtmMetricSpace): PartialFunction[Simplex[Int], Double] =
     val base = FiniteMetricSpace.MaximumDistanceFiltrationValue[Int](reified)
-    val cache = TrieMap.empty[Simplex[Int], Double]
+    val cache = FiltrationCache.empty[Simplex[Int], Double]
     new PartialFunction[Simplex[Int], Double]:
       def isDefinedAt(spx: Simplex[Int]): Boolean = base.isDefinedAt(spx)
       def apply(spx: Simplex[Int]): Double =

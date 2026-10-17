@@ -90,7 +90,8 @@ private object CoefficientKind:
 object TDA4j:
   // The look every plot of a result starts from: MATLAB and Java have no `given`s, so this is the session's one. It is
   // the calling thread's (MATLAB calls from one thread), so a script's defaults never reach another thread's plots.
-  private val plotLook: ThreadLocal[plot.Look] = ThreadLocal.withInitial(() => plot.Look.none)
+  private val plotLook: ThreadLocal[plot.Look] = new ThreadLocal[plot.Look]:
+    override def initialValue(): plot.Look = plot.Look.none
 
   /** The plots a result draws from now on start from these changes, written as `element.property=value`
     * (`"palette=print"`, `"style=print"`, `"title.size=18"`, ...; see the plotting page of the user guide), until

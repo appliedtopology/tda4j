@@ -1,5 +1,7 @@
 package org.appliedtopology.tda4j.plot
 
+import RootText.lowerRoot
+
 /** How data values become positions along an axis (or steps along a color ramp). The plots hold data in its own units;
   * a transform is applied only when drawing, so the same figure can be shown on a linear or a log axis.
   *
@@ -112,7 +114,7 @@ object Transform:
     * 1 of zero; `Transform.SymLog(c)` sets another stretch). For callers that have a word, not a value: the command
     * line and MATLAB.
     */
-  def named(name: String): Transform = name.trim.toLowerCase(java.util.Locale.ROOT) match
+  def named(name: String): Transform = name.trim.lowerRoot match
     case "linear" | "identity" => Identity
     case "log" | "log10"       => Log10
     case "sqrt"                => Sqrt

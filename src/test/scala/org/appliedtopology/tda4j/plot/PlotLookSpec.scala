@@ -1,5 +1,6 @@
 package org.appliedtopology.tda4j.plot
 
+import org.appliedtopology.tda4j.SpecThrows.throwWith
 import org.appliedtopology.tda4j.*
 import org.specs2.mutable.Specification
 
@@ -164,7 +165,7 @@ class PlotLookSpec extends Specification:
       Look.named("PRINT") must beEqualTo(Look.print)
       Look.named("default") must beEqualTo(Look.none)
       Look.none.isEmpty must beTrue
-      Look.named("poster") must throwAn[IllegalArgumentException](
+      Look.named("poster") must throwWith[IllegalArgumentException](
         "unknown look 'poster'; expected one of default, print, clear"
       )
     }
@@ -174,10 +175,10 @@ class PlotLookSpec extends Specification:
         Look() + Text(TextRole.Title, size = 18) + Lines.grid(dash = Dash.Dotted)
       )
       Look.settings() must beEqualTo(Look.none)
-      Look.settings("palette=neon") must throwAn[IllegalArgumentException](
+      Look.settings("palette=neon") must throwWith[IllegalArgumentException](
         "expected one of brand, reference, print, clear"
       )
-      Look.settings("style=poster") must throwAn[IllegalArgumentException](
+      Look.settings("style=poster") must throwWith[IllegalArgumentException](
         "expected one of default, slides, print, clear"
       )
       Settings.parse("palette=print") must beEqualTo(Palette.print)

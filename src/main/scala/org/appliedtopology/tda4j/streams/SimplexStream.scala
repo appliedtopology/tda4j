@@ -2,7 +2,7 @@ package org.appliedtopology.tda4j
 
 import scala.collection.{immutable, mutable}
 import scala.collection.immutable.{Map, Seq, SortedSet}
-import scala.collection.concurrent.TrieMap
+
 import math.Ordering.Implicits.*
 
 trait Filterable[FiltrationT: Ordering]:
@@ -393,10 +393,10 @@ open class EnumeratingCofaceSimplexStream(
   // already-resident cell count adds no new memory concern, and there is no incremental formula for the
   // general max-pairwise-distance functional this stream computes by default.
   //
-  // TrieMap, not mutable.HashMap: a plain HashMap's getOrElseUpdate is not safe to call concurrently, and
-  // parallelFiltrationValue's pre-warm step (below) does exactly that -- TrieMap's own getOrElseUpdate is a
-  // genuine drop-in backed by a lock-free Ctrie. See .claude/WORKLOG-parallelization-survey.md item 2 (Cech).
-  private val filtrationValueCache = TrieMap.empty[Simplex[Int], Double]
+  // FiltrationCache (a TrieMap on the JVM), not mutable.HashMap: a plain HashMap's getOrElseUpdate is not safe to call
+  // concurrently, and parallelFiltrationValue's pre-warm step (below) does exactly that -- TrieMap's own getOrElseUpdate is
+  // a genuine drop-in backed by a lock-free Ctrie. See .claude/WORKLOG-parallelization-survey.md item 2 (Cech).
+  private val filtrationValueCache = FiltrationCache.empty[Simplex[Int], Double]
 
   override val filtrationValue: PartialFunction[Simplex[Int], Double] =
     filtrationValueOverride.getOrElse {

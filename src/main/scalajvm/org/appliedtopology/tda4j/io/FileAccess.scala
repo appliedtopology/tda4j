@@ -39,6 +39,10 @@ private[tda4j] object FileAccess:
   /** [[writer]] as a `PrintWriter`, which hides a failed write until `checkError`. */
   def printWriter(path: String): PrintWriter = new PrintWriter(writer(path))
 
+  /** What reading a missing file throws: a `FileNotFoundException`. (Scala.js has none: there it is an `IOException`.)
+    */
+  def noSuchFile(path: String): java.io.IOException = new java.io.FileNotFoundException(s"$path: no such file")
+
   def isFile(path: String): Boolean = Files.isRegularFile(Paths.get(path))
 
   /** `path` made absolute against the working directory. */

@@ -1,7 +1,5 @@
 package org.appliedtopology.tda4j
 
-import scala.collection.concurrent.TrieMap
-
 /** The Cech filtration value of a simplex: the radius of the smallest ball containing its vertices
   * ([[MinimumEnclosingBall]]). Values are cached, so a simplex has one value for the whole computation.
   */
@@ -11,14 +9,14 @@ object CechFiltration:
     * least its facets' values, so floating-point error cannot break monotonicity.
     */
   def apply(euclideanMetricSpace: EuclideanMetricSpace): PartialFunction[Simplex[Int], Double] =
-    // TrieMap, not mutable.HashMap: RipserCofaceSimplexStream's parallelFiltrationValue pre-warm step calls
+    // FiltrationCache (a TrieMap on the JVM), not mutable.HashMap: RipserCofaceSimplexStream's parallelFiltrationValue pre-warm step calls
     // this PartialFunction's apply concurrently from multiple threads when enabled -- see
     // .claude/WORKLOG-parallelization-survey.md item 2. TrieMap's getOrElseUpdate is a genuine drop-in (same
     // signature) backed by a lock-free Ctrie, safe for concurrent reads and writes; computeRadius's own
     // facet-floor lookups (cache.getOrElse, a plain read) are likewise safe concurrently, since the parallel
     // phase never writes a NEW entry mid-computation -- only already-complete lower-dimension entries are
     // ever read while dimension d's own candidates are being computed.
-    val cache = TrieMap.empty[Simplex[Int], Double]
+    val cache = FiltrationCache.empty[Simplex[Int], Double]
     def computeRadius(spx: Simplex[Int]): Double =
       val vertices = spx.underlying.toArray
       val coords = vertices.map(euclideanMetricSpace.pts)

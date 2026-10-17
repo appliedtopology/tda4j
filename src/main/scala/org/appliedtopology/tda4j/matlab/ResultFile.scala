@@ -115,7 +115,7 @@ private[matlab] object ResultFile:
 
   /** Reads a saved result, checking that its parts fit together. */
   def read(path: String): PersistenceResult =
-    if !FileAccess.isFile(path) then throw new java.io.FileNotFoundException(s"$path: no such file")
+    if !FileAccess.isFile(path) then throw FileAccess.noSuchFile(path)
     parse(FileAccess.readText(path), path)
 
   /** A saved result from its text; `path` names it in error messages. */

@@ -34,7 +34,7 @@ private[tda4j] object FileAccess:
       case e @ js.JavaScriptException(error) =>
         val dynamic = error.asInstanceOf[js.Dynamic]
         val code = if js.typeOf(dynamic.code) == "string" then dynamic.code.toString else ""
-        if code == "ENOENT" then throw new java.io.FileNotFoundException(s"$path: no such file")
+        if code == "ENOENT" then throw noSuchFile(path)
         else throw new java.io.IOException(s"$path: ${e.getMessage}", e)
 
   private lazy val fs = nodeModule("fs")
@@ -52,9 +52,9 @@ private[tda4j] object FileAccess:
   def readHead(path: String, n: Int): Array[Byte] = io(path) {
     val fd = fs.openSync(path, "r")
     try
-      val buffer = js.Dynamic.global.Uint8Array.newInstance(n)
+      val buffer = new Uint8Array(n)
       val read = fs.readSync(fd, buffer, 0, n, 0).asInstanceOf[Int]
-      toScala(buffer.subarray(0, read))
+      toScala(buffer.subarray(0, read).asInstanceOf[js.Dynamic])
     finally fs.closeSync(fd)
   }
 
@@ -75,6 +75,9 @@ private[tda4j] object FileAccess:
 
   /** [[writer]] as a `PrintWriter`, which hides a failed write until `checkError`. */
   def printWriter(path: String): PrintWriter = new PrintWriter(writer(path))
+
+  /** What reading a missing file throws: an `IOException`, as Scala.js has no `FileNotFoundException`. */
+  def noSuchFile(path: String): java.io.IOException = new java.io.IOException(s"$path: no such file")
 
   def isFile(path: String): Boolean =
     val stat = fs.statSync(path, js.Dynamic.literal(throwIfNoEntry = false))

@@ -1,5 +1,6 @@
 package org.appliedtopology.tda4j
 
+import org.appliedtopology.tda4j.SpecThrows.throwWith
 import org.specs2.mutable
 
 /** The fast engines' representatives come from a signed union-find (`SignedUnionFind`) instead of a coefficient map per
@@ -244,20 +245,20 @@ class FastRepresentativesSpec extends mutable.Specification:
     )
     def fromFunction(vs: IndexedSeq[Double]) =
       CubicalGridStream(shape, index => vs(index(0) * 3 + index(1)), nanMask = false)
-    (CubicalImage.fromFlatArray(shape, values, nanMask = false) must throwAn[IllegalArgumentException](message)) and
+    (CubicalImage.fromFlatArray(shape, values, nanMask = false) must throwWith[IllegalArgumentException](message)) and
       (CubicalImage.fromFlatArray(shape, values, sublevel = false, nanMask = false) must
-        throwAn[IllegalArgumentException](message)) and
+        throwWith[IllegalArgumentException](message)) and
       (CubicalImage.fromGrayscale2D(Array(values.take(3).toArray, values.drop(3).toArray), nanMask = false) must
-        throwAn[IllegalArgumentException](message)) and
+        throwWith[IllegalArgumentException](message)) and
       (engines.map(e => scala.util.Try(Persistence(Image(values, shape, nanMask = false), engine = e)).isFailure) must
         beEqualTo(engines.map(_ => true))) and
-      (Persistence(Image(values, shape, nanMask = false)) must throwAn[IllegalArgumentException](message)) and
+      (Persistence(Image(values, shape, nanMask = false)) must throwWith[IllegalArgumentException](message)) and
       (FastCubicalHomologyEngine[f3.Fp]().persistentHomology(fromFunction(values)) must
-        throwAn[IllegalArgumentException](message)) and
+        throwWith[IllegalArgumentException](message)) and
       (PackedCubicalCohomologyEngine[f3.Fp](fromFunction(values), 2).persistentHomology() must
-        throwAn[IllegalArgumentException](message)) and
+        throwWith[IllegalArgumentException](message)) and
       (Persistence(fromFunction(values), engine = Persistence.Engine.Naive) must
-        throwAn[IllegalArgumentException](message)) and
+        throwWith[IllegalArgumentException](message)) and
       (engines.map(e => Persistence(Image(clean, shape, nanMask = false), engine = e).triples) must beEqualTo(
         engines.map(e => Persistence(Image(clean, shape), engine = e).triples)
       )) and

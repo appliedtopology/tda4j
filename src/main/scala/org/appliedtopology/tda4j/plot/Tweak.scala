@@ -1,8 +1,10 @@
 package org.appliedtopology.tda4j.plot
 
+import RootText.lowerRoot
+
 import org.appliedtopology.tda4j.*
 
-import java.util.{IllegalFormatException, Locale}
+import java.util.IllegalFormatException
 
 /** A change to how a plot looks, kept as a value. Add it to a plot with `+`, combine tweaks with `+`, keep them in a
   * `val` and use them on every figure of a paper:
@@ -301,7 +303,7 @@ object Scale:
       val allowed = if which == "x" then Seq(Side.Bottom, Side.Top) else Seq(Side.Left, Side.Right)
       require(
         allowed.contains(side),
-        s"Scale.$which: the $which axis is at the ${allowed.mkString(" or the ").toLowerCase(Locale.ROOT)}, not the ${side.toString.toLowerCase(Locale.ROOT)}"
+        s"Scale.$which: the $which axis is at the ${allowed.mkString(" or the ").lowerRoot}, not the ${side.toString.lowerRoot}"
       )
     }
 
@@ -346,7 +348,7 @@ object Scale:
         require(l < h, s"Scale.$which: min (${Svg.number(l)}) must be less than max (${Svg.number(h)})")
       format.toOption.foreach { pattern =>
         val works =
-          try String.format(Locale.ROOT, pattern, Double.box(1.5)).nonEmpty
+          try RootText.format(pattern, Double.box(1.5)).nonEmpty
           catch case _: IllegalFormatException => false
         require(
           works,

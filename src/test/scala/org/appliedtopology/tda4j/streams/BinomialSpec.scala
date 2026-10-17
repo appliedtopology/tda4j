@@ -1,5 +1,6 @@
 package org.appliedtopology.tda4j
 
+import org.appliedtopology.tda4j.SpecThrows.throwWith
 import org.specs2.mutable.Specification
 
 import SimplexIndexing.binomial
@@ -78,7 +79,7 @@ class BinomialSpec extends Specification:
   }
 
   "Overflow says which coefficient and what to do, as an IllegalArgumentException" >> {
-    binomial(67, 33) must throwAn[IllegalArgumentException](
+    binomial(67, 33) must throwWith[IllegalArgumentException](
       "binomial.67, 33. overflows Long -- this complex is too large to index"
     )
   }
