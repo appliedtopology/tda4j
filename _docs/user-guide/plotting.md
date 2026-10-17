@@ -395,7 +395,8 @@ thickness in pixels.
 
 The style sets what applies to the whole plot. Each piece of text has a *role*, and each can be changed alone: `Title`,
 `Subtitle`, `AxisLabel`, `TickLabel`, `Legend` (the entries), `LegendTitle`, `ColorTitle` (the title of a color bar; its
-numbers are `TickLabel`) and `Note` (the small print under a plot). A text has a size in pixels (before the style's text
+numbers are `TickLabel`), `Note` (the small print under a plot), `Caption` (the line under a plot, below) and `Tag`
+(the letter of a panel). A text has a size in pixels (before the style's text
 scale, so `Style.slides` still scales it), a weight, a slant, a font of its own, a color, and, for a title, subtitle,
 axis label and note, an alignment along the plot area. The tick labels of the x axis can be slanted by an angle. The
 margins follow the text: a larger tick label makes room for itself.
@@ -442,7 +443,7 @@ earlier ones set, and tweaks of different elements come in any order, a `Style` 
 
 | element | properties |
 |---|---|
-| `title`, `subtitle`, `axis-label`, `tick-label`, `legend`, `legend-title`, `color-title`, `note` | `size`, `weight` (`light`, `normal`, `medium`, `semibold`, `bold`), `italic`, `align` (`start`, `middle`, `end`), `angle` (tick labels only), `font`, `color` |
+| `title`, `subtitle`, `axis-label`, `tick-label`, `legend`, `legend-title`, `color-title`, `note`, `caption`, `tag` | `size`, `weight` (`light`, `normal`, `medium`, `semibold`, `bold`), `italic`, `align` (`start`, `middle`, `end`), `angle` (tick labels only), `font`, `color`, `limit` (the longest the text may be, in pixels) |
 | `grid`, `minor-grid`, `axis-line`, `frame` | `visible`, `width`, `color`, `dash` (`solid`, `dashed`, `dotted`), `opacity` |
 | `ticks`, `minor-ticks` | `length`, `direction` (`out`, `in`), `visible`, `width`, `color`, `opacity` |
 | `panel` | `color`, `opacity`, `visible` |
@@ -450,12 +451,101 @@ earlier ones set, and tweaks of different elements come in any order, a `Style` 
 | `marker` | `shape` (a name, a matplotlib code, `pch:N`, `glyph:text`), `size`, `opacity`, `fill`, `edge-width` (0 for none), `edge-color`, `edge-opacity`, `edge-dash`, `edge-visible` |
 | `degree-0`, `degree-1`, ... | `color`, `dark-color`, `label` and the `marker` properties |
 | `segments`, `polygons`, `discs`, `lines` | `width`, `opacity` for segments; `opacity` for polygons and discs; `width` for lines |
-| `x-axis`, `y-axis` | `bottom` or `top`; `left` or `right` (written `x-axis=top`) |
+| `x-axis`, `y-axis` | the side alone (`x-axis=top`, `y-axis=right`), or `side`, `reverse` (`true` runs the axis backwards), `padding` (the room around the data, as a fraction of their extent), `min`, `max`, `format` |
+| `aspect` | the length of a y unit over an x unit (`aspect=1` for equal units), or `free` |
+| `numbers` | `locale` (`de`, `fr`, `sv`, ...), `decimal`, `grouping`, `minus` (`space` is a space) |
+| `size` | `width`, `height`: pixels, or a number with a unit, `3.4in`, `8.6cm`, `86mm`, `245pt` |
 
 `fig.withSetting("title.size=18")`, `fig.withSetting("grid.dash=dotted")` and
 `java -jar tda4j-assembly.jar --plot diagram --set title.size=18 --set ticks.length=4 ...` are the same changes. A name that
 is not one, a number that is not a number and a setting a plot cannot have (a tick label of a 3-D scene, which has a title,
 a subtitle and a hint) are errors that say what to write instead.
+
+### The axes: direction, room, shape and scales of your own
+
+`Scale.x(reverse = true)` runs an axis backwards, the way a depth or a rank is drawn: the larger numbers are at the left
+(or at the bottom). Everything drawn in the plot follows, the half plane below the diagonal of a persistence diagram
+included, and the boxes of a heatmap stay boxes. `padding` is the room left around the data, as a fraction of their
+extent (a plot has 0.04 of it on each side; 0 puts the first point on the axis). `withAspect(2)` makes a y unit twice as
+long as an x unit on the page, `withAspect(1)` makes them equal (a persistence diagram begins so), and
+`withAspect(free = true)` lets the units differ.
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val points = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
+val d = Persistence(points, maxDimension = 1)
+
+// the bars from the largest scale down, with no room beyond the data on the x axis
+val backwards = Plot.barcode(d).withXScale(reverse = true, padding = 0)
+
+// a scale of your own: the cube root, which spaces 1, 8 and 27 evenly
+val cubeRoot = Transform.Custom("cube root", math.cbrt, v => v * v * v)
+val cubic = Plot.barcode(d).withXScale(cubeRoot)
+
+// the units of a diagram freed from each other
+val loose = Plot.diagram(d).withAspect(free = true)
+```
+
+A scale of your own gives a name (the one messages use), the map to the line and the map back, which must undo each other;
+the ticks are round numbers of the data, as on a square-root axis. Keep the functions in a `val`: two axes are on one
+scale (for `Board.shared()`) when they hold the same functions.
+
+### Numbers
+
+`Numbers` sets how the numbers of the tick labels and the color bar are written: the decimal separator, a mark between
+groups of three digits, and the minus sign. `Numbers.locale("de")` takes what a locale writes (a comma and a hyphen for
+German, a comma and a true minus sign `−` for Swedish); the symbols can also be given one by one. Anything that is not a
+number, such as an `H0` in a legend, is left alone.
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val points = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
+val d = Persistence(points, maxDimension = 1)
+
+val german = Plot.diagram(d).withLocale("de")
+val typographic = Plot.diagram(d).withNumbers(decimal = ",", minus = "−", grouping = " ")
+```
+
+A long text can be cut: `Text(TextRole.Legend, limit = 120)` ends a legend entry that would be longer than 120 pixels in
+an ellipsis, and the whole text is the tooltip of what is left. The length of a text is estimated from its size, so the
+cut falls a character or two from where a font of your own would put it.
+
+### A caption, a panel tag and a description
+
+`Labels(caption = ...)` puts a line under the plot, at the left of the plot area, and takes its room; `tag` puts a short
+label in the corner of the figure, in a larger, semibold face, the way a journal letters its panels; `description` is what
+a screen reader says of the plot (the `<desc>` of the SVG). A barcode and a diagram describe themselves, with their counts
+by degree, unless you give another. `Board.tagged()` letters the panels of a board `(a)`, `(b)`, ...; `tagged("%s.", "A")`
+writes `A.`, `B.`, and the sequence `"1"` counts.
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val points = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
+val d = Persistence(points, maxDimension = 1)
+
+val one = Plot.diagram(d)
+  .withCaption("Source: a noisy circle")
+  .withDescription("One long-lived loop, far from the diagonal")
+val board = Plot.side(Plot.diagram(d), Plot.barcode(d)).tagged()
+```
+
+A 3-D scene has none of the three; asking says so.
+
+### Sizes in the units of a paper
+
+A figure's size is in pixels, 96 to the inch. `Size.inches(3.4, 2.6)`, `Size.cm`, `Size.mm` and `Size.pt` are the sizes in
+the units of a journal's template (`Size.pt(245)` is a column), and `size.width=3.4in` says the same as a setting. Add
+the size with `+` as any tweak: `Plot.diagram(d) + Size.inches(3.4, 2.6)`. The text keeps its size in pixels, so check it
+against the column.
 
 ### For a paper, and for a page of either color
 

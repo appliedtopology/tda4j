@@ -164,9 +164,10 @@ enum Ticks:
   * (the `∞` mark); `format` is a printf pattern for the numbers; `visible = false` drops ticks, labels and baseline (a
   * point cloud's frame). On a log axis what is at 0 (an `H0` bar's birth) sits on a `-∞` line below the lowest number,
   * as an essential bar ends at `∞`: `minusInfinity = None` draws the line when something is there, `Some(true)` always
-  * (panels that must line up), `Some(false)` never, leaving what is at 0 out and counting it. `side` puts the axis on
-  * the other side of the plot (an x axis at the `Top`, a y axis at the `Right`). Change an axis of a figure with
-  * `Scale.x(...)` and `Labels(x = ...)`.
+  * (panels that must line up), `Some(false)` never, leaving what is at 0 out and counting it. `reverse` runs the axis
+  * the other way (large values at the left, or at the bottom); `padding` is the fraction of the data's extent left
+  * empty at each end when the range is not fixed (default 0.04). `side` puts the axis on the other side of the plot (an
+  * x axis at the `Top`, a y axis at the `Right`). Change an axis of a figure with `Scale.x(...)` and `Labels(x = ...)`.
   */
 final case class Axis(
   label: String = "",
@@ -179,7 +180,9 @@ final case class Axis(
   transform: Transform = Transform.Identity,
   format: Option[String] = None,
   minusInfinity: Option[Boolean] = None,
-  side: Option[Side] = None
+  side: Option[Side] = None,
+  reverse: Boolean = false,
+  padding: Option[Double] = None
 ):
   /** Where the axis sits: `side`, or the bottom of an x axis and the left of a y axis, which are the defaults. */
   def sideOr(default: Side): Side = side.getOrElse(default)
@@ -206,7 +209,10 @@ object LegendItem:
   * The parts follow the grammar of graphics: the `marks` are the data drawn, `x` and `y` the position scales, `palette`
   * with `degrees` and `colorScale` the color scales, `legend` and the color bar their guides, `style` the look and
   * `elements` its finer parts (each text, the lines, the plot area). `legendPlace` is where the plot puts its legend
-  * unless the style says otherwise.
+  * unless the style says otherwise. `equalAspect` keeps a unit of x as long as a unit of y when both axes are on one
+  * scale, and `aspect` is any other ratio of the length of a y unit to an x unit (`Scale.aspect`). `caption` is a line
+  * of text under the plot, `tag` the letter of a panel of a board, and `description` what a screen reader says of the
+  * plot (the `<desc>` of the SVG).
   */
 final case class Figure(
   marks: Vector[Mark] = Vector.empty,
@@ -219,12 +225,16 @@ final case class Figure(
   width: Int = 640,
   height: Int = 440,
   equalAspect: Boolean = false,
+  aspect: Option[Double] = None,
   palette: Palette = Palette.default,
   style: Style = Style.default,
   degrees: Map[Int, DegreeStyle] = Map.empty,
   legendTitle: String = "",
   elements: Elements = Elements(),
-  legendPlace: LegendPosition = LegendPosition.Right
+  legendPlace: LegendPosition = LegendPosition.Right,
+  caption: String = "",
+  tag: String = "",
+  description: String = ""
 ) extends Plot:
   def +(mark: Mark): Figure = copy(marks = marks :+ mark)
   def ++(more: IterableOnce[Mark]): Figure = copy(marks = marks ++ more)
@@ -242,8 +252,11 @@ final case class Figure(
     x: Optional[String] = Optional.empty,
     y: Optional[String] = Optional.empty,
     legend: Optional[String] = Optional.empty,
-    color: Optional[String] = Optional.empty
-  ): Figure = this + Labels(title, subtitle, x, y, legend, color)
+    color: Optional[String] = Optional.empty,
+    caption: Optional[String] = Optional.empty,
+    tag: Optional[String] = Optional.empty,
+    description: Optional[String] = Optional.empty
+  ): Figure = this + Labels(title, subtitle, x, y, legend, color, caption, tag, description)
 
   /** The size in pixels; give one to keep the other (`withSize(width = 900)`). */
   def withSize(width: Optional[Int] = Optional.empty, height: Optional[Int] = Optional.empty): Figure =
@@ -260,8 +273,11 @@ final case class Figure(
     grid: Optional[Boolean] = Optional.empty,
     visible: Optional[Boolean] = Optional.empty,
     minusInfinity: Optional[Boolean] = Optional.empty,
-    position: Optional[Side] = Optional.empty
-  ): Figure = this + Scale.x(transform, min, max, breaks, format, grid, visible, minusInfinity, position)
+    position: Optional[Side] = Optional.empty,
+    reverse: Optional[Boolean] = Optional.empty,
+    padding: Optional[Double] = Optional.empty
+  ): Figure =
+    this + Scale.x(transform, min, max, breaks, format, grid, visible, minusInfinity, position, reverse, padding)
 
   /** The y axis; as [[withXScale]]. */
   def withYScale(
@@ -273,8 +289,11 @@ final case class Figure(
     grid: Optional[Boolean] = Optional.empty,
     visible: Optional[Boolean] = Optional.empty,
     minusInfinity: Optional[Boolean] = Optional.empty,
-    position: Optional[Side] = Optional.empty
-  ): Figure = this + Scale.y(transform, min, max, breaks, format, grid, visible, minusInfinity, position)
+    position: Optional[Side] = Optional.empty,
+    reverse: Optional[Boolean] = Optional.empty,
+    padding: Optional[Double] = Optional.empty
+  ): Figure =
+    this + Scale.y(transform, min, max, breaks, format, grid, visible, minusInfinity, position, reverse, padding)
 
   /** Both axes alike: a log-log diagram is `withXYScale(Transform.Log10)`. */
   def withXYScale(
@@ -285,8 +304,19 @@ final case class Figure(
     format: Optional[String] = Optional.empty,
     grid: Optional[Boolean] = Optional.empty,
     visible: Optional[Boolean] = Optional.empty,
-    minusInfinity: Optional[Boolean] = Optional.empty
-  ): Figure = this + Scale.xy(transform, min, max, breaks, format, grid, visible, minusInfinity)
+    minusInfinity: Optional[Boolean] = Optional.empty,
+    reverse: Optional[Boolean] = Optional.empty,
+    padding: Optional[Double] = Optional.empty
+  ): Figure = this + Scale.xy(transform, min, max, breaks, format, grid, visible, minusInfinity, reverse, padding)
+
+  /** The aspect ratio of the plot area: `withAspect(1)` for equal units, `withAspect(free = true)` for none. See
+    * [[Scale.aspect]].
+    */
+  def withAspect(ratio: Optional[Double] = Optional.empty, free: Optional[Boolean] = Optional.empty): Figure =
+    this + Scale.aspect(ratio, free)
+
+  /** The aspect ratio as a number, for MATLAB and Java: `withAspect(1)` for equal units. */
+  def withAspect(ratio: Double): Figure = this + Scale.aspect(ratio = ratio)
 
   /** The color scale of a heatmap or a cocycle, if the figure has one. See [[Scale.color]]. */
   def withColorScale(
@@ -323,8 +353,19 @@ final case class Figure(
     angle: Optional[Double] = Optional.empty,
     font: Optional[String] = Optional.empty,
     color: Optional[String] = Optional.empty,
-    paint: Optional[Paint] = Optional.empty
-  ): Figure = this + Text(role, size, weight, italic, align, angle, font, color, paint)
+    paint: Optional[Paint] = Optional.empty,
+    limit: Optional[Double] = Optional.empty
+  ): Figure = this + Text(role, size, weight, italic, align, angle, font, color, paint, limit)
+
+  /** How the numbers of tick labels and the color bar are written. See [[Numbers]]. */
+  def withNumbers(
+    decimal: Optional[String] = Optional.empty,
+    grouping: Optional[String] = Optional.empty,
+    minus: Optional[String] = Optional.empty
+  ): Figure = this + Numbers(decimal, grouping, minus)
+
+  /** The decimal separator and minus sign of a locale (`withLocale("de")`). See [[Numbers.locale]]. */
+  def withLocale(tag: String): Figure = this + Numbers.locale(tag)
 
   /** The gridlines: width, color, dash, opacity. See [[Lines.grid]]. */
   def withGridLines(
@@ -453,6 +494,15 @@ final case class Figure(
 
   /** The heading over the legend's entries. */
   def withLegendTitle(text: String): Figure = withLabels(legend = text)
+
+  /** A line of text under the plot. */
+  def withCaption(text: String): Figure = withLabels(caption = text)
+
+  /** The letter or number of a panel, in the corner of the figure: `"(a)"`. */
+  def withTag(text: String): Figure = withLabels(tag = text)
+
+  /** What a screen reader says of the plot (the `<desc>` of the SVG). */
+  def withDescription(text: String): Figure = withLabels(description = text)
 
   /** The title of the color bar. */
   def withColorLabel(text: String): Figure = withLabels(color = text)

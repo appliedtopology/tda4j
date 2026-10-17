@@ -27,19 +27,27 @@ enum Transform:
     */
   case SymLog(linear: Double)
 
+  /** A transform of your own: `forward` gives the position of a value (`NaN` for a value with none), `backward` its
+    * inverse; ticks are round numbers of the data, as on a square-root axis. Two axes are on one scale when they share
+    * the same functions (so a `val` keeps one): `Transform.Custom("cube root", math.cbrt, v => v * v * v)`.
+    */
+  case Custom(name: String, forward: Double => Double, backward: Double => Double)
+
   /** The position of `v`, or `NaN` when `v` has none. */
   def apply(v: Double): Double = this match
-    case Identity  => v
-    case Log10     => if v > 0 then math.log10(v) else Double.NaN
-    case Sqrt      => math.signum(v) * math.sqrt(math.abs(v))
-    case SymLog(c) => math.signum(v) * math.log10(1 + math.abs(v) / c)
+    case Identity              => v
+    case Log10                 => if v > 0 then math.log10(v) else Double.NaN
+    case Sqrt                  => math.signum(v) * math.sqrt(math.abs(v))
+    case SymLog(c)             => math.signum(v) * math.log10(1 + math.abs(v) / c)
+    case Custom(_, forward, _) => forward(v)
 
   /** The value at position `u`: `inverse(apply(v)) == v` wherever `apply(v)` is a number. */
   def inverse(u: Double): Double = this match
-    case Identity  => u
-    case Log10     => math.pow(10, u)
-    case Sqrt      => math.signum(u) * u * u
-    case SymLog(c) => math.signum(u) * c * (math.pow(10, math.abs(u)) - 1)
+    case Identity               => u
+    case Log10                  => math.pow(10, u)
+    case Sqrt                   => math.signum(u) * u * u
+    case SymLog(c)              => math.signum(u) * c * (math.pow(10, math.abs(u)) - 1)
+    case Custom(_, _, backward) => backward(u)
 
   /** The lowest position for data that are not negative (zero on a square-root axis): an axis that widens its range to
     * keep an aspect ratio stops a margin below it, unless it has a negative value.
@@ -50,10 +58,11 @@ enum Transform:
 
   /** A word for the axis note: "log", "square-root". */
   def label: String = this match
-    case Identity  => "linear"
-    case Log10     => "log"
-    case Sqrt      => "square-root"
-    case SymLog(_) => "symmetric log"
+    case Identity           => "linear"
+    case Log10              => "log"
+    case Sqrt               => "square-root"
+    case SymLog(_)          => "symmetric log"
+    case Custom(name, _, _) => name
 
   /** About `target` round tick values inside `[lo, hi]` (data units): 1, 2, 5 times a power of ten for a linear or
     * square-root axis, powers of ten (with 2 and 5 between when there are few decades) for a log axis, and for a
@@ -61,8 +70,8 @@ enum Transform:
     * linear stretch).
     */
   def ticks(lo: Double, hi: Double, target: Int = 5): IndexedSeq[Double] = this match
-    case Identity | Sqrt => Svg.niceTicks(lo, hi, target)
-    case Log10           =>
+    case Identity | Sqrt | Custom(_, _, _) => Svg.niceTicks(lo, hi, target)
+    case Log10                             =>
       val positive = lo > 0 && hi > lo && hi.isFinite
       if !positive then IndexedSeq.empty
       else

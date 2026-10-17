@@ -53,6 +53,19 @@ final case class Board(plots: Seq[Figure], title: String = "") extends Plot:
   /** This board with the change `tweak` makes in every panel (`Labels(title = ...)` titles the board, the page). */
   def +(tweak: Tweak): Board = tweak.onBoard(this)
 
+  /** The panels lettered, as a paper does: `tagged()` is `(a)`, `(b)`, ...; `tagged("%s.", "A")` is `A.`, `B.`;
+    * `tagged("%s)", "1")` is `1)`, `2)`. `format` takes the letter at its `%s`, and `sequence` is where the letters
+    * start: `a`, `A` or `1`.
+    */
+  def tagged(format: String = "(%s)", sequence: String = "a"): Board =
+    require(format.contains("%s"), s"Board.tagged: the format \"$format\" has no %s for the letter, such as \"(%s)\"")
+    val label: Int => String = sequence match
+      case "a"   => i => ('a' + i).toChar.toString
+      case "A"   => i => ('A' + i).toChar.toString
+      case "1"   => i => (i + 1).toString
+      case other => throw IllegalArgumentException(s"Board.tagged: the sequence '$other' should be a, A or 1")
+    copy(plots = plots.zipWithIndex.map((p, i) => p.copy(tag = format.replace("%s", label(i)))))
+
   /** The panels on one scale, so that what is drawn at the same height means the same in each: every panel takes the
     * union of the panels' ranges on the axes asked for. The panels must draw those axes on the same [[Transform]].
     */
@@ -160,6 +173,10 @@ object Plot:
     case c: Chain[?, ?] => lifted(c.asInstanceOf[Chain[CellT, ?]])
     case s: Seq[?]      => s.asInstanceOf[Seq[(CellT, Double)]]
 
+  /** `H0: 16, H1: 1`: how many bars each degree has. */
+  private def degreeCounts(bars: Seq[PersistenceBar[Double, ?]]): String =
+    bars.groupBy(_.dim).toSeq.sortBy(_._1).map((k, bs) => s"H$k: ${bs.size}").mkString(", ")
+
   private def degreeLegend(degrees: Seq[Int], key: LegendItem.Key = LegendItem.Key.Dot): Vector[LegendItem] =
     degrees.distinct.sorted.map(k => LegendItem(s"H$k", Paint.Series(k), key, Shape.ofDegree(k))).toVector
 
@@ -227,6 +244,9 @@ object Plot:
     Figure(
       marks = marks.result(),
       title = title,
+      description =
+        s"$title: ${all.size} bars (${degreeCounts(all)}), each running from the birth to the death of a class " +
+          "along the filtration value" + (if essential then "; essential classes run to ∞" else ""),
       subtitle = s"${all.size} bars" + longest.fold("")(n => s", the $n longest of each degree shown"),
       x = Axis(
         label = "filtration value",
@@ -275,6 +295,9 @@ object Plot:
     Figure(
       marks = marks.result(),
       title = title,
+      description =
+        s"$title: ${all.size} points (${degreeCounts(all)}), birth on the horizontal axis and death on the " +
+          "vertical, above the diagonal" + (if essential then "; essential classes on the line marked ∞" else ""),
       subtitle = s"${all.size} bars",
       x = Axis(label = "birth", min = Some(a), max = Some(z), ticks = ticks),
       y = Axis(

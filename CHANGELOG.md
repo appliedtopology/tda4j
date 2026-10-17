@@ -56,6 +56,17 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 - The legend can go to the left, the top, or a corner inside the plot area (`LegendPosition.Left`, `Top`, `UpperLeft`,
   `UpperRight`, `LowerLeft`, `LowerRight`); `Style.legend` is optional, so that a style that names no place leaves a plot its
   own. `Plot.barcode(d, order = BarOrder.Persistence)` sorts the bars longest first (or by `Death`).
+- Axes and numbers: `Scale.x/y(reverse = true)` runs an axis backwards (a diagram's shaded half plane and a heatmap's boxes
+  follow), `padding` sets the room around the data, `Scale.aspect(ratio)` / `withAspect` the length of a y unit over an x unit
+  (`free = true` for none), `Transform.Custom(name, forward, backward)` is a scale of your own. `Numbers(decimal, grouping,
+  minus)` and `Numbers.locale("de")` (`withNumbers`, `withLocale`) write the numbers of the tick labels and the color bar
+  the way a locale or a journal does; `Text(role, limit = px)` cuts a text that is too long with an ellipsis, the whole text
+  its tooltip.
+- `Labels(caption, tag, description)` (`withCaption`, `withTag`, `withDescription`): a line under the plot, a panel letter in
+  the corner, and an SVG `<desc>` for a screen reader (a barcode and a diagram describe themselves); `Board.tagged()`
+  letters a board's panels `(a)`, `(b)`, ...; `Size.inches/cm/mm/pt` give a size in the units of a journal template.
+  Settings: `x-axis.reverse`, `x-axis.padding`, `aspect`, `numbers.locale/decimal/grouping/minus`, `size.width=3.4in`,
+  `caption.size`, `tag.weight`, `legend.limit`, ... (MATLAB `withSetting`, CLI `--set`).
 - `Board.shared()` puts the panels on one scale; `Mark.Rule` (a line across the plot at one value) and
   `Mark.Diagonal(offset)` (the line `y = x + offset`, drawn in the plot's own scales).
 - MATLAB: the figures returned by the `plot...` methods have the common tweaks as methods that take strings and numbers
@@ -67,6 +78,7 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 - A persistence diagram's legend is at its lower right, inside the shaded half plane, and the plot takes the room the legend
   column had. (`withLegend("right")` puts it back.)
+- A barcode and a diagram carry a `<desc>` (their counts by degree) in the SVG.
 - A board of panels with no background (`Style.clear`) saved as an `.svg` has no background rectangle of its own either.
 - A plot's colors for data follow its palette: a persistence image, an image, a cocycle and circular coordinates hold
   their values (`Paint.Value`) and a `ColorScale` colors them when drawn.

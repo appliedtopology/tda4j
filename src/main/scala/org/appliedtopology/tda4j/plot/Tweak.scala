@@ -62,6 +62,12 @@ object Tweak:
   *   a heading over the legend's entries
   * @param color
   *   the title of the color bar
+  * @param caption
+  *   a line of text under the plot
+  * @param tag
+  *   the letter of a panel of a board, in the corner of the figure (`"(a)"`)
+  * @param description
+  *   what a screen reader says of the plot, the `<desc>` of the SVG
   */
 final case class Labels(
   title: Optional[String] = Optional.empty,
@@ -69,7 +75,10 @@ final case class Labels(
   x: Optional[String] = Optional.empty,
   y: Optional[String] = Optional.empty,
   legend: Optional[String] = Optional.empty,
-  color: Optional[String] = Optional.empty
+  color: Optional[String] = Optional.empty,
+  caption: Optional[String] = Optional.empty,
+  tag: Optional[String] = Optional.empty,
+  description: Optional[String] = Optional.empty
 ) extends Tweak:
   def onFigure(f: Figure): Figure = f.copy(
     title = title.getOrElse(f.title),
@@ -77,11 +86,22 @@ final case class Labels(
     x = f.x.copy(label = x.getOrElse(f.x.label)),
     y = f.y.copy(label = y.getOrElse(f.y.label)),
     legendTitle = legend.getOrElse(f.legendTitle),
-    colorScale = f.colorScale.map(c => c.copy(label = color.getOrElse(c.label)))
+    colorScale = f.colorScale.map(c => c.copy(label = color.getOrElse(c.label))),
+    caption = caption.getOrElse(f.caption),
+    tag = tag.getOrElse(f.tag),
+    description = description.getOrElse(f.description)
   )
 
   override def onScene(s: Scene): Scene =
-    val axesWords = Seq("x" -> x, "y" -> y, "legend" -> legend, "color" -> color).collect {
+    val axesWords = Seq(
+      "x" -> x,
+      "y" -> y,
+      "legend" -> legend,
+      "color" -> color,
+      "caption" -> caption,
+      "tag" -> tag,
+      "description" -> description
+    ).collect {
       case (name, o) if !o.isEmpty => name
     }
     if axesWords.nonEmpty then
@@ -109,6 +129,28 @@ final case class Size(width: Optional[Int] = Optional.empty, height: Optional[In
   def onFigure(f: Figure): Figure = f.copy(width = width.getOrElse(f.width), height = height.getOrElse(f.height))
   override def onScene(s: Scene): Scene = s.copy(width = width.getOrElse(s.width), height = height.getOrElse(s.height))
 
+object Size:
+  // CSS pixels are 1/96 inch, which is what browsers, Inkscape and the SVG tools use
+  private def of(width: Optional[Double], height: Optional[Double], pixelsPerUnit: Double): Size =
+    def px(v: Optional[Double]): Optional[Int] = Optional(v.toOption.map(x => math.round(x * pixelsPerUnit).toInt))
+    Size(px(width), px(height))
+
+  /** A size in inches: `Size.inches(3.4, 2.6)` is 326 by 250 pixels (96 to the inch). */
+  def inches(width: Optional[Double] = Optional.empty, height: Optional[Double] = Optional.empty): Size =
+    of(width, height, 96.0)
+
+  /** A size in centimetres. */
+  def cm(width: Optional[Double] = Optional.empty, height: Optional[Double] = Optional.empty): Size =
+    of(width, height, 96.0 / 2.54)
+
+  /** A size in millimetres. */
+  def mm(width: Optional[Double] = Optional.empty, height: Optional[Double] = Optional.empty): Size =
+    of(width, height, 96.0 / 25.4)
+
+  /** A size in points (72 to the inch): a journal's column of 245 pt is 327 pixels. */
+  def pt(width: Optional[Double] = Optional.empty, height: Optional[Double] = Optional.empty): Size =
+    of(width, height, 96.0 / 72.0)
+
 /** Scales: how data become positions, colors and marks. The tweaks that change them:
   *
   *   - [[Scale.x]], [[Scale.y]], [[Scale.xy]]: an axis's transform (log, square root), limits, tick positions and
@@ -124,7 +166,8 @@ object Scale:
     * turn the gridlines and the whole axis (ticks, labels, line) on or off. On a log axis what is at 0 (an `H0` bar's
     * birth) sits on a `-∞` line below the lowest number: `minusInfinity = false` leaves it out and counts it instead,
     * `true` keeps the line even with nothing on it (panels that must line up). `position` puts the axis at the
-    * `Side.Top` of the plot (or back at the `Side.Bottom`).
+    * `Side.Top` of the plot (or back at the `Side.Bottom`); `reverse = true` runs it the other way; `padding` is the
+    * fraction of the data's extent left empty at each end (default 0.04) when `min` and `max` do not fix them.
     */
   def x(
     transform: Optional[Transform] = Optional.empty,
@@ -135,10 +178,12 @@ object Scale:
     grid: Optional[Boolean] = Optional.empty,
     visible: Optional[Boolean] = Optional.empty,
     minusInfinity: Optional[Boolean] = Optional.empty,
-    position: Optional[Side] = Optional.empty
+    position: Optional[Side] = Optional.empty,
+    reverse: Optional[Boolean] = Optional.empty,
+    padding: Optional[Double] = Optional.empty
   ): Tweak =
     checkSide("x", position)
-    Position(true, false, transform, min, max, breaks, format, grid, visible, minusInfinity, position)
+    Position(true, false, transform, min, max, breaks, format, grid, visible, minusInfinity, position, reverse, padding)
 
   /** The y axis; as [[x]], with `position` the `Side.Left` or `Side.Right` of the plot. */
   def y(
@@ -150,10 +195,12 @@ object Scale:
     grid: Optional[Boolean] = Optional.empty,
     visible: Optional[Boolean] = Optional.empty,
     minusInfinity: Optional[Boolean] = Optional.empty,
-    position: Optional[Side] = Optional.empty
+    position: Optional[Side] = Optional.empty,
+    reverse: Optional[Boolean] = Optional.empty,
+    padding: Optional[Double] = Optional.empty
   ): Tweak =
     checkSide("y", position)
-    Position(false, true, transform, min, max, breaks, format, grid, visible, minusInfinity, position)
+    Position(false, true, transform, min, max, breaks, format, grid, visible, minusInfinity, position, reverse, padding)
 
   /** Both axes alike: a log-log persistence diagram is `Scale.xy(Transform.Log10)`. */
   def xy(
@@ -164,8 +211,25 @@ object Scale:
     format: Optional[String] = Optional.empty,
     grid: Optional[Boolean] = Optional.empty,
     visible: Optional[Boolean] = Optional.empty,
-    minusInfinity: Optional[Boolean] = Optional.empty
-  ): Tweak = Position(true, true, transform, min, max, breaks, format, grid, visible, minusInfinity, Optional.empty)
+    minusInfinity: Optional[Boolean] = Optional.empty,
+    reverse: Optional[Boolean] = Optional.empty,
+    padding: Optional[Double] = Optional.empty
+  ): Tweak =
+    Position(
+      true,
+      true,
+      transform,
+      min,
+      max,
+      breaks,
+      format,
+      grid,
+      visible,
+      minusInfinity,
+      Optional.empty,
+      reverse,
+      padding
+    )
 
   /** The figure's color scale, if it has one (a heatmap, a persistence image, a cocycle, circular coordinates; any
     * other figure is left as it is). `min` and `max` set the values at the ends of the ramp, so that two figures can
@@ -214,6 +278,23 @@ object Scale:
       )
     )
 
+  /** The aspect ratio of the plot area: `ratio` is how many times as long a unit of y is as a unit of x (`1` is equal
+    * units, a circle round), the plot widening a range to keep it; `free = true` gives it up. Units are those of the
+    * axes' scales, so on a log axis a decade is a unit. The plots that draw geometry (a complex, a diagram) begin with
+    * equal units where both axes share a scale.
+    */
+  def aspect(ratio: Optional[Double] = Optional.empty, free: Optional[Boolean] = Optional.empty): Tweak =
+    ratio.toOption.foreach(r =>
+      require(r > 0 && r.isFinite, s"Scale.aspect: the ratio must be a positive number, not ${Svg.number(r)}")
+    )
+    require(ratio.isEmpty || free.isEmpty, "Scale.aspect: give a ratio or free = true, not both")
+    AspectChange(ratio.toOption, free.toOption.contains(true))
+
+  private final case class AspectChange(ratio: Option[Double], free: Boolean) extends Tweak:
+    def onFigure(f: Figure): Figure =
+      if free then f.copy(equalAspect = false, aspect = None) else f.copy(aspect = ratio.orElse(f.aspect))
+    override def toString: String = s"Scale.aspect($ratio, free = $free)"
+
   // an axis is on one of two sides: refused when the tweak is made, so a command line says so before anything is computed
   private def checkSide(which: String, position: Optional[Side]): Unit =
     position.toOption.foreach { side =>
@@ -235,7 +316,9 @@ object Scale:
     grid: Optional[Boolean],
     visible: Optional[Boolean],
     minusInfinity: Optional[Boolean],
-    position: Optional[Side]
+    position: Optional[Side],
+    reverse: Optional[Boolean],
+    padding: Optional[Double]
   ) extends Tweak:
     def onFigure(f: Figure): Figure =
       f.copy(x = if onX then update(f.x, "x") else f.x, y = if onY then update(f.y, "y") else f.y)
@@ -248,6 +331,12 @@ object Scale:
         case Transform.SymLog(c) =>
           require(c > 0 && c.isFinite, s"Scale.$which: a symmetric log axis needs a positive linear stretch, not $c")
         case _ => ()
+      padding.toOption.foreach(p =>
+        require(
+          p >= 0 && p <= 5 && p.isFinite,
+          s"Scale.$which: padding is a fraction of the data's extent, 0 to 5, not ${Svg.number(p)}"
+        )
+      )
       Seq("min" -> min, "max" -> max).foreach { (what, o) =>
         o.toOption.foreach(v => require(v.isFinite, s"Scale.$which: $what = ${Svg.number(v)} is not a number"))
       }
@@ -273,7 +362,9 @@ object Scale:
         grid = grid.getOrElse(a.grid),
         visible = visible.getOrElse(a.visible),
         minusInfinity = minusInfinity.toOption.orElse(a.minusInfinity),
-        side = position.toOption.orElse(a.side)
+        side = position.toOption.orElse(a.side),
+        reverse = reverse.getOrElse(a.reverse),
+        padding = padding.toOption.orElse(a.padding)
       )
 
   private final case class ColorChange(

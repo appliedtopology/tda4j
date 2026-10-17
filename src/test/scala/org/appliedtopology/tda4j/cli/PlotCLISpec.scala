@@ -176,6 +176,12 @@ class PlotCLISpec extends Specification:
       drawn("--set", "ticks.length=4") must not(beEqualTo(expected(identity)))
       drawn("--style", "print", "--set", "title.size=18") must
         beEqualTo(expected(_.withStyle("print").withSetting("title.size=18")))
+      drawn("--set", "x-axis.reverse=true", "--set", "size.width=4in", "--set", "numbers.decimal=,") must
+        beEqualTo(
+          expected(_.withSetting("x-axis.reverse=true").withSetting("size.width=4in").withSetting("numbers.decimal=,"))
+        )
+      drawn("--set", "size.width=4in") must contain("width=\"384\"")
+      drawn("--set", "numbers.decimal=,").contains("0,5") must beTrue
       drawn("--palette", "clear", "--style", "clear") must
         beEqualTo(expected(_.withPalette("clear").withStyle("clear")))
       drawn("--style", "print") must contain("Helvetica")
@@ -259,6 +265,8 @@ class PlotCLISpec extends Specification:
       val (c11, e11) = failure("--plot", "diagram", "--set", "x-axis=left")
       val (c12, e12) = failure("--plot", "input-3d", "--set", "tick-label.size=9")
       val (c13, e13) = failure("--set", "title.size=18")
+      val (c14, e14) = failure("--plot", "diagram", "--set", "numbers.separator=,")
+      val (c15, e15) = failure("--plot", "diagram", "--set", "size.width=wide")
       (c1 must beEqualTo(1)) and (e1 must contain("--title is for --plot")) and
         (c2 must beEqualTo(1)) and (e2 must contain(
           "unknown scale 'cubic'; expected one of linear, log, sqrt, symlog"
@@ -270,6 +278,8 @@ class PlotCLISpec extends Specification:
         (c11 must beEqualTo(1)) and (e11 must contain("the x axis is at the bottom or the top")) and
         (c12 must beEqualTo(1)) and (e12 must contain("a 3-D scene has a title")) and
         (c13 must beEqualTo(1)) and (e13 must contain("--set is for --plot")) and
+        (c14 must beEqualTo(1)) and (e14 must contain("expected one of locale, decimal, grouping, minus")) and
+        (c15 must beEqualTo(1)) and (e15 must contain("is not a number")) and
         (c4 must beEqualTo(1)) and (e4 must contain("expected one of auto, light, dark")) and
         (c5 must beEqualTo(1)) and (e5 must contain("between 100 and 20000")) and
         (c6 must beEqualTo(1)) and (e6 must contain("--x-scale is for 2-D plots")) and

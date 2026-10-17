@@ -6,10 +6,11 @@ import java.util.Locale
   *
   * `Title` and `Subtitle` head the plot; `AxisLabel` names an axis and `TickLabel` numbers it; `Legend` is a legend's
   * entries (and a color bar's numbers are `TickLabel`), `LegendTitle` its heading, `ColorTitle` the title of a color
-  * bar; `Note` is the small print under a plot (and a 3-D scene's hint).
+  * bar; `Note` is the small print under a plot (and a 3-D scene's hint); `Caption` is the plot's caption under it, and
+  * `Tag` the letter of a panel of a board ("(a)").
   */
 enum TextRole:
-  case Title, Subtitle, AxisLabel, TickLabel, Legend, LegendTitle, ColorTitle, Note
+  case Title, Subtitle, AxisLabel, TickLabel, Legend, LegendTitle, ColorTitle, Note, Caption, Tag
 
 object TextRole:
   private def key(s: String): String = s.filter(_.isLetter).toLowerCase(Locale.ROOT)
@@ -40,6 +41,8 @@ object TextRole:
     case LegendTitle => 12.0
     case ColorTitle  => 11.0
     case Note        => 11.0
+    case Caption     => 11.0
+    case Tag         => 16.0
 
 /** How heavy a text is, as CSS weights go. */
 enum Weight(val css: Int):
@@ -109,6 +112,9 @@ object Side:
   *   a CSS `font-family` list for this text alone
   * @param paint
   *   a palette role (`Paint.Muted`) or a color of your own (`Paint.Fixed("#333333")`)
+  * @param limit
+  *   the longest the text may be, in pixels: a longer one is cut and ends in `…`, with the whole text as its tooltip.
+  *   The width is estimated from the characters (0.6 of the size each), as a font is not known
   */
 final case class TextStyle(
   size: Option[Double] = None,
@@ -117,7 +123,8 @@ final case class TextStyle(
   align: Option[Anchor] = None,
   angle: Option[Double] = None,
   font: Option[String] = None,
-  paint: Option[Paint] = None
+  paint: Option[Paint] = None,
+  limit: Option[Double] = None
 ):
   /** `later` over this one: what `later` sets wins, the rest stays. */
   def merge(later: TextStyle): TextStyle = TextStyle(
@@ -127,7 +134,8 @@ final case class TextStyle(
     later.align.orElse(align),
     later.angle.orElse(angle),
     later.font.orElse(font),
-    later.paint.orElse(paint)
+    later.paint.orElse(paint),
+    later.limit.orElse(limit)
   )
 
 /** What to change about the look of a line of the plot (gridlines, an axis line, a tick mark, a frame). Whatever is
@@ -173,8 +181,18 @@ final case class TextFace(
   align: Anchor,
   angle: Double,
   font: Option[String],
-  paint: Paint
-)
+  paint: Paint,
+  limit: Option[Double] = None
+):
+  /** `text` as far as it fits within `limit` at the pixel size `px` (a character is taken to be 0.6 of it wide), and
+    * whether it was cut.
+    */
+  def fit(text: String, px: Double): (String, Boolean) =
+    limit match
+      case Some(l) if text.length * 0.6 * px > l =>
+        val keep = math.max(1, (l / (0.6 * px)).toInt - 1)
+        (text.take(keep) + "…", true)
+      case _ => (text, false)
 
 /** A line as it is drawn: every setting has a value. */
 final case class LineStroke(visible: Boolean, width: Double, paint: Paint, dash: Dash, opacity: Double)
@@ -197,6 +215,8 @@ final case class TickMarks(length: Double, direction: TickDirection, stroke: Lin
   *   the fill of the plot area, if it has one
   * @param marker
   *   what to change about every point's marker (the shape, size, opacity, fill and edge)
+  * @param numbers
+  *   how the numbers of the tick labels and the color bar are written
   */
 final case class Elements(
   text: Map[TextRole, TextStyle] = Map.empty,
@@ -207,7 +227,8 @@ final case class Elements(
   minorTicks: TickStyle = TickStyle(),
   frame: LineStyle = LineStyle(),
   panel: Option[(Paint, Double)] = None,
-  marker: MarkerStyle = MarkerStyle()
+  marker: MarkerStyle = MarkerStyle(),
+  numbers: NumberStyle = NumberStyle()
 ):
   /** This with `style` merged into what the text role `role` has. */
   def withText(role: TextRole, style: TextStyle): Elements =
@@ -224,7 +245,8 @@ final case class Elements(
       align = s.align.getOrElse(base.align),
       angle = s.angle.getOrElse(0.0),
       font = s.font,
-      paint = s.paint.getOrElse(base.paint)
+      paint = s.paint.getOrElse(base.paint),
+      limit = s.limit
     )
 
   private def stroke(line: LineStyle, base: LineStroke): LineStroke = LineStroke(
@@ -259,4 +281,50 @@ object Elements:
       case TextRole.LegendTitle => (Some(Weight.SemiBold), Anchor.Start, Paint.Secondary)
       case TextRole.ColorTitle  => (None, Anchor.Start, Paint.Secondary)
       case TextRole.Note        => (None, Anchor.Start, Paint.Muted)
+      case TextRole.Caption     => (None, Anchor.Start, Paint.Muted)
+      case TextRole.Tag         => (Some(Weight.SemiBold), Anchor.Start, Paint.Ink)
     TextFace(TextRole.defaultSize(role), weight, false, align, 0.0, None, paint)
+
+/** How the numbers of tick labels and color bars are written: the decimal separator, a separator between groups of
+  * three digits (none unless given) and the minus sign (`"−"`, the typographic one, is a common wish). Whatever is
+  * `None` stays as it is: `.`, no grouping, `-`.
+  */
+final case class NumberStyle(
+  decimal: Option[String] = None,
+  grouping: Option[String] = None,
+  minus: Option[String] = None
+):
+  def merge(later: NumberStyle): NumberStyle =
+    NumberStyle(later.decimal.orElse(decimal), later.grouping.orElse(grouping), later.minus.orElse(minus))
+
+  def isDefault: Boolean = decimal.isEmpty && grouping.isEmpty && minus.isEmpty
+
+  /** `text` with each number in it written as this style has it: `-1234.5` with `−`, `,` and a space is `−1 234,5`; a
+    * number with an exponent (`1e-4`) keeps it, with the minus sign; what is not a number (`H0`, `∞`) is left alone.
+    */
+  def apply(text: String): String =
+    if isDefault then text
+    else if text.startsWith("-∞") then minus.getOrElse("-") + text.drop(1)
+    else
+      NumberStyle.number.replaceAllIn(
+        text,
+        m =>
+          val sign = if m.group(1).isEmpty then "" else minus.getOrElse("-")
+          val whole = m.group(2)
+          val grouped = grouping.fold(whole) { g =>
+            whole.reverse.grouped(3).mkString(g.reverse).reverse
+          }
+          val frac = Option(m.group(3)).fold("")(f => decimal.getOrElse(".") + f)
+          val exp = Option(m.group(4)).fold("")(e => "e" + e.replace("-", minus.getOrElse("-")))
+          scala.util.matching.Regex.quoteReplacement(sign + grouped + frac + exp)
+      )
+
+object NumberStyle:
+  private val number = """(-?)(\d+)(?:\.(\d+))?(?:e(-?\d+))?""".r
+
+  /** The decimal separator and the minus sign of the locale `tag` (`de`, `fr`, `sv-SE`); grouping is not taken, as a
+    * plot's four-digit numbers are rarely grouped.
+    */
+  def locale(tag: String): NumberStyle =
+    val symbols = java.text.DecimalFormatSymbols.getInstance(java.util.Locale.forLanguageTag(tag.trim))
+    NumberStyle(Some(symbols.getDecimalSeparator.toString), None, Some(symbols.getMinusSign.toString))

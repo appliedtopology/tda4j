@@ -38,6 +38,14 @@ Every plot is an immutable value.
   beside the lowest number, a log axis with a negative value is drawn as a
   symmetric log (and says so under the plot), and only a value that is not a
   number is left out and counted.
+- An axis can run backwards (`Axis.reverse`), keeps a margin of `padding` of the data's extent, and the plot area can hold
+  an aspect ratio (`Figure.aspect`, which wins over the diagram's default of equal units); the renderer builds a frame
+  whose `px`/`py` mirror the line, and draws the diagonal's shade in the usual frame and mirrors it back, so a new mark
+  that is clipped to a half plane does the same. `Transform.Custom` holds two functions: compare axes by them, so keep
+  them in a `val`.
+- Text that carries numbers goes through `Elements.numbers` (`NumberStyle`) at the point it is drawn: write a number into
+  a label with `Svg.number` and let the renderer localize it, never format it with a symbol of your own. A text longer than
+  its `TextStyle.limit` is cut by `TextFace.fit`, which estimates a character at 0.6 em.
 - `over` stacks one figure on another, such as a cycle on its complex.
 - A figure is changed with a `Tweak` (`Tweak.scala`): `fig + tweak`. `Labels`,
   `Size`, `Style`, `Palette` and the `Scale` constructors are tweaks; see the

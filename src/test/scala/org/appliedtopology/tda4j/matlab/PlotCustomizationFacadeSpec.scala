@@ -43,6 +43,20 @@ class PlotCustomizationFacadeSpec extends Specification:
       fig.withStyle("print") must beEqualTo(fig + Style.print)
       fig.withPalette("clear") must beEqualTo(fig + Palette.clear)
       fig.withStyle("clear") must beEqualTo(fig + Style.clear)
+      fig.withCaption("c") must beEqualTo(fig + Labels(caption = "c"))
+      fig.withTag("(a)") must beEqualTo(fig + Labels(tag = "(a)"))
+      fig.withDescription("d") must beEqualTo(fig + Labels(description = "d"))
+      fig.withLocale("de") must beEqualTo(fig + Numbers.locale("de"))
+      fig.withAspect(2) must beEqualTo(fig + Scale.aspect(2))
+      fig.withSetting("x-axis.reverse=true") must beEqualTo(fig + Scale.x(reverse = true))
+      fig.withSetting("y-axis.padding=0.1") must beEqualTo(fig + Scale.y(padding = 0.1))
+      fig.withSetting("aspect=free") must beEqualTo(fig + Scale.aspect(free = true))
+      fig.withSetting("numbers.minus=−") must beEqualTo(fig + Numbers(minus = "−"))
+      fig.withSetting("numbers.grouping=space") must beEqualTo(fig + Numbers(grouping = " "))
+      fig.withSetting("caption.size=9") must beEqualTo(fig + Text(TextRole.Caption, size = 9))
+      fig.withSetting("legend.limit=80") must beEqualTo(fig + Text(TextRole.Legend, limit = 80))
+      fig.withSetting("size.width=3.4in") must beEqualTo(fig + Size.inches(width = 3.4))
+      fig.withSetting("size.height=8cm") must beEqualTo(fig + Size.cm(height = 8))
       fig.withSetting("grid.dash=dotted") must beEqualTo(fig + Lines.grid(dash = Dash.Dotted))
       fig.withSetting("marker.shape=pch:1") must beEqualTo(fig + Geom.points(shape = Shape.Circle, fill = false))
       fig.withSetting("degree-1.size=8") must beEqualTo(fig + Scale.degree(1, marker = MarkerStyle(size = Some(8))))
@@ -68,6 +82,11 @@ class PlotCustomizationFacadeSpec extends Specification:
         "withYLabel",
         "withLegendTitle",
         "withColorLabel",
+        "withCaption",
+        "withTag",
+        "withDescription",
+        "withLocale",
+        "withAspect",
         "withSize",
         "withXScale",
         "withYScale",

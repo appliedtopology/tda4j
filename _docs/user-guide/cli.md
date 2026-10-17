@@ -30,7 +30,9 @@ one:
   `.html`) or a page opened in the browser; `--bar`, `--dimension` and `--at` choose what (see
   [plotting](plotting.md#from-matlab-java-and-the-command-line)); `--title`, `--x-label`, `--y-label`, `--width`,
   `--height`, `--palette`, `--style`, `--theme`, `--text-scale`, `--set` (one change of an element, repeated: `--set
-  title.size=18`), `--x-scale` and `--y-scale` change how it looks
+  title.size=18`, `--set x-axis.reverse=true`, `--set size.width=3.4in`; the settings are listed in
+  [customizing a plot](plotting.md#finer-control-text-lines-the-plot-area-the-sides-of-the-axes)), `--x-scale` and
+  `--y-scale` change how it looks
   (`--palette print --style print` is a figure for a paper, `--palette clear --style clear` one with no background for
   a page of either color, black or white by `--theme`; see
   [customizing a plot](plotting.md#from-matlab-and-the-command-line));

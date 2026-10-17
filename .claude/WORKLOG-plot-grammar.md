@@ -161,6 +161,29 @@ The two real defects that made customizing hard (both found by reading, not by u
     `polygons`, `discs`, `lines`, still one grammar for MATLAB and `--set`. (f) A scene's canvas takes the same marker size,
     opacity and edge (the page's script changed; checked in Chromium: no errors, the same pixels at defaults).
 
+14. **Axes, numbers, text limits, captions, units** (project lead: items 4 to 10 of the survey, plus number format and
+    truncation). (a) A reversed axis is a property of the `Frame` (`revX`/`revY` flip `px`/`py`), not of the data: marks,
+    boxes (sorted by pixel) and the legend are untouched, and the diagonal's shade is computed in the usual frame and mirrored
+    back, because its corners are chosen by the half plane it covers. (b) `aspect` generalizes the old equal-aspect branch:
+    `aspectRatio = fig.aspect.orElse(equalAspect && xt == yt -> 1.0)`; `free = true` turns the diagram's default off.
+    (c) `padding` replaces the 4% constant only when given. (d) `Transform.Custom(name, forward, backward)`: equality is by
+    the functions (a case class with function fields), ticks as for the square root, so a user keeps a `val` for a shared
+    scale; the inverse is trusted, not checked. (e) `NumberStyle(decimal, grouping, minus)` runs over the text of a tick
+    label or a color-bar number at the point it is drawn; it recognizes a number by regex and leaves `H0` and `∞` alone,
+    and `-∞` gets the minus. `locale(tag)` takes decimal and minus from `DecimalFormatSymbols`, NOT the grouping (a
+    locale's grouping would put a thin space in `1 000` of a plot that shows `1000` by default). `Settings.parse` trims
+    values, which would lose a space: `numbers.grouping=space`, or a value of only blanks, is kept as written. (f) `limit`
+    is per text role, estimated at 0.6 em per character (no font metrics here), cutting to `keep - 1` characters and an
+    ellipsis, with the whole text as `<title>`; a spec pins the number, a mutation of the factor fails it. (g) Caption,
+    tag and description: `Caption` and `Tag` are text roles (so `caption.size=9` works with no new key), the caption
+    band is 16 px x its scale and the note lines rise above it, the tag sits at (6, 22) in 16 px semibold; the `<desc>` of a
+    barcode and a diagram is built from their counts (the one intentional change of default output besides the diagram's
+    legend). `Board.tagged(format, sequence)` letters `a`, `A` or `1`. A scene has none of the three and says so.
+    (h) `Size.inches/cm/mm/pt` is pixels at 96 per inch; `size.width=3.4in` is a setting. The text keeps its pixel size,
+    which the docs say. Not done: the legend box (background, frame), legend columns, an axis crossing at a value, a
+    `Settings` key for the caption's text (`withCaption`, `Labels(caption)` only). Gallery: 59 files byte-identical (ignoring
+    the added `<desc>`) and 13 new.
+
 ## What was verified
 
 - **Default plots are unchanged**: `Gallery` run on the original commit (a `git worktree`) and on the new code, SVGs

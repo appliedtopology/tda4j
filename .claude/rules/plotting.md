@@ -100,6 +100,11 @@ API). Rules:
 - **A marker's look is `MarkerStyle` layers** (`Markers.scala`), resolved in one place (`MarkerStyle.resolve`) for plots,
   legend keys and scenes; never read a shape off a mark directly. A new shape is a case of `Shape`, a drawing in
   `Svg.marker`, and an entry in `MarkerStyle.named`. The first four cases of `Shape` are the degree shapes, in order.
+- **Axes and numbers** (`WORKLOG-plot-grammar.md` decision 14): a reversed axis lives in the `Frame` (`revX`/`revY`), so a
+  new mark that covers a half plane draws in the usual frame and mirrors back, as the diagonal's shade does; `Figure.aspect`
+  beats the equal-aspect default; numbers pass through `Elements.numbers` where they are written (never format a number
+  with a symbol of your own); text is cut by `TextFace.fit` (an estimate of 0.6 em per character: say "estimated" in
+  docs). `Settings.parse` trims values, so a blank symbol is `space` or kept raw.
 - A plot's own default (a diagram's legend place) goes in the `Figure`, never in the `Style`, which a user replaces whole.
 - Default output is a contract: look at `Gallery` before and after a renderer change and diff the SVGs against a
   `git worktree` build of the old commit (ids normalized: `tda4j[0-9]+`); every difference must be explained.

@@ -1347,6 +1347,267 @@ class PlotGrammarSpec extends Specification:
     }
   }
 
+  /** Whether the point lies inside the polygon (an even-odd count of the edges a ray to the right crosses). */
+  private def inside(p: (Double, Double), poly: Seq[(Double, Double)]): Boolean =
+    poly.zip(poly.tail :+ poly.head).count { case ((x1, y1), (x2, y2)) =>
+      (y1 > p._2) != (y2 > p._2) && p._1 < (x2 - x1) * (p._2 - y1) / (y2 - y1) + x1
+    } % 2 == 1
+
+  "the axes of a plot" should {
+    val three =
+      Figure(marks = Vector(Mark.Points(IndexedSeq((1.0, 1.0), (2.0, 2.0), (3.0, 3.0)), IndexedSeq(Paint.Series(0)))))
+    def xs(svg: String) = drawnMarks(svg).map(number(_, "cx"))
+    def ys(svg: String) = drawnMarks(svg).map(number(_, "cy"))
+
+    "run backwards on request, and keep the boxes of a heatmap and the shade of a diagram where they belong" in {
+      val fig = three + Scale.xy(min = 0, max = 4)
+      val (xa, xb) = (xs(fig.svg(Theme.Light)), xs((fig + Scale.x(reverse = true)).svg(Theme.Light)))
+      xa must beEqualTo(xa.sorted) // 1, 2, 3 left to right
+      xb must beEqualTo(xb.sorted.reverse) // and right to left
+      ys((fig + Scale.y(reverse = true)).svg(Theme.Light)) must beEqualTo(
+        ys(fig.svg(Theme.Light)).sorted
+      ) // y runs down
+      val image = Plot.persistenceImage(circleDiagram, 0, resolution = 6, sigma = 0.05)
+      val boxes = drawnMarks((image + Scale.x(reverse = true) + Scale.y(reverse = true)).svg(Theme.Light))
+      boxes.forall(b => number(b, "width") > 0 && number(b, "height") > 0) must beTrue
+      boxes.size must beEqualTo(drawnMarks(image.svg(Theme.Light)).size)
+      // the half plane below the diagonal is where the data are below it, whichever way the axes run
+      val diagram = Plot.diagram(circleDiagram)
+      def shade(f: Figure) =
+        vertices(elements(f.svg(Theme.Light), "polygon").find(_.getAttribute("style").contains("fill-opacity:0.6")).get)
+      def corner(f: Figure, xBig: Boolean, yBig: Boolean) =
+        val (x0, y0, w0, h0) = plotArea(f.svg(Theme.Light))
+        val flipX = f.x.reverse
+        val flipY = f.y.reverse
+        val right = xBig != flipX // the large x is at the right, unless the axis runs backwards
+        val up = yBig != flipY
+        (if right then x0 + w0 - 1 else x0 + 1, if up then y0 + 1 else y0 + h0 - 1)
+      Seq((false, false), (true, false), (false, true), (true, true)).foreach { (rx, ry) =>
+        val f = diagram + Scale.x(reverse = rx) + Scale.y(reverse = ry)
+        inside(corner(f, xBig = true, yBig = false), shade(f)) must beTrue // large x, small y: below the diagonal
+        inside(corner(f, xBig = false, yBig = true), shade(f)) must beFalse // small x, large y: above it
+      }
+      success
+    }
+    "leave more or less room around the data when asked" in {
+      val fixed = three + Scale.y(min = 0, max = 4)
+      def first(f: Figure) =
+        val svg = f.svg(Theme.Light)
+        val (x0, y0, w0, h0) = plotArea(svg)
+        ((xs(svg).head - x0) / w0, xs(svg).last)
+      first(fixed)._1 must beCloseTo(0.04 * 2 / (2 + 2 * 0.04 * 2), 1e-3) // the default: 4% of the extent each side
+      first(fixed + Scale.x(padding = 0.25))._1 must beCloseTo(0.25 * 2 / (2 + 2 * 0.25 * 2), 1e-3)
+      first(fixed + Scale.x(padding = 0))._1 must beCloseTo(0.0, 1e-3) // the first point on the axis
+      (fixed + Scale.x(padding = -1)) must throwAn[IllegalArgumentException]("padding is a fraction")
+    }
+    "keep a ratio of the length of a y unit to an x unit, and give it up" in {
+      def unit(f: Figure) =
+        val unitSquare = f.copy(marks =
+          Vector(Mark.Points(IndexedSeq((0.0, 0.0), (1.0, 0.0), (0.0, 1.0)), IndexedSeq(Paint.Series(0))))
+        )
+        val svg = unitSquare.svg(Theme.Light)
+        val (cx, cy) = (xs(svg), ys(svg))
+        (cx(1) - cx(0), cy(0) - cy(2)) // the pixels of a unit of x, of a unit of y
+      val loose = Figure(width = 640, height = 300)
+      val (lx, ly) = unit(loose)
+      (ly / lx) must not(beCloseTo(2.0, 0.05)) // it is not so by itself
+      val (ax, ay) = unit(loose + Scale.aspect(2))
+      (ay / ax) must beCloseTo(2.0, 0.01)
+      val (hx, hy) = unit(loose + Scale.aspect(0.5))
+      (hy / hx) must beCloseTo(0.5, 0.01)
+      val equal = Plot.diagram(circleDiagram)
+      val (ex, ey) = unit(equal)
+      (ey / ex) must beCloseTo(1.0, 0.01) // a diagram begins with equal units
+      val (fx, fy) = unit(equal + Scale.aspect(free = true))
+      (fy / fx) must not(beCloseTo(1.0, 0.01))
+      Scale.aspect(0) must throwAn[IllegalArgumentException]("ratio must be a positive number")
+      Scale.aspect(2, free = true) must throwAn[IllegalArgumentException]("a ratio or free = true, not both")
+      loose.withAspect(2) must beEqualTo(loose + Scale.aspect(2))
+    }
+    "be drawn on a scale of your own" in {
+      val cube = Transform.Custom("cube root", math.cbrt, v => v * v * v)
+      val fig = Figure(marks =
+        Vector(Mark.Points(IndexedSeq((1.0, 1.0), (8.0, 1.0), (27.0, 1.0)), IndexedSeq(Paint.Series(0))))
+      ) +
+        Scale.x(cube, min = 1, max = 27)
+      val at = xs(fig.svg(Theme.Light))
+      (at(1) - at(0)) must beCloseTo(at(2) - at(1), 0.05) // 1, 8 and 27 are one cube root apart
+      val plain = xs((fig + Scale.x(Transform.Identity)).svg(Theme.Light))
+      (plain(1) - plain(0)) must not(beCloseTo(plain(2) - plain(1), 0.5))
+      cube.label must beEqualTo("cube root")
+      cube.inverse(cube(8.0)) must beCloseTo(8.0, 1e-9)
+    }
+    "be written as settings" in {
+      val f = three
+      def axes(spec: String) = f + Settings.parse(spec)
+      axes("x-axis.reverse=true").x.reverse must beTrue
+      axes("y-axis.padding=0.1").y.padding must beSome(0.1)
+      axes("x-axis.side=top").x.side must beSome(Side.Top)
+      axes("y-axis.min=0").y.min must beSome(0.0)
+      axes("x-axis.max=5").x.max must beSome(5.0)
+      axes("x-axis.format=%.1f").x.format must beSome("%.1f")
+      axes("aspect=2").aspect must beSome(2.0)
+      axes("aspect=free").equalAspect must beFalse
+      Settings.parse("x-axis.side=left") must throwAn[IllegalArgumentException](
+        "the x axis is at the bottom or the top"
+      )
+      Settings.parse("x-axis.colour=red") must throwAn[IllegalArgumentException](
+        "unknown property 'colour' of x-axis; expected one of side, reverse"
+      )
+      Settings.parse("aspect=wide") must throwAn[IllegalArgumentException]("'wide' is not a number")
+    }
+  }
+
+  "the numbers of a plot" should {
+    val signed = Figure(marks = Vector(Mark.Points(IndexedSeq((-1.0, -1.0), (1.0, 1.0)), IndexedSeq(Paint.Series(0)))))
+    def tickWords(svg: String) = elements(svg, "text").filter(_.getTextContent.exists(_.isDigit)).map(_.getTextContent)
+
+    "be written with the decimal separator and the minus sign asked for, and nothing else" in {
+      val plain = tickWords(signed.svg(Theme.Light))
+      plain must contain("-0.5")
+      val german = tickWords((signed + Numbers(decimal = ",", minus = "−")).svg(Theme.Light))
+      german must contain("−0,5")
+      german must not(contain("-0.5"))
+      german.size must beEqualTo(plain.size)
+      german.forall(w => !w.contains("-") && !w.contains(".")) must beTrue
+      tickWords((signed + Numbers.locale("sv")).svg(Theme.Light)) must contain(
+        "−0,5"
+      ) // Swedish: a comma and a true minus
+      words((Plot.barcode(circleDiagram) + Numbers(minus = "−", decimal = ",")).svg()) must contain("H0") // not numbers
+    }
+    "group the digits of a large number, and write the color bar's numbers the same" in {
+      val big =
+        Figure(marks = Vector(Mark.Points(IndexedSeq((0.0, 0.0), (30000.0, 30000.0)), IndexedSeq(Paint.Series(0)))))
+      tickWords((big + Numbers(grouping = " ")).svg(Theme.Light)) must contain("10 000")
+      val image = Plot.persistenceImage(circleDiagram, 0, resolution = 6, sigma = 0.05)
+      words((image + Numbers(decimal = ",")).svg()).exists(w => w.matches("0,[0-9]+")) must beTrue
+      words(image.svg()).exists(w => w.matches("0\\.[0-9]+")) must beTrue
+    }
+    "be a style that writes numbers, and leaves anything that is not one" in {
+      val de = NumberStyle(decimal = Some(","), minus = Some("−"))
+      de("-0.25") must beEqualTo("−0,25")
+      de("1e-4") must beEqualTo("1e−4")
+      de("∞") must beEqualTo("∞")
+      de("-∞") must beEqualTo("−∞")
+      de("H0") must beEqualTo("H0")
+      NumberStyle(grouping = Some(" "), decimal = Some(","))("1234567.5") must beEqualTo("1 234 567,5")
+      NumberStyle()("-0.25") must beEqualTo("-0.25")
+      Numbers(decimal = "1") must throwAn[IllegalArgumentException]("not a digit")
+      Numbers(minus = "toolong") must throwAn[IllegalArgumentException]("one to three characters")
+    }
+    "be written as settings" in {
+      (three + Settings.parse("numbers.locale=sv")).elements.numbers.decimal must beSome(",")
+      (three + Settings.parse("numbers.minus=−")).elements.numbers.minus must beSome("−")
+      (three + Settings.parse("numbers.grouping= ")).elements.numbers.grouping must beSome(" ")
+      (three + Settings.parse("numbers.grouping=space")).elements.numbers.grouping must beSome(" ")
+      Settings.parse("numbers.separator=,") must throwAn[IllegalArgumentException](
+        "expected one of locale, decimal, grouping, minus"
+      )
+    }
+  }
+
+  private lazy val three =
+    Figure(marks = Vector(Mark.Points(IndexedSeq((1.0, 1.0), (2.0, 2.0), (3.0, 3.0)), IndexedSeq(Paint.Series(0)))))
+
+  "a long text" should {
+    val fig = Plot.diagram(circleDiagram)
+    def at(svg: String, start: String) =
+      elements(svg, "text").find(_.getFirstChild.getTextContent.startsWith(start)).get
+
+    "be cut to its limit, ending in an ellipsis, with the whole text as its tooltip" in {
+      val cut = at((fig + Text(TextRole.Title, limit = 100)).svg(Theme.Light), "Persistenc")
+      cut.getFirstChild.getTextContent must beEqualTo("Persistenc…") // 100 px of 9 px characters, one for the dots
+      elements((fig + Text(TextRole.Title, limit = 100)).svg(Theme.Light), "title").map(_.getTextContent) must
+        contain("Persistence diagram")
+      at((fig + Text(TextRole.Title, limit = 400)).svg(Theme.Light), "Persistence").getTextContent must
+        beEqualTo("Persistence diagram") // fits: nothing cut, no tooltip
+      val legend = Figure(marks = three.marks, legend = Vector(LegendItem("a rather long label", Paint.Series(0)))) +
+        Text(TextRole.Legend, limit = 60)
+      at(legend.svg(Theme.Light), "a rathe").getFirstChild.getTextContent must beEqualTo("a rathe…")
+    }
+    "refuse a limit that means nothing" in {
+      Text(TextRole.Title, limit = 0) must throwAn[IllegalArgumentException]("limit must be a positive number")
+      Settings.parse("title.limit=big") must throwAn[IllegalArgumentException]("'big' is not a number")
+      (fig + Settings.parse("legend.limit=80")).elements.face(TextRole.Legend).limit must beSome(80.0)
+    }
+  }
+
+  "the caption, tag and description of a plot" should {
+    val fig = Plot.diagram(circleDiagram)
+    val plain = fig.svg(Theme.Light)
+    val (x0, y0, w0, h0) = plotArea(plain)
+    def at(svg: String, words: String) = elements(svg, "text").find(_.getTextContent == words).get
+
+    "put a caption under the plot, and take its room" in {
+      val svg = (fig + Labels(caption = "Source: a noisy circle")).svg(Theme.Light)
+      val caption = at(svg, "Source: a noisy circle")
+      number(caption, "y") must beCloseTo(fig.height - 4.0 * 1.0, 0.02)
+      number(caption, "x") must beCloseTo(x0, 0.02) // at the left of the plot area
+      plotArea(svg)._4 must beCloseTo(h0 - 16.0, 0.02) // 16 px of room
+      at((fig + Labels(caption = "c") + Text(TextRole.Caption, align = Anchor.End)).svg(Theme.Light), "c")
+        .getAttribute("text-anchor") must
+        beEqualTo("end")
+      textsOnPage(svg) must beTrue
+      // the small print rises above it
+      val noted = Figure(marks =
+        Vector(Mark.Points(IndexedSeq((1.0, Double.NaN), (2.0, 2.0)), IndexedSeq(Paint.Series(0))))
+      ) + Labels(caption = "cap")
+      val ns = noted.svg(Theme.Light)
+      number(elements(ns, "text").find(_.getTextContent.contains("not shown")).get, "y") must beLessThan(
+        number(at(ns, "cap"), "y") - 10
+      )
+    }
+    "put a tag in the corner, and a description where a screen reader finds it" in {
+      val tagged = (fig + Labels(tag = "(a)")).svg(Theme.Light)
+      val tag = at(tagged, "(a)")
+      (number(tag, "x"), number(tag, "y"), number(tag, "font-size")) must beEqualTo((6.0, 22.0, 16.0))
+      tag.getAttribute("font-weight") must beEqualTo("600")
+      elements(plain, "desc").map(_.getTextContent).head must contain("Persistence diagram: 17 points (H0: 16, H1: 1)")
+      elements((fig + Labels(description = "Loops of a circle")).svg(Theme.Light), "desc").map(_.getTextContent) must
+        beEqualTo(Seq("Loops of a circle"))
+      elements(dots(1).svg(Theme.Light), "desc") must beEmpty // a plot made by hand has none unless given
+      elements(Plot.barcode(circleDiagram).svg(Theme.Light), "desc").head.getTextContent must contain(
+        "17 bars (H0: 16, H1: 1)"
+      )
+    }
+    "letter the panels of a board" in {
+      val board = Plot.side(Plot.diagram(circleDiagram), Plot.barcode(circleDiagram))
+      board.tagged().plots.map(_.tag) must beEqualTo(Seq("(a)", "(b)"))
+      board.tagged("%s.", "A").plots.map(_.tag) must beEqualTo(Seq("A.", "B."))
+      board.tagged("%s)", "1").plots.map(_.tag) must beEqualTo(Seq("1)", "2)"))
+      board.tagged().svgFile(Theme.Light) must contain(">(b)</text>")
+      board.tagged("tag") must throwAn[IllegalArgumentException]("has no %s for the letter")
+      board.tagged("%s", "i") must throwAn[IllegalArgumentException]("should be a, A or 1")
+    }
+    "belong to a figure, not to a scene" in {
+      Plot.points3D(circle) + Labels(caption = "c") must throwAn[UnsupportedOperationException]("(caption)")
+      fig.withCaption("c") must beEqualTo(fig + Labels(caption = "c"))
+      fig.withTag("(a)") must beEqualTo(fig + Labels(tag = "(a)"))
+      fig.withDescription("d") must beEqualTo(fig + Labels(description = "d"))
+    }
+  }
+
+  "a size in physical units" should {
+    "be that many pixels at 96 to the inch" in {
+      Size.inches(3.4, 2.6) must beEqualTo(Size(326, 250))
+      Size.cm(8.6, 6) must beEqualTo(Size(325, 227))
+      Size.mm(86) must beEqualTo(Size(width = 325))
+      Size.pt(245) must beEqualTo(Size(width = 327)) // a journal column
+      Size.inches(height = 3) must beEqualTo(Size(height = 288))
+      Plot.diagram(circleDiagram).withSize(Size.inches(3.4, 2.6).width.getOrElse(0), 250).width must beEqualTo(326)
+    }
+    "be written with a unit in a setting" in {
+      val fig = Plot.diagram(circleDiagram)
+      val sized = fig + Settings.parse("size.width=3.4in") + Settings.parse("size.height=6.5cm")
+      (sized.width, sized.height) must beEqualTo((326, 246))
+      (fig + Settings.parse("size.width=300")).width must beEqualTo(300)
+      (fig + Settings.parse("size.height=245pt")).height must beEqualTo(327)
+      (fig + Settings.parse("size.width=86mm")).width must beEqualTo(325)
+      Settings.parse("size.width=wide") must throwAn[IllegalArgumentException]("is not a number")
+      Settings.parse("size.depth=3") must throwAn[IllegalArgumentException]("expected one of width, height")
+    }
+  }
+
   "labels and size" should {
     val fig = Plot.diagram(circleDiagram)
     "put the words given in the places they belong" in {

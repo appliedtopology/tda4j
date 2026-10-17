@@ -65,13 +65,15 @@ object Svg:
     w: Double,
     h: Double,
     bandX: Option[Double],
-    bandY: Option[Double]
+    bandY: Option[Double],
+    revX: Boolean = false,
+    revY: Boolean = false
   ):
     // 0 on a log axis has no position of its own: it is on the `-∞` line, `bandX`/`bandY` in transformed space
     private def tx(x: Double): Double = if x == 0.0 && bandX.isDefined then bandX.get else xt(x)
     private def ty(y: Double): Double = if y == 0.0 && bandY.isDefined then bandY.get else yt(y)
-    def px(x: Double): Double = left + (tx(x) - x0) / (x1 - x0) * w
-    def py(y: Double): Double = top + h - (ty(y) - y0) / (y1 - y0) * h
+    def px(x: Double): Double = left + (if revX then x1 - tx(x) else tx(x) - x0) / (x1 - x0) * w
+    def py(y: Double): Double = top + h - (if revY then y1 - ty(y) else ty(y) - y0) / (y1 - y0) * h
 
     /** Pixels per data unit along x: the radius of a disc on a linear axis. */
     def scale: Double = w / (x1 - x0)
@@ -175,7 +177,7 @@ object Svg:
     (fixedLo, fixedHi) match
       case (Some(l), Some(h)) => (l, h)
       case _                  =>
-        val (pl, pu) = padded(lo, hi, 0.04)
+        val (pl, pu) = padded(lo, hi, a.padding.getOrElse(0.04))
         (fixedLo.getOrElse(pl), fixedHi.getOrElse(pu))
 
   private def checkRange(name: String, tr: Transform, lo: Double, hi: Double): Unit =
@@ -223,6 +225,12 @@ object Svg:
       val f = face(r)
       f.weight.fold("")(wt => s""" font-weight="${wt.css}"""") + (if f.italic then """ font-style="italic"""" else "") +
         f.font.fold("")(ff => s""" font-family="${escape(ff)}"""")
+
+    // a text's content, cut to the role's limit (the whole text is then its tooltip), and a number as the plot writes them
+    def body(r: TextRole, text: String): String =
+      val (shown, cut) = face(r).fit(text, px(r))
+      escape(shown) + (if cut then s"<title>${escape(text)}</title>" else "")
+    def loc(text: String): String = el.numbers(text)
 
     def paint(p: Paint): String = p match
       case Paint.Value(v) =>
@@ -355,7 +363,9 @@ object Svg:
         s"$notShown ${if notShown == 1 then "mark" else "marks"} not shown: $why"
       }
     val noteBand = 14.0 * sc(TextRole.Note) * notes.size
-    val bottom = axisBand + (if legendPlace == LegendPosition.Bottom then legendBand else 0.0) + noteBand
+    val captionBand = if fig.caption.isEmpty then 0.0 else 16.0 * sc(TextRole.Caption)
+    val bottom =
+      axisBand + (if legendPlace == LegendPosition.Bottom then legendBand else 0.0) + noteBand + captionBand
     val h = math.max(40.0, fig.height - top - bottom)
 
     // the range shown
@@ -372,21 +382,25 @@ object Svg:
     val (lengthX, lengthY) = (math.max(1.0, w - reserveX), math.max(1.0, h - reserveY))
     // Equal units on both axes mean something only when both are on one scale (log-log: a decade is as long either way).
     // Widening a range stops a margin below what the scale can place (nothing is below 0 on a square-root axis).
-    if fig.equalAspect && xt == yt then
+    // (`aspect` asks for another ratio of the length of a y unit to an x unit, and takes it whatever the scales)
+    val aspectRatio = fig.aspect.orElse(Option.when(fig.equalAspect && xt == yt)(1.0))
+    aspectRatio.foreach { ratio =>
       val sx = (x1 - x0) / lengthX
       val sy = (y1 - y0) / lengthY
-      if sx > sy then
+      val wanted = sx / ratio // data per pixel along y, for a y unit to be `ratio` times as long as an x unit
+      if sy < wanted then
         val c = (y0 + y1) / 2
-        y0 = c - sx * lengthY / 2; y1 = c + sx * lengthY / 2
+        y0 = c - wanted * lengthY / 2; y1 = c + wanted * lengthY / 2
       else
         val c = (x0 + x1) / 2
-        x0 = c - sy * lengthX / 2; x1 = c + sy * lengthX / 2
+        x0 = c - sy * ratio * lengthX / 2; x1 = c + sy * ratio * lengthX / 2
       val lowestX = (if signsX.negative then Double.NegativeInfinity else xt.floor) - 0.04 * (x1 - x0)
       if x0 < lowestX then
         x1 += lowestX - x0; x0 = lowestX
       val lowestY = (if signsY.negative then Double.NegativeInfinity else yt.floor) - 0.04 * (y1 - y0)
       if y0 < lowestY then
         y1 += lowestY - y0; y0 = lowestY
+    }
     // where the numbers of an axis start, and the `-∞` line 34 pixels below that, with the room for a marker under it
     val (startX, startY) = (x0, y0)
     var (bandX, bandY) = (Option.empty[Double], Option.empty[Double])
@@ -398,13 +412,14 @@ object Svg:
       val unit = (y1 - y0) / lengthY
       bandY = Some(y0 - 34.0 * ts * unit)
       y0 -= reserveY * unit
-    val f = Frame(xt, yt, x0, x1, y0, y1, left, top, w, h, bandX, bandY)
+    val f = Frame(xt, yt, x0, x1, y0, y1, left, top, w, h, bandX, bandY, fig.x.reverse, fig.y.reverse)
 
     sb ++= s"""<svg xmlns="http://www.w3.org/2000/svg" id="$id" width="${fig.width}" height="${fig.height}" viewBox="0 0 ${fig.width} ${fig.height}" font-family="${escape(
         style.font
       )}" role="img">"""
     if theme == Theme.Auto then sb ++= s"<style>${pal.cssVariables(s"#$id")}</style>"
     if fig.title.nonEmpty then sb ++= s"<title>${escape(fig.title)}</title>"
+    if fig.description.nonEmpty then sb ++= s"<desc>${escape(fig.description)}</desc>"
     if !style.transparent then
       sb ++= s"""<rect width="${fig.width}" height="${fig.height}" style="fill:${paint(Paint.Surface)}"/>"""
     sb ++= s"""<defs><clipPath id="$id-clip"><rect x="${fmt(left)}" y="${fmt(top)}" width="${fmt(w)}" height="${fmt(
@@ -424,7 +439,7 @@ object Svg:
       val (tx, anchor) = alignedAt(TextRole.Title)
       sb ++= s"""<text x="${fmt(tx)}" y="${fmt(titleBase)}"$anchor style="fill:${paint(
           face(TextRole.Title).paint
-        )}" font-size="${fmt(titleSize)}"${extra(TextRole.Title)}>${escape(fig.title)}</text>"""
+        )}" font-size="${fmt(titleSize)}"${extra(TextRole.Title)}>${body(TextRole.Title, fig.title)}</text>"""
     if fig.subtitle.nonEmpty then
       val (sx, anchor) = alignedAt(TextRole.Subtitle)
       val subSize = px(TextRole.Subtitle)
@@ -434,7 +449,7 @@ object Svg:
         else titleBase + (subSize - 12.0 * ts)
       sb ++= s"""<text x="${fmt(sx)}" y="${fmt(sy)}"$anchor style="fill:${paint(
           face(TextRole.Subtitle).paint
-        )}" font-size="${fmt(subSize)}"${extra(TextRole.Subtitle)}>${escape(fig.subtitle)}</text>"""
+        )}" font-size="${fmt(subSize)}"${extra(TextRole.Subtitle)}>${body(TextRole.Subtitle, fig.subtitle)}</text>"""
 
     // the plot area's own fill
     el.panel.foreach { (fill, opacity) =>
@@ -525,7 +540,7 @@ object Svg:
           if tickAngle == 0.0 then "" else s""" transform="rotate(${fmt(-tickAngle)} ${fmt(at)} ${fmt(labelY)})""""
         s"""<text x="${fmt(at)}" y="${fmt(labelY)}"$turn text-anchor="$tickAnchor" font-size="$tickSize"${extra(
             TextRole.TickLabel
-          )} style="fill:$tickFill;font-variant-numeric:tabular-nums">${escape(label)}</text>"""
+          )} style="fill:$tickFill;font-variant-numeric:tabular-nums">${body(TextRole.TickLabel, loc(label))}</text>"""
       inX.foreach((t, label) => sb ++= tickText(f.px(t), label))
       if fig.x.label.nonEmpty then
         val (lx, anchor) = face(TextRole.AxisLabel).align match
@@ -537,7 +552,8 @@ object Svg:
           else xAxisY + markOut + 30.0 * sTick + 6.0 * sAxis + slant
         sb ++= s"""<text x="${fmt(lx)}" y="${fmt(labelBase)}" text-anchor="$anchor" font-size="${fmt(
             px(TextRole.AxisLabel)
-          )}"${extra(TextRole.AxisLabel)} style="fill:${paint(face(TextRole.AxisLabel).paint)}">${escape(
+          )}"${extra(TextRole.AxisLabel)} style="fill:${paint(face(TextRole.AxisLabel).paint)}">${body(
+            TextRole.AxisLabel,
             fig.x.label
           )}</text>"""
     if fig.y.visible then
@@ -557,9 +573,7 @@ object Svg:
             f.py(t) + 4 * sTick
           )}" text-anchor="$numberAnchor" font-size="$tickSize"${extra(
             TextRole.TickLabel
-          )} style="fill:$tickFill;font-variant-numeric:tabular-nums">${escape(
-            label
-          )}</text>"""
+          )} style="fill:$tickFill;font-variant-numeric:tabular-nums">${body(TextRole.TickLabel, loc(label))}</text>"""
       )
       if fig.y.label.nonEmpty then
         val (cy, anchor) = face(TextRole.AxisLabel).align match
@@ -575,7 +589,7 @@ object Svg:
             TextRole.AxisLabel
           )} style="fill:${paint(
             face(TextRole.AxisLabel).paint
-          )}">${escape(fig.y.label)}</text>"""
+          )}">${body(TextRole.AxisLabel, fig.y.label)}</text>"""
 
     // the `-∞` line, as the `∞` line of a diagram: where what is at 0 on a log axis sits
     val minusInfinity = number(Double.NegativeInfinity)
@@ -591,7 +605,7 @@ object Svg:
             labelY
           )}" text-anchor="middle" font-size="$tickSize"${extra(
             TextRole.TickLabel
-          )} style="fill:$tickFill;font-variant-numeric:tabular-nums">$minusInfinity</text>"""
+          )} style="fill:$tickFill;font-variant-numeric:tabular-nums">${loc(minusInfinity)}</text>"""
     }
     bandY.foreach { _ =>
       val by = f.py(0.0)
@@ -605,7 +619,7 @@ object Svg:
             by + 4 * sTick
           )}" text-anchor="${if yRight then "start" else "end"}" font-size="$tickSize"${extra(
             TextRole.TickLabel
-          )} style="fill:$tickFill;font-variant-numeric:tabular-nums">$minusInfinity</text>"""
+          )} style="fill:$tickFill;font-variant-numeric:tabular-nums">${loc(minusInfinity)}</text>"""
     }
 
     // marks
@@ -648,8 +662,11 @@ object Svg:
         m.boxes.indices.foreach(i =>
           val (bx0, by0, bx1, by1) = m.boxes(i)
           if ok((bx0, by0)) && ok((bx1, by1)) then
-            val (px0, px1) = (f.px(math.min(bx0, bx1)), f.px(math.max(bx0, bx1)))
-            val (py0, py1) = (f.py(math.max(by0, by1)), f.py(math.min(by0, by1)))
+            // an axis that runs backwards puts the larger value first, so the corners are sorted on the page
+            val (ax, bx) = (f.px(bx0), f.px(bx1))
+            val (ay, by) = (f.py(by0), f.py(by1))
+            val (px0, px1) = (math.min(ax, bx), math.max(ax, bx))
+            val (py0, py1) = (math.min(ay, by), math.max(ay, by))
             item(
               s"""<rect x="${fmt(px0)}" y="${fmt(py0)}" width="${fmt(px1 - px0 + 0.3)}" height="${fmt(
                   py1 - py0 + 0.3
@@ -736,9 +753,16 @@ object Svg:
             m.shade.foreach { shade =>
               // the corners are far outside the plot, which the clip trims: the polygon is the region below the line
               val far = 4.0 * (fig.width + fig.height)
+              // with an axis running backwards the plot is its mirror image: shade in the usual one, and mirror back
+              def mirror(p: XY): XY =
+                (
+                  if fig.x.reverse then 2 * left + w - p._1 else p._1,
+                  if fig.y.reverse then 2 * top + h - p._2 else p._2
+                )
+              val usual = line.map(mirror)
               val corners =
-                Seq((left + w + far, top - far), (left + w + far, top + h + far), (line.head._1, top + h + far))
-              val pts = (line ++ corners).map((px, py) => s"${fmt(px)},${fmt(py)}").mkString(" ")
+                Seq((left + w + far, top - far), (left + w + far, top + h + far), (usual.head._1, top + h + far))
+              val pts = (usual ++ corners).map(mirror).map((px, py) => s"${fmt(px)},${fmt(py)}").mkString(" ")
               sb ++= s"""<polygon points="$pts" style="fill:${paint(shade)};fill-opacity:${m.shadeOpacity}"/>"""
             }
             val pts = line.map((px, py) => s"${fmt(px)},${fmt(py)}").mkString(" ")
@@ -772,7 +796,7 @@ object Svg:
     def legendText(text: String, lx: Double, cy: Double, role: TextRole): String =
       s"""<text x="${fmt(lx)}" y="${fmt(cy + 4 * sc(role))}" font-size="${fmt(px(role))}"${extra(
           role
-        )} style="fill:${paint(face(role).paint)}">${escape(text)}</text>"""
+        )} style="fill:${paint(face(role).paint)}">${body(role, text)}</text>"""
     var lx = left + w + rightAxisBand + 18
     // the entries in a column from `x`, the title's line (if there is a title) centred at `firstCy`
     def legendList(x: Double, firstCy: Double): Unit =
@@ -831,15 +855,16 @@ object Svg:
           )}" style="fill:${cb.barColor(t, pal)}"/>"""
       }
       sb ++= s"""<text x="${fmt(bx + 16 * ts)}" y="${fmt(top + 4 * sTick)}" $numberStyle>${escape(
-          number(cb.hi)
+          loc(number(cb.hi))
         )}</text>"""
       sb ++= s"""<text x="${fmt(bx + 16 * ts)}" y="${fmt(top + bh + 4 * sTick)}" $numberStyle>${escape(
-          number(cb.lo)
+          loc(number(cb.lo))
         )}</text>"""
       if cb.label.nonEmpty then
         sb ++= s"""<text x="${fmt(bx)}" y="${fmt(top + bh + 22 * sc(TextRole.ColorTitle))}" font-size="${fmt(
             px(TextRole.ColorTitle)
-          )}"${extra(TextRole.ColorTitle)} style="fill:${paint(face(TextRole.ColorTitle).paint)}">${escape(
+          )}"${extra(TextRole.ColorTitle)} style="fill:${paint(face(TextRole.ColorTitle).paint)}">${body(
+            TextRole.ColorTitle,
             cb.label
           )}</text>"""
     }
@@ -848,11 +873,24 @@ object Svg:
     val sNote = sc(TextRole.Note)
     val (noteX, noteAnchor) = alignedAt(TextRole.Note)
     notes.zipWithIndex.foreach { (note, k) =>
-      val baseline = fig.height - 4 * sNote - 14 * sNote * (notes.size - 1 - k)
+      val baseline = fig.height - captionBand - 4 * sNote - 14 * sNote * (notes.size - 1 - k)
       sb ++= s"""<text x="${fmt(noteX)}" y="${fmt(baseline)}"$noteAnchor font-size="${fmt(px(TextRole.Note))}"${extra(
           TextRole.Note
-        )} style="fill:${paint(face(TextRole.Note).paint)}">${escape(note)}</text>"""
+        )} style="fill:${paint(face(TextRole.Note).paint)}">${body(TextRole.Note, note)}</text>"""
     }
+    if fig.caption.nonEmpty then
+      val (cx, anchor) = alignedAt(TextRole.Caption)
+      sb ++= s"""<text x="${fmt(cx)}" y="${fmt(fig.height - 4 * sc(TextRole.Caption))}"$anchor font-size="${fmt(
+          px(TextRole.Caption)
+        )}"${extra(TextRole.Caption)} style="fill:${paint(face(TextRole.Caption).paint)}">${body(
+          TextRole.Caption,
+          fig.caption
+        )}</text>"""
+    // the letter of a panel of a board, in the corner
+    if fig.tag.nonEmpty then
+      sb ++= s"""<text x="6" y="${fmt(6 + px(TextRole.Tag))}" font-size="${fmt(px(TextRole.Tag))}"${extra(
+          TextRole.Tag
+        )} style="fill:${paint(face(TextRole.Tag).paint)}">${body(TextRole.Tag, fig.tag)}</text>"""
     sb ++= "</svg>"
     sb.toString
 

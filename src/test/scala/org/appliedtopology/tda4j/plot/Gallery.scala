@@ -187,6 +187,34 @@ object Gallery:
       Plot.barcode(d).withLegend(place).save(out(s"legend-$place.svg"))
     }
     Plot.diagram(loops).withLegend("right").save(out("legend-diagram-right.svg"))
+    // ----- the axes, numbers, caption and tags, units of a paper
+    (Plot.barcode(d) + Scale.x(reverse = true) + Labels(subtitle = "the x axis reversed"))
+      .save(out("axes-reversed-barcode.svg"))
+    (Plot.diagram(loops) + Scale.x(reverse = true) + Scale.y(reverse = true) +
+      Labels(subtitle = "both axes reversed: the shade is still where death < birth"))
+      .save(out("axes-reversed-diagram.svg"))
+    (Plot.barcode(d) + Scale.x(padding = 0) + Scale.y(padding = 0.2) + Labels(subtitle = "padding 0 and 0.2"))
+      .save(out("axes-padding.svg"))
+    (Plot.diagram(loops) + Scale.aspect(free = true) + Size(760, 300) + Labels(subtitle = "units freed"))
+      .save(out("axes-aspect-free.svg"))
+    (Plot.diagram(loops) + Scale.aspect(ratio = 2) + Labels(subtitle = "a y unit twice an x unit"))
+      .save(out("axes-aspect-two.svg"))
+    (Plot.barcode(d) + Scale.x(Transform.Custom("cube root", math.cbrt, v => v * v * v)) +
+      Labels(subtitle = "a cube-root scale of our own")).save(out("axes-cube-root.svg"))
+    (Plot.diagram(loops) + Numbers.locale("de") + Labels(subtitle = "German numbers"))
+      .save(out("numbers-german.svg"))
+    val large = Persistence(scattered.map(_.map(_ * 10000)), maxDimension = 1)
+    (Plot.barcode(large) + Numbers(grouping = " ", decimal = ",", minus = "\u2212") +
+      Labels(subtitle = "grouped digits"))
+      .save(out("numbers-grouped.svg"))
+    (image1 + Numbers.locale("sv") + Labels(color = "densitet")).save(out("numbers-colorbar-swedish.svg"))
+    (Plot.diagram(loops) + Text(TextRole.Legend, limit = 60) + Text(TextRole.Title, limit = 90))
+      .save(out("text-limit.svg"))
+    (Plot.diagram(loops) + Labels(caption = "Source: a noisy sample of a circle, 70 points", tag = "(a)") +
+      Text(TextRole.Caption, italic = true)).save(out("caption-tag.svg"))
+    Plot.side(Plot.diagram(d), Plot.barcode(d)).tagged().save(out("board-tagged.svg"))
+    (Plot.diagram(loops) + paper + Size.inches(3.4, 2.6) + Labels(tag = "(b)", caption = "a column wide"))
+      .save(out("size-column.svg"))
     val before = Plot.barcode(Persistence(noisyCircle(30, 0.03, 4), maxDimension = 1)).copy(title = "tighter")
     val after = Plot.barcode(Persistence(noisyCircle(30, 0.2, 5), maxDimension = 1)).copy(title = "noisier")
     (Plot.side(before, after).shared(y = false) + Style(grid = false)).save(out("custom-board-shared.svg"))

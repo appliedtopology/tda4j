@@ -41,7 +41,8 @@ private object Check:
   * (`align` of a tick label, whose place is its tick's) refuses, naming what to use.
   */
 object Text:
-  private val alignable = Set(TextRole.Title, TextRole.Subtitle, TextRole.AxisLabel, TextRole.Note)
+  private val alignable =
+    Set(TextRole.Title, TextRole.Subtitle, TextRole.AxisLabel, TextRole.Note, TextRole.Caption)
 
   /** The roles a 3-D scene has: it has no axes, legend or color bar. */
   private[plot] val sceneRoles = Set(TextRole.Title, TextRole.Subtitle, TextRole.Note)
@@ -49,7 +50,9 @@ object Text:
   /** The text of `role`. `size` is in pixels, `weight` a [[Weight]], `italic` slants it, `align` puts a title,
     * subtitle, axis label or note at the `Start`, `Middle` or `End` of the plot area, `angle` slants the x axis's tick
     * labels (degrees counterclockwise, between -90 and 90), `font` a CSS `font-family` list for this text alone, and
-    * `color` (a CSS color) or `paint` (a palette role, so that it follows the theme) its color.
+    * `color` (a CSS color) or `paint` (a palette role, so that it follows the theme) its color. `limit` is the longest
+    * the text may be in pixels: a longer one is cut to fit and ends in `…`, with the whole of it as its tooltip (the
+    * width is estimated from the characters; a font is not known).
     */
   def apply(
     role: TextRole,
@@ -60,10 +63,12 @@ object Text:
     angle: Optional[Double] = Optional.empty,
     font: Optional[String] = Optional.empty,
     color: Optional[String] = Optional.empty,
-    paint: Optional[Paint] = Optional.empty
+    paint: Optional[Paint] = Optional.empty,
+    limit: Optional[Double] = Optional.empty
   ): Tweak =
     val who = s"Text(${TextRole.hyphenated(role)})"
     Check.positive(who, "size", size)
+    Check.positive(who, "limit", limit)
     require(
       align.isEmpty || alignable(role),
       s"$who: align has no meaning here; only a title, subtitle, axis label and note can be aligned"
@@ -90,7 +95,8 @@ object Text:
         align.toOption,
         angle.toOption,
         font.toOption,
-        Check.paint(who, color, paint)
+        Check.paint(who, color, paint),
+        limit.toOption
       )
     )
 
@@ -243,6 +249,39 @@ object Lines:
       f.copy(elements = if minor then e.copy(minorTicks = merged) else e.copy(ticks = merged))
     override def toString: String = s"Lines.$which($change)"
 
+/** How the numbers of the tick labels and the color bar are written: `Numbers(decimal = ",", minus = "−")` for a German
+  * paper, `Numbers.locale("de")` for what the locale has (its decimal separator and minus sign), `grouping = " "` to
+  * group the digits of a large number in threes. Only what is given changes.
+  */
+object Numbers:
+  def apply(
+    decimal: Optional[String] = Optional.empty,
+    grouping: Optional[String] = Optional.empty,
+    minus: Optional[String] = Optional.empty
+  ): Tweak =
+    Seq("decimal" -> decimal, "grouping" -> grouping, "minus" -> minus).foreach { (name, o) =>
+      o.toOption.foreach(v =>
+        require(
+          v.length <= 3 && !v.exists(c => c.isDigit || c == '<'),
+          s"Numbers: $name \"$v\" should be a symbol of one to three characters, not a digit"
+        )
+      )
+    }
+    NumbersChange(NumberStyle(decimal.toOption, grouping.toOption, minus.toOption))
+
+  /** The decimal separator and minus sign of the locale `tag` (`de`, `fr`, `sv`): see [[NumberStyle.locale]]. */
+  def locale(tag: String): Tweak =
+    val style =
+      try NumberStyle.locale(tag)
+      catch
+        case _: RuntimeException =>
+          throw IllegalArgumentException(s"Numbers.locale: '$tag' is not a locale; try \"de\", \"fr\" or \"sv-SE\"")
+    NumbersChange(style)
+
+  private final case class NumbersChange(style: NumberStyle) extends Tweak:
+    def onFigure(f: Figure): Figure = f.copy(elements = f.elements.copy(numbers = f.elements.numbers.merge(style)))
+    override def toString: String = s"Numbers($style)"
+
 /** The guides a plot draws for itself, which are not axes or text: the plot area's own fill, and the diagonal of a
   * persistence diagram with its shaded half plane.
   */
@@ -342,10 +381,12 @@ object Guide:
   * name, a matplotlib code, an R `pch`, `glyph:text`; see [[MarkerStyle.named]]), `size`, `opacity`, `fill`,
   * `edge-width` (0 for none), `edge-color`, `edge-opacity`, `edge-dash`, `edge-visible`; `degree-0`, `degree-1`, ...
   * with `color`, `dark-color`, `label` and the `marker` properties; `segments` (`width`, `opacity`), `polygons` and
-  * `discs` (`opacity`), `lines` (`width`); and `x-axis` (`bottom`, `top`) and `y-axis` (`left`, `right`).
+  * `discs` (`opacity`), `lines` (`width`); `numbers` (`locale`, `decimal`, `grouping`, `minus`); `size` (`width`,
+  * `height`, in pixels or with `in`, `cm`, `mm`, `pt`); `aspect` (`1`, or `free`); and `x-axis` and `y-axis`, alone
+  * (`x-axis=top`) or with `side`, `reverse`, `padding`, `min`, `max`, `format`.
   */
 object Settings:
-  private val textProperties = Seq("size", "weight", "italic", "align", "angle", "font", "color")
+  private val textProperties = Seq("size", "weight", "italic", "align", "angle", "font", "color", "limit")
   private val lineProperties = Seq("visible", "width", "color", "dash", "opacity")
   private val tickProperties = Seq("length", "direction", "visible", "width", "color", "opacity")
   private val elementNames =
@@ -365,6 +406,9 @@ object Settings:
         "polygons",
         "discs",
         "lines",
+        "numbers",
+        "size",
+        "aspect",
         "x-axis",
         "y-axis"
       )
@@ -435,6 +479,36 @@ object Settings:
       case "edge-visible" => edge(LineStyle(visible = Some(flag(spec, value))))
       case _              => unknownProperty(element, property, markerProperties)
 
+  /** A length in pixels, written as a number of pixels or with a unit: `326`, `3.4in`, `8.6cm`, `86mm`, `245pt`. */
+  private def pixels(spec: String, value: String): Int =
+    val v = value.trim.toLowerCase(java.util.Locale.ROOT)
+    val units = Seq("px" -> 1.0, "in" -> 96.0, "cm" -> 96.0 / 2.54, "mm" -> 96.0 / 25.4, "pt" -> 96.0 / 72.0)
+    val (digits, factor) =
+      units.collectFirst { case (u, f) if v.endsWith(u) => (v.dropRight(2), f) }.getOrElse((v, 1.0))
+    math.round(number(spec, digits) * factor).toInt
+
+  /** The axis `x-axis.reverse=true`, `x-axis.padding=0.1`, `x-axis.side=top`, `x-axis.min=0`, `x-axis.max=2`. */
+  private def axisSetting(spec: String, element: String, property: String, value: String): Tweak =
+    def scale(
+      position: Optional[Side] = Optional.empty,
+      reverse: Optional[Boolean] = Optional.empty,
+      padding: Optional[Double] = Optional.empty,
+      min: Optional[Double] = Optional.empty,
+      max: Optional[Double] = Optional.empty,
+      format: Optional[String] = Optional.empty
+    ): Tweak =
+      if element == "x-axis" then
+        Scale.x(min = min, max = max, format = format, position = position, reverse = reverse, padding = padding)
+      else Scale.y(min = min, max = max, format = format, position = position, reverse = reverse, padding = padding)
+    property match
+      case "side"    => scale(position = Side.named(value))
+      case "reverse" => scale(reverse = flag(spec, value))
+      case "padding" => scale(padding = number(spec, value))
+      case "min"     => scale(min = number(spec, value))
+      case "max"     => scale(max = number(spec, value))
+      case "format"  => scale(format = value)
+      case _         => unknownProperty(element, property, Seq("side", "reverse", "padding", "min", "max", "format"))
+
   /** The degree `degree-1.color=#c2185b` and its markers (`degree-1.size=6`, `degree-1.shape=pch:1`). */
   private def degreeSetting(spec: String, element: String, property: String, value: String): Tweak =
     val k = element
@@ -458,11 +532,16 @@ object Settings:
     val eq = spec.indexOf('=')
     require(eq > 0, s"setting '$spec' should be element.property=value, such as title.size=18")
     val key = spec.take(eq).trim.toLowerCase(java.util.Locale.ROOT)
-    val value = spec.drop(eq + 1).trim
+    val raw = spec.drop(eq + 1)
+    val value = raw.trim
+    // a separator may be a space, which the trim would take away: `numbers.grouping= ` or `numbers.grouping=space`
+    val symbol = if value.equalsIgnoreCase("space") then " " else if value.isEmpty && raw.nonEmpty then raw else value
     key match
       case "x-axis" => Scale.x(position = Side.named(value))
       case "y-axis" => Scale.y(position = Side.named(value))
-      case _        =>
+      case "aspect" =>
+        if value.equalsIgnoreCase("free") then Scale.aspect(free = true) else Scale.aspect(ratio = number(spec, value))
+      case _ =>
         val dot = key.indexOf('.')
         require(
           dot > 0,
@@ -480,6 +559,7 @@ object Settings:
             case "angle"  => Text(role, angle = number(spec, value))
             case "font"   => Text(role, font = value)
             case "color"  => Text(role, color = value)
+            case "limit"  => Text(role, limit = number(spec, value))
             case _        => unknownProperty(element, property, textProperties)
         else
           element match
@@ -514,7 +594,20 @@ object Settings:
                 case "opacity" => Guide.panel(opacity = number(spec, value))
                 case "visible" => Guide.panel(visible = flag(spec, value))
                 case _         => unknownProperty(element, property, Seq("color", "opacity", "visible"))
-            case "marker"   => Geom.pointsOf(markerSetting(spec, element, property, value))
+            case "marker"            => Geom.pointsOf(markerSetting(spec, element, property, value))
+            case "x-axis" | "y-axis" => axisSetting(spec, element, property, value)
+            case "numbers"           =>
+              property match
+                case "locale"   => Numbers.locale(value)
+                case "decimal"  => Numbers(decimal = symbol)
+                case "grouping" => Numbers(grouping = symbol)
+                case "minus"    => Numbers(minus = symbol)
+                case _          => unknownProperty(element, property, Seq("locale", "decimal", "grouping", "minus"))
+            case "size" =>
+              property match
+                case "width"  => Size(width = pixels(spec, value))
+                case "height" => Size(height = pixels(spec, value))
+                case _        => unknownProperty(element, property, Seq("width", "height"))
             case "segments" =>
               property match
                 case "width"   => Geom.segments(width = number(spec, value))
