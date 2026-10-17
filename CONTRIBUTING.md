@@ -84,8 +84,8 @@ does not apply. "Closes #N" in the description closes the issue when the pull re
 **A change a user can see adds a line to [CHANGELOG.md](CHANGELOG.md)** under Unreleased, in the section it belongs
 to; a change that breaks existing code goes under Breaking, with what to write instead.
 
-**CI must be green**: `test` (the test suite, then the fat jar built and run on a sample), `docs-build`, `mima` and
-`lint`. Reproduce a failure locally before fixing it. A change to the formatter's output on files the pull request
+**CI must be green**: `test` (the JVM test suite, then the fat jar built and run on a sample), `test-js` (the Scala.js
+suite on Node.js), `npm-package` (the npm tarball installed and run), `docs-build`, `mima` and `lint`. Reproduce a failure locally before fixing it. A change to the formatter's output on files the pull request
 does not otherwise touch goes in a commit of its own, "Format: ..., formatter output only".
 
 **Binary compatibility** is checked within a release series (0.5.x). Before 1.0 a deliberate break is allowed, but it
@@ -94,7 +94,8 @@ accidental break is restored, not filtered.
 
 **A new user-visible capability** (a complex, an engine, an option) is finished when four places know about it: the
 MATLAB facade (`matlab.TDA4j`), the command line (`cli.TDA4jConf`, a one-to-one mirror of the MATLAB options), the
-developer's guide and the user guide.
+developer's guide and the user guide; an option also goes in the npm package's typings (`npm/index.d.ts`), which spell
+out the facade's options for JavaScript.
 
 The project lead reviews and merges. Dependabot opens weekly pull requests for the GitHub Actions and the sbt
 dependencies; they go through the same CI.

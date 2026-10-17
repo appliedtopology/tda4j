@@ -9,6 +9,16 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Breaking
 
+- `Plot.save` (and `PersistenceResult.save`, and so the MATLAB `save`) return the absolute path as a `String`, not a
+  `java.nio.file.Path`: the Scala.js build has no `java.nio.file`. Call `Paths.get(result)` where you need a `Path`.
+- `CubicalImage.fromBufferedImage` and `CubicalImage.fromFile` are members of the JVM build only (they are still there, on
+  the JVM); on Scala.js `fromFile` throws and `fromImageData` takes their place.
+- The library's dependencies on Apache Commons Math, Commons Numbers, jvptree and Miniball are gone (they have no
+  Scala.js build); their replacements are `DenseMatrix`, `DenseVector`, `VantagePointTree` and the minimum enclosing ball in
+  the library itself. A public signature that took a commons `RealMatrix` or `RealVector` (`Barcode.image`/`kernel`/
+  `cokernel`/`isMap`, `AlphaShapes.Point`) takes a `DenseMatrix` or `DenseVector`, and `JVPTree` is `VantagePointTree`-backed
+  under a name that does not mention the Java library (the entry is finalized when the replacements are merged).
+
 - `RingModule.scale` is `scalarMultiply`, and so is the infix extension (`r.scalarMultiply(x)`, was `r.scale(x)`). The
   operators `⊠`, `|*|`, `<*` and `mul` are as they were. A `RingModule` instance of your own implements
   `scalarMultiply(x, y)`; the labs (`TDAlab`, `CubicalLab`) lose `scale` and gain `scalarMultiply`.
@@ -19,6 +29,17 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   call, keep their signatures.
 
 ### Added
+
+- **tda4j runs in JavaScript.** The library is built for the JVM and for Scala.js from the same sources (sbt 2 project
+  matrix: `tda4j` and `tda4jJS`). Scala.js programs depend on the same coordinates (`"org.appliedtopology" %% "tda4j"`
+  picks `tda4j_sjs1_3` in a Scala.js project); JavaScript and TypeScript programs install the npm package: `npm install
+  tda4j`, `import { persistence } from "tda4j"`, with `persistence`, `persistenceFromDistances`, `persistenceFromImage`
+  and `persistenceFromGrid` returning a `Result` (bars, representatives, distances, landscapes, plots) and typings. `npx
+  tda4j` is the command line on Node.js. Browsers and Node.js 20.16 or newer; one thread; no file access in a browser. See
+  *Using it from JavaScript* in the user guide.
+- `CubicalImage.fromImageData` (Scala.js) builds a cubical complex from the pixels of a canvas.
+- `Parallel`, `FileAccess` and `CubicalImagePlatform` exist once per platform; on Scala.js `parallelFiltrationValue` and the
+  DQP alpha complex's `parallel` give the same answer on one thread.
 
 - Customizing a plot, by chaining: `Plot.diagram(d).withLabels(title = ..., x = ..., y = ...).withXYScale(Transform.Log10)
   .withSize(960, 540)`, with `withXScale`/`withYScale` (scale, `min`, `max`, `breaks`, `format = "%.1f"`, gridlines),
