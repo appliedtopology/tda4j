@@ -113,15 +113,14 @@ sbt -DrunBenchmarks=true tda4j/test   # also run benchmark/profiling specs — N
 No `sbt` on `PATH`: `.claude/scripts/install-sbt.sh` (paced around Maven Central's cold-cache 429s). A cloud Setup script
 should hold `.claude/scripts/cloud-setup-script.sh` (installer plus warmed dependencies); without it a session starts cold (~1 h).
 
-No linter beyond scalafmt; tests are specs2. CI jobs (`test` with a fat-jar smoke run, `test-js`, `npm-package`, `docs-build`, `mima`, `lint`) and
-their local equivalents: steward skill; a weekly `coverage.yml` maps coverage, never gates. A deliberate binary break is
+No linter beyond scalafmt; tests are specs2. CI jobs (`test` with a fat-jar smoke run, `test-js`, `npm-package`,
+`docs-build`, `mima`, `lint`) and their local equivalents: steward skill; a weekly `coverage.yml` maps coverage. A deliberate binary break is
 a commented `mimaBinaryIssueFilters` entry (project lead: not a strong requirement before 1.0). The ~319 `-Wunused:all` warnings stay
 (`WORKLOG-compiler-warnings.md`). Docs build with 3.8.4 (only a FRESH sbt server sees `TDA4J_SCALA_VERSION`: `rules/docs-and-tutorials.md`). After `sbt package` or a docs build a test compile can miss main classes ("Not found:
 TDAlab"): `sbt clean`. **scalafmt only sees git-tracked files**: `git add` a new file before `scalafmtAll`.
 
-**Never run two `sbt` invocations against this checkout at once** — the incremental compiler's own class-file
-writes from one process can be read mid-update by the other, producing a `NoClassDefFoundError` that looks like a
-real regression but disappears on a clean, sequential rerun.
+**Never run two `sbt` invocations against this checkout at once**: one process reads the other's half-written class
+files, and the `NoClassDefFoundError` looks like a regression until a clean, sequential rerun.
 
 ## User-facing entry points: `Persistence`, labs, the cursor
 
