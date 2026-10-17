@@ -282,6 +282,51 @@ object Numbers:
     def onFigure(f: Figure): Figure = f.copy(elements = f.elements.copy(numbers = f.elements.numbers.merge(style)))
     override def toString: String = s"Numbers($style)"
 
+/** The camera of a 3-D scene: where it looks from, `azimuth` around the vertical axis and `elevation` above the horizon
+  * (both in degrees), and how close, `zoom` (1 is the default, 2 shows the scene twice as large). A page's canvas
+  * starts from this view and can still be turned and zoomed; a saved `.svg` is this one view. Only what is given
+  * changes. A 2-D figure has no camera and refuses it.
+  */
+object Camera:
+  /** The largest and smallest zoom, which are the canvas's own limits. */
+  val zoomRange: (Double, Double) = (0.2, 8.0)
+
+  def apply(
+    azimuth: Optional[Double] = Optional.empty,
+    elevation: Optional[Double] = Optional.empty,
+    zoom: Optional[Double] = Optional.empty
+  ): Tweak =
+    azimuth.toOption.foreach(a =>
+      require(a.isFinite, s"Camera: the azimuth is an angle in degrees, not ${Svg.number(a)}")
+    )
+    elevation.toOption.foreach(e =>
+      require(
+        e.isFinite && e >= -90 && e <= 90,
+        s"Camera: the elevation is an angle from -90 (below) to 90 (above) degrees, not ${Svg.number(e)}"
+      )
+    )
+    zoom.toOption.foreach(z =>
+      require(
+        z >= zoomRange._1 && z <= zoomRange._2,
+        s"Camera: the zoom should be between ${Svg.number(zoomRange._1)} and ${Svg.number(zoomRange._2)}, not ${Svg.number(z)}"
+      )
+    )
+    CameraChange(azimuth.toOption, elevation.toOption, zoom.toOption)
+
+  private final case class CameraChange(azimuth: Option[Double], elevation: Option[Double], zoom: Option[Double])
+      extends Tweak:
+    def onFigure(f: Figure): Figure =
+      throw UnsupportedOperationException(
+        s"$this is the camera of a 3-D scene; a 2-D figure has none (Scale.x, Scale.aspect and Size shape a figure)"
+      )
+    override def onScene(s: Scene): Scene =
+      s.copy(
+        azimuth = azimuth.getOrElse(s.azimuth),
+        elevation = elevation.getOrElse(s.elevation),
+        zoom = zoom.getOrElse(s.zoom)
+      )
+    override def toString: String = "Camera(...)"
+
 /** The guides a plot draws for itself, which are not axes or text: the plot area's own fill, and the diagonal of a
   * persistence diagram with its shaded half plane.
   */
@@ -382,8 +427,9 @@ object Guide:
   * `edge-width` (0 for none), `edge-color`, `edge-opacity`, `edge-dash`, `edge-visible`; `degree-0`, `degree-1`, ...
   * with `color`, `dark-color`, `label` and the `marker` properties; `segments` (`width`, `opacity`), `polygons` and
   * `discs` (`opacity`), `lines` (`width`); `numbers` (`locale`, `decimal`, `grouping`, `minus`); `size` (`width`,
-  * `height`, in pixels or with `in`, `cm`, `mm`, `pt`); `aspect` (`1`, or `free`); and `x-axis` and `y-axis`, alone
-  * (`x-axis=top`) or with `side`, `reverse`, `padding`, `min`, `max`, `format`.
+  * `height`, in pixels or with `in`, `cm`, `mm`, `pt`); `camera` (`azimuth`, `elevation`, `zoom`, of a 3-D scene);
+  * `aspect` (`1`, or `free`); and `x-axis` and `y-axis`, alone (`x-axis=top`) or with `side`, `reverse`, `padding`,
+  * `min`, `max`, `format`.
   */
 object Settings:
   private val textProperties = Seq("size", "weight", "italic", "align", "angle", "font", "color", "limit")
@@ -408,6 +454,7 @@ object Settings:
         "lines",
         "numbers",
         "size",
+        "camera",
         "aspect",
         "x-axis",
         "y-axis"
@@ -603,6 +650,12 @@ object Settings:
                 case "grouping" => Numbers(grouping = symbol)
                 case "minus"    => Numbers(minus = symbol)
                 case _          => unknownProperty(element, property, Seq("locale", "decimal", "grouping", "minus"))
+            case "camera" =>
+              property match
+                case "azimuth"   => Camera(azimuth = number(spec, value))
+                case "elevation" => Camera(elevation = number(spec, value))
+                case "zoom"      => Camera(zoom = number(spec, value))
+                case _           => unknownProperty(element, property, Seq("azimuth", "elevation", "zoom"))
             case "size" =>
               property match
                 case "width"  => Size(width = pixels(spec, value))

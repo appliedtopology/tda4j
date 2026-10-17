@@ -54,7 +54,8 @@ Every plot is an immutable value.
 **`Scene`** (`Scene.scala`) is a 3-D scene made of layers. It renders two ways:
 - for a page, as an inline canvas viewer (drag to turn, scroll to zoom), with
   its script in the page and no CDN;
-- for a file, as a static SVG: an orthographic view drawn back to front.
+- for a file, as a static SVG: an orthographic view drawn back to front. The view is the scene's `azimuth`, `elevation`
+  and `zoom` (set with the `Camera` tweak); the page's canvas starts from the same three numbers.
 
 **`trait Plot`** is what the viewer shows and `save` writes. It has `view`,
 `save`, `html`, `fragment` and `svgFile`, and is implemented by `Figure`,

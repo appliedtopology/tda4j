@@ -67,6 +67,9 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   letters a board's panels `(a)`, `(b)`, ...; `Size.inches/cm/mm/pt` give a size in the units of a journal template.
   Settings: `x-axis.reverse`, `x-axis.padding`, `aspect`, `numbers.locale/decimal/grouping/minus`, `size.width=3.4in`,
   `caption.size`, `tag.weight`, `legend.limit`, ... (MATLAB `withSetting`, CLI `--set`).
+- `Camera(azimuth, elevation, zoom)` (`Scene.withCamera`, settings `camera.azimuth/elevation/zoom`) sets the view of a 3-D
+  scene: the saved `.svg` is that view, a page's canvas starts from it; a 2-D plot refuses it, and the CLI says so before
+  computing.
 - `Board.shared()` puts the panels on one scale; `Mark.Rule` (a line across the plot at one value) and
   `Mark.Diagonal(offset)` (the line `y = x + offset`, drawn in the plot's own scales).
 - MATLAB: the figures returned by the `plot...` methods have the common tweaks as methods that take strings and numbers

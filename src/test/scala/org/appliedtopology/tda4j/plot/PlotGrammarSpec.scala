@@ -1608,6 +1608,79 @@ class PlotGrammarSpec extends Specification:
     }
   }
 
+  "the camera of a 3-D scene" should {
+    // A (1,0,0), B (-1,0,0) and C (0,0,1): from the front (azimuth 0, elevation 0) A and B are apart and C is above them;
+    // from the side (azimuth 90) A and B are in line with the viewer; from above (elevation 90) the three are level
+    val cloud = Array(Array(1.0, 0.0, 0.0), Array(-1.0, 0.0, 0.0), Array(0.0, 0.0, 1.0))
+    val scene = Plot.points3D(cloud)
+    // the points drawn, in the order of the cloud (the order of drawing is by depth, so find each by its own tooltip-free
+    // position: left to right and bottom to top are what the checks use)
+    def dots(s: Scene) = elements(s.staticSvg(Theme.Light), "circle").map(c => (number(c, "cx"), number(c, "cy")))
+    def spread(values: Seq[Double]) = values.max - values.min
+    def spreadX(s: Scene) = spread(dots(s).map(_._1))
+    def spreadY(s: Scene) = spread(dots(s).map(_._2))
+
+    "look from where it is told to, in degrees" in {
+      val front = scene + Camera(azimuth = 0, elevation = 0)
+      spreadX(front) must beGreaterThan(100.0) // A and B are apart
+      spreadY(front) must beGreaterThan(50.0) // and C is above
+      val side = scene + Camera(azimuth = 90, elevation = 0)
+      spreadX(side) must beCloseTo(0.0, 1e-6) // A and B are in line, C is between them
+      val above = scene + Camera(azimuth = 0, elevation = 90)
+      spreadY(above) must beCloseTo(0.0, 1e-6) // from above the height does not show
+      spreadX(above) must beCloseTo(spreadX(front), 1e-6)
+      (scene.azimuth, scene.elevation, scene.zoom) must beEqualTo((-35.0, 25.0, 1.0)) // what a scene begins with
+      scene.withCamera(azimuth = 10, elevation = 20, zoom = 2).azimuth must beEqualTo(10.0)
+    }
+    "come closer by its zoom, round the middle of the plot" in {
+      val one = scene + Camera(azimuth = 0, elevation = 0, zoom = 1)
+      val two = scene + Camera(zoom = 2) + Camera(azimuth = 0, elevation = 0)
+      (spreadX(two) / spreadX(one)) must beCloseTo(2.0, 1e-3) // positions are written to two decimals
+      (spreadY(two) / spreadY(one)) must beCloseTo(2.0, 1e-3)
+      val xsOne = dots(one).map(_._1)
+      val xsTwo = dots(two).map(_._1)
+      ((xsOne.max + xsOne.min) / 2) must beCloseTo(scene.width / 2.0, 1e-6)
+      ((xsTwo.max + xsTwo.min) / 2) must beCloseTo(scene.width / 2.0, 1e-6) // the middle stays
+    }
+    "start a page's canvas there, which can still be turned and zoomed" in {
+      val page = (scene + Camera(azimuth = 90, elevation = 10, zoom = 1.5)).fragment(Theme.Light)
+      page must contain(s"let az=${math.toRadians(90.0)},el=${math.toRadians(10.0)},zoom=1.5;")
+      scene.fragment(Theme.Light) must contain("zoom=1;") // as it always was
+      page must contain("drag to turn, scroll to zoom")
+    }
+    "change only what is given, and commute with the rest" in {
+      val a = scene + Camera(azimuth = 40) + Camera(zoom = 3)
+      (a.azimuth, a.elevation, a.zoom) must beEqualTo((40.0, 25.0, 3.0))
+      val b = scene + Camera(azimuth = 40) + Style.print + Size(500, 500) + Camera(zoom = 3) + Palette.print
+      val c = scene + Palette.print + Camera(zoom = 3) + Size(500, 500) + Style.print + Camera(azimuth = 40)
+      b must beEqualTo(c)
+    }
+    "refuse a view that means nothing, in words" in {
+      Camera(elevation = 100) must throwAn[IllegalArgumentException]("the elevation is an angle from -90")
+      Camera(zoom = 0) must throwAn[IllegalArgumentException]("the zoom should be between 0.2 and 8, not 0")
+      Camera(zoom = 9) must throwAn[IllegalArgumentException]("the zoom should be between 0.2 and 8, not 9")
+      Camera(azimuth = Double.NaN) must throwAn[IllegalArgumentException]("the azimuth is an angle in degrees")
+      Plot.diagram(circleDiagram) + Camera(zoom = 2) must throwAn[UnsupportedOperationException](
+        "is the camera of a 3-D scene; a 2-D figure has none"
+      )
+      Plot.side(Plot.diagram(circleDiagram)) + Camera(zoom = 2) must throwAn[UnsupportedOperationException](
+        "a 2-D figure has none"
+      )
+    }
+    "be written as settings" in {
+      scene.withSetting("camera.azimuth=90") must beEqualTo(scene + Camera(azimuth = 90))
+      scene.withSetting("camera.elevation=-10").elevation must beEqualTo(-10.0)
+      scene.withSetting("camera.zoom=1.5").zoom must beEqualTo(1.5)
+      Settings.parse("camera.roll=3") must throwAn[IllegalArgumentException](
+        "unknown property 'roll' of camera; expected one of azimuth, elevation, zoom"
+      )
+      Settings.parse("camera.zoom=close") must throwAn[IllegalArgumentException]("'close' is not a number")
+      Plot.diagram(circleDiagram).withSetting("camera.zoom=2") must throwAn[UnsupportedOperationException](
+        "a 2-D figure has none"
+      )
+    }
+  }
+
   "labels and size" should {
     val fig = Plot.diagram(circleDiagram)
     "put the words given in the places they belong" in {

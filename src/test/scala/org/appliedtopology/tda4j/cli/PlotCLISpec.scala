@@ -251,6 +251,14 @@ class PlotCLISpec extends Specification:
       var code = -1
       val err = stderrOf { code = run(args :+ circleFile*)._1 }
       (code, err)
+    "be refused before anything is computed, so a typo costs no wait" >> {
+      // the input does not exist: were the setting checked only when the plot is made, the missing file would be the error
+      def early(args: String*): String = stderrOf(run(args :+ "no-such-input.csv"*))
+      early("--plot", "diagram", "--set", "camera.zoom=2") must contain("a 2-D figure has none")
+      early("--plot", "input-3d", "--set", "tick-label.size=9") must contain("a 3-D scene has a title")
+      early("--plot", "input-3d", "--set", "camera.zoom=20") must contain("the zoom should be between 0.2 and 8")
+      early("--plot", "diagram", "--set", "title.size=big") must contain("'big' is not a number")
+    }
     "be an error that says what to do, never ignored" >> {
       val (c1, e1) = failure("--title", "A circle")
       val (c2, e2) = failure("--plot", "diagram", "--x-scale", "cubic")
@@ -266,6 +274,8 @@ class PlotCLISpec extends Specification:
       val (c12, e12) = failure("--plot", "input-3d", "--set", "tick-label.size=9")
       val (c13, e13) = failure("--set", "title.size=18")
       val (c14, e14) = failure("--plot", "diagram", "--set", "numbers.separator=,")
+      val (c16, e16) = failure("--plot", "diagram", "--set", "camera.zoom=2")
+      val (c17, e17) = failure("--plot", "input-3d", "--set", "camera.zoom=20")
       val (c15, e15) = failure("--plot", "diagram", "--set", "size.width=wide")
       (c1 must beEqualTo(1)) and (e1 must contain("--title is for --plot")) and
         (c2 must beEqualTo(1)) and (e2 must contain(
@@ -280,6 +290,8 @@ class PlotCLISpec extends Specification:
         (c13 must beEqualTo(1)) and (e13 must contain("--set is for --plot")) and
         (c14 must beEqualTo(1)) and (e14 must contain("expected one of locale, decimal, grouping, minus")) and
         (c15 must beEqualTo(1)) and (e15 must contain("is not a number")) and
+        (c16 must beEqualTo(1)) and (e16 must contain("a 2-D figure has none")) and
+        (c17 must beEqualTo(1)) and (e17 must contain("the zoom should be between 0.2 and 8")) and
         (c4 must beEqualTo(1)) and (e4 must contain("expected one of auto, light, dark")) and
         (c5 must beEqualTo(1)) and (e5 must contain("between 100 and 20000")) and
         (c6 must beEqualTo(1)) and (e6 must contain("--x-scale is for 2-D plots")) and

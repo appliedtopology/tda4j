@@ -4,6 +4,7 @@ package cli
 import org.appliedtopology.tda4j.*
 import org.appliedtopology.tda4j.matlab.{LandmarkSelectionResult, PersistenceResult, TDA4j}
 import org.appliedtopology.tda4j.plot.{
+  Figure,
   Labels,
   Palette,
   Plot,
@@ -586,6 +587,9 @@ object TDA4jCLI:
           }
           // a setting of an element a scene has not (a tick label) is refused now, not after the computation
           conf.set.toOption.foreach(specs => Settings.parseAll(specs).foreach(change => Scene() + change))
+        else
+          // and the camera of a 3-D scene is refused for a 2-D plot
+          conf.set.toOption.foreach(specs => Settings.parseAll(specs).foreach(change => Figure() + change))
         val others = Seq(
           "--distance-to" -> conf.distanceTo.isSupplied,
           "--select-landmarks" -> conf.selectLandmarks(),

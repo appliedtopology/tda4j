@@ -107,6 +107,7 @@ class PlotCustomizationFacadeSpec extends Specification:
         "withTitle",
         "withSubtitle",
         "withSize",
+        "withCamera",
         "withPalette",
         "withStyle",
         "withSetting",
@@ -173,6 +174,8 @@ class PlotCustomizationFacadeSpec extends Specification:
       scene.withPalette("reference").palette must beEqualTo(Palette.reference)
       scene.withStyle("print").style must beEqualTo(Style.print)
       scene.withSetting("title.size=18") must beEqualTo(scene + Text(TextRole.Title, size = 18))
+      scene.withCamera(90, 10, 1.5) must beEqualTo(scene + Camera(azimuth = 90, elevation = 10, zoom = 1.5))
+      scene.withSetting("camera.zoom=2") must beEqualTo(scene + Camera(zoom = 2))
       scene.withSetting("tick-label.size=9") must throwAn[UnsupportedOperationException]("a 3-D scene has a title")
     }
   }

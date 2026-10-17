@@ -455,6 +455,7 @@ earlier ones set, and tweaks of different elements come in any order, a `Style` 
 | `aspect` | the length of a y unit over an x unit (`aspect=1` for equal units), or `free` |
 | `numbers` | `locale` (`de`, `fr`, `sv`, ...), `decimal`, `grouping`, `minus` (`space` is a space) |
 | `size` | `width`, `height`: pixels, or a number with a unit, `3.4in`, `8.6cm`, `86mm`, `245pt` |
+| `camera` | `azimuth`, `elevation` (degrees), `zoom` (0.2 to 8), of a 3-D scene |
 
 `fig.withSetting("title.size=18")`, `fig.withSetting("grid.dash=dotted")` and
 `java -jar tda4j-assembly.jar --plot diagram --set title.size=18 --set ticks.length=4 ...` are the same changes. A name that
@@ -546,6 +547,27 @@ A figure's size is in pixels, 96 to the inch. `Size.inches(3.4, 2.6)`, `Size.cm`
 the units of a journal's template (`Size.pt(245)` is a column), and `size.width=3.4in` says the same as a setting. Add
 the size with `+` as any tweak: `Plot.diagram(d) + Size.inches(3.4, 2.6)`. The text keeps its size in pixels, so check it
 against the column.
+
+### The camera of a 3-D scene
+
+A 3-D scene is drawn from one view in a saved `.svg`, and on a page it starts from that view and can be turned (drag)
+and zoomed (scroll). `Camera(azimuth, elevation, zoom)` sets it: the azimuth turns the scene around the vertical axis and
+the elevation raises the eye above the horizon, both in degrees (from the front, `azimuth = 0, elevation = 0`; the default
+view is `-35` and `25`), and the zoom is how close, from 0.2 to 8 (2 shows the scene twice as large, round the middle of
+the plot). Only what is given changes. A 2-D figure has no camera and says so.
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val helix = Array.tabulate(60)(i => Array(math.cos(0.3 * i), math.sin(0.3 * i), i / 30.0))
+val scene = Plot.points3D(helix).withCamera(azimuth = 20, elevation = 10, zoom = 1.3)
+scene.save("helix.svg")
+```
+
+From MATLAB it is `scene.withCamera(20, 10, 1.3)` and `scene.withSetting('camera.zoom=1.3')`; on the command line,
+`--plot input-3d --set camera.azimuth=20 --set camera.zoom=1.3`.
 
 ### For a paper, and for a page of either color
 

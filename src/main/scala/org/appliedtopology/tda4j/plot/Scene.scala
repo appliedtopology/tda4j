@@ -30,13 +30,14 @@ final case class Scene(
   palette: Palette = Palette.default,
   style: Style = Style.default,
   degrees: Map[Int, DegreeStyle] = Map.empty,
-  elements: Elements = Elements()
+  elements: Elements = Elements(),
+  zoom: Double = 1.0
 ) extends Plot:
   def +(layer: Layer): Scene = copy(layers = layers :+ layer)
   def ++(more: IterableOnce[Layer]): Scene = copy(layers = layers ++ more)
 
   /** This scene with the change `tweak` makes. Only the tweaks that need no axes apply: a palette, a [[Style]], a
-    * [[Size]], the title and subtitle of [[Labels]] and the colors of `Scale.degree`.
+    * [[Size]], the [[Camera]], the title and subtitle of [[Labels]] and the colors of `Scale.degree`.
     */
   def +(tweak: Tweak): Scene = tweak.onScene(this)
 
@@ -57,6 +58,16 @@ final case class Scene(
     darkColor: Optional[String] = Optional.empty
   ): Scene =
     this + Scale.degree(k, color = color, darkColor = darkColor)
+
+  /** Where the camera looks from (`azimuth` and `elevation`, in degrees) and how close (`zoom`). See [[Camera]]. */
+  def withCamera(
+    azimuth: Optional[Double] = Optional.empty,
+    elevation: Optional[Double] = Optional.empty,
+    zoom: Optional[Double] = Optional.empty
+  ): Scene = this + Camera(azimuth, elevation, zoom)
+
+  /** The camera by plain numbers, for MATLAB and Java: `withCamera(-35, 25, 1)` is the default view. */
+  def withCamera(azimuth: Double, elevation: Double, zoom: Double): Scene = this + Camera(azimuth, elevation, zoom)
 
   /** This palette. */
   def withPalette(palette: Palette): Scene = this + palette
@@ -179,7 +190,7 @@ final case class Scene(
       val z2 = y1 * math.sin(el) + z * math.cos(el)
       (x1, z2, y2) // screen x, screen y (up), depth (away from the viewer)
     val top = if title.nonEmpty then 16.0 + 24.0 * ts * (elements.face(TextRole.Title).size / 15.0) else 12.0
-    val scale = 0.46 * math.min(width, height - top)
+    val scale = 0.46 * math.min(width, height - top) * zoom
     val (cx, cy) = (width / 2.0, top + (height - top) / 2.0)
     def sx(v: (Double, Double, Double)) = f"${cx + v._1 * scale}%.2f"
     def sy(v: (Double, Double, Double)) = f"${cy - v._2 * scale}%.2f"
@@ -327,7 +338,7 @@ final case class Scene(
        |const layers=$json;
        |const css=getComputedStyle(root);
        |const color=s=>s.startsWith('var(')?css.getPropertyValue(s.slice(4,-1)).trim():s;
-       |let az=${math.toRadians(azimuth)},el=${math.toRadians(elevation)},zoom=1;
+       |let az=${math.toRadians(azimuth)},el=${math.toRadians(elevation)},zoom=${Svg.number(zoom)};
        |function proj(p){const x1=p[0]*Math.cos(az)-p[1]*Math.sin(az),y1=p[0]*Math.sin(az)+p[1]*Math.cos(az);
        |  return [x1,y1*Math.sin(el)+p[2]*Math.cos(el),y1*Math.cos(el)-p[2]*Math.sin(el)];}
        |function draw(){const dpr=window.devicePixelRatio||1,W=cv.clientWidth,H=W*cv.height/cv.width;
