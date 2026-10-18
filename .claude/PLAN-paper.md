@@ -744,7 +744,30 @@ saying so), ripser.py aborted at 72 GB, JavaPlex timed out at 1 h with 104 GB, G
   separately (`WORKLOG-bowyer-watson.md`). Same family as the Miniball one-ULP entry.
 - **§3.4:** Bowyer–Watson is the alpha entry for d = 2 to 4. Failure rates by (d, n) now concern Helix at d ≥ 5 only.
 
+## Update, 2026-10-18: the first full cross-tool run, and what the harness changed
+
+The first full run (2026-10-14, before the Scala.js build) is not citable; reading its summary changed the harness
+(`WORKLOG-bench-harness-fixes.md`, issues #126 to #133) and §3.4 and §4:
+
+- **§3.0 methodology, now enforced by the harness:**
+  - peak RSS is the process's own `VmHWM` (the first run's `wait4` figures carried the harness's RSS as a 130 MB floor),
+    and a JVM row also reports the heap pools' peak, because a JVM's RSS follows its collector;
+  - a failure has a status and a reason (`timeout`, `limit`, `oom`, `unsupported`, `error(code)`), and a limit of the other
+    tool is a result: Ripser's coefficient builds fail above a simplex index of 2^55 - 1 (8 coefficient bits fixed in the
+    index field), which is clifford50000 at degree 2 for ripser.cpp and giotto-ph at p = 17 and for ripser.py at every p;
+  - the reference is the fixed baseline, a row without a finished reference is marked and left out of the means, and the means are per task.
+- **§3.4 alpha datasets:** two of the first run's six alpha inputs were degenerate (cospherical sphere, a scan), so GUDHI
+  was no ground truth there; each now has a jittered general-position twin, and the raw one is flagged. The high-dimensional
+  cases are `unif5d_500`, `unif10d_1000` (the DQP paper's own §4.2 example) and `o3_1024_alpha` (R^9). The DQP paper's other
+  two data sets, cyclooctane (R^24) and the image patches X(300,30) (R^9), have published sizes and Betti numbers that make them an
+  oracle for DQP; they wait for data files (#133). Nothing was taken from the Helix paper (IEEE 10917453), which could not be read.
+- **§4 datasets:** `o3_1024` is now also an alpha case.
+
 ## 8. Facts verified this session, and how
+
+- **`ripser.cpp`'s coefficient bits** (2026-10-18): `num_coefficient_bits = 8` and `max_simplex_index = 2^55 - 1`, read in the
+  copy inside the ripser.py 0.6.15 sdist from PyPI; the master copy that `bench/run.sh setup` clones is not yet compared.
+- **The DQP paper's §4 numbers** (sizes, radii, timings), read from the arXiv PDF (2310.00536) with `pdftotext`.
 
 - **HAP** `PersistentHomologyOfSubGroupSeries`: the manual's §11.1-9, read as raw HTML from the GitHub Pages mirror
   (`gap-packages.github.io/hap/doc/chap11_mj.html`) and quoted verbatim.

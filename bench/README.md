@@ -42,8 +42,10 @@ Useful options of `run`:
 | `--fields 2,17` | coefficient primes; tools that only do Z/2 report `unsupported` at 17 |
 | `--warmup N --trials N` | warm runs: untimed and timed computations per process |
 | `--timeout S` | seconds per computation; a timeout is recorded, not dropped |
+| `--rerun-timeouts` | a computation that timed out at one field is not run at the next (its time does not depend on the field; `--fields 2,17` would cost the timeout twice) and is recorded as timed out; this runs it anyway |
 | `--warm-cap S` | if one cold computation takes longer than this (default 60 s), the warm run reuses it instead of repeating |
-| `--jvm-heap 32g` | `-Xmx` for TDA4j and JavaPlex. fractal-r needs about 12g; clifford50000 more |
+| `--jvm-heap 32g` | `-Xmx` and `-Xms` for TDA4j and JavaPlex, with `-XX:+UseParallelGC` (one policy for this script and `sweep-cubical`). fractal-r needs about 12g; clifford50000 more |
+| `--jvm-opts "-Xss8m"` | more JVM options |
 | `--node-heap 32g` | `--max-old-space-size` for the `tda4j-js` tools, in the same notation (default: `--jvm-heap`). Node's own default is a few GB, far below what the large cases need |
 | `--node-opts "--stack-size=4000"` | more options for node |
 
@@ -74,7 +76,16 @@ bench/run.sh sweep-cubical --dims 2,3 --jvm-heap 32g --timeout 1800
 - **warm:** one process, `--warmup` untimed then `--trials` timed computations; the median of the timed ones. This is
   what a library user in a long-running JVM or MATLAB session sees. For ripser.cpp, which has no loop, warm is the
   median of `--trials` cold runs.
-- **peak RSS** of each process, from `wait4`.
+- **peak RSS** of each process: the kernel's `VmHWM`, sampled from `/proc` every 10 ms while it runs. (`wait4`'s
+  `ru_maxrss` includes the harness's own RSS at the moment of the spawn, because the kernel folds the parent's
+  high-water mark into the child at `exec`: a child that used 40 MB reported 261 MB from a 250 MB parent. In the first
+  run, 41 of 338 rows read exactly 130 MB.) A process too short to be sampled falls back to `ru_maxrss` and is marked
+  `≤` in the summary.
+- **JVM heap:** a JVM's RSS follows its collector (a parallel collector with a large heap shows its total allocation
+  until the first collection), so the TDA4j driver also reports the peak use of the heap pools over the timed runs
+  (`heap_peak_mb`: the sum of the pools' peaks, an upper bound on the heap in use at once; `old_peak_mb`: the old
+  generation alone, the closest to what the computation keeps). Use `heap_peak_mb` for a statement about what TDA4j
+  needs; RSS is what the machine saw. Node's heap grows on demand, so its RSS is already close to its need.
 - **Scala.js:** the `tda4j-js` tools run the optimized link (`fullLinkJS`, what the npm package ships) in Node.js, one
   process per computation like the others. Cold therefore includes Node's startup and loading the library's module;
   warm is the V8 JIT after `--warmup` computations. There is one thread (`Parallel` is a loop there). The package's
@@ -84,6 +95,17 @@ bench/run.sh sweep-cubical --dims 2,3 --jvm-heap 32g --timeout 1800
   and alpha. The comparison uses the bottleneck distance per degree, and essential bars matched by birth.
   - ripser.cpp computes in float32, so the tolerance is `1e-5 × max(1, threshold)`.
   - For JavaPlex the tolerance is `threshold / divisions`, since JavaPlex snaps filtration values to a grid.
+  - A distance below 1e-12 is 0. `inf` means a different number of essential bars in some degree, and the summary's
+    notes say which degree and how many.
+  - The `bars` column of the summary counts the bars that are essential or longer than the tolerance, so a tool that
+    keeps near-zero bars does not look as if it disagreed; the raw counts are in `runs.csv`.
+- **failures:** a run that does not finish has a status and a reason (the stderr line that explains it):
+  `timeout`; `limit` (the tool's own range: Ripser's coefficient builds keep the coefficient in the same 64-bit field
+  as the simplex index, with 8 bits fixed whatever the prime, so a simplex index above 2^55 - 1 is an uncaught
+  `std::overflow_error`; clifford50000 needs C(50000, 4) = 2.6e17 at degree 2, and fails at p = 17 for ripser.cpp and
+  giotto-ph, and at every p for ripser.py, which always builds with coefficients); `oom`; `unsupported` (the tool does not
+  offer it, or the harness knows it cannot run, for example Bowyer–Watson above 4-D); `error(code)`; `missing` (not
+  installed). `summary.md` lists them with their reasons under "Failures and limits".
 
 ## The cases
 
@@ -100,8 +122,24 @@ bench/run.sh sweep-cubical --dims 2,3 --jvm-heap 32g --timeout 1800
   - sublevel filtrations, in the T-construction (top cells carry the values);
   - uniform noise, and a bright Gaussian blob on a dark background, in 2-D up to 2048² and 3-D up to 128³;
   - GUDHI with `top_dimensional_cells`, and CubicalRipser with `filtration="T"`.
-- **Alpha:** uniform points in 2-D and 3-D, the Stanford dragon (2000 points), and sphere3 in R⁴. GUDHI reports squared
-  radii, so we take square roots.
+- **Alpha:** filtration values are circumradii (GUDHI reports squared radii, so we take square roots).
+  - Uniform points in 2-D and 3-D.
+  - The Stanford dragon (2000 points) and sphere3 (192 points on S³ in R⁴) are **degenerate**: the sphere's points are
+    cospherical, the dragon is a scan. Each tool triangulates a degenerate cell its own way, so GUDHI is no ground
+    truth and `agrees = False` there is a property of the input (`rules/alpha.md`; #130). They are kept and flagged †,
+    and every run also has `dragon2000_alpha_gp` and `sphere3_192_alpha_gp`: the same points moved by Gaussian noise of
+    1e-3 of the bounding-box diagonal (seeded, one file for all tools). If a `_gp` case still disagrees, that is a TDA4j
+    bug.
+  - **Higher ambient dimension** (#131, #133), the regime the dual-QP (DQP) and Helix backends are for:
+    `unif5d_500` (the Helix crossover table's 5-D case; CGAL still finishes it), `unif10d_1000` (the DQP paper's own
+    example, Carlsson and Carlsson, Sci. Rep. 14:19824, §4.2: 1000 points uniform in [-1,1]¹⁰, radius 1.0, complex up to
+    3-simplices; their sizes were (1000, 64785, 560459, 1783194) in 5 minutes, and a full Delaunay triangulation is out
+    of reach, so GUDHI and Helix are expected to time out: that is the result), and `o3_1024_alpha` (the 3×3
+    orthogonal matrices of the Ripser benchmark, in R⁹, with the radius at which a point has about 25 neighbours within
+    2r, the statistic that decides between DQP and a triangulation). The paper's two data sets, cyclooctane (R²⁴) and
+    the image patches, need data files that are not wired in (#133).
+  - A case with a radius gives it to every tool: TDA4j's dispatch and DQP build only what lies within it (bars alive at
+    the radius are essential), GUDHI gets `max_alpha_square`, and the tree is cut above dimension `dim + 1`.
 
 ## The tools
 
@@ -112,7 +150,7 @@ bench/run.sh sweep-cubical --dims 2,3 --jvm-heap 32g --timeout 1800
 | `tda4j-js`, `tda4j-js-cocycles` | `workers/tda4j_js_worker.mjs` on Node.js, through the npm package's `persistence`, `persistenceFromDistances` and `persistenceFromGrid` | the Scala.js build of the two rows above: the same library, the same engines, compiled to JavaScript |
 | `tda4j-js-cohomology`, `tda4j-js-fastalpha`, `tda4j-js-bw`, `tda4j-js-helix` | the same, named engines and backends | JavaScript twins of the next row's tools |
 | `tda4j-cohomology`, `tda4j-fastalpha` | named engines | cohomology on images (on a grid: the packed grid engine, the general engine's output); the dual union-find on alpha (on the default triangulation) |
-| `tda4j-bw`, `tda4j-helix` | named alpha backends | `tda4j` uses the default, Bowyer–Watson up to 4 dimensions (every alpha case here); these name each triangulation |
+| `tda4j-bw`, `tda4j-helix`, `tda4j-dqp` | named alpha backends | `tda4j` uses the default: Bowyer–Watson up to 4 dimensions, Helix above, DQP for a small radius; these name each. Bowyer–Watson is `unsupported` above 4-D; DQP only runs on a case with a radius (untruncated it is about 100 times slower than Helix); `tda4j-fastalpha` takes no radius |
 | `ripser.cpp` | vanilla build for p = 2, `ripser-coeff` for other primes | the reference for Vietoris–Rips |
 | `ripser.py`, `giotto-ph-1t`, `giotto-ph-mt` | pip | giotto-ph multithreaded is reported, never the baseline |
 | `gudhi`, `gudhi-collapse` | pip | edge collapse first in the second variant |
@@ -125,13 +163,16 @@ against `ripser.cpp` is the like-for-like comparison. `tda4j` against `ripserer-
 
 ## Output (`$WORKDIR/results/<timestamp>/`)
 
-- `runs.csv`: one row per process (cold, warm), with every trial's time.
-- `summary.csv`: one row per case, field and tool, with agreement.
-- `summary.md`: the same as a table, then TDA4j's slowdown against the fastest other single-threaded tool and
-  against the reference, per case and as geometric means (the `tda4j-js` rows count as TDA4j variants, never as the
-  baseline), then **Scala.js against the JVM**: for each `tda4j-js*` row, the warm and cold time ratios and the
-  peak-memory ratio to its JVM twin (`tda4j-js` to `tda4j`, `tda4j-js-cocycles` to `tda4j-cocycles`, ...), per case and as
-  geometric means.
+- `runs.csv`: one row per process (cold, warm), with every trial's time, the failure reason, where the RSS came from
+  and the JVM's heap peaks.
+- `summary.csv`: one row per case, field and tool, with agreement, the significant bar counts and the notes.
+- `summary.md`: the same as a table, then the failures with their reasons and the agreement notes, then TDA4j's
+  slowdown against the reference and against the fastest other single-threaded tool, per case. The reference is the
+  fixed baseline; "best other" changes from row to row, so a row whose reference did not finish is marked † and is left
+  out of the means. The means are per task (never pooled across tasks), with median, range and how many cases the
+  variant finished; the `tda4j-js` rows count as TDA4j variants, never as the baseline. Last, **Scala.js against the
+  JVM**: for each `tda4j-js*` row, the warm and cold time ratios and the memory ratios to its JVM twin (`tda4j-js` to
+  `tda4j`, `tda4j-js-cocycles` to `tda4j-cocycles`, ...), per case and as geometric means per task.
 - `env.json`: the machine, the JVM, Node.js and the npm package's version, every Python package's version, the
   ripser.cpp and TDA4j commits, the options.
 - `bars/*.tsv`: every barcode (`dim birth death`); `logs/`: each process's stdout and stderr.
@@ -143,6 +184,8 @@ runs.
 
 
 - Run on a quiet machine. Record it, and fix its frequency governor if you can.
+- The harness's own checks: `python3 bench/test_bench.py` (synthetic processes and results; nothing to install).
+- A tool's failure on a case is a result; read "Failures and limits" before calling a gap in a table a gap in the data.
 - The JavaScript rows depend on the Node.js version (V8): `env.json` records it; use the same one for a comparison.
 - Pin the pip versions for the final run (`setup_python` in `run.sh`). `env.json` records what was used either way.
 - MATLAB is not exercised here. The MATLAB snippets are checked separately; see `.claude/PLAN-paper.md` §2.1.

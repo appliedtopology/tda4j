@@ -119,8 +119,14 @@ def gudhi_tool(opts, data):
             return out
         return run
     if task == "alpha":
+        # A threshold is the largest radius, as in TDA4j's truncated complex: bars alive at it are essential. The tree
+        # keeps simplices up to dimension dim + 1 only (all a barcode up to degree dim needs). The Delaunay
+        # triangulation is built whole whatever the radius, which is why GUDHI is not expected to finish in 10-D.
+        max_square = float(opts["threshold"]) ** 2 if "threshold" in opts else math.inf
+
         def run():
-            st = gudhi.AlphaComplex(points=data).create_simplex_tree()
+            st = gudhi.AlphaComplex(points=data).create_simplex_tree(max_alpha_square=max_square)
+            st.prune_above_dimension(dim + 1)
             st.compute_persistence(homology_coeff_field=p, min_persistence=0)
             return intervals(st, transform=lambda x: math.sqrt(max(x, 0.0)) if math.isfinite(x) else x)
         return run

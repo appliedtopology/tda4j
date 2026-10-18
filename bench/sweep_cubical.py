@@ -78,7 +78,7 @@ def main():
     with open(out / "sweep.csv", "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["dim", "image", "n", "pixels", "engine", "status", "median_s", "times_s", "us_per_pixel",
-                    "maxrss_mb", "bars"])
+                    "maxrss_mb", "bars", "rss_src", "heap_peak_mb", "reason"])
         for d in [int(x) for x in args.dims.split(",")]:
             for image in args.images.split(","):
                 stopped = set()
@@ -101,10 +101,10 @@ def main():
                                         f"warmup={warmup}", f"trials={trials}"]
                         for lab, engine, reps, dims, cap in ENGINES:
                             if lab == label:
-                                return ["java", f"-Xmx{args.jvm_heap}", f"-Xms{args.jvm_heap}", "-XX:+UseParallelGC",
-                                        "-cp", cp, "org.appliedtopology.tda4j.PaperBenchmarkDriver", "task=cubical",
-                                        f"input={path}", f"dim={d - 1}", "p=2", f"engine={engine}", f"reps={reps}",
-                                        f"warmup={warmup}", f"trials={trials}"]
+                                return (["java"] + bench.jvm_flags(args.jvm_heap) +
+                                        ["-cp", cp, "org.appliedtopology.tda4j.PaperBenchmarkDriver", "task=cubical",
+                                         f"input={path}", f"dim={d - 1}", "p=2", f"engine={engine}", f"reps={reps}",
+                                         f"warmup={warmup}", f"trials={trials}"])
                         return [args.python, str(bench.HERE / "workers" / "py_worker.py"), f"tool={label}",
                                 "task=cubical", f"input={path}", f"dim={d - 1}", "p=2", f"warmup={warmup}",
                                 f"trials={trials}"]
@@ -120,20 +120,20 @@ def main():
                         tag = f"{d}d_{image}_{n}_{label}"
                         # Cold first: one computation, bounded by --timeout. Repeat only when that was quick enough
                         # for warm-up to matter; past --warm-cap the cold time is the measurement.
-                        status, wall, rss, text = bench.run_proc(command(label, 0, 1), args.timeout,
-                                                                 out / "logs" / (tag + "__cold"))
-                        j = bench.last_json(text) if status == "ok" else None
+                        cold = bench.run_proc(command(label, 0, 1), args.timeout, out / "logs" / (tag + "__cold"))
+                        status, wall, rss, reason, rss_src = cold.status, cold.wall, cold.rss_mb, cold.reason, cold.rss_src
+                        j = bench.last_json(cold.text) if status == "ok" else None
                         if j and j["times_s"][0] < args.warm_cap and args.trials > 0:
-                            s2, wall2, rss2, text2 = bench.run_proc(command(label, 1, args.trials),
-                                                                    args.timeout * (args.trials + 1),
-                                                                    out / "logs" / (tag + "__warm"))
-                            j2 = bench.last_json(text2) if s2 == "ok" else None
+                            warm = bench.run_proc(command(label, 1, args.trials), args.timeout * (args.trials + 1),
+                                                  out / "logs" / (tag + "__warm"))
+                            j2 = bench.last_json(warm.text) if warm.status == "ok" else None
                             if j2:
-                                j, rss = j2, max(rss, rss2)
+                                j, rss = j2, max(rss, warm.rss_mb)
                         med = statistics.median(j["times_s"]) if j else None
                         upp = med / (n ** d) * 1e6 if med else None
                         w.writerow([d, image, n, n ** d, label, status, med, json.dumps(j["times_s"]) if j else "",
-                                    upp, f"{rss:.0f}", json.dumps(j["bars"]) if j else ""])
+                                    upp, f"{rss:.0f}", json.dumps(j["bars"]) if j else "", rss_src,
+                                    j.get("heap_peak_mb", "") if j else "", reason])
                         f.flush()
                         rows.append((d, image, n, label, status, med, upp, rss))
                         print(f"{tag:40s} {status:9s} " + (f"{med:9.3f}s {upp:8.2f}us/px {rss:7.0f}MB" if med

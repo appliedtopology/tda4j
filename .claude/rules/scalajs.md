@@ -85,7 +85,9 @@ specs2's `throwA[E]("message")` reports a mismatch on JS for a message that matc
 `bench/` times the Scala.js build beside the JVM build and the other tools (`bench/run.sh setup tda4j-js`, the `tda4j-js*`
 tools, `workers/tda4j_js_worker.mjs`, which speaks the same `key=value`/JSON-line protocol as `PaperBenchmarkDriver`). The
 worker calls the npm package's API with the facade's option names; a new benchmark case or driver option goes in both
-drivers. `run.sh` takes the JVM classpath from `tda4j/Test/fullClasspath`, never from the aggregating root.
+drivers (the JVM driver alone reports the heap pools' peak, `heap_peak_mb`: a JVM's RSS follows its collector, Node's is
+close to its need). `run.sh` takes the JVM classpath from `tda4j/Test/fullClasspath`, never from the aggregating root.
+The harness's own checks run without any of the tools: `python3 bench/test_bench.py` (`WORKLOG-bench-harness-fixes.md`).
 
 ## Known limits
 

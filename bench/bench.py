@@ -13,7 +13,11 @@ The `tda4j-js*` tools are the Scala.js build, packaged as the npm package and ru
 (workers/tda4j_js_worker.mjs): the same sources as `tda4j*`, so the pair of rows is the cost of the platform.
 
 Method (see .claude/PLAN-paper.md, section 3.0):
-  - Every run is its own process, killed at --timeout; peak RSS comes from wait4.
+  - Every run is its own process, killed at --timeout. Peak RSS is the kernel's VmHWM of that process, sampled from
+    /proc while it runs (wait4's ru_maxrss would include the harness's own RSS: the kernel folds the parent's
+    high-water mark into the child at exec). The JVM rows also report the peak use of the heap pools.
+  - A run that does not finish is `timeout`, `limit` (the tool's own index range), `oom`, `unsupported` or
+    `error(code)`, with the last line of its stderr as the reason; a timeout at one field is not rerun at the next.
   - "cold": one process doing one computation, timed from launch to exit (startup, JIT, reading input).
   - "warm": one process doing --warmup untimed and --trials timed computations; we report the median of
     the timed ones (for ripser.cpp, which has no in-process loop, the median of --trials cold runs).
@@ -30,6 +34,7 @@ import json
 import math
 import os
 import platform
+import re
 import shutil
 import signal
 import statistics
@@ -38,6 +43,7 @@ import sys
 import time
 import urllib.request
 from pathlib import Path
+from typing import NamedTuple, Optional
 
 import numpy as np
 
@@ -49,6 +55,17 @@ ROADMAP = "https://raw.githubusercontent.com/n-otter/PH-roadmap/master/data_sets
 # Cases. The Vietoris-Rips ones are the Ripser paper's benchmark (ripser-benchmark's Dockerfile, same flags
 # minus --ratio, which only filters printed output), plus the sphere3 size ladder.
 # ---------------------------------------------------------------------------------------------------------
+class Case(NamedTuple):
+    name: str
+    task: str
+    file: str
+    format: str  # points | distance | npy
+    dim: int  # the highest homological degree computed
+    threshold: Optional[float] = None  # the largest filtration value; None: the enclosing radius (VR) or no limit
+    radius_k: Optional[int] = None  # alpha: a radius at which a point has about this many neighbours within 2r
+    degenerate: bool = False  # not in general position: the reference is not ground truth for the barcode
+
+
 CASES = [
     # name, task, file, format, dim, threshold
     ("sphere3_48", "vr", "sphere3_48.txt", "points", 2, None),
@@ -76,9 +93,24 @@ CASES = [
     ("unif2d_10000", "alpha", "unif2d_10000.txt", "points", 1, None),
     ("unif3d_1000", "alpha", "unif3d_1000.txt", "points", 2, None),
     ("unif3d_5000", "alpha", "unif3d_5000.txt", "points", 2, None),
-    ("dragon2000_alpha", "alpha", "dragon_2000.txt", "points", 2, None),
-    ("sphere3_192_alpha", "alpha", "sphere_3_192_points.dat", "points", 2, None),
+    # The two point sets below are not in general position (192 points on S^3 are cospherical; the dragon is a scan),
+    # so each tool triangulates the degenerate cells its own way and GUDHI is no ground truth: kept, flagged, and
+    # paired with a jittered copy (`_gp`, general position) that all tools read instead.
+    Case("dragon2000_alpha", "alpha", "dragon_2000.txt", "points", 2, degenerate=True),
+    Case("sphere3_192_alpha", "alpha", "sphere_3_192_points.dat", "points", 2, degenerate=True),
+    Case("dragon2000_alpha_gp", "alpha", "dragon_2000.gp.txt", "points", 2),
+    Case("sphere3_192_alpha_gp", "alpha", "sphere_3_192.gp.txt", "points", 2),
+    # High ambient dimension, the regime the dual-QP and Helix backends are for (issues #131, #133). unif5d_500 is the
+    # Helix crossover table's 5-D case (CGAL still finishes it). unif10d_1000 is the DQP paper's own example
+    # (Carlsson and Carlsson, Sci. Rep. 14:19824, section 4.2): 1000 points uniform in [-1,1]^10, radius 1.0, up to
+    # 3-simplices; the paper's sizes were (1000, 64785, 560459, 1783194) in 5 minutes, and a full Delaunay triangulation
+    # is out of reach (GUDHI and Helix are expected to time out, which is the result). o3_1024_alpha: the Ripser
+    # benchmark's 3x3 orthogonal matrices in R^9, with a radius at which a point has about 25 neighbours within 2r.
+    Case("unif5d_500", "alpha", "unif5d_500.txt", "points", 2),
+    Case("unif10d_1000", "alpha", "unif10d_1000.txt", "points", 2, threshold=1.0),
+    Case("o3_1024_alpha", "alpha", "o3_1024.txt", "points", 2, radius_k=25),
 ]
+CASES = [c if isinstance(c, Case) else Case(*c) for c in CASES]
 
 # ---------------------------------------------------------------------------------------------------------
 # Tools: (name, kind, task, options). `multithreaded` rows are reported but never count as the
@@ -101,10 +133,13 @@ TOOLS = [
     ("gudhi", "py", "cubical", {}),
     ("cripser", "py", "cubical", {}),
     ("tda4j", "tda4j", "alpha", {"engine": "auto", "reps": "cycles"}),
-    ("tda4j-fastalpha", "tda4j", "alpha", {"engine": "fastalpha", "reps": "cycles"}),
-    # The default above is Bowyer-Watson up to 4 dimensions (every alpha case here) and Helix above; these name each.
-    ("tda4j-bw", "tda4j", "alpha", {"engine": "auto", "reps": "cycles", "backend": "bowyer-watson"}),
+    # fast-alpha runs on the whole triangulation, so it takes no radius; Bowyer-Watson refuses an affine span above
+    # 4; DQP is only run with a radius (untruncated it is about 100 times slower than Helix in 2-D).
+    ("tda4j-fastalpha", "tda4j", "alpha", {"engine": "fastalpha", "reps": "cycles", "no_radius": True}),
+    # The default above is Bowyer-Watson up to 4 dimensions, Helix above and DQP for a small radius; these name each.
+    ("tda4j-bw", "tda4j", "alpha", {"engine": "auto", "reps": "cycles", "backend": "bowyer-watson", "max_ambient": 4}),
     ("tda4j-helix", "tda4j", "alpha", {"engine": "auto", "reps": "cycles", "backend": "helix"}),
+    ("tda4j-dqp", "tda4j", "alpha", {"engine": "auto", "reps": "cycles", "backend": "dqp", "needs_radius": True}),
     ("gudhi", "py", "alpha", {}),
 ]
 # The Scala.js build of TDA4j (the npm package, on Node.js) beside each JVM variant above. A tool named `tda4j-js...`
@@ -115,9 +150,12 @@ TOOLS += [
     ("tda4j-js", "tda4j-js", "cubical", {"engine": "auto", "reps": "cycles"}),
     ("tda4j-js-cohomology", "tda4j-js", "cubical", {"engine": "cohomology", "reps": "cocycles"}),
     ("tda4j-js", "tda4j-js", "alpha", {"engine": "auto", "reps": "cycles"}),
-    ("tda4j-js-fastalpha", "tda4j-js", "alpha", {"engine": "fastalpha", "reps": "cycles"}),
-    ("tda4j-js-bw", "tda4j-js", "alpha", {"engine": "auto", "reps": "cycles", "backend": "bowyer-watson"}),
+    ("tda4j-js-fastalpha", "tda4j-js", "alpha", {"engine": "fastalpha", "reps": "cycles", "no_radius": True}),
+    ("tda4j-js-bw", "tda4j-js", "alpha",
+     {"engine": "auto", "reps": "cycles", "backend": "bowyer-watson", "max_ambient": 4}),
     ("tda4j-js-helix", "tda4j-js", "alpha", {"engine": "auto", "reps": "cycles", "backend": "helix"}),
+    ("tda4j-js-dqp", "tda4j-js", "alpha",
+     {"engine": "auto", "reps": "cycles", "backend": "dqp", "needs_radius": True}),
 ]
 REFERENCE = {"vr": "ripser.cpp", "cubical": "gudhi", "alpha": "gudhi"}
 
@@ -134,6 +172,13 @@ def node_heap_mb(spec):
     spec = str(spec).strip().lower()
     scale = {"k": 1 / 1024, "m": 1, "g": 1024, "t": 1024 * 1024}.get(spec[-1:], None)
     return int(float(spec[:-1] if scale else spec) * (scale or 1))
+
+
+def jvm_flags(heap, extra=""):
+    """The options of every JVM process of the benchmark, here and in sweep_cubical.py: one collector and a fixed heap.
+    A JVM's RSS follows the collector's policy (a parallel collector shows its total allocation until the first
+    collection), so the two drivers must agree; the drivers also report the heap pools' peak use."""
+    return [f"-Xmx{heap}", f"-Xms{heap}", "-XX:+UseParallelGC"] + extra.split()
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -153,6 +198,13 @@ def blob(shape, rng):
     grids = np.meshgrid(*[np.arange(n) for n in shape], indexing="ij")
     r2 = sum(((g - (n - 1) / 2) / (n / 4)) ** 2 for g, n in zip(grids, shape))
     return np.exp(-r2 / 2) + 0.05 * rng.random(shape)
+
+
+def jitter(points, rng, relative=1e-3):
+    """Gaussian noise of `relative` times the bounding-box diagonal: far above the 1e-10 radius at which Helix calls
+    points cospherical and far below the sampling distance, so cospherical and coplanar clusters are broken."""
+    scale = relative * float(np.linalg.norm(points.max(axis=0) - points.min(axis=0)))
+    return points + scale * rng.normal(size=points.shape)
 
 
 def prepare(data: Path):
@@ -185,6 +237,14 @@ def prepare(data: Path):
         np.savetxt(data / f"unif2d_{n}.txt", rng.random((n, 2)), fmt="%.17g")
     for n in [1000, 5000]:
         np.savetxt(data / f"unif3d_{n}.txt", rng.random((n, 3)), fmt="%.17g")
+
+    # Added after the sets above, from their own generator, so the earlier files stay byte-identical.
+    rng = np.random.default_rng(20261018)
+    np.savetxt(data / "unif5d_500.txt", rng.random((500, 5)), fmt="%.17g")
+    np.savetxt(data / "unif10d_1000.txt", rng.uniform(-1, 1, (1000, 10)), fmt="%.17g")  # the DQP paper's example
+    # The two degenerate alpha inputs, moved into general position: the same file for every tool.
+    np.savetxt(data / "sphere_3_192.gp.txt", jitter(np.loadtxt(data / "sphere_3_192_points.dat"), rng), fmt="%.17g")
+    np.savetxt(data / "dragon_2000.gp.txt", jitter(np.loadtxt(data / "dragon_2000.txt"), rng), fmt="%.17g")
     with open(data / "MANIFEST.json", "w") as f:
         json.dump({p.name: p.stat().st_size for p in sorted(data.iterdir()) if p.is_file()}, f, indent=1)
     print(f"data ready in {data}")
@@ -193,14 +253,70 @@ def prepare(data: Path):
 # ---------------------------------------------------------------------------------------------------------
 # running one process
 # ---------------------------------------------------------------------------------------------------------
+class Proc(NamedTuple):
+    """One process: `status` is ok | timeout | unsupported | limit | oom | error(code); `reason` the stderr line that
+    explains a status other than ok; `rss_src` is `proc` (VmHWM sampled while it ran) or `rusage` (ru_maxrss, which
+    includes the harness's own RSS at spawn time: an upper bound, for a process too short to be sampled)."""
+    status: str
+    wall: float
+    rss_mb: float
+    text: str
+    reason: str = ""
+    rss_src: str = "proc"
+
+
+# What a tool prints when it hits a limit of its own. Ripser packs the coefficient into the same 64-bit field as the
+# simplex index (num_coefficient_bits = 8 in every USE_COEFFICIENTS build, whatever the prime), which leaves a simplex
+# index of at most 2^55 - 1; a larger one is a std::overflow_error that nothing catches (SIGABRT, exit -6).
+FAILURES = [
+    ("limit", re.compile(r"larger than maximum index")),
+    ("oom", re.compile(r"bad_alloc|MemoryError|OutOfMemoryError|heap out of memory|Cannot allocate memory")),
+]
+
+
+def classify(code, err_text):
+    """(status, reason) of a process that exited with `code` after printing `err_text` to stderr."""
+    lines = [l.strip() for l in err_text.splitlines() if l.strip()]
+    if code == 0:
+        return "ok", ""
+    for status, pattern in FAILURES:
+        hit = next((l for l in lines if pattern.search(l)), None)
+        if hit:
+            return status, hit[:300]
+    reason = lines[-1][:300] if lines else ""
+    if code == 3:
+        return "unsupported", reason
+    if code == -9 and not reason:
+        reason = "killed by SIGKILL, not by the harness: probably the kernel's out-of-memory killer"
+    return f"error({code})", reason
+
+
+def vm_hwm_mb(pid):
+    """The kernel's peak-RSS high-water mark of process `pid` (VmHWM), or None where /proc has none: elsewhere than
+    Linux, or a zombie."""
+    try:
+        with open(f"/proc/{pid}/status") as f:
+            for line in f:
+                if line.startswith("VmHWM:"):
+                    return int(line.split()[1]) / 1024
+    except (OSError, ValueError):
+        pass
+    return None
+
+
 def run_proc(cmd, timeout, log_prefix):
-    """Runs cmd in its own session; returns (status, wall_s, maxrss_mb, stdout). status: ok|timeout|error|unsupported."""
+    """Runs cmd in its own session (killed as a group at `timeout`); returns a `Proc`."""
     out_path, err_path = Path(str(log_prefix) + ".out"), Path(str(log_prefix) + ".err")
     with open(out_path, "w") as out, open(err_path, "w") as err:
         start = time.perf_counter()
+        # Popen returns once the child has exec'd, so /proc/<pid>/status describes the new program, not the harness.
         proc = subprocess.Popen(cmd, stdout=out, stderr=err, start_new_session=True)
-        status, rusage = None, None
+        peak = 0.0
+        status, rusage, timed_out = None, None, False
         while True:
+            hwm = vm_hwm_mb(proc.pid)
+            if hwm:
+                peak = max(peak, hwm)
             pid, st, ru = os.wait4(proc.pid, os.WNOHANG)
             if pid != 0:
                 status, rusage = st, ru
@@ -208,15 +324,17 @@ def run_proc(cmd, timeout, log_prefix):
             if time.perf_counter() - start > timeout:
                 os.killpg(proc.pid, signal.SIGKILL)
                 _, status, rusage = os.wait4(proc.pid, 0)
-                wall = time.perf_counter() - start
-                return "timeout", wall, rusage.ru_maxrss / 1024, ""
-            time.sleep(0.02)
+                timed_out = True
+                break
+            time.sleep(0.01)
         wall = time.perf_counter() - start
+    rss, src = (peak, "proc") if peak > 0 else (rusage.ru_maxrss / 1024, "rusage")
+    if timed_out:
+        return Proc("timeout", wall, rss, "", f"killed after {timeout:g} s", src)
     code = os.waitstatus_to_exitcode(status)
-    text = out_path.read_text()
-    if code == 3:
-        return "unsupported", wall, rusage.ru_maxrss / 1024, text
-    return ("ok" if code == 0 else f"error({code})"), wall, rusage.ru_maxrss / 1024, text
+    err_text = err_path.read_text(errors="replace")[-65536:]
+    kind, reason = classify(code, err_text)
+    return Proc(kind, wall, rss, out_path.read_text(), reason, src)
 
 
 def last_json(text):
@@ -271,7 +389,7 @@ def available(kind, opts, python):
 
 
 def command(kind, name, opts, case, data, p, threshold, warmup, trials, out, args):
-    cname, task, fname, fmt, dim, _ = case
+    task, fname, fmt, dim = case.task, case.file, case.format, case.dim
     common = [f"task={task}", f"input={data / fname}", f"dim={dim}", f"p={p}", f"warmup={warmup}",
               f"trials={trials}", f"out={out}"]
     if fmt in ("points", "distance"):
@@ -280,7 +398,7 @@ def command(kind, name, opts, case, data, p, threshold, warmup, trials, out, arg
         common.append(f"threshold={threshold!r}")
     if kind == "tda4j":
         cp = Path(os.environ["TDA4J_CP"]).read_text().strip()
-        return (["java", f"-Xmx{args.jvm_heap}"] + args.jvm_opts.split() +
+        return (["java"] + jvm_flags(args.jvm_heap, args.jvm_opts) +
                 ["-cp", cp, "org.appliedtopology.tda4j.PaperBenchmarkDriver",
                  f"engine={opts['engine']}", f"reps={opts['reps']}"] +
                 ([f"backend={opts['backend']}"] if "backend" in opts else []) + common)
@@ -301,8 +419,8 @@ def command(kind, name, opts, case, data, p, threshold, warmup, trials, out, arg
                  str(HERE / "workers" / "ripserer_worker.jl"), f"variant={opts['variant']}"] + common)
     if kind == "javaplex":
         cp = os.environ["JAVAPLEX_JAR"] + os.pathsep + os.environ["JAVAPLEX_BUILD"]
-        return ["java", f"-Xmx{args.jvm_heap}", "-cp", cp, "JavaPlexWorker",
-                f"divisions={args.javaplex_divisions}"] + common
+        return (["java"] + jvm_flags(args.jvm_heap, args.jvm_opts) + ["-cp", cp, "JavaPlexWorker",
+                f"divisions={args.javaplex_divisions}"] + common)
     if kind == "ripser":
         binary = os.environ["RIPSER_BIN"] if p == 2 else os.environ.get("RIPSER_COEFF_BIN", "")
         if not binary:
@@ -317,18 +435,62 @@ def command(kind, name, opts, case, data, p, threshold, warmup, trials, out, arg
     raise ValueError(kind)
 
 
-def enclosing_radius(case, data):
-    _, task, fname, fmt, _, threshold = case
-    if threshold is not None or task != "vr":
-        return threshold
-    if fmt == "distance":
-        d = np.loadtxt(data / fname)
+def pairwise_distances(x, rows=None):
+    """Euclidean distances from the points `rows` (default: all) to all points of `x`."""
+    g = x @ x.T if rows is None else x[rows] @ x.T
+    sq = np.einsum("ij,ij->i", x, x)
+    sq_rows = sq if rows is None else sq[rows]
+    return np.sqrt(np.maximum(sq_rows[:, None] + sq[None, :] - 2 * g, 0))
+
+
+def alpha_radius(points, k, sample=200, seed=0):
+    """A radius at which a point has about k neighbours within 2r (the statistic that decides between the dual-QP and a
+    triangulation, `AlphaShapes.prefersDQP`): half the median distance from a sample of points to their k-th nearest
+    neighbour. The scale of the data is not known when a case is written; its density is what the cost depends on."""
+    x = np.asarray(points, dtype=float)
+    rng = np.random.default_rng(seed)
+    rows = rng.choice(len(x), size=min(sample, len(x)), replace=False)
+    d = np.partition(pairwise_distances(x, rows), k, axis=1)[:, k]  # column 0 of the sorted row is the point itself
+    return float(f"{np.median(d) / 2:.6g}")
+
+
+def case_threshold(case, data):
+    """The largest filtration value every tool gets: the case's own, a radius from its neighbour count, or for
+    Vietoris-Rips without one the enclosing radius (ripser.cpp's default); None for no limit."""
+    if case.threshold is not None:
+        return case.threshold
+    if case.radius_k:
+        return alpha_radius(np.loadtxt(data / case.file, ndmin=2), case.radius_k)
+    if case.task != "vr":
+        return None
+    if case.format == "distance":
+        d = np.loadtxt(data / case.file)
     else:
-        x = np.loadtxt(data / fname)
-        g = x @ x.T
-        sq = np.diag(g)
-        d = np.sqrt(np.maximum(sq[:, None] + sq[None, :] - 2 * g, 0))
+        d = pairwise_distances(np.loadtxt(data / case.file))
     return float(np.min(np.max(d, axis=1)))
+
+
+def ambient_dimension(case, data):
+    """The number of coordinates of a point file's first row; 0 for any other input."""
+    if case.format != "points":
+        return 0
+    with open(data / case.file) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#"):
+                return len([x for x in re.split(r"[,\s]+", line) if x])
+    return 0
+
+
+def skip_reason(opts, case, ambient, threshold):
+    """Why a tool is not run on a case at all (recorded as `unsupported`), or None."""
+    if opts.get("max_ambient") and ambient > opts["max_ambient"]:
+        return f"ambient dimension {ambient} is above the backend's limit of {opts['max_ambient']}"
+    if opts.get("needs_radius") and threshold is None:
+        return "run with a radius only: untruncated it builds every pair of points (about 100 times slower than Helix)"
+    if opts.get("no_radius") and case.task == "alpha" and threshold is not None:
+        return "takes no radius: it needs the whole triangulation"
+    return None
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -344,113 +506,170 @@ def read_bars(path):
     return bars
 
 
-def agreement(a, b, max_dim):
-    """Largest discrepancy over degrees 0..max_dim: bottleneck distance on finite bars, essential births
-    matched in sorted order (a count mismatch is reported as inf)."""
-    import gudhi
+def agreement(a, b, max_dim, bottleneck=None):
+    """(distance, note): the largest discrepancy over degrees 0..max_dim, as the bottleneck distance on finite bars
+    and essential births matched in sorted order. A different number of essential bars in some degree is distance inf,
+    and the note says which degree and how many. Distances below 1e-12 are 0 (the bottleneck routine returns
+    denormals for equal diagrams). `bottleneck` defaults to GUDHI's."""
+    if bottleneck is None:
+        import gudhi
+        bottleneck = gudhi.bottleneck_distance
     worst = 0.0
     for k in range(max_dim + 1):
         fa = [(x, y) for x, y in a.get(k, []) if math.isfinite(y) and y > x]
         fb = [(x, y) for x, y in b.get(k, []) if math.isfinite(y) and y > x]
-        worst = max(worst, gudhi.bottleneck_distance(np.array(fa).reshape(-1, 2), np.array(fb).reshape(-1, 2)))
+        worst = max(worst, bottleneck(np.array(fa).reshape(-1, 2), np.array(fb).reshape(-1, 2)))
         ea = sorted(x for x, y in a.get(k, []) if math.isinf(y))
         eb = sorted(x for x, y in b.get(k, []) if math.isinf(y))
         if len(ea) != len(eb):
-            return math.inf
+            return math.inf, f"H{k} has {len(ea)} essential bars against the reference's {len(eb)}"
         if ea:
             worst = max(worst, max(abs(x - y) for x, y in zip(ea, eb)))
-    return worst
+    return (0.0 if worst < 1e-12 else worst), ""
+
+
+def tolerance(threshold, tool, divisions):
+    """The distance below which two barcodes agree. ripser.cpp computes in float32; JavaPlex snaps filtration values
+    to a grid of threshold / divisions."""
+    scale = float(threshold) if threshold not in ("", "None", None) else 1.0
+    tol = 1e-5 * max(1.0, scale)
+    if tool == "javaplex" and threshold not in ("", "None", None):
+        tol = max(tol, float(threshold) / float(divisions))
+    return tol
+
+
+def significant_counts(bars, tol):
+    """Bars per degree that are essential or longer than `tol`: what two tools can be compared on. A tool that keeps
+    the near-zero bars (length below the agreement tolerance) would otherwise look as if it disagreed."""
+    counts = {}
+    for k, ivs in bars.items():
+        n = sum(1 for b, d in ivs if math.isinf(d) or d - b > tol)
+        if n:
+            counts[str(k)] = n
+    return counts
 
 
 # ---------------------------------------------------------------------------------------------------------
 # run
 # ---------------------------------------------------------------------------------------------------------
+RUNS_COLUMNS = ["case", "task", "p", "tool", "mode", "status", "wall_s", "times_s", "median_s", "maxrss_mb", "bars",
+                "threshold", "multithreaded", "info", "reason", "rss_src", "heap_peak_mb", "old_peak_mb"]
+
+
 def run(args):
     data = Path(args.data)
     out = Path(args.out)
     (out / "bars").mkdir(parents=True, exist_ok=True)
     (out / "logs").mkdir(parents=True, exist_ok=True)
     write_env(out, args)
-    cases = [c for c in CASES if not args.cases or c[0] in args.cases.split(",")]
+    cases = [c for c in CASES if not args.cases or c.name in args.cases.split(",")]
     tasks = set(args.tasks.split(",")) if args.tasks else None
     wanted = set(args.tools.split(",")) if args.tools else None
     fields = [int(p) for p in args.fields.split(",")]
     runs_csv = out / "runs.csv"
     new = not runs_csv.exists()
+    timed_out = {}  # (case, tool) -> the first field at which it timed out
     with open(runs_csv, "a", newline="") as f:
-        w = csv.writer(f)
+        w = csv.DictWriter(f, fieldnames=RUNS_COLUMNS)
         if new:
-            w.writerow(["case", "task", "p", "tool", "mode", "status", "wall_s", "times_s", "median_s",
-                        "maxrss_mb", "bars", "threshold", "multithreaded", "info"])
+            w.writeheader()
         for case in cases:
-            cname, task = case[0], case[1]
-            if tasks and task not in tasks:
+            if tasks and case.task not in tasks:
                 continue
-            threshold = enclosing_radius(case, data)
+            threshold = case_threshold(case, data)
+            ambient = ambient_dimension(case, data)
             for p in fields:
                 for name, kind, ttask, opts in TOOLS:
-                    if ttask != task or (wanted and name not in wanted):
+                    if ttask != case.task or (wanted and name not in wanted):
                         continue
                     opts = dict(opts)
                     opts.setdefault("pytool", name)
+
+                    def not_run(status, reason, mode="cold"):
+                        w.writerow({"case": case.name, "task": case.task, "p": p, "tool": name, "mode": mode,
+                                    "status": status, "threshold": threshold, "reason": reason})
+                        f.flush()
+                        print(f"[{datetime.datetime.now():%H:%M:%S}] {case.name}__p{p}__{name}: {status} ({reason})",
+                              flush=True)
+
                     if not available(kind, opts, args.python):
-                        w.writerow([cname, task, p, name, "-", "missing", "", "", "", "", "", threshold, "", ""])
+                        w.writerow({"case": case.name, "task": case.task, "p": p, "tool": name, "mode": "-",
+                                    "status": "missing", "threshold": threshold})
                         f.flush()
                         continue
-                    run_one(w, f, data, out, case, p, threshold, name, kind, opts, args)
+                    why = skip_reason(opts, case, ambient, threshold)
+                    if why:
+                        not_run("unsupported", why)
+                        continue
+                    earlier = timed_out.get((case.name, name))
+                    if earlier is not None and not args.rerun_timeouts:
+                        # The time of a computation does not depend on the field (p = 17 over p = 2 was 0.9 to 1.2 for
+                        # every tool of the first run), and a timeout costs --timeout seconds.
+                        not_run("timeout", f"not run: the same computation timed out at p={earlier}")
+                        continue
+                    if run_one(w, f, data, out, case, p, threshold, name, kind, opts, args) == "timeout":
+                        timed_out.setdefault((case.name, name), p)
 
 
 def run_one(w, f, data, out, case, p, threshold, name, kind, opts, args):
-    cname, task = case[0], case[1]
+    """Runs one (case, field, tool): cold, then warm. Returns "timeout" if a run timed out, else the last status."""
+    cname, task = case.name, case.task
     tag = f"{cname}__p{p}__{name}"
     bars_path = out / "bars" / f"{tag}.tsv"
     mt = bool(opts.get("multithreaded"))
     print(f"[{datetime.datetime.now():%H:%M:%S}] {tag}", flush=True)
 
-    def record(mode, status, wall, rss, info, times=None, bars=None):
+    def record(mode, proc, info="", times=None, bars=None, wall=None, rss=None, j=None):
         med = statistics.median(times) if times else ""
-        w.writerow([cname, task, p, name, mode, status, f"{wall:.4f}",
-                    json.dumps(times) if times else "", med if med == "" else f"{med:.6f}",
-                    f"{rss:.1f}", json.dumps(bars) if bars else "", threshold, mt, info])
+        wall = proc.wall if wall is None else wall
+        rss = proc.rss_mb if rss is None else rss
+        j = j or {}
+        w.writerow({"case": cname, "task": task, "p": p, "tool": name, "mode": mode, "status": proc.status,
+                    "wall_s": f"{wall:.4f}", "times_s": json.dumps(times) if times else "",
+                    "median_s": med if med == "" else f"{med:.6f}", "maxrss_mb": f"{rss:.1f}",
+                    "bars": json.dumps(bars) if bars else "", "threshold": threshold, "multithreaded": mt,
+                    "info": info, "reason": proc.reason, "rss_src": proc.rss_src,
+                    "heap_peak_mb": j.get("heap_peak_mb", ""), "old_peak_mb": j.get("old_peak_mb", "")})
         f.flush()
-        print(f"    {mode:4s} {status:10s} wall={wall:.2f}s median={med if med == '' else f'{med:.3f}s'} "
-              f"rss={rss:.0f}MB {info}", flush=True)
+        print(f"    {mode:4s} {proc.status:10s} wall={wall:.2f}s median={med if med == '' else f'{med:.3f}s'} "
+              f"rss={rss:.0f}MB {info} {proc.reason}".rstrip(), flush=True)
 
     if kind == "ripser":
         cmd = command(kind, name, opts, case, data, p, threshold, 0, 1, bars_path, args)
         if cmd is None:
-            record("cold", "missing", 0, 0, "no coefficient build for p != 2")
-            return
-        walls, rss_max = [], 0.0
+            record("cold", Proc("missing", 0, 0, "", "no coefficient build for p != 2"))
+            return "missing"
+        walls, rss_max, counts, last = [], 0.0, None, None
         for t in range(max(1, args.trials)):
             if walls and walls[0] > args.warm_cap:
                 break  # one long run is enough; see --warm-cap
-            status, wall, rss, text = run_proc(cmd, args.timeout, out / "logs" / f"{tag}__{t}")
-            rss_max = max(rss_max, rss)
-            if status != "ok":
-                record("cold", status, wall, rss, "")
-                return
+            last = run_proc(cmd, args.timeout, out / "logs" / f"{tag}__{t}")
+            rss_max = max(rss_max, last.rss_mb)
+            if last.status != "ok":
+                record("cold", last)
+                return last.status
             if t == 0:
-                counts = parse_ripser_output(text, bars_path)
-                record("cold", status, wall, rss, "", [wall], counts)
-            walls.append(wall)
-        record("warm", "ok", sum(walls), rss_max, "median of cold runs", walls, counts)
-        return
+                counts = parse_ripser_output(last.text, bars_path)
+                record("cold", last, times=[last.wall], bars=counts)
+            walls.append(last.wall)
+        record("warm", last, "median of cold runs", walls, counts, wall=sum(walls), rss=rss_max)
+        return "ok"
 
     cmd = command(kind, name, opts, case, data, p, threshold, 0, 1, bars_path, args)
-    status, wall, rss, text = run_proc(cmd, args.timeout, out / "logs" / f"{tag}__cold")
-    j = last_json(text) if status == "ok" else None
-    record("cold", status, wall, rss, "", j["times_s"] if j else None, j["bars"] if j else None)
-    if status != "ok" or args.trials <= 0:
-        return
+    cold = run_proc(cmd, args.timeout, out / "logs" / f"{tag}__cold")
+    j = last_json(cold.text) if cold.status == "ok" else None
+    record("cold", cold, times=j["times_s"] if j else None, bars=j["bars"] if j else None, j=j)
+    if cold.status != "ok" or args.trials <= 0:
+        return cold.status
     if j and j["times_s"] and j["times_s"][0] > args.warm_cap:
         # Warm-up is irrelevant at this scale, and warmup+trials repetitions could cost hours: reuse the cold run.
-        record("warm", "ok", wall, rss, f"cold computation > {args.warm_cap:g}s: warm = cold", j["times_s"], j["bars"])
-        return
+        record("warm", cold, f"cold computation > {args.warm_cap:g}s: warm = cold", j["times_s"], j["bars"], j=j)
+        return "ok"
     cmd = command(kind, name, opts, case, data, p, threshold, args.warmup, args.trials, bars_path, args)
-    status, wall, rss, text = run_proc(cmd, args.timeout * (args.warmup + args.trials), out / "logs" / f"{tag}__warm")
-    j = last_json(text) if status == "ok" else None
-    record("warm", status, wall, rss, "", j["times_s"] if j else None, j["bars"] if j else None)
+    warm = run_proc(cmd, args.timeout * (args.warmup + args.trials), out / "logs" / f"{tag}__warm")
+    j = last_json(warm.text) if warm.status == "ok" else None
+    record("warm", warm, times=j["times_s"] if j else None, bars=j["bars"] if j else None, j=j)
+    return warm.status
 
 
 def js_package_version():
@@ -481,6 +700,7 @@ def write_env(out, args):
         "julia": cmd_out([os.environ["JULIA"], "--version"]) if os.environ.get("JULIA") else "",
         "ripser_git": cmd_out(["git", "-C", str(Path(os.environ.get("RIPSER_BIN", ".")).parent), "rev-parse", "HEAD"]),
         "tda4j_git": cmd_out(["git", "-C", str(HERE.parent), "rev-parse", "HEAD"]),
+        "jvm_flags": jvm_flags(args.jvm_heap, args.jvm_opts),
         "args": vars(args),
     }
     with open(out / "env.json", "w") as f:
@@ -490,9 +710,17 @@ def write_env(out, args):
 # ---------------------------------------------------------------------------------------------------------
 # summarize
 # ---------------------------------------------------------------------------------------------------------
-def summarize(out: Path):
+def geomean(values):
+    return math.exp(sum(math.log(v) for v in values) / len(values))
+
+
+def fmt_distance(dist):
+    return "" if dist is None else ("0" if dist == 0 else f"{dist:.3g}")
+
+
+def summarize(out: Path, bottleneck=None):
     rows = list(csv.DictReader(open(out / "runs.csv")))
-    case_dim = {c[0]: c[4] for c in CASES}
+    cases = {c.name: c for c in CASES}
     try:
         divisions = json.load(open(out / "env.json"))["args"]["javaplex_divisions"]
     except Exception:
@@ -503,68 +731,114 @@ def summarize(out: Path):
     summary = []
     for (cname, p, tool), modes in sorted(by.items()):
         cold, warm = modes.get("cold", {}), modes.get("warm", {})
-        task = (cold or warm or next(iter(modes.values())))["task"]
+        first = cold or warm or next(iter(modes.values()))
+        task = first["task"]
         ref = REFERENCE[task]
         mine = read_bars(out / "bars" / f"{cname}__p{p}__{tool}.tsv") if cold.get("status") == "ok" else None
         theirs = read_bars(out / "bars" / f"{cname}__p{p}__{ref}.tsv")
-        dist = agreement(mine, theirs, case_dim[cname]) if (mine is not None and theirs is not None) else None
+        dist, note = None, ""
+        if mine is not None and theirs is not None:
+            max_dim = cases[cname].dim if cname in cases else max(list(mine) + list(theirs) + [0])
+            dist, note = agreement(mine, theirs, max_dim, bottleneck)
         thr = cold.get("threshold") or ""
-        scale = float(thr) if thr not in ("", "None") else 1.0
-        tol = 1e-5 * max(1.0, scale)
-        if tool == "javaplex" and thr not in ("", "None"):
-            tol = max(tol, float(thr) / float(divisions))  # JavaPlex snaps values to threshold/divisions
+        tol = tolerance(thr, tool, divisions)
+        measured = [m for m in modes.values() if m.get("maxrss_mb")]
+        heaps = [float(m["heap_peak_mb"]) for m in modes.values() if m.get("heap_peak_mb")]
+        olds = [float(m["old_peak_mb"]) for m in modes.values() if m.get("old_peak_mb")]
         summary.append({
             "case": cname, "task": task, "p": p, "tool": tool,
-            "status": warm.get("status") or cold.get("status") or next(iter(modes.values()))["status"],
+            "status": warm.get("status") or cold.get("status") or first["status"],
             "cold_s": cold.get("wall_s", ""), "warm_median_s": warm.get("median_s", ""),
-            "maxrss_mb": max([float(m["maxrss_mb"]) for m in modes.values() if m.get("maxrss_mb")] or [0]),
+            "maxrss_mb": max([float(m["maxrss_mb"]) for m in measured] or [0]),
             "bars": cold.get("bars", ""), "multithreaded": cold.get("multithreaded", ""),
-            "vs_reference": "" if dist is None else f"{dist:.3g}",
+            "vs_reference": fmt_distance(dist),
             "agrees": "" if dist is None else str(dist <= tol),
+            "bars_sig": json.dumps(significant_counts(mine, tol)) if mine is not None else "",
+            "reason": warm.get("reason") or cold.get("reason") or "",
+            "note": note,
+            "rss_src": "rusage" if any(m.get("rss_src") == "rusage" for m in measured) else ("proc" if measured else ""),
+            "heap_peak_mb": f"{max(heaps):.0f}" if heaps else "",
+            "old_peak_mb": f"{max(olds):.0f}" if olds else "",
+            "degenerate": str(cname in cases and cases[cname].degenerate),
         })
+    if not summary:
+        print(f"no runs in {out / 'runs.csv'}")
+        return
     with open(out / "summary.csv", "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(summary[0].keys()))
         w.writeheader()
         w.writerows(summary)
 
-    # TDA4j's slowdown: its warm median against the fastest other single-threaded tool, and against the
-    # reference; geometric means over the cases where both finished.
-    lines = ["# TDA4j cross-platform benchmark", "", f"Results: `{out}`. Environment: `env.json`.", ""]
-    lines += ["| case | p | tool | status | cold s | warm s | peak MB | bars | Δ vs reference | agrees |",
-              "|---|---|---|---|---|---|---|---|---|---|"]
+    lines = ["# TDA4j cross-platform benchmark", "", f"Results: `{out}`. Environment: `env.json`.", "",
+             "Status: `ok`; `timeout`; `limit` (the tool's own index range); `oom`; `unsupported`; `error(code)`; "
+             "`missing` (not installed). Peak MB is the kernel's peak RSS of the process (`≤` where it could only be "
+             "read from `ru_maxrss`, an upper bound); heap MB is the JVM's peak use of its heap pools. "
+             "† the point set is degenerate (not in general position), so the reference is not ground truth.", ""]
+    lines += ["| case | p | tool | status | cold s | warm s | peak MB | heap MB | bars (> tol) | Δ vs reference | agrees |",
+              "|---|---|---|---|---|---|---|---|---|---|---|"]
     for s in summary:
-        lines.append(f"| {s['case']} | {s['p']} | {s['tool']} | {s['status']} | {s['cold_s']} | "
-                     f"{s['warm_median_s']} | {s['maxrss_mb']:.0f} | {s['bars']} | {s['vs_reference']} | {s['agrees']} |")
+        rss = f"{'≤' if s['rss_src'] == 'rusage' else ''}{s['maxrss_mb']:.0f}" if s["rss_src"] else ""
+        agrees = s["agrees"] + ("†" if s["degenerate"] == "True" and s["agrees"] == "False" else "")
+        lines.append(f"| {s['case']} | {s['p']} | {s['tool']} | {s['status']} | {s['cold_s']} | {s['warm_median_s']} | "
+                     f"{rss} | {s['heap_peak_mb']} | {s['bars_sig'] or s['bars']} | {s['vs_reference']} | {agrees} |")
+
+    failed = [s for s in summary if s["status"] not in ("ok", "missing")]
+    if failed:
+        lines += ["", "## Failures and limits", "", "| case | p | tool | status | reason |", "|---|---|---|---|---|"]
+        lines += [f"| {s['case']} | {s['p']} | {s['tool']} | {s['status']} | {s['reason'].replace('|', '/')} |"
+                  for s in failed]
+    missing = sorted({s["tool"] for s in summary if s["status"] == "missing"})
+    if missing:
+        lines += ["", f"Not installed: {', '.join(missing)}."]
+    noted = [s for s in summary if s["note"]]
+    if noted:
+        lines += ["", "## Agreement notes", ""]
+        lines += [f"- {s['case']}, p={s['p']}, {s['tool']}: {s['note']}" for s in noted]
+
+    # TDA4j's slowdown: its warm median against the reference (the fixed baseline) and against the fastest other
+    # single-threaded tool (which changes from row to row). A row whose reference did not finish is marked † and
+    # leaves both means: its "best other" is a different tool, and the row is not comparable with the others.
     lines += ["", "## TDA4j slowdown (warm median ÷ other tool's warm median; cold in parentheses)", "",
+              "† the reference did not finish: the best other tool is a different, slower one, and the row is not "
+              "counted in the means.", "",
               "| case | p | TDA4j variant | best other single-threaded | × best | × reference |", "|---|---|---|---|---|---|"]
-    ratios_best, ratios_ref = {}, {}
     groups = {}
     for s in summary:
         groups.setdefault((s["case"], s["p"]), []).append(s)
+    ratios_best, ratios_ref = {}, {}
+    attempted, finished = {}, {}
     for (cname, p), ss in sorted(groups.items()):
+        task = ss[0]["task"]
+        for t in ss:
+            if t["tool"].startswith("tda4j") and t["status"] != "missing":
+                attempted.setdefault((task, t["tool"], p), set()).add(cname)
+                if t["status"] == "ok":
+                    finished.setdefault((task, t["tool"], p), set()).add(cname)
         ok = [s for s in ss if s["status"] == "ok" and s["warm_median_s"] not in ("", None)]
         others = [s for s in ok if not s["tool"].startswith("tda4j") and s["multithreaded"] != "True"]
         if not others:
             continue
         best = min(others, key=lambda s: float(s["warm_median_s"]))
-        ref = next((s for s in ok if s["tool"] == REFERENCE[ss[0]["task"]]), None)
+        ref = next((s for s in ok if s["tool"] == REFERENCE[task]), None)
         for t in [s for s in ok if s["tool"].startswith("tda4j")]:
             rb = float(t["warm_median_s"]) / float(best["warm_median_s"])
             rr = float(t["warm_median_s"]) / float(ref["warm_median_s"]) if ref else None
             cb = float(t["cold_s"]) / float(best["cold_s"]) if t["cold_s"] and best["cold_s"] else None
-            ratios_best.setdefault((t["tool"], p), []).append(rb)
-            if rr:
-                ratios_ref.setdefault((t["tool"], p), []).append(rr)
+            if ref:
+                ratios_best.setdefault((task, t["tool"], p), []).append(rb)
+                ratios_ref.setdefault((task, t["tool"], p), []).append(rr)
             cold = f" ({cb:.2f})" if cb else ""
-            ref_text = "" if rr is None else f"{rr:.2f}"
-            lines.append(f"| {cname} | {p} | {t['tool']} | {best['tool']} | {rb:.2f}{cold} | {ref_text} |")
-    lines += ["", "Geometric means:", ""]
-    for key, vals in sorted(ratios_best.items()):
-        gm = math.exp(sum(math.log(v) for v in vals) / len(vals))
-        ref_vals = ratios_ref.get(key, [])
-        gr = math.exp(sum(math.log(v) for v in ref_vals) / len(ref_vals)) if ref_vals else float("nan")
-        lines.append(f"- {key[0]}, p={key[1]}: {gm:.2f}x the best other tool, {gr:.2f}x the reference "
-                     f"({len(vals)} cases)")
+            lines.append(f"| {cname} | {p} | {t['tool']} | {best['tool']}{'' if ref else ' †'} | {rb:.2f}{cold} | "
+                         f"{'' if rr is None else f'{rr:.2f}'} |")
+    lines += ["", "Means per task, over the cases where the variant and the reference both finished "
+              "(finished = the variant's own successes among the cases it ran):", ""]
+    for key in sorted(ratios_ref):
+        task, tool, p = key
+        vals, best_vals = ratios_ref[key], ratios_best[key]
+        ordered = sorted(vals)
+        lines.append(f"- {task}, {tool}, p={p}: {geomean(vals):.2f}x the reference (median {statistics.median(ordered):.2f}, "
+                     f"range {ordered[0]:.2f} to {ordered[-1]:.2f}) and {geomean(best_vals):.2f}x the best other tool, "
+                     f"over {len(vals)} cases; finished {len(finished.get(key, ()))} of {len(attempted.get(key, ()))}")
     lines += js_against_jvm(summary)
     (out / "summary.md").write_text("\n".join(lines) + "\n")
     print("\n".join(lines))
@@ -572,7 +846,8 @@ def summarize(out: Path):
 
 def js_against_jvm(summary):
     """The Scala.js build beside the JVM build of the same variant: warm and cold time ratios (JS ÷ JVM) and memory,
-    per case and as geometric means. Empty when no `tda4j-js*` tool ran."""
+    per case and as geometric means per task. Memory is compared two ways: RSS to RSS, and the JS RSS to the JVM's
+    peak heap use (a JVM's RSS follows its collector). Empty when no `tda4j-js*` tool ran."""
     index = {(s["case"], s["p"], s["tool"]): s for s in summary if s["status"] == "ok"}
     rows, warm_ratios, cold_ratios = [], {}, {}
     for (cname, p, tool), js in sorted(index.items()):
@@ -580,6 +855,7 @@ def js_against_jvm(summary):
         jvm = index.get((cname, p, jvm_name)) if jvm_name else None
         if jvm is None:
             continue
+        task = js["task"]
 
         def ratio(key):
             a, b = js.get(key, ""), jvm.get(key, "")
@@ -587,23 +863,23 @@ def js_against_jvm(summary):
 
         warm, cold = ratio("warm_median_s"), ratio("cold_s")
         mem = float(js["maxrss_mb"]) / float(jvm["maxrss_mb"]) if float(jvm["maxrss_mb"]) > 0 else None
+        heap = float(js["maxrss_mb"]) / float(jvm["heap_peak_mb"]) if jvm.get("heap_peak_mb") else None
         if warm:
-            warm_ratios.setdefault((tool, p), []).append(warm)
+            warm_ratios.setdefault((task, tool, p), []).append(warm)
         if cold:
-            cold_ratios.setdefault((tool, p), []).append(cold)
+            cold_ratios.setdefault((task, tool, p), []).append(cold)
         fmt = lambda v: "" if v is None else f"{v:.2f}"
-        rows.append(f"| {cname} | {p} | {tool} | {jvm_name} | {fmt(warm)} | {fmt(cold)} | {fmt(mem)} | "
+        rows.append(f"| {cname} | {p} | {tool} | {jvm_name} | {fmt(warm)} | {fmt(cold)} | {fmt(mem)} | {fmt(heap)} | "
                     f"{js['agrees']} |")
     if not rows:
         return []
     lines = ["", "## Scala.js against the JVM (JS ÷ JVM; above 1, the JVM is faster)", "",
-             "| case | p | JS tool | JVM twin | warm × | cold × | peak memory × | JS agrees with reference |",
-             "|---|---|---|---|---|---|---|---|"] + rows + ["", "Geometric means of the warm ratio (cold in parentheses):", ""]
+             "| case | p | JS tool | JVM twin | warm × | cold × | peak RSS × | RSS ÷ JVM heap peak | JS agrees with reference |",
+             "|---|---|---|---|---|---|---|---|---|"] + rows + ["", "Geometric means of the warm ratio (cold in parentheses):", ""]
     for key, vals in sorted(warm_ratios.items()):
-        gm = math.exp(sum(math.log(v) for v in vals) / len(vals))
         cold = cold_ratios.get(key, [])
-        gc = f" ({math.exp(sum(math.log(v) for v in cold) / len(cold)):.2f})" if cold else ""
-        lines.append(f"- {key[0]}, p={key[1]}: {gm:.2f}x{gc} over {len(vals)} cases")
+        gc = f" ({geomean(cold):.2f})" if cold else ""
+        lines.append(f"- {key[0]}, {key[1]}, p={key[2]}: {geomean(vals):.2f}x{gc} over {len(vals)} cases")
     return lines
 
 
@@ -625,7 +901,9 @@ def main():
     p2.add_argument("--warm-cap", type=float, default=60,
                     help="if one cold computation takes longer (s), skip the warm repetitions and reuse it")
     p2.add_argument("--jvm-heap", default="16g")
-    p2.add_argument("--jvm-opts", default="")
+    p2.add_argument("--jvm-opts", default="", help="more JVM options, after -Xmx/-Xms/-XX:+UseParallelGC")
+    p2.add_argument("--rerun-timeouts", action="store_true",
+                    help="rerun a computation at every field even after it timed out at an earlier one")
     p2.add_argument("--node-heap", default="",
                     help="--max-old-space-size for the tda4j-js tools, in the JVM's notation (default: --jvm-heap)")
     p2.add_argument("--node-opts", default="", help="more options for node, e.g. --stack-size=4000")

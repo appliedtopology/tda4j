@@ -103,6 +103,7 @@ if (task === "vr") {
   compute = () => tda4j.persistenceFromGrid(shape, values, options);
 } else if (task === "alpha") {
   if (engineName === "fastalpha" && backend === "dqp") unsupported("engine=fastalpha needs a triangulation, not DQP");
+  if (engineName === "fastalpha" && threshold !== undefined) unsupported("engine=fastalpha takes no threshold");
   const matrix = readMatrix(input);
   const alpha = { ...options, complex: "alpha" };
   if (backend !== "default") alpha.alphaBackend = backend;
