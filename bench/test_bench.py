@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tests of the benchmark harness itself, on synthetic processes and synthetic results: nothing here needs the tools
-being benchmarked (no sbt, GUDHI, ripser or Julia). Run from the repository root:
+being benchmarked (no sbt, GUDHI, ripser or Julia), except `PythonWorkerTests`, which runs the Python worker's adapters
+and skips what is not installed. Run from the repository root:
 
     python3 bench/test_bench.py        (or: python3 -m unittest discover -s bench -p 'test_*.py' -v)
 
@@ -11,6 +12,7 @@ import importlib.util
 import json
 import math
 import os
+import subprocess
 import sys
 import tempfile
 import time
@@ -156,6 +158,20 @@ class CaseTests(unittest.TestCase):
         self.assertTrue(tools["tda4j-dqp"]["needs_radius"])
         self.assertTrue(tools["tda4j-fastalpha"]["no_radius"])
         self.assertEqual(bench.jvm_twin("tda4j-js-dqp"), "tda4j-dqp")
+
+    def test_dionysus_and_oat_are_vietoris_rips_comparators_and_oat_is_characteristic_zero(self):
+        rows = {name: (task, opts) for name, kind, task, opts in bench.TOOLS if name.startswith(("dionysus", "oat"))}
+        self.assertEqual(set(rows), {"dionysus", "dionysus-homology", "dionysus-cocycles", "oat", "oat-cycles"})
+        self.assertEqual({task for task, _ in rows.values()}, {"vr"}, "neither has a cubical or an alpha complex to run")
+        self.assertEqual(bench.CHARACTERISTIC_ZERO, {"oat", "oat-cycles"})
+        names = {name for name, _, _, _ in bench.TOOLS}
+        for name, (_, opts) in rows.items():
+            self.assertIn(opts.get("slower_than", "dionysus" if name.startswith("dionysus") else "oat"), names)
+        for name in ("dionysus", "oat"):
+            self.assertNotIn("slower_than", rows[name][1], "the fast variant is the one the others wait for")
+        # the module the harness imports to test for the tool is not always the tool's name
+        for pytool in ("dionysus", "oat"):
+            self.assertIsInstance(bench.available("py", {"pytool": pytool}, sys.executable), bool)
 
     def test_jvm_flags_are_one_policy(self):
         self.assertEqual(bench.jvm_flags("16g"), ["-Xmx16g", "-Xms16g", "-XX:+UseParallelGC"])
@@ -332,6 +348,37 @@ class DegenerateTests(unittest.TestCase):
             self.assertIn("| False† |", md)
 
 
+class CharacteristicZeroTests(unittest.TestCase):
+    """OAT computes over the rationals whatever the row's p: a disagreement with the F_p reference is noted as such."""
+
+    def summarize(self, oat_bars):
+        d = tempfile.TemporaryDirectory()
+        self.addCleanup(d.cleanup)
+        out = Path(d.name)
+        (out / "bars").mkdir()
+        rows = []
+        for name, bars in [("ripser.cpp", "0\t0.0\tinf\n1\t0.5\tinf\n"), ("oat", oat_bars)]:
+            rows.append(run_row("torsion", name, "cold", "ok", wall="2", median="2", p="2"))
+            rows.append(run_row("torsion", name, "warm", "ok", wall="1", median="1", p="2"))
+            (out / "bars" / f"torsion__p2__{name}.tsv").write_text(bars)
+        write_runs(out, rows)
+        bench.summarize(out, bottleneck=stub_bottleneck)
+        with open(out / "summary.csv") as f:
+            return (out / "summary.md").read_text(), {r["tool"]: r for r in csv.DictReader(f)}
+
+    def test_a_difference_is_noted_as_the_field_not_hidden(self):
+        md, rows = self.summarize("0\t0.0\tinf\n")  # no essential H1 class over Q
+        self.assertEqual(rows["oat"]["agrees"], "False")
+        self.assertIn("H1 has 0 essential bars against the reference's 1; computed over the rationals, the reference "
+                      "over F_2", rows["oat"]["note"])
+        self.assertIn("oat compute over the rationals whatever the p of the row", md)
+        self.assertEqual(rows["ripser.cpp"]["note"], "")
+
+    def test_agreement_needs_no_note(self):
+        _, rows = self.summarize("0\t0.0\tinf\n1\t0.5\tinf\n")
+        self.assertEqual((rows["oat"]["agrees"], rows["oat"]["note"]), ("True", ""))
+
+
 class RunLoopTests(unittest.TestCase):
     """The loop around run_one: skipping what cannot run, and not repeating a timeout at the next field."""
 
@@ -386,6 +433,60 @@ class RunLoopTests(unittest.TestCase):
     def test_an_error_at_one_field_does_not_skip_the_other(self):
         calls, _ = self.run_loop({("slow", 2): "error(1)"})
         self.assertEqual([(c[0], c[1]) for c in calls], [("slow", 2), ("slow", 17)])
+
+
+class SlowerVariantTests(unittest.TestCase):
+    """A variant that does more work than a tool which timed out is not run, so its timeout is not spent again."""
+
+    def run_loop(self, statuses, rerun=False):
+        calls = []
+        with tempfile.TemporaryDirectory() as d:
+            data, out = Path(d) / "data", Path(d) / "out"
+            data.mkdir()
+            np.savetxt(data / "pts.txt", np.random.default_rng(0).random((20, 3)))
+            case = bench.Case("pts", "vr", "pts.txt", "points", 1)
+            saved = bench.CASES, bench.TOOLS, bench.available, bench.run_one, bench.write_env
+            bench.CASES = [case]
+            bench.TOOLS = [("base", "py", "vr", {}), ("extras", "py", "vr", {"slower_than": "base"}),
+                           ("other", "py", "vr", {})]
+            bench.available = lambda kind, opts, python: True
+            bench.write_env = lambda out, args: None
+
+            def fake(w, f, data, out, case, p, threshold, name, kind, opts, args):
+                calls.append((name, p))
+                return statuses.get(name, "ok")
+            bench.run_one = fake
+            try:
+                args = Namespace(data=str(data), out=str(out), cases="", tasks="", tools="", fields="2,17",
+                                 python="python3", rerun_timeouts=rerun)
+                bench.run(args)
+                with open(out / "runs.csv") as f:
+                    rows = list(csv.DictReader(f))
+            finally:
+                bench.CASES, bench.TOOLS, bench.available, bench.run_one, bench.write_env = saved
+        return calls, rows
+
+    def test_a_timeout_of_the_faster_variant_skips_the_slower_one_at_every_field(self):
+        calls, rows = self.run_loop({"base": "timeout"})
+        self.assertEqual(calls, [("base", 2), ("other", 2), ("other", 17)])
+        skipped = [r for r in rows if r["tool"] == "extras"]
+        self.assertEqual([(r["p"], r["status"]) for r in skipped], [("2", "timeout"), ("17", "timeout")])
+        self.assertIn("base, the faster variant, timed out on this case", skipped[0]["reason"])
+
+    def test_running_out_of_memory_is_passed_on_as_oom(self):
+        _, rows = self.run_loop({"base": "oom"})
+        extras = next(r for r in rows if r["tool"] == "extras")
+        self.assertEqual(extras["status"], "oom")
+        self.assertIn("ran out of memory", extras["reason"])
+
+    def test_an_error_or_a_finished_run_does_not_skip_it(self):
+        for status in ("ok", "error(1)", "limit"):
+            calls, _ = self.run_loop({"base": status})
+            self.assertIn(("extras", 2), calls, status)
+
+    def test_rerun_timeouts_runs_it_anyway(self):
+        calls, _ = self.run_loop({"base": "timeout"}, rerun=True)
+        self.assertIn(("extras", 2), calls)
 
 
 class AddressSpaceTests(unittest.TestCase):
@@ -618,6 +719,75 @@ class SweepLoopTests(unittest.TestCase):
         self.assertIn("(tda4j-dqp)", md)                # d = 6: GUDHI ran out of memory, the dual QP is the reference
         self.assertIn("| 500 (700) |", md.split("## Peak memory")[1].split("## Largest")[0])
         self.assertIn("inf† (gudhi)", md)
+
+
+def have(module):
+    return importlib.util.find_spec(module) is not None
+
+
+class PythonWorkerTests(unittest.TestCase):
+    """The adapters of workers/py_worker.py against GUDHI on a random cloud. What is not installed is skipped."""
+
+    WORKER = Path(__file__).resolve().parent / "workers" / "py_worker.py"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.dir = tempfile.TemporaryDirectory()
+        cls.points = Path(cls.dir.name) / "pts.txt"
+        x = np.random.default_rng(7).random((60, 3))
+        np.savetxt(cls.points, x)
+        d = np.sqrt(((x[:, None, :] - x[None, :, :]) ** 2).sum(-1))
+        cls.distances = Path(cls.dir.name) / "dist.txt"
+        np.savetxt(cls.distances, d)
+        cls.threshold = float(np.min(d.max(axis=1)))
+        cls.image = Path(cls.dir.name) / "image.npy"
+        np.save(cls.image, np.random.default_rng(8).random((8, 8)))
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.dir.cleanup()
+
+    def worker(self, tool, task="vr", p=2, fmt="points", variant=None):
+        tag = f"{tool}-{variant}-{p}-{fmt}"
+        out = Path(self.dir.name) / f"{tag}.tsv"
+        source = self.image if task == "cubical" else self.points if fmt == "points" else self.distances
+        cmd = [sys.executable, str(self.WORKER), f"tool={tool}", f"task={task}", f"input={source}", f"format={fmt}",
+               "dim=2", f"p={p}", f"threshold={self.threshold!r}", "warmup=0", "trials=1", f"out={out}"]
+        if variant:
+            cmd.append(f"variant={variant}")
+        r = subprocess.run(cmd, capture_output=True, text=True)
+        return r, (bench.read_bars(out) if r.returncode == 0 else None)
+
+    @unittest.skipUnless(all(map(have, ("gudhi", "dionysus", "oat_python"))), "gudhi, dionysus or oat_python missing")
+    def test_every_variant_has_the_barcode_of_gudhi_at_both_primes(self):
+        for p in (2, 17):
+            _, reference = self.worker("gudhi", p=p)
+            self.assertEqual(len(reference[0]), 60)
+            for tool, variant in [("dionysus", None), ("dionysus", "homology"), ("dionysus", "cocycles"), ("oat", None),
+                                  ("oat", "cycles")]:
+                r, bars = self.worker(tool, p=p, variant=variant)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                dist, note = bench.agreement(bars, reference, 2)
+                self.assertLess(dist, 1e-5, f"{tool} {variant} p={p}: {note}")
+                self.assertEqual(note, "")
+                self.assertEqual(json.loads(r.stdout.strip().splitlines()[-1])["bars"],
+                                 {str(k): len(bars[k]) for k in sorted(bars)})
+
+    @unittest.skipUnless(all(map(have, ("gudhi", "dionysus", "oat_python"))), "gudhi, dionysus or oat_python missing")
+    def test_a_distance_matrix_is_the_same_input_as_the_points(self):
+        for tool in ("dionysus", "oat"):
+            _, a = self.worker(tool, fmt="points")
+            _, b = self.worker(tool, fmt="distance")
+            dist, note = bench.agreement(a, b, 2)  # Dionysus rounds its distances to float32 (about 3e-8 here)
+            self.assertLess(dist, 1e-6, tool)
+            self.assertEqual(note, "")
+
+    @unittest.skipUnless(all(map(have, ("dionysus", "oat_python"))), "dionysus or oat_python missing")
+    def test_neither_runs_a_cubical_or_an_alpha_task(self):
+        for tool in ("dionysus", "oat"):
+            for task in ("cubical", "alpha"):
+                r, _ = self.worker(tool, task=task)
+                self.assertEqual(r.returncode, 3, f"{tool} {task}: exit 3 is 'unsupported'")
 
 
 if __name__ == "__main__":

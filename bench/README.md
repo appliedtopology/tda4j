@@ -195,11 +195,20 @@ position (marked †).
 | `ripser.py`, `giotto-ph-1t`, `giotto-ph-mt` | pip | giotto-ph multithreaded is reported, never the baseline |
 | `gudhi`, `gudhi-collapse` | pip | edge collapse first in the second variant |
 | `cripser` | pip | CubicalRipser, Z/2 only |
+| `dionysus`, `dionysus-homology`, `dionysus-cocycles` | pip (`dionysus`) | Dionysus 2 on Vietoris–Rips only: `fill_rips`, then its cohomology algorithm (the fast one, so the main row), the clearing homology reduction, or cohomology with a representative cocycle read for every bar. float32. No alpha complex in the wheel (that needs CGAL), and `fill_freudenthal` is a lower-star filtration of the Freudenthal triangulation, not the T-construction of the cubical cases |
+| `oat`, `oat-cycles` | pip (`oat_python`) | OpenAppliedTopology (Rust), Vietoris–Rips only: a U-match decomposition of the boundary matrix; the second returns a cycle representative for every bar. It computes **over the rationals** whatever `p` is (no modulus), so a row at `p = 2` or `17` can differ from the reference where there is `p`-torsion; `summary.md` says so under "Agreement notes" |
 | `ripserer`, `ripserer-involuted` | Julia | the second asks for cycles (involuted), like TDA4j's default |
 | `javaplex` | `workers/JavaPlexWorker.java` | written against JavaPlex 4.x's API but **not yet compiled against a real jar** |
 
 TDA4j always returns a representative with every bar, while most of the others return bars only. `tda4j-cocycles`
-against `ripser.cpp` is the like-for-like comparison. `tda4j` against `ripserer-involuted` compares cycles with cycles.
+against `ripser.cpp` is the like-for-like comparison. `tda4j` against `ripserer-involuted`, `oat-cycles` compares cycles
+with cycles, and `tda4j-cocycles` against `dionysus-cocycles` cocycles with cocycles.
+
+A variant that does more work than another tool (`dionysus-homology` and `dionysus-cocycles` after `dionysus`,
+`oat-cycles` after `oat`) is not run on a case where that tool timed out or ran out of memory: it would only spend the
+timeout again, and the table says so (`--rerun-timeouts` runs it anyway). Both build the complex explicitly, where
+Ripser's is implicit, so the large Vietoris–Rips cases may end in `timeout` or `oom` for them (not measured at that scale
+yet); `--tools` leaves them out of a quick run.
 
 ## Output (`$WORKDIR/results/<timestamp>/`)
 

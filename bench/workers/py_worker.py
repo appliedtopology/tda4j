@@ -14,6 +14,12 @@ Tools and what they support (anything else exits with status 3, "unsupported"):
                                      CubicalComplex(top_dimensional_cells=...) = T-construction,
                                      AlphaComplex (filtration values are squared radii: we take sqrt)
   cripser    cubical                 tcripser = T-construction, F_2 only
+  dionysus   vr                      Dionysus 2 (float32): fill_rips, then variant=cohomology (default; the fast one),
+                                     homology (the clearing reduction) or cocycles (cohomology, and a representative
+                                     cocycle is read for every bar)
+  oat        vr                      OpenAppliedTopology (oat_python, Rust): a U-match decomposition of the
+                                     Vietoris-Rips boundary matrix, over the rationals whatever p is (it takes no
+                                     modulus); variant=cycles also returns a cycle representative for every bar
 """
 import json
 import math
@@ -154,14 +160,73 @@ def cripser_tool(opts, data):
     return run
 
 
-TOOLS = {"ripser.py": ripser_py, "giotto-ph": giotto_ph, "gudhi": gudhi_tool, "cripser": cripser_tool}
+def dionysus_tool(opts, data):
+    if opts["task"] != "vr":
+        # fill_freudenthal is a lower-star filtration of the Freudenthal triangulation, not the T-construction of the
+        # cubical benchmark; the wheel has no alpha complex (that needs CGAL).
+        sys.exit(UNSUPPORTED)
+    import dionysus
+    dim, p = int(opts["dim"]), int(opts.get("p", 2))
+    variant = opts.get("variant", "cohomology")
+    # Dionysus keeps the edges of length at most r in float32; the margin is the float32 rounding of the threshold
+    # (the enclosing radius is an edge length, and rounding it down would drop that very edge).
+    r = float(opts["threshold"]) * (1 + 1e-6) if "threshold" in opts else math.inf
+    if opts.get("format", "points") == "distance":
+        # fill_rips reads a 1-D array as the condensed (upper-triangle, row-major) distance matrix.
+        inputs = np.ascontiguousarray(data[np.triu_indices(data.shape[0], 1)], dtype=np.float64)
+    else:
+        inputs = np.ascontiguousarray(data, dtype=np.float64)
+
+    def run():
+        filtration = dionysus.fill_rips(inputs, dim + 1, r)
+        if variant == "homology":
+            pers = dionysus.homology_persistence(filtration, p, "clearing")
+        else:
+            pers = dionysus.cohomology_persistence(filtration, p, variant == "cocycles")
+        # The last diagram is the one of degree dim + 1, which the (dim + 1)-skeleton cannot get right.
+        dgms = dionysus.init_diagrams(pers, filtration)[:dim + 1]
+        if variant == "cocycles":
+            cocycles = [pers.cocycle(pt.data) for dg in dgms for pt in dg]  # read, as a caller of the cocycles would
+        return [(k, float(pt.birth), finite_or_inf(pt.death)) for k, dg in enumerate(dgms) for pt in dg]
+    return run
+
+
+def oat_tool(opts, data):
+    if opts["task"] != "vr":
+        sys.exit(UNSUPPORTED)  # no cubical or alpha complexes (it has Vietoris-Rips and Dowker)
+    import oat_python as oat
+    dim = int(opts["dim"])
+    cycles = opts.get("variant") == "cycles"
+    # Edges strictly above this are left out, and the enclosing radius is an edge length: a relative margin keeps that
+    # edge in whatever the last bits of the neighbour search (scikit-learn's, from points) say.
+    limit = float(opts["threshold"]) * (1 + 1e-6) if "threshold" in opts else math.inf
+    distance = opts.get("format", "points") == "distance"
+    inputs = np.ascontiguousarray(data, dtype=np.float64)
+
+    def run():
+        if distance:
+            sparse = oat.dissimilarity.sparse_matrix_for_dense(dissimilarity_matrix=inputs, max_dissimilarity=limit)
+        else:
+            sparse = oat.dissimilarity.sparse_matrix_for_points(points=inputs, max_dissimilarity=limit)
+        decomposition = oat.core.vietoris_rips.BoundaryMatrixDecomposition(
+            dissimilarity_matrix=sparse, max_homology_dimension=dim)
+        df = decomposition.persistent_homology_dataframe(
+            return_cycle_representatives=cycles, return_bounding_chains=False)
+        return [(int(k), float(b), finite_or_inf(d))
+                for k, b, d in zip(df["dimension"], df["birth_filtration"], df["death_filtration"]) if int(k) <= dim]
+    return run
+
+
+TOOLS = {"ripser.py": ripser_py, "giotto-ph": giotto_ph, "gudhi": gudhi_tool, "cripser": cripser_tool,
+         "dionysus": dionysus_tool, "oat": oat_tool}
+DISTRIBUTION = {"ripser.py": "ripser", "giotto-ph": "giotto-ph", "gudhi": "gudhi", "cripser": "cripser",
+                "dionysus": "dionysus", "oat": "oat_python"}
 
 
 def version_of(tool):
-    mod = {"ripser.py": "ripser", "giotto-ph": "gph", "gudhi": "gudhi", "cripser": "cripser"}[tool]
     try:
         from importlib.metadata import version
-        return version({"gph": "giotto-ph", "ripser": "ripser", "gudhi": "gudhi", "cripser": "cripser"}[mod])
+        return version(DISTRIBUTION[tool])
     except Exception:
         return "unknown"
 

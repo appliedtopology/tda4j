@@ -35,12 +35,12 @@ mkdir -p "$TOOLS" "$DATA"
 log() { printf '\n=== %s ===\n' "$*"; }
 
 setup_python() {
-  log "Python tools (ripser.py, giotto-ph, GUDHI, CubicalRipser) in $VENV"
+  log "Python tools (ripser.py, giotto-ph, GUDHI, CubicalRipser, Dionysus 2, OAT) in $VENV"
   if [ ! -x "$VENV/bin/python" ]; then "${PYTHON:-python3}" -m venv "$VENV"; fi
   "$VENV/bin/python" -m pip install --upgrade pip >/dev/null
   # Unpinned on purpose: the versions actually installed are recorded in every run's env.json.
   # For the paper's final run, pin them here (pip install pkg==x.y.z).
-  for pkg in numpy scipy ripser giotto-ph gudhi cripser; do
+  for pkg in numpy scipy ripser giotto-ph gudhi cripser dionysus oat_python; do
     "$VENV/bin/python" -m pip install "$pkg" || echo "WARNING: could not install $pkg; it will be reported as missing"
   done
 }

@@ -138,6 +138,16 @@ TOOLS = [
     ("giotto-ph-mt", "py", "vr", {"pytool": "giotto-ph", "threads": "ALL", "multithreaded": True}),
     ("gudhi", "py", "vr", {}),
     ("gudhi-collapse", "py", "vr", {"pytool": "gudhi", "variant": "collapse"}),
+    # Dionysus 2 (float32): its cohomology algorithm is the fast one and the default row; `-homology` is the clearing
+    # reduction; `-cocycles` also reads a representative cocycle for every bar. A `slower_than` variant is not run on a
+    # case where the named tool timed out or ran out of memory: that would only spend the timeout again.
+    ("dionysus", "py", "vr", {"variant": "cohomology"}),
+    ("dionysus-homology", "py", "vr", {"pytool": "dionysus", "variant": "homology", "slower_than": "dionysus"}),
+    ("dionysus-cocycles", "py", "vr", {"pytool": "dionysus", "variant": "cocycles", "slower_than": "dionysus"}),
+    # OAT (OpenAppliedTopology, Rust) computes over the rationals, whatever the field of the run: it takes no modulus.
+    # `oat-cycles` also returns a cycle representative for every bar.
+    ("oat", "py", "vr", {"char0": True}),
+    ("oat-cycles", "py", "vr", {"pytool": "oat", "variant": "cycles", "char0": True, "slower_than": "oat"}),
     ("ripserer", "julia", "vr", {"variant": "cohomology"}),
     ("ripserer-involuted", "julia", "vr", {"variant": "involuted"}),
     ("javaplex", "javaplex", "vr", {}),
@@ -175,6 +185,7 @@ TOOLS += [
      {"engine": "auto", "reps": "cycles", "backend": "dqp", "needs_radius": True}),
 ]
 REFERENCE = {"vr": "ripser.cpp", "cubical": "gudhi", "alpha": "gudhi"}
+CHARACTERISTIC_ZERO = {name for name, _, _, opts in TOOLS if opts.get("char0")}
 
 
 def jvm_twin(name):
@@ -433,7 +444,8 @@ def available(kind, opts, python):
     if kind == "javaplex":
         return bool(env.get("JAVAPLEX_JAR")) and bool(env.get("JAVAPLEX_BUILD"))
     if kind == "py":
-        mod = {"ripser.py": "ripser", "giotto-ph": "gph", "gudhi": "gudhi", "cripser": "cripser"}[opts["pytool"]]
+        mod = {"ripser.py": "ripser", "giotto-ph": "gph", "gudhi": "gudhi", "cripser": "cripser",
+               "dionysus": "dionysus", "oat": "oat_python"}[opts["pytool"]]
         r = subprocess.run([python, "-c", f"import {mod}"], capture_output=True)
         return r.returncode == 0
     return False
@@ -626,6 +638,7 @@ def run(args):
     runs_csv = out / "runs.csv"
     new = not runs_csv.exists()
     timed_out = {}  # (case, tool) -> the first field at which it timed out
+    gave_up = {}  # (case, tool) -> "timeout" or "oom", the first time it did
     with open(runs_csv, "a", newline="") as f:
         w = csv.DictWriter(f, fieldnames=RUNS_COLUMNS)
         if new:
@@ -664,8 +677,17 @@ def run(args):
                         # every tool of the first run), and a timeout costs --timeout seconds.
                         not_run("timeout", f"not run: the same computation timed out at p={earlier}")
                         continue
-                    if run_one(w, f, data, out, case, p, threshold, name, kind, opts, args) == "timeout":
+                    faster = opts.get("slower_than")
+                    if faster and (case.name, faster) in gave_up and not args.rerun_timeouts:
+                        outcome = gave_up[(case.name, faster)]
+                        not_run(outcome, f"not run: {faster}, the faster variant, "
+                                         f"{'timed out' if outcome == 'timeout' else 'ran out of memory'} on this case")
+                        continue
+                    status = run_one(w, f, data, out, case, p, threshold, name, kind, opts, args)
+                    if status == "timeout":
                         timed_out.setdefault((case.name, name), p)
+                    if status in ("timeout", "oom"):
+                        gave_up.setdefault((case.name, name), status)
 
 
 def run_one(w, f, data, out, case, p, threshold, name, kind, opts, args):
@@ -801,6 +823,9 @@ def summarize(out: Path, bottleneck=None):
             dist, note = agreement(mine, theirs, max_dim, bottleneck)
         thr = cold.get("threshold") or ""
         tol = tolerance(thr, tool, divisions)
+        if tool in CHARACTERISTIC_ZERO and dist is not None and dist > tol:
+            # Its barcode is over the rationals, the reference's over F_p: the two differ where there is p-torsion.
+            note = f"{note + '; ' if note else ''}computed over the rationals, the reference over F_{p}"
         measured = [m for m in modes.values() if m.get("maxrss_mb")]
         heaps = [float(m["heap_peak_mb"]) for m in modes.values() if m.get("heap_peak_mb")]
         olds = [float(m["old_peak_mb"]) for m in modes.values() if m.get("old_peak_mb")]
@@ -834,6 +859,10 @@ def summarize(out: Path, bottleneck=None):
              "`missing` (not installed). Peak MB is the kernel's peak RSS of the process (`≤` where it could only be "
              "read from `ru_maxrss`, an upper bound); heap MB is the JVM's peak use of its heap pools. "
              "† the point set is degenerate (not in general position), so the reference is not ground truth.", ""]
+    zero = sorted({s["tool"] for s in summary if s["tool"] in CHARACTERISTIC_ZERO and s["status"] != "missing"})
+    if zero:
+        lines[-1:] = ["", f"{', '.join(zero)} compute over the rationals whatever the p of the row: a difference from the "
+                      "reference (over F_p) can be p-torsion, and is noted under \"Agreement notes\".", ""]
     lines += ["| case | p | tool | status | cold s | warm s | peak MB | heap MB | bars (> tol) | Δ vs reference | agrees |",
               "|---|---|---|---|---|---|---|---|---|---|---|"]
     for s in summary:

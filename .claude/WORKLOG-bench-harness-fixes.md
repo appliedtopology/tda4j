@@ -192,3 +192,35 @@ from `sweep.csv` with `--summarize` and that one cell is empty.
   10 to 18 s, almost independent of d.
 - **Not shown:** anything above d = 7, where GUDHI is expected to stop; the cyclooctane and other real data against GUDHI (CGAL does
   not reach 24 coordinates); more than two draws; failure rates.
+
+## Fourth addendum (same day): Dionysus 2 and OAT as Vietoris-Rips comparators
+
+The project lead noticed that the plan's comparator list (`PLAN-paper.md` §3.1) names OAT and Dionysus 2 but the harness ran neither. Both
+are now in `bench/` for the Vietoris-Rips task (#138 holds what is open).
+
+- **Dionysus 2.2.3** (the pip wheel, Python 3.13): `fill_rips(points or condensed distances, dim + 1, r)`, then
+  `cohomology_persistence` (the fast algorithm, the main row `dionysus`), `homology_persistence(..., "clearing")`
+  (`dionysus-homology`), or `cohomology_persistence(keep_cocycles=True)` with `pers.cocycle(pt.data)` read for every bar
+  (`dionysus-cocycles`). `init_diagrams` is cut to degrees up to `dim`: the last diagram belongs to the top skeleton and is not a result.
+  It is float32 (an edge of length 1 + 1e-9 reads as 1.0; from points its distances differ from a double matrix's by one float32 ulp, 3e-8
+  at 0.5), so it gets the same tolerance as ripser.cpp. The threshold gets a relative margin of 1e-6, the float32 rounding of the enclosing radius.
+- **OAT 0.2.0** (`oat_python`, Rust): `oat.dissimilarity.sparse_matrix_for_points` (scikit-learn's radius graph; entries strictly above
+  `max_dissimilarity` are dropped) or `sparse_matrix_for_dense`, then `oat.core.vietoris_rips.BoundaryMatrixDecomposition(max_homology_dimension=dim)`
+  and `persistent_homology_dataframe(return_cycle_representatives=...)`. **It has no modulus argument and its docstrings say the field is the
+  rationals**, so `oat` and `oat-cycles` are one computation whatever the row's p, and the summary notes a disagreement as "computed over the
+  rationals, the reference over F_p" instead of calling it a bug. I did not test this on torsion data. OAT prints timing lines to stdout;
+  `last_json` reads the last JSON line, so the output is unaffected. Its import (pandas, scikit-learn) is about 1.3 s, part of the cold time.
+- **What neither does:** Dionysus's wheel has no alpha complex; `fill_freudenthal` is a lower-star filtration on the Freudenthal triangulation, not the
+  T-construction, so not comparable to the cubical cases; OAT has no cubical or alpha complex. Both exit 3 (`unsupported`) on those tasks.
+- **Cost control.** The three slower variants are `slower_than` their fast one (`dionysus`, `oat`) and are not run on a case where it timed out or ran
+  out of memory (`--rerun-timeouts` overrides). At 120 uniform points in R^3, degree 2, at the enclosing radius (1.9 million simplices), in-process: Dionysus
+  homology/clearing 14.8 s, `row` 44 s, `column` 15.6 s, cohomology 1.7 s, cohomology with cocycles 2.1 s; OAT 0.72 s for the decomposition and 0.10 s for the
+  dataframe. One draw each; the point is the ratio between the Dionysus algorithms, which is why cohomology is the main row.
+- **Through the harness** (`bench.py run` on a 90-point cloud in R^3, degree 2, p = 2 and 17, GUDHI standing in for ripser.cpp as the reference, a 15 GB
+  sandbox, one warm-up and two trials): warm medians GUDHI 0.49 s, OAT 0.33 s (with cycles 0.33 s), Dionysus cohomology 3.2 s (with cocycles 3.2 s), Dionysus
+  homology 10.3 s; peak RSS 95, 270 (OAT, the interpreter and its imports included), 310 and 205 MB. Every row has 90/31/7 bars of degrees 0/1/2 and agrees with GUDHI
+  (OAT exactly, Dionysus 2e-8). Not a result for the paper: one draw, a noisy sandbox, and none of the benchmark's real cases.
+- **Tests.** `bench/test_bench.py` (65 tests, the venv with all three tools runs them all; without them four skip): the tool configuration (Vietoris-Rips only, OAT
+  characteristic zero, `slower_than` names real tools), the skip rule in the run loop (timeout and oom skip, error and limit do not, `--rerun-timeouts` overrides), the
+  characteristic-zero note in the summary, and the worker against GUDHI at p = 2 and 17 for every variant, with a distance-matrix input equal to the points input and
+  exit status 3 for cubical and alpha.
