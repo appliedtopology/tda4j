@@ -1,9 +1,5 @@
 package org.appliedtopology.tda4j
 
-import java.awt.image.BufferedImage
-import java.io.File
-import javax.imageio.ImageIO
-
 /** Cubical complexes of images and voxel grids. Every array constructor reduces to [[fromFlatArray]]: values in
   * row-major order (last axis fastest) and a `shape`.
   *
@@ -14,13 +10,13 @@ import javax.imageio.ImageIO
   * after every finite value in a sublevel image, and before them in a superlevel one (negated to `-Infinity`). Every
   * array constructor takes `nanMask = false` to turn masks off: a NaN pixel is then an error, naming the pixel.
   */
-object CubicalImage:
+object CubicalImage extends CubicalImagePlatform:
 
   /** Grayscale value of one ARGB pixel via the standard ITU-R BT.601 luma formula, 0..255. Applied unconditionally (not
     * just to color images) -- for an already-grayscale image (R=G=B for every pixel), this is the identity, so there is
     * no need to special-case `BufferedImage`'s many possible underlying color types.
     */
-  private def luma(rgb: Int): Double =
+  private[tda4j] def luma(rgb: Int): Double =
     val r = (rgb >> 16) & 0xff
     val g = (rgb >> 8) & 0xff
     val b = rgb & 0xff
@@ -102,31 +98,3 @@ object CubicalImage:
       parallelFiltrationValue,
       nanMask
     )
-
-  /** `img.getRGB(x, y)` grayscale (luma) values as a dense grid, shape `(width, height)` -- axis 0 is the image's own
-    * x-axis, axis 1 is y.
-    */
-  def fromBufferedImage(
-    img: BufferedImage,
-    sublevel: Boolean = true,
-    parallelFiltrationValue: Boolean = false
-  ): CubicalGridStream =
-    val width = img.getWidth
-    val height = img.getHeight
-    val sign = if sublevel then 1.0 else -1.0
-    // BufferedImage.getRGB is safe for concurrent reads as long as nothing mutates the image concurrently
-    // (true here: img is only ever read, by this closure, for the stream's whole lifetime).
-    val values: IndexedSeq[Int] => Double = idx => sign * luma(img.getRGB(idx(0), idx(1)))
-    CubicalGridStream(IndexedSeq(width, height), values, parallelFiltrationValue)
-
-  /** Reads an image file via `javax.imageio.ImageIO` (JDK-builtin, no new dependency) -- PNG/JPEG/BMP/GIF and whatever
-    * other formats the running JVM's registered `ImageReader`s support.
-    */
-  def fromFile(
-    path: String,
-    sublevel: Boolean = true,
-    parallelFiltrationValue: Boolean = false
-  ): CubicalGridStream =
-    val img = ImageIO.read(new File(path))
-    require(img != null, s"could not read an image from $path (unrecognized format, or not an image file)")
-    fromBufferedImage(img, sublevel, parallelFiltrationValue)

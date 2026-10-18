@@ -515,7 +515,7 @@ val typographic = Plot.diagram(d).withNumbers(decimal = ",", minus = "−", grou
 
 A long text can be cut: `Text(TextRole.Legend, limit = 120)` ends a legend entry that would be longer than 120 pixels in
 an ellipsis, and the whole text is the tooltip of what is left. The length of a text is estimated from its size, so the
-cut falls a character or two from where a font of your own would put it.
+cut can fall some characters from where a font of your own would put it.
 
 ### A caption, a panel tag and a description
 

@@ -31,7 +31,7 @@ jobs:
       - name: Setup sbt launcher
         uses: sbt/setup-sbt@v1
       - name: Run the tests with coverage
-        run: sbt "set Global / cacheStores := Nil ; clean ; coverage ; testFull ; coverageReport"
+        run: sbt "set Global / cacheStores := Nil ; clean ; coverage ; tda4j/testFull ; tda4j/coverageReport"
       - name: Summarize
         id: report
         run: |

@@ -1,5 +1,6 @@
 package org.appliedtopology.tda4j.matlab
 
+import org.appliedtopology.tda4j.SpecThrows.throwWith
 import org.appliedtopology.tda4j.*
 
 import org.appliedtopology.tda4j.*
@@ -152,7 +153,7 @@ class TDA4jSpec extends mutable.Specification:
         )
         .and(
           TDA4j.computeFromImage(pixels, Array("engine", "fast-cubical", "representativeType", "cocycles")) must
-            throwAn[IllegalArgumentException](message = "for cocycles use engine=cohomology")
+            throwWith[IllegalArgumentException]("for cocycles use engine=cohomology")
         )
         .and(
           triples(
@@ -162,7 +163,7 @@ class TDA4jSpec extends mutable.Specification:
         )
         .and(
           TDA4j.computeFromPoints(points, Array("representativeType", "both")) must
-            throwAn[IllegalArgumentException](message = "must be cycles or cocycles")
+            throwWith[IllegalArgumentException]("must be cycles or cocycles")
         )
     }
 
@@ -205,8 +206,8 @@ class TDA4jSpec extends mutable.Specification:
         (TDA4j.computeFromImage(withNaN, Array("nanMask", "true")).size() must beEqualTo(
           TDA4j.computeFromImage(withNaN).size()
         )) and
-        (TDA4j.computeFromImage(withNaN, Array("nanMask", "maybe")) must throwAn[IllegalArgumentException](
-          message = "nanMask"
+        (TDA4j.computeFromImage(withNaN, Array("nanMask", "maybe")) must throwWith[IllegalArgumentException](
+          "nanMask"
         ))
     }
 
@@ -668,11 +669,9 @@ class TDA4jSpec extends mutable.Specification:
 
   "complex=sparse-rips, option validation" should {
     "say so when the pre-0.5.0 name sheehy-rips is used" in {
-      FullBarcode.computeFromPoints(points, Array("complex", "sheehy-rips", "sparseEpsilon", "0.5")) must throwA[
+      FullBarcode.computeFromPoints(points, Array("complex", "sheehy-rips", "sparseEpsilon", "0.5")) must throwWith[
         IllegalArgumentException
-      ](
-        "renamed 'sparse-rips'"
-      )
+      ]("renamed 'sparse-rips'")
     }
     "require sparseEpsilon" in {
       FullBarcode.computeFromPoints(points, Array("complex", "sparse-rips")) must throwA[IllegalArgumentException]

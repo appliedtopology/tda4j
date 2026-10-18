@@ -257,10 +257,21 @@ The two real defects that made customizing hard (both found by reading, not by u
 ## Not verified / open (filed as issues)
 
 - #96 (question, answered by the project lead and closed): zeros on a log axis, see decision 6.
-- #97 (enhancement): PNG/PDF export (a new module), a session-wide default style, color bar ticks on a transformed
-  scale, a visible board title, balls (`Mark.Discs`) on a curved axis, print palettes (Okabe-Ito fails the validator on the
-  brand surface), an `aes` helper for the user's own tables.
+- #97 (enhancement): at the time of the first round: PNG/PDF export (a new module), a session-wide default style, color
+  bar ticks on a transformed scale, a visible board title, balls (`Mark.Discs`) on a curved axis, print palettes
+  (Okabe-Ito fails the validator on the brand surface), an `aes` helper for the user's own tables. After the later rounds
+  (decisions 11 to 15) it lists only the color bar ticks, the board title, discs on a curved axis, Okabe-Ito and grayscale
+  palettes, and `aes`: the session default is `given Look`, PNG/PDF is #101.
 - #98 (unverified): MATLAB itself (the `with...` methods are called from Scala), Safari and Firefox rendering of
   `stroke-dasharray`, `<ellipse>` and the clipped half-plane polygon, the interactive 3-D canvas (only its CSS changed).
 - #99 (unverified): `(a must X).and(b must Y)` before the last statement of an example checks only `a`; 329 uses of
   `.and(` in 40 specs, nobody has checked which are mid-body.
+- From the later rounds (11 to 15; #101 and #102 were filed during the work, the rest when the pull request merged): #101 (enhancement) PNG/PDF export and SVG text as
+  outlines; #102 (enhancement) interactivity; #103 (enhancement) a legend box and legend columns; #104 (enhancement) an
+  axis that crosses at a value; #105 (enhancement) boards, layout grids and panel tags from MATLAB and the CLI, 3-D scenes
+  in a board, and the extra `Look` parameter Java callers of `Plot` see; #106 (enhancement) CLI flags for caption, tag,
+  description and a named look; #107 (unverified) a layout board's page in a browser, `<desc>` with a screen reader,
+  `setPlotDefaults` from MATLAB, the camera in the canvas, the estimated text width, R's composite `pch` shapes, glyph
+  markers, locale data, reversed axes in Safari and Firefox; #108 (enhancement) cut text at its measured width; #109
+  (documentation) the developer's guide page was extended beyond fixing facts, by every round; #110 (question) a look that
+  skips tweaks a plot cannot have, and a diagram in a wide layout cell.

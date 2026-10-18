@@ -1,6 +1,5 @@
 package org.appliedtopology.tda4j
 
-import org.apache.commons.math3.linear.*
 import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
 
@@ -78,7 +77,7 @@ class BarcodeAlgebraSpec extends Specification with ScalaCheck:
       Barcode.isMap(
         List(dim(0)(0.bc(5))),
         List(dim(0)(0.bc(5))),
-        MatrixUtils.createRealMatrix(Array(Array(1.0)))
+        DenseMatrix(Array(Array(1.0)))
       ) must beTrue
     )
 
@@ -86,7 +85,7 @@ class BarcodeAlgebraSpec extends Specification with ScalaCheck:
       val isThisAMap = Barcode.isMap(
         List(dim(0)(0.bc(5))),
         List(dim(0)(1.bc(5))),
-        MatrixUtils.createRealMatrix(Array(Array(1.0)))
+        DenseMatrix(Array(Array(1.0)))
       )
       isThisAMap must beFalse
     }
@@ -95,7 +94,7 @@ class BarcodeAlgebraSpec extends Specification with ScalaCheck:
       Barcode.isMap(
         List(dim(0)(0.bc(5))),
         List(dim(0)(0.bc(6))),
-        MatrixUtils.createRealMatrix(Array(Array(1.0)))
+        DenseMatrix(Array(Array(1.0)))
       ) must beFalse
     )
 
@@ -103,7 +102,7 @@ class BarcodeAlgebraSpec extends Specification with ScalaCheck:
       Barcode.isMap(
         List(dim(0)(0.bc(5))),
         List(dim(0)(1.bc(4))),
-        MatrixUtils.createRealMatrix(Array(Array(1.0)))
+        DenseMatrix(Array(Array(1.0)))
       ) must beFalse
     )
 
@@ -111,7 +110,7 @@ class BarcodeAlgebraSpec extends Specification with ScalaCheck:
       Barcode.isMap(
         List(dim(0)(0.bc(5))),
         List(dim(0)(6.bc(10))),
-        MatrixUtils.createRealMatrix(Array(Array(1.0)))
+        DenseMatrix(Array(Array(1.0)))
       ) must beFalse
     )
 
@@ -119,11 +118,13 @@ class BarcodeAlgebraSpec extends Specification with ScalaCheck:
       Barcode.isMap(
         List(dim(0)(10.bc(15))),
         List(dim(0)(6.bc(9))),
-        MatrixUtils.createRealMatrix(Array(Array(1.0)))
+        DenseMatrix(Array(Array(1.0)))
       ) must beFalse
     )
 
-    val eye5 = MatrixUtils.createRealIdentityMatrix(5)
+    val eye5 = DenseMatrix.identity(5)
+    // The j-th column of m as a matrix of one column.
+    def column(m: DenseMatrix, j: Int): DenseMatrix = DenseMatrix.tabulate(m.rows, 1)((i, _) => m(i, j))
     "Target fully below source" ==> (Barcode.isMap(
       List(dim(0)(10.bc(15))),
       List(
@@ -133,7 +134,7 @@ class BarcodeAlgebraSpec extends Specification with ScalaCheck:
         dim(0)(12.bc(16)),
         dim(0)(16.bc(20))
       ),
-      eye5.getColumnMatrix(0)
+      column(eye5, 0)
     ) must beFalse)
 
     "Target intersects source from below" ==> (Barcode.isMap(
@@ -145,7 +146,7 @@ class BarcodeAlgebraSpec extends Specification with ScalaCheck:
         dim(0)(12.bc(16)),
         dim(0)(16.bc(20))
       ),
-      eye5.getColumnMatrix(1)
+      column(eye5, 1)
     ) must beTrue)
 
     "Target fully includes source" ==> (Barcode.isMap(
@@ -157,7 +158,7 @@ class BarcodeAlgebraSpec extends Specification with ScalaCheck:
         dim(0)(12.bc(16)),
         dim(0)(16.bc(20))
       ),
-      eye5.getColumnMatrix(2)
+      column(eye5, 2)
     ) must beFalse)
 
     "Target intersects source from above" ==> (Barcode.isMap(
@@ -169,7 +170,7 @@ class BarcodeAlgebraSpec extends Specification with ScalaCheck:
         dim(0)(12.bc(16)),
         dim(0)(16.bc(20))
       ),
-      eye5.getColumnMatrix(3)
+      column(eye5, 3)
     ) must beFalse)
 
     "Target fully above source" ==> (Barcode.isMap(
@@ -181,7 +182,7 @@ class BarcodeAlgebraSpec extends Specification with ScalaCheck:
         dim(0)(12.bc(16)),
         dim(0)(16.bc(20))
       ),
-      eye5.getColumnMatrix(4)
+      column(eye5, 4)
     ) must beFalse)
   }
   "Cokernel, kernel, image computation" >> {
@@ -191,7 +192,7 @@ class BarcodeAlgebraSpec extends Specification with ScalaCheck:
     val source = List(dim(0)(2.bc(5)), dim(0)(3.bc(7)))
     val target = List(dim(0)(1.bc(6)), dim(0)(0.bc(4)))
     val matrix =
-      MatrixUtils.createRealMatrix(Array(Array(0.0, 1.0), Array(1.0, 1.0)))
+      DenseMatrix(Array(Array(0.0, 1.0), Array(1.0, 1.0)))
 
     "cokernel" ==> (Barcode.cokernel(
       source,
@@ -225,4 +226,25 @@ class BarcodeAlgebraSpec extends Specification with ScalaCheck:
         dim(0)(2.bc(4))
       )
     ))
+  }
+  "Reducing a matrix by the lowest nonzero entries of its columns" >> {
+    val matrix = DenseMatrix(Array(Array(1.0, 1.0), Array(1.0, 2.0)))
+
+    "subtracts the left column times the ratio of the pivot row's entries, and leaves its argument alone" ==> {
+      Barcode.reduceMatrix(matrix) must beEqualTo(DenseMatrix(Array(Array(1.0, -1.0), Array(1.0, 0.0))))
+      matrix must beEqualTo(DenseMatrix(Array(Array(1.0, 1.0), Array(1.0, 2.0))))
+    }
+
+    "reads each column's pivot after the columns to its left have been subtracted from it" ==> {
+      // Column 1 has 4 where column 0 has 2 in the lowest row: minus twice column 0 it is (1, 0), pivot row 0.
+      val m = DenseMatrix(Array(Array(1.0, 3.0, 1.0), Array(2.0, 4.0, 2.0)))
+      val reduced = Barcode.reduceMatrix(m)
+      reduced must beEqualTo(DenseMatrix(Array(Array(1.0, 1.0, 0.0), Array(2.0, 0.0, 0.0))))
+      Barcode.pivotsOf(reduced) must beEqualTo(Seq((1, 0), (0, 1)))
+    }
+
+    "has pivots at the lowest nonzero entry of each nonzero column" ==> {
+      val m = DenseMatrix(Array(Array(0.0, 5.0, 0.0), Array(0.0, 0.0, 0.0), Array(7.0, 1.0, 0.0)))
+      Barcode.pivotsOf(m) must beEqualTo(Seq((2, 0), (2, 1)))
+    }
   }

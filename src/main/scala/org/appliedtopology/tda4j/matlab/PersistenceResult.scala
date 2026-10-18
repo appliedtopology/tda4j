@@ -269,7 +269,6 @@ final class PersistenceResult private[matlab] (
   def save(path: String): String =
     ResultFile
       .write(path, allDims, allBirths, allDeaths, visible, threshold, k => cycleProvider(visible(k)), source)
-      .toString
 
   // ---------------------------------------------------------------------------------------------------------------
   // plots

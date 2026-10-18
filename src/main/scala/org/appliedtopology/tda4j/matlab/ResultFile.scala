@@ -1,8 +1,7 @@
 package org.appliedtopology.tda4j.matlab
 
-import java.io.{BufferedWriter, OutputStreamWriter}
-import java.nio.charset.StandardCharsets
-import java.nio.file.{Files, Path, Paths}
+import org.appliedtopology.tda4j.*
+
 import scala.collection.mutable
 
 /** The saved form of a [[PersistenceResult]] (`result.save(path)`, `TDA4j.loadResult(path)`): one JSON object.
@@ -35,16 +34,8 @@ private[matlab] object ResultFile:
   val Format = "tda4j-persistence-result"
   val Version = 1
 
-  /** The version of tda4j writing the file, from the resource the build generates. */
-  private lazy val version: Option[String] =
-    Option(classOf[PersistenceResult].getResourceAsStream("/org/appliedtopology/tda4j/version.properties")).flatMap {
-      in =>
-        try
-          val props = java.util.Properties()
-          props.load(in)
-          Option(props.getProperty("version"))
-        finally in.close()
-    }
+  /** The version of tda4j writing the file, from the source file the build generates. */
+  private lazy val version: Option[String] = Some(LibraryVersion.value)
 
   /** Writes a result; `representative(k)` is reported bar `k`'s representative. */
   def write(
@@ -56,10 +47,10 @@ private[matlab] object ResultFile:
     threshold: Double,
     representative: Int => (Array[Array[Int]], Array[Double]),
     source: Option[ResultSource]
-  ): Path =
-    val p = Paths.get(path).toAbsolutePath
-    Option(p.getParent).foreach(Files.createDirectories(_))
-    val out = BufferedWriter(OutputStreamWriter(Files.newOutputStream(p), StandardCharsets.UTF_8), 1 << 16)
+  ): String =
+    val absolute = FileAccess.absolute(path)
+    FileAccess.createParentDirectories(absolute)
+    val out = FileAccess.writer(absolute)
     try
       val w = JsonWriter(out)
       def key(k: String): Unit =
@@ -120,13 +111,12 @@ private[matlab] object ResultFile:
       }
       w.raw("\n}\n")
     finally out.close()
-    p
+    absolute
 
   /** Reads a saved result, checking that its parts fit together. */
   def read(path: String): PersistenceResult =
-    val p = Paths.get(path)
-    if !Files.isRegularFile(p) then throw new java.io.FileNotFoundException(s"$path: no such file")
-    parse(Files.readString(p, StandardCharsets.UTF_8), path)
+    if !FileAccess.isFile(path) then throw FileAccess.noSuchFile(path)
+    parse(FileAccess.readText(path), path)
 
   /** A saved result from its text; `path` names it in error messages. */
   def parse(text: String, path: String): PersistenceResult =

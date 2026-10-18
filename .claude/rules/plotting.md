@@ -117,6 +117,5 @@ API). Rules:
   `git worktree` build of the old commit (ids normalized: `tda4j[0-9]+`); every difference must be explained.
 
 **Specs for plots**: `PlotGrammarSpec` examples are built so the plausible wrong implementation fails them, and were
-mutation-checked (break the code, see the example fail). **specs2 trap**: in a non-final statement `(a must X).and(b must
-Y)` checks only `a`, the by-name `b` is never forced; write separate `must` statements.
+mutation-checked (break the code, see the example fail; count errors as well as failures). specs2 traps: `rules/testing.md`.
 

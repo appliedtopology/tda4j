@@ -4,8 +4,10 @@ name: Release
 # its own `tagRelease`/`pushChanges` steps. This workflow does NOT publish to Maven Central: `sbt release`
 # already does that locally (publishSigned/sonaUpload/sonaRelease), and re-running those here would be a
 # duplicate publish attempt against an already-released coordinate. This workflow only covers what `sbt
-# release` doesn't: building the fat jar and the demo REPL jar, attaching every release artifact to a GitHub Release,
-# and publishing that version's docs snapshot under its own path on GitHub Pages.
+# release` doesn't: building the fat jar, the demo REPL jar and the npm package, attaching every release artifact to a
+# GitHub Release, publishing that version's docs snapshot under its own path on GitHub Pages, and (once the repository
+# has an `NPM_TOKEN` secret) publishing the npm package. `sbt release` publishes both Maven artifacts, `tda4j_3` (JVM)
+# and `tda4j_sjs1_3` (Scala.js).
 
 on:
   workflow_dispatch:
@@ -33,6 +35,10 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    env:
+      # An npm access token that may publish to the `@appliedtopology` scope (RELEASE.md, "npm"). Without it the publish step is skipped, and
+      # the package is still built and attached to the GitHub Release.
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -43,6 +49,10 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
       - name: Setup sbt launcher
         uses: sbt/setup-sbt@v1
       - name: Derive release version
@@ -81,7 +91,10 @@ jobs:
           # below, which depends on a VERSION of the library: building it against the tag's own sources does not wait for
           # Maven Central to serve the version `sbt release` has just published. Its scaladoc jar is left out of that
           # publish (`packageDoc` below builds the one the release carries, with 3.8.4).
-          sbt "set Compile / packageDoc / publishArtifact := false ; assembly ; publishLocal ; packageSrc ; ++3.8.4! ; packageDoc ; doc"
+          #
+          # Every command names its project: `tda4j` is the JVM build (fat jar, docs, the JVM Maven artifact), `tda4jJS` the
+          # Scala.js build (the npm package).
+          sbt "set tda4j / Compile / packageDoc / publishArtifact := false ; tda4j/assembly ; tda4j/publishLocal ; tda4j/packageSrc ; tda4jJS/npmPack ; ++3.8.4! ; tda4j/packageDoc ; tda4j/doc"
       - name: Build the demo REPL jar
         # A separate sbt build (demo/README.md): its own server, so the env var below is seen by a fresh one. It resolves
         # `tda4j % VERSION` from ~/.ivy2/local, where the step above just put it, and everything else from Maven Central.
@@ -156,5 +169,21 @@ jobs:
             target/out/jvm/scala-3.9.0/tda4j/*-${VERSION}-assembly.jar \
             target/out/jvm/scala-3.9.0/tda4j/*-sources.jar \
             target/out/jvm/scala-3.8.4/tda4j/*-javadoc.jar \
+            target/npm/*.tgz \
             "demo/target/out/jvm/scala-3.9.0/tda4j-demo/tda4j-demo-${VERSION}.jar" \
             "docs-${VERSION}.zip"
+      - name: Publish to npm
+        # Skipped until the repository has the NPM_TOKEN secret (RELEASE.md, "npm"). A version with a suffix (0.8.0-RC1)
+        # goes out under the `next` tag, so `npm install @appliedtopology/tda4j` keeps giving the last full release.
+        if: ${{ env.NPM_TOKEN != '' }}
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -e
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc"
+          TAG_FLAG=""
+          case "$VERSION" in
+            *-*) TAG_FLAG="--tag next" ;;
+          esac
+          npm publish target/npm/*.tgz --access public $TAG_FLAG
+          rm -f "$HOME/.npmrc"

@@ -4,9 +4,6 @@ import org.appliedtopology.tda4j.*
 
 import cats.syntax.show.toShow
 
-import java.nio.charset.StandardCharsets
-import java.nio.file.{Files, Path, Paths}
-
 /** Anything the viewer can show and `save` can write: a [[Figure]], a [[Scene]] (3-D), a side-by-side [[Board]]. */
 trait Plot:
   def title: String
@@ -28,23 +25,24 @@ trait Plot:
   /** Writes the plot to `path`: an `.svg` file in plain light colors (another `theme` on request), or an `.html` page
     * (interactive for 3-D) that follows the reader's light or dark setting. Returns the absolute path.
     */
-  def save(path: String, theme: Option[Theme] = None): Path =
-    val p = Paths.get(path).toAbsolutePath
+  def save(path: String, theme: Option[Theme] = None): String =
+    val absolute = FileAccess.absolute(path)
     val text =
       if path.toLowerCase.endsWith(".svg") then svgFile(theme.getOrElse(Theme.Light))
       else html(theme.getOrElse(Theme.Auto))
-    Option(p.getParent).foreach(Files.createDirectories(_))
-    Files.write(p, text.getBytes(StandardCharsets.UTF_8))
+    FileAccess.createParentDirectories(absolute)
+    FileAccess.writeText(absolute, text)
+    absolute
 
   /** [[save]] in the default theme for the file type, for callers that cannot use a default argument (Java, MATLAB:
     * `fig.save('diagram.svg')`).
     */
-  def save(path: String): Path = save(path, None)
+  def save(path: String): String = save(path, None)
 
   /** [[save]] in the theme called `theme` (`auto`, `light` or `dark`), for callers that have a word, not a `Theme`
     * (MATLAB: `fig.save('diagram.svg', 'dark')`).
     */
-  def save(path: String, theme: String): Path = save(path, Some(Theme.named(theme)))
+  def save(path: String, theme: String): String = save(path, Some(Theme.named(theme)))
 
 /** Plots side by side, in one row (small multiples: a barcode next to its diagram, a complex at several scales), or on
   * a [[Layout]] grid, where a panel can span several rows and columns (`Plot.layout(2, 3).place(...)`).

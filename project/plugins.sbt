@@ -5,3 +5,5 @@ addSbtPlugin("com.github.sbt" % "sbt-release"     % "1.5.0")
 addSbtPlugin("com.github.sbt" % "sbt-pgp"         % "2.3.2")
 addSbtPlugin("com.eed3si9n"   % "sbt-assembly"    % "2.5.0")
 addSbtPlugin("org.scoverage"  % "sbt-scoverage"   % "2.4.4")
+// Scala.js on sbt 2 (the JS row of the projectMatrix in build.sbt). 1.22.0 is the first release with an sbt 2 build.
+addSbtPlugin("org.scala-js" % "sbt-scalajs" % "1.22.0")

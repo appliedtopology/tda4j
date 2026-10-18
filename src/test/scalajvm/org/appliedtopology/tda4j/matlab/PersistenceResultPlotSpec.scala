@@ -155,13 +155,13 @@ class PersistenceResultPlotSpec extends Specification:
 
   "a plot from MATLAB or Java" should {
     "have a save method taking only the path" >> {
-      classOf[plot.Plot].getMethod("save", classOf[String]).getReturnType must beEqualTo(classOf[java.nio.file.Path])
+      classOf[plot.Plot].getMethod("save", classOf[String]).getReturnType must beEqualTo(classOf[String])
     }
     "save with the file type's default theme, with no default argument" >> {
       val path = java.io.File.createTempFile("plot-spec", ".svg")
       path.deleteOnExit()
       val r = TDA4j.computeFromPoints(circle, Array("maxDimension", "1"))
       val written = r.plotDiagram().save(path.getAbsolutePath)
-      java.nio.file.Files.readString(written) must contain(plot.Palette.brand.seriesLight(0))
+      java.nio.file.Files.readString(java.nio.file.Paths.get(written)) must contain(plot.Palette.brand.seriesLight(0))
     }
   }

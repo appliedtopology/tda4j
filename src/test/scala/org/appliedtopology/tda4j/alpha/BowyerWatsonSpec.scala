@@ -1,5 +1,6 @@
 package org.appliedtopology.tda4j
 
+import org.appliedtopology.tda4j.SpecThrows.throwWith
 import org.specs2.mutable
 
 /** `BowyerWatsonDelaunay`: the triangulation's invariants after every insertion, agreement with Helix in general
@@ -119,5 +120,5 @@ class BowyerWatsonSpec extends mutable.Specification:
   }
 
   "refuses an input that spans more than 4 dimensions, saying what to use instead" >> {
-    BowyerWatsonDelaunay(cloud(5, 10, 1)) must throwAn[IllegalArgumentException](message = "AlphaBackend.DQP")
+    BowyerWatsonDelaunay(cloud(5, 10, 1)) must throwWith[IllegalArgumentException]("AlphaBackend.DQP")
   }

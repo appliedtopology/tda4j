@@ -37,3 +37,5 @@ ci/secrets.tar
 
 # Python bytecode (bench/)
 __pycache__/
+.sbt/
+.claude/worktrees/

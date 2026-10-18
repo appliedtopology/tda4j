@@ -1,6 +1,7 @@
 package org.appliedtopology.tda4j
 package sset
 
+import org.appliedtopology.tda4j.SpecThrows.throwWith
 import org.appliedtopology.tda4j.*
 
 import org.specs2.mutable.Specification
@@ -198,8 +199,8 @@ class CollapsedNerveSpec extends Specification:
       (z4oneGenerator.validate() must beEmpty)
         .and(z4oneGenerator.respects(z4chain) must not(beEmpty))
         .and(
-          CollapsedNerve(z4oneGenerator).persistentHomology(z4chain, 3, 2) must throwAn[IllegalArgumentException](
-            message = "RewritingSystem.refining"
+          CollapsedNerve(z4oneGenerator).persistentHomology(z4chain, 3, 2) must throwWith[IllegalArgumentException](
+            "RewritingSystem.refining"
           )
         )
         .and(

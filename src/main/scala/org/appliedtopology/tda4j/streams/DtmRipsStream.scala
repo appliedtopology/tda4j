@@ -1,6 +1,5 @@
 package org.appliedtopology.tda4j
 
-import scala.collection.concurrent.TrieMap
 import scala.collection.immutable
 
 /** The DTM-filtration of Anai, Chazal, Glisse, Ike, Lecci, Rouvreau, Saulnier and Wasserman, "DTM-based filtrations"
@@ -78,7 +77,7 @@ object DtmRipsSimplexStream:
   /** Reifies the DTM-Rips 1-skeleton as a `FiniteMetricSpace[Int]` (doubled `2*t`) so it slots into
     * `RipserCofaceSimplexStream` unchanged for every dimension `>= 1`, the same trick `WitnessMetricSpace` uses for the
     * lazy witness complex. '''Not a real metric''' (no triangle-inequality guarantee) -- never hand this to
-    * `JVPTree`/`SparseMetricSpace`/`alpha`, only to combinatorial coface generation.
+    * `VantagePointQuery`/`SparseMetricSpace`/`alpha`, only to combinatorial coface generation.
     */
   class DtmMetricSpace(val ambient: FiniteMetricSpace[Int], val f: IndexedSeq[Double], val p: Double = 1.0)
       extends FiniteMetricSpace[Int]:
@@ -110,7 +109,7 @@ object DtmRipsSimplexStream:
     */
   def filtrationValueOverride(reified: DtmMetricSpace): PartialFunction[Simplex[Int], Double] =
     val base = FiniteMetricSpace.MaximumDistanceFiltrationValue[Int](reified)
-    val cache = TrieMap.empty[Simplex[Int], Double]
+    val cache = FiltrationCache.empty[Simplex[Int], Double]
     new PartialFunction[Simplex[Int], Double]:
       def isDefinedAt(spx: Simplex[Int]): Boolean = base.isDefinedAt(spx)
       def apply(spx: Simplex[Int]): Double =
