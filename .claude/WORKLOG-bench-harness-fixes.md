@@ -129,3 +129,35 @@ Measured here (one draw each, 4 cores, 15 GB, `-Xmx9g`, so only the shape of the
 
 Not run: GUDHI (so the reference column and every agreement figure), the Scala.js twins, the seeds, the larger spheres and the 800-point
 case. The thesis's own cube numbers were not given; they would go in `THESIS_HELIX_SECONDS`.
+
+## Second addendum (same day): decisions, cyclooctane, and a cross-check by another algorithm
+
+Decisions of the project lead, which supersede parts of the first addendum:
+- **No other paper's numbers in our tables** (they were computed in another setting): the column with Helix's reported times, the
+  comparison "10.8 s there against more than 420 s here" and its issue (#134, closed as a duplicate of #68 with the measurement kept
+  there) are withdrawn. The question is whether our alpha implementation stands up to other implementations.
+- **No sphere samples** (cospherical points are degenerate for every Delaunay-based tool): the `sphere` shape, `--spheres` and the
+  anchors are gone from `sweep_alpha.py`; the unit cube (interior and surface) stays, with `--grid` for a series over n at fixed d.
+  The one sphere measurement kept for the record, on 40 points of the 11-sphere in R^12: Helix did not finish in 420 s, the dual-QP took
+  27 s; on the 14-sphere the dual-QP took 9.9 s.
+- The compute server has about 160 GB free, so the sweep's defaults are `--jvm-heap 64g`, `--timeout 1800`, GUDHI capped at 128 GB.
+
+**Cyclooctane.** The data is `src/matlab/for_distribution/tutorial_examples/pointsCycloOctane.mat` of `appliedtopology/javaplex` (found by
+the project lead; that repository is outside this session's scope, but `git clone` of a public repository works through the proxy, and a
+direct raw-file download does not). Checked here: one variable, `pointsCycloOctane`, 6040 x 24 doubles, coordinates in [-1.95, 1.95];
+SHA-256 `6725fa21...f79cc` at javaplex commit `05a288a4`; a median of 37 other points within 0.5 and 8 within 0.25. `prepare` fetches it
+from the pinned URL, checks the hash, converts it with scipy (`cyclooctane.txt`); the cases are `cyclooctane` (Ripser to 0.5) and
+`cyclooctane_alpha` (DQP to 0.25, degrees 0 to 2). The same directory has `pointsOpticalDct_k15.mat` (15000 x 8), an optical-patch set
+that is not the DQP paper's k = 300 set (that file is not in the repository).
+- DQP on all of it at the radius 0.25, `-Xmx10g`: 224 s of computation at p = 2 and 234 s at p = 17, 3.6 GB RSS, bars per degree
+  (6040, 10959, 528); the bars alive at the radius are (1, 1, 2) over both fields, and the two barcodes are identical bar for bar (all
+  17,527 pairs). Those are the Betti numbers of the complex, computed first and not compared with anything.
+  An earlier version of `bench.py` carried an expected value and a claim that F_2 would differ because of the Klein bottle's torsion;
+  the run does not support that claim and both were removed (the plan's rule: compute first, quote after).
+
+**Cross-check by another algorithm** (`sweep_alpha.py` and `tda4j-cech`): TDA4j's Cech complex, built from minimum enclosing balls with no
+triangulation, has the barcode of the alpha complex in general position (nerve lemma). On 40 interior cube points (one draw each) the
+Cech, dual-QP and Helix barcodes agree, in the number of bars longer than 1e-6 in every degree and in their values to at most 5.6e-16,
+at d = 5 (H0 to H2: 40, 120, 111 bars), d = 6 (40, 232, 417) and d = 7 (40, 263, 626); the dual-QP has two more H2 bars at d = 6, of
+length 2.5e-9 and 4.2e-9 at filtration values 49 and 83 (nearly flat simplices). Times at n = 40: Cech 16 to 38 s, nearly independent of d.
+The first real run of the sweep with GUDHI 3.13 (installed in the scratch venv): see the next section when it is done.

@@ -30,6 +30,7 @@ Method (see .claude/PLAN-paper.md, section 3.0):
 import argparse
 import csv
 import datetime
+import hashlib
 import json
 import math
 import os
@@ -50,6 +51,11 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 RIPSER_BENCH = "https://raw.githubusercontent.com/Ripser/ripser-benchmark/master"
 ROADMAP = "https://raw.githubusercontent.com/n-otter/PH-roadmap/master/data_sets"
+# The cyclooctane conformations (6040 points in R^24; Martin, Thompson, Coutsias and Watson 2010), as JavaPlex's MATLAB
+# tutorial ships them. Pinned to a commit and to the file's SHA-256: a changed file would change the benchmark.
+JAVAPLEX_TUTORIAL = ("https://github.com/appliedtopology/javaplex/raw/05a288a4a99f27242d8f4b24e98d4cce749fb71a/"
+                     "src/matlab/for_distribution/tutorial_examples")
+CYCLOOCTANE_SHA256 = "6725fa217e770fe8a65c20d82c347cc5cfa17d557488b38a1b554d90566f79cc"
 
 # ---------------------------------------------------------------------------------------------------------
 # Cases. The Vietoris-Rips ones are the Ripser paper's benchmark (ripser-benchmark's Dockerfile, same flags
@@ -77,6 +83,9 @@ CASES = [
     ("o3_1024", "vr", "o3_1024.txt", "points", 3, 1.8),
     ("o3_4096", "vr", "o3_4096.txt", "points", 3, 1.4),
     ("clifford50000", "vr", "clifford_torus_50000.points.txt", "points", 2, 0.15),
+    # Cyclooctane (R^24, 6040 conformations): Ripser to the cutoff 0.5, the same data and degrees as the alpha case below
+    # at the radius 0.25 (two balls of radius r meet at distance 2r).
+    ("cyclooctane", "vr", "cyclooctane.txt", "points", 2, 0.5),
     # cubical: sublevel filtration, T-construction (top cells carry the values)
     ("random2d_512", "cubical", "random2d_512.npy", "npy", 1, None),
     ("blob2d_512", "cubical", "blob2d_512.npy", "npy", 1, None),
@@ -101,14 +110,18 @@ CASES = [
     Case("dragon2000_alpha_gp", "alpha", "dragon_2000.gp.txt", "points", 2),
     Case("sphere3_192_alpha_gp", "alpha", "sphere_3_192.gp.txt", "points", 2),
     # High ambient dimension, the regime the dual-QP and Helix backends are for (issues #131, #133). unif5d_500 is the
-    # Helix crossover table's 5-D case (CGAL still finishes it). unif10d_1000 is the DQP paper's own example
-    # (Carlsson and Carlsson, Sci. Rep. 14:19824, section 4.2): 1000 points uniform in [-1,1]^10, radius 1.0, up to
-    # 3-simplices; the paper's sizes were (1000, 64785, 560459, 1783194) in 5 minutes, and a full Delaunay triangulation
-    # is out of reach (GUDHI and Helix are expected to time out, which is the result). o3_1024_alpha: the Ripser
-    # benchmark's 3x3 orthogonal matrices in R^9, with a radius at which a point has about 25 neighbours within 2r.
+    # Helix crossover table's 5-D case (CGAL still finishes it). unif10d_1000 takes its parameters from the DQP paper's
+    # random example (Carlsson and Carlsson, Sci. Rep. 14:19824, section 4.2): 1000 points uniform in [-1,1]^10, radius
+    # 1.0, up to 3-simplices; a full Delaunay triangulation is out of reach there (GUDHI and Helix are expected to time
+    # out, which is a result). o3_1024_alpha: the Ripser benchmark's 3x3 orthogonal matrices in R^9, with a radius at
+    # which a point has about 25 neighbours within 2r.
     Case("unif5d_500", "alpha", "unif5d_500.txt", "points", 2),
     Case("unif10d_1000", "alpha", "unif10d_1000.txt", "points", 2, threshold=1.0),
     Case("o3_1024_alpha", "alpha", "o3_1024.txt", "points", 2, radius_k=25),
+    # Cyclooctane as the DQP paper uses it: Alpha(S, 0.25) up to 3-simplices. A real data set of 24 coordinates, for which
+    # a full Delaunay triangulation is out of reach. The bars alive at the radius are the Betti numbers there (the
+    # summary's `betti` column, per field).
+    Case("cyclooctane_alpha", "alpha", "cyclooctane.txt", "points", 2, threshold=0.25),
 ]
 CASES = [c if isinstance(c, Case) else Case(*c) for c in CASES]
 
@@ -141,6 +154,10 @@ TOOLS = [
     ("tda4j-helix", "tda4j", "alpha", {"engine": "auto", "reps": "cycles", "backend": "helix"}),
     ("tda4j-dqp", "tda4j", "alpha", {"engine": "auto", "reps": "cycles", "backend": "dqp", "needs_radius": True}),
     ("gudhi", "py", "alpha", {}),
+    # The Cech complex (minimum enclosing balls, no triangulation) has the barcode of the alpha complex in general
+    # position (nerve lemma): a check of the alpha code by another algorithm. Its own task, so no case runs it by itself;
+    # sweep_alpha.py does.
+    ("tda4j-cech", "tda4j", "cech", {"engine": "auto", "reps": "cycles"}),
 ]
 # The Scala.js build of TDA4j (the npm package, on Node.js) beside each JVM variant above. A tool named `tda4j-js...`
 # is the JavaScript twin of `tda4j...`: summarize pairs them.
@@ -207,6 +224,30 @@ def jitter(points, rng, relative=1e-3):
     return points + scale * rng.normal(size=points.shape)
 
 
+def sha256_of(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def cyclooctane_points(data: Path):
+    """data/cyclooctane.txt (6040 rows of 24 numbers) from JavaPlex's `pointsCycloOctane.mat`, checked against its SHA-256."""
+    mat = data / "pointsCycloOctane.mat"
+    fetch(f"{JAVAPLEX_TUTORIAL}/pointsCycloOctane.mat", mat)
+    found = sha256_of(mat)
+    if found != CYCLOOCTANE_SHA256:
+        raise SystemExit(f"{mat}: SHA-256 {found}, expected {CYCLOOCTANE_SHA256}; delete it and look at what changed")
+    try:
+        import scipy.io
+    except ImportError:
+        raise SystemExit("reading the .mat file needs scipy: `bench/run.sh setup python` installs it")
+    x = np.asarray(scipy.io.loadmat(str(mat))["pointsCycloOctane"], dtype=float)
+    assert x.shape == (6040, 24), f"{mat}: expected 6040 points in R^24, got {x.shape}"
+    np.savetxt(data / "cyclooctane.txt", x, fmt="%.17g")
+
+
 def prepare(data: Path):
     data.mkdir(parents=True, exist_ok=True)
     for f in ["sphere_3_192_points.dat", "o3_1024.txt", "o3_4096.txt", "clifford_torus_50000.points.txt"]:
@@ -215,6 +256,8 @@ def prepare(data: Path):
     fetch(f"{ROADMAP}/roadmap_datasets_point_cloud/dragon_vrip.ply.txt_2000_.txt", data / "dragon_2000.txt")
     fetch(f"{ROADMAP}/roadmap_datasets_distmat/fractal_9_5_2_random_edge_list.txt_0.19795_distmat.txt",
           data / "fractal-r.txt")
+
+    cyclooctane_points(data)
 
     sphere = np.loadtxt(data / "sphere_3_192_points.dat")
     np.savetxt(data / "sphere3_48.txt", sphere[:48], fmt="%.17g")
@@ -547,6 +590,11 @@ def tolerance(threshold, tool, divisions):
     return tol
 
 
+def essential_counts(bars, max_dim):
+    """Essential bars per degree 0..max_dim: the Betti numbers, in that field, of a complex cut at its threshold."""
+    return tuple(sum(1 for b, d in bars.get(k, []) if math.isinf(d)) for k in range(max_dim + 1))
+
+
 def significant_counts(bars, tol):
     """Bars per degree that are essential or longer than `tol`: what two tools can be compared on. A tool that keeps
     the near-zero bars (length below the agreement tolerance) would otherwise look as if it disagreed."""
@@ -771,6 +819,7 @@ def summarize(out: Path, bottleneck=None):
             "heap_peak_mb": f"{max(heaps):.0f}" if heaps else "",
             "old_peak_mb": f"{max(olds):.0f}" if olds else "",
             "degenerate": str(cname in cases and cases[cname].degenerate),
+            "betti": ",".join(map(str, essential_counts(mine, cases[cname].dim))) if (mine is not None and cname in cases) else "",
         })
     if not summary:
         print(f"no runs in {out / 'runs.csv'}")

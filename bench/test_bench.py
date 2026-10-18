@@ -117,9 +117,10 @@ class CaseTests(unittest.TestCase):
             if c.degenerate:
                 self.assertIn(c.name + "_gp", names)
 
-    def test_every_tool_runs_a_task_with_a_reference(self):
+    def test_every_tool_runs_a_task_with_a_reference_except_cech_which_only_the_alpha_sweep_runs(self):
         for name, kind, task, opts in bench.TOOLS:
-            self.assertIn(task, bench.REFERENCE, name)
+            self.assertTrue(task in bench.REFERENCE or task == "cech", name)
+        self.assertNotIn("cech", {c.task for c in bench.CASES}, "no case of the main run uses the Cech task")
 
     def test_alpha_radius_has_about_k_neighbours(self):
         x = np.random.default_rng(1).random((1500, 3))
@@ -402,20 +403,20 @@ class AddressSpaceTests(unittest.TestCase):
 
 class CubePointsTests(unittest.TestCase):
     def test_interior_points_are_inside_the_cube_and_deterministic(self):
-        x = sweep_alpha.cube_points("interior", 40, 7, 0)
+        x = sweep_alpha.points("interior", 40, 7, 0)
         self.assertEqual(x.shape, (40, 7))
         self.assertTrue(((x > 0) & (x < 1)).all())
-        np.testing.assert_array_equal(x, sweep_alpha.cube_points("interior", 40, 7, 0))
-        self.assertFalse(np.array_equal(x, sweep_alpha.cube_points("interior", 40, 7, 1)))
-        self.assertFalse(np.array_equal(x, sweep_alpha.cube_points("surface", 40, 7, 0)))
+        np.testing.assert_array_equal(x, sweep_alpha.points("interior", 40, 7, 0))
+        self.assertFalse(np.array_equal(x, sweep_alpha.points("interior", 40, 7, 1)))
+        self.assertFalse(np.array_equal(x, sweep_alpha.points("surface", 40, 7, 0)))
 
     def test_surface_points_have_exactly_one_coordinate_on_a_facet(self):
-        x = sweep_alpha.cube_points("surface", 400, 6, 3)
+        x = sweep_alpha.points("surface", 400, 6, 3)
         self.assertTrue(((x >= 0) & (x <= 1)).all())
         self.assertTrue((((x == 0) | (x == 1)).sum(axis=1) == 1).all())
 
     def test_surface_points_are_uniform_over_the_facets(self):
-        x = sweep_alpha.cube_points("surface", 20000, 4, 0)
+        x = sweep_alpha.points("surface", 20000, 4, 0)
         counts = [int((x[:, i] == v).sum()) for i in range(4) for v in (0.0, 1.0)]
         self.assertEqual(sum(counts), 20000)
         self.assertLess(max(counts) - min(counts), 0.1 * 20000 / 8)
@@ -432,42 +433,105 @@ class CubePointsTests(unittest.TestCase):
         self.assertEqual(sweep_alpha.parse_extra(""), [])
 
 
-class SphereTests(unittest.TestCase):
-    def test_a_d_sphere_lives_in_d_plus_one_coordinates_on_the_unit_sphere(self):
-        x = sweep_alpha.points("sphere", 40, 11, 0)
-        self.assertEqual(x.shape, (40, 12))
-        np.testing.assert_allclose(np.linalg.norm(x, axis=1), 1.0, atol=1e-15)
-        np.testing.assert_array_equal(x, sweep_alpha.points("sphere", 40, 11, 0))
-        self.assertFalse(np.array_equal(x, sweep_alpha.points("sphere", 40, 11, 1)))
-        self.assertEqual((sweep_alpha.ambient_of("sphere", 11), sweep_alpha.ambient_of("surface", 11)), (12, 11))
+class PlanTests(unittest.TestCase):
+    def test_a_draw_in_the_interior_is_in_general_position(self):
+        self.assertFalse(sweep_alpha.is_degenerate(sweep_alpha.points("interior", 40, 11, 0)))
+        self.assertFalse(sweep_alpha.is_degenerate(sweep_alpha.points("surface", 40, 12, 0)))
 
-    def test_points_are_spread_over_the_whole_sphere(self):
-        x = sweep_alpha.points("sphere", 4000, 3, 0)
-        self.assertLess(np.abs(x.mean(axis=0)).max(), 0.05)
+    def test_there_is_no_sphere_to_sample(self):
+        with self.assertRaises(Exception):
+            sweep_alpha.parse_extra("40:11:sphere")
 
-    def test_a_sphere_is_degenerate_and_an_interior_draw_is_not(self):
-        self.assertTrue(sweep_alpha.is_degenerate("sphere", sweep_alpha.points("sphere", 40, 11, 0)))
-        self.assertFalse(sweep_alpha.is_degenerate("interior", sweep_alpha.points("interior", 40, 11, 0)))
-        self.assertFalse(sweep_alpha.is_degenerate("surface", sweep_alpha.points("surface", 40, 12, 0)))
-
-    def test_sphere_groups(self):
-        self.assertEqual(sweep_alpha.parse_spheres("11:40,100;14:40,75,125"), [(11, [40, 100]), (14, [40, 75, 125])])
-        self.assertEqual(sweep_alpha.parse_spheres(sweep_alpha.DEFAULT_SPHERES)[2], (17, [40, 60, 75]))
+    def test_grid_groups(self):
+        self.assertEqual(sweep_alpha.parse_grid("11:40,100;14:40,75,125"), [(11, [40, 100]), (14, [40, 75, 125])])
+        self.assertEqual(sweep_alpha.parse_grid(""), [])
 
     def test_the_plan_runs_each_series_in_order_and_the_extra_cells_on_their_own(self):
-        args = Namespace(shapes="interior,sphere", points="40,60", dims="5,6", spheres="11:40,100;14:40",
-                         extra="800:11:interior")
+        args = Namespace(shapes="interior", points="40,60", dims="5,6", grid="11:40,100;14:40", extra="800:11:interior")
         cells = sweep_alpha.plan(args)
-        self.assertEqual([(c[0], c[1], c[2]) for c in cells if c[3] == ("interior", "n", 40)],
+        self.assertEqual([(c[0], c[1], c[2]) for c in cells if c[3] == ("d", "interior", 40)],
                          [("interior", 40, 5), ("interior", 40, 6)])
-        self.assertEqual([(c[1], c[2]) for c in cells if c[3] == ("sphere", "d", 11)], [(40, 11), (100, 11)])
+        self.assertEqual([(c[1], c[2]) for c in cells if c[3] == ("n", "interior", 11)], [(40, 11), (100, 11)])
         self.assertEqual([c for c in cells if c[3] is None], [("interior", 800, 11, None)])
         self.assertNotIn("surface", {c[0] for c in cells})
 
-    def test_the_thesis_anchors_are_in_seconds(self):
-        self.assertAlmostEqual(sweep_alpha.THESIS_HELIX_SECONDS[("sphere", 40, 11)], 10.8)
-        self.assertAlmostEqual(sweep_alpha.THESIS_HELIX_SECONDS[("sphere", 40, 14)], 94.8)
-        self.assertAlmostEqual(sweep_alpha.THESIS_HELIX_SECONDS[("sphere", 40, 17)], 472.2)
+    def test_no_other_papers_numbers_are_in_the_script(self):
+        self.assertFalse(hasattr(sweep_alpha, "THESIS_HELIX_SECONDS"))
+
+    def test_the_cech_tool_runs_the_cech_task_and_the_others_the_alpha_task(self):
+        seen = []
+        saved = sweep_alpha.bench.command, sweep_alpha.bench.run_proc
+        sweep_alpha.bench.command = lambda kind, name, opts, case, data, p, thr, w, t, out, args: (
+            seen.append((name, case.task)) or ["x"])
+        sweep_alpha.bench.run_proc = lambda cmd, timeout, log, **kw: sweep_alpha.bench.Proc(
+            "ok", 1.0, 100.0, '{"times_s": [1.0], "bars": {"0": 1}}')
+        try:
+            with tempfile.TemporaryDirectory() as d:
+                (Path(d) / "sweepalpha").mkdir()
+                (Path(d) / "bars").mkdir()
+                args = Namespace(data=d, dim=2, field=17, py_mem_gb=0, timeout=10, warm_cap=0, trials=0)
+                rows = [sweep_alpha.run_cell(name, "tda4j", {}, "interior", 10, 5, 0, "d", args, None, Path(d))
+                        for name in ("tda4j-cech", "tda4j-dqp")]
+        finally:
+            sweep_alpha.bench.command, sweep_alpha.bench.run_proc = saved
+        self.assertEqual(seen, [("tda4j-cech", "cech"), ("tda4j-dqp", "alpha")])
+        self.assertEqual([r["status"] for r in rows], ["ok", "ok"])
+        self.assertEqual(rows[0]["series"], "d")
+
+
+class CyclooctaneTests(unittest.TestCase):
+    def test_the_vietoris_rips_and_alpha_cases_share_the_data_and_the_radii_match(self):
+        cases = {c.name: c for c in bench.CASES}
+        vr, alpha = cases["cyclooctane"], cases["cyclooctane_alpha"]
+        self.assertEqual((vr.task, vr.threshold, vr.dim, vr.file), ("vr", 0.5, 2, "cyclooctane.txt"))
+        self.assertEqual((alpha.task, alpha.threshold, alpha.dim, alpha.file), ("alpha", 0.25, 2, "cyclooctane.txt"))
+        self.assertEqual(alpha.threshold * 2, vr.threshold, "two balls of radius r meet at distance 2r")
+
+    def test_a_changed_file_is_refused(self):
+        with tempfile.TemporaryDirectory() as d:
+            saved = bench.fetch
+            bench.fetch = lambda url, dest: Path(dest).write_bytes(b"not the file")
+            try:
+                with self.assertRaises(SystemExit) as caught:
+                    bench.cyclooctane_points(Path(d))
+            finally:
+                bench.fetch = saved
+        self.assertIn("SHA-256", str(caught.exception))
+
+    @unittest.skipUnless(importlib.util.find_spec("scipy"), "scipy is not installed")
+    def test_the_mat_file_becomes_a_text_file_of_6040_points_in_24_dimensions(self):
+        import scipy.io
+        x = np.random.default_rng(0).standard_normal((6040, 24))
+        with tempfile.TemporaryDirectory() as d:
+            mat = Path(d) / "pointsCycloOctane.mat"
+            scipy.io.savemat(str(mat), {"pointsCycloOctane": x})
+            saved = bench.fetch, bench.CYCLOOCTANE_SHA256
+            bench.fetch, bench.CYCLOOCTANE_SHA256 = (lambda url, dest: None), bench.sha256_of(mat)
+            try:
+                bench.cyclooctane_points(Path(d))
+            finally:
+                bench.fetch, bench.CYCLOOCTANE_SHA256 = saved
+            np.testing.assert_array_equal(np.loadtxt(Path(d) / "cyclooctane.txt"), x)
+
+    def test_the_summary_reports_the_bars_alive_at_the_threshold_per_field(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d)
+            (out / "bars").mkdir()
+            rows = []
+            for p, bars in [(2, "0\t0.0\tinf\n1\t0.3\tinf\n2\t0.2\tinf\n2\t0.21\tinf\n2\t0.1\t0.15\n"),
+                            (17, "0\t0.0\tinf\n1\t0.3\tinf\n1\t0.31\tinf\n")]:
+                for mode in ("cold", "warm"):
+                    rows.append(run_row("cyclooctane_alpha", "tda4j-dqp", mode, "ok", wall="2", median="2", task="alpha",
+                                        p=str(p), threshold="0.25"))
+                (out / "bars" / f"cyclooctane_alpha__p{p}__tda4j-dqp.tsv").write_text(bars)
+            write_runs(out, rows)
+            bench.summarize(out, bottleneck=stub_bottleneck)
+            with open(out / "summary.csv") as f:
+                found = {r["p"]: r["betti"] for r in csv.DictReader(f)}
+            md = (out / "summary.md").read_text()
+        self.assertEqual(found, {"2": "1,1,2", "17": "1,2,0"})
+        self.assertNotIn("Known Betti", md, "no number from a paper is compared with")
+        self.assertEqual(bench.essential_counts({0: [(0.0, math.inf)], 2: [(0.1, 0.2)]}, 2), (1, 0, 0))
 
 
 class SweepLoopTests(unittest.TestCase):
@@ -475,7 +539,7 @@ class SweepLoopTests(unittest.TestCase):
         calls = []
         with tempfile.TemporaryDirectory() as d:
             saved = sweep_alpha.run_cell, sweep_alpha.bench.available, sys.argv
-            sweep_alpha.run_cell = lambda name, kind, opts, shape, n, dd, seed, args, bench_args, out: (
+            sweep_alpha.run_cell = lambda name, kind, opts, shape, n, dd, seed, series, args, bench_args, out: (
                 calls.append((name, shape, n, dd, seed)) or fake(name, shape, n, dd, seed))
             sweep_alpha.bench.available = lambda kind, opts, python: True
             sys.argv = ["sweep_alpha.py", "--data", d, "--out", str(Path(d) / "out"), "--dims", "5,6,7,8", "--points", "40",
@@ -507,20 +571,18 @@ class SweepLoopTests(unittest.TestCase):
         self.assertIn("timeout", md)
 
 
-    def test_a_sphere_series_stops_along_n_and_its_table_has_the_thesis_column(self):
+    def test_a_grid_series_stops_along_n_and_its_tables_are_by_d(self):
         def fake(name, shape, n, d, seed):
             return self.row(name, shape, n, d, seed, "timeout" if name == "tda4j-helix" and n >= 100 else "ok",
-                            ambient=d + 1, degenerate="True")
-        calls, rows, md = self.run_sweep(fake, ["--shapes", "sphere", "--spheres", "11:40,100,300;14:40"])
+                            series="n")
+        calls, rows, md = self.run_sweep(fake, ["--dims", "", "--points", "", "--grid", "11:40,100,300;14:40"])
         self.assertEqual([c[2:4] for c in calls if c[0] == "tda4j-helix" and c[3] == 11], [(40, 11), (40, 11), (100, 11)])
         self.assertEqual([c[2] for c in calls if c[0] == "tda4j-helix" and c[3] == 14], [40, 40])
         self.assertEqual(len([c for c in calls if c[0] == "tda4j-dqp" and c[3] == 11]), 6, "3 sizes x 2 seeds")
-        self.assertIn("### sphere S^11 in R^12", md)
-        self.assertIn("### sphere S^14 in R^15", md)
-        time_table = md.split("## Time in seconds")[1].split("## Peak memory")[0]
-        self.assertIn("Helix, thesis (serial)", time_table)
-        self.assertRegex(time_table, r"\| n = 40† \|[^\n]*\| 10\.8 \|")
-        self.assertRegex(time_table, r"\| n = 40† \|[^\n]*\| 94\.8 \|")
+        self.assertIn("### interior points of the unit cube, d = 11", md)
+        self.assertIn("### interior points of the unit cube, d = 14", md)
+        self.assertRegex(md, r"\| n = 100 \|[^\n]*timeout")
+        self.assertNotIn("thesis", md.lower())
 
     def test_extra_cells_ignore_the_stop(self):
         def fake(name, shape, n, d, seed):

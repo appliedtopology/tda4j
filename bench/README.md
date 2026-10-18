@@ -71,36 +71,38 @@ bench/run.sh sweep-cubical --dims 2,3 --jvm-heap 32g --timeout 1800
 
 ## The alpha dimension sweep
 
-`bench/run.sh sweep-alpha` asks what the ambient dimension and the point count cost each alpha backend, on the
-workloads of the Helix thesis and paper as they were described to us (neither was read):
-- **cube:** n = 40 and 60 points uniform at random in the interior of the unit cube, or on its surface, over the
-  dimensions 5, 6, 7, 8, 10, 12, 15, 20, 25 (`--points`, `--dims`, `--shapes`); the heaviest case there is 800 points in R¹¹
-  (`--extra 800:11:interior`);
-- **sphere:** Tadasets' `dsphere(n, d)`, n points on the d-sphere **in R^(d+1)** (checked in Tadasets 0.2.2: standard normal
-  vectors, normalized), for d = 11 with n = 40 to 900, d = 14 with 40 to 125, d = 17 with 40 to 75 (`--spheres`). Helix's
-  serial times for the 40-point ones were reported as 0.18, 1.58 and 7.87 minutes; `sweep.md` prints them in a column beside
-  ours (another machine, another implementation: the order of magnitude and the slope in d are the comparison). That the
-  thesis's d is Tadasets' d, so R^(d+1), is our reading.
+`bench/run.sh sweep-alpha` asks two things of the alpha complex: whether TDA4j's code holds up against other
+implementations, and what the ambient dimension and the point count cost each backend. The inputs are random points of
+the unit cube, the kind the Helix thesis uses (as it was described to us; it was not read): n = 40 and 60 points uniform
+in the interior or on the surface, over the dimensions 5, 6, 7, 8, 10, 12, 15, 20, 25 (`--points`, `--dims`, `--shapes`);
+`--grid "11:40,100,300,900"` runs a series over n at a fixed d, and `--extra 800:11:interior` single cells. Points on a
+sphere are deliberately not sampled: they are all cospherical, and every Delaunay-based tool then triangulates the one
+degenerate cell its own way.
 
-Tools: `tda4j`, `tda4j-helix`, `tda4j-fastalpha`, `tda4j-dqp`, `gudhi`, and the `tda4j-js` twins. At these point counts the
-dual-QP needs no radius: it builds every candidate simplex up to dimension 3 (at most C(n, 4) of them), and its cost
-barely depends on the ambient dimension, while a Delaunay-based tool pays for a triangulation whose size grows with it. Each
-cell runs on `--seeds` draws (default 3; start with 1), cold and warm, and a tool's series stops at its first timeout or
-out-of-memory (along d for the cubes, along n for the spheres). The defaults assume a machine like the compute server's
-(`--jvm-heap 64g`, `--timeout 1800`, GUDHI capped at `--py-mem-gb 128`).
+Tools: `tda4j`, `tda4j-helix`, `tda4j-fastalpha`, `tda4j-dqp`, `tda4j-cech`, `gudhi`, and the `tda4j-js` twins. A barcode is
+compared with the first of GUDHI, the Cech complex and the dual-QP that finished on the same draw. GUDHI (CGAL) is the other
+implementation but stops early in d. The Cech complex (minimum enclosing balls, no triangulation) and the dual-QP (a
+quadratic program per simplex) are other algorithms than the Delaunay walk, and by the nerve lemma the Cech and alpha
+complexes have the same barcode in general position, so their agreement to rounding is a check at dimensions where GUDHI
+cannot run. At these point counts the dual-QP needs no radius: it builds every candidate simplex up to dimension 3 (at most
+C(n, 4) of them). Nothing from another paper's tables is used: their timings were measured in other settings.
+
+Each cell runs on `--seeds` draws (default 3; start with 1), cold and warm, and a tool's series stops at its first timeout or
+out-of-memory. The defaults assume a machine like the compute server's (`--jvm-heap 64g`, `--timeout 1800`, GUDHI capped at
+`--py-mem-gb 128`).
 
 ```sh
-bench/run.sh sweep-alpha --seeds 1 --dims 5,6,7,8 --points 40 --shapes interior --spheres "11:40"   # a quick look
-bench/run.sh sweep-alpha --extra 800:11:interior                                                  # the whole grid
+bench/run.sh sweep-alpha --seeds 1 --dims 5,6,7,8 --points 40 --shapes interior   # a quick look
+bench/run.sh sweep-alpha --extra 800:11:interior                                    # the whole grid
 ```
 
-What it does not do: **failure rates.** Helix's invalid triangulations were about 1 in 170 clouds at d = 4 with 20 to 30 points,
-so a rate needs hundreds of draws per cell, not three; the sweep reports timing and whether a draw failed. Also **no
-simplex counts** (the driver does not report the size of the complex), so the cost cannot yet be set against the size of the
-triangulation. And the points are noise: in high dimension the distances concentrate, filtration values cluster, and a few
-nearly flat simplices have circumradii of 50 and more in a unit cube, so the bottleneck distance between backends is mostly
-the agreement of near-degenerate values; read it as a correctness stress, not a statement about topology. Cube-surface
-draws with d + 1 points on one facet, and every sphere, are not in general position (marked †).
+What it does not do: **failure rates.** Helix's invalid triangulations were about 1 in 170 clouds at d = 4 with 20 to 30
+points, so a rate needs hundreds of draws per cell, not three; the sweep reports timing and whether a draw failed. Also **no
+simplex counts** (the driver does not report the size of the complex). And the points are noise: in high dimension the
+distances concentrate, filtration values cluster, and a few nearly flat simplices have circumradii of 50 and more in a unit
+cube, so the bottleneck distance between backends is mostly the agreement of near-degenerate values; read it as a
+correctness stress, not a statement about topology. Cube-surface draws with d + 1 points on one facet are not in general
+position (marked †).
 
 ## What is measured
 
@@ -163,14 +165,19 @@ draws with d + 1 points on one facet, and every sphere, are not in general posit
     and every run also has `dragon2000_alpha_gp` and `sphere3_192_alpha_gp`: the same points moved by Gaussian noise of
     1e-3 of the bounding-box diagonal (seeded, one file for all tools). If a `_gp` case still disagrees, that is a TDA4j
     bug.
-  - **Higher ambient dimension** (#131, #133), the regime the dual-QP (DQP) and Helix backends are for:
-    `unif5d_500` (the Helix crossover table's 5-D case; CGAL still finishes it), `unif10d_1000` (the DQP paper's own
-    example, Carlsson and Carlsson, Sci. Rep. 14:19824, §4.2: 1000 points uniform in [-1,1]¹⁰, radius 1.0, complex up to
-    3-simplices; their sizes were (1000, 64785, 560459, 1783194) in 5 minutes, and a full Delaunay triangulation is out
-    of reach, so GUDHI and Helix are expected to time out: that is the result), and `o3_1024_alpha` (the 3×3
-    orthogonal matrices of the Ripser benchmark, in R⁹, with the radius at which a point has about 25 neighbours within
-    2r, the statistic that decides between DQP and a triangulation). The paper's two data sets, cyclooctane (R²⁴) and
-    the image patches, need data files that are not wired in (#133).
+  - **Higher ambient dimension** (#131, #133), the regime the dual-QP (DQP) and Helix backends are for: `unif5d_500` (the
+    Helix crossover table's 5-D case; CGAL still finishes it); `unif10d_1000`, with the parameters of the DQP paper's random
+    example (Carlsson and Carlsson, Sci. Rep. 14:19824, §4.2: 1000 points uniform in [-1,1]¹⁰, radius 1.0, complex up to
+    3-simplices), where a full Delaunay triangulation is out of reach, so GUDHI and Helix are expected to time out: that is
+    a result; `o3_1024_alpha` (the 3×3 orthogonal matrices of the Ripser benchmark, in R⁹, with the radius at which a
+    point has about 25 neighbours within 2r, the statistic that decides between DQP and a triangulation); and
+    `cyclooctane_alpha` (below).
+  - **Cyclooctane** (`cyclooctane`, `cyclooctane_alpha`): 6040 conformations of the molecule in R²⁴, which JavaPlex's MATLAB
+    tutorial ships as `pointsCycloOctane.mat`. `prepare` downloads it from the JavaPlex repository, pinned to a commit and
+    checked against its SHA-256, and converts it with scipy (`cyclooctane.txt`). The Vietoris-Rips case runs Ripser to the
+    cutoff 0.5, the alpha case DQP to the radius 0.25 (two balls of radius r meet at distance 2r), degrees 0 to 2. The
+    summary's `betti` column has the bars alive at the radius, the Betti numbers of the complex there, per field; no number
+    from a paper is compared with.
   - A case with a radius gives it to every tool: TDA4j's dispatch and DQP build only what lies within it (bars alive at
     the radius are essential), GUDHI gets `max_alpha_square`, and the tree is cut above dimension `dim + 1`.
 

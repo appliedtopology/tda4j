@@ -762,12 +762,16 @@ The first full run (2026-10-14, before the Scala.js build) is not citable; readi
   two data sets, cyclooctane (R^24) and the image patches X(300,30) (R^9), have published sizes and Betti numbers that make them an
   oracle for DQP; they wait for data files (#133). Nothing was taken from the Helix paper (IEEE 10917453), which could not be read.
 - **§4 datasets:** `o3_1024` is now also an alpha case.
-- **§3.4 again, the Helix thesis and paper workloads** (as described by the project lead; not read): `bench/sweep_alpha.py` runs
-  40 and 60 points uniform in the interior or on the surface of the unit cube over d = 5 to 25, the Tadasets d-spheres for
-  d = 11, 14, 17 with the paper's point counts, and the 800-point case in R^11, with Helix's reported serial times on the 40-point
-  spheres (10.8, 94.8, 472 s) beside ours. It is the controlled test of the claim that the dual-QP's cost barely depends on the
-  ambient dimension, and the calibration of our Helix port against the original (first look: 40 points on the 11-sphere time out
-  at 420 s here against 10.8 s there, #134).
+- **§3.4 again, the alpha sweep** (`bench/sweep_alpha.py`; the project lead's decisions of 2026-10-18): random points of the unit
+  cube, 40 and 60 of them in the interior or on the surface over d = 5 to 25 (the kind the Helix thesis uses; not read), and no
+  sphere samples, since they are cospherical and degenerate for every Delaunay-based tool. No number from another paper goes in our
+  tables, because it was computed in another setting; the question is whether our alpha implementation stands up to other
+  implementations: GUDHI (CGAL) where it can run, and at higher d TDA4j's own Cech complex (minimum enclosing balls: the same
+  barcode in general position by the nerve lemma) and dual-QP, three algorithms. At d = 5, 6, 7 on 40 interior points the Cech,
+  dual-QP and Helix barcodes agree to 5e-16 on every bar longer than 1e-6 (`WORKLOG-bench-harness-fixes.md`, second addendum).
+- **§5, cyclooctane:** the data is JavaPlex's `pointsCycloOctane.mat` (6040 points in R^24), wired into `bench` as the cases
+  `cyclooctane` (Ripser to 0.5) and `cyclooctane_alpha` (DQP to 0.25). Per the rule of §5, Betti numbers are computed first and
+  quoted after: the harness reports the bars alive at the radius, per field, and compares with no published value.
 
 ## 8. Facts verified this session, and how
 

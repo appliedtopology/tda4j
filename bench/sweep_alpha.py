@@ -1,38 +1,38 @@
 #!/usr/bin/env python3
-"""Dimension sweep for the alpha complex: what do the ambient dimension and the point count cost each backend?
+"""Dimension and point-count sweep for the alpha complex: does TDA4j's alpha hold up against other implementations, and
+what do the ambient dimension and the point count cost each backend?
 
-    bench/run.sh sweep-alpha [--dims 5,6,7,8,10,12,15,20,25] [--points 40,60] [--shapes interior,surface,sphere]
-                             [--spheres "11:40,100,300,900;14:40,75,125;17:40,60,75"] [--seeds 3] [--timeout 1800]
-                             [--jvm-heap 64g] [--py-mem-gb 128] [--extra 800:11:interior]
+    bench/run.sh sweep-alpha [--dims 5,6,7,8,10,12,15,20,25] [--points 40,60] [--shapes interior,surface]
+                             [--grid "11:40,100,300,900"] [--extra 800:11:interior] [--seeds 3] [--timeout 1800]
+                             [--jvm-heap 64g] [--py-mem-gb 128]
 
-`run.sh setup` must have run. The workloads are the Helix thesis's and paper's, as they were described to us (neither
-was read):
-  - `interior`, `surface`: n points drawn uniformly at random in the interior of the unit cube [0,1]^d, or on its
-    surface (a facet chosen uniformly, one coordinate fixed to 0 or 1, the others uniform). n = 40 and 60 over a range
-    of dimensions (`--points`, `--dims`); the heaviest case is 800 points in R^11 (`--extra 800:11:interior`).
-  - `sphere`: Tadasets' `dsphere(n, d)`, n points on the d-sphere in R^(d+1) (standard normal vectors, normalized),
-    for d = 11, 14, 17 with n from 40 up to 900, 125 and 75 (`--spheres`, d:n,n,..;d:n,..). Helix's serial times for
-    the 40-point ones were reported as 0.18, 1.58 and 7.87 minutes: the time table has them in a column of their own
-    (`THESIS_HELIX_SECONDS`; their machine is not ours).
-Per cell every tool runs on `--seeds` independent draws: cold, and warm when the cold run took under `--warm-cap`
-seconds. A tool's series stops at its first timeout or out-of-memory: along d for the cubes (the cost grows with d over
-this range) and along n for the spheres; a timeout costs `--timeout`.
+`run.sh setup` must have run. The inputs are random points of the unit cube [0,1]^d, the kind the Helix thesis uses (as it
+was described to us): n points uniform in the interior, or on the surface (a facet chosen uniformly, one coordinate fixed
+to 0 or 1, the others uniform). `--points` and `--dims` give the sweep over d at fixed n; `--grid` the sweep over n at
+fixed d (`d:n,n,..;d:n,..`); `--extra n:d:shape` single cells such as 800 points in R^11. Per cell every tool runs on
+`--seeds` independent draws: cold, and warm when the cold run took under `--warm-cap` seconds. A tool's series stops at its
+first timeout or out-of-memory (a series runs along d, or along n for a grid); a timeout costs `--timeout`.
 
-Tools: `tda4j` (the default: Helix without a radius above 4-D), `tda4j-helix`, `tda4j-fastalpha` (Helix's
-triangulation, then the dual union-find), `tda4j-dqp` (the dual quadratic program: it needs no triangulation, so with
-no radius it builds every candidate simplex up to dimension 3), `gudhi` (CGAL's Delaunay triangulation), and the
-Scala.js twins when installed. Bowyer-Watson stops at 4-D, the sweep starts at 5. `--py-mem-gb` caps GUDHI's address
-space, so CGAL's allocation at high d ends in `oom` and not in the kernel's killer; JVM and Node are not capped.
+Tools: `tda4j` (the default: Helix without a radius above 4-D), `tda4j-helix`, `tda4j-fastalpha` (Helix's triangulation, then
+the dual union-find), `tda4j-dqp` (the dual quadratic program: it needs no triangulation, so with no radius it builds every
+candidate simplex up to dimension 3), `tda4j-cech`, `gudhi` (CGAL's Delaunay triangulation), and the Scala.js twins when
+installed. Bowyer-Watson stops at 4-D, the sweep starts at 5. `--py-mem-gb` caps GUDHI's address space, so CGAL's allocation
+at high d ends in `oom` and not in the kernel's killer; JVM and Node are not capped.
 
-Degenerate draws, marked † where it changes a distance: a point on a facet of the cube shares a coordinate with the others
-on it, and d + 1 points on one facet lie in a hyperplane, which breaks general position (for 40 points it happens in
-about 9 of 10 draws at d = 5, 4 of 10 at d = 6, and not from d = 8). Points on a sphere are all cospherical (up to
-rounding), so Helix treats them as one cluster, DQP keeps the simplex they span, and CGAL, which is exact on the rounded
-doubles, triangulates by the rounding: the three barcodes need not agree and GUDHI is no ground truth.
+The reference for a barcode is the first of GUDHI, the Cech complex and the dual-QP that finished on the same draw (and is not
+the tool itself). GUDHI is the other implementation, but it stops early; the Cech complex (minimum enclosing balls, no
+triangulation) and the dual-QP (a quadratic program per simplex) are different algorithms from the Delaunay walk, and by
+the nerve lemma the Cech and alpha complexes have the same barcode in general position, so agreement of three algorithms
+to rounding is a check at dimensions where GUDHI cannot run. Nothing from another paper's tables is used here: the
+timings of other implementations were measured in other settings.
 
-Output, in --out (default $WORKDIR/sweeps/alpha-<timestamp>): sweep.csv (one row per run), bars/, logs/, sweep.md
-(time, memory, and the distance to the reference barcode: GUDHI's, else the dual-QP's).
-`sweep_alpha.py --summarize DIR` rebuilds the tables.
+Degenerate draws, marked † where it changes a distance: a point on a facet of the cube shares a coordinate with the others on
+it, and d + 1 points on one facet lie in a hyperplane, which breaks general position (for 40 points it happens in about 9
+of 10 draws at d = 5, 4 of 10 at d = 6, and not from d = 8). Points on a sphere are not sampled: they are all cospherical,
+and every Delaunay-based tool then triangulates the one degenerate cell its own way.
+
+Output, in --out (default $WORKDIR/sweeps/alpha-<timestamp>): sweep.csv (one row per run), bars/, logs/, sweep.md (time,
+memory, and the distance to the reference barcode). `sweep_alpha.py --summarize DIR` rebuilds the tables.
 """
 import argparse
 import csv
@@ -49,31 +49,15 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bench  # noqa: E402  (Case, TOOLS, command, run_proc, last_json, available, agreement, read_bars)
 
-TOOL_NAMES = ["tda4j", "tda4j-helix", "tda4j-fastalpha", "tda4j-dqp", "gudhi",
+TOOL_NAMES = ["tda4j", "tda4j-helix", "tda4j-fastalpha", "tda4j-dqp", "tda4j-cech", "gudhi",
               "tda4j-js", "tda4j-js-helix", "tda4j-js-fastalpha", "tda4j-js-dqp"]
-REFERENCES = ["gudhi", "tda4j-dqp"]  # the barcode a row is compared with: the first that finished on the same draw
-DEFAULT_SPHERES = "11:40,100,300,900;14:40,75,125;17:40,60,75"
-# Helix's serial time on 40 points of the d-sphere, as reported to us: 0.18, 1.58 and 7.87 minutes. Another machine and
-# another implementation; the point of the column is the order of magnitude and the slope in d.
-THESIS_HELIX_SECONDS = {("sphere", 40, 11): 0.18 * 60, ("sphere", 40, 14): 1.58 * 60, ("sphere", 40, 17): 7.87 * 60}
-COLUMNS = ["shape", "n", "d", "ambient", "seed", "tool", "status", "reason", "degenerate", "densest_facet",
-           "cold_wall_s", "cold_s", "warm_median_s", "rss_mb", "rss_src", "heap_peak_mb", "old_peak_mb", "bars"]
-
-
-def ambient_of(shape, d):
-    """The number of coordinates: d for the cubes, d + 1 for the d-sphere (Tadasets' convention)."""
-    return d + 1 if shape == "sphere" else d
+REFERENCES = ["gudhi", "tda4j-cech", "tda4j-dqp"]  # the barcode a row is compared with: the first that finished
+COLUMNS = ["shape", "n", "d", "series", "seed", "tool", "status", "reason", "degenerate", "densest_facet", "cold_wall_s",
+           "cold_s", "warm_median_s", "rss_mb", "rss_src", "heap_peak_mb", "old_peak_mb", "bars"]
 
 
 def points(shape, n, d, seed):
-    """The draw. Deterministic in (shape, n, d, seed)."""
-    if shape == "sphere":
-        return sphere_points(n, d, seed)
-    return cube_points(shape, n, d, seed)
-
-
-def cube_points(shape, n, d, seed):
-    """n points uniform in the interior of [0,1]^d, or on its surface."""
+    """n points uniform in the interior of [0,1]^d, or on its surface. Deterministic in (shape, n, d, seed)."""
     rng = np.random.default_rng([20261018, 1 if shape == "surface" else 0, n, d, seed])
     x = rng.random((n, d))
     if shape == "surface":
@@ -82,22 +66,12 @@ def cube_points(shape, n, d, seed):
     return x
 
 
-def sphere_points(n, d, seed):
-    """n points on the d-sphere in R^(d+1), the way Tadasets' `dsphere` does it (version 0.2.2, no noise, no
-    embedding): standard normal vectors, normalized."""
-    x = np.random.default_rng([20261018, 2, n, d, seed]).standard_normal((n, d + 1))
-    return x / np.sqrt((x ** 2).sum(axis=1))[:, None]
-
-
 def densest_facet(x):
     """The most points on one facet. d + 1 of them lie in a hyperplane (a (d-1)-flat): not general position."""
     return max(int((x[:, i] == v).sum()) for i in range(x.shape[1]) for v in (0.0, 1.0))
 
 
-def is_degenerate(shape, x):
-    """Cospherical (a sphere) or d + 1 points in one hyperplane (the cube's surface): not in general position."""
-    if shape == "sphere":
-        return True
+def is_degenerate(x):
     return densest_facet(x) >= x.shape[1] + 1
 
 
@@ -106,13 +80,13 @@ def parse_extra(text):
     out = []
     for item in [t for t in text.split(",") if t.strip()]:
         n, d, shape = item.split(":")
-        assert shape in ("interior", "surface", "sphere"), f"--extra {item}: interior, surface or sphere"
+        assert shape in ("interior", "surface"), f"--extra {item}: the shape is interior or surface"
         out.append((int(n), int(d), shape))
     return out
 
 
-def parse_spheres(text):
-    """`11:40,100;14:40` -> [(11, [40, 100]), (14, [40])]: the sphere dimension and its point counts."""
+def parse_grid(text):
+    """`11:40,100;14:40` -> [(11, [40, 100]), (14, [40])]: a dimension and the point counts to run in it."""
     out = []
     for group in [g for g in text.split(";") if g.strip()]:
         d, ns = group.split(":")
@@ -120,14 +94,15 @@ def parse_spheres(text):
     return out
 
 
-def run_cell(name, kind, opts, shape, n, d, seed, args, bench_args, out):
+def run_cell(name, kind, opts, shape, n, d, seed, series, args, bench_args, out):
     """One tool on one draw: a cold run, then a warm one if the cold computation was quick. Returns a row."""
     x = points(shape, n, d, seed)
     rel = f"sweepalpha/{shape}_{n}_{d}_{seed}.txt"
     path = Path(args.data) / rel
     if not path.exists():
         np.savetxt(path, x, fmt="%.17g")
-    case = bench.Case(f"{shape}{d}d_{n}_s{seed}", "alpha", rel, "points", args.dim)
+    task = "cech" if name == "tda4j-cech" else "alpha"
+    case = bench.Case(f"{shape}{d}d_{n}_s{seed}", task, rel, "points", args.dim)
     bars = out / "bars" / f"{shape}_{n}_{d}_{seed}__{name}.tsv"
     tag = f"{shape}_{n}_{d}_{seed}__{name}"
     caps = {"address_space_mb": args.py_mem_gb * 1024} if kind == "py" and args.py_mem_gb else {}
@@ -135,12 +110,12 @@ def run_cell(name, kind, opts, shape, n, d, seed, args, bench_args, out):
     cold = bench.run_proc(bench.command(kind, name, opts, case, data, args.field, None, 0, 1, bars, bench_args),
                           args.timeout, out / "logs" / (tag + "__cold"), **caps)
     j = bench.last_json(cold.text) if cold.status == "ok" else None
-    row = {"shape": shape, "n": n, "d": d, "ambient": ambient_of(shape, d), "seed": seed, "tool": name,
-           "status": cold.status, "reason": cold.reason, "degenerate": str(is_degenerate(shape, x)),
-           "densest_facet": "" if shape == "sphere" else densest_facet(x), "cold_wall_s": f"{cold.wall:.3f}",
-           "cold_s": f"{j['times_s'][0]:.4f}" if j else "", "warm_median_s": "", "rss_mb": f"{cold.rss_mb:.0f}",
-           "rss_src": cold.rss_src, "heap_peak_mb": j.get("heap_peak_mb", "") if j else "",
-           "old_peak_mb": j.get("old_peak_mb", "") if j else "", "bars": json.dumps(j["bars"]) if j else ""}
+    row = {"shape": shape, "n": n, "d": d, "series": series or "", "seed": seed, "tool": name, "status": cold.status,
+           "reason": cold.reason, "degenerate": str(is_degenerate(x)), "densest_facet": densest_facet(x),
+           "cold_wall_s": f"{cold.wall:.3f}", "cold_s": f"{j['times_s'][0]:.4f}" if j else "", "warm_median_s": "",
+           "rss_mb": f"{cold.rss_mb:.0f}", "rss_src": cold.rss_src,
+           "heap_peak_mb": j.get("heap_peak_mb", "") if j else "", "old_peak_mb": j.get("old_peak_mb", "") if j else "",
+           "bars": json.dumps(j["bars"]) if j else ""}
     if j and j["times_s"][0] < args.warm_cap and args.trials > 0:
         warm = bench.run_proc(bench.command(kind, name, opts, case, data, args.field, None, 1, args.trials, bars,
                                             bench_args), args.timeout * (args.trials + 1),
@@ -157,25 +132,26 @@ def run_cell(name, kind, opts, shape, n, d, seed, args, bench_args, out):
 
 
 def plan(args):
-    """The cells in run order: (shape, n, d, series). A tool stops at its first timeout within a series; a cell with
-    series None (`--extra`) always runs."""
+    """The cells in run order: (shape, n, d, series). `series` names what grows along a tool's run: "d", or "n" for a
+    grid; it stops at its first timeout. A cell with series None (`--extra`) always runs."""
     cells = []
-    for shape in [s for s in args.shapes.split(",") if s in ("interior", "surface")]:
-        for n in [int(x) for x in args.points.split(",")]:
-            cells += [(shape, n, d, (shape, "n", n)) for d in [int(x) for x in args.dims.split(",")]]
-    if "sphere" in args.shapes.split(","):
-        for d, ns in parse_spheres(args.spheres):
-            cells += [("sphere", n, d, ("sphere", "d", d)) for n in ns]
+    shapes = [s for s in args.shapes.split(",") if s]
+    for shape in shapes:
+        for n in [int(x) for x in args.points.split(",") if x]:
+            cells += [(shape, n, d, ("d", shape, n)) for d in [int(x) for x in args.dims.split(",") if x]]
+    for shape in shapes:
+        for d, ns in parse_grid(args.grid):
+            cells += [(shape, n, d, ("n", shape, d)) for n in ns]
     cells += [(shape, n, d, None) for n, d, shape in parse_extra(args.extra)]
     return cells
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--dims", default="5,6,7,8,10,12,15,20,25", help="the cube's dimensions")
-    ap.add_argument("--points", default="40,60", help="the cube's point counts")
-    ap.add_argument("--shapes", default="interior,surface,sphere")
-    ap.add_argument("--spheres", default=DEFAULT_SPHERES, help="sphere dimension:point counts, separated by ;")
+    ap.add_argument("--dims", default="5,6,7,8,10,12,15,20,25", help="the dimensions of the sweep over d")
+    ap.add_argument("--points", default="40,60", help="the point counts of the sweep over d")
+    ap.add_argument("--shapes", default="interior,surface")
+    ap.add_argument("--grid", default="", help="sweeps over n at fixed d: d:n,n,..;d:n,.. (default: none)")
     ap.add_argument("--extra", default="", help="single cells n:d:shape, run on their own, e.g. 800:11:interior")
     ap.add_argument("--seeds", type=int, default=3)
     ap.add_argument("--dim", type=int, default=2, help="the highest homological degree")
@@ -210,7 +186,7 @@ def main():
     wanted = set(args.tools.split(",")) if args.tools else None
     tools = []
     for name, kind, task, opts in bench.TOOLS:
-        if task != "alpha" or name not in TOOL_NAMES or (wanted and name not in wanted):
+        if task not in ("alpha", "cech") or name not in TOOL_NAMES or (wanted and name not in wanted):
             continue
         if kind == "tda4j-js" and args.no_js:
             continue
@@ -230,7 +206,8 @@ def main():
                 if series is not None and (series, name) in stopped:
                     continue
                 for seed in range(args.seeds):
-                    row = run_cell(name, kind, opts, shape, n, d, seed, args, bench_args, out)
+                    row = run_cell(name, kind, opts, shape, n, d, seed, series[0] if series else None, args,
+                                   bench_args, out)
                     w.writerow(row)
                     f.flush()
                     best = row["warm_median_s"] or row["cold_s"]
@@ -245,12 +222,12 @@ def main():
 
 
 def summarize(out, bottleneck=None):
-    """sweep.md: the median time, the memory and the distance to the reference barcode, by dimension for the cubes
-    (one table per n) and by point count for the spheres (one table per d)."""
+    """sweep.md: the median time, the memory and the distance to the reference barcode: one table per n with d down the
+    rows for the sweeps over d, one per d with n down the rows for a grid."""
     with open(out / "sweep.csv") as f:
         rows = list(csv.DictReader(f))
     tools = list(dict.fromkeys(r["tool"] for r in rows))
-    cells = list(dict.fromkeys((r["shape"], int(r["n"]), int(r["d"])) for r in rows))
+    cells = list(dict.fromkeys((r["shape"], int(r["n"]), int(r["d"]), r["series"]) for r in rows))
     by = {}
     for r in rows:
         by.setdefault((r["shape"], int(r["n"]), int(r["d"]), r["tool"]), []).append(r)
@@ -303,33 +280,27 @@ def summarize(out, bottleneck=None):
         text = "0" if worst == 0 else f"{worst:.2g}"
         return f"{text}{'†' if dagger and worst > 1e-5 else ''} ({ref_name})"
 
-    def group_of(shape, n, d):
-        """(title, row label) of a cell: the spheres are tabled by d with n down the rows, the cubes by n with d."""
-        if shape == "sphere":
-            return f"sphere S^{d} in R^{d + 1}", f"n = {n}"
+    def group_of(shape, n, d, series):
+        """(title, row label) of a cell."""
+        if series == "n":
+            return f"{shape} points of the unit cube, d = {d}", f"n = {n}"
         return f"{shape} points of the unit cube, n = {n}", f"d = {d}"
 
     lines = ["# Alpha complex: dimension and point-count sweep", "",
              "Each cell is the median over the draws that finished (`ok/draws` if some did not; otherwise the status). "
-             "† marks a degenerate draw: d + 1 points on one facet of the cube, or points on a sphere.", ""]
-    for title, cell, anchors in [("Time in seconds (warm median; the cold computation if it was too slow to repeat)",
-                                  time_cell, True),
-                                 ("Peak memory in MB: RSS (JVM heap pools' peak in parentheses)", memory_cell, False),
-                                 ("Largest bottleneck distance to the reference barcode (in parentheses)",
-                                  distance_cell, False)]:
+             "† marks a degenerate draw: d + 1 points on one facet of the cube.", ""]
+    for title, cell in [("Time in seconds (warm median; the cold computation if it was too slow to repeat)", time_cell),
+                        ("Peak memory in MB: RSS (JVM heap pools' peak in parentheses)", memory_cell),
+                        ("Largest bottleneck distance to the reference barcode (in parentheses)", distance_cell)]:
         lines += [f"## {title}", ""]
         for group in dict.fromkeys(group_of(*c)[0] for c in cells):
             members = [c for c in cells if group_of(*c)[0] == group]
-            show = anchors and any((s, n, d) in THESIS_HELIX_SECONDS for s, n, d in members)
-            header = "| | " + " | ".join(tools) + (" | Helix, thesis (serial) |" if show else " |")
-            lines += [f"### {group}", "", header, "|---|" + "---|" * (len(tools) + (1 if show else 0))]
-            for s, n, d in members:
+            lines += [f"### {group}", "", "| | " + " | ".join(tools) + " |", "|---|" + "---|" * len(tools)]
+            for s, n, d, series in members:
                 degenerate = any(r["degenerate"] == "True" for t in tools for r in by.get((s, n, d, t), []))
-                label = group_of(s, n, d)[1] + ("†" if degenerate else "")
+                label = group_of(s, n, d, series)[1] + ("†" if degenerate else "")
                 body = " | ".join(cell(s, n, d, t, by.get((s, n, d, t), [])) for t in tools)
-                anchor = f" | {THESIS_HELIX_SECONDS[(s, n, d)]:.3g}" if show and (s, n, d) in THESIS_HELIX_SECONDS else (
-                    " | " if show else "")
-                lines.append(f"| {label} | {body}{anchor} |")
+                lines.append(f"| {label} | {body} |")
             lines.append("")
     (out / "sweep.md").write_text("\n".join(lines) + "\n")
     print("\n".join(lines))
