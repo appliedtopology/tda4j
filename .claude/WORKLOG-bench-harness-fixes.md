@@ -161,3 +161,34 @@ Cech, dual-QP and Helix barcodes agree, in the number of bars longer than 1e-6 i
 at d = 5 (H0 to H2: 40, 120, 111 bars), d = 6 (40, 232, 417) and d = 7 (40, 263, 626); the dual-QP has two more H2 bars at d = 6, of
 length 2.5e-9 and 4.2e-9 at filtration values 49 and 83 (nearly flat simplices). Times at n = 40: Cech 16 to 38 s, nearly independent of d.
 The first real run of the sweep with GUDHI 3.13 (installed in the scratch venv): see the next section when it is done.
+
+## Third addendum (same day, after the merge of #125): the sweep against GUDHI, on small draws
+
+`bench/sweep_alpha.py` with GUDHI 3.13 (installed in a scratch venv; it also runs the CGAL alpha complex) on 40 points of the unit cube,
+interior and surface, d = 5, 6, 7, two draws per cell, 4 cores and 15 GB (`--jvm-heap 6g`), warm medians in seconds. The run stopped
+after the last GUDHI cell of the surface at d = 7, before `tda4j-cech` there and before its own summary (the process was gone when I
+looked; the sandbox session had been reconnecting, so a restart is the likely cause; not investigated), so `sweep.md` was rebuilt
+from `sweep.csv` with `--summarize` and that one cell is empty.
+
+| 40 points | tda4j-helix | tda4j-dqp | tda4j-cech | gudhi |
+|---|---|---|---|---|
+| interior, d = 5 | 2.78 | 1.60 | 17.7 | 0.020 |
+| interior, d = 6 | 4.18 | 0.90 | 10.2 | 0.105 |
+| interior, d = 7 | 39.9 | 1.81 | 13.5 | 0.524 |
+| surface, d = 5 (some draw has d + 1 points on a facet) | 1.06 | 0.76 | 17.7 | 0.021 |
+| surface, d = 6 | 6.52 | 3.30 | 15.2 | 0.106 |
+| surface, d = 7 | 55.4 | 1.77 | | 0.458 |
+
+- **Agreement with GUDHI** (largest bottleneck distance to the reference over the two draws; the tolerance is 1e-5): Helix at most
+  2.9e-11 (0 in five cells of six), the Cech complex 0, the dual-QP at most 2.8e-8 (the near-zero bars it keeps that the others
+  drop). GUDHI against the Cech complex: 0, and 4.3e-9 against the dual-QP where the Cech complex is missing. So on these inputs
+  TDA4j's alpha complex agrees with CGAL's in all three of its implementations, degenerate surface draws included.
+- **Cost.** GUDHI is 100 times faster than Helix at d = 5 and 76 times at d = 7, and 3.5 times faster than the dual-QP at d = 7. GUDHI's time
+  grows by a factor 5 per dimension (0.020, 0.105, 0.524 s), Helix's by 1.5 to 10 (2.8, 4.2, 39.9), the dual-QP's hardly at all (1.6,
+  0.9, 1.8). If the trends hold the dual-QP overtakes GUDHI near d = 8 to 9: a projection from three points and two draws, not a
+  measurement; the server run measures it.
+- **Memory.** GUDHI 44 to 94 MB of RSS; TDA4j 1.0 to 2.5 GB, with the JVM heap pools' peak within a few percent of the RSS here
+  (the pre-sized heap and the parallel collector keep young garbage around). The Cech complex uses the most (2.2 to 2.5 GB) and takes
+  10 to 18 s, almost independent of d.
+- **Not shown:** anything above d = 7, where GUDHI is expected to stop; the cyclooctane and other real data against GUDHI (CGAL does
+  not reach 24 coordinates); more than two draws; failure rates.
