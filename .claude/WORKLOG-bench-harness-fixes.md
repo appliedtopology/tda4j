@@ -92,3 +92,40 @@ what was checked and changed. Point-in-time snapshot: later results go in an add
 
 #126 to #133 each carry their own "done when"; #133 (cyclooctane and the image patches need data files, nothing from the Helix paper) is the
 one nobody has started.
+
+## Addendum (same day): the alpha dimension sweep
+
+The project lead described the Helix master's thesis and paper (neither read here) and asked for a spread over dimension:
+- the thesis: time and memory over the dimension for 40 and 60 points uniform in the interior or on the surface of the unit cube;
+  the heaviest case is 800 points in R^11;
+- the paper: points on Tadasets' d-spheres for d = 11 (n from 40 to 900), 14 (40 to 125) and 17 (40 to 75), with Helix's serial times
+  on the 40-point ones reported as 0.18, 1.58 and 7.87 minutes (10.8, 94.8 and 472 s);
+- the compute server has about 160 GB of memory free, so heap size is not a limit (`--jvm-heap 64g`, `--timeout 1800`).
+
+Pushing back on one thing and agreeing with another. Agreed: a fixed small n over a range of d is the right controlled sweep
+(the cubical sweep's twin) and it is cheap; the dual-QP at n = 40 needs no radius (at most C(40, 4) = 91,390 candidate
+tetrahedra), which is what the ambient-dimension claim needs and `o3_1024_alpha` cannot show. Caveats, now in the README and the
+script's docstring: the points are noise (concentrated distances, nearly flat simplices with circumradii of 50 or more in a unit
+cube), so agreement is a correctness stress and not a topological statement; three seeds give timings and not failure rates
+(about 1 in 170 clouds at d = 4); cube-surface draws are degenerate when d + 1 points share a facet (probability for n = 40: 0.90
+at d = 5, 0.43 at d = 6, 0.09 at d = 7, 0.01 at d = 8; for n = 60: 1.0, 0.96, 0.60, 0.17) and spheres always are.
+
+What was built: `bench/sweep_alpha.py` and `run.sh sweep-alpha` (shapes `interior`, `surface`, `sphere`; series along d for the cubes and
+along n for the spheres, each stopping at its first timeout or out-of-memory; `--seeds`; GUDHI under an address-space cap
+(`run_proc(address_space_mb=)`, tested); the thesis's sphere times as a column in the time table); `bench/test_bench.py` has 51
+checks. `bench.py` also had two file-handle leaks and a `Popen` that was never marked reaped; fixed.
+
+Measured here (one draw each, 4 cores, 15 GB, `-Xmx9g`, so only the shape of the curves is worth reading):
+- Helix on 40 uniform cube points: 3.2 s at d = 5, 14 s at d = 6, 80 s at d = 7 (2.9 GB), a factor 4 to 5 per dimension; the
+  dual-QP on the same points: 1.9, 3.2, 4.2 s, then 18.7 s at d = 8. So a Helix series at n = 40 stops near d = 8 to 9.
+- At d = 5 and 6 the dual-QP and Helix barcodes agree except for two H2 bars of length 3e-9 at filtration values 49 and 83 (nearly
+  flat simplices), below any tolerance.
+- **40 points on the 11-sphere (R^12): Helix timed out at 420 s; the paper's Helix needs 10.8 s.** The dual-QP took 27 s, and 10 s on
+  40 points of the 14-sphere. Our Helix is therefore at least 39 times slower than the original on its own workload, or the
+  cospherical cluster (all 40 points are cospherical up to rounding) sends it down a slow branch; #68 (symbolic perturbation for
+  cospherical points) is the same area. One draw, one machine: a lead, not a measurement (#134).
+- On the 3-sphere (R^4) with 80 points the dual-QP timed out at 150 s where Bowyer-Watson takes 3.5 s: the dual-QP is not free of
+  the number of points, either.
+
+Not run: GUDHI (so the reference column and every agreement figure), the Scala.js twins, the seeds, the larger spheres and the 800-point
+case. The thesis's own cube numbers were not given; they would go in `THESIS_HELIX_SECONDS`.

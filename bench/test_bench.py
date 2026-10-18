@@ -25,6 +25,8 @@ _spec = importlib.util.spec_from_file_location("bench_py", Path(__file__).resolv
 bench = importlib.util.module_from_spec(_spec)
 sys.modules["bench_py"] = bench
 _spec.loader.exec_module(bench)
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import sweep_alpha  # noqa: E402  (imports bench.py by name: a second copy of the module, which is fine here)
 
 
 def child(code):
@@ -383,6 +385,177 @@ class RunLoopTests(unittest.TestCase):
     def test_an_error_at_one_field_does_not_skip_the_other(self):
         calls, _ = self.run_loop({("slow", 2): "error(1)"})
         self.assertEqual([(c[0], c[1]) for c in calls], [("slow", 2), ("slow", 17)])
+
+
+class AddressSpaceTests(unittest.TestCase):
+    def test_a_runaway_allocation_under_a_cap_is_oom_not_a_crash_of_the_machine(self):
+        with tempfile.TemporaryDirectory() as d:
+            proc = bench.run_proc(child("x = bytearray(2 * 1024**3); print(len(x))"), 60, Path(d) / "log",
+                                  address_space_mb=600)
+        self.assertEqual(proc.status, "oom")
+        self.assertIn("MemoryError", proc.reason)
+
+    def test_no_cap_by_default(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(bench.run_proc(child("x = bytearray(300 * 1024**2)"), 60, Path(d) / "log").status, "ok")
+
+
+class CubePointsTests(unittest.TestCase):
+    def test_interior_points_are_inside_the_cube_and_deterministic(self):
+        x = sweep_alpha.cube_points("interior", 40, 7, 0)
+        self.assertEqual(x.shape, (40, 7))
+        self.assertTrue(((x > 0) & (x < 1)).all())
+        np.testing.assert_array_equal(x, sweep_alpha.cube_points("interior", 40, 7, 0))
+        self.assertFalse(np.array_equal(x, sweep_alpha.cube_points("interior", 40, 7, 1)))
+        self.assertFalse(np.array_equal(x, sweep_alpha.cube_points("surface", 40, 7, 0)))
+
+    def test_surface_points_have_exactly_one_coordinate_on_a_facet(self):
+        x = sweep_alpha.cube_points("surface", 400, 6, 3)
+        self.assertTrue(((x >= 0) & (x <= 1)).all())
+        self.assertTrue((((x == 0) | (x == 1)).sum(axis=1) == 1).all())
+
+    def test_surface_points_are_uniform_over_the_facets(self):
+        x = sweep_alpha.cube_points("surface", 20000, 4, 0)
+        counts = [int((x[:, i] == v).sum()) for i in range(4) for v in (0.0, 1.0)]
+        self.assertEqual(sum(counts), 20000)
+        self.assertLess(max(counts) - min(counts), 0.1 * 20000 / 8)
+
+    def test_d_plus_one_points_on_a_facet_are_not_in_general_position(self):
+        x = np.random.default_rng(0).random((12, 5))
+        self.assertEqual(sweep_alpha.densest_facet(x), 0)
+        x[:6, 2] = 1.0  # six points in the hyperplane x_2 = 1 of R^5: d + 1 = 6
+        self.assertEqual(sweep_alpha.densest_facet(x), 6)
+        self.assertGreaterEqual(sweep_alpha.densest_facet(x), 5 + 1)
+
+    def test_extra_cells(self):
+        self.assertEqual(sweep_alpha.parse_extra("800:11:interior, 60:8:surface"), [(800, 11, "interior"), (60, 8, "surface")])
+        self.assertEqual(sweep_alpha.parse_extra(""), [])
+
+
+class SphereTests(unittest.TestCase):
+    def test_a_d_sphere_lives_in_d_plus_one_coordinates_on_the_unit_sphere(self):
+        x = sweep_alpha.points("sphere", 40, 11, 0)
+        self.assertEqual(x.shape, (40, 12))
+        np.testing.assert_allclose(np.linalg.norm(x, axis=1), 1.0, atol=1e-15)
+        np.testing.assert_array_equal(x, sweep_alpha.points("sphere", 40, 11, 0))
+        self.assertFalse(np.array_equal(x, sweep_alpha.points("sphere", 40, 11, 1)))
+        self.assertEqual((sweep_alpha.ambient_of("sphere", 11), sweep_alpha.ambient_of("surface", 11)), (12, 11))
+
+    def test_points_are_spread_over_the_whole_sphere(self):
+        x = sweep_alpha.points("sphere", 4000, 3, 0)
+        self.assertLess(np.abs(x.mean(axis=0)).max(), 0.05)
+
+    def test_a_sphere_is_degenerate_and_an_interior_draw_is_not(self):
+        self.assertTrue(sweep_alpha.is_degenerate("sphere", sweep_alpha.points("sphere", 40, 11, 0)))
+        self.assertFalse(sweep_alpha.is_degenerate("interior", sweep_alpha.points("interior", 40, 11, 0)))
+        self.assertFalse(sweep_alpha.is_degenerate("surface", sweep_alpha.points("surface", 40, 12, 0)))
+
+    def test_sphere_groups(self):
+        self.assertEqual(sweep_alpha.parse_spheres("11:40,100;14:40,75,125"), [(11, [40, 100]), (14, [40, 75, 125])])
+        self.assertEqual(sweep_alpha.parse_spheres(sweep_alpha.DEFAULT_SPHERES)[2], (17, [40, 60, 75]))
+
+    def test_the_plan_runs_each_series_in_order_and_the_extra_cells_on_their_own(self):
+        args = Namespace(shapes="interior,sphere", points="40,60", dims="5,6", spheres="11:40,100;14:40",
+                         extra="800:11:interior")
+        cells = sweep_alpha.plan(args)
+        self.assertEqual([(c[0], c[1], c[2]) for c in cells if c[3] == ("interior", "n", 40)],
+                         [("interior", 40, 5), ("interior", 40, 6)])
+        self.assertEqual([(c[1], c[2]) for c in cells if c[3] == ("sphere", "d", 11)], [(40, 11), (100, 11)])
+        self.assertEqual([c for c in cells if c[3] is None], [("interior", 800, 11, None)])
+        self.assertNotIn("surface", {c[0] for c in cells})
+
+    def test_the_thesis_anchors_are_in_seconds(self):
+        self.assertAlmostEqual(sweep_alpha.THESIS_HELIX_SECONDS[("sphere", 40, 11)], 10.8)
+        self.assertAlmostEqual(sweep_alpha.THESIS_HELIX_SECONDS[("sphere", 40, 14)], 94.8)
+        self.assertAlmostEqual(sweep_alpha.THESIS_HELIX_SECONDS[("sphere", 40, 17)], 472.2)
+
+
+class SweepLoopTests(unittest.TestCase):
+    def run_sweep(self, fake, argv_extra=()):
+        calls = []
+        with tempfile.TemporaryDirectory() as d:
+            saved = sweep_alpha.run_cell, sweep_alpha.bench.available, sys.argv
+            sweep_alpha.run_cell = lambda name, kind, opts, shape, n, dd, seed, args, bench_args, out: (
+                calls.append((name, shape, n, dd, seed)) or fake(name, shape, n, dd, seed))
+            sweep_alpha.bench.available = lambda kind, opts, python: True
+            sys.argv = ["sweep_alpha.py", "--data", d, "--out", str(Path(d) / "out"), "--dims", "5,6,7,8", "--points", "40",
+                        "--shapes", "interior", "--seeds", "2", "--tools", "tda4j-helix,tda4j-dqp", *argv_extra]
+            try:
+                sweep_alpha.main()
+                with open(Path(d) / "out" / "sweep.csv") as f:
+                    rows = list(csv.DictReader(f))
+                md = (Path(d) / "out" / "sweep.md").read_text()
+            finally:
+                sweep_alpha.run_cell, sweep_alpha.bench.available, sys.argv = saved
+        return calls, rows, md
+
+    @staticmethod
+    def row(name, shape, n, d, seed, status="ok", seconds="1.5", **more):
+        base = {c: "" for c in sweep_alpha.COLUMNS}
+        base.update({"shape": shape, "n": n, "d": d, "seed": seed, "tool": name, "status": status, "warm_median_s": seconds if status == "ok" else "",
+                     "rss_mb": "500", "rss_src": "proc", "degenerate": "False"})
+        base.update(more)
+        return base
+
+    def test_a_series_stops_at_its_first_timeout_and_the_other_tools_go_on(self):
+        def fake(name, shape, n, d, seed):
+            return self.row(name, shape, n, d, seed, "timeout" if name == "tda4j-helix" and d >= 7 else "ok")
+        calls, rows, md = self.run_sweep(fake)
+        self.assertEqual([c for c in calls if c[0] == "tda4j-helix" and c[3] >= 7], [("tda4j-helix", "interior", 40, 7, 0)],
+                         "the second seed and the larger dimensions are not run")
+        self.assertEqual(len([c for c in calls if c[0] == "tda4j-dqp"]), 8, "4 dimensions x 2 seeds")
+        self.assertIn("timeout", md)
+
+
+    def test_a_sphere_series_stops_along_n_and_its_table_has_the_thesis_column(self):
+        def fake(name, shape, n, d, seed):
+            return self.row(name, shape, n, d, seed, "timeout" if name == "tda4j-helix" and n >= 100 else "ok",
+                            ambient=d + 1, degenerate="True")
+        calls, rows, md = self.run_sweep(fake, ["--shapes", "sphere", "--spheres", "11:40,100,300;14:40"])
+        self.assertEqual([c[2:4] for c in calls if c[0] == "tda4j-helix" and c[3] == 11], [(40, 11), (40, 11), (100, 11)])
+        self.assertEqual([c[2] for c in calls if c[0] == "tda4j-helix" and c[3] == 14], [40, 40])
+        self.assertEqual(len([c for c in calls if c[0] == "tda4j-dqp" and c[3] == 11]), 6, "3 sizes x 2 seeds")
+        self.assertIn("### sphere S^11 in R^12", md)
+        self.assertIn("### sphere S^14 in R^15", md)
+        time_table = md.split("## Time in seconds")[1].split("## Peak memory")[0]
+        self.assertIn("Helix, thesis (serial)", time_table)
+        self.assertRegex(time_table, r"\| n = 40† \|[^\n]*\| 10\.8 \|")
+        self.assertRegex(time_table, r"\| n = 40† \|[^\n]*\| 94\.8 \|")
+
+    def test_extra_cells_ignore_the_stop(self):
+        def fake(name, shape, n, d, seed):
+            return self.row(name, shape, n, d, seed, "timeout" if name == "tda4j-helix" else "ok")
+        calls, _, _ = self.run_sweep(fake, ["--extra", "800:11:interior"])
+        self.assertIn(("tda4j-helix", "interior", 800, 11, 0), calls)
+
+    def test_tables_name_the_reference_and_mark_failures(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d)
+            (out / "bars").mkdir()
+            rows = []
+            same, other = "0\t0.0\tinf\n1\t0.5\t0.9\n", "0\t0.0\tinf\n1\t0.5\t0.9\n1\t0.2\t0.6\n"
+            for dd, gudhi_ok in [(5, True), (6, False)]:
+                for seed in (0, 1):
+                    for tool, ok, text in [("gudhi", gudhi_ok, same), ("tda4j-dqp", True, same),
+                                           ("tda4j-helix", True, same if seed == 0 else other)]:
+                        rows.append(self.row(tool, "surface", 40, dd, seed, "ok" if ok else "oom",
+                                             heap_peak_mb="700" if tool.startswith("tda4j") else "",
+                                             degenerate=str(dd == 5 and seed == 1)))
+                        if ok:
+                            (out / "bars" / f"surface_40_{dd}_{seed}__{tool}.tsv").write_text(text)
+            with open(out / "sweep.csv", "w", newline="") as f:
+                w = csv.DictWriter(f, fieldnames=sweep_alpha.COLUMNS)
+                w.writeheader()
+                w.writerows(rows)
+            sweep_alpha.summarize(out, stub_bottleneck)
+            md = (out / "sweep.md").read_text()
+        self.assertIn("| d = 5† |", md, "a draw with d + 1 points on a facet marks its dimension")
+        self.assertIn("| d = 6 |", md)
+        self.assertRegex(md, r"\| d = 6 \|[^\n]*oom")
+        self.assertIn("(gudhi)", md)                    # d = 5: GUDHI finished, so it is the reference
+        self.assertIn("(tda4j-dqp)", md)                # d = 6: GUDHI ran out of memory, the dual QP is the reference
+        self.assertIn("| 500 (700) |", md.split("## Peak memory")[1].split("## Largest")[0])
+        self.assertIn("inf† (gudhi)", md)
 
 
 if __name__ == "__main__":

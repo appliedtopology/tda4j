@@ -304,13 +304,20 @@ def vm_hwm_mb(pid):
     return None
 
 
-def run_proc(cmd, timeout, log_prefix):
-    """Runs cmd in its own session (killed as a group at `timeout`); returns a `Proc`."""
+def run_proc(cmd, timeout, log_prefix, address_space_mb=None):
+    """Runs cmd in its own session (killed as a group at `timeout`); returns a `Proc`. `address_space_mb` caps the
+    process's virtual memory (RLIMIT_AS), so a runaway C++ allocation ends in `std::bad_alloc` (status `oom`) and not in
+    the kernel's out-of-memory killer; not for a JVM or Node, which reserve far more address space than they use."""
     out_path, err_path = Path(str(log_prefix) + ".out"), Path(str(log_prefix) + ".err")
+    limit = None
+    if address_space_mb:
+        import resource
+        cap = int(address_space_mb) * 1024 * 1024
+        limit = lambda: resource.setrlimit(resource.RLIMIT_AS, (cap, cap))
     with open(out_path, "w") as out, open(err_path, "w") as err:
         start = time.perf_counter()
         # Popen returns once the child has exec'd, so /proc/<pid>/status describes the new program, not the harness.
-        proc = subprocess.Popen(cmd, stdout=out, stderr=err, start_new_session=True)
+        proc = subprocess.Popen(cmd, stdout=out, stderr=err, start_new_session=True, preexec_fn=limit)
         peak = 0.0
         status, rusage, timed_out = None, None, False
         while True:
@@ -328,6 +335,7 @@ def run_proc(cmd, timeout, log_prefix):
                 break
             time.sleep(0.01)
         wall = time.perf_counter() - start
+    proc.returncode = os.waitstatus_to_exitcode(status)  # reaped by wait4: Popen must not warn about a running child
     rss, src = (peak, "proc") if peak > 0 else (rusage.ru_maxrss / 1024, "rusage")
     if timed_out:
         return Proc("timeout", wall, rss, "", f"killed after {timeout:g} s", src)
@@ -500,9 +508,10 @@ def read_bars(path):
     bars = {}
     if not Path(path).exists():
         return None
-    for line in open(path):
-        k, b, d = line.split("\t")
-        bars.setdefault(int(k), []).append((float(b), math.inf if d.strip() == "inf" else float(d)))
+    with open(path) as f:
+        for line in f:
+            k, b, d = line.split("\t")
+            bars.setdefault(int(k), []).append((float(b), math.inf if d.strip() == "inf" else float(d)))
     return bars
 
 
@@ -719,10 +728,12 @@ def fmt_distance(dist):
 
 
 def summarize(out: Path, bottleneck=None):
-    rows = list(csv.DictReader(open(out / "runs.csv")))
+    with open(out / "runs.csv") as f:
+        rows = list(csv.DictReader(f))
     cases = {c.name: c for c in CASES}
     try:
-        divisions = json.load(open(out / "env.json"))["args"]["javaplex_divisions"]
+        with open(out / "env.json") as f:
+            divisions = json.load(f)["args"]["javaplex_divisions"]
     except Exception:
         divisions = 1000
     by = {}

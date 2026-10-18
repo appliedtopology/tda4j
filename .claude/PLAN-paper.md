@@ -762,6 +762,12 @@ The first full run (2026-10-14, before the Scala.js build) is not citable; readi
   two data sets, cyclooctane (R^24) and the image patches X(300,30) (R^9), have published sizes and Betti numbers that make them an
   oracle for DQP; they wait for data files (#133). Nothing was taken from the Helix paper (IEEE 10917453), which could not be read.
 - **§4 datasets:** `o3_1024` is now also an alpha case.
+- **§3.4 again, the Helix thesis and paper workloads** (as described by the project lead; not read): `bench/sweep_alpha.py` runs
+  40 and 60 points uniform in the interior or on the surface of the unit cube over d = 5 to 25, the Tadasets d-spheres for
+  d = 11, 14, 17 with the paper's point counts, and the 800-point case in R^11, with Helix's reported serial times on the 40-point
+  spheres (10.8, 94.8, 472 s) beside ours. It is the controlled test of the claim that the dual-QP's cost barely depends on the
+  ambient dimension, and the calibration of our Helix port against the original (first look: 40 points on the 11-sphere time out
+  at 420 s here against 10.8 s there, #134).
 
 ## 8. Facts verified this session, and how
 

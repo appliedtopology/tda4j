@@ -69,6 +69,39 @@ fast/cohomology ratio.
 bench/run.sh sweep-cubical --dims 2,3 --jvm-heap 32g --timeout 1800
 ```
 
+## The alpha dimension sweep
+
+`bench/run.sh sweep-alpha` asks what the ambient dimension and the point count cost each alpha backend, on the
+workloads of the Helix thesis and paper as they were described to us (neither was read):
+- **cube:** n = 40 and 60 points uniform at random in the interior of the unit cube, or on its surface, over the
+  dimensions 5, 6, 7, 8, 10, 12, 15, 20, 25 (`--points`, `--dims`, `--shapes`); the heaviest case there is 800 points in R¹¹
+  (`--extra 800:11:interior`);
+- **sphere:** Tadasets' `dsphere(n, d)`, n points on the d-sphere **in R^(d+1)** (checked in Tadasets 0.2.2: standard normal
+  vectors, normalized), for d = 11 with n = 40 to 900, d = 14 with 40 to 125, d = 17 with 40 to 75 (`--spheres`). Helix's
+  serial times for the 40-point ones were reported as 0.18, 1.58 and 7.87 minutes; `sweep.md` prints them in a column beside
+  ours (another machine, another implementation: the order of magnitude and the slope in d are the comparison). That the
+  thesis's d is Tadasets' d, so R^(d+1), is our reading.
+
+Tools: `tda4j`, `tda4j-helix`, `tda4j-fastalpha`, `tda4j-dqp`, `gudhi`, and the `tda4j-js` twins. At these point counts the
+dual-QP needs no radius: it builds every candidate simplex up to dimension 3 (at most C(n, 4) of them), and its cost
+barely depends on the ambient dimension, while a Delaunay-based tool pays for a triangulation whose size grows with it. Each
+cell runs on `--seeds` draws (default 3; start with 1), cold and warm, and a tool's series stops at its first timeout or
+out-of-memory (along d for the cubes, along n for the spheres). The defaults assume a machine like the compute server's
+(`--jvm-heap 64g`, `--timeout 1800`, GUDHI capped at `--py-mem-gb 128`).
+
+```sh
+bench/run.sh sweep-alpha --seeds 1 --dims 5,6,7,8 --points 40 --shapes interior --spheres "11:40"   # a quick look
+bench/run.sh sweep-alpha --extra 800:11:interior                                                  # the whole grid
+```
+
+What it does not do: **failure rates.** Helix's invalid triangulations were about 1 in 170 clouds at d = 4 with 20 to 30 points,
+so a rate needs hundreds of draws per cell, not three; the sweep reports timing and whether a draw failed. Also **no
+simplex counts** (the driver does not report the size of the complex), so the cost cannot yet be set against the size of the
+triangulation. And the points are noise: in high dimension the distances concentrate, filtration values cluster, and a few
+nearly flat simplices have circumradii of 50 and more in a unit cube, so the bottleneck distance between backends is mostly
+the agreement of near-degenerate values; read it as a correctness stress, not a statement about topology. Cube-surface
+draws with d + 1 points on one facet, and every sphere, are not in general position (marked †).
+
 ## What is measured
 
 - **cold:** one process, one computation, from launch to exit: startup, JIT, reading the input. This is what a
