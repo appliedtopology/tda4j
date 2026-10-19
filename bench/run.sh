@@ -11,8 +11,9 @@
 #   bench/run.sh sweep-cubical [--dims 2,3] [...]   size sweep of TDA4j's image engines (sweep_cubical.py)
 #   bench/run.sh sweep-alpha [--seeds 1] [...]       dimension and point-count sweep of the alpha complex backends
 #                                   (sweep_alpha.py): cube and sphere samples, the Helix thesis's workloads
-#   bench/run.sh count-cells [--cases a,b] [--join RESULTS_DIR] [...]   the number of cells of every case's complex, by
-#                                   dimension (count_cells.py): the size of each problem, into results/cells-<timestamp>
+#   bench/run.sh count-cells [--reference] [--cases a,b] [--verify] [...]   the number of cells of every case's complex,
+#                                   by dimension (count_cells.py); --reference writes bench/cells-reference.csv, which
+#                                   `summarize` joins: a benchmark run never counts
 #
 # Environment (all optional):
 #   WORKDIR        scratch space for tools, data and results (default: ./bench-work)

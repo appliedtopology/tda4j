@@ -245,11 +245,31 @@ estimate, so a count that does not finish is a row that says so (vertices, edges
 - **Cross-checks that ran:** TDA4j's `VietorisRips` stream has exactly the clique counts on three stand-in inputs (60 points at 0.4: 60/301/599/680;
   a 48-point cloud in R^4: 78,758 cells; a 70 x 70 not-quite-symmetric matrix: 242,675); TDA4j's alpha stream has GUDHI's counts on 60 points in R^3
   at no radius (60/354/566/271) and at 0.2 (60/220/218/67), on 200 points in R^2 and 50 in R^5, and the DQP backend agrees at 0.2.
-- **Scale, on stand-ins (4 cores, not the benchmark files):** 50,000 points on a Clifford torus in R^4 at 0.15, up to 3-simplices, 2.2 million edges
-  and 413 million 4-cliques in 1.8 s; 4,096 random 3 x 3 orthogonal matrices at 1.4, up to 4-simplices, 292 million 5-cliques in 0.12 s. The real counts
-  come from the server; I cannot say yet that every Vietoris-Rips case finishes, only that these sizes do.
+- **Scale (4 cores):** every Vietoris-Rips case of the suite is counted in under 12 s (clifford50000 takes 11.4 s, 2.2 million edges and 413 million
+  4-cliques; fractal-r 2.2 billion cells in 0.11 s; dragon2000 0.7 s).
 - **TDA4j's stream is slow to iterate:** about 8,000 cells per second (78,758 cells in 9 s, 242,675 in 33 s, one JVM each, JIT warm-up included), which
   is why the cross-check stops at `--cross-check-max` 3e5. Not an A/B measurement, and not what the engines use (the packed Ripser engine does not
   build the stream); unexamined.
-- **Open:** the `sweep_alpha.py` cells (the cube draws) have no count yet; the Scala.js twin has none (the count does not depend on the platform);
-  the real data of the cases was not available here (`bench.py prepare` downloads it), so no real count was produced in this session. #135.
+- **The reference (project lead: one count per example is enough, a run need not count).** `bench/cells-reference.csv` is checked in and
+  `bench.py summarize` joins it as `cells`; `bench/run.sh count-cells --reference` writes it, `--verify` compares the SHA-256 of `data/` with the
+  files that were counted. All 32 cases were counted in 4 minutes on 4 cores, from the real benchmark data (`bench.py prepare` in this
+  sandbox: the Ripser and roadmap files from GitHub, the cyclooctane `.mat` from the javaplex clone, the generated sets from their seeds):
+
+  | case | cells up to dim + 1 | | case | cells |
+  |---|---|---|---|---|
+  | sphere3_48 / 96 / 192 | 136,390 / 2,480,471 / 47,890,347 | | random2d_512 / 1024 / 2048 | 1,050,625 / 4,198,401 / 16,785,409 |
+  | dragon2000 (dim 1) | 546,815,948 | | random3d_32 / 64 / 128 | 274,625 / 2,146,689 / 16,974,593 |
+  | random16 (dim 7) | 15,834,007 | | unif2d_1000 / 10000 (alpha) | 5,959 / 59,943 |
+  | fractal-r | 2,201,692,044 | | unif3d_1000 / 5000 | 27,531 / 142,317 |
+  | o3_1024 / o3_4096 | 10,596,595 / 343,610,197 | | unif5d_500 | 268,107 |
+  | clifford50000 | 454,608,895 | | unif10d_1000 | 2,691,159 (TDA4j only) |
+  | cyclooctane (to 0.5) | 6,332,000 | | o3_1024_alpha / cyclooctane_alpha | 30,634 / 70,896 (TDA4j only) |
+
+  GUDHI and TDA4j count the same alpha complex in every case both ran (nine, the two degenerate ones included), and the TDA4j Vietoris-Rips stream has the
+  clique count of sphere3_48 (the only Vietoris-Rips case under the cross-check limit).
+- **clifford50000 is a small complex with a huge index range:** 454.6 million cells up to dimension 3, against the 2.6e17 subsets of size 4 that Ripser's
+  combinatorial indexing must be able to name (the `limit` of the first section). The `limit` comes from the index, not from the size of the problem.
+- **`sphere_3_192_points.dat` is 192 points on the unit sphere of R^3** (three coordinates, norms 1 to 1e-8), so the comment in `bench.py` that said S^3
+  was wrong and is corrected; whether "sphere3" in the Ripser paper means the 3 coordinates or the 3-sphere I did not look up.
+- **Open:** the `sweep_alpha.py` cells (the cube draws) have no count yet; the Scala.js twin has none (the count does not depend on the platform).
+  The counts above come from this sandbox's copy of the data; `--verify` on the server says whether its files are the same. #135.

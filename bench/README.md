@@ -51,10 +51,15 @@ Useful options of `run`:
 
 ## Counting the cells
 
-`bench/run.sh count-cells` (`count_cells.py`) counts the cells of the complex each case reduces, by dimension, so that a
-time can be set against the size of the problem. The unit is the cells of dimension 0 to `dim + 1` at the case's
-threshold: the whole complex, not what an engine touches (no apparent pairs, no clearing, no implicit complex). Output in
-`$WORKDIR/results/cells-<timestamp>/`: `cells.md` (the table), `cells.csv` (one row per case, joinable on `case`),
+Each case has one reference count of the cells of the complex it reduces, in `bench/cells-reference.csv` (checked in). A
+benchmark run never counts: `bench.py summarize` joins the reference as the `cells` column of `summary.csv` and `summary.md`, so
+a time can be set against the size of the problem. The unit is the cells of dimension 0 to `dim + 1` at the case's threshold: the
+whole complex, not what an engine touches (no apparent pairs, no clearing, no implicit complex). The file also has the cells of
+each dimension, the source and a check, and the SHA-256 of the data file that was counted.
+
+`bench/run.sh count-cells --reference` makes or updates it (`count_cells.py`; `--cases a,b` recounts only those, a count that
+fails never replaces a good one), and `bench/run.sh count-cells --verify` checks that your `data/` has the files it was counted
+from. Without `--reference` the counts go to `$WORKDIR/results/cells-<timestamp>/` only: `cells.md` (the table), `cells.csv`,
 `cells_sources.csv` (one row per case and source, with time and peak memory).
 
 | task | counted by | check |
@@ -66,8 +71,8 @@ threshold: the whole complex, not what an engine touches (no apparent pairs, no 
 A count that needs more than `--timeout` seconds (3600) is a row that says so, with the vertices, the edges and the bound
 "every subset"; no row is an estimate. The graph is `distance <= threshold` with a relative margin of 1e-9, so the edge that
 defines the enclosing radius is in, and a distance matrix is read from its lower triangle (as ripser.cpp and TDA4j do).
-`--join RESULTS` adds each case's total to that run's `summary.csv` as `summary_with_cells.csv` (a `cells_total` column).
-`--no-jvm` skips TDA4j (no `setup tda4j` needed), `--no-gudhi` skips GUDHI, `--threads N` limits the counter.
+`--no-jvm` skips TDA4j (no `setup tda4j` needed), `--no-gudhi` skips GUDHI, `--threads N` limits the counter, and `--join
+RESULTS` adds the totals to a finished run's `summary.csv` as `summary_with_cells.csv` (for a run made before the reference existed).
 
 ## The image-engine size sweep
 

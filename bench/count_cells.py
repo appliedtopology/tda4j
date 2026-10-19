@@ -21,6 +21,9 @@ count would need more time than `--timeout` the row says so and gives the number
 
 Output: `cells.csv` (one row per case: the canonical count, its source, the check), `cells_sources.csv` (one row per
 case and source), `cells.md` (the table). Environment: TDA4J_CP as for bench.py; CXX to choose the compiler.
+
+A benchmark run never counts. The count is made once per case, with `--reference`, into `bench/cells-reference.csv` (checked
+in, with the SHA-256 of the data file counted), and `bench.py summarize` joins it as the `cells` column.
 """
 import argparse
 import csv
@@ -289,6 +292,44 @@ def write_outputs(out, cases_rows):
     return flat
 
 
+def update_reference(path, flat, hashes):
+    """Merges the ok rows of `flat` into the reference file: a row for a case replaces that case's old one, a failed count
+    never replaces a good one, the file stays in the order of bench.CASES. Each row carries the SHA-256 of the data file it
+    was counted from, so a regenerated or edited input is noticed. Returns the number of rows written."""
+    kept = {}
+    if Path(path).exists():
+        with open(path) as f:
+            kept = {r["case"]: r for r in csv.DictReader(f)}
+    for r in flat:
+        if r["status"] == "ok":
+            kept[r["case"]] = {**r, "data_sha256": hashes.get(r["case"], "")}
+    top = max([int(k[3:]) + 1 for r in kept.values() for k in r if re.fullmatch(r"dim\d+", k) and r[k] not in ("", None)] + [1])
+    fields = ["case", "task", "points", "ambient", "dim", "threshold", "source", "total"] + [f"dim{k}" for k in range(top)] + \
+             ["check", "data_sha256"]
+    order = {c.name: i for i, c in enumerate(bench.CASES)}
+    with open(path, "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore", restval="")
+        w.writeheader()
+        w.writerows(sorted(kept.values(), key=lambda r: order.get(r["case"], len(order))))
+    return len(kept)
+
+
+def verify_reference(path, data):
+    """[(case, what)] for every reference row whose data file is missing or no longer has the SHA-256 it was counted from."""
+    problems = []
+    with open(path) as f:
+        for r in csv.DictReader(f):
+            case = next((c for c in bench.CASES if c.name == r["case"]), None)
+            file = data / case.file if case else None
+            if case is None:
+                problems.append((r["case"], "no such case in bench.py"))
+            elif not file.exists():
+                problems.append((r["case"], f"{file} not found"))
+            elif r["data_sha256"] and bench.sha256_of(file) != r["data_sha256"]:
+                problems.append((r["case"], f"{file.name} is not the file that was counted (SHA-256 differs)"))
+    return problems
+
+
 def join_summary(results, flat):
     """RESULTS/summary.csv with the total number of cells of each row's case added: `summary_with_cells.csv`."""
     totals = {r["case"]: r["total"] for r in flat}
@@ -310,7 +351,7 @@ def main():
         return
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--data", required=True, help="the directory `bench.py prepare` filled")
-    ap.add_argument("--out", required=True)
+    ap.add_argument("--out", required=True, help="where cells.md, cells.csv and cells_sources.csv go")
     ap.add_argument("--cases", default="", help="comma-separated case names (default: all)")
     ap.add_argument("--tasks", default="", help="comma-separated: vr,cubical,alpha (default: all)")
     ap.add_argument("--timeout", type=float, default=3600, help="seconds per count")
@@ -328,9 +369,21 @@ def main():
                     help="the largest Vietoris-Rips count that is cross-checked (TDA4j's stream yields about 8,000 cells/s)")
     ap.add_argument("--jvm-heap", default="8g")
     ap.add_argument("--jvm-opts", default="")
+    ap.add_argument("--reference", action="store_true",
+                    help="write the counts into the checked-in reference file (bench/cells-reference.csv), which "
+                         "bench.py summarize joins; a failed count never replaces a good one")
+    ap.add_argument("--reference-file", default=str(bench.CELLS_REFERENCE))
+    ap.add_argument("--verify", action="store_true",
+                    help="only check that the data files are the ones the reference was counted from (SHA-256); exit 1 if not")
     ap.add_argument("--join", default="", help="a bench.py results directory: add each case's total to its summary.csv")
     args = ap.parse_args()
     data, out = Path(args.data), Path(args.out)
+    if args.verify:
+        problems = verify_reference(args.reference_file, data)
+        for case, what in problems:
+            print(f"{case}: {what}")
+        print("the data files match the reference" if not problems else f"{len(problems)} of the reference's cases do not match")
+        sys.exit(1 if problems else 0)
     (out / "logs").mkdir(parents=True, exist_ok=True)
     if args.threads:
         os.environ["OMP_NUM_THREADS"] = str(args.threads)
@@ -348,6 +401,9 @@ def main():
             stamp(f"    {r['source']:8s} {r['status']:8s} total={r['total']} {r['seconds']}s {r['note'][:100]}")
         write_outputs(out, cases_rows)  # after every case: a killed run keeps what it counted
     flat = write_outputs(out, cases_rows)
+    if args.reference:
+        hashes = {c.name: bench.sha256_of(data / c.file) for c, _ in cases_rows if (data / c.file).exists()}
+        stamp(f"{update_reference(args.reference_file, flat, hashes)} cases in {args.reference_file}")
     if args.join:
         stamp(f"wrote {join_summary(args.join, flat)}")
     print((out / "cells.md").read_text())

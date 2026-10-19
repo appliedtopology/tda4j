@@ -102,7 +102,8 @@ CASES = [
     ("unif2d_10000", "alpha", "unif2d_10000.txt", "points", 1, None),
     ("unif3d_1000", "alpha", "unif3d_1000.txt", "points", 2, None),
     ("unif3d_5000", "alpha", "unif3d_5000.txt", "points", 2, None),
-    # The two point sets below are not in general position (192 points on S^3 are cospherical; the dragon is a scan),
+    # The two point sets below are not in general position (the 192 points of sphere_3_192_points.dat lie on the unit sphere of
+    # R^3, three coordinates each, and are cospherical; the dragon is a scan),
     # so each tool triangulates the degenerate cells its own way and GUDHI is no ground truth: kept, flagged, and
     # paired with a jittered copy (`_gp`, general position) that all tools read instead.
     Case("dragon2000_alpha", "alpha", "dragon_2000.txt", "points", 2, degenerate=True),
@@ -124,6 +125,19 @@ CASES = [
     Case("cyclooctane_alpha", "alpha", "cyclooctane.txt", "points", 2, threshold=0.25),
 ]
 CASES = [c if isinstance(c, Case) else Case(*c) for c in CASES]
+
+# One reference count of the cells of each case's complex, made once by count_cells.py --reference and checked in: a
+# benchmark run never counts. `summarize` joins it as the `cells` column (blank for a case without a count).
+CELLS_REFERENCE = HERE / "cells-reference.csv"
+
+
+def cells_reference():
+    """{case: total cells} from CELLS_REFERENCE; empty when there is no such file."""
+    try:
+        with open(CELLS_REFERENCE) as f:
+            return {r["case"]: r["total"] for r in csv.DictReader(f)}
+    except OSError:
+        return {}
 
 # ---------------------------------------------------------------------------------------------------------
 # Tools: (name, kind, task, options). `multithreaded` rows are reported but never count as the
@@ -810,6 +824,7 @@ def summarize(out: Path, bottleneck=None):
     for r in rows:
         by.setdefault((r["case"], r["p"], r["tool"]), {})[r["mode"]] = r
     summary = []
+    cells = cells_reference()
     for (cname, p, tool), modes in sorted(by.items()):
         cold, warm = modes.get("cold", {}), modes.get("warm", {})
         first = cold or warm or next(iter(modes.values()))
@@ -830,7 +845,7 @@ def summarize(out: Path, bottleneck=None):
         heaps = [float(m["heap_peak_mb"]) for m in modes.values() if m.get("heap_peak_mb")]
         olds = [float(m["old_peak_mb"]) for m in modes.values() if m.get("old_peak_mb")]
         summary.append({
-            "case": cname, "task": task, "p": p, "tool": tool,
+            "case": cname, "task": task, "p": p, "tool": tool, "cells": cells.get(cname, ""),
             "status": warm.get("status") or cold.get("status") or first["status"],
             "cold_s": cold.get("wall_s", ""), "warm_median_s": warm.get("median_s", ""),
             "maxrss_mb": max([float(m["maxrss_mb"]) for m in measured] or [0]),
@@ -863,13 +878,14 @@ def summarize(out: Path, bottleneck=None):
     if zero:
         lines[-1:] = ["", f"{', '.join(zero)} compute over the rationals whatever the p of the row: a difference from the "
                       "reference (over F_p) can be p-torsion, and is noted under \"Agreement notes\".", ""]
-    lines += ["| case | p | tool | status | cold s | warm s | peak MB | heap MB | bars (> tol) | Δ vs reference | agrees |",
-              "|---|---|---|---|---|---|---|---|---|---|---|"]
+    lines += ["| case | p | tool | status | cold s | warm s | peak MB | heap MB | bars (> tol) | Δ vs reference | agrees | cells |",
+              "|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for s in summary:
         rss = f"{'≤' if s['rss_src'] == 'rusage' else ''}{s['maxrss_mb']:.0f}" if s["rss_src"] else ""
         agrees = s["agrees"] + ("†" if s["degenerate"] == "True" and s["agrees"] == "False" else "")
+        size = f"{int(s['cells']):,}" if s["cells"] else ""
         lines.append(f"| {s['case']} | {s['p']} | {s['tool']} | {s['status']} | {s['cold_s']} | {s['warm_median_s']} | "
-                     f"{rss} | {s['heap_peak_mb']} | {s['bars_sig'] or s['bars']} | {s['vs_reference']} | {agrees} |")
+                     f"{rss} | {s['heap_peak_mb']} | {s['bars_sig'] or s['bars']} | {s['vs_reference']} | {agrees} | {size} |")
 
     failed = [s for s in summary if s["status"] not in ("ok", "missing")]
     if failed:

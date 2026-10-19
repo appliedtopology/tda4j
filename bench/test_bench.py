@@ -876,6 +876,62 @@ class CellCountTests(unittest.TestCase):
             joined = {r["case"]: r["cells_total"] for r in csv.DictReader(f)}
         self.assertEqual(joined, {"img": "25", "other": ""})
 
+    def test_the_reference_file_keeps_a_good_count_over_a_failed_one_and_the_order_of_the_cases(self):
+        path = self.tmp / "reference.csv"
+        path.unlink(missing_ok=True)
+        names = [c.name for c in bench.CASES]
+        a, b = bench.Case(names[3], "vr", "a.txt", "points", 2), bench.Case(names[0], "vr", "b.txt", "points", 2)
+        good = count_cells.write_outputs(self.tmp / "outputs", [(a, [count_cells.row(a, "cliques", "ok", {0: 4, 1: 6}, points=4)])])
+        count_cells.update_reference(path, good, {a.name: "abc"})
+        more = count_cells.write_outputs(self.tmp / "outputs", [(b, [count_cells.row(b, "cliques", "ok", {0: 2, 1: 1}, points=2)])])
+        self.assertEqual(count_cells.update_reference(path, more, {b.name: "def"}), 2)
+        failed = count_cells.write_outputs(self.tmp / "outputs", [(a, [count_cells.row(a, "cliques", "timeout")])])
+        count_cells.update_reference(path, failed, {})
+        with open(path) as f:
+            rows = list(csv.DictReader(f))
+        self.assertEqual([r["case"] for r in rows], [names[0], names[3]], "in the order of bench.CASES")
+        self.assertEqual((rows[1]["total"], rows[1]["data_sha256"]), ("10", "abc"), "a timeout does not replace a count")
+        self.assertEqual((rows[0]["total"], rows[0]["dim1"]), ("3", "1"))
+
+    def test_verify_notices_a_changed_or_missing_data_file(self):
+        data = self.tmp / "verify-data"
+        data.mkdir(exist_ok=True)
+        case = bench.CASES[0]
+        (data / case.file).write_text("1 2 3\n")
+        reference = self.tmp / "verify.csv"
+        reference.write_text(f"case,data_sha256\n{case.name},{bench.sha256_of(data / case.file)}\nnot_a_case,\n")
+        self.assertEqual([c for c, _ in count_cells.verify_reference(reference, data)], ["not_a_case"])
+        (data / case.file).write_text("1 2 4\n")
+        problems = dict(count_cells.verify_reference(reference, data))
+        self.assertIn("SHA-256 differs", problems[case.name])
+        (data / case.file).unlink()
+        self.assertIn("not found", dict(count_cells.verify_reference(reference, data))[case.name])
+
+    def test_summarize_joins_the_reference_counts_and_a_run_never_counts(self):
+        reference = self.tmp / "joined.csv"
+        reference.write_text("case,total\nsmall,12345\n")
+        saved = bench.CELLS_REFERENCE
+        bench.CELLS_REFERENCE = reference
+        try:
+            out = self.tmp / "joined-run"
+            (out / "bars").mkdir(parents=True, exist_ok=True)
+            rows = []
+            for case in ("small", "other"):
+                rows.append(run_row(case, "gudhi", "cold", "ok", wall="2", median="2"))
+                rows.append(run_row(case, "gudhi", "warm", "ok", wall="1", median="1"))
+            write_runs(out, rows)
+            bench.summarize(out, bottleneck=stub_bottleneck)
+            with open(out / "summary.csv") as f:
+                cells = {r["case"]: r["cells"] for r in csv.DictReader(f)}
+            md = (out / "summary.md").read_text()
+        finally:
+            bench.CELLS_REFERENCE = saved
+        self.assertEqual(cells, {"small": "12345", "other": ""})
+        self.assertIn("agrees | cells |", md)
+        self.assertRegex(md, r"\| small \| 17 \| gudhi \| ok \|.*\| 12,345 \|")
+        self.assertNotIn("count_cells", Path(bench.__file__).read_text().split("def run(args)")[1].split("def run_one")[0],
+                         "the benchmark loop does not count cells")
+
     def test_every_case_is_countable_by_some_source(self):
         for case in bench.CASES:
             self.assertIn(case.task, ("vr", "cubical", "alpha"), case.name)
