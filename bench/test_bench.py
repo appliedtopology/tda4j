@@ -12,6 +12,7 @@ import importlib.util
 import json
 import math
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -29,6 +30,7 @@ sys.modules["bench_py"] = bench
 _spec.loader.exec_module(bench)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import sweep_alpha  # noqa: E402  (imports bench.py by name: a second copy of the module, which is fine here)
+import count_cells  # noqa: E402
 
 
 def child(code):
@@ -719,6 +721,164 @@ class SweepLoopTests(unittest.TestCase):
         self.assertIn("(tda4j-dqp)", md)                # d = 6: GUDHI ran out of memory, the dual QP is the reference
         self.assertIn("| 500 (700) |", md.split("## Peak memory")[1].split("## Largest")[0])
         self.assertIn("inf† (gudhi)", md)
+
+
+class CellCountTests(unittest.TestCase):
+    """bench/count_cells.py: the size of each case, by dimension. The clique counter is checked against enumeration and
+    against GUDHI, the grid formula against cell-by-cell enumeration."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.dir = tempfile.TemporaryDirectory()
+        cls.tmp = Path(cls.dir.name)
+        import shutil
+        cls.counter = count_cells.build_counter(cls.tmp / "build") if shutil.which(os.environ.get("CXX", "g++")) else None
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.dir.cleanup()
+
+    def cliques(self, matrix, fmt, threshold, k):
+        path = self.tmp / f"in-{fmt}.txt"
+        np.savetxt(path, matrix, fmt="%.17g")
+        r = subprocess.run([str(self.counter), str(path), fmt, repr(threshold), str(k)], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return [int(c) for c in json.loads(r.stdout)["counts"]]
+
+    @staticmethod
+    def enumerate_cliques(adjacent, k):
+        """Cliques of sizes 1..k of a graph by plain recursion: nothing shared with the C++ method."""
+        found = [0] * (k + 1)
+
+        def grow(clique, candidates):
+            found[len(clique)] += 1
+            if len(clique) < k:
+                for i, c in enumerate(candidates):
+                    grow(clique + [c], [d for d in candidates[i + 1:] if adjacent[c][d]])
+        n = len(adjacent)
+        for v in range(n):
+            grow([v], [u for u in range(v + 1, n) if adjacent[v][u]])
+        return found[1:]
+
+    def test_the_grid_formula_is_cell_by_cell_enumeration(self):
+        for shape in [(5,), (2, 3), (2, 2, 2), (1, 4, 2), (3, 1)]:
+            # a cell is a coordinate in 0..2n per axis: even is a vertex of that axis, odd an edge; its dimension is the
+            # number of odd coordinates
+            brute = {}
+            for cell in __import__("itertools").product(*[range(2 * n + 1) for n in shape]):
+                d = sum(c % 2 for c in cell)
+                brute[d] = brute.get(d, 0) + 1
+            self.assertEqual(count_cells.grid_cells(shape, len(shape)), brute, shape)
+        self.assertEqual(count_cells.grid_cells((4, 4), 1), {0: 25, 1: 40}, "cut at dimension 1")
+        self.assertEqual(count_cells.grid_cells((4, 4), 5), {0: 25, 1: 40, 2: 16}, "no dimension above the grid's own")
+
+    def test_every_subset_bound(self):
+        self.assertEqual(count_cells.every_subset_bound(5, 3), 5 + 10 + 10)
+
+    @unittest.skipIf(shutil.which("g++") is None and "CXX" not in os.environ, "no C++ compiler")
+    def test_cliques_of_random_points_equal_plain_enumeration(self):
+        rng = np.random.default_rng(1)
+        for n, d, threshold, k in [(40, 3, 0.5, 6), (60, 2, 0.3, 8), (35, 5, 0.9, 5)]:
+            x = rng.random((n, d))
+            dist = np.sqrt(((x[:, None] - x[None]) ** 2).sum(-1))
+            adjacent = (dist <= threshold) & ~np.eye(n, dtype=bool)
+            self.assertEqual(self.cliques(x, "points", threshold, k), self.enumerate_cliques(adjacent, k), (n, d))
+
+    @unittest.skipIf(shutil.which("g++") is None and "CXX" not in os.environ, "no C++ compiler")
+    def test_a_distance_matrix_is_read_from_its_lower_triangle(self):
+        x = np.random.default_rng(2).random((30, 3))
+        dist = np.sqrt(((x[:, None] - x[None]) ** 2).sum(-1))
+        skewed = dist.copy()
+        skewed[np.triu_indices(30, 1)] = 99.0  # the upper triangle is ignored
+        want = self.enumerate_cliques((dist <= 0.5) & ~np.eye(30, dtype=bool), 5)
+        self.assertEqual(self.cliques(skewed, "distance", 0.5, 5), want)
+
+    @unittest.skipIf(shutil.which("g++") is None and "CXX" not in os.environ, "no C++ compiler")
+    def test_an_edge_exactly_at_the_threshold_is_in(self):
+        lattice = np.array([(i, j) for i in range(3) for j in range(3)], dtype=float)
+        squared = ((lattice[:, None] - lattice[None]) ** 2).sum(-1)  # integers: exact, so the ties are real
+        unit = (squared <= 1) & ~np.eye(9, dtype=bool)
+        king = (squared <= 2) & ~np.eye(9, dtype=bool)
+        self.assertEqual(self.cliques(lattice, "points", 1.0, 3), [9, 12, 0])
+        self.assertEqual(self.cliques(lattice, "points", 1.0, 3), self.enumerate_cliques(unit, 3))
+        # 12 unit edges and 8 diagonals of length sqrt(2): the king's graph, whose 2 x 2 blocks are four K4s
+        self.assertEqual(self.cliques(lattice, "points", math.sqrt(2), 4), self.enumerate_cliques(king, 4))
+        self.assertEqual(self.cliques(lattice, "points", math.sqrt(2), 4), [9, 20, 16, 4])
+
+    @unittest.skipUnless(importlib.util.find_spec("gudhi"), "gudhi is not installed")
+    @unittest.skipIf(shutil.which("g++") is None and "CXX" not in os.environ, "no C++ compiler")
+    def test_cliques_equal_gudhis_rips_complex_by_dimension(self):
+        import gudhi
+        x = np.random.default_rng(3).random((70, 3))
+        threshold = 0.35
+        tree = gudhi.RipsComplex(points=x, max_edge_length=threshold).create_simplex_tree(max_dimension=3)
+        by_dim = [0, 0, 0, 0]
+        for simplex, _ in tree.get_simplices():
+            by_dim[len(simplex) - 1] += 1
+        self.assertEqual(self.cliques(x, "points", threshold, 4), by_dim)
+
+    @unittest.skipIf(shutil.which("g++") is None and "CXX" not in os.environ, "no C++ compiler")
+    def test_a_count_that_times_out_still_reports_the_graph_and_the_bound(self):
+        fake = self.tmp / "fake_counter"
+        fake.write_text("#!/bin/sh\necho 'graph: n=100 edges=500 degeneracy=9' >&2\nsleep 30\n")
+        fake.chmod(0o755)
+        (self.tmp / "logs").mkdir(exist_ok=True)
+        case = bench.Case("slow", "vr", "x.txt", "points", 2)
+        r = count_cells.count_cliques(case, self.tmp / "x.txt", 1.0, fake, Namespace(timeout=1), self.tmp)
+        self.assertEqual((r["status"], r["points"], r["edges"]), ("timeout", 100, 500))
+        self.assertIn("at most", r["note"])
+        self.assertIn(f"{count_cells.every_subset_bound(100, 4):.3g}", r["note"])
+        self.assertEqual(r["total"], "", "no cell count is made up")
+
+    def test_the_canonical_row_is_the_independent_source_and_the_check_says_what_the_other_found(self):
+        case = bench.Case("c", "alpha", "c.txt", "points", 1)
+        gudhi = count_cells.row(case, "gudhi", "ok", {0: 5, 1: 9, 2: 5})
+        tda4j = count_cells.row(case, "tda4j", "ok", {0: 5, 1: 9, 2: 5})
+        chosen, check = count_cells.canonical([tda4j, gudhi])
+        self.assertEqual((chosen["source"], check), ("gudhi", "tda4j agrees"))
+        off = count_cells.row(case, "tda4j", "ok", {0: 5, 1: 9, 2: 6})
+        chosen, check = count_cells.canonical([gudhi, off])
+        self.assertIn("tda4j DIFFERS (dim 2: gudhi 5 / tda4j 6)", check)
+        chosen, check = count_cells.canonical([count_cells.row(case, "gudhi", "timeout"), tda4j])
+        self.assertEqual((chosen["source"], check), ("tda4j", "single source (TDA4j's own count)"))
+        chosen, check = count_cells.canonical([count_cells.row(case, "gudhi", "timeout")])
+        self.assertEqual(check, "no count")
+
+    def test_missing_data_is_a_row_not_a_crash(self):
+        case = bench.Case("gone", "vr", "gone.txt", "points", 1)
+        args = Namespace(cross_check=False, no_jvm=True, gudhi_python_ok=False)
+        rows = count_cells.count_case(case, args, self.tmp, self.tmp, None)
+        self.assertEqual([(r["status"], r["source"]) for r in rows], [("missing", "-")])
+        self.assertIn("bench.py prepare", rows[0]["note"])
+
+    def test_outputs_and_the_join_with_a_summary(self):
+        out = self.tmp / "outputs"
+        out.mkdir()
+        cubical = bench.Case("img", "cubical", "img.npy", "npy", 1)
+        vr = bench.Case("cloud", "vr", "cloud.txt", "points", 2)
+        cases_rows = [(cubical, [count_cells.row(cubical, "grid", "ok", count_cells.grid_cells((2, 2), 2), points="2x2")]),
+                      (vr, [count_cells.row(vr, "cliques", "timeout", note="killed after 1 s", points=100, edges=500)])]
+        flat = count_cells.write_outputs(out, cases_rows)
+        with open(out / "cells.csv") as f:
+            rows = {r["case"]: r for r in csv.DictReader(f)}
+        self.assertEqual((rows["img"]["dim0"], rows["img"]["dim1"], rows["img"]["dim2"], rows["img"]["total"]), ("9", "12", "4", "25"))
+        self.assertEqual((rows["cloud"]["status"], rows["cloud"]["total"], rows["cloud"]["dim0"]), ("timeout", "", ""))
+        md = (out / "cells.md").read_text()
+        self.assertIn("| img | cubical | 2x2 |", md)
+        self.assertIn("timeout: killed after 1 s", md)
+        results = self.tmp / "results"
+        results.mkdir()
+        with open(results / "summary.csv", "w", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=["case", "tool", "status"])
+            w.writeheader()
+            w.writerows([{"case": "img", "tool": "gudhi", "status": "ok"}, {"case": "other", "tool": "gudhi", "status": "ok"}])
+        with open(count_cells.join_summary(results, flat)) as f:
+            joined = {r["case"]: r["cells_total"] for r in csv.DictReader(f)}
+        self.assertEqual(joined, {"img": "25", "other": ""})
+
+    def test_every_case_is_countable_by_some_source(self):
+        for case in bench.CASES:
+            self.assertIn(case.task, ("vr", "cubical", "alpha"), case.name)
 
 
 def have(module):

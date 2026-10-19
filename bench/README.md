@@ -49,6 +49,26 @@ Useful options of `run`:
 | `--node-heap 32g` | `--max-old-space-size` for the `tda4j-js` tools, in the same notation (default: `--jvm-heap`). Node's own default is a few GB, far below what the large cases need |
 | `--node-opts "--stack-size=4000"` | more options for node |
 
+## Counting the cells
+
+`bench/run.sh count-cells` (`count_cells.py`) counts the cells of the complex each case reduces, by dimension, so that a
+time can be set against the size of the problem. The unit is the cells of dimension 0 to `dim + 1` at the case's
+threshold: the whole complex, not what an engine touches (no apparent pairs, no clearing, no implicit complex). Output in
+`$WORKDIR/results/cells-<timestamp>/`: `cells.md` (the table), `cells.csv` (one row per case, joinable on `case`),
+`cells_sources.csv` (one row per case and source, with time and peak memory).
+
+| task | counted by | check |
+|---|---|---|
+| Vietoris–Rips | `workers/count_cliques.cpp` (compiled with `g++`, OpenMP if there is any): every clique of the threshold graph, by degeneracy ordering and bitsets; exact | TDA4j's own stream iterated (`PaperBenchmarkDriver count=true`), when the count is under `--cross-check-max` (3e5; the stream yields about 8,000 cells per second) |
+| cubical | the images are full grids: the product over the axes of `(n + 1) + n x` | the unit tests enumerate small grids cell by cell |
+| alpha | GUDHI's alpha complex up to `--gudhi-max-ambient` (5), and TDA4j's stream; the second is the only count for the cases CGAL cannot reach (`unif10d_1000`, `o3_1024_alpha`, `cyclooctane_alpha`) | where both ran they are compared; a case with one source says "single source" |
+
+A count that needs more than `--timeout` seconds (3600) is a row that says so, with the vertices, the edges and the bound
+"every subset"; no row is an estimate. The graph is `distance <= threshold` with a relative margin of 1e-9, so the edge that
+defines the enclosing radius is in, and a distance matrix is read from its lower triangle (as ripser.cpp and TDA4j do).
+`--join RESULTS` adds each case's total to that run's `summary.csv` as `summary_with_cells.csv` (a `cells_total` column).
+`--no-jvm` skips TDA4j (no `setup tda4j` needed), `--no-gudhi` skips GUDHI, `--threads N` limits the counter.
+
 ## The image-engine size sweep
 
 `bench/run.sh sweep-cubical` decides which engine `Persistence(Image(...))` should pick by default. It times:

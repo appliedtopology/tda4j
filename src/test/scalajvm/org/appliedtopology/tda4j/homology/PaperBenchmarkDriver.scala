@@ -13,7 +13,7 @@ import scala.jdk.CollectionConverters.ListHasAsScala
   * java -cp $CP org.appliedtopology.tda4j.PaperBenchmarkDriver task=vr input=sphere.txt format=points dim=2 \
   *   [threshold=1.8] [p=2] [engine=auto|ripser|cohomology|chunks|naive|fastcubical|fastalpha] \
   *   [reps=cycles|cocycles|none] [backend=default|bowyer-watson|helix|dqp] [warmup=2] [trials=5] [out=bars.tsv]
-  *   [read=true] [hold=seconds]
+  *   [read=true] [hold=seconds] [count=true]
   * }}}
   *
   *   - `task=vr`: points (`format=points`, one point per line) or a full distance matrix (`format=distance`).
@@ -23,6 +23,9 @@ import scala.jdk.CollectionConverters.ListHasAsScala
   *     largest radius: bars alive at it are essential, and DQP builds only what lies within it. `engine=fastalpha` runs
   *     on the backend's triangulation and takes no threshold.
   *   - `task=cech`: points; filtration values are radii (the same barcode as alpha in general position).
+  *   - `count=true` (tasks `vr`, `alpha`, `cech`): build the complex the task would reduce, count its cells by
+  *     dimension (up to `dim + 1`, all a barcode up to degree `dim` needs) and print one JSON line with `cells`; no
+  *     engine runs (`bench/count_cells.py`).
   *
   * Times cover the whole `Persistence(...)` call: building the complex, the reduction and the representatives. For
   * `task=cubical`, `read=true` also reads every representative's terms inside the timed region (the JSON line reports
@@ -53,6 +56,9 @@ object PaperBenchmarkDriver:
     val readReps = opts.get("read").contains("true")
     // hold=N (cubical): keep the last diagram reachable for N seconds after the trials, for a heap histogram.
     val holdSeconds = opts.getOrElse("hold", "0").toInt
+    if opts.get("count").contains("true") then
+      countCells(task, opts, dim, threshold)
+      return
     var termsRead = 0L
     var held: AnyRef = null
 
@@ -197,6 +203,33 @@ object PaperBenchmarkDriver:
       println(s"""{"held":${held != null}}""")
 
   private def fmt(x: Double): String = if x.isPosInfinity then "inf" else x.toString
+
+  /** The cells of the complex a task reduces, by dimension: the stream is built as `Persistence` builds it and only
+    * iterated, never reduced, so the count is the size of the problem and not of what an engine touches.
+    */
+  private def countCells(task: String, opts: Map[String, String], dim: Int, threshold: Option[Double]): Unit =
+    val start = System.nanoTime()
+    val input = opts("input")
+    val stream: LevelwiseSimplexStream[Int, Double] = task match
+      case "vr" =>
+        opts.getOrElse("format", "points") match
+          case "points"   => VietorisRips.fromPoints(readMatrix(input), dim, threshold)
+          case "distance" =>
+            VietorisRips(ExplicitMetricSpace(readMatrix(input).map(_.toSeq).toSeq), dim, threshold)
+          case other => throw IllegalArgumentException(s"format=$other (points|distance)")
+      case "alpha" =>
+        val backend = AlphaBackend.parse(opts.getOrElse("backend", "default"))
+        Truncated(AlphaShapes(readMatrix(input), backend, maxRadius = threshold, maxDimension = dim), dim)
+      case "cech" => Cech.fromPoints(readMatrix(input), dim, threshold)
+      case other  => throw IllegalArgumentException(s"count=true is for the tasks vr, alpha and cech, not $other")
+    val counts = scala.collection.mutable.TreeMap.empty[Int, Long]
+    stream.iterator.foreach(cell => counts.update(cell.dim, counts.getOrElse(cell.dim, 0L) + 1L))
+    val cells = counts.map((d, c) => s""""$d":$c""").mkString(",")
+    println(
+      s"""{"tool":"tda4j","task":"$task","count":true,"cells":{$cells},"seconds":${(System
+          .nanoTime() - start) / 1e9},""" +
+        s""""java":"${System.getProperty("java.version")}"}"""
+    )
 
   private def fastAlpha(
     pts: Array[Array[Double]],

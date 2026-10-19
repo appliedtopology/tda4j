@@ -224,3 +224,32 @@ are now in `bench/` for the Vietoris-Rips task (#138 holds what is open).
   characteristic zero, `slower_than` names real tools), the skip rule in the run loop (timeout and oom skip, error and limit do not, `--rerun-timeouts` overrides), the
   characteristic-zero note in the summary, and the worker against GUDHI at p = 2 and 17 for every variant, with a distance-matrix input equal to the points input and
   exit status 3 for cubical and alpha.
+
+## Fifth addendum (2026-10-19): counting the cells of every case
+
+The summary had the number of bars of each run and no size of the problem (#135 lists it as "simplex counts"). `bench/count_cells.py`
+(`bench/run.sh count-cells`) now counts the cells of dimension 0 to `dim + 1` of the complex each case reduces, at the case's threshold:
+the whole complex, not what an engine touches. I read "without shortcuts" that way: no apparent pairs, no clearing, no implicit complex, and no
+estimate, so a count that does not finish is a row that says so (vertices, edges, the bound "every subset"), never a guess.
+
+- **Vietoris-Rips: `workers/count_cliques.cpp`**, exact. kClist on a degeneracy ordering with the candidate sets as bitsets; the last level is
+  a popcount. A distance is compared with `threshold * (1 + 1e-9)` so the edge that IS the enclosing radius is in; a matrix is read from its
+  lower triangle. Checked against plain recursive enumeration (points, a matrix whose upper triangle is junk, a 3 x 3 lattice with ties at
+  exactly sqrt 2) and against GUDHI's Rips complex by dimension.
+- **Cubical:** the images are full grids, so the cells of dimension j are the coefficient of x^j in the product of `(n_i + 1) + n_i x`; the unit
+  tests enumerate small grids cell by cell (a coordinate per axis, even = vertex, odd = edge). This is a formula, the one place the script does not
+  enumerate the data.
+- **Alpha:** GUDHI's alpha complex up to ambient dimension 5 (`--gudhi-max-ambient`), and TDA4j's stream through the new `count=true` mode of
+  `PaperBenchmarkDriver` (JVM only), which builds the stream as `Persistence` does and iterates it. For `unif10d_1000`, `o3_1024_alpha` and
+  `cyclooctane_alpha` TDA4j is the only source, and the table says "single source (TDA4j's own count)".
+- **Cross-checks that ran:** TDA4j's `VietorisRips` stream has exactly the clique counts on three stand-in inputs (60 points at 0.4: 60/301/599/680;
+  a 48-point cloud in R^4: 78,758 cells; a 70 x 70 not-quite-symmetric matrix: 242,675); TDA4j's alpha stream has GUDHI's counts on 60 points in R^3
+  at no radius (60/354/566/271) and at 0.2 (60/220/218/67), on 200 points in R^2 and 50 in R^5, and the DQP backend agrees at 0.2.
+- **Scale, on stand-ins (4 cores, not the benchmark files):** 50,000 points on a Clifford torus in R^4 at 0.15, up to 3-simplices, 2.2 million edges
+  and 413 million 4-cliques in 1.8 s; 4,096 random 3 x 3 orthogonal matrices at 1.4, up to 4-simplices, 292 million 5-cliques in 0.12 s. The real counts
+  come from the server; I cannot say yet that every Vietoris-Rips case finishes, only that these sizes do.
+- **TDA4j's stream is slow to iterate:** about 8,000 cells per second (78,758 cells in 9 s, 242,675 in 33 s, one JVM each, JIT warm-up included), which
+  is why the cross-check stops at `--cross-check-max` 3e5. Not an A/B measurement, and not what the engines use (the packed Ripser engine does not
+  build the stream); unexamined.
+- **Open:** the `sweep_alpha.py` cells (the cube draws) have no count yet; the Scala.js twin has none (the count does not depend on the platform);
+  the real data of the cases was not available here (`bench.py prepare` downloads it), so no real count was produced in this session. #135.
