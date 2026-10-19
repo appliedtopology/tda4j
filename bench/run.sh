@@ -3,7 +3,7 @@
 # See bench/README.md. Idempotent: re-running skips what is already built or downloaded.
 #
 #   bench/run.sh setup [tool...]    build/install every tool into $WORKDIR, or only the named ones:
-#                                   python tda4j tda4j-js ripser julia javaplex
+#                                   python tda4j tda4j-js ripser julia javaplex dipha phat eirene
 #   bench/run.sh prepare            download and generate the data sets into $WORKDIR/data
 #   bench/run.sh run [bench.py run options...]   e.g. --tasks vr --fields 2,17 --timeout 3600
 #   bench/run.sh all [options...]   setup + prepare + run
@@ -18,7 +18,9 @@
 # Environment (all optional):
 #   WORKDIR        scratch space for tools, data and results (default: ./bench-work)
 #   PYTHON         python3 to build the venv from (default: python3)
-#   JULIA          julia binary; Ripserer.jl is skipped if unset and `julia` is not on PATH
+#   JULIA          julia binary; Ripserer.jl and Eirene.jl are skipped if unset and `julia` is not on PATH
+#   MPIEXEC, MPIEXEC_FLAGS   how `dipha-mt` is launched (default: mpiexec, and for Open MPI --oversubscribe, plus
+#                  --allow-run-as-root as root); DIPHA needs an MPI implementation with mpicxx and cmake
 #   JAVAPLEX_JAR   a JavaPlex 4.x jar; JavaPlex is skipped if unset
 #   NODE           node binary for the Scala.js build of TDA4j (20.16 or newer; default: node on PATH); tda4j-js is
 #                  skipped if there is none
@@ -64,6 +66,48 @@ setup_julia() {
     echo "$julia" > "$TOOLS/julia.path"
   else
     echo "WARNING: Ripserer.jl setup failed; it will be reported as missing"; rm -f "$TOOLS/julia.path"
+  fi
+}
+
+setup_dipha() {
+  log "DIPHA (MPI) and make_phat, which writes DIPHA's Vietoris-Rips complex as a PHAT boundary matrix"
+  if ! command -v mpicxx >/dev/null || ! command -v cmake >/dev/null; then
+    echo "WARNING: DIPHA needs mpicxx (apt install libopenmpi-dev openmpi-bin) and cmake: dipha, dipha-mt, phat and phat-dual will be reported as missing"
+    return
+  fi
+  if [ ! -d "$TOOLS/dipha" ]; then git clone https://github.com/DIPHA/dipha.git "$TOOLS/dipha"; fi
+  (cd "$TOOLS/dipha" && git checkout --quiet 0b874769fbd092c07a12cebc2459adb02117c2fd)
+  mkdir -p "$TOOLS/dipha/build"
+  (cd "$TOOLS/dipha/build" && cmake .. && make -j"$(nproc)" dipha) \
+    || { echo "WARNING: DIPHA did not build; it will be reported as missing"; return; }
+  mpicxx -O3 -DNDEBUG -std=c++11 -I"$TOOLS/dipha/include" -I"$TOOLS/dipha/externals" \
+    -o "$TOOLS/make_phat" "$BENCH/workers/make_phat.cpp" \
+    || echo "WARNING: make_phat did not build; phat will be reported as missing"
+}
+
+setup_phat() {
+  log "PHAT (reduction of a prebuilt boundary matrix)"
+  if ! command -v cmake >/dev/null; then echo "WARNING: PHAT needs cmake: phat and phat-dual will be reported as missing"; return; fi
+  if [ ! -d "$TOOLS/phat" ]; then git clone https://bitbucket.org/phat-code/phat.git "$TOOLS/phat"; fi
+  (cd "$TOOLS/phat" && git checkout --quiet a74705e4628e447084d47dbf13a16dfb6d2ebd9a)
+  mkdir -p "$TOOLS/phat/build"
+  (cd "$TOOLS/phat/build" && cmake .. && make -j"$(nproc)" phat) \
+    || echo "WARNING: PHAT did not build; it will be reported as missing"
+}
+
+setup_eirene() {
+  local julia="${JULIA:-$(command -v julia || true)}"
+  if [ -z "$julia" ]; then echo "julia not found: Eirene will be reported as missing"; return; fi
+  log "Eirene.jl ($julia): GitHub master at a pinned commit (1.4.0)"
+  # The registered Eirene (1.0.0 to 1.3.6) cannot be resolved on Julia 1.10: its CSV and DataFrames bounds exclude each
+  # other's current versions. The repository's master (1.4.0, compat julia = "1") installs and loads.
+  mkdir -p "$TOOLS/eirene"
+  if "$julia" --project="$TOOLS/eirene" -e 'using Pkg; Pkg.add(url="https://github.com/Eetion/Eirene.jl", rev="16622d0aa1d7237895919e7fbdc1e8a6196425ab"); Pkg.precompile(); using Eirene' \
+     && "$julia" --project="$TOOLS/eirene" "$BENCH/workers/eirene_worker.jl" \
+          task=vr input="$BENCH/smoke-points.txt" dim=1 p=2 warmup=0 trials=1 >/dev/null; then
+    echo "$julia" > "$TOOLS/eirene.path"
+  else
+    echo "WARNING: Eirene setup failed; it will be reported as missing"; rm -f "$TOOLS/eirene.path"
   fi
 }
 
@@ -178,6 +222,12 @@ export_env() {
   if [ -s "$TOOLS/julia.path" ]; then
     export JULIA="$(cat "$TOOLS/julia.path")" RIPSERER_PROJECT="$TOOLS/julia"
   fi
+  if [ -s "$TOOLS/eirene.path" ]; then
+    export JULIA="${JULIA:-$(cat "$TOOLS/eirene.path")}" EIRENE_PROJECT="$TOOLS/eirene"
+  fi
+  [ -x "$TOOLS/dipha/build/dipha" ] && export DIPHA_BIN="$TOOLS/dipha/build/dipha"
+  [ -x "$TOOLS/make_phat" ] && export MAKE_PHAT_BIN="$TOOLS/make_phat"
+  [ -x "$TOOLS/phat/build/phat" ] && export PHAT_BIN="$TOOLS/phat/build/phat"
   if [ -s "$TOOLS/javaplex.path" ]; then
     export JAVAPLEX_JAR="$(cat "$TOOLS/javaplex.path")" JAVAPLEX_BUILD="$TOOLS/javaplex-build"
   fi
@@ -189,7 +239,7 @@ case "$cmd" in
   # TDA4j first: the optional tools after it only warn when they fail.
   setup)
     components=("$@")
-    if [ ${#components[@]} -eq 0 ]; then components=(python tda4j tda4j-js ripser julia javaplex); fi
+    if [ ${#components[@]} -eq 0 ]; then components=(python tda4j tda4j-js ripser julia javaplex dipha phat eirene); fi
     for component in "${components[@]}"; do
       case "$component" in
         python) setup_python ;;
@@ -198,7 +248,10 @@ case "$cmd" in
         ripser) setup_ripser ;;
         julia) setup_julia ;;
         javaplex) setup_javaplex ;;
-        *) echo "unknown component '$component' (python tda4j tda4j-js ripser julia javaplex)"; exit 2 ;;
+        dipha) setup_dipha ;;
+        phat) setup_phat ;;
+        eirene) setup_eirene ;;
+        *) echo "unknown component '$component' (python tda4j tda4j-js ripser julia javaplex dipha phat eirene)"; exit 2 ;;
       esac
     done
     ;;

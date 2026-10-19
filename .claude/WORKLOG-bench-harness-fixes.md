@@ -273,3 +273,47 @@ estimate, so a count that does not finish is a row that says so (vertices, edges
   was wrong and is corrected; whether "sphere3" in the Ripser paper means the 3 coordinates or the 3-sphere I did not look up.
 - **Open:** the `sweep_alpha.py` cells (the cube draws) have no count yet; the Scala.js twin has none (the count does not depend on the platform).
   The counts above come from this sandbox's copy of the data; `--verify` on the server says whether its files are the same. #135.
+
+## Sixth addendum (2026-10-19): DIPHA, PHAT and Eirene
+
+The project lead asked for the three unless there was a compelling reason against. There is none against DIPHA or Eirene; PHAT is a different kind of
+tool, and the rows say so. Everything below was built and run in this sandbox (Ubuntu 24.04, 4 cores, OpenMPI 4.1.6, Julia 1.10.5).
+
+- **DIPHA** (commit `0b87476`): the Ripser paper's own Dockerfile runs it (`--dual --upper_dim dim + 1`) on sphere_3_192 and o3_1024 only; the o3_4096 and dragon stages
+  are commented out there. Z/2 only. Its Vietoris-Rips input is a sparse distance matrix with the threshold in it, written once by `bench/dipha_io.py` (SciPy's
+  `cKDTree`, both ends of each edge, a relative margin of 1e-9) and not timed. **Its filtration value is half the largest distance of a simplex** (`max / 2` in
+  `sparse_rips_complex.h` and `full_rips_complex.h`), so the bars are doubled on reading. `--upper_dim D` keeps the cells of dimension up to and including D (the
+  README says "the first D dimensions"; the code uses `breakpoints[upper_dim + 1]`), and the diagram omits the essential classes of that top dimension. Essential classes
+  are stored with the dimension `-d - 1` and the death `max_value`. A second row runs it under `mpiexec` with a rank per core; the memory of a job of several
+  processes is the sum of the ranks' VmHWM (`tree_hwm_mb`, an upper bound, ranks peak at different times). Open MPI 4's `mpiexec --version` says `OpenRTE`, which the
+  flavour check had to learn: a container needs `--allow-run-as-root` and a rank per hardware thread `--oversubscribe`.
+- **DIPHA's cubical input is the V-construction**, each cell taking the max of its vertex values (`weighted_cubical_complex.h`). The plan listed "DIPHA (T)" among the
+  cubical comparators; that was wrong and is corrected. It runs Vietoris-Rips only.
+- **Eirene**: Z/2 only (every persistence routine is `persistf2...`). The registered package (1.0.0 to 1.3.6) cannot be installed on Julia 1.10: its CSV compat
+  (up to 0.7.10) forces DataFrames up to 0.22.7, which SortingAlgorithms excludes. The repository's master (1.4.0, `julia = "1"`, last commit 2025-01-28) installs, precompiles
+  and loads, so `setup eirene` pins it by commit; Pkg warns that precompilation of Eirene itself is skipped for a circular dependency through its DataFrames and CSV
+  extensions, and the first call in a process compiles (about 7 s). The `pc` model takes the points as columns; values are distances, no halving. `eirene` is
+  `record="none"` (the Ripser paper's runs), `eirene-cycles` is `record="cyclerep"` and reads `classrep` for every bar. Eirene is not abandoned (the repository is
+  maintained); its author's newer system is OAT, which is already a row.
+- **PHAT** (commit `a74705e`): reduces a filtered boundary matrix and knows no complex, Z/2 only, no representatives. A fair row needs the matrix made by something else;
+  `workers/make_phat.cpp` is DIPHA's `create_phat_filtration` extended to write the filtration values and dimensions, so PHAT reduces DIPHA's complex in DIPHA's order.
+  The rows are `kernel` rows (`phat` twist with bit-tree pivot columns, `phat-dual` on the dual): excluded from "best other", marked in the summary, skipped above
+  `--explicit-max-cells` (1e8 cells, by the reference counts). Vietoris-Rips only; a T-construction matrix for the cubical cases is not written.
+- **Agreement:** all of them agree with ripser.cpp at p = 2 (distance at most 5.0e-6, the float32 error of the reference; GUDHI agrees to 0 for DIPHA at 1 and 3 ranks,
+  Eirene in both variants, PHAT twist and dual, in the unit tests). At p = 17 ripser.cpp finds 178 classes in degree 2 of o3_1024 against 180 at p = 2: the field matters
+  there, and the Z/2-only rows are refused at p = 17 (`only_p`, status `unsupported`, reason "Z/2 coefficients only").
+- **Measurements, one run each in a noisy 4-core sandbox, not for the paper** (cases from `bench.py prepare`; warm medians; ripser.cpp for scale):
+
+  | case (cells) | ripser.cpp | dipha | dipha-mt (4 ranks) | phat / phat-dual (reduction only) | eirene |
+  |---|---|---|---|---|---|
+  | sphere3_48 (136 k) | 0.011 s | 0.71 s | | 0.16 s / 0.065 s | 0.019 s (cold 13 s) |
+  | sphere3_96 (2.5 M) | 0.08 s | 8.0 s, 336 MB | 4.1 s, 478 MB | 5.1 s / 1.0 s | 0.49 s, 851 MB (cold 16 s) |
+  | o3_1024 (10.6 M) | 1.8 s, 14 MB | 47.5 s, 1381 MB | 29.5 s, 1576 MB | 15.5 s / 10.8 s | |
+  | random16 (15.8 M) | 6.0 s, 83 MB | | | | 5.2 s, 2477 MB (with cycles 17.5 s) |
+  | sphere3_192 (47.9 M) | 0.71 s | 236 s, 5.6 GB | | not run (above the cap) | |
+  | fractal-r (2.2 billion) | | `std::bad_alloc` on 15 GB | | | |
+
+  `make_phat` took 46 s for o3_1024 beforehand. Eirene's cold times are Julia's start and compilation. Eirene beating ripser.cpp on random16 (50 points in R^16, degree 7)
+  is one measurement.
+- **Not done / open (#139):** the three tools at the scale of the real suite (DIPHA and Eirene on the largest cases, the cap for PHAT); a T-construction boundary matrix to put
+  PHAT and DIPHA on the cubical cases; per-rank memory for `dipha-mt` is an upper bound.

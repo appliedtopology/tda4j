@@ -12,16 +12,17 @@ quantified slowdown", so the output is that slowdown, per case and as a geometri
 # on the compute server, from the repository root
 export WORKDIR=/scratch/tda4j-bench        # tools, data and results go here (default ./bench-work)
 export JAVAPLEX_JAR=/path/to/javaplex.jar  # optional: TDA4j's predecessor
-# julia on PATH (or JULIA=/path/to/julia) adds Ripserer.jl
+# julia on PATH (or JULIA=/path/to/julia) adds Ripserer.jl and Eirene.jl
+# an MPI implementation with mpicxx (apt install libopenmpi-dev openmpi-bin) and cmake add DIPHA and PHAT
 # node 20.16 or newer on PATH (or NODE=/path/to/node) adds the Scala.js build of TDA4j
 
-bench/run.sh setup        # venv + pip tools, TDA4j (JVM), TDA4j (npm package), ripser.cpp (Z/2 and coefficient builds), Ripserer.jl, JavaPlex
+bench/run.sh setup        # venv + pip tools, TDA4j (JVM), TDA4j (npm package), ripser.cpp (Z/2 and coefficient builds), Ripserer.jl, JavaPlex, DIPHA, PHAT, Eirene.jl
 bench/run.sh prepare      # downloads the Ripser-paper data, generates the synthetic sets (seeded)
 bench/run.sh run --fields 2,17 --timeout 3600 --jvm-heap 32g
 ```
 
 Re-running is safe: `setup` and `prepare` skip what exists, and every `run` writes a new results directory.
-`bench/run.sh setup tda4j-js` redoes one component (`python tda4j tda4j-js ripser julia javaplex`), for example after
+`bench/run.sh setup tda4j-js` redoes one component (`python tda4j tda4j-js ripser julia javaplex dipha phat eirene`), for example after
 changing the library: the JVM tool uses the compiled classes, the JavaScript one the npm package, and both are rebuilt
 by their own `setup` step. Run the steps one after the other: they use sbt, and two sbt processes on one checkout
 corrupt each other's builds.
@@ -223,9 +224,13 @@ position (marked †).
 | `dionysus`, `dionysus-homology`, `dionysus-cocycles` | pip (`dionysus`) | Dionysus 2 on Vietoris–Rips only: `fill_rips`, then its cohomology algorithm (the fast one, so the main row), the clearing homology reduction, or cohomology with a representative cocycle read for every bar. float32. No alpha complex in the wheel (that needs CGAL), and `fill_freudenthal` is a lower-star filtration of the Freudenthal triangulation, not the T-construction of the cubical cases |
 | `oat`, `oat-cycles` | pip (`oat_python`) | OpenAppliedTopology (Rust), Vietoris–Rips only: a U-match decomposition of the boundary matrix; the second returns a cycle representative for every bar. It computes **over the rationals** whatever `p` is (no modulus), so a row at `p = 2` or `17` can differ from the reference where there is `p`-torsion; `summary.md` says so under "Agreement notes" |
 | `ripserer`, `ripserer-involuted` | Julia | the second asks for cycles (involuted), like TDA4j's default |
+| `eirene`, `eirene-cycles` | Julia (`setup eirene`) | Eirene.jl 1.4.0 (GitHub master at a pinned commit: the registered 1.0.0 to 1.3.6 cannot be resolved on Julia 1.10, their CSV and DataFrames bounds exclude each other), Vietoris–Rips, **Z/2 only**. `eirene` is `record="none"`, the barcode, as the Ripser paper's Dockerfile runs it; `eirene-cycles` is `record="cyclerep"` and reads a representative cycle for every bar |
+| `dipha`, `dipha-mt` | CMake + MPI (`setup dipha`) | DIPHA at a pinned commit, Vietoris–Rips, **Z/2 only**, always `--dual` as in the Ripser paper's Dockerfile, `--upper_dim dim + 1`. Its input is a sparse distance matrix with the threshold in it (`dipha_io.py`, written once into `data/dipha/` and not timed); its values are radii (half a distance), so the bars are doubled; the second row is `mpiexec -n <cores>`, reported but never the baseline, and its memory is the sum over the ranks. DIPHA's cubical input is the V-construction, not the T-construction of the cubical cases, so it runs only Vietoris–Rips |
+| `phat`, `phat-dual` | CMake (`setup phat`) | PHAT at a pinned commit reduces a prebuilt filtered boundary matrix over Z/2 (twist, bit-tree pivot columns; the second on the dual). It builds no complex: `make_phat` writes DIPHA's Vietoris–Rips complex as a boundary matrix beforehand (`data/phat/`, not timed), so these `kernel` rows time the reduction alone (reading the matrix, reducing, writing the pairs) and are never the baseline. A case above `--explicit-max-cells` (1e8, by `cells-reference.csv`) is not written out |
 | `javaplex` | `workers/JavaPlexWorker.java` | written against JavaPlex 4.x's API but **not yet compiled against a real jar** |
 
-TDA4j always returns a representative with every bar, while most of the others return bars only. `tda4j-cocycles`
+PHAT, DIPHA and the plain Eirene row return pairs or bars and no representative; `eirene-cycles`, `oat-cycles` and `dionysus-cocycles`
+read one for every bar. TDA4j always returns a representative with every bar, while most of the others return bars only. `tda4j-cocycles`
 against `ripser.cpp` is the like-for-like comparison. `tda4j` against `ripserer-involuted`, `oat-cycles` compares cycles
 with cycles, and `tda4j-cocycles` against `dionysus-cocycles` cocycles with cocycles.
 

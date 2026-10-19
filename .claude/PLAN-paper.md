@@ -370,7 +370,12 @@ Planning document for the project lead. Nothing here is implemented.
     from the reference where there is torsion);
   - Dionysus 2 (in the harness as `dionysus`, `dionysus-homology`, `dionysus-cocycles`; Vietoris–Rips only, float32);
   - JavaPlex, mandatory as the predecessor;
-  - Eirene, optional, already in the harness.
+  - Eirene (in the harness since 2026-10-19 as `eirene`, `eirene-cycles`: Z/2 only; GitHub master 1.4.0, since the registered package
+    cannot be resolved on Julia 1.10);
+  - DIPHA (in the harness as `dipha`, `dipha-mt`: Z/2 only, one rank and one rank per core; the Ripser paper's own Dockerfile runs it on
+    sphere_3_192 and o3_1024 only, the o3_4096 and dragon stages are commented out);
+  - PHAT, as `phat` and `phat-dual`: a **kernel** row. It reduces a prebuilt boundary matrix and builds no complex, so it times the
+    reduction alone, is never the baseline, and runs only the cases whose complex is written out (`--explicit-max-cells`).
 - **Datasets:** the seven cases in the Ripser-paper Dockerfile, with its exact flags (**verified**):
 
   | case | flags |
@@ -419,7 +424,8 @@ Planning document for the project lead. Nothing here is implemented.
 - **Comparators:**
   - CubicalRipser, in its T mode (check the flag or module in the pinned version);
   - GUDHI `CubicalComplex` with `top_dimensional_cells`;
-  - DIPHA (T);
+  - DIPHA, which is V-construction only (`weighted_cubical_complex.h` gives each cell the max of its vertex values; this line said T): a T run would need
+    the cells written as DIPHA's explicit `WEIGHTED_BOUNDARY_MATRIX`, which the harness does not do;
   - HomCloud (with representatives);
   - Ripserer.jl;
   - Flash Cubical, which is V only. A fair comparison needs a small V-construction loader on our side: vertex values,
