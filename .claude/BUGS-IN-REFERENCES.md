@@ -145,3 +145,32 @@ example or published number used `JVPTree` with such a `k`.
 **What tda4j did**: `VantagePointTree.nearest` is the first `k` of the stable sort by distance (a bounded max-heap searched
 with pruning on strict inequality), compared with a linear scan on Euclidean and non-Euclidean metrics in
 `VantagePointTreeSpec`. Not reported upstream.
+
+## jvptree 0.3.0 loses a point lying exactly on the radius, and answers some nearest-neighbour queries with the wrong points
+
+2026-10-20, from a CI failure of `VantagePointTreeOracleSpec` (`WORKLOG-vptree-oracle-flake.md`). `com.eatthepath:jvptree`
+0.3.0; both defects vary between builds of the same points, because the vantage points come from an unseeded
+`java.util.Random` per node. **Verified** (JVM, 2026-10-20), on the 8 x 8 integer lattice with Euclidean distance
+`sqrt(sum of squares)`:
+
+- **`getAllWithinDistance(q, radius)` loses a point whose computed distance is the radius.** 121 of 2,000 builds lost at
+  least one point (queries every third lattice point, radii `sqrt(0..20)`); in all 121 the lost point's computed distance
+  equals the radius exactly; no build returned a point outside the radius. Cause, checked inside 66 of 66 builds that
+  lost the point 30 for the query 39 at radius `sqrt(2)`: the node prunes its nearer child unless
+  `d(q, v) <= threshold + radius` (bytecode of `VPTreeNode.collectAllWithinDistance`: no allowance for rounding), and with
+  the vantage point (0,3) and threshold `sqrt(18)` the collinear points make `sqrt(32) > sqrt(18) + sqrt(2)` by one ulp.
+  Random point clouds do not trip it (0 mismatches in 500 builds of `VantagePointTreeOracleSpec`'s first example).
+- **`getNearestNeighbors(q, k)` can answer with `k` points that are not the `k` nearest** (the entry above has the
+  short answers). Lattice, k = 20 of 64: 43 of 2,000 builds, e.g. distances `3.0, 3.162` where the 19th and 20th nearest are
+  both `2.828`. Sweep over random clouds and lattices (261,120 queries): 4,101 short or wrong, none with k <= 16 (184,320
+  queries), the smallest failing k was 20.
+- **Not checked**: the cause of the wrong nearest-neighbour answers (a reading of `collectNearestNeighbors`, which prunes on
+  the distance to the farthest candidate so far with no test that `k` candidates were found, fits k above the leaf
+  capacity 16, but no patched build was run); behaviour on metrics other than Euclidean.
+
+**Consequence for tda4j**: none in shipped code (`VantagePointTree` replaced jvptree in `src/main`); the JVM-only oracle spec was
+flaky about one run in twelve until it was judged by a linear scan.
+
+**What tda4j did**: `VantagePointTreeOracleSpec` asserts `VantagePointTree` against the linear scan and counts jvptree's
+defects instead of asserting them; `VantagePointTreeSpec` pins the one-ulp case against our own pruning slack. Not reported
+upstream.

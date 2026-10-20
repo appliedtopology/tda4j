@@ -50,6 +50,9 @@ inclusive, `nearest(k)` is the first `k` of the stable sort by distance (ties by
 balanced and deterministic, pruning slack `1e-12`; `VantagePointQuery` is its `SpatialQuery`. `MinimumEnclosingBall`:
 Wolfe's active-set method on the dual (Welzl is exponential in the boundary points), the radius IS the largest distance
 to the returned centre. `SimplexIndexing.binomial`: exact `Long`, `IllegalArgumentException` on overflow.
+`VantagePointTreeOracleSpec` (JVM) is judged by a linear scan, never by jvptree: jvptree 0.3.0 loses points exactly on the
+radius and gives wrong nearest neighbours from k = 20 (none seen up to 16) on some random builds, so its answers are counted, not asserted
+(`WORKLOG-vptree-oracle-flake.md`, `BUGS-IN-REFERENCES.md`); the one-ulp pruning case is pinned in `VantagePointTreeSpec`.
 
 **`maxFiltrationValue` defaults to `metricSpace.minimumEnclosingRadius`** (Ripser's own `enclosing_radius`) in the
 Enumerating/Ripser/Inorder/Incremental streams and both Ripser engines. Pass `Some(Double.PositiveInfinity)` for
