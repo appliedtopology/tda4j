@@ -49,6 +49,10 @@ from typing import NamedTuple, Optional
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
+import dipha_io  # noqa: E402
+import phat_io  # noqa: E402
 RIPSER_BENCH = "https://raw.githubusercontent.com/Ripser/ripser-benchmark/master"
 ROADMAP = "https://raw.githubusercontent.com/n-otter/PH-roadmap/master/data_sets"
 # The cyclooctane conformations (6040 points in R^24; Martin, Thompson, Coutsias and Watson 2010), as JavaPlex's MATLAB
@@ -102,7 +106,8 @@ CASES = [
     ("unif2d_10000", "alpha", "unif2d_10000.txt", "points", 1, None),
     ("unif3d_1000", "alpha", "unif3d_1000.txt", "points", 2, None),
     ("unif3d_5000", "alpha", "unif3d_5000.txt", "points", 2, None),
-    # The two point sets below are not in general position (192 points on S^3 are cospherical; the dragon is a scan),
+    # The two point sets below are not in general position (the 192 points of sphere_3_192_points.dat lie on the unit sphere of
+    # R^3, three coordinates each, and are cospherical; the dragon is a scan),
     # so each tool triangulates the degenerate cells its own way and GUDHI is no ground truth: kept, flagged, and
     # paired with a jittered copy (`_gp`, general position) that all tools read instead.
     Case("dragon2000_alpha", "alpha", "dragon_2000.txt", "points", 2, degenerate=True),
@@ -125,6 +130,19 @@ CASES = [
 ]
 CASES = [c if isinstance(c, Case) else Case(*c) for c in CASES]
 
+# One reference count of the cells of each case's complex, made once by count_cells.py --reference and checked in: a
+# benchmark run never counts. `summarize` joins it as the `cells` column (blank for a case without a count).
+CELLS_REFERENCE = HERE / "cells-reference.csv"
+
+
+def cells_reference():
+    """{case: total cells} from CELLS_REFERENCE; empty when there is no such file."""
+    try:
+        with open(CELLS_REFERENCE) as f:
+            return {r["case"]: r["total"] for r in csv.DictReader(f)}
+    except OSError:
+        return {}
+
 # ---------------------------------------------------------------------------------------------------------
 # Tools: (name, kind, task, options). `multithreaded` rows are reported but never count as the
 # single-threaded baseline. Reference tool per task is used for agreement.
@@ -133,13 +151,39 @@ TOOLS = [
     ("tda4j", "tda4j", "vr", {"engine": "auto", "reps": "cycles"}),
     ("tda4j-cocycles", "tda4j", "vr", {"engine": "auto", "reps": "cocycles"}),
     ("ripser.cpp", "ripser", "vr", {}),
+    # DIPHA (Bauer, Kerber and Reininghaus; MPI): Z/2 only, always the dualized algorithm (as in the Ripser paper's
+    # Dockerfile). Its input is a sparse distance matrix with the threshold in it, made before the run and not timed
+    # (dipha_io.py); `dipha-mt` is the same under mpiexec with a rank per core, and its memory is the sum over the ranks.
+    ("dipha", "dipha", "vr", {"only_p": 2}),
+    ("dipha-mt", "dipha", "vr", {"only_p": 2, "multithreaded": True, "ranks": "ALL"}),
+    # PHAT (Bauer, Kerber, Reininghaus and Wagner) reduces a prebuilt filtered boundary matrix, over Z/2: it builds no complex.
+    # The matrix is DIPHA's Vietoris-Rips complex written beforehand by make_phat (not timed), so a `kernel` row times the
+    # reduction alone (reading the matrix, reducing it, writing the pairs) and is never the baseline another tool is measured
+    # against. `phat` is its default (twist, bit-tree pivot columns); `phat-dual` is the same on the dual (cohomology).
+    ("phat", "phat", "vr", {"only_p": 2, "kernel": True}),
+    ("phat-dual", "phat", "vr", {"only_p": 2, "kernel": True, "dualize": True}),
     ("ripser.py", "py", "vr", {}),
     ("giotto-ph-1t", "py", "vr", {"pytool": "giotto-ph", "threads": "1"}),
     ("giotto-ph-mt", "py", "vr", {"pytool": "giotto-ph", "threads": "ALL", "multithreaded": True}),
     ("gudhi", "py", "vr", {}),
     ("gudhi-collapse", "py", "vr", {"pytool": "gudhi", "variant": "collapse"}),
+    # Dionysus 2 (float32): its cohomology algorithm is the fast one and the default row; `-homology` is the clearing
+    # reduction; `-cocycles` also reads a representative cocycle for every bar. A `slower_than` variant is not run on a
+    # case where the named tool timed out or ran out of memory: that would only spend the timeout again.
+    ("dionysus", "py", "vr", {"variant": "cohomology"}),
+    ("dionysus-homology", "py", "vr", {"pytool": "dionysus", "variant": "homology", "slower_than": "dionysus"}),
+    ("dionysus-cocycles", "py", "vr", {"pytool": "dionysus", "variant": "cocycles", "slower_than": "dionysus"}),
+    # OAT (OpenAppliedTopology, Rust) computes over the rationals, whatever the field of the run: it takes no modulus.
+    # `oat-cycles` also returns a cycle representative for every bar.
+    ("oat", "py", "vr", {"char0": True}),
+    ("oat-cycles", "py", "vr", {"pytool": "oat", "variant": "cycles", "char0": True, "slower_than": "oat"}),
     ("ripserer", "julia", "vr", {"variant": "cohomology"}),
     ("ripserer-involuted", "julia", "vr", {"variant": "involuted"}),
+    # Eirene (Henselman-Petrusek; Julia): Z/2 only. `eirene` is `record="none"`, the barcode, as the Ripser paper's Dockerfile
+    # runs it; `eirene-cycles` is `record="cyclerep"` and also reads a representative cycle for every bar.
+    ("eirene", "julia", "vr", {"julia_tool": "eirene", "variant": "bars", "only_p": 2}),
+    ("eirene-cycles", "julia", "vr",
+     {"julia_tool": "eirene", "variant": "cycles", "only_p": 2, "slower_than": "eirene"}),
     ("javaplex", "javaplex", "vr", {}),
     ("tda4j", "tda4j", "cubical", {"engine": "auto", "reps": "cycles"}),
     ("tda4j-cohomology", "tda4j", "cubical", {"engine": "cohomology", "reps": "cocycles"}),
@@ -175,6 +219,8 @@ TOOLS += [
      {"engine": "auto", "reps": "cycles", "backend": "dqp", "needs_radius": True}),
 ]
 REFERENCE = {"vr": "ripser.cpp", "cubical": "gudhi", "alpha": "gudhi"}
+CHARACTERISTIC_ZERO = {name for name, _, _, opts in TOOLS if opts.get("char0")}
+KERNEL_TOOLS = {name for name, _, _, opts in TOOLS if opts.get("kernel")}
 
 
 def jvm_twin(name):
@@ -347,7 +393,23 @@ def vm_hwm_mb(pid):
     return None
 
 
-def run_proc(cmd, timeout, log_prefix, address_space_mb=None):
+def tree_hwm_mb(pid):
+    """VmHWM summed over the process and all its descendants: the memory of a job of several processes (MPI ranks).
+    The ranks' peaks need not coincide, so this bounds the total from above."""
+    total, todo = 0.0, [pid]
+    while todo:
+        current = todo.pop()
+        total += vm_hwm_mb(current) or 0.0
+        try:
+            for task in os.listdir(f"/proc/{current}/task"):
+                with open(f"/proc/{current}/task/{task}/children") as f:
+                    todo += [int(c) for c in f.read().split()]
+        except OSError:
+            pass
+    return total or None
+
+
+def run_proc(cmd, timeout, log_prefix, address_space_mb=None, tree=False):
     """Runs cmd in its own session (killed as a group at `timeout`); returns a `Proc`. `address_space_mb` caps the
     process's virtual memory (RLIMIT_AS), so a runaway C++ allocation ends in `std::bad_alloc` (status `oom`) and not in
     the kernel's out-of-memory killer; not for a JVM or Node, which reserve far more address space than they use."""
@@ -364,7 +426,7 @@ def run_proc(cmd, timeout, log_prefix, address_space_mb=None):
         peak = 0.0
         status, rusage, timed_out = None, None, False
         while True:
-            hwm = vm_hwm_mb(proc.pid)
+            hwm = tree_hwm_mb(proc.pid) if tree else vm_hwm_mb(proc.pid)
             if hwm:
                 peak = max(peak, hwm)
             pid, st, ru = os.wait4(proc.pid, os.WNOHANG)
@@ -399,6 +461,22 @@ def last_json(text):
     return None
 
 
+# Tools that are run as a binary, once per trial, and print or write their result for the harness to read.
+BINARY_KINDS = ("ripser", "dipha", "phat")
+
+
+def parse_binary_output(kind, proc, bars_path, case, matrix=None):
+    """Writes the bars of a finished binary tool to `bars_path` (`dim<TAB>birth<TAB>death`); returns the count per degree.
+    `matrix` is the boundary matrix PHAT reduced."""
+    if kind == "ripser":
+        return parse_ripser_output(proc.text, bars_path)
+    if kind == "dipha":
+        return dipha_io.diagram_to_bars(Path(bars_path).with_suffix(".diagram"), bars_path, case.dim)
+    if kind == "phat":
+        return phat_io.pairs_to_bars(Path(bars_path).with_suffix(".pairs"), matrix, bars_path, case.dim)
+    raise ValueError(kind)
+
+
 def parse_ripser_output(text, out_path):
     """ripser.cpp prints `persistence intervals in dim k:` then ` [b,d)` / ` [b, )` lines."""
     dim, rows = None, []
@@ -429,11 +507,16 @@ def available(kind, opts, python):
     if kind == "ripser":
         return bool(env.get("RIPSER_BIN"))
     if kind == "julia":
-        return bool(env.get("JULIA")) and bool(env.get("RIPSERER_PROJECT"))
+        return bool(env.get("JULIA")) and bool(env.get(JULIA_TOOLS[opts.get("julia_tool", "ripserer")][0]))
+    if kind == "phat":
+        return bool(env.get("PHAT_BIN")) and bool(env.get("MAKE_PHAT_BIN"))
+    if kind == "dipha":
+        return bool(env.get("DIPHA_BIN")) and (not opts.get("ranks") or shutil.which(env.get("MPIEXEC", "mpiexec")) is not None)
     if kind == "javaplex":
         return bool(env.get("JAVAPLEX_JAR")) and bool(env.get("JAVAPLEX_BUILD"))
     if kind == "py":
-        mod = {"ripser.py": "ripser", "giotto-ph": "gph", "gudhi": "gudhi", "cripser": "cripser"}[opts["pytool"]]
+        mod = {"ripser.py": "ripser", "giotto-ph": "gph", "gudhi": "gudhi", "cripser": "cripser",
+               "dionysus": "dionysus", "oat": "oat_python"}[opts["pytool"]]
         r = subprocess.run([python, "-c", f"import {mod}"], capture_output=True)
         return r.returncode == 0
     return False
@@ -466,12 +549,27 @@ def command(kind, name, opts, case, data, p, threshold, warmup, trials, out, arg
             extra.append(f"threads={os.cpu_count() if opts['threads'] == 'ALL' else opts['threads']}")
         return [args.python, str(HERE / "workers" / "py_worker.py")] + extra + common
     if kind == "julia":
-        return ([os.environ["JULIA"], f"--project={os.environ['RIPSERER_PROJECT']}",
-                 str(HERE / "workers" / "ripserer_worker.jl"), f"variant={opts['variant']}"] + common)
+        project_variable, worker = JULIA_TOOLS[opts.get("julia_tool", "ripserer")]
+        return ([os.environ["JULIA"], f"--project={os.environ[project_variable]}",
+                 str(HERE / "workers" / worker), f"variant={opts['variant']}"] + common)
     if kind == "javaplex":
         cp = os.environ["JAVAPLEX_JAR"] + os.pathsep + os.environ["JAVAPLEX_BUILD"]
         return (["java"] + jvm_flags(args.jvm_heap, args.jvm_opts) + ["-cp", cp, "JavaPlexWorker",
                 f"divisions={args.javaplex_divisions}"] + common)
+    if kind == "dipha":
+        if threshold is None:
+            raise ValueError("dipha needs a threshold: its input is the sparse distance matrix under it")
+        source = data / "dipha" / f"{case.name}.t{threshold!r}.dipha"
+        dipha_io.prepare_input(lambda: np.loadtxt(data / fname, ndmin=2), fmt, threshold, source)
+        cmd = [os.environ["DIPHA_BIN"], "--dual", "--upper_dim", str(dim + 1), str(source), str(Path(out).with_suffix(".diagram"))]
+        if opts.get("ranks"):
+            ranks = os.cpu_count() if opts["ranks"] == "ALL" else int(opts["ranks"])
+            cmd = [os.environ.get("MPIEXEC", "mpiexec"), "-n", str(ranks)] + mpiexec_flags() + cmd
+        return cmd
+    if kind == "phat":
+        matrix = phat_matrix(case, data, threshold, fmt, fname, dim)
+        cmd = [os.environ["PHAT_BIN"], "--binary"] + (["--dualize"] if opts.get("dualize") else [])
+        return cmd + [str(matrix), str(Path(out).with_suffix(".pairs"))]
     if kind == "ripser":
         binary = os.environ["RIPSER_BIN"] if p == 2 else os.environ.get("RIPSER_COEFF_BIN", "")
         if not binary:
@@ -484,6 +582,40 @@ def command(kind, name, opts, case, data, p, threshold, warmup, trials, out, arg
             cmd += ["--modulus", str(p)]
         return cmd
     raise ValueError(kind)
+
+
+def phat_matrix(case, data, threshold, fmt, fname, dim):
+    """The filtered boundary matrix of a case for PHAT, made by make_phat from DIPHA's input unless it is there already
+    (untimed: the complex is built beforehand). Its path."""
+    if threshold is None:
+        raise ValueError("phat needs a threshold: its input is the complex under it")
+    source = data / "dipha" / f"{case.name}.t{threshold!r}.dipha"
+    dipha_io.prepare_input(lambda: np.loadtxt(data / fname, ndmin=2), fmt, threshold, source)
+    matrix = data / "phat" / f"{case.name}.t{threshold!r}.phat"
+    if not (matrix.exists() and Path(f"{matrix}.dims").exists()):
+        matrix.parent.mkdir(parents=True, exist_ok=True)
+        for stale in (matrix, Path(f"{matrix}.values"), Path(f"{matrix}.dims")):
+            stale.unlink(missing_ok=True)
+        subprocess.run([os.environ["MAKE_PHAT_BIN"], str(dim + 1), str(source), str(matrix)], check=True)
+    return matrix
+
+
+# The Julia tools: the environment variable holding the project each needs, and the worker script.
+JULIA_TOOLS = {"ripserer": ("RIPSERER_PROJECT", "ripserer_worker.jl"), "eirene": ("EIRENE_PROJECT", "eirene_worker.jl")}
+
+
+def mpiexec_flags():
+    """Options for mpiexec: MPIEXEC_FLAGS when set, else for Open MPI the two a benchmark needs (a rank per hardware
+    thread is more ranks than slots, and a container runs as root); other MPIs get none."""
+    if "MPIEXEC_FLAGS" in os.environ:
+        return os.environ["MPIEXEC_FLAGS"].split()
+    try:
+        version = subprocess.run([os.environ.get("MPIEXEC", "mpiexec"), "--version"], capture_output=True, text=True).stdout
+    except OSError:
+        return []
+    if "Open MPI" not in version and "OpenRTE" not in version:  # `mpiexec --version` says OpenRTE for Open MPI 4
+        return []
+    return ["--oversubscribe"] + (["--allow-run-as-root"] if os.geteuid() == 0 else [])
 
 
 def pairwise_distances(x, rows=None):
@@ -533,8 +665,10 @@ def ambient_dimension(case, data):
     return 0
 
 
-def skip_reason(opts, case, ambient, threshold):
+def skip_reason(opts, case, ambient, threshold, p=None):
     """Why a tool is not run on a case at all (recorded as `unsupported`), or None."""
+    if opts.get("only_p") and p is not None and p != opts["only_p"]:
+        return f"Z/{opts['only_p']} coefficients only"
     if opts.get("max_ambient") and ambient > opts["max_ambient"]:
         return f"ambient dimension {ambient} is above the backend's limit of {opts['max_ambient']}"
     if opts.get("needs_radius") and threshold is None:
@@ -625,7 +759,9 @@ def run(args):
     fields = [int(p) for p in args.fields.split(",")]
     runs_csv = out / "runs.csv"
     new = not runs_csv.exists()
+    cells = cells_reference()
     timed_out = {}  # (case, tool) -> the first field at which it timed out
+    gave_up = {}  # (case, tool) -> "timeout" or "oom", the first time it did
     with open(runs_csv, "a", newline="") as f:
         w = csv.DictWriter(f, fieldnames=RUNS_COLUMNS)
         if new:
@@ -654,9 +790,14 @@ def run(args):
                                     "status": "missing", "threshold": threshold})
                         f.flush()
                         continue
-                    why = skip_reason(opts, case, ambient, threshold)
+                    why = skip_reason(opts, case, ambient, threshold, p)
                     if why:
                         not_run("unsupported", why)
+                        continue
+                    explicit = cells.get(case.name)
+                    if kind == "phat" and explicit and int(explicit) > getattr(args, "explicit_max_cells", 1e8):
+                        not_run("unsupported", f"the explicit boundary matrix would have {int(explicit):,} cells "
+                                               f"(above --explicit-max-cells {getattr(args, 'explicit_max_cells', 1e8):,.0f})")
                         continue
                     earlier = timed_out.get((case.name, name))
                     if earlier is not None and not args.rerun_timeouts:
@@ -664,8 +805,17 @@ def run(args):
                         # every tool of the first run), and a timeout costs --timeout seconds.
                         not_run("timeout", f"not run: the same computation timed out at p={earlier}")
                         continue
-                    if run_one(w, f, data, out, case, p, threshold, name, kind, opts, args) == "timeout":
+                    faster = opts.get("slower_than")
+                    if faster and (case.name, faster) in gave_up and not args.rerun_timeouts:
+                        outcome = gave_up[(case.name, faster)]
+                        not_run(outcome, f"not run: {faster}, the faster variant, "
+                                         f"{'timed out' if outcome == 'timeout' else 'ran out of memory'} on this case")
+                        continue
+                    status = run_one(w, f, data, out, case, p, threshold, name, kind, opts, args)
+                    if status == "timeout":
                         timed_out.setdefault((case.name, name), p)
+                    if status in ("timeout", "oom"):
+                        gave_up.setdefault((case.name, name), status)
 
 
 def run_one(w, f, data, out, case, p, threshold, name, kind, opts, args):
@@ -691,7 +841,7 @@ def run_one(w, f, data, out, case, p, threshold, name, kind, opts, args):
         print(f"    {mode:4s} {proc.status:10s} wall={wall:.2f}s median={med if med == '' else f'{med:.3f}s'} "
               f"rss={rss:.0f}MB {info} {proc.reason}".rstrip(), flush=True)
 
-    if kind == "ripser":
+    if kind in BINARY_KINDS:
         cmd = command(kind, name, opts, case, data, p, threshold, 0, 1, bars_path, args)
         if cmd is None:
             record("cold", Proc("missing", 0, 0, "", "no coefficient build for p != 2"))
@@ -700,13 +850,19 @@ def run_one(w, f, data, out, case, p, threshold, name, kind, opts, args):
         for t in range(max(1, args.trials)):
             if walls and walls[0] > args.warm_cap:
                 break  # one long run is enough; see --warm-cap
-            last = run_proc(cmd, args.timeout, out / "logs" / f"{tag}__{t}")
+            for result in (".diagram", ".pairs"):
+                Path(bars_path).with_suffix(result).unlink(missing_ok=True)  # DIPHA does not overwrite cleanly
+            last = run_proc(cmd, args.timeout, out / "logs" / f"{tag}__{t}", tree=bool(opts.get("ranks")))
             rss_max = max(rss_max, last.rss_mb)
             if last.status != "ok":
                 record("cold", last)
                 return last.status
             if t == 0:
-                counts = parse_ripser_output(last.text, bars_path)
+                try:
+                    counts = parse_binary_output(kind, last, bars_path, case, cmd[-2] if kind == "phat" else None)
+                except (OSError, ValueError) as e:
+                    record("cold", Proc("error(output)", last.wall, last.rss_mb, "", f"cannot read the result: {e}"))
+                    return "error(output)"
                 record("cold", last, times=[last.wall], bars=counts)
             walls.append(last.wall)
         record("warm", last, "median of cold runs", walls, counts, wall=sum(walls), rss=rss_max)
@@ -788,6 +944,7 @@ def summarize(out: Path, bottleneck=None):
     for r in rows:
         by.setdefault((r["case"], r["p"], r["tool"]), {})[r["mode"]] = r
     summary = []
+    cells = cells_reference()
     for (cname, p, tool), modes in sorted(by.items()):
         cold, warm = modes.get("cold", {}), modes.get("warm", {})
         first = cold or warm or next(iter(modes.values()))
@@ -801,11 +958,14 @@ def summarize(out: Path, bottleneck=None):
             dist, note = agreement(mine, theirs, max_dim, bottleneck)
         thr = cold.get("threshold") or ""
         tol = tolerance(thr, tool, divisions)
+        if tool in CHARACTERISTIC_ZERO and dist is not None and dist > tol:
+            # Its barcode is over the rationals, the reference's over F_p: the two differ where there is p-torsion.
+            note = f"{note + '; ' if note else ''}computed over the rationals, the reference over F_{p}"
         measured = [m for m in modes.values() if m.get("maxrss_mb")]
         heaps = [float(m["heap_peak_mb"]) for m in modes.values() if m.get("heap_peak_mb")]
         olds = [float(m["old_peak_mb"]) for m in modes.values() if m.get("old_peak_mb")]
         summary.append({
-            "case": cname, "task": task, "p": p, "tool": tool,
+            "case": cname, "task": task, "p": p, "tool": tool, "cells": cells.get(cname, ""),
             "status": warm.get("status") or cold.get("status") or first["status"],
             "cold_s": cold.get("wall_s", ""), "warm_median_s": warm.get("median_s", ""),
             "maxrss_mb": max([float(m["maxrss_mb"]) for m in measured] or [0]),
@@ -834,13 +994,22 @@ def summarize(out: Path, bottleneck=None):
              "`missing` (not installed). Peak MB is the kernel's peak RSS of the process (`≤` where it could only be "
              "read from `ru_maxrss`, an upper bound); heap MB is the JVM's peak use of its heap pools. "
              "† the point set is degenerate (not in general position), so the reference is not ground truth.", ""]
-    lines += ["| case | p | tool | status | cold s | warm s | peak MB | heap MB | bars (> tol) | Δ vs reference | agrees |",
-              "|---|---|---|---|---|---|---|---|---|---|---|"]
+    kernels = sorted({s["tool"] for s in summary if s["tool"] in KERNEL_TOOLS and s["status"] != "missing"})
+    if kernels:
+        lines[-1:] = ["", f"{', '.join(kernels)} time the reduction of a boundary matrix built beforehand: the complex is not "
+                      "timed, so these rows are never the baseline the other tools are measured against.", ""]
+    zero = sorted({s["tool"] for s in summary if s["tool"] in CHARACTERISTIC_ZERO and s["status"] != "missing"})
+    if zero:
+        lines[-1:] = ["", f"{', '.join(zero)} compute over the rationals whatever the p of the row: a difference from the "
+                      "reference (over F_p) can be p-torsion, and is noted under \"Agreement notes\".", ""]
+    lines += ["| case | p | tool | status | cold s | warm s | peak MB | heap MB | bars (> tol) | Δ vs reference | agrees | cells |",
+              "|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for s in summary:
         rss = f"{'≤' if s['rss_src'] == 'rusage' else ''}{s['maxrss_mb']:.0f}" if s["rss_src"] else ""
         agrees = s["agrees"] + ("†" if s["degenerate"] == "True" and s["agrees"] == "False" else "")
+        size = f"{int(s['cells']):,}" if s["cells"] else ""
         lines.append(f"| {s['case']} | {s['p']} | {s['tool']} | {s['status']} | {s['cold_s']} | {s['warm_median_s']} | "
-                     f"{rss} | {s['heap_peak_mb']} | {s['bars_sig'] or s['bars']} | {s['vs_reference']} | {agrees} |")
+                     f"{rss} | {s['heap_peak_mb']} | {s['bars_sig'] or s['bars']} | {s['vs_reference']} | {agrees} | {size} |")
 
     failed = [s for s in summary if s["status"] not in ("ok", "missing")]
     if failed:
@@ -875,7 +1044,8 @@ def summarize(out: Path, bottleneck=None):
                 if t["status"] == "ok":
                     finished.setdefault((task, t["tool"], p), set()).add(cname)
         ok = [s for s in ss if s["status"] == "ok" and s["warm_median_s"] not in ("", None)]
-        others = [s for s in ok if not s["tool"].startswith("tda4j") and s["multithreaded"] != "True"]
+        others = [s for s in ok if not s["tool"].startswith("tda4j") and s["multithreaded"] != "True"
+                  and s["tool"] not in KERNEL_TOOLS]
         if not others:
             continue
         best = min(others, key=lambda s: float(s["warm_median_s"]))
@@ -968,6 +1138,9 @@ def main():
                     help="--max-old-space-size for the tda4j-js tools, in the JVM's notation (default: --jvm-heap)")
     p2.add_argument("--node-opts", default="", help="more options for node, e.g. --stack-size=4000")
     p2.add_argument("--javaplex-divisions", type=int, default=1000)
+    p2.add_argument("--explicit-max-cells", type=float, default=1e8,
+                    help="the largest complex (cells, from bench/cells-reference.csv) that is written out as a boundary "
+                         "matrix for the phat rows")
     p2.add_argument("--python", default=sys.executable)
     p3 = sub.add_parser("summarize")
     p3.add_argument("out")

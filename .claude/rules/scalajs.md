@@ -87,6 +87,7 @@ tools, `workers/tda4j_js_worker.mjs`, which speaks the same `key=value`/JSON-lin
 worker calls the npm package's API with the facade's option names; a new benchmark case or driver option goes in both
 drivers (the JVM driver alone reports the heap pools' peak, `heap_peak_mb`: a JVM's RSS follows its collector, Node's is
 close to its need). `run.sh` takes the JVM classpath from `tda4j/Test/fullClasspath`, never from the aggregating root.
+`PaperBenchmarkDriver count=true` (the cells of the complex, for `bench/count_cells.py`) is JVM-only: the cell counts do not depend on the platform.
 The harness's own checks run without any of the tools: `python3 bench/test_bench.py` (`WORKLOG-bench-harness-fixes.md`).
 
 ## Known limits

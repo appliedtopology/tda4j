@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tests of the benchmark harness itself, on synthetic processes and synthetic results: nothing here needs the tools
-being benchmarked (no sbt, GUDHI, ripser or Julia). Run from the repository root:
+being benchmarked (no sbt, GUDHI, ripser or Julia), except `PythonWorkerTests`, which runs the Python worker's adapters
+and skips what is not installed. Run from the repository root:
 
     python3 bench/test_bench.py        (or: python3 -m unittest discover -s bench -p 'test_*.py' -v)
 
@@ -11,10 +12,14 @@ import importlib.util
 import json
 import math
 import os
+import shutil
+import subprocess
 import sys
 import tempfile
+import struct
 import time
 import unittest
+from unittest import mock
 from argparse import Namespace
 from pathlib import Path
 
@@ -27,6 +32,12 @@ sys.modules["bench_py"] = bench
 _spec.loader.exec_module(bench)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import sweep_alpha  # noqa: E402  (imports bench.py by name: a second copy of the module, which is fine here)
+import count_cells  # noqa: E402
+import dipha_io  # noqa: E402
+import phat_io  # noqa: E402
+
+
+HERE_BENCH = Path(__file__).resolve().parent
 
 
 def child(code):
@@ -156,6 +167,20 @@ class CaseTests(unittest.TestCase):
         self.assertTrue(tools["tda4j-dqp"]["needs_radius"])
         self.assertTrue(tools["tda4j-fastalpha"]["no_radius"])
         self.assertEqual(bench.jvm_twin("tda4j-js-dqp"), "tda4j-dqp")
+
+    def test_dionysus_and_oat_are_vietoris_rips_comparators_and_oat_is_characteristic_zero(self):
+        rows = {name: (task, opts) for name, kind, task, opts in bench.TOOLS if name.startswith(("dionysus", "oat"))}
+        self.assertEqual(set(rows), {"dionysus", "dionysus-homology", "dionysus-cocycles", "oat", "oat-cycles"})
+        self.assertEqual({task for task, _ in rows.values()}, {"vr"}, "neither has a cubical or an alpha complex to run")
+        self.assertEqual(bench.CHARACTERISTIC_ZERO, {"oat", "oat-cycles"})
+        names = {name for name, _, _, _ in bench.TOOLS}
+        for name, (_, opts) in rows.items():
+            self.assertIn(opts.get("slower_than", "dionysus" if name.startswith("dionysus") else "oat"), names)
+        for name in ("dionysus", "oat"):
+            self.assertNotIn("slower_than", rows[name][1], "the fast variant is the one the others wait for")
+        # the module the harness imports to test for the tool is not always the tool's name
+        for pytool in ("dionysus", "oat"):
+            self.assertIsInstance(bench.available("py", {"pytool": pytool}, sys.executable), bool)
 
     def test_jvm_flags_are_one_policy(self):
         self.assertEqual(bench.jvm_flags("16g"), ["-Xmx16g", "-Xms16g", "-XX:+UseParallelGC"])
@@ -332,6 +357,37 @@ class DegenerateTests(unittest.TestCase):
             self.assertIn("| False† |", md)
 
 
+class CharacteristicZeroTests(unittest.TestCase):
+    """OAT computes over the rationals whatever the row's p: a disagreement with the F_p reference is noted as such."""
+
+    def summarize(self, oat_bars):
+        d = tempfile.TemporaryDirectory()
+        self.addCleanup(d.cleanup)
+        out = Path(d.name)
+        (out / "bars").mkdir()
+        rows = []
+        for name, bars in [("ripser.cpp", "0\t0.0\tinf\n1\t0.5\tinf\n"), ("oat", oat_bars)]:
+            rows.append(run_row("torsion", name, "cold", "ok", wall="2", median="2", p="2"))
+            rows.append(run_row("torsion", name, "warm", "ok", wall="1", median="1", p="2"))
+            (out / "bars" / f"torsion__p2__{name}.tsv").write_text(bars)
+        write_runs(out, rows)
+        bench.summarize(out, bottleneck=stub_bottleneck)
+        with open(out / "summary.csv") as f:
+            return (out / "summary.md").read_text(), {r["tool"]: r for r in csv.DictReader(f)}
+
+    def test_a_difference_is_noted_as_the_field_not_hidden(self):
+        md, rows = self.summarize("0\t0.0\tinf\n")  # no essential H1 class over Q
+        self.assertEqual(rows["oat"]["agrees"], "False")
+        self.assertIn("H1 has 0 essential bars against the reference's 1; computed over the rationals, the reference "
+                      "over F_2", rows["oat"]["note"])
+        self.assertIn("oat compute over the rationals whatever the p of the row", md)
+        self.assertEqual(rows["ripser.cpp"]["note"], "")
+
+    def test_agreement_needs_no_note(self):
+        _, rows = self.summarize("0\t0.0\tinf\n1\t0.5\tinf\n")
+        self.assertEqual((rows["oat"]["agrees"], rows["oat"]["note"]), ("True", ""))
+
+
 class RunLoopTests(unittest.TestCase):
     """The loop around run_one: skipping what cannot run, and not repeating a timeout at the next field."""
 
@@ -386,6 +442,60 @@ class RunLoopTests(unittest.TestCase):
     def test_an_error_at_one_field_does_not_skip_the_other(self):
         calls, _ = self.run_loop({("slow", 2): "error(1)"})
         self.assertEqual([(c[0], c[1]) for c in calls], [("slow", 2), ("slow", 17)])
+
+
+class SlowerVariantTests(unittest.TestCase):
+    """A variant that does more work than a tool which timed out is not run, so its timeout is not spent again."""
+
+    def run_loop(self, statuses, rerun=False):
+        calls = []
+        with tempfile.TemporaryDirectory() as d:
+            data, out = Path(d) / "data", Path(d) / "out"
+            data.mkdir()
+            np.savetxt(data / "pts.txt", np.random.default_rng(0).random((20, 3)))
+            case = bench.Case("pts", "vr", "pts.txt", "points", 1)
+            saved = bench.CASES, bench.TOOLS, bench.available, bench.run_one, bench.write_env
+            bench.CASES = [case]
+            bench.TOOLS = [("base", "py", "vr", {}), ("extras", "py", "vr", {"slower_than": "base"}),
+                           ("other", "py", "vr", {})]
+            bench.available = lambda kind, opts, python: True
+            bench.write_env = lambda out, args: None
+
+            def fake(w, f, data, out, case, p, threshold, name, kind, opts, args):
+                calls.append((name, p))
+                return statuses.get(name, "ok")
+            bench.run_one = fake
+            try:
+                args = Namespace(data=str(data), out=str(out), cases="", tasks="", tools="", fields="2,17",
+                                 python="python3", rerun_timeouts=rerun)
+                bench.run(args)
+                with open(out / "runs.csv") as f:
+                    rows = list(csv.DictReader(f))
+            finally:
+                bench.CASES, bench.TOOLS, bench.available, bench.run_one, bench.write_env = saved
+        return calls, rows
+
+    def test_a_timeout_of_the_faster_variant_skips_the_slower_one_at_every_field(self):
+        calls, rows = self.run_loop({"base": "timeout"})
+        self.assertEqual(calls, [("base", 2), ("other", 2), ("other", 17)])
+        skipped = [r for r in rows if r["tool"] == "extras"]
+        self.assertEqual([(r["p"], r["status"]) for r in skipped], [("2", "timeout"), ("17", "timeout")])
+        self.assertIn("base, the faster variant, timed out on this case", skipped[0]["reason"])
+
+    def test_running_out_of_memory_is_passed_on_as_oom(self):
+        _, rows = self.run_loop({"base": "oom"})
+        extras = next(r for r in rows if r["tool"] == "extras")
+        self.assertEqual(extras["status"], "oom")
+        self.assertIn("ran out of memory", extras["reason"])
+
+    def test_an_error_or_a_finished_run_does_not_skip_it(self):
+        for status in ("ok", "error(1)", "limit"):
+            calls, _ = self.run_loop({"base": status})
+            self.assertIn(("extras", 2), calls, status)
+
+    def test_rerun_timeouts_runs_it_anyway(self):
+        calls, _ = self.run_loop({"base": "timeout"}, rerun=True)
+        self.assertIn(("extras", 2), calls)
 
 
 class AddressSpaceTests(unittest.TestCase):
@@ -618,6 +728,511 @@ class SweepLoopTests(unittest.TestCase):
         self.assertIn("(tda4j-dqp)", md)                # d = 6: GUDHI ran out of memory, the dual QP is the reference
         self.assertIn("| 500 (700) |", md.split("## Peak memory")[1].split("## Largest")[0])
         self.assertIn("inf† (gudhi)", md)
+
+
+class CellCountTests(unittest.TestCase):
+    """bench/count_cells.py: the size of each case, by dimension. The clique counter is checked against enumeration and
+    against GUDHI, the grid formula against cell-by-cell enumeration."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.dir = tempfile.TemporaryDirectory()
+        cls.tmp = Path(cls.dir.name)
+        import shutil
+        cls.counter = count_cells.build_counter(cls.tmp / "build") if shutil.which(os.environ.get("CXX", "g++")) else None
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.dir.cleanup()
+
+    def cliques(self, matrix, fmt, threshold, k):
+        path = self.tmp / f"in-{fmt}.txt"
+        np.savetxt(path, matrix, fmt="%.17g")
+        r = subprocess.run([str(self.counter), str(path), fmt, repr(threshold), str(k)], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return [int(c) for c in json.loads(r.stdout)["counts"]]
+
+    @staticmethod
+    def enumerate_cliques(adjacent, k):
+        """Cliques of sizes 1..k of a graph by plain recursion: nothing shared with the C++ method."""
+        found = [0] * (k + 1)
+
+        def grow(clique, candidates):
+            found[len(clique)] += 1
+            if len(clique) < k:
+                for i, c in enumerate(candidates):
+                    grow(clique + [c], [d for d in candidates[i + 1:] if adjacent[c][d]])
+        n = len(adjacent)
+        for v in range(n):
+            grow([v], [u for u in range(v + 1, n) if adjacent[v][u]])
+        return found[1:]
+
+    def test_the_grid_formula_is_cell_by_cell_enumeration(self):
+        for shape in [(5,), (2, 3), (2, 2, 2), (1, 4, 2), (3, 1)]:
+            # a cell is a coordinate in 0..2n per axis: even is a vertex of that axis, odd an edge; its dimension is the
+            # number of odd coordinates
+            brute = {}
+            for cell in __import__("itertools").product(*[range(2 * n + 1) for n in shape]):
+                d = sum(c % 2 for c in cell)
+                brute[d] = brute.get(d, 0) + 1
+            self.assertEqual(count_cells.grid_cells(shape, len(shape)), brute, shape)
+        self.assertEqual(count_cells.grid_cells((4, 4), 1), {0: 25, 1: 40}, "cut at dimension 1")
+        self.assertEqual(count_cells.grid_cells((4, 4), 5), {0: 25, 1: 40, 2: 16}, "no dimension above the grid's own")
+
+    def test_every_subset_bound(self):
+        self.assertEqual(count_cells.every_subset_bound(5, 3), 5 + 10 + 10)
+
+    @unittest.skipIf(shutil.which("g++") is None and "CXX" not in os.environ, "no C++ compiler")
+    def test_cliques_of_random_points_equal_plain_enumeration(self):
+        rng = np.random.default_rng(1)
+        for n, d, threshold, k in [(40, 3, 0.5, 6), (60, 2, 0.3, 8), (35, 5, 0.9, 5)]:
+            x = rng.random((n, d))
+            dist = np.sqrt(((x[:, None] - x[None]) ** 2).sum(-1))
+            adjacent = (dist <= threshold) & ~np.eye(n, dtype=bool)
+            self.assertEqual(self.cliques(x, "points", threshold, k), self.enumerate_cliques(adjacent, k), (n, d))
+
+    @unittest.skipIf(shutil.which("g++") is None and "CXX" not in os.environ, "no C++ compiler")
+    def test_a_distance_matrix_is_read_from_its_lower_triangle(self):
+        x = np.random.default_rng(2).random((30, 3))
+        dist = np.sqrt(((x[:, None] - x[None]) ** 2).sum(-1))
+        skewed = dist.copy()
+        skewed[np.triu_indices(30, 1)] = 99.0  # the upper triangle is ignored
+        want = self.enumerate_cliques((dist <= 0.5) & ~np.eye(30, dtype=bool), 5)
+        self.assertEqual(self.cliques(skewed, "distance", 0.5, 5), want)
+
+    @unittest.skipIf(shutil.which("g++") is None and "CXX" not in os.environ, "no C++ compiler")
+    def test_an_edge_exactly_at_the_threshold_is_in(self):
+        lattice = np.array([(i, j) for i in range(3) for j in range(3)], dtype=float)
+        squared = ((lattice[:, None] - lattice[None]) ** 2).sum(-1)  # integers: exact, so the ties are real
+        unit = (squared <= 1) & ~np.eye(9, dtype=bool)
+        king = (squared <= 2) & ~np.eye(9, dtype=bool)
+        self.assertEqual(self.cliques(lattice, "points", 1.0, 3), [9, 12, 0])
+        self.assertEqual(self.cliques(lattice, "points", 1.0, 3), self.enumerate_cliques(unit, 3))
+        # 12 unit edges and 8 diagonals of length sqrt(2): the king's graph, whose 2 x 2 blocks are four K4s
+        self.assertEqual(self.cliques(lattice, "points", math.sqrt(2), 4), self.enumerate_cliques(king, 4))
+        self.assertEqual(self.cliques(lattice, "points", math.sqrt(2), 4), [9, 20, 16, 4])
+
+    @unittest.skipUnless(importlib.util.find_spec("gudhi"), "gudhi is not installed")
+    @unittest.skipIf(shutil.which("g++") is None and "CXX" not in os.environ, "no C++ compiler")
+    def test_cliques_equal_gudhis_rips_complex_by_dimension(self):
+        import gudhi
+        x = np.random.default_rng(3).random((70, 3))
+        threshold = 0.35
+        tree = gudhi.RipsComplex(points=x, max_edge_length=threshold).create_simplex_tree(max_dimension=3)
+        by_dim = [0, 0, 0, 0]
+        for simplex, _ in tree.get_simplices():
+            by_dim[len(simplex) - 1] += 1
+        self.assertEqual(self.cliques(x, "points", threshold, 4), by_dim)
+
+    @unittest.skipIf(shutil.which("g++") is None and "CXX" not in os.environ, "no C++ compiler")
+    def test_a_count_that_times_out_still_reports_the_graph_and_the_bound(self):
+        fake = self.tmp / "fake_counter"
+        fake.write_text("#!/bin/sh\necho 'graph: n=100 edges=500 degeneracy=9' >&2\nsleep 30\n")
+        fake.chmod(0o755)
+        (self.tmp / "logs").mkdir(exist_ok=True)
+        case = bench.Case("slow", "vr", "x.txt", "points", 2)
+        r = count_cells.count_cliques(case, self.tmp / "x.txt", 1.0, fake, Namespace(timeout=1), self.tmp)
+        self.assertEqual((r["status"], r["points"], r["edges"]), ("timeout", 100, 500))
+        self.assertIn("at most", r["note"])
+        self.assertIn(f"{count_cells.every_subset_bound(100, 4):.3g}", r["note"])
+        self.assertEqual(r["total"], "", "no cell count is made up")
+
+    def test_the_canonical_row_is_the_independent_source_and_the_check_says_what_the_other_found(self):
+        case = bench.Case("c", "alpha", "c.txt", "points", 1)
+        gudhi = count_cells.row(case, "gudhi", "ok", {0: 5, 1: 9, 2: 5})
+        tda4j = count_cells.row(case, "tda4j", "ok", {0: 5, 1: 9, 2: 5})
+        chosen, check = count_cells.canonical([tda4j, gudhi])
+        self.assertEqual((chosen["source"], check), ("gudhi", "tda4j agrees"))
+        off = count_cells.row(case, "tda4j", "ok", {0: 5, 1: 9, 2: 6})
+        chosen, check = count_cells.canonical([gudhi, off])
+        self.assertIn("tda4j DIFFERS (dim 2: gudhi 5 / tda4j 6)", check)
+        chosen, check = count_cells.canonical([count_cells.row(case, "gudhi", "timeout"), tda4j])
+        self.assertEqual((chosen["source"], check), ("tda4j", "single source (TDA4j's own count)"))
+        chosen, check = count_cells.canonical([count_cells.row(case, "gudhi", "timeout")])
+        self.assertEqual(check, "no count")
+
+    def test_missing_data_is_a_row_not_a_crash(self):
+        case = bench.Case("gone", "vr", "gone.txt", "points", 1)
+        args = Namespace(cross_check=False, no_jvm=True, gudhi_python_ok=False)
+        rows = count_cells.count_case(case, args, self.tmp, self.tmp, None)
+        self.assertEqual([(r["status"], r["source"]) for r in rows], [("missing", "-")])
+        self.assertIn("bench.py prepare", rows[0]["note"])
+
+    def test_outputs_and_the_join_with_a_summary(self):
+        out = self.tmp / "outputs"
+        out.mkdir()
+        cubical = bench.Case("img", "cubical", "img.npy", "npy", 1)
+        vr = bench.Case("cloud", "vr", "cloud.txt", "points", 2)
+        cases_rows = [(cubical, [count_cells.row(cubical, "grid", "ok", count_cells.grid_cells((2, 2), 2), points="2x2")]),
+                      (vr, [count_cells.row(vr, "cliques", "timeout", note="killed after 1 s", points=100, edges=500)])]
+        flat = count_cells.write_outputs(out, cases_rows)
+        with open(out / "cells.csv") as f:
+            rows = {r["case"]: r for r in csv.DictReader(f)}
+        self.assertEqual((rows["img"]["dim0"], rows["img"]["dim1"], rows["img"]["dim2"], rows["img"]["total"]), ("9", "12", "4", "25"))
+        self.assertEqual((rows["cloud"]["status"], rows["cloud"]["total"], rows["cloud"]["dim0"]), ("timeout", "", ""))
+        md = (out / "cells.md").read_text()
+        self.assertIn("| img | cubical | 2x2 |", md)
+        self.assertIn("timeout: killed after 1 s", md)
+        results = self.tmp / "results"
+        results.mkdir()
+        with open(results / "summary.csv", "w", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=["case", "tool", "status"])
+            w.writeheader()
+            w.writerows([{"case": "img", "tool": "gudhi", "status": "ok"}, {"case": "other", "tool": "gudhi", "status": "ok"}])
+        with open(count_cells.join_summary(results, flat)) as f:
+            joined = {r["case"]: r["cells_total"] for r in csv.DictReader(f)}
+        self.assertEqual(joined, {"img": "25", "other": ""})
+
+    def test_the_reference_file_keeps_a_good_count_over_a_failed_one_and_the_order_of_the_cases(self):
+        path = self.tmp / "reference.csv"
+        path.unlink(missing_ok=True)
+        names = [c.name for c in bench.CASES]
+        a, b = bench.Case(names[3], "vr", "a.txt", "points", 2), bench.Case(names[0], "vr", "b.txt", "points", 2)
+        good = count_cells.write_outputs(self.tmp / "outputs", [(a, [count_cells.row(a, "cliques", "ok", {0: 4, 1: 6}, points=4)])])
+        count_cells.update_reference(path, good, {a.name: "abc"})
+        more = count_cells.write_outputs(self.tmp / "outputs", [(b, [count_cells.row(b, "cliques", "ok", {0: 2, 1: 1}, points=2)])])
+        self.assertEqual(count_cells.update_reference(path, more, {b.name: "def"}), 2)
+        failed = count_cells.write_outputs(self.tmp / "outputs", [(a, [count_cells.row(a, "cliques", "timeout")])])
+        count_cells.update_reference(path, failed, {})
+        with open(path) as f:
+            rows = list(csv.DictReader(f))
+        self.assertEqual([r["case"] for r in rows], [names[0], names[3]], "in the order of bench.CASES")
+        self.assertEqual((rows[1]["total"], rows[1]["data_sha256"]), ("10", "abc"), "a timeout does not replace a count")
+        self.assertEqual((rows[0]["total"], rows[0]["dim1"]), ("3", "1"))
+
+    def test_verify_notices_a_changed_or_missing_data_file(self):
+        data = self.tmp / "verify-data"
+        data.mkdir(exist_ok=True)
+        case = bench.CASES[0]
+        (data / case.file).write_text("1 2 3\n")
+        reference = self.tmp / "verify.csv"
+        reference.write_text(f"case,data_sha256\n{case.name},{bench.sha256_of(data / case.file)}\nnot_a_case,\n")
+        self.assertEqual([c for c, _ in count_cells.verify_reference(reference, data)], ["not_a_case"])
+        (data / case.file).write_text("1 2 4\n")
+        problems = dict(count_cells.verify_reference(reference, data))
+        self.assertIn("SHA-256 differs", problems[case.name])
+        (data / case.file).unlink()
+        self.assertIn("not found", dict(count_cells.verify_reference(reference, data))[case.name])
+
+    def test_summarize_joins_the_reference_counts_and_a_run_never_counts(self):
+        reference = self.tmp / "joined.csv"
+        reference.write_text("case,total\nsmall,12345\n")
+        saved = bench.CELLS_REFERENCE
+        bench.CELLS_REFERENCE = reference
+        try:
+            out = self.tmp / "joined-run"
+            (out / "bars").mkdir(parents=True, exist_ok=True)
+            rows = []
+            for case in ("small", "other"):
+                rows.append(run_row(case, "gudhi", "cold", "ok", wall="2", median="2"))
+                rows.append(run_row(case, "gudhi", "warm", "ok", wall="1", median="1"))
+            write_runs(out, rows)
+            bench.summarize(out, bottleneck=stub_bottleneck)
+            with open(out / "summary.csv") as f:
+                cells = {r["case"]: r["cells"] for r in csv.DictReader(f)}
+            md = (out / "summary.md").read_text()
+        finally:
+            bench.CELLS_REFERENCE = saved
+        self.assertEqual(cells, {"small": "12345", "other": ""})
+        self.assertIn("agrees | cells |", md)
+        self.assertRegex(md, r"\| small \| 17 \| gudhi \| ok \|.*\| 12,345 \|")
+        self.assertNotIn("count_cells", Path(bench.__file__).read_text().split("def run(args)")[1].split("def run_one")[0],
+                         "the benchmark loop does not count cells")
+
+    def test_every_case_is_countable_by_some_source(self):
+        for case in bench.CASES:
+            self.assertIn(case.task, ("vr", "cubical", "alpha"), case.name)
+
+
+class DiphaPhatEireneTests(unittest.TestCase):
+    """DIPHA, PHAT and Eirene: the rows, their Z/2 limit, DIPHA's and PHAT's files, and (with the tools installed) each tool's
+    barcode against GUDHI's."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.dir = tempfile.TemporaryDirectory()
+        cls.tmp = Path(cls.dir.name)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.dir.cleanup()
+
+    def test_the_rows_are_vietoris_rips_and_z2_only_and_the_phat_rows_are_kernels(self):
+        rows = {name: (kind, task, opts) for name, kind, task, opts in bench.TOOLS
+                if name.startswith(("dipha", "phat", "eirene"))}
+        self.assertEqual(set(rows), {"dipha", "dipha-mt", "phat", "phat-dual", "eirene", "eirene-cycles"})
+        for name, (kind, task, opts) in rows.items():
+            self.assertEqual((task, opts.get("only_p")), ("vr", 2), name)
+        self.assertEqual(bench.KERNEL_TOOLS, {"phat", "phat-dual"})
+        self.assertTrue(rows["dipha-mt"][2]["multithreaded"])
+        self.assertEqual(rows["eirene-cycles"][2]["slower_than"], "eirene")
+        for name in ("eirene", "eirene-cycles"):
+            self.assertIn(rows[name][2]["julia_tool"], bench.JULIA_TOOLS)
+        for binary_kind in ("dipha", "phat"):
+            self.assertIn(binary_kind, bench.BINARY_KINDS)
+
+    def test_a_z2_only_tool_is_not_run_at_another_prime(self):
+        case = bench.Case("c", "vr", "c.txt", "points", 2)
+        self.assertIn("Z/2 coefficients only", bench.skip_reason({"only_p": 2}, case, 3, 1.0, 17))
+        self.assertIsNone(bench.skip_reason({"only_p": 2}, case, 3, 1.0, 2))
+        self.assertIsNone(bench.skip_reason({"only_p": 2}, case, 3, 1.0), "no field given: nothing to refuse")
+        self.assertIsNone(bench.skip_reason({}, case, 3, 1.0, 17))
+
+    def test_the_sparse_distance_matrix_lists_both_ends_of_every_edge_in_dipha_layout(self):
+        path = self.tmp / "tiny.dipha"
+        dipha_io.write_sparse_distance_matrix(path, 4, np.array([0, 0, 2]), np.array([1, 2, 3]), np.array([1.0, 2.0, 0.5]))
+        raw = path.read_bytes()
+        magic, kind, n = struct.unpack("<qqq", raw[:24])
+        self.assertEqual((magic, kind, n), (8067171840, 8, 4))
+        counts = np.frombuffer(raw[24:24 + 32], dtype="<i8")
+        self.assertEqual(counts.tolist(), [2, 1, 2, 1])
+        m = int(counts.sum())
+        columns = np.frombuffer(raw[56:56 + 8 * m], dtype="<i8")
+        self.assertEqual(columns.tolist(), [1, 2, 0, 0, 3, 2])
+        distances = np.frombuffer(raw[56 + 8 * m:], dtype="<f8")
+        self.assertEqual(distances.tolist(), [1.0, 2.0, 1.0, 2.0, 0.5, 0.5])
+
+    @unittest.skipUnless(importlib.util.find_spec("scipy"), "scipy is not installed")
+    def test_an_edge_exactly_at_the_threshold_is_in(self):
+        lattice = np.array([(i, j) for i in range(3) for j in range(3)], dtype=float)
+        i, j, d = dipha_io.edges_within(lattice, math.sqrt(2))
+        self.assertEqual(len(i), 20, "12 unit edges and 8 diagonals")
+        self.assertAlmostEqual(float(d.max()), math.sqrt(2))
+
+    def test_a_distance_matrix_is_read_from_its_lower_triangle(self):
+        matrix = np.array([[0, 99, 99], [1, 0, 99], [3, 2, 0]], dtype=float)  # upper triangle junk
+        i, j, d = dipha_io.matrix_edges_within(matrix, 2.0)
+        self.assertEqual(sorted(zip(i.tolist(), j.tolist(), d.tolist())), [(0, 1, 1.0), (1, 2, 2.0)])
+
+    def test_a_diagram_is_read_with_essential_classes_decoded_and_its_values_doubled(self):
+        path = self.tmp / "tiny.diagram"
+        with open(path, "wb") as f:
+            f.write(struct.pack("<qqq", 8067171840, 2, 4))
+            for dim, birth, death in [(0, 0.0, 0.5), (-1, 0.0, 9.0), (1, 0.25, 0.75), (2, 0.5, 0.75)]:
+                f.write(struct.pack("<qdd", dim, birth, death))
+        self.assertEqual(dipha_io.read_diagram(path), [(0, 0.0, 0.5), (0, 0.0, math.inf), (1, 0.25, 0.75), (2, 0.5, 0.75)])
+        bars = self.tmp / "tiny.tsv"
+        counts = dipha_io.diagram_to_bars(path, bars, 1)
+        self.assertEqual(counts, {"0": 2, "1": 1})
+        self.assertEqual(bench.read_bars(bars), {0: [(0.0, 1.0), (0.0, math.inf)], 1: [(0.5, 1.5)]})
+        (self.tmp / "bad.diagram").write_bytes(struct.pack("<qqq", 1, 2, 0))
+        with self.assertRaises(ValueError):
+            dipha_io.read_diagram(self.tmp / "bad.diagram")
+
+    def test_phat_pairs_become_bars_unpaired_columns_are_essential_and_equal_values_are_no_bar(self):
+        matrix = self.tmp / "m.phat"
+        np.array([0.0, 0.0, 0.5, 0.5, 0.75, 0.75], dtype="<f8").tofile(f"{matrix}.values")
+        np.array([0, 0, 1, 1, 2, 2], dtype="<i8").tofile(f"{matrix}.dims")
+        pairs = self.tmp / "m.pairs"
+        with open(pairs, "wb") as f:
+            f.write(struct.pack("<q", 2))
+            f.write(struct.pack("<qq", 1, 2))  # a vertex born at 0 dies at the edge of value 0.5
+            f.write(struct.pack("<qq", 3, 4))  # an edge and a triangle of value 0.5 and 0.75: a bar
+        bars = self.tmp / "m.tsv"
+        counts = phat_io.pairs_to_bars(pairs, matrix, bars, 1)
+        self.assertEqual(counts, {"0": 2, "1": 1})
+        self.assertEqual(bench.read_bars(bars), {0: [(0.0, 1.0), (0.0, math.inf)], 1: [(1.0, 1.5)]})
+        # a dimension above max_dim is left out, even essential: the triangle 5 (dimension 2) is in no pair
+        self.assertNotIn(2, bench.read_bars(bars))
+
+    def test_mpiexec_gets_the_flags_its_flavour_needs(self):
+        def answers(text):
+            return mock.patch.object(bench.subprocess, "run", return_value=mock.Mock(stdout=text))
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("MPIEXEC_FLAGS", None)
+            with answers("mpiexec (OpenRTE) 4.1.6"):
+                self.assertIn("--oversubscribe", bench.mpiexec_flags())
+            with answers("HYDRA build details: Version: 4.0"):
+                self.assertEqual(bench.mpiexec_flags(), [])
+        with mock.patch.dict(os.environ, {"MPIEXEC_FLAGS": "--bind-to none"}):
+            self.assertEqual(bench.mpiexec_flags(), ["--bind-to", "none"])
+
+    def test_the_memory_of_a_job_of_several_processes_is_summed_over_the_tree(self):
+        code = ("import subprocess, sys, time\n"
+                "c = subprocess.Popen([sys.executable, '-c', 'x = bytearray(200 * 1024 * 1024)\\nimport time; time.sleep(4)'])\n"
+                "time.sleep(4)\n")
+        proc = subprocess.Popen(child(code))
+        try:
+            time.sleep(2)
+            alone, together = bench.vm_hwm_mb(proc.pid), bench.tree_hwm_mb(proc.pid)
+        finally:
+            proc.kill()
+            proc.wait()
+        self.assertGreater(together, alone + 150, "the child's 200 MB is in the sum and not in the parent's own figure")
+
+    def test_a_kernel_row_is_never_the_baseline_and_the_table_says_so(self):
+        out = self.tmp / "kernel-run"
+        (out / "bars").mkdir(parents=True, exist_ok=True)
+        bars = "0\t0.0\tinf\n1\t0.5\t0.9\n"
+        rows = []
+        for name, warm in [("ripser.cpp", 1.0), ("gudhi", 2.0), ("phat", 0.1), ("tda4j", 5.0)]:
+            rows.append(run_row("k", name, "cold", "ok", wall=str(warm), median=str(warm)))
+            rows.append(run_row("k", name, "warm", "ok", wall=str(warm), median=str(warm)))
+            (out / "bars" / f"k__p17__{name}.tsv").write_text(bars)
+        write_runs(out, rows)
+        bench.summarize(out, bottleneck=stub_bottleneck)
+        md = (out / "summary.md").read_text()
+        self.assertIn("| k | 17 | tda4j | ripser.cpp |", md, "the best other single-threaded tool is ripser.cpp, not phat")
+        self.assertIn("phat time the reduction of a boundary matrix built beforehand", md)
+
+    def test_a_case_too_big_for_an_explicit_matrix_is_not_run_by_phat(self):
+        calls = []
+        with tempfile.TemporaryDirectory() as d:
+            data, out = Path(d) / "data", Path(d) / "out"
+            data.mkdir()
+            np.savetxt(data / "pts.txt", np.random.default_rng(0).random((20, 3)))
+            case = bench.Case("big", "vr", "pts.txt", "points", 1)
+            saved = bench.CASES, bench.TOOLS, bench.available, bench.run_one, bench.write_env, bench.cells_reference
+            bench.CASES = [case]
+            bench.TOOLS = [("phat", "phat", "vr", {"only_p": 2, "kernel": True})]
+            bench.available = lambda kind, opts, python: True
+            bench.write_env = lambda out, args: None
+            bench.cells_reference = lambda: {"big": "500000000"}
+            bench.run_one = lambda *a, **k: calls.append(a) or "ok"
+            try:
+                args = Namespace(data=str(data), out=str(out), cases="", tasks="", tools="", fields="2",
+                                 python="python3", rerun_timeouts=False, explicit_max_cells=1e8)
+                bench.run(args)
+                with open(out / "runs.csv") as f:
+                    rows = list(csv.DictReader(f))
+            finally:
+                bench.CASES, bench.TOOLS, bench.available, bench.run_one, bench.write_env, bench.cells_reference = saved
+        self.assertEqual(calls, [])
+        self.assertEqual(rows[0]["status"], "unsupported")
+        self.assertIn("500,000,000 cells", rows[0]["reason"])
+
+    # --- with the tools installed (bench/run.sh setup dipha phat eirene; the variables run.sh exports) ---------------------
+
+    def tiny_case(self):
+        data = self.tmp / "tiny-data"
+        data.mkdir(exist_ok=True)
+        points = np.random.default_rng(5).random((45, 3))
+        np.savetxt(data / "tiny.txt", points, fmt="%.17g")
+        d = np.sqrt(((points[:, None] - points[None]) ** 2).sum(-1))
+        case = bench.Case("tiny", "vr", "tiny.txt", "points", 2)
+        return case, data, float(d.max(axis=1).min())
+
+    def gudhi_bars(self, case, data, threshold):
+        import gudhi
+        points = np.loadtxt(data / case.file)
+        tree = gudhi.RipsComplex(points=points, max_edge_length=threshold).create_simplex_tree(max_dimension=case.dim + 1)
+        tree.compute_persistence(homology_coeff_field=2, min_persistence=0)
+        return {k: [(float(b), math.inf if d == math.inf else float(d)) for b, d in tree.persistence_intervals_in_dimension(k)]
+                for k in range(case.dim + 1)}
+
+    def run_binary(self, kind, name, opts, case, data, threshold):
+        out = self.tmp / f"{name}.tsv"
+        args = Namespace(trials=1)
+        cmd = bench.command(kind, name, opts, case, data, 2, threshold, 0, 1, out, args)
+        r = subprocess.run(cmd, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        matrix = cmd[-2] if kind == "phat" else None
+        bench.parse_binary_output(kind, bench.Proc("ok", 0, 0, r.stdout), out, case, matrix)
+        return bench.read_bars(out)
+
+    @unittest.skipUnless(os.environ.get("DIPHA_BIN") and importlib.util.find_spec("gudhi") and importlib.util.find_spec("scipy"),
+                         "DIPHA_BIN, gudhi or scipy missing")
+    def test_dipha_has_gudhis_barcode_on_one_rank_and_on_three(self):
+        case, data, threshold = self.tiny_case()
+        reference = self.gudhi_bars(case, data, threshold)
+        for opts in ({}, {"ranks": "3"}):
+            bars = self.run_binary("dipha", "dipha", opts, case, data, threshold)
+            self.assertLess(bench.agreement(bars, reference, case.dim)[0], 1e-9, opts)
+
+    @unittest.skipUnless(os.environ.get("PHAT_BIN") and os.environ.get("MAKE_PHAT_BIN") and importlib.util.find_spec("gudhi")
+                         and importlib.util.find_spec("scipy"), "PHAT_BIN, MAKE_PHAT_BIN, gudhi or scipy missing")
+    def test_phat_has_gudhis_barcode_twist_and_dualized(self):
+        case, data, threshold = self.tiny_case()
+        reference = self.gudhi_bars(case, data, threshold)
+        for opts in ({}, {"dualize": True}):
+            bars = self.run_binary("phat", "phat", opts, case, data, threshold)
+            self.assertLess(bench.agreement(bars, reference, case.dim)[0], 1e-9, opts)
+
+    @unittest.skipUnless(os.environ.get("JULIA") and os.environ.get("EIRENE_PROJECT") and importlib.util.find_spec("gudhi"),
+                         "JULIA, EIRENE_PROJECT or gudhi missing")
+    def test_eirene_has_gudhis_barcode_in_both_variants_and_refuses_another_prime(self):
+        case, data, threshold = self.tiny_case()
+        reference = self.gudhi_bars(case, data, threshold)
+        worker = str(HERE_BENCH / "workers" / "eirene_worker.jl")
+        for variant in ("bars", "cycles"):
+            out = self.tmp / f"eirene-{variant}.tsv"
+            cmd = [os.environ["JULIA"], f"--project={os.environ['EIRENE_PROJECT']}", worker, f"variant={variant}", "task=vr",
+                   f"input={data / case.file}", "format=points", f"dim={case.dim}", "p=2", f"threshold={threshold!r}",
+                   "warmup=0", "trials=1", f"out={out}"]
+            r = subprocess.run(cmd, capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertLess(bench.agreement(bench.read_bars(out), reference, case.dim)[0], 1e-9, variant)
+        r = subprocess.run(cmd[:-5] + ["p=17"] + cmd[-3:], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 3, "exit 3 is 'unsupported'")
+
+
+def have(module):
+    return importlib.util.find_spec(module) is not None
+
+
+class PythonWorkerTests(unittest.TestCase):
+    """The adapters of workers/py_worker.py against GUDHI on a random cloud. What is not installed is skipped."""
+
+    WORKER = Path(__file__).resolve().parent / "workers" / "py_worker.py"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.dir = tempfile.TemporaryDirectory()
+        cls.points = Path(cls.dir.name) / "pts.txt"
+        x = np.random.default_rng(7).random((60, 3))
+        np.savetxt(cls.points, x)
+        d = np.sqrt(((x[:, None, :] - x[None, :, :]) ** 2).sum(-1))
+        cls.distances = Path(cls.dir.name) / "dist.txt"
+        np.savetxt(cls.distances, d)
+        cls.threshold = float(np.min(d.max(axis=1)))
+        cls.image = Path(cls.dir.name) / "image.npy"
+        np.save(cls.image, np.random.default_rng(8).random((8, 8)))
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.dir.cleanup()
+
+    def worker(self, tool, task="vr", p=2, fmt="points", variant=None):
+        tag = f"{tool}-{variant}-{p}-{fmt}"
+        out = Path(self.dir.name) / f"{tag}.tsv"
+        source = self.image if task == "cubical" else self.points if fmt == "points" else self.distances
+        cmd = [sys.executable, str(self.WORKER), f"tool={tool}", f"task={task}", f"input={source}", f"format={fmt}",
+               "dim=2", f"p={p}", f"threshold={self.threshold!r}", "warmup=0", "trials=1", f"out={out}"]
+        if variant:
+            cmd.append(f"variant={variant}")
+        r = subprocess.run(cmd, capture_output=True, text=True)
+        return r, (bench.read_bars(out) if r.returncode == 0 else None)
+
+    @unittest.skipUnless(all(map(have, ("gudhi", "dionysus", "oat_python"))), "gudhi, dionysus or oat_python missing")
+    def test_every_variant_has_the_barcode_of_gudhi_at_both_primes(self):
+        for p in (2, 17):
+            _, reference = self.worker("gudhi", p=p)
+            self.assertEqual(len(reference[0]), 60)
+            for tool, variant in [("dionysus", None), ("dionysus", "homology"), ("dionysus", "cocycles"), ("oat", None),
+                                  ("oat", "cycles")]:
+                r, bars = self.worker(tool, p=p, variant=variant)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                dist, note = bench.agreement(bars, reference, 2)
+                self.assertLess(dist, 1e-5, f"{tool} {variant} p={p}: {note}")
+                self.assertEqual(note, "")
+                self.assertEqual(json.loads(r.stdout.strip().splitlines()[-1])["bars"],
+                                 {str(k): len(bars[k]) for k in sorted(bars)})
+
+    @unittest.skipUnless(all(map(have, ("gudhi", "dionysus", "oat_python"))), "gudhi, dionysus or oat_python missing")
+    def test_a_distance_matrix_is_the_same_input_as_the_points(self):
+        for tool in ("dionysus", "oat"):
+            _, a = self.worker(tool, fmt="points")
+            _, b = self.worker(tool, fmt="distance")
+            dist, note = bench.agreement(a, b, 2)  # Dionysus rounds its distances to float32 (about 3e-8 here)
+            self.assertLess(dist, 1e-6, tool)
+            self.assertEqual(note, "")
+
+    @unittest.skipUnless(all(map(have, ("dionysus", "oat_python"))), "dionysus or oat_python missing")
+    def test_neither_runs_a_cubical_or_an_alpha_task(self):
+        for tool in ("dionysus", "oat"):
+            for task in ("cubical", "alpha"):
+                r, _ = self.worker(tool, task=task)
+                self.assertEqual(r.returncode, 3, f"{tool} {task}: exit 3 is 'unsupported'")
 
 
 if __name__ == "__main__":
