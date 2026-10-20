@@ -98,8 +98,7 @@ The cost is that features still alive at the cut-off have no death inside the wi
 
 ## The whole script
 
-The fragments above, in one piece (this block is compiled with the documentation, and `FindALoopSpec` runs it and checks
-every number quoted on this page):
+The fragments above, in one piece:
 
 <div class="tabset">
 <div class="tab" data-lang="Scala">
@@ -159,9 +158,8 @@ shortBars(shortBars(:,1) == 1, :)      % [1 0.595 Inf]: born, not dead by the cu
 </div>
 
 The MATLAB tab makes the same calls through the `TDA4j` facade. It shows the bars `significant()` keeps (pass
-`'minPersistence', '0'` for all of them), and it counts bars from 0 (Java's convention), so `cycleVertices(k)` takes the
-bar's row number minus 1. `MatlabTabsSpec` makes these same calls from Scala and checks every number quoted in the MATLAB
-tab; MATLAB itself is not run by the test suite.
+`'minPersistence', '0'` for all of them), and it counts bars from 0, so `cycleVertices(k)` takes the bar's row number
+minus 1.
 
 ## Where to go next
 

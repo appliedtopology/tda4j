@@ -190,4 +190,4 @@ norm(imageA(:) - imageEight(:))             % 0.163
 </div>
 </div>
 
-Through the facade, distances, landscapes and images always use the *complete* barcode of each result, including the short bars the Scala script set aside with `significant()`. The bottleneck distance does not notice them; the Wasserstein distance, a sum, does, so it comes out slightly larger here (0.045 against 0.040, and 0.830 against 0.826). `MatlabTabsSpec` makes these same calls from Scala and checks every number quoted in the MATLAB tab; MATLAB itself is not run by the test suite.
+Through the facade, distances, landscapes and images always use the *complete* barcode of each result, including the short bars the Scala script set aside with `significant()`. The bottleneck distance does not notice them; the Wasserstein distance, a sum, does, so it comes out slightly larger here (0.045 against 0.040, and 0.830 against 0.826).

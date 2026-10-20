@@ -134,4 +134,4 @@ end
 </div>
 </div>
 
-The MATLAB entry point takes `dtmK` and `dtmP` for the DTM-weighted Rips complex; it does not expose the weights themselves, so the average-weight comparison above has no MATLAB counterpart. `MatlabTabsSpec` makes these same calls from Scala and checks every number quoted in the MATLAB tab; MATLAB itself is not run by the test suite.
+The MATLAB entry point takes `dtmK` and `dtmP` for the DTM-weighted Rips complex; it does not expose the weights themselves, so the average-weight comparison above has no MATLAB counterpart.

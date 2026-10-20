@@ -129,4 +129,4 @@ clubs.toArray()         % exactly the same seven bars
 </div>
 </div>
 
-`computeFromRelation` takes the relation as a matrix, with `Inf` for pairs that are never related; `dual` selects the transposed relation. `MatlabTabsSpec` makes these same calls from Scala and checks every number quoted in the MATLAB tab; MATLAB itself is not run by the test suite.
+`computeFromRelation` takes the relation as a matrix, with `Inf` for pairs that are never related; `dual` selects the transposed relation.
