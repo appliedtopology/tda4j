@@ -13,6 +13,7 @@
 <div class="cover">
  <div class="doc">
   <p>******* Optimized Vietoris-Rips cofacet generation for fast coboundary computation *******</p>
+  <p>Iterates the vertices <code>w</code> outside <code>simplex</code> for which <code>simplex + w</code> is a simplex of the sparse complex (every distance from <code>w</code> to a vertex of <code>simplex</code> finite in <code>sparseMetricSpace</code>), each once, in increasing order of the diameter of <code>simplex + w</code>. <code>simplex</code> must itself be a simplex of the sparse complex.</p>
  </div>
  <section id="attributes">
   <h2 class="h500">Attributes</h2>
@@ -27,7 +28,7 @@
     Source
    </dt>
    <dd class="body-medium">
-    <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L11" target="_blank">Cofacets.scala</a>
+    <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L15" target="_blank">Cofacets.scala</a>
    </dd>
    <dt class="body-small">
     Graph
@@ -215,7 +216,7 @@ node6 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L130" target="_blank">Cofacets.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L138" target="_blank">Cofacets.scala</a>
               </dd>
              </dl>
             </div>
@@ -245,7 +246,7 @@ node6 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L81" target="_blank">Cofacets.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L89" target="_blank">Cofacets.scala</a>
               </dd>
              </dl>
             </div>
@@ -304,7 +305,7 @@ node6 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L20" target="_blank">Cofacets.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L24" target="_blank">Cofacets.scala</a>
               </dd>
              </dl>
             </div>
@@ -334,7 +335,7 @@ node6 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L93" target="_blank">Cofacets.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L101" target="_blank">Cofacets.scala</a>
               </dd>
              </dl>
             </div>
@@ -404,7 +405,7 @@ node6 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L21" target="_blank">Cofacets.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L25" target="_blank">Cofacets.scala</a>
               </dd>
              </dl>
             </div>
@@ -434,7 +435,7 @@ node6 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L97" target="_blank">Cofacets.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L105" target="_blank">Cofacets.scala</a>
               </dd>
              </dl>
             </div>
@@ -6715,7 +6716,7 @@ node6 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L33" target="_blank">Cofacets.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L37" target="_blank">Cofacets.scala</a>
               </dd>
              </dl>
             </div>
@@ -6745,7 +6746,7 @@ node6 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L71" target="_blank">Cofacets.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L79" target="_blank">Cofacets.scala</a>
               </dd>
              </dl>
             </div>
@@ -6775,7 +6776,7 @@ node6 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L18" target="_blank">Cofacets.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L22" target="_blank">Cofacets.scala</a>
               </dd>
              </dl>
             </div>
@@ -6805,7 +6806,7 @@ node6 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L32" target="_blank">Cofacets.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L36" target="_blank">Cofacets.scala</a>
               </dd>
              </dl>
             </div>
@@ -6835,7 +6836,7 @@ node6 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L79" target="_blank">Cofacets.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L87" target="_blank">Cofacets.scala</a>
               </dd>
              </dl>
             </div>
@@ -6865,7 +6866,7 @@ node6 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L70" target="_blank">Cofacets.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L78" target="_blank">Cofacets.scala</a>
               </dd>
              </dl>
             </div>
@@ -6895,7 +6896,7 @@ node6 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L17" target="_blank">Cofacets.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L21" target="_blank">Cofacets.scala</a>
               </dd>
              </dl>
             </div>
@@ -6925,7 +6926,7 @@ node6 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L37" target="_blank">Cofacets.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L41" target="_blank">Cofacets.scala</a>
               </dd>
              </dl>
             </div>
@@ -6955,7 +6956,7 @@ node6 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L12" target="_blank">Cofacets.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L16" target="_blank">Cofacets.scala</a>
               </dd>
              </dl>
             </div>
@@ -6985,7 +6986,7 @@ node6 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L36" target="_blank">Cofacets.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L40" target="_blank">Cofacets.scala</a>
               </dd>
              </dl>
             </div>
@@ -7015,7 +7016,7 @@ node6 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L35" target="_blank">Cofacets.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L39" target="_blank">Cofacets.scala</a>
               </dd>
              </dl>
             </div>
@@ -7045,7 +7046,7 @@ node6 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L15" target="_blank">Cofacets.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Cofacets.scala#L19" target="_blank">Cofacets.scala</a>
               </dd>
              </dl>
             </div>
