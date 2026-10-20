@@ -3,17 +3,14 @@ layout: main
 title: Developer's Guide for TDA4j
 ---
 
-TDA4j is meant to be a viable platform for algorithm development and research into topological data
-analysis, not just a library you call into as a black box. This guide gets you from "I understand
-persistent homology" to "I can confidently write, review, and extend code in this repository" — which, if
-Scala 3.7+'s newest context-abstraction syntax is new to you (as it is for most people — it's genuinely
-recent), is most of the actual gap.
+TDA4j is a platform for algorithm development and research in topological data analysis, not only a library to call.
+This guide is for reading, reviewing and extending its code, assuming you know persistent homology. Scala 3.7+'s
+context-abstraction syntax is most of the gap; the first page covers it.
 
 ## How to use this guide
 
 1. **The Scala 3 syntax.** `Type is TypeClass`, `type Self: Ordering as ordering`, `given [bounds] => Body
-   = value`, opaque types, extension methods. None of this is older-Scala-3-style code that "should" already
-   look familiar. Start with the [Scala 3 primer](scala3-primer.md).
+   = value`, opaque types, extension methods. Start with the [Scala 3 primer](scala3-primer.md).
 2. **Where a given piece of functionality lives, and what layer it's in.** The library is built in clear
    layers — algebra, then complex construction (streams), then the persistence engines that consume a
    stream — and each has its own source directory (one package; simplicial sets are the `sset` add-on). See
@@ -23,9 +20,7 @@ recent), is most of the actual gap.
    assumptions and intended roles; they are not layers on one shared core.
    See [Persistence engines](persistence-engines.md).
 4. **What traps look fine, compile fine, and only produce a wrong answer on specific inputs.** Ordering and
-   reduction code in this codebase has a real history of exactly this failure mode. See
-   [Hard-won invariants](gotchas.md) before you trust your own "this looks obviously correct" judgment
-   on a change to reduction or ordering logic.
+   reduction code is where they hide. Read [Hard-won invariants](gotchas.md) before changing it.
 5. **Whether a surprising result is a bug or the mathematically correct answer on a degenerate input.** See
    [Degeneracies](degeneracies.md) before "fixing" something that isn't broken.
 6. **What a user meets first, and the rules for new public API.** The

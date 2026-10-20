@@ -161,16 +161,13 @@ part of any result.
 
 ## 5. `CellularCohomologyEngine` — generic cohomology, for every cell type
 
-Persistent *co*homology, generic over `CellT: OrderedCell` — the cohomology counterpart to engine 1, filling
-in what used to be a real asymmetry: cohomology in this codebase meant engines 3/4 only, both hardcoded to
-`Simplex[Int]`. `Cube`, `FiniteSimplicialSet` generators, and `Simplex[Int]` complexes that aren't
-Vietoris-Rips (Cech, Alpha, the general witness complex) had no cohomology option at all before this class —
-not even Cech/Alpha, despite sharing `Simplex[Int]` as a cell type, since engines 3/4's speed optimizations
-(`insertionDiameter`, apparent pairs) are proven specifically for the max-pairwise-distance functional, not
-Cech's circumradius, Alpha's own filtration, or the general witness complex's per-dimension threshold. (The
-*lazy* witness complex is the one exception among these: it genuinely IS a max-pairwise-distance flag
-complex under its own `WitnessMetricSpace`, so engines 3/4 both work for it directly — see
-`architecture.md`'s "Witness complexes" section.)
+Persistent *co*homology, generic over `CellT: OrderedCell`: the cohomology counterpart to engine 1. It serves every
+cell type: `Cube`, `FiniteSimplicialSet` generators, and the `Simplex[Int]` complexes that are not Vietoris-Rips
+(Cech, Alpha, the general witness complex). Engines 3 and 4 cannot: their speed optimizations (`insertionDiameter`,
+apparent pairs) are proven only for the max-pairwise-distance functional, not for Cech's circumradius, Alpha's own
+filtration, or the general witness complex's per-dimension threshold. The lazy witness complex is the exception: it is
+a max-pairwise-distance flag complex under its own `WitnessMetricSpace`, so engines 3 and 4 work for it (see
+"Witness complexes" in `architecture.md`).
 
 **The key idea**: the coboundary matrix persistent cohomology reduces is the transpose of the ordinary
 boundary matrix, same coefficients. Every stream this class targets already gets fully materialized before

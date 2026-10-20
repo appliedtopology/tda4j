@@ -166,14 +166,10 @@ others.
 
 ## Process: validate empirically, not by inspection
 
-Every substantive design decision in this codebase's persistence-engine work (pivot orientation, whether
-clearing is optional, whether an ordering fix is complete, whether an optimization is sound) has gone
-through at least one empirical discriminating test before being trusted — never a plausibility argument
-alone, even a careful one. "This class-scope `chainRM` should be inert because X" has been both correct and
-wrong for structurally similar-looking classes in this codebase; only a discriminating test told the two
-apart.
+Pivot orientation, optional clearing, the completeness of an ordering fix and the soundness of an optimization are
+settled by a discriminating test, not by a plausibility argument: "this class-scope `chainRM` should be inert
+because X" is right for some classes and wrong for structurally similar ones.
 
-The pattern to carry into new work: **when a change to reduction/ordering logic seems obviously sound by
-inspection, build the cheap discriminating test anyway before implementing it for real.** A good
+**When a change to reduction or ordering logic seems obviously sound, write the cheap discriminating test first.** A good
 discriminating fixture deliberately puts filtration order and some other natural order (vertex label,
 insertion order) in conflict — a fixture where they happen to agree will not catch this class of bug.

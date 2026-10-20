@@ -3,11 +3,9 @@ layout: main
 title: A Scala 3.7+ primer for this codebase
 ---
 
-If you know topology cold but Scala 3's newest context-abstraction features are new to you, read this
-before anything else. TDA4j leans hard on Scala 3.7+ syntax that didn't exist a few years ago, and code
-samples you find by searching the web (or asking an LLM trained on older Scala) will often look
-superficially similar but be subtly wrong for this codebase. Every construct below is demonstrated with
-real code from the current source tree, not a simplified stand-in.
+TDA4j uses the context-abstraction syntax introduced in Scala 3.7 and later. If it is new to you, read this page
+first: older Scala 3 examples look similar but do not compile here. Each construct below is shown with code from
+the source tree.
 
 ## The problem all of this solves
 

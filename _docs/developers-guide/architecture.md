@@ -229,8 +229,7 @@ nothing else. The library has two storages (both `final`: the reductions match o
 homological degree you want and building one dimension higher internally. The sections below describe the implementation
 classes those objects choose between (`EnumeratingCofaceSimplexStream`, `CechCofaceSimplexStream`, ...). They are
 public: the objects are the documented entry, and the classes are what to extend when building a new filtered complex
-on the same machinery (most of them reuse `RipserCofaceSimplexStream`'s coface loop). See
-`.claude/DESIGN-stream-naming.md`.
+on the same machinery (most of them reuse `RipserCofaceSimplexStream`'s coface loop).
 
 A `CellStream[CellT, FiltrationT]` is the abstract interface every persistence engine consumes: an iterator
 over cells in filtration order, plus a `filtrationValue: PartialFunction[CellT, FiltrationT]` and a
