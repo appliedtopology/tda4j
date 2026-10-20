@@ -289,8 +289,8 @@ scala> def kleinPatch(s: Double, t: Double): Array[Double] =
   val f = pixelgrid.map((x,y) => c*(a*x+b*y)*(a*x+b*y) + d*(a*x+b*y))
   val centered = f.map(_ - f.sum/f.length).tail
   centered.map(_ / math.sqrt(centered.map(x => x*x).sum))
-val rnd = scala.util.Random(20261016)
-val klein = Array.fill(15000)(kleinPatch(rnd.nextDouble(), rnd.nextDouble()))
+scala> val rnd = scala.util.Random(20261016)
+scala> val klein = Array.fill(15000)(kleinPatch(rnd.nextDouble(), rnd.nextDouble()))
 ```
 
 Or you can grab the file https://tda4j.appliedtopology.org/presentations/tutorial-2026-10-16/klein-15000.csv.
