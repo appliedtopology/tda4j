@@ -27,10 +27,12 @@ jobs:
           java-version: 21
       - name: Setup sbt launcher
         uses: sbt/setup-sbt@v1
+      # `--server` runs sbt in the foreground, so no sbt server is left to race setup-sbt's post-job cache step (test.yml's
+      # header says why).
       - name: Build docs site
         env:
           TDA4J_SCALA_VERSION: "3.8.4" # docs only; see build.sbt. TODO: remove when 3.9.1 is released.
-        run: sbt tda4j/doc
+        run: sbt --server tda4j/doc
       - name: Publish docs
         run: |
           set -e

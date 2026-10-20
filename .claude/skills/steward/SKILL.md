@@ -31,6 +31,13 @@ after every job below passes locally.
 | `docs-build` (`test.yml`) | `TDA4J_SCALA_VERSION=3.8.4 sbt tda4j/doc` | `sbt shutdown`, then the same | the error names `page.md:line` |
 | `mima` (`test.yml`) | `sbt tda4j/mimaReportBinaryIssues` | the same | see below |
 
+CI starts every one of these with `sbt --server` (sbt in the foreground, exiting with its step), in every workflow; the
+table leaves the flag out because locally plain `sbt` is right. Through the thin client a server stays behind and
+replaces its log file under `target/global-logging/` just as setup-sbt's post-job cache step hashes the workspace. A job
+whose sbt step passed and that fails only in "Post Setup sbt launcher" with `hashFiles('**/*.sbt', '**/*.properties')
+failed` is that race: find the sbt call without `--server` (`WORKLOG-ci-sbt-post-step-race.md`). It is not a test or
+MiMa failure, and a re-run hides it without fixing it.
+
 `coverage.yml` (weekly and on demand, uploaded to Codecov) is a map, not a check: nothing fails on a coverage number, and
 Codecov's commit statuses are informational (`codecov.yml`).
 
