@@ -22,8 +22,7 @@ val diagram = Persistence(SparseRips(metricSpace, epsilon = 0.5, maxDimension = 
 complex is too big and an approximation is acceptable; the [tutorial](../../tutorials/choosing-a-complex.md) compares it
 with the exact complexes. The filtration is not a plain diameter filtration, so the Ripser engine does not apply.
 
-A note on the reference: the paper's Algorithm 3 computes an edge's birth without checking that both endpoints are still
-present (their balls have not vanished), which its own Section 5.3 requires for the filtration to be monotone. The
-implementation follows Section 5.3.
+An edge is born only while both its endpoints are still present, as Section 5.3 of the paper requires for a monotone
+filtration.
 
 From MATLAB and the command line: `complex=sparse-rips` with `sparseEpsilon`.
