@@ -5,6 +5,11 @@ import cats.Show
 import scala.collection.immutable.ArraySeq
 
 open class FiniteField(val p: Int):
+  require(
+    p > 1 && BigInt(p).isProbablePrime(certainty = 100),
+    s"tda4j: FiniteField needs a prime number, got $p (Z/$p is not a field)"
+  )
+
   opaque type Fp = Int
 
   object Fp:

@@ -142,6 +142,11 @@ object FiniteFieldSpec extends mutable.Specification with ScalaCheck:
     }
   }
 
+  "FiniteField(p) refuses a p that is not a prime, saying so" >>
+    Seq(-3, 0, 1, 4, 9, 15)
+      .map(p => (new FiniteField(p): Any) must SpecThrows.throwWith[IllegalArgumentException]("needs a prime number"))
+      .reduce(_ and _)
+
   "Testing unapply and pattern matching for value declarations" >> {
     val x: Fp = Fp(42)
     val Fp(y) = x

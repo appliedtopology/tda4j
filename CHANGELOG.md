@@ -142,6 +142,10 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Fixed
 
+- `Cech`, `Witness`, `Dowker`, `DtmRips` and `SparseRips` built dimension `d + 1` by enumerating and testing every
+  `(d + 1)`-subset of the points instead of extending the simplices kept in dimension `d`, so a sparse complex cost as
+  much as a dense one; they extend the kept simplices, and give the same complex cell for cell.
+- `FiniteField(p)` with a `p` that is not a prime failed on first use with "/ by zero"; it says that `p` must be prime.
 - `fig.copy(palette = ...)` left heatmaps, cocycles' values and the color bar in the palette the plot was built with.
 - `DistanceToMeasure` through the vantage-point search returned fewer than `k` neighbours for some `k` that is a sizeable
   fraction of the number of points (a defect of the Java library it used); it returns `k`.
