@@ -30,7 +30,7 @@ concurrency:
   group: gh-pages-publish
 
 permissions:
-  contents: write,read
+  contents: write
   id-token: write
 
 jobs:
