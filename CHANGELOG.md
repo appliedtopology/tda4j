@@ -147,6 +147,8 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 ### Build, CI and Documentation
 
 - The user guide's plotting page has a "Customizing a plot" section; the CLI and MATLAB pages point to it.
+- CI starts every sbt command with `--server`. The sbt server that the thin client left running intermittently failed a
+  job (most visibly `mima` and `test-js`) in setup-sbt's post-job cache step, after every step of the job had passed.
 - The Scala.js test run is shorter: `APISpec` (a scratchpad for call syntax, its checks covered by other specs) is gone,
   and the alpha complex properties that search for rare inputs run all their cases on the JVM and a tenth on Scala.js.
 
