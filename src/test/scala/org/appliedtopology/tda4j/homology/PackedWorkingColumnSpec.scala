@@ -2,6 +2,8 @@ package org.appliedtopology.tda4j
 
 import org.specs2.mutable
 
+import scala.compiletime.asMatchable
+
 /** `PackedRipserCohomologyEngine` reduces with a heap of primitive entries (Ripser's working column) instead of
   * `Chain.reduceBy`'s `TreeMap`. It must be the same reduction: same pivots, same pairs, and the same cocycles term for
   * term, in the same list order, as the `Chain`-based engine kept in the test tree (`ChainPackedRipserReference`). The
@@ -37,10 +39,10 @@ class PackedWorkingColumnSpec extends mutable.Specification:
     import field.given
     val heap = PackedRipserCohomologyEngine[field.Fp](space, 2, apparent, threshold)
     val chain = ChainPackedRipserReference[field.Fp](referenceSpace.getOrElse(space), 2, apparent, threshold)
-    def heapCell(c: Any) = c match
+    def heapCell(c: Any) = c.asMatchable match
       case x: heap.DiameterIndex => (x.diameter, x.index)
       case _                     => (Double.NaN, -1L)
-    def chainCell(c: Any) = c match
+    def chainCell(c: Any) = c.asMatchable match
       case x: chain.DiameterIndex => (x.diameter, x.index)
       case _                      => (Double.NaN, -1L)
     def flat[Cell](bars: List[PersistenceBar[Double, Chain[Cell, field.Fp]]], cell: Any => (Double, Long)) =
