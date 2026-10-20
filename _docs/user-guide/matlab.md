@@ -8,7 +8,7 @@ for plain Java. Every method takes and returns only `int`, `double`, `String`, a
 options are a flat list of name-value strings, so a new option never changes a method's signature.
 
 ```matlab
-javaaddpath('target/out/jvm/scala-3.9.0/tda4j/tda4j-<version>-assembly.jar');   % after sbt assembly
+javaaddpath('/path/to/tda4j-VERSION-assembly.jar');   % see Installation
 import org.appliedtopology.tda4j.matlab.*;
 
 points = [0.0 0.0; 1.0 0.0; 0.5 0.8];

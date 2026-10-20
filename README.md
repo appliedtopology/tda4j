@@ -17,13 +17,12 @@ Stanford University (JavaPlex, JPlex, PLEX).
 
 ## Using it
 
-From sbt (Scala 3.9):
+[Installation](https://tda4j.appliedtopology.org/user-guide/installation.html) lists requirements and dependency lines
+for every build tool. In short, from sbt (Java 21, Scala 3.9):
 
 ```scala
-libraryDependencies += "org.appliedtopology" %% "tda4j" % "<latest version>"
+libraryDependencies += "org.appliedtopology" %% "tda4j" % "VERSION"
 ```
-
-Maven coordinates: `org.appliedtopology:tda4j_3:<latest version>`. Then, in a Scala file:
 
 ```scala
 import scala.language.experimental.modularity
@@ -33,6 +32,21 @@ val points = Array.tabulate(30)(i => Array(math.cos(i * 0.21), math.sin(i * 0.21
 val diagram = Persistence(points)   // degrees 0 to 2, coefficients in the field with 17 elements
 diagram.dim(1).longest              // the most persistent loop, with a representative cycle
 ```
+
+From Java, with `tda4j-VERSION-assembly.jar` on the class path:
+
+```java
+import org.appliedtopology.tda4j.matlab.*;
+
+double[][] points = { {0, 0}, {1, 0}, {1, 1}, {0, 1} };
+PersistenceResult result = TDA4j.computeFromPoints(points, new String[] {"maxDimension", "1"});
+double[][] bars = result.toArray();   // one row per bar: dimension, birth, death
+```
+
+From MATLAB, `javaaddpath('tda4j-VERSION-assembly.jar')` and the same calls
+([MATLAB and Java](https://tda4j.appliedtopology.org/user-guide/matlab.html)). From the command line,
+`java -jar tda4j-VERSION-assembly.jar --max-dimension 1 points.csv`. The jar is on the
+[releases](https://github.com/appliedtopology/tda4j/releases) page.
 
 From JavaScript or TypeScript (browsers, and Node.js 20.16 or newer):
 
@@ -46,13 +60,8 @@ const result = persistence([[0, 0], [1, 0], [1, 1], [0, 1]], { maxDimension: 1 }
 result.bars;   // [{ dim: 0, birth: 0, death: Infinity }, ...]
 ```
 
-Scala.js programs use the same sbt line as above (`tda4j_sjs1_3`). For the command line and MATLAB, download `tda4j-<version>-assembly.jar` from the
-[releases](https://github.com/appliedtopology/tda4j/releases) and run `java -jar tda4j-<version>-assembly.jar --help`, or
-add it to MATLAB's Java class path.
-
-The distributed `tda4j-demo-<version>.jar` is a self-contained demo jar: execute it as
-`java -jar tda4j-demo-<latest version>.jar` to get a Scala REPL environment with imports in place without
-needing a local Scala installation.
+Scala.js programs use `%%%` in the sbt line above. `tda4j-demo-VERSION.jar` is a self-contained Scala REPL with the
+library imported: `java -jar tda4j-demo-VERSION.jar`.
 
 ## Documentation
 

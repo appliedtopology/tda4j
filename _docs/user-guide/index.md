@@ -22,6 +22,7 @@ spaces are an add-on with one more import, `import org.appliedtopology.tda4j.sse
 
 ## Contents
 
+* [Installation](installation.md): requirements and dependency lines for every build tool and language.
 * [Quickstart](quickstart.md): `Persistence(...)` and the diagram it returns, short bars, representatives, long
   computations, chains.
 * **Complexes** ([overview](topological-spaces/index.md)): [Vietoris-Rips](topological-spaces/vietoris-rips.md)

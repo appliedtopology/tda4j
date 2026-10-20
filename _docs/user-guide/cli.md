@@ -3,10 +3,10 @@ layout: main
 title: "Command-line tool: `tda4j`"
 ---
 
-`sbt assembly` builds a jar that runs as a command-line tool:
+The assembly jar from the [installation page](installation.md) runs as a command-line tool:
 
 ```
-java -jar target/out/jvm/scala-3.9.0/tda4j/tda4j-<version>-assembly.jar [options] <input-file>
+java -jar /path/to/tda4j-VERSION-assembly.jar [options] <input-file>
 ```
 
 It reads a point cloud, distance matrix, image or relation, computes persistence with the same code as the

@@ -175,7 +175,7 @@ val fastBars = FastCubicalHomologyEngine[Double]().persistentHomology(stream)
 <div class="tab" data-lang="MATLAB">
 
 ```matlab
-javaaddpath('target/out/jvm/scala-3.9.0/tda4j/tda4j-0.5.0-SNAPSHOT-assembly.jar');   % from the repository root, after sbt assembly
+javaaddpath('/path/to/tda4j-VERSION-assembly.jar');
 import org.appliedtopology.tda4j.matlab.*;
 
 % The same image as the Scala script, drawn from the same Java random number generator

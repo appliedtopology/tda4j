@@ -31,6 +31,7 @@ subsection:
   - index: user-guide/index.md
     directory: user-guide
     subsection:
+      - page: user-guide/installation.md
       - page: user-guide/quickstart.md
       - page: user-guide/cli.md
       - page: user-guide/matlab.md

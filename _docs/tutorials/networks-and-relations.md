@@ -108,7 +108,7 @@ val agree = clubs.triples.sorted == people.triples.sorted
 <div class="tab" data-lang="MATLAB">
 
 ```matlab
-javaaddpath('target/out/jvm/scala-3.9.0/tda4j/tda4j-0.5.0-SNAPSHOT-assembly.jar');   % from the repository root, after sbt assembly
+javaaddpath('/path/to/tda4j-VERSION-assembly.jar');
 import org.appliedtopology.tda4j.matlab.*;
 
 % 6 people (rows) and 7 clubs (columns); Inf means 'never a member'

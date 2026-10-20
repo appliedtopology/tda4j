@@ -44,17 +44,17 @@ Task 1 is not possible from the command line.
 
 Task 2 can be done as follows:
 ```shell sc:nocompile
-java -jar target/out/jvm/scala-3.9.0/tda4j/tda4j-0.5.0-SNAPSHOT-assembly.jar -r --max-dimension 1 _docs/tutorials/examplepoints.csv
+java -jar /path/to/tda4j-VERSION-assembly.jar -r --max-dimension 1 _docs/tutorials/examplepoints.csv
 ```
 
 Task 3 is not possible from the command line.
 
 ## Matlab
 
-MATLAB talks to TDA4j through its built-in Java interface: put the assembly jar (`sbt assembly`) on the Java path and call `org.appliedtopology.tda4j.matlab.TDA4j` directly. MATLAB can handle all three tasks. See [Calling from MATLAB or Java](../user-guide/matlab.md) for the complete list of options.
+MATLAB talks to TDA4j through its built-in Java interface: put the assembly jar ([installation](../user-guide/installation.md)) on the Java path and call `org.appliedtopology.tda4j.matlab.TDA4j` directly. MATLAB can handle all three tasks. See [Calling from MATLAB or Java](../user-guide/matlab.md) for the complete list of options.
 
 ```matlab
-javaaddpath('target/out/jvm/scala-3.9.0/tda4j/tda4j-0.5.0-SNAPSHOT-assembly.jar');
+javaaddpath('/path/to/tda4j-VERSION-assembly.jar');
 import org.appliedtopology.tda4j.matlab.*;   % makes TDA4j (a static Java class, not an object to construct) callable by its short name
 
 % Task 1: the octahedron is the flag complex of its own edge graph, so a distance matrix is enough.
