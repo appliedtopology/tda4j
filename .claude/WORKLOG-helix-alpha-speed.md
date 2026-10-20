@@ -86,6 +86,28 @@ filling with garbage, not data.
 Barcodes against GUDHI (bottleneck distance, degrees 0..2, zero-length bars dropped): 5.6e-16 at d = 7, 1.0e-13 at d = 9
 (GUDHI reports one more degree-2 bar there, at bottleneck cost 1e-13: a rounding-level tie), 7.8e-16 at d = 10.
 
+## Interleaved warm A/B (the protocol of `_docs/developers-guide/performance.md`)
+
+Original and new classes built apart (`git checkout 389a102 -- AlphaShapes.scala`, compile, copy the class directory;
+then the PR's file), `PaperBenchmarkDriver task=alpha backend=helix`, one variant per JVM, one warm-up then three timed
+computations, three JVMs per variant run in the order orig, new, orig, new, ...; median of the three per-JVM medians:
+
+| d | original | new | factor | per-JVM medians (orig / new) |
+|---|---|---|---|---|
+| 5 | 0.407 s | 0.278 s | 1.5x | 0.41, 0.33, 0.44 / 0.28, 0.36, 0.25 |
+| 6 | 2.415 s | 0.507 s | 4.8x | 2.42, 2.24, 2.52 / 0.54, 0.46, 0.51 |
+| 7 | 14.9 s | 1.51 s | 9.9x | 14.8, 15.4, 14.9 / 1.66, 1.49, 1.51 |
+
+Warm, the d = 7 run is 1.5 s against GUDHI's 0.98 s on the same machine. d = 8 and above were not repeated (one cold run
+of the original takes 105 s); the cold numbers above are single runs.
+
+## The 11-sphere workload (#134) is untouched
+
+40 points of Tadasets' `dsphere(40, 11)` (R^12, all cospherical, seed 1), `AlphaProfileDriver verb=only` on the new code:
+killed at 420 s, still in the triangulation phase (nothing after the header line). So the slow branch of #134 is in the
+walk on cospherical input (`handleCosphericalPoints` and the repair), not in `topValue` or the faces; this PR does not
+speed it up. Not profiled.
+
 ## Verification
 
 - Every simplex with its value (hex doubles) and the emission order of every dimension, before and after, byte-identical on
