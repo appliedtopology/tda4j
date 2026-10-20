@@ -128,6 +128,10 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Changed
 
+- The Helix alpha backend (what `AlphaShapes` uses above 4-D) builds the faces of its triangulation in time linear in
+  their number and makes the `Simplex` objects of a dimension only when it is read. 40 points in R^8 take 7 s (was
+  105 s), in R^10 about a minute (the dimension sweep timed out after an hour); the simplices, values and order of the
+  stream, and the barcodes, are the same bit for bit.
 - A persistence diagram's legend is at its lower right, inside the shaded half plane, and the plot takes the room the legend
   column had. (`withLegend("right")` puts it back.)
 - A barcode and a diagram carry a `<desc>` (their counts by degree) in the SVG.

@@ -65,6 +65,15 @@ in its affine hull) if it is Gabriel -- no vertex of a coface strictly inside th
 value among its immediate cofaces. For points in general position this is the alpha filtration exactly, and
 `HelixDqpAgreementSpec` checks that Helix and DQP give the same barcode in dimensions 2, 3 and 4.
 
+**Cost.** A triangulation pays for the whole Delaunay complex, while the barcode up to degree 2 needs only its
+3-skeleton: for 40 uniform points the complex has 577,257 simplices in R^8 and about 6.4 million in R^10, the 3-skeleton
+at most 102,000. `DelaunayAlphaShapes` therefore keeps the faces and their values in flat arrays (a face table per
+dimension, each face found from its immediate cofaces) and makes the `Simplex` objects of a dimension only when that
+dimension is read: the `Persistence` verb reads the dimensions up to `maxDimension + 1` and pays arrays, not objects,
+for the ones above. `filtrationValue` looks a simplex up in its face table. Forty points in R^10 take about a minute on
+four cores (GUDHI, which builds the same face lattice top-down, takes 56 s); `AlphaProfileDriver` (`src/test/scalajvm`)
+prints the phases of one input: triangulation, faces and values, sort, reduction.
+
 **Known limitation:** `HelixDelaunay`'s greedy walk can produce an invalid
 triangulation on near-cospherical point configurations. Every result is checked,
 and an invalid one is repaired by retriangulating slightly perturbed points
