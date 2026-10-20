@@ -9,7 +9,7 @@ import java.io.{ByteArrayOutputStream, File, PrintStream}
 /** The persistence-threshold flags, through the real `TDA4jCLI.run` (NOT `CliFull`, which switches the threshold off).
   */
 class PersistenceThresholdCLISpec extends mutable.Specification:
-  sequential // captures System.err
+  sequential
 
   private def tempFile(suffix: String): String =
     val f = File.createTempFile("cli-threshold-spec", suffix)
@@ -25,11 +25,7 @@ class PersistenceThresholdCLISpec extends mutable.Specification:
   private def run(args: String*): (Int, Seq[String], String) =
     val out = new ByteArrayOutputStream()
     val err = new ByteArrayOutputStream()
-    val oldErr = System.err
-    System.setErr(new PrintStream(err))
-    val code =
-      try TDA4jCLI.run(args.toSeq, new PrintStream(out))
-      finally System.setErr(oldErr)
+    val code = TDA4jCLI.run(args.toSeq, new PrintStream(out), new PrintStream(err))
     (code, out.toString.linesIterator.toSeq, err.toString)
 
   "by default" should

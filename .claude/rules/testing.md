@@ -23,3 +23,7 @@ always-true properties, #79). Fix the operands (`.toLong`, wrap in `Fp`), do not
 - `must throwAn[IllegalArgumentException]("text")` takes a REGEX: `(`, `)` and `.` in the message must be escaped or left out.
 - An example that THROWS is reported as an error (`!`, "N errors"), not a failure (`x`, "N failures"): a script that breaks the
   code and counts failures misses a mutation the example does catch.
+
+**A spec never swaps `System.err`/`System.out`** (or any other process-wide state): sbt runs spec classes concurrently in one
+JVM, so a swapped stream captures another spec's output (and its restore can restore the wrong stream). The CLI takes its
+error stream (`TDA4jCLI.run(args, out, err)`); pass a buffer (`WORKLOG-cli-spec-stderr-race.md`).
