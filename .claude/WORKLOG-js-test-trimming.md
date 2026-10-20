@@ -77,7 +77,14 @@ the mirror worked.
   is `CofaceSimplexStreamSpec`, `BowyerWatsonSpec` and `CollapsedNerveSpec`, all done by 263 s.
 - `tda4j/testFull`: 1528 examples, 1520 passed, 8 skipped (the benchmarks), 0 failures.
 - The alpha specs ran 200 cases per property on JS (400 expectations per spec) and 2000 on the JVM.
-- The CI wall clock after the change is not measured here; the PR's own CI run is the measurement.
+- CI, PR #146's first run (39458469521, head bc18ef8 = these changes merged with `scala` at ffa67a6) against the base's
+  own run on ffa67a6 (39456817933), both with `--server`: the "Run the Scala.js tests" step went from 10 min 11 s to
+  4 min 41 s, and the whole run from 10.5 to 5.5 min. The JVM `test` job is now the critical path (step 3 min 48 s on
+  the base, 4 min 51 s here). Its specs took the same time in both runs (first to last report 2 min 11 s against 2 min
+  10 s); the extra minute was before them: sbt's startup, and compiling the 120 main sources, which the base run took
+  from sbt's cache and this run compiled because `Cofacets.scala` changed. Per spec on the JVM: `APISpec` was 48 s,
+  `CofacetsSpec` went from 8.6 s to 0.2 s, and `BowyerWatsonSpec` (unchanged) went from 25 s to 68 s, a measure of
+  how noisy one CI run is.
 
 ## Not done
 
