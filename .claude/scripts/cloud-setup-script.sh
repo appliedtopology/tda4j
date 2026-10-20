@@ -10,10 +10,13 @@ if [ -x "$REPO/.claude/scripts/install-sbt.sh" ]; then
   # The sbt launcher, sbt 2 itself, the plugins and the main dependencies (a paced retry loop around `sbt compile`).
   "$REPO/.claude/scripts/install-sbt.sh" "$REPO" || true
   # install-sbt.sh warms `compile` only: also the test-scope dependencies (specs2, scalacheck) of both builds (`tda4j`, the
-  # JVM one, and `tda4jJS`, the Scala.js one) and the scalafmt the sbt plugin downloads on first use. (`Test/update` is not
-  # a task in sbt 2: `Test/externalDependencyClasspath` resolves the same thing.)
+  # JVM one, and `tda4jJS`, the Scala.js one), the scalafmt the sbt plugin downloads on first use, and the Scala.js linker
+  # (`scalajs-linker`, `closure-compiler`), which the plugin resolves only when it first links, so a link is the one way
+  # to fetch it (`scalaJSLinkerImpl` alone does not download it). (`Test/update` is not a task in sbt 2:
+  # `Test/externalDependencyClasspath` resolves the same thing.)
   cd "$REPO" && for i in 1 2 3 4 5; do
-    timeout 300 sbt "tda4j/Test/externalDependencyClasspath" "tda4jJS/Test/externalDependencyClasspath" scalafmtSbtCheck < /dev/null && break
+    timeout 600 sbt "tda4j/Test/externalDependencyClasspath" "tda4jJS/Test/externalDependencyClasspath" scalafmtSbtCheck \
+      "tda4jJS/fastLinkJS" < /dev/null && break
     sleep 20
   done || true
 else

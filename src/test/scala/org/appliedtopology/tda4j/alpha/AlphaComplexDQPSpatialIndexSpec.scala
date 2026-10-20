@@ -17,7 +17,8 @@ import org.specs2.scalacheck.Parameters
   * so none of the existing Alpha* specs touch this code path.
   */
 class AlphaComplexDQPSpatialIndexSpec extends org.specs2.mutable.Specification with ScalaCheck:
-  given Parameters = Parameters(minTestsOk = 500)
+  // All 500 cases on the JVM, a tenth on Scala.js (`TestPlatform`).
+  given Parameters = Parameters(minTestsOk = TestPlatform.propertyCases(500))
 
   private def bruteForceCechNeighbours(space: PowerDistance, maxPower: Double): IndexedSeq[IndexedSeq[Int]] =
     val n = space.size

@@ -80,6 +80,14 @@ formatting, sort stability), never loosen it for JS only without a comment namin
 `Double.toString` prints `1.0` as `1` on JS (expected strings in shared specs build their numbers with `${1.0}`), and
 specs2's `throwA[E]("message")` reports a mismatch on JS for a message that matches (use `SpecThrows.throwWith`).
 
+**Test time on JS** (`WORKLOG-js-test-trimming.md`). sbt runs the JS specs on one Node process per core, so one long
+example sets the wall clock while the other cores idle. A property that hunts rare inputs takes its count
+from `TestPlatform.propertyCases(n)` (the test seam, `src/test/scalajvm` and `src/test/scalajs`): all `n` on the JVM, a
+tenth on JS, whose run is there to catch platform differences. specs2's "Finished in" is wrong on JS for many specs (13 ms
+for a 12-minute spec): time JS specs by the gaps between "Total for specification" lines in a run with
+`set LocalProject("tda4jJS") / Test / parallelExecution := false`, or exclude one example with `testOnly * -- ex
+^(?!its.description).*`.
+
 ## Benchmarks
 
 `bench/` times the Scala.js build beside the JVM build and the other tools (`bench/run.sh setup tda4j-js`, the `tda4j-js*`
