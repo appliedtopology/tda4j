@@ -41,12 +41,12 @@ one:
   plot it without computing again. Computation flags are refused for it.
 
 ```
-java -jar tda4j-assembly.jar --max-dimension 1 points.csv
-java -jar tda4j-assembly.jar --input-format csv-relation --dual true relation.csv
-java -jar tda4j-assembly.jar --max-dimension 1 --save-result circle.json points.csv
-java -jar tda4j-assembly.jar --plot representative --output loop.svg circle.json
-java -jar tda4j-assembly.jar --plot diagram --title "A noisy circle" --x-scale sqrt --output diagram.svg circle.json
-java -jar tda4j-assembly.jar --output-format gudhi --output circle.pers circle.json
+java -jar tda4j-VERSION-assembly.jar --max-dimension 1 points.csv
+java -jar tda4j-VERSION-assembly.jar --input-format csv-relation --dual true relation.csv
+java -jar tda4j-VERSION-assembly.jar --max-dimension 1 --save-result circle.json points.csv
+java -jar tda4j-VERSION-assembly.jar --plot representative --output loop.svg circle.json
+java -jar tda4j-VERSION-assembly.jar --plot diagram --title "A noisy circle" --x-scale sqrt --output diagram.svg circle.json
+java -jar tda4j-VERSION-assembly.jar --output-format gudhi --output circle.pers circle.json
 ```
 
 ### Which bars are reported

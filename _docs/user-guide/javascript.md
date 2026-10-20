@@ -48,8 +48,8 @@ A bad option or a malformed input throws an `Error` that says what to change.
 
 ### On the command line
 
-`npx @appliedtopology/tda4j --max-dimension 1 points.csv` (`tda4j --max-dimension 1 points.csv` once the package is installed) is the [command line](cli.md) of the JVM build, with the same flags, reading
-files through Node.js. It does not read image files (`--input-format image`): decode the image yourself and pass its
+`npx @appliedtopology/tda4j --max-dimension 1 points.csv` runs the [command line](cli.md) of the JVM build, with the same
+flags, reading files through Node.js; once the package is installed, `tda4j --max-dimension 1 points.csv` does. It does not read image files (`--input-format image`): decode the image yourself and pass its
 pixels to `persistenceFromImage`.
 
 ### What differs from the JVM build
@@ -68,16 +68,7 @@ pixels to `persistenceFromImage`.
 
 ## From Scala.js
 
-In an sbt 2 build (`project/plugins.sbt` has `sbt-scalajs`), `%%` picks the Scala.js artifact by itself in a project that
-is a Scala.js one:
-
-```scala sc:nocompile
-libraryDependencies += "org.appliedtopology" %% "tda4j" % "<latest version>"
-```
-
-(`%%%` in sbt 1; `mvn"org.appliedtopology::tda4j::<latest version>"` in Mill.) The Maven artifact is `tda4j_sjs1_3`.
-The code is the Scala code of the [quickstart](quickstart.md): `Persistence(points)` in a Scala.js program works as it
-does on the JVM.
-
-For the cross-build's layout, and the pieces that exist once per platform, see the
-[architecture](../developers-guide/architecture.md) page of the Developer's Guide.
+In a Scala.js project, the dependency is the same line as for the JVM (see [installation](installation.md)); sbt 2's
+`%%` picks the Scala.js artifact `tda4j_sjs1_3` by itself (`%%%` in sbt 1). The code is the Scala code of the
+[quickstart](quickstart.md): `Persistence(points)` works as it does on the JVM. The cross-build's layout is described in
+the Developer's Guide [architecture](../developers-guide/architecture.md) page.

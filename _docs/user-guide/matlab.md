@@ -118,5 +118,4 @@ Each `plot...` method returns a figure object; call `view()` on it for the brows
 [customizing a plot](plotting.md#from-matlab-and-the-command-line)). `result.save('result.json')` writes the whole result to a file, which `TDA4j.loadResult('result.json')`
 reads back (in MATLAB, Java, Scala or `tda4j --plot ...`); it is JSON, readable from other languages too.
 
-MATLAB itself is not part of the test suite: the tutorial MATLAB tabs are checked by making the same Java calls from
-Scala.
+The MATLAB tabs in the tutorials are checked as the same Java calls made from Scala, not in MATLAB itself.
