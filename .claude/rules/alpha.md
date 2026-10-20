@@ -46,12 +46,22 @@ routed through one shared `rankAtEpsilon` helper: retry every affinely-independe
 (smallest-span first); reject affinely-degenerate candidates outright; project a globally-coplanar cloud onto
 its true affine span first.
 
-**Helix alpha values are computed top-down** (`alphaValues`): top cells take the smallest containing circumradius;
+**Helix alpha values are computed top-down** (`built`, read by `valueOf`): top cells take the smallest containing circumradius;
 below that a simplex takes its own smallest circumradius (centre in its affine hull, `smallestCircumsphere`, never
 `Hypersphere.apply`) if Gabriel w.r.t. its cofaces' opposite vertices, else the min over its immediate cofaces. The
 Gabriel rule once covered edges only, so 3-D lost most `H_2` (`WORKLOG-helix-alpha-values.md`). **In general position
 Helix must equal DQP bar for bar** (`HelixDqpAgreementSpec`, a CI gate in 2-D/3-D/4-D); only degenerate inputs stay
 diagnostic.
+
+**`DelaunayAlphaShapes` keeps faces and values in flat tables, read per dimension** (`WORKLOG-helix-alpha-speed.md`): `built`
+is a `FaceTable` per dimension plus value arrays; the `Simplex` objects, the sorted order of a dimension
+(`simplicesOfDimension`, `sortedDimension`) are made when it is first asked for (the verb reads up to `maxDimension + 1`,
+never the millions of faces above), and `filtrationValue` probes the table, not a `HashMap[Simplex, Double]`. Nothing in
+here may be per-simplex hash sets or a scan of the cells per top simplex (`topValue` was quadratic in the number of cells
+and was 75% of the time at 40 points in R^7: `HelixDelaunay.smallestCircumradii`); no `tabulate`/`map`/`sum` in
+`circumsphere` (boxing, once per face). Any change here is checked by a before/after dump of every simplex, value (hex
+doubles) and stream order (`AlphaProfileDriver dump=`), not by Betti numbers. 40 points in R^8: 7 s, in R^10: 71 s (GUDHI
+3.7 s, 56 s). Helix's walk is now 40-55% of that; DQP and Cech pay for the 3-skeleton only (at most C(n, <= 4)).
 
 **Helix walk** (`WORKLOG-helix-construction-speed.md`): hull facet by gift wrapping (deterministic, no RNG); across
 each frontier facet the cofacet is the light point with the smallest centre parameter `t` (sphere centre `c0 + t n`),

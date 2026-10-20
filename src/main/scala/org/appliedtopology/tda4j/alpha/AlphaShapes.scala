@@ -711,9 +711,9 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
     validated.toSet
 
 /** An alpha complex read off a Delaunay triangulation of `points`: the faces of the top-dimensional simplices, with
-  * alpha values computed top-down (see `alphaValues`). A subclass supplies the triangulation (`topSimplices`, distinct)
-  * and the value of each top simplex (`topValue`, its circumradius); [[HelixDelaunay]] is one.
-  * [[FastAlphaHomologyEngine]] works on any of them.
+  * alpha values computed top-down (see `valueOf`). A subclass supplies the triangulation (`topSimplices`, distinct) and
+  * the value of each top simplex (`topValue`, its circumradius); [[HelixDelaunay]] is one. [[FastAlphaHomologyEngine]]
+  * works on any of them.
   */
 abstract class DelaunayAlphaShapes(using epsilon: Epsilon) extends AlphaShapes:
   /** The dimension of the triangulation (of the points' affine span). */
@@ -733,9 +733,11 @@ abstract class DelaunayAlphaShapes(using epsilon: Epsilon) extends AlphaShapes:
     */
   protected def duplicates: Map[Int, Int] = Map.empty
 
-  // Every simplex once, per dimension, with its alpha value: built on flat arrays (a face table per dimension, faces
-  // found from their immediate cofaces), so the Simplex objects and the value map are made once at the end.
-  private lazy val built: (Map[Int, Seq[Simplex[Int]]], mutable.HashMap[Simplex[Int], Double]) =
+  // Every simplex once, per dimension, with its alpha value: flat arrays (a face table per dimension, faces found from
+  // their immediate cofaces). The `Simplex` objects of a dimension are made when that dimension is asked for
+  // (`simplicesOfDimension`) and a value is looked up in the tables, so a run that reads the first few dimensions
+  // (the verb cuts the stream at `maxDimension + 1`) never pays for the millions of faces above them.
+  private lazy val built: (Array[DelaunayAlphaShapes.FaceTable], Array[Array[Double]]) =
     val coords = points.map(_.toArray).toArray
     val top = ambientDimension
     val tops = topSimplices.toArray
@@ -804,26 +806,28 @@ abstract class DelaunayAlphaShapes(using epsilon: Epsilon) extends AlphaShapes:
             if gabriel(f) && radius(f) < cofaceMin(f) * (1 - 1e-12) then radius(f) else cofaceMin(f)
       levels(k) = faces
       values(k) = vals
-    val valueMap = mutable.HashMap.empty[Simplex[Int], Double]
-    // Dimension 1 exists even for points spanning nothing when some of them are repeated (their value-0 edges).
-    val highest = if duplicates.nonEmpty then math.max(top, 1) else top
-    val byDimension = (0 to highest).map { k =>
-      val level = if k <= top then levels(k) else DelaunayAlphaShapes.FaceTable(k + 1, 0)
-      val simplices = Array.tabulate(level.size) { f =>
-        val s = Simplex.from(Seq.tabulate(k + 1)(i => level.vertex(f, i)))
-        valueMap(s) = values(k)(f)
-        s
-      }
-      val extra: Seq[Simplex[Int]] = k match
-        case 0 => duplicates.keys.toSeq.map(Simplex(_))
-        case 1 => duplicates.toSeq.map((dup, kept) => Simplex(dup, kept))
-        case _ => Nil
-      extra.foreach(s => valueMap(s) = 0.0)
-      k -> (simplices.toSeq ++ extra)
-    }
-    (byDimension.toMap, valueMap)
+    (levels, values)
 
-  lazy val simplicesMap: Map[Int, Seq[Simplex[Int]]] = built._1
+  // Dimension 1 exists even for points spanning nothing when some of them are repeated (their value-0 edges).
+  private lazy val highest: Int = if duplicates.nonEmpty then math.max(ambientDimension, 1) else ambientDimension
+
+  // The simplices of dimension `k` in table order, then the repeated points' extras (value 0).
+  private val unsorted: mutable.HashMap[Int, Seq[Simplex[Int]]] = mutable.HashMap.empty
+  private def simplicesOfDimension(k: Int): Seq[Simplex[Int]] = synchronized {
+    unsorted.getOrElseUpdate(
+      k, {
+        val level = if k <= ambientDimension then built._1(k) else DelaunayAlphaShapes.FaceTable(k + 1, 0)
+        val simplices = Array.tabulate(level.size)(f => Simplex.from(Seq.tabulate(k + 1)(i => level.vertex(f, i))))
+        val extra: Seq[Simplex[Int]] = k match
+          case 0 => duplicates.keys.toSeq.map(Simplex(_))
+          case 1 => duplicates.toSeq.map((dup, kept) => Simplex(dup, kept))
+          case _ => Nil
+        simplices.toSeq ++ extra
+      }
+    )
+  }
+
+  lazy val simplicesMap: Map[Int, Seq[Simplex[Int]]] = (0 to highest).map(k => k -> simplicesOfDimension(k)).toMap
 
   /** The smallest sphere through every vertex of `s`: its centre lies in `s`'s own affine hull (`Hypersphere.apply` is
     * for full-dimensional simplices only).
@@ -842,9 +846,22 @@ abstract class DelaunayAlphaShapes(using epsilon: Epsilon) extends AlphaShapes:
     *     sphere, computed twice), which also keeps the filtration monotone to the last bit.
     *   - a vertex: 0.
     */
-  private def alphaValues: mutable.HashMap[Simplex[Int], Double] = built._2
+  private def valueOf(s: Simplex[Int]): Double =
+    val vs = s.toArray
+    val k = vs.length - 1
+    val row = if k >= 0 && k <= ambientDimension then built._1(k).indexOf(vs) else -1
+    if row >= 0 then built._2(k)(row)
+    else if isRepeatedPointFace(vs) then 0.0
+    else throw new NoSuchElementException(s"key not found: $s")
 
-  override def filtrationValue: PartialFunction[Simplex[Int], Double] = { case spx => alphaValues(spx) }
+  // A repeated point (a vertex the triangulation does not have) or the edge joining it to the one that was kept.
+  private def isRepeatedPointFace(vs: Array[Int]): Boolean =
+    duplicates.nonEmpty && (vs.length match
+      case 1 => duplicates.contains(vs(0))
+      case 2 => duplicates.get(vs(0)).contains(vs(1)) || duplicates.get(vs(1)).contains(vs(0))
+      case _ => false)
+
+  override def filtrationValue: PartialFunction[Simplex[Int], Double] = { case spx => valueOf(spx) }
 
   // Must be the exact reverse of filtrationOrdering below, not merely "ascending by filtrationValue" --
   // sortBy(filtrationValue) alone has no explicit tie-break (falls back to simplicesMap's own insertion
@@ -853,27 +870,38 @@ abstract class DelaunayAlphaShapes(using epsilon: Epsilon) extends AlphaShapes:
   // whose chunk-boundary logic (Homology.scala's PersistenceInChunksEngine.allCells) relies on
   // iterateDimension's own emission order standing in for filtrationOrdering position -- found via
   // EngineComparisonBenchmarkSpec / AlphaFiltrationOrderingRegressionSpec (see CLAUDE.md).
-  // Values are looked up once per simplex; only equal values fall through to the full ordering.
-  lazy val simplicesSortedMap: Map[Int, Seq[Simplex[Int]]] =
-    val reverse = filtrationOrdering.reverse
-    simplicesMap.map { (d, v) =>
-      val keyed = v.map(s => (alphaValues(s), s)).toArray
-      java.util.Arrays.sort(
-        keyed,
-        (a: (Double, Simplex[Int]), b: (Double, Simplex[Int])) =>
-          java.lang.Double.compare(a._1, b._1) match
-            case 0 => reverse.compare(a._2, b._2)
-            case c => c
-      )
-      (d, keyed.toSeq.map(_._2))
-    }
+  // Values are read from the face tables once per simplex; only equal values fall through to the full ordering.
+  private val sorted: mutable.HashMap[Int, Seq[Simplex[Int]]] = mutable.HashMap.empty
+  private def sortedDimension(k: Int): Seq[Simplex[Int]] = synchronized {
+    sorted.getOrElseUpdate(
+      k, {
+        val reverse = filtrationOrdering.reverse
+        // The table's values in table order; the repeated points' extras after them have value 0.
+        val tableValues = if k <= ambientDimension then built._2(k) else Array.emptyDoubleArray
+        val keyed = simplicesOfDimension(k).iterator.zipWithIndex
+          .map((s, i) => (if i < tableValues.length then tableValues(i) else 0.0, s))
+          .toArray
+        java.util.Arrays.sort(
+          keyed,
+          (a: (Double, Simplex[Int]), b: (Double, Simplex[Int])) =>
+            java.lang.Double.compare(a._1, b._1) match
+              case 0 => reverse.compare(a._2, b._2)
+              case c => c
+        )
+        keyed.toSeq.map(_._2)
+      }
+    )
+  }
 
-  def simplicesInDimension(d: Int): Iterator[Simplex[Int]] = simplicesSortedMap(d).iterator
+  lazy val simplicesSortedMap: Map[Int, Seq[Simplex[Int]]] = (0 to highest).map(k => k -> sortedDimension(k)).toMap
 
-  def simplices(): Iterator[Simplex[Int]] = simplicesSortedMap.keys.toSeq.sorted.iterator.flatMap(simplicesInDimension)
+  def simplicesInDimension(d: Int): Iterator[Simplex[Int]] =
+    if d < 0 || d > highest then throw new NoSuchElementException(s"key not found: $d") else sortedDimension(d).iterator
+
+  def simplices(): Iterator[Simplex[Int]] = (0 to highest).iterator.flatMap(simplicesInDimension)
 
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
-    case d if simplicesSortedMap.contains(d) => simplicesSortedMap(d).iterator
+    case d if d >= 0 && d <= highest => sortedDimension(d).iterator
   }
 
   // The shared FiltrationOrdering.canonical shape: fv reversed, then dimension, then simplexOrdering.
@@ -950,14 +978,30 @@ open class HelixDelaunay(pts: Array[Array[Double]], seed: Long = 0L, requireVali
 
   protected def topSimplices: Iterable[Simplex[Int]] = validated.map(_.simplex)
 
-  // The smallest circumradius among the Delaunay simplices containing it: its own, unless a cospherical cluster was
-  // tiled as one larger cell.
-  private lazy val containing: Map[Int, Seq[DelaunaySimplex]] =
-    validated.toSeq.flatMap(ds => ds.simplex.toSeq.map(v => (v, ds))).groupMap(_._1)(_._2)
-  protected def topValue(s: Simplex[Int]): Double =
-    containing(s.toSeq.head).filter(ds => s.toSet.subsetOf(ds.simplex.toSet)).map(_.circumsphere.radius).min
+  // The smallest circumradius among the Delaunay simplices containing a top-sized simplex: its own, unless a cospherical
+  // cluster was tiled as one larger cell. A table with one entry per (ambient + 1)-subset of each cell, so a lookup is one
+  // hash probe: scanning the cells around the simplex's first vertex (and building two sets per cell) made the faces
+  // quadratic in the number of cells, ~75% of the time at n = 40 points in R^7 (`.claude/WORKLOG-helix-alpha-speed.md`).
+  private lazy val topRadius: mutable.HashMap[Simplex[Int], Double] =
+    HelixDelaunay.smallestCircumradii(validated, ambientDimension)
+  protected def topValue(s: Simplex[Int]): Double = topRadius(s)
 
 object HelixDelaunay:
+
+  /** For every `(top + 1)`-subset of a cell, the smallest circumradius among the cells that contain it: a cell of
+    * exactly `top + 1` vertices gives its own radius to itself, a larger cell (a cospherical cluster taken whole) gives
+    * its radius to each of its subsets, and a simplex that several cells claim keeps the smallest.
+    */
+  def smallestCircumradii(cells: Iterable[DelaunaySimplex], top: Int): mutable.HashMap[Simplex[Int], Double] =
+    val radii = mutable.HashMap.empty[Simplex[Int], Double]
+    cells.foreach { cell =>
+      val radius = cell.circumsphere.radius
+      val subsets =
+        if cell.simplex.size == top + 1 then Iterator.single(cell.simplex)
+        else cell.simplex.toArray.combinations(top + 1).map(c => Simplex.from(c.toSeq))
+      subsets.foreach(s => radii.updateWith(s)(old => Some(old.fold(radius)(math.min(_, radius)))))
+    }
+    radii
 
   /** Points whose affine span has lower dimension than their coordinates, re-expressed in an orthonormal basis of that
     * span (distances are unchanged, so the triangulation is the true one); other point sets are returned as they are.
@@ -1156,6 +1200,15 @@ object DelaunayAlphaShapes:
       while i < width && rows(row * width + i) == vs(i) do i += 1
       i == width
 
+    /** The row of the sorted vertices `vs`, or -1 if there is none. */
+    def indexOf(vs: Array[Int]): Int =
+      if vs.length != width then -1
+      else
+        val mask = slots.length - 1
+        var s = hash(vs, 0) & mask
+        while slots(s) >= 0 && !sameRow(slots(s), vs) do s = (s + 1) & mask
+        slots(s)
+
     /** The row of the sorted vertices `vs`, and whether it is new. */
     def add(vs: Array[Int]): (Int, Boolean) =
       if size * 2 >= slots.length then grow()
@@ -1192,8 +1245,20 @@ object DelaunayAlphaShapes:
       0.0
     else
       // a(c)(r): column c of D, overwritten by R above the diagonal and the reflector below.
-      val a = Array.tabulate(k)(c => Array.tabulate(dim)(r => coords(vs(c + 1))(r) - p0(r)))
-      val rhs = Array.tabulate(k)(c => a(c).map(x => x * x).sum / 2)
+      // Plain loops: this runs once per face of the triangulation (millions in 9-D), and the `tabulate`/`map`/`sum`
+      // closures box a Double per coordinate. The sums are taken in the same order, so the values are bit-for-bit the same.
+      val a = new Array[Array[Double]](k)
+      val rhs = new Array[Double](k)
+      for c <- 0 until k do
+        val q = coords(vs(c + 1))
+        val col = new Array[Double](dim)
+        var sq = 0.0
+        for r <- 0 until dim do
+          val x = q(r) - p0(r)
+          col(r) = x
+          sq += x * x
+        a(c) = col
+        rhs(c) = sq / 2
       val diag = new Array[Double](k)
       val reflectors = new Array[Array[Double]](k)
       for c <- 0 until k do
