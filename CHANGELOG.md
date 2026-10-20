@@ -145,6 +145,11 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 - `Cech`, `Witness`, `Dowker`, `DtmRips` and `SparseRips` built dimension `d + 1` by enumerating and testing every
   `(d + 1)`-subset of the points instead of extending the simplices kept in dimension `d`, so a sparse complex cost as
   much as a dense one; they extend the kept simplices, and give the same complex cell for cell.
+- A file in the wrong format was read as a different space instead of refused: `CSV.readLowerTriangularDistanceMatrix`
+  accepted a full matrix (as a point set one larger) and ragged rows, `CSV.readPointCloud` and `readFullDistanceMatrix`
+  accepted rows of different lengths, `Ripser.readDistanceMatrix` failed on a trailing blank line, and
+  `Perseus.readCubicalImageData` ignored values beyond its grid. Each now says which row or line is wrong; a token that is
+  not a number is named with its line.
 - `FiniteField(p)` with a `p` that is not a prime failed on first use with "/ by zero"; it says that `p` must be prime.
 - `fig.copy(palette = ...)` left heatmaps, cocycles' values and the color bar in the palette the plot was built with.
 - `DistanceToMeasure` through the vantage-point search returned fewer than `k` neighbours for some `k` that is a sizeable

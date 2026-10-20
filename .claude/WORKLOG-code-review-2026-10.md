@@ -29,7 +29,26 @@ alpha (#155) and the release workflow (#150, #151) were left alone.
 - **[reading] ok:** `NeighbourLists.within` caps and overflow handling, `SimplexIndexing.binomial` overflow guard,
   `decodeToArray` parity with `apply`.
 
+## Area 2: engines — fuzzed, not read line by line
+
+- **[probe] No disagreement found.** `Persistence` on random quantized point sets (ties on purpose): Ripser, Chunks, Naive
+  and Cohomology agree bar for bar over F2/F3/F17, cycles and cocycles (360 runs), Cech and Vietoris-Rips with a
+  threshold over F0/F2/F3/F5 with and without zero-length bars (about 160 runs), and 2-D/3-D images over FastCubical,
+  Cohomology, Chunks and Naive (160 runs). Every cycle representative of every engine has zero boundary. The harness
+  was a scratch `main` under `src/test` (not committed): compare `triples` after rounding, check `Chain.boundary`.
+- Not covered by the fuzz: alpha and witness inputs, `includeZeroLength` for cubical images, dimension > 3.
+
+## Area 4 (first part): `barcode/` distances and `io/`
+
+- **[probe] Bottleneck and Wasserstein are cubic.** Correct (brute-force spec) but 1,500 bars take 22 s / 40 s. Issue #166.
+- **[probe] File readers read the wrong format as a different space.** A full 3x3 matrix given to
+  `CSV.readLowerTriangularDistanceMatrix` came back as a 4-point space with other distances; ragged rows, a ragged point
+  cloud and Perseus values beyond the grid were accepted; a trailing blank line crashed `Ripser.readDistanceMatrix` with
+  an `IndexOutOfBoundsException`; a header line gave a bare `NumberFormatException`. Fixed in the PR with row/line
+  numbers in the messages (`MalformedInputSpec`, shared so it runs on Scala.js too).
+- **[reading] ok:** `BarcodeDistance` conventions (diagonal distance for `LP`, essential bars), `DiagramPoint`.
+
 ## Not yet reviewed (in priority order)
 
-`homology/` engines (Homology, PackedRipser, RipserCohomology, Involution), the remaining streams (witness, Dowker, DTM,
-sparse Rips, edge collapse), `barcode/`, `alpha/` (not Helix), `io/`, `matlab`/`cli` facade, `sset`, `plot`, Scala.js seams.
+the `homology/` engine sources (fuzzed above), the remaining streams (witness, Dowker, DTM,
+sparse Rips, edge collapse), `barcode/` vectorizations and filters, `io/` Dipha/Gudhi, `alpha/` (not Helix), `matlab`/`cli` facade, `sset`, `plot`, Scala.js seams.
