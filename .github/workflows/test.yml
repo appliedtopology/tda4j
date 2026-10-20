@@ -22,6 +22,12 @@ concurrency:
 # build), `test-js` (the Scala.js build, on Node.js), `npm-package` (the npm tarball, installed and run), `docs-build`
 # (named to differ from the deploying job `docs` in docs.yml) and `mima`. A branch rule for `scala` can require any of
 # them by job name. The sbt projects are `tda4j` (JVM) and `tda4jJS` (Scala.js): every command here names one.
+#
+# Every sbt call in every workflow runs with `--server`: sbt in the foreground, finished when its step is. Through sbt
+# 2's default thin client a server stays behind, and in the first milliseconds after the step it replaces its log file
+# in `target/global-logging/`, just as setup-sbt's post-job cache step hashes the workspace (`hashFiles('**/*.sbt',
+# '**/*.properties')`); a file deleted under that walk fails the job ("Post Setup sbt launcher") after every step passed.
+# A new sbt step keeps the flag.
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -37,12 +43,12 @@ jobs:
       - name: Setup sbt launcher
         uses: sbt/setup-sbt@v1
       - name: Run tests
-        run: sbt "clean ; tda4j/test"
+        run: sbt --server "clean ; tda4j/test"
       # The fat jar is what the CLI and MATLAB users run; release.yml builds it, so a break (a merge strategy, a missing
       # main class) would otherwise surface only at release. The smoke run checks the answer, not just the exit code:
       # the noisy circle has exactly one degree-1 bar.
       - name: Build the fat jar
-        run: sbt tda4j/assembly
+        run: sbt --server tda4j/assembly
       - name: Smoke-test the fat jar
         run: |
           jar=$(ls target/out/jvm/scala-*/tda4j/tda4j-*-assembly.jar)
@@ -71,7 +77,7 @@ jobs:
       - name: Setup sbt launcher
         uses: sbt/setup-sbt@v1
       - name: Run the Scala.js tests
-        run: sbt "clean ; tda4jJS/test"
+        run: sbt --server "clean ; tda4jJS/test"
 
   # The npm package the release attaches (and publishes to npm once a token is configured, see release.yml): built from
   # the optimized link, installed from its tarball into an empty project, and run the way a user runs it, as a library
@@ -94,7 +100,7 @@ jobs:
       - name: Setup sbt launcher
         uses: sbt/setup-sbt@v1
       - name: Build the package
-        run: sbt tda4jJS/npmPack
+        run: sbt --server tda4jJS/npmPack
       - name: Install and run it
         run: |
           set -e
@@ -132,11 +138,12 @@ jobs:
       - name: Build docs
         env:
           TDA4J_SCALA_VERSION: "3.8.4" # docs only; see build.sbt. TODO: remove when 3.9.1 is released.
-        run: sbt tda4j/doc
+        run: sbt --server tda4j/doc
 
-  # Binary compatibility is enforced within a compatibility series (0.5.x, later 1.x) and never across one; `build.sbt`
-  # (`mimaBaselineVersions`) derives the baseline from the `v*` git tags, so this job needs the full history and tags.
-  # While only 0.5.0-SNAPSHOT exists the baseline is empty and the job passes trivially.
+  # Binary compatibility is enforced within a compatibility series (0.Y.x before 1.0, then X.x) and never across one;
+  # `build.sbt` (`mimaBaselineVersions`) derives the baseline from the `v*` git tags, so this job needs the full history
+  # and tags. A build with no earlier plain release in its series (an X.Y.0-SNAPSHOT, like 0.7.0-SNAPSHOT now) has an
+  # empty baseline, and the job passes trivially ("mimaPreviousArtifacts is empty").
   mima:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -153,4 +160,4 @@ jobs:
       - name: Setup sbt launcher
         uses: sbt/setup-sbt@v1
       - name: Binary Compatibility Checks
-        run: sbt tda4j/mimaReportBinaryIssues
+        run: sbt --server tda4j/mimaReportBinaryIssues

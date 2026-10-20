@@ -10,8 +10,9 @@ ThisBuild / organization := "org.appliedtopology"
 
 // Docs are built with 3.8.4 (scaladoc 3.9.0 ships broken JavaScript); docs.yml and test.yml set
 // TDA4J_SCALA_VERSION=3.8.4 for their `sbt doc` step. `sbt "++3.8.4 doc"` does NOT work in sbt 2: "no subprojects
-// list 3.8.4 ... in crossScalaVersions"; `++3.8.4!` does, and release.yml uses it because the env var only reaches a
-// FRESH sbt server: a second `sbt` call in the same job joins the running server (thin client) and ignores it.
+// list 3.8.4 ... in crossScalaVersions"; `++3.8.4!` does, and release.yml uses it to stay in one sbt invocation. The env
+// var only reaches a FRESH sbt JVM: through sbt 2's thin client (the local default) a second `sbt` call joins the
+// running server and ignores it; CI starts every sbt call with `--server`, a new JVM each time.
 // TODO: delete the override when 3.9.1 is released.
 val tda4jScalaVersion = sys.env.getOrElse("TDA4J_SCALA_VERSION", "3.9.0")
 ThisBuild / scalaVersion := tda4jScalaVersion

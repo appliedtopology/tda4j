@@ -145,6 +145,8 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 ### Build, CI and Documentation
 
 - The user guide's plotting page has a "Customizing a plot" section; the CLI and MATLAB pages point to it.
+- CI starts every sbt command with `--server`. The sbt server that the thin client left running intermittently failed a
+  job (most visibly `mima` and `test-js`) in setup-sbt's post-job cache step, after every step of the job had passed.
 
 
 ## 0.6.2 (2026-10-15)

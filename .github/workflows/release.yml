@@ -86,10 +86,14 @@ jobs:
         env:
           TDA4J_DOCS_VERSION: ${{ steps.version.outputs.version }}
         run: |
-          # Docs only are built with 3.8.4 (see build.sbt), switched to with `++3.8.4!` inside ONE sbt invocation. Not
-          # `TDA4J_SCALA_VERSION=3.8.4 sbt ...` as a second call: sbt 2 runs as a thin client, so a second `sbt` connects
-          # to the server the first one started, which never sees the new env var, builds docs with 3.9.0, and leaves
-          # no scala-3.8.4/.../api for the steps below. TODO: drop `++3.8.4!` when 3.9.1 is released.
+          # Docs only are built with 3.8.4 (see build.sbt), switched to with `++3.8.4!` inside ONE sbt invocation: one
+          # project load, and it does not depend on how sbt is started. A second `TDA4J_SCALA_VERSION=3.8.4 sbt ...` call
+          # sees the variable only in a fresh sbt JVM; through sbt 2's thin client it would join the server the first call
+          # started, build docs with 3.9.0, and leave no scala-3.8.4/.../api for the steps below. TODO: drop `++3.8.4!` when
+          # 3.9.1 is released.
+          #
+          # `--server` here and in the next step runs sbt in the foreground, so no sbt server is left to race setup-sbt's
+          # post-job cache step (test.yml's header says why).
           #
           # `publishLocal` (still on 3.9.0, before the switch) puts this checkout's library into ~/.ivy2/local for the demo jar
           # below, which depends on a VERSION of the library: building it against the tag's own sources does not wait for
@@ -98,14 +102,14 @@ jobs:
           #
           # Every command names its project: `tda4j` is the JVM build (fat jar, docs, the JVM Maven artifact), `tda4jJS` the
           # Scala.js build (the npm package).
-          sbt "tda4j/assembly ; tda4j/publishLocal ; tda4j/packageSrc ; tda4jJS/npmPack ; ++3.8.4! ; tda4j/packageDoc ; tda4j/doc"
+          sbt --server "tda4j/assembly ; tda4j/publishLocal ; tda4j/packageSrc ; tda4jJS/npmPack ; ++3.8.4! ; tda4j/packageDoc ; tda4j/doc"
       - name: Build the demo REPL jar
-        # A separate sbt build (demo/README.md): its own server, so the env var below is seen by a fresh one. It resolves
+        # A separate sbt build (demo/README.md), in its own fresh sbt JVM, which sees the env var below. It resolves
         # `tda4j % VERSION` from ~/.ivy2/local, where the step above just put it, and everything else from Maven Central.
         working-directory: demo
         env:
           TDA4J_VERSION: ${{ steps.version.outputs.version }}
-        run: sbt "++3.9.0! ; assembly
+        run: --server sbt "++3.9.0! ; assembly
       - name: Smoke-test the demo REPL jar
         # Checks the answer, not just the exit code: a REPL that starts and cannot run the library would still exit 0. The
         # REPL evaluates the first piped line and ends, so the script is run with `:load`. The unit square has five bars,
