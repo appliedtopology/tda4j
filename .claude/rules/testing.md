@@ -23,3 +23,7 @@ always-true properties, #79). Fix the operands (`.toLong`, wrap in `Fp`), do not
 - `must throwAn[IllegalArgumentException]("text")` takes a REGEX: `(`, `)` and `.` in the message must be escaped or left out.
 - An example that THROWS is reported as an error (`!`, "N errors"), not a failure (`x`, "N failures"): a script that breaks the
   code and counts failures misses a mutation the example does catch.
+
+**A property that hunts rare inputs** (2000 cases because a bug showed once in thousands of clouds) takes its count from
+`TestPlatform.propertyCases(n)`: all `n` on the JVM, a tenth on Scala.js (`rules/scalajs.md`). A spec that shared code
+runs must stay cheap on JS, where it is 3 to 60 times slower than on the JVM.

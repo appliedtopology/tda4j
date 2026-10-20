@@ -68,6 +68,12 @@ What differs between the platforms is behind a few small seams, each defined onc
 | `plot.RootText` | `Locale.ROOT` for lower-casing and `String.format`; `DecimalFormatSymbols` | plain lower-casing and `String.format`; `Intl.NumberFormat` for a locale's separators (`java.util.Locale` does not exist on Scala.js) |
 | `cli.ProcessExit` | `sys.exit` | sets `process.exitCode` (no `System.exit` on Scala.js) |
 
+The specs under `src/test/scala` run on both platforms and have one seam of their own, `TestPlatform` (in
+`src/test/scalajvm` and `src/test/scalajs`). A property that searches for rare inputs, such as the alpha complex
+properties' 2000 random point clouds, runs `TestPlatform.propertyCases(n)` cases: all `n` on the JVM and a tenth on
+Scala.js. The code under test is the same on both, so the search is done once, on the JVM, while the Scala.js run
+checks what can differ between the platforms.
+
 The Scala.js build adds `javascript.Exports` (the functions the npm package exports, a thin layer over the
 [MATLAB facade](../user-guide/matlab.md)) and the `tda4j` command on Node.js (`cli.TDA4jNodeMain`; the command is
 `TDA4jCLI` as on the JVM). The linker writes ES modules: `main.mjs` holds the exports, `cli.mjs` the command. `sbt
