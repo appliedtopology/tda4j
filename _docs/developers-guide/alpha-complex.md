@@ -136,13 +136,13 @@ the paper's Definition 10 — `AlphaComplexDQP.radiusOf` takes the square root, 
 `HelixDelaunay.filtrationValue`'s units. The dual objective only needs *squared distances*:
 `B_ij = (d²(i,x) + d²(j,x) - d²(i,j))/2` — which is why `PowerDistance` sits on squared distance rather than
 extending `FiniteMetricSpace` directly, bridging via `PowerDistance.toMetricSpace` only where interop is
-actually needed (e.g. `cechNeighbours()`'s VP-tree spatial index). **Caveat**: `B` is PSD only for
+needed (e.g. `cechNeighbours()`'s VP-tree spatial index). **Caveat**: `B` is PSD only for
 Euclidean-embeddable metrics.
 
 `AlphaShapeDQP` always computes the complete, **untruncated** alpha complex, matching `HelixDelaunay`'s own
 always-untruncated behavior (a finite radius bound would silently exclude the arbitrarily-large-circumradius
 simplices degenerate configurations legitimately produce — see [Degeneracies](degeneracies.md)).
-Callers who want an actually radius-truncated alpha complex should call `AlphaComplexDQP.euclidean(points,
+Callers who want a radius-truncated alpha complex should call `AlphaComplexDQP.euclidean(points,
 maxRadius, maxDimension, settings)` directly.
 
 ### Numerical robustness

@@ -293,7 +293,7 @@ listed below.
 |-------------------------------|-----------------|------------------------------------------------------|---------|-----------------------------------------------------|--------------|----------------|--------------|
 | `vr`                          | `ripser`        | yes                                                    | yes     | yes                                                   | yes          | **no**         | **no**       |
 | `cech`                        | `cohomology`         | **no** — not a max-pairwise-distance functional (radius, not diameter) | yes | yes | yes          | **no**       | **no**       |
-| `witness`, `witnessVariant=lazy`    | `ripser`  | yes — genuinely a flag complex under its own reified `WitnessMetricSpace` | yes | yes | yes | **no** | **no** |
+| `witness`, `witnessVariant=lazy`    | `ripser`  | yes — a flag complex under its own reified `WitnessMetricSpace` | yes | yes | yes | **no** | **no** |
 | `witness`, `witnessVariant=general` | `cohomology`   | **no** — not a flag complex (dimension-specific threshold) | yes | **no** | yes | **no** | **no** |
 | `dtm-rips`                    | `cohomology`         | **no** — vertices aren't born at 0, and the weighted-Rips functional isn't `insertionDiameter`-compatible | yes | yes | yes | **no** | **no** |
 | `dtm-alpha`                   | `cohomology`         | **no** — no notion of a Vietoris-Rips complex at all   | yes     | **no** — shares `AlphaComplexDQP`'s known stall/OOM risk (see `alpha-complex.md`) | yes | **no** | **no** — always uses `AlphaComplexDQP`, never a triangulation |

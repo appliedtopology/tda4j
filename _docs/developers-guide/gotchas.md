@@ -29,9 +29,8 @@ order, not filtration order, regardless of what's nominally in scope at the call
 **The fix pattern, everywhere it's applied**: declare `given Ordering[CellT] = stream.filtrationOrdering`
 as the *first* statement inside whatever state object holds the stream, before summoning `chainRM`.
 
-This is genuinely dangerous rather than a style nit because it compiles cleanly either way and only
-manifests as a wrong *answer* on inputs where lexicographic and filtration order actually disagree — most
-hand-built fixtures don't exercise that unless someone deliberately constructs one (a fixture with vertex 1
+This is not a style nit: it compiles either way and gives a wrong *answer* only on inputs where lexicographic and
+filtration order disagree. Most hand-built fixtures do not exercise that unless built to (a fixture with vertex 1
 born early and vertex 9 born late is the minimal discriminator). **Not every class-scope `chainRM` instance
 is a live bug**: whether it matters depends on whether anything downstream trusts that instance's output
 directly for pivot identity, or whether every consumer re-resolves ordering itself (e.g. via
@@ -127,7 +126,7 @@ val xs: IndexedSeq[Simplex[Int]] = ...
 xs.forall(...)
 ```
 
-## 9. Dowker streams must reject genuinely infinite filtration values
+## 9. Dowker streams must reject infinite filtration values
 
 `DowkerGeometry.fromBoolean` uses `+Infinity` to represent a relation that is
 never witnessed. Since `+Infinity <= +Infinity` is true, the usual

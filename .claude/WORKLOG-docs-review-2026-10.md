@@ -31,3 +31,12 @@ Not checked (budget): scaladoc coverage of public members, tutorial correctness 
 - #162 (content pass) opened: dev guide partly done; user guide, tutorials, plotting (45 KB) still to read end to end.
 - Unverified: the installation page's `publishLocal` and Maven Central coordinates (no release exists yet); the docs
   build (`sbt doc`) was not run in this session.
+
+## Step 3: read-through (#162)
+
+Read in full: user-guide `topological-spaces/index`, `vietoris-rips`, `homology-computation/*`, the head of `plotting`,
+a tutorial opening; developer's guide passages flagged by a hedge-word grep. The user guide and tutorials were already
+concise and in human register: no edits needed in what was read. Developer's guide: filler ("genuinely", "actually")
+and one history sentence removed. Not read end to end (budget): remaining user-guide pages, 11 other tutorials, the
+bulk of `plotting.md`, `architecture.md`, `persistence-engines.md`, `class-diagrams.md`. Those are the next step if
+wanted; the pattern sweeps found nothing there.

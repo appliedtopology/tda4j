@@ -5,7 +5,7 @@ title: Architecture: from algebra to persistence
 
 
 This page walks the two lower layers of the library: the algebraic core (what a "chain" and a
-"coefficient" actually are) and complex construction (how a sequence of cells in filtration order gets
+"coefficient" are) and complex construction (how a sequence of cells in filtration order gets
 produced). [Persistence engines](persistence-engines.md) covers what consumes the stream this layer
 produces.
 
@@ -178,9 +178,8 @@ trait OrderedCell extends Cell:
 `OrderedCell` instances (`cells/SimplexOrderedCell.scala`, `cells/CubicalOrderedCell.scala`,
 `sset/SimplicialSet.scala`): `boundary` returns each codimension-1 face paired with alternating signs.
 
-There is no dual `Cocell`/`OrderedCocell` trait pair — an earlier version of this codebase had one, and it was
-removed: coboundary is *extrinsic* to a cell (it depends on which higher-dimensional cells actually exist in
-the ambient, possibly-truncated complex), not intrinsic the way `boundary` is, so a per-cell `coboundary`
+There is no dual `Cocell`/`OrderedCocell` trait pair: coboundary is *extrinsic* to a cell (it depends on which
+higher-dimensional cells exist in the ambient, possibly truncated complex), not intrinsic the way `boundary` is, so a per-cell `coboundary`
 method with no complex to consult can only be correct when the complex is always the full
 combinatorially-possible one. `RipserCohomologyEngine`/`PackedRipserCohomologyEngine` compute coboundaries
 directly against `SimplexIndexing`'s cofacet iterator instead (see
@@ -287,8 +286,8 @@ stream it wraps.
 
 ### Vietoris-Rips: several independent generation strategies
 
-These are **alternate engines with the same output contract, not layers on one another** — check which
-`iterateDimension`/`iterator` implementation is actually in play before reasoning about a bug:
+These are **alternative implementations with the same output contract, not layers on one another**. Check which
+`iterateDimension`/`iterator` implementation is in play before reasoning about a bug:
 
 - `EnumeratingCofaceSimplexStream` — generates each dimension explicitly via `SimplexIndexing`'s
   combinatorial-number-system enumeration, filtered by an optional `keepCriterion`.
