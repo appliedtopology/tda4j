@@ -60,8 +60,9 @@ class AlphaComplexSpec extends org.specs2.mutable.Specification with ScalaCheck:
   // violations) were rare: verified failure rates from roughly 1-in-500 to 1-in-12000
   // random point clouds during debugging (see WORKLOG.md). The scalacheck default of 100
   // cases per run is not enough to reliably catch a regression at that rate; 2000 is a
-  // still-fast (a few seconds) compromise that gives meaningfully better odds.
-  given Parameters = Parameters(minTestsOk = 2000)
+  // still-fast (a few seconds) compromise that gives meaningfully better odds. The JVM run
+  // does that search; Scala.js runs a tenth (`TestPlatform`, .claude/WORKLOG-js-test-trimming.md).
+  given Parameters = Parameters(minTestsOk = TestPlatform.propertyCases(2000))
 
   private val dispatches = Seq("helix", "DQP")
   private val pointsGen =
