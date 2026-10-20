@@ -226,6 +226,23 @@ class VantagePointTreeSpec extends Specification:
     misses must beEmpty
   }
 
+  "Collinear lattice points, where computed distances break the triangle inequality by one ulp: the point on the radius is found from every vantage point" >> {
+    // (0,3), (3,6) and (4,7) are collinear, at distances sqrt(18), sqrt(2) and sqrt(32) from each other, and in floating
+    // point sqrt(32) > sqrt(18) + sqrt(2). With (0,3) as the vantage point and (3,6) the farthest of its nearer half
+    // (leafSize 3 makes these four points one inner node), a query at (4,7) of radius sqrt(2) puts (3,6) exactly on the
+    // radius and exactly one ulp outside what the triangle inequality allows: a pruning bound without slack skips it.
+    // Each of the 24 orders of the points gives a different vantage point.
+    val v = Array(0.0, 3.0)
+    val near = Array(1.0, 3.0)
+    val onRadius = Array(3.0, 6.0)
+    val q = Array(4.0, 7.0)
+    val problems = for
+      elems <- IndexedSeq(v, near, onRadius, q).permutations.toSeq
+      problem <- disagreements(elems, euclid, Seq(q), Seq(math.sqrt(2.0)), Seq(1, 2, 4), 3)
+    yield problem
+    (euclid(v, q) must beGreaterThan(euclid(v, onRadius) + euclid(onRadius, q))) and (problems must beEmpty)
+  }
+
   "Coincident points are all found, in construction order, without any special handling" >> {
     val same = IndexedSeq.fill(100)(Array(0.25, 0.5))
     val tree = VantagePointTree(same, euclid, 4)

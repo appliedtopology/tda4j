@@ -22,19 +22,23 @@ class PlotCLISpec extends Specification:
     f.deleteOnExit()
     f.getAbsolutePath
 
+  // Where the CLI's error stream goes. The process's own `System.err` is shared with the specs running beside this one,
+  // so it is neither swapped nor read here.
+  private var errorBuffer = ByteArrayOutputStream()
+
   private def run(args: String*): (Int, String) =
     val buffer = ByteArrayOutputStream()
-    val code = TDA4jCLI.run(args, PrintStream(buffer))
+    val code = TDA4jCLI.run(args, PrintStream(buffer), PrintStream(errorBuffer, true, StandardCharsets.UTF_8))
     (code, buffer.toString)
 
-  /** Standard error while `body` runs. */
+  /** What the CLI writes to its error stream while `body` runs. */
   private def stderrOf(body: => Unit): String =
-    val buffer = ByteArrayOutputStream()
-    val saved = System.err
-    System.setErr(PrintStream(buffer, true, StandardCharsets.UTF_8))
+    val captured = ByteArrayOutputStream()
+    val saved = errorBuffer
+    errorBuffer = captured
     try body
-    finally System.setErr(saved)
-    buffer.toString(StandardCharsets.UTF_8)
+    finally errorBuffer = saved
+    captured.toString(StandardCharsets.UTF_8)
 
   private def read(path: String): String = Files.readString(Paths.get(path), StandardCharsets.UTF_8)
 

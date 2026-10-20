@@ -32,12 +32,13 @@ object TDA4jCLI:
     if exitCode != 0 then ProcessExit.withCode(exitCode)
 
   /** The CLI without the process exit, so it can run in-process: returns `0` on success and `1` on a reported failure
-    * (a bad option, a malformed file), which is printed as one line `tda4j: <message>` on standard error.
+    * (a bad option, a malformed file), which is printed as one line `tda4j: <message>` on `err` (standard error by
+    * default).
     *
     * Parse errors, `--help` and `--version` are handled by Scallop, which prints and calls `System.exit` before this
     * method returns: do not call it with such arguments from a process that must keep running.
     */
-  private[cli] def run(args: Seq[String], out: java.io.PrintStream): Int =
+  private[cli] def run(args: Seq[String], out: java.io.PrintStream, err: java.io.PrintStream = System.err): Int =
     try
       val conf = new TDA4jConf(args)
       val options = buildOptions(conf)
@@ -156,7 +157,7 @@ object TDA4jCLI:
             throw new IllegalStateException("unreachable: rejected by the Relation guard above")
           case ResolvedInput.Result(_) =>
             throw new IllegalStateException("unreachable: rejected by the Result guard above")
-        writeLandmarkSelection(conf, selection, out)
+        writeLandmarkSelection(conf, selection, out, err)
         0
       else
         val result = conf.landmarksFile.toOption match
@@ -182,26 +183,26 @@ object TDA4jCLI:
         val loaded = resolved.isInstanceOf[ResolvedInput.Result]
         // Saved first: a plot or output that fails must not lose a long computation.
         conf.saveResult.foreach(result.save)
-        if conf.plot.isSupplied then writePlot(conf, result, loaded)
+        if conf.plot.isSupplied then writePlot(conf, result, loaded, err)
         else if conf.distanceTo.isSupplied then writeDistance(conf, result, out)
         else
           writeOutput(conf, result, out)
-          noteHiddenBars(result, loaded)
+          noteHiddenBars(result, loaded, err)
         0
     catch
       case e: IllegalArgumentException =>
-        System.err.println(s"tda4j: ${e.getMessage}")
+        err.println(s"tda4j: ${e.getMessage}")
         1
       // what a result cannot draw (a representative with no coordinates, a complex the plots do not build)
       case e: UnsupportedOperationException =>
-        System.err.println(s"tda4j: ${e.getMessage}")
+        err.println(s"tda4j: ${e.getMessage}")
         1
       case e: java.io.IOException =>
         // Covers FileNotFoundException (a missing/unreadable --input path OR --landmarks-file path) and any
         // other I/O failure from the io.* readers -- these are user-input problems (a typo'd path, a
         // permissions issue), not a `tda4j` bug, so they get the same clean one-line message as an
         // IllegalArgumentException rather than a raw stack trace.
-        System.err.println(s"tda4j: ${e.getMessage}")
+        err.println(s"tda4j: ${e.getMessage}")
         1
 
   // -----------------------------------------------------------------------------------------------------------
@@ -338,7 +339,8 @@ object TDA4jCLI:
   private[cli] def writeLandmarkSelection(
     conf: TDA4jConf,
     selection: LandmarkSelectionResult,
-    out: java.io.PrintStream
+    out: java.io.PrintStream,
+    err: java.io.PrintStream = System.err
   ): Unit =
     val lines = s"# coveringRadius=${selection.coveringRadius()}" +: selection.landmarks().map(_.toString).toSeq
     conf.output.toOption match
@@ -349,7 +351,7 @@ object TDA4jCLI:
       case None => lines.foreach(out.println)
     // Always to stderr, even when --output also wrote it as a comment line: the point is that a human running
     // this interactively sees R without having to open/grep the output file.
-    System.err.println(
+    err.println(
       s"tda4j: covering radius R = ${selection.coveringRadius()} -- e.g. pass '${2 * selection.coveringRadius()}' " +
         "as --max-filtration-value for step 2 (the JavaPlex tutorial's own 2R recipe)"
     )
@@ -403,9 +405,13 @@ object TDA4jCLI:
   /** One stderr line when the threshold hid anything, so a user is never left wondering where bars went. A saved result
     * keeps the threshold it was saved with.
     */
-  private[cli] def noteHiddenBars(result: PersistenceResult, loaded: Boolean = false): Unit =
+  private[cli] def noteHiddenBars(
+    result: PersistenceResult,
+    loaded: Boolean = false,
+    err: java.io.PrintStream = System.err
+  ): Unit =
     if result.hiddenCount() > 0 then
-      System.err.println(
+      err.println(
         s"tda4j: ${result.hiddenCount()} bar(s) with persistence <= ${result.persistenceThreshold()} not reported " +
           s"(${result.size()} reported); " +
           (if loaded then "the saved result keeps its threshold: compute again with --min-persistence 0 to report them"
@@ -624,10 +630,15 @@ object TDA4jCLI:
     asked.flatten.reduceOption(_ + _)
 
   /** Draws `--plot` into `--output`, or into a page in the temporary directory opened in the browser. */
-  private[cli] def writePlot(conf: TDA4jConf, result: PersistenceResult, loaded: Boolean): Unit =
+  private[cli] def writePlot(
+    conf: TDA4jConf,
+    result: PersistenceResult,
+    loaded: Boolean,
+    err: java.io.PrintStream = System.err
+  ): Unit =
     def chosenBar(): Int =
       val i = conf.bar.toOption.getOrElse(result.mostPersistentBar(conf.dimension.toOption.getOrElse(1)))
-      if i >= 0 && i < result.size() then System.err.println(s"tda4j: drawing bar $i: ${toBars(result)(i)}")
+      if i >= 0 && i < result.size() then err.println(s"tda4j: drawing bar $i: ${toBars(result)(i)}")
       i
     def dimension = conf.dimension.toOption.getOrElse(1)
     val kind = conf.plot()
@@ -645,7 +656,7 @@ object TDA4jCLI:
       case "complex-3d"        => result.plotComplex3D(conf.at())
       case "representative-3d" => result.plotRepresentative3D(chosenBar())
       case other               => throw new IllegalStateException(s"unreachable: --plot $other was checked")
-    if kind == "barcode" || kind == "diagram" then noteHiddenBars(result, loaded)
+    if kind == "barcode" || kind == "diagram" then noteHiddenBars(result, loaded, err)
     val drawn: Plot = appearance(conf).fold(figure) { tweak =>
       figure match
         case f: plot.Figure => f + tweak
@@ -659,6 +670,6 @@ object TDA4jCLI:
         val page = FileAccess.tempFile(s"tda4j-$kind-", ".html")
         FileAccess.writeText(page, drawn.html(theme.getOrElse(Theme.Auto)))
         val opened = Viewer.browse(FileAccess.fileUri(page))
-        System.err.println(
+        err.println(
           s"tda4j: wrote $page" + (if opened then " (opened in your browser)" else "; open it in a browser")
         )
