@@ -19,14 +19,14 @@ The current version is on [Maven Central](https://central.sonatype.com/artifact/
 
 ## Scala
 
-```scala
+```scala sc:nocompile
 // sbt
 libraryDependencies += "org.appliedtopology" %% "tda4j" % "VERSION"
 // sbt, Scala.js project
 libraryDependencies += "org.appliedtopology" %%% "tda4j" % "VERSION"
 ```
 
-```scala
+```scala sc:nocompile
 // Mill
 mvn"org.appliedtopology::tda4j:VERSION"
 // Scala CLI, at the top of the file
