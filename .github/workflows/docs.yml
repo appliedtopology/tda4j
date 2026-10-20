@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - scala
+    paths-ignore:
+      - '.github/**'
+      - '.claude/**'
 
 # Shared with release.yml on purpose -- see its own copy of this comment for why.
 concurrency:

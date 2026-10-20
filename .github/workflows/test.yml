@@ -2,9 +2,15 @@ name: Test
 
 on:
   push:
+    paths-ignore:
+      - '.github/**'
+      - '.claude/**'
     branches:
       - scala
   pull_request:
+    paths-ignore:
+      - '.github/**'
+      - '.claude/**'
     branches:
       - scala
   workflow_dispatch:
