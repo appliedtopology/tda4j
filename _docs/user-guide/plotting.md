@@ -9,6 +9,9 @@ the library, in the package `org.appliedtopology.tda4j.plot`, and need no other 
 a small built-in 3-D viewer, and they show up in your browser while you work in a REPL. The API is young and may still
 change between releases.
 
+The sections up to [What there is](#what-there-is) are all that most readers need. Everything under
+[Customizing a plot](#customizing-a-plot) is reference: look up the element you want to change.
+
 ## In a REPL: `view()`
 
 ```scala
@@ -108,7 +111,7 @@ A result computed from a distance matrix or a relation has no coordinates: it dr
 and persistence images, and says so for the rest. The command line draws the same figures with `--plot`:
 
 ```
-java -jar tda4j-assembly.jar --max-dimension 1 --save-result circle.json noisy-circle.csv
+java -jar tda4j-VERSION-assembly.jar --max-dimension 1 --save-result circle.json noisy-circle.csv
 java -jar tda4j-assembly.jar --plot diagram --output diagram.svg circle.json
 java -jar tda4j-assembly.jar --plot representative circle.json
 ```
@@ -367,7 +370,7 @@ val stars = Plot.diagram(d).withPoints(shape = Shape.Glyph("★"), size = 7, edg
 draws an open marker, an outline in its own color 1.5 pixels wide; the edge has a width (0 for none), a color or a palette
 role, an opacity and a dash, and `edgeVisible = false` takes it away. A plus, a cross and a bar are strokes: their edge is
 their color and their width is the edge's. A degree's markers (`Scale.degree(k, marker = MarkerStyle(...))`) win over the
-plot's, which win over the plot's own. A 3-D scene's points are round and filled, and take a size, an opacity and an edge.
+plot's marker settings, which win over the default. A 3-D scene's points are round and filled, and take a size, an opacity and an edge.
 
 **As text**, a shape is a name (`triangle-down`, `star`, `plus`, ...), a one-letter code of matplotlib (`o . ^ v < > s p h * + x
 D | _`), a number of R and ggplot's `pch` (`pch:16`, or a bare `0` to `25`: 0 to 14 are open shapes, 15 to 25 filled, the

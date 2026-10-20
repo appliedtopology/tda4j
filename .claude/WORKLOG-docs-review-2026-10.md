@@ -40,3 +40,18 @@ concise and in human register: no edits needed in what was read. Developer's gui
 and one history sentence removed. Not read end to end (budget): remaining user-guide pages, 11 other tutorials, the
 bulk of `plotting.md`, `architecture.md`, `persistence-engines.md`, `class-diagrams.md`. Those are the next step if
 wanted; the pattern sweeps found nothing there.
+
+## Step 4: full read-through of everything outside the developer's guide (#162)
+
+Read in full (prose; code fences skimmed): user guide (quickstart, cli, matlab, javascript, input-output,
+boundary-matrix, circular-coordinates, vectorization, all complexes pages, engines pages, simplicial sets, plotting),
+all 12 tutorials' prose. Result, honestly: the register is already human and concise; edits were small and specific.
+Fixed: unclosed parenthesis and broken sentence in fast-cubical.md; wrong link target (witness section pointed to the
+sparse Rips page); Scala.js section of javascript.md (placeholder version, sbt 1/Mill clutter); a paper-bug note in
+sparse-vietoris-rips.md reduced to the rule the code follows; CLI/plotting jar names; test-class names
+(`MatlabTabsSpec`, `FindALoopSpec`, `TutorialData`) removed from tutorial prose, one sentence in the tutorials index
+says MATLAB tabs are checked via Java; the 25-line data dump in all-ways-to-call.md replaced by a link; plotting.md
+gets a pointer separating the common sections from the reference. Link check over `_docs` (relative `.md` links and
+anchors): no broken ones remain. Not changed on purpose: the long reference sections of plotting.md (structure fine,
+length is the content); developer's guide beyond the earlier steps (human-edited per Mikael).
+Not done: docs build (CI `docs-build` runs it on the PR).
