@@ -25,12 +25,14 @@ the docs steps set `TDA4J_SCALA_VERSION=3.8.4` (read by `scalaVersion` in `build
 
 | Artifact | How | Where it goes |
 |---|---|---|
-| Library jar | `sbt package` (part of `publishSigned`): `tda4j`, plots included (`org.appliedtopology.tda4j.plot`) | Maven Central |
+| Library jar | `sbt tda4j/package` (part of `publishSigned`): `tda4j_3`, plots included (`org.appliedtopology.tda4j.plot`) | Maven Central |
+| Scala.js library | `tda4jJS/package` (part of `publishSigned`): `tda4j_sjs1_3`, the same sources linked by Scala.js users' builds; no MiMa check until a second release of the series exists | Maven Central |
+| npm package | `sbt tda4jJS/npmPack` → `target/npm/tda4j-<version>.tgz`: the optimized link as ES modules, `npm/package.json` with the version filled in, `npm/index.d.ts`, `npm/README.md`; the `test.yml` job `npm-package` installs it into an empty project and runs the library and the `tda4j` command | npm (`release.yml`, once `NPM_TOKEN` exists, see "npm" below) + GitHub Release |
 | Sources jar | `publishMavenStyle := true` + sbt's default `publishArtifact` behavior (`Compile / packageSrc`) | Maven Central + GitHub Release |
 | Scaladoc jar | sbt's default `Compile / packageDoc` | Maven Central + GitHub Release |
-| Fat jar (CLI/MATLAB) | `sbt assembly` → `target/out/jvm/scala-3.9.0/tda4j/tda4j-<version>-assembly.jar` (name from `assembly / assemblyJarName` in `build.sbt`); CI's `test` job builds it and runs it on a sample for every pull request | GitHub Release only (not published to Maven — fat jars with bundled deps are a poor Maven citizen) |
+| Fat jar (CLI/MATLAB) | `sbt tda4j/assembly` → `target/out/jvm/scala-3.9.0/tda4j/tda4j-<version>-assembly.jar` (name from `assembly / assemblyJarName` in `build.sbt`); CI's `test` job builds it and runs it on a sample for every pull request | GitHub Release only (not published to Maven — fat jars with bundled deps are a poor Maven citizen) |
 | Demo REPL jar | `demo/` is a separate sbt build (`demo/README.md`) that bundles a *version* of the library with the Scala REPL: `TDA4J_VERSION=<version> sbt assembly` in `demo/` → `demo/target/out/jvm/scala-3.9.0/tda4j-demo/tda4j-demo-<version>.jar` (about 74 MB). `release.yml` builds it against the tag's own sources and smoke-runs it | GitHub Release only |
-| Docs site | `sbt doc` → `target/out/jvm/scala-<docs scala version>/tda4j/api` (scaladoc static site built from `_docs/`) | GitHub Pages, under a per-version path (`/X.Y.Z/`, `/dev/` for in-progress docs) + a zipped copy on the GitHub Release |
+| Docs site | `sbt tda4j/doc` → `target/out/jvm/scala-<docs scala version>/tda4j/api` (scaladoc static site built from `_docs/`) | GitHub Pages, under a per-version path (`/X.Y.Z/`, `/dev/` for in-progress docs) + a zipped copy on the GitHub Release |
 
 All four Maven-bound artifacts (jar, sources, scaladoc, POM) are produced and signed in one shot by
 `publishSigned` (`sbt-pgp`) — nothing bespoke needed there beyond having a valid PGP key configured (see
@@ -58,9 +60,10 @@ already-released coordinate.
 
 ### 1. Pre-flight
 
-- On `scala` (or whatever branch is being released from), working tree clean, `sbt "clean ; test"` and
-  `sbt mimaReportBinaryIssues` both green — same as CI (`test.yml`), run locally first so the interactive
-  `sbt-release` sequence doesn't fail partway through.
+- On `scala` (or whatever branch is being released from), working tree clean, `sbt "clean ; test"` (both the JVM and
+  the Scala.js specs; the latter needs Node.js 20.16 or newer), `sbt tda4j/mimaReportBinaryIssues` and `sbt
+  tda4jJS/npmPack` all green — same as CI (`test.yml`), run locally first so the interactive `sbt-release` sequence
+  doesn't fail partway through.
 - `sbt scalafmtCheck scalafmtSbtCheck` clean (`lint.yml`'s own check).
 - **The changelog.** In `CHANGELOG.md`, rename the `Unreleased` section to `X.Y.Z (YYYY-MM-DD)`, read it over
   (breaking changes first, each with what to write instead), and commit that before `sbt release`. It is the release
@@ -68,8 +71,9 @@ already-released coordinate.
   section into the GitHub Release's description once the workflow has created it.
 - **Open issues.** Skim the [issues](https://github.com/appliedtopology/tda4j/issues) for anything that should block
   the release (a `bug` on a default path, an `unverified` claim the release notes would repeat).
-- One artifact goes to Central under the `org.appliedtopology` namespace: `tda4j` (POM metadata from `sonatype.sbt`;
-  `sbt publishLocal` shows the POM without publishing anything).
+- Two artifacts go to Central under the `org.appliedtopology` namespace: `tda4j_3` (JVM) and `tda4j_sjs1_3` (Scala.js),
+  from the one `publishSigned` (POM metadata from `sonatype.sbt`; `sbt publishLocal` shows the POMs without publishing
+  anything). MiMa checks the JVM artifact only: a Scala.js jar carries no class files for it to read.
 - Confirm `mimaPreviousArtifacts` (`sbt show mimaPreviousArtifacts`): `build.sbt` derives it from the `v*` git tags of
   the version's own compatibility series that are older than it. A tag with no published Maven artifact makes
   `mimaReportBinaryIssues` fail to resolve, so check that those tags really were published. A deliberate break inside a
@@ -106,6 +110,16 @@ already-released coordinate.
   `gh release create` and the plain `git push` to `gh-pages` (via `actions/checkout`'s own persisted
   credentials, which cover any git operation against the same repo, not just the checked-out ref).
 
+- **`NPM_TOKEN`** (optional until the first npm release): an [npm](https://www.npmjs.com/) access token that may publish
+  to the `@appliedtopology` scope; the package is `@appliedtopology/tda4j` (`name` in `npm/package.json`). The scope
+  exists (the project lead created it). Once: as a member of the scope with publish rights, with two-factor
+  authentication on, create a granular access token with read-and-write permission for packages in the
+  `@appliedtopology` scope (the first publish creates the package, so the token cannot yet be limited to it; narrow it
+  to `@appliedtopology/tda4j` after that), and add it as the repository secret `NPM_TOKEN`. A scoped package is private
+  unless published with `--access public`, which `release.yml` passes. Without the secret, `release.yml` builds the npm
+  tarball, attaches it to the GitHub Release and skips the publish step; `npm publish --access public` of that tarball
+  by hand does the same.
+
 Nothing else is required in CI today. If Maven publishing is later moved into CI (see the note above), add
 `SONATYPE_USERNAME`/`SONATYPE_PASSWORD`/`PGP_PASSPHRASE` (plus the PGP private key itself, e.g. base64 in a
 `PGP_SECRET` secret, imported with `gpg --import` before `publishSigned` runs) as repo secrets at that point.
@@ -131,8 +145,8 @@ whole sequence, per `sbt-release`'s own resume support.
 The tag push from step 3 triggers `.github/workflows/release.yml`, which:
 
 1. Checks that the ref is an existing `vX.Y.Z` tag, before anything is built or published.
-2. Runs `sbt "set Compile / packageDoc / publishArtifact := false ; assembly ; publishLocal ; packageSrc ; ++3.8.4! ;
-   packageDoc ; doc"`: the fat jar, the library published to `~/.ivy2/local` (for the demo jar, below) and the sources jar
+2. Runs `sbt "set tda4j / Compile / packageDoc / publishArtifact := false ; tda4j/assembly ; tda4j/publishLocal ;
+   tda4j/packageSrc ; tda4jJS/npmPack ; ++3.8.4! ; tda4j/packageDoc ; tda4j/doc"`: the npm package, the fat jar, the library published to `~/.ivy2/local` (for the demo jar, below) and the sources jar
    with Scala 3.9.0, then the scaladoc jar and the docs site with 3.8.4 (scaladoc 3.9.0's JavaScript is broken), switched
    inside the one invocation because a second `sbt` call would join the running server and keep 3.9.0.
    Builds the demo REPL jar (`sbt assembly` in `demo/`, with `TDA4J_VERSION` the tag's version) against that local
@@ -143,7 +157,10 @@ The tag push from step 3 triggers `.github/workflows/release.yml`, which:
 4. Zips this version's docs (`target/out/jvm/scala-3.8.4/tda4j/api`, the site step 3 just published) into
    `docs-X.Y.Z.zip`.
 5. Runs `gh release create` on the pushed tag, title `TDA4j X.Y.Z`, `--generate-notes`, `--prerelease` while
-   the version is still `0.x`, with the fat jar, sources jar, scaladoc jar, demo REPL jar, and docs zip attached.
+   the version is still `0.x`, with the fat jar, sources jar, scaladoc jar, npm tarball, demo REPL jar, and docs zip
+   attached.
+6. Publishes the npm tarball with `npm publish --access public` when the `NPM_TOKEN` secret exists (a version with a
+   suffix, such as `0.8.0-RC1`, under the tag `next`, so `npm install @appliedtopology/tda4j` keeps giving the last full release).
 
 If it fails partway (e.g. a transient GitHub API error), it's safe to just re-run the workflow from the
 Actions tab — nothing it does touches Maven, and `gh release create`/the docs `git push` are both safe to
@@ -160,6 +177,8 @@ instead, replicate steps 1–4 locally; the commands are in the workflow file.
   series only; a new minor starts with an empty baseline).
 - Skim the new `-SNAPSHOT` commit `sbt release` pushed — confirm it actually landed on `scala` and the version
   bump is sane before walking away.
-- Confirm `release.yml` finished green in the Actions tab and the GitHub Release looks right (all five files
+- Verify `npm install @appliedtopology/tda4j@X.Y.Z` in a scratch directory and `import { persistence } from
+  "@appliedtopology/tda4j"` (skip until the package has been published once).
+- Confirm `release.yml` finished green in the Actions tab and the GitHub Release looks right (all six files
   attached, the changelog section pasted into its description) before announcing the release anywhere.
 - Add a new, empty `## Unreleased` section at the top of `CHANGELOG.md` if the release commit did not.

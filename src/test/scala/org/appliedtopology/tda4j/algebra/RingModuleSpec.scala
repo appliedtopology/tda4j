@@ -19,7 +19,7 @@ class RingModuleSpec extends mutable.Specification with ScalaCheck:
 
     override def negate(x: (Int, Int)): (Int, Int) = (-x._1, -x._2)
 
-    def scale(x: Int, y: (Int, Int)): (Int, Int) = (x * y._1, x * y._2)
+    def scalarMultiply(x: Int, y: (Int, Int)): (Int, Int) = (x * y._1, x * y._2)
 
   "zero should exist" >> {
     val v: (Int, Int) = rm.zero

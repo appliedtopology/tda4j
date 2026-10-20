@@ -1,5 +1,6 @@
 package tda4juser
 
+import org.appliedtopology.tda4j.SpecThrows.throwWith
 import org.specs2.mutable.Specification
 
 /** The one-call verb, from a user's side of the package boundary: one import, every input shape, and answers that agree
@@ -125,7 +126,7 @@ class PersistenceVerbSpec extends Specification:
         .and(Persistence(forH2).maxDimension must beEqualTo(2))
         .and(Persistence(forH2).bettiNumbers must beEqualTo(Vector(1, 0, 0)))
         .and(
-          Persistence(forH1, maxDimension = 2) must throwAn[IllegalArgumentException](message =
+          Persistence(forH1, maxDimension = 2) must throwWith[IllegalArgumentException](
             "built for degrees 0..1"
           )
         )
@@ -152,7 +153,7 @@ class PersistenceVerbSpec extends Specification:
         )
     }
     "reject a characteristic that is neither 0 nor a prime, saying so" in {
-      Persistence(circle(5), characteristic = 4) must throwAn[IllegalArgumentException](message =
+      Persistence(circle(5), characteristic = 4) must throwWith[IllegalArgumentException](
         "0 \\(reals\\) or a prime"
       )
     }
@@ -221,7 +222,7 @@ class PersistenceEnginesSpec extends org.specs2.mutable.Specification:
             Image(Array(Array(0.0, 1.0), Array(1.0, 0.0))),
             engine = Persistence.Engine.FastCubical,
             representatives = Representatives.Cocycles
-          ) must throwAn[IllegalArgumentException](message = "Engine.Cohomology")
+          ) must throwWith[IllegalArgumentException]("Engine.Cohomology")
         )
     }
     "refuse engine = Ripser for an input that is not a Vietoris-Rips complex of points" in {

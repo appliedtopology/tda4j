@@ -1,8 +1,5 @@
 package org.appliedtopology.tda4j
 
-import scala.io.Source
-import java.io.PrintWriter
-
 /** Ripser's input formats (`point-cloud`, `lower-distance`, `upper-distance`, `distance`, `binary`), with the
   * conventions of `ripser.cpp`. Not supported: `sparse` (an edge list) and `dipha` (use [[Dipha]]).
   */
@@ -11,7 +8,7 @@ object Ripser:
 
   /** One point per line, whitespace- or comma-separated coordinates -- Ripser's default `--format point-cloud`. */
   def readPointCloud(path: String): Array[Array[Double]] =
-    val src = Source.fromFile(path)
+    val src = FileAccess.source(path)
     try
       src
         .getLines()
@@ -25,12 +22,12 @@ object Ripser:
     EuclideanMetricSpace(readPointCloud(path))
 
   def writePointCloud(path: String, points: Array[Array[Double]]): Unit =
-    val out = new PrintWriter(path)
+    val out = FileAccess.printWriter(path)
     try points.foreach(p => out.println(p.mkString(",")))
     finally out.close()
 
   private def readFlatValues(path: String): IndexedSeq[Double] =
-    val src = Source.fromFile(path)
+    val src = FileAccess.source(path)
     try src.getLines().mkString(" ").split(delimiterRegex).filter(_.nonEmpty).map(_.toDouble).toIndexedSeq
     finally src.close()
 
@@ -47,7 +44,7 @@ object Ripser:
     ExplicitMetricSpace(readLowerDistanceMatrix(path).map(_.toIndexedSeq).toIndexedSeq)
 
   def writeLowerDistanceMatrix(path: String, matrix: Array[Array[Double]]): Unit =
-    val out = new PrintWriter(path)
+    val out = FileAccess.printWriter(path)
     try out.println(DistanceMatrices.flattenLowerTriangular(matrix).mkString(","))
     finally out.close()
 
@@ -60,7 +57,7 @@ object Ripser:
     ExplicitMetricSpace(readUpperDistanceMatrix(path).map(_.toIndexedSeq).toIndexedSeq)
 
   def writeUpperDistanceMatrix(path: String, matrix: Array[Array[Double]]): Unit =
-    val out = new PrintWriter(path)
+    val out = FileAccess.printWriter(path)
     try out.println(DistanceMatrices.flattenUpperTriangular(matrix).mkString(","))
     finally out.close()
 
@@ -70,7 +67,7 @@ object Ripser:
     * the lower triangle.
     */
   def readDistanceMatrix(path: String): Array[Array[Double]] =
-    val src = Source.fromFile(path)
+    val src = FileAccess.source(path)
     try
       val lines = src.getLines().toIndexedSeq
       val n = lines.size

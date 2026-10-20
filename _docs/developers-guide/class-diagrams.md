@@ -18,7 +18,7 @@ classDiagram
         plus(x, y) Self
         minus(x, y) Self
         negate(x) Self
-        scale(r, y) Self
+        scalarMultiply(r, y) Self
         +(rhs) Self
         -(rhs) Self
         unary_-() Self
@@ -251,9 +251,9 @@ classDiagram
         <<typeclass: type VertexT>>
         neighbors(v, epsilon) Set~VertexT~
     }
-    SpatialQuery <|-- JVPTree
+    SpatialQuery <|-- VantagePointQuery
     SpatialQuery <|-- BruteForce
-    SparseMetricSpace --> SpatialQuery : uses (JVPTree)
+    SparseMetricSpace --> SpatialQuery : uses (VantagePointQuery)
 ```
 
 ## Barcode representation (`barcode/Barcode.scala`)

@@ -1,7 +1,9 @@
 package org.appliedtopology.tda4j
 
 import java.io.{BufferedInputStream, DataInputStream, FileInputStream, PrintWriter}
+import java.lang.management.{ManagementFactory, MemoryType}
 import java.nio.{ByteBuffer, ByteOrder}
+import scala.jdk.CollectionConverters.ListHasAsScala
 
 /** TDA4j's side of the cross-platform benchmark (`bench/`, `.claude/PLAN-paper.md` §3). One computation per JVM: read
   * the input once, run `warmup` untimed and `trials` timed computations through the public `Persistence` verb (or a
@@ -17,7 +19,9 @@ import java.nio.{ByteBuffer, ByteOrder}
   *   - `task=vr`: points (`format=points`, one point per line) or a full distance matrix (`format=distance`).
   *   - `task=cubical`: a `.npy` array of float64 in C order (any dimension), sublevel filtration, T-construction.
   *   - `task=alpha`: points; filtration values are circumradii. `backend=default` (Bowyer-Watson up to 4 dimensions,
-  *     Helix above), `bowyer-watson`, `helix` or `dqp`. `engine=fastalpha` runs on the backend's triangulation.
+  *     Helix above, DQP when `threshold` is small enough), `bowyer-watson`, `helix` or `dqp`. `threshold` is the
+  *     largest radius: bars alive at it are essential, and DQP builds only what lies within it. `engine=fastalpha` runs
+  *     on the backend's triangulation and takes no threshold.
   *   - `task=cech`: points; filtration values are radii (the same barcode as alpha in general position).
   *
   * Times cover the whole `Persistence(...)` call: building the complex, the reduction and the representatives. For
@@ -113,19 +117,15 @@ object PaperBenchmarkDriver:
       case "alpha" =>
         val pts = readMatrix(input)
         val backend = AlphaBackend.parse(opts.getOrElse("backend", "default"))
-        if engineName == "fastalpha" then () => fastAlpha(pts, backend, dim, p)
-        else if backend == AlphaBackend.DQP then
-          () =>
-            Persistence(
-              Truncated(AlphaShapes(pts, backend), dim),
-              characteristic = p,
-              engine = engine,
-              representatives = reps
-            ).triples
+        if engineName == "fastalpha" then
+          require(threshold.isEmpty, "engine=fastalpha takes no threshold: it needs the whole triangulation")
+          () => fastAlpha(pts, backend, dim, p)
         else if backend != AlphaBackend.Default then
+          // With a threshold the radius reaches the backend: DQP only builds the simplices within it (without one it
+          // is the untruncated DQP), the triangulations are filtered.
           () =>
             Persistence(
-              Truncated(AlphaShapes(pts, backend), dim),
+              Truncated(AlphaShapes(pts, backend, maxRadius = threshold, maxDimension = dim), dim),
               characteristic = p,
               engine = engine,
               representatives = reps
@@ -135,6 +135,7 @@ object PaperBenchmarkDriver:
             Persistence(
               pts,
               maxDimension = dim,
+              maxFiltrationValue = threshold,
               complex = AlphaShapes,
               characteristic = p,
               engine = engine,
@@ -158,6 +159,10 @@ object PaperBenchmarkDriver:
 
     var bars: List[(Int, Double, Double)] = Nil
     (1 to warmup).foreach(_ => bars = compute())
+    // The peak use of each heap pool over the timed runs: the RSS of a JVM follows its collector's policy (a parallel
+    // collector with a large heap shows its total allocation), the pools' peaks follow the computation.
+    val heapPools = ManagementFactory.getMemoryPoolMXBeans.asScala.filter(_.getType == MemoryType.HEAP).toList
+    heapPools.foreach(_.resetPeakUsage())
     val times = (1 to trials).map { _ =>
       val t0 = System.nanoTime()
       bars = compute()
@@ -170,12 +175,18 @@ object PaperBenchmarkDriver:
     }
     val counts = bars.groupMapReduce(_._1)(_ => 1)(_ + _).toSeq.sorted
     val rt = Runtime.getRuntime
+    // Pools peak at different moments, so the sum bounds the heap in use at once from above; the old generation
+    // ("Old Gen", "Tenured Gen") is the closest to the live set of what the computation keeps.
+    val heapPeakMb = heapPools.map(_.getPeakUsage.getUsed).sum / 1048576
+    val oldPools = heapPools.filter(pool => pool.getName.contains("Old") || pool.getName.contains("Tenured"))
+    val oldPeakMb = oldPools.map(_.getPeakUsage.getUsed).sum / 1048576
     println(
       "{" +
         s""""tool":"tda4j","task":"$task","engine":"$engineName","p":$p,"warmup":$warmup,""" +
         s""""load_s":$loadSeconds,"times_s":[${times.mkString(",")}],""" +
         s""""bars":{${counts.map((d, c) => s""""$d":$c""").mkString(",")}},""" +
         s""""heap_used_mb":${(rt.totalMemory - rt.freeMemory) / 1048576},""" +
+        s""""heap_peak_mb":$heapPeakMb,"old_peak_mb":$oldPeakMb,""" +
         s""""terms_read":$termsRead,""" +
         s""""java":"${System.getProperty("java.version")}"""" +
         "}"

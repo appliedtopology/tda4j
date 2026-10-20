@@ -38,7 +38,7 @@ class ChainStorageSpec extends Specification:
         val other: C3 = Chain.from(entries(4))
         val scalar = f3.Fp(2)
         val reductions = theirs.leadingTerm._1.toList.flatMap { lead =>
-          val z = rm.scale(scalar, theirs)
+          val z = rm.scalarMultiply(scalar, theirs)
           Seq(
             "reduceBy, as the basis column" ->
               (Chain.reduceBy(z, mutable.Map(lead -> mine), Chain.empty[Simplex[Int], f3.Fp]) ==
@@ -55,7 +55,7 @@ class ChainStorageSpec extends Specification:
           "leadingTerm" -> (mine.leadingTerm == theirs.leadingTerm && mine.leadingCell == theirs.leadingCell),
           "equality" -> (mine == theirs && theirs == mine),
           "plus" -> (rm.plus(mine, other) == rm.plus(theirs, other) && rm.plus(other, mine) == rm.plus(other, theirs)),
-          "scale" -> (rm.scale(scalar, mine) == rm.scale(scalar, theirs)),
+          "scalarMultiply" -> (rm.scalarMultiply(scalar, mine) == rm.scalarMultiply(scalar, theirs)),
           "minus" -> rm.minus(mine, theirs).isZero(),
           "boundary" -> (Chain.from(mine.boundary) == Chain.from(theirs.boundary))
         ) ++ reductions).collect { case (name, false) => s"trial $trial: $name" }

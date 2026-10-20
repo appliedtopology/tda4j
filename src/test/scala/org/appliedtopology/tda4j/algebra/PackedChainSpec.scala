@@ -44,7 +44,7 @@ class PackedChainSpec extends mutable.Specification:
       terms.sortBy(_._1)(using order.reverse).map(_._2.asInstanceOf[AnyRef]).toArray,
       IntCells
     )
-    val z = rm.plus(rm.scale(scalar, heap), other)
+    val z = rm.plus(rm.scalarMultiply(scalar, heap), other)
     val column = rm.plus(heap, other)
     val termsBefore = packed.terms
     Seq(
@@ -56,7 +56,7 @@ class PackedChainSpec extends mutable.Specification:
       "rawEntries" -> (packed.rawEntries.toSet == heap.rawEntries.toSet),
       "plus" -> (rm.plus(packed, other) == rm.plus(heap, other) && rm.plus(other, packed) == rm.plus(other, heap)),
       "plus itself" -> (rm.plus(packed, packed) == rm.plus(heap, heap)),
-      "scale" -> (rm.scale(scalar, packed) == rm.scale(scalar, heap)),
+      "scalarMultiply" -> (rm.scalarMultiply(scalar, packed) == rm.scalarMultiply(scalar, heap)),
       "negate" -> (rm.negate(packed) == rm.negate(heap)),
       "minus" -> rm.minus(packed, heap).isZero(),
       // A packed basis column: its leading coefficient drives the reduction step.

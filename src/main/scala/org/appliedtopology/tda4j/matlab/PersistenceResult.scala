@@ -1,7 +1,8 @@
 package org.appliedtopology.tda4j.matlab
 
 import org.appliedtopology.tda4j.*
-import org.appliedtopology.tda4j.plot.{Figure, Plot, Scene, Svg}
+import org.appliedtopology.tda4j.matlab.TDA4j.sessionLook
+import org.appliedtopology.tda4j.plot.{BarOrder, Figure, Plot, Scene, Svg}
 
 /** The boundary matrix of the complex a [[PersistenceResult]] was computed from, one column per cell in filtration
   * order; exposed only through `PersistenceResult`'s accessors.
@@ -268,7 +269,6 @@ final class PersistenceResult private[matlab] (
   def save(path: String): String =
     ResultFile
       .write(path, allDims, allBirths, allDeaths, visible, threshold, k => cycleProvider(visible(k)), source)
-      .toString
 
   // ---------------------------------------------------------------------------------------------------------------
   // plots
@@ -309,6 +309,11 @@ final class PersistenceResult private[matlab] (
 
   /** The barcode of the `longest` most persistent reported bars of each dimension. */
   def plotBarcode(longest: Int): Figure = withHiddenNote(Plot.barcode(reportedBars, longest = Some(longest)))
+
+  /** The barcode with the bars of each dimension sorted by `order`: `birth` (the default), `persistence` (the longest
+    * first) or `death`.
+    */
+  def plotBarcode(order: String): Figure = withHiddenNote(Plot.barcode(reportedBars, order = BarOrder.named(order)))
 
   /** The reported bars as a persistence diagram: a point `(birth, death)` per bar, essential bars on the `∞` line. */
   def plotDiagram(): Figure = withHiddenNote(Plot.diagram(reportedBars))

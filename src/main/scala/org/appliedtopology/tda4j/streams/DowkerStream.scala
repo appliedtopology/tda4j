@@ -1,6 +1,5 @@
 package org.appliedtopology.tda4j
 
-import scala.collection.concurrent.TrieMap
 import scala.collection.immutable
 
 /** The filtered Dowker complex of a relation `R: L x W -> [0, Infinity]` between two finite sets (C. H. Dowker,
@@ -65,7 +64,7 @@ object DowkerGeometry:
 /** [[DowkerGeometry.filtrationValue]], memoized. Vertices get their own (generally nonzero) value. */
 object DowkerFiltration:
   def apply(geometry: DowkerGeometry): PartialFunction[Simplex[Int], Double] =
-    val cache = TrieMap.empty[Simplex[Int], Double]
+    val cache = FiltrationCache.empty[Simplex[Int], Double]
     new PartialFunction[Simplex[Int], Double]:
       def isDefinedAt(spx: Simplex[Int]): Boolean = spx.forall(v => 0 <= v && v < geometry.numLeft)
       def apply(spx: Simplex[Int]): Double = cache.getOrElseUpdate(spx, geometry.filtrationValue(spx.toIndexedSeq))

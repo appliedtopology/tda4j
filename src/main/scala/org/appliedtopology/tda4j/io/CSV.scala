@@ -22,9 +22,6 @@ package org.appliedtopology.tda4j
  * `CubicalGridStream`) and `PersistenceBar`; nothing outside `io/` (apart from the MATLAB facade and CLI) uses them.
  */
 
-import scala.io.Source
-import java.io.PrintWriter
-
 /** Generic delimited-text point clouds, distance matrices, and persistence diagrams -- fields split on `,` or any run
   * of whitespace, so plain-whitespace-separated files (Dionysus/JavaPlex's own convention) parse with these same
   * methods too.
@@ -33,7 +30,7 @@ object CSV:
   private val delimiterRegex = "[\\s,]+"
 
   private def readNumericRows(path: String): IndexedSeq[IndexedSeq[Double]] =
-    val src = Source.fromFile(path)
+    val src = FileAccess.source(path)
     try
       src
         .getLines()
@@ -44,7 +41,7 @@ object CSV:
     finally src.close()
 
   private def writeRows(path: String, rows: Iterable[Iterable[Double]]): Unit =
-    val out = new PrintWriter(path)
+    val out = FileAccess.printWriter(path)
     try rows.foreach(row => out.println(row.mkString(",")))
     finally out.close()
 
@@ -85,7 +82,7 @@ object CSV:
     ExplicitMetricSpace(readLowerTriangularDistanceMatrix(path).map(_.toIndexedSeq).toIndexedSeq)
 
   def writeLowerTriangularDistanceMatrix(path: String, matrix: Array[Array[Double]]): Unit =
-    val out = new PrintWriter(path)
+    val out = FileAccess.printWriter(path)
     try for i <- 1 until matrix.size do out.println((0 until i).map(j => matrix(i)(j)).mkString(","))
     finally out.close()
 
@@ -94,7 +91,7 @@ object CSV:
     * optional coefficient-field column.
     */
   def readPersistenceDiagram(path: String): Seq[PersistenceBar[Double, Nothing]] =
-    val src = Source.fromFile(path)
+    val src = FileAccess.source(path)
     try
       src
         .getLines()
@@ -109,7 +106,7 @@ object CSV:
     finally src.close()
 
   def writePersistenceDiagram(path: String, bars: Seq[PersistenceBar[Double, ?]]): Unit =
-    val out = new PrintWriter(path)
+    val out = FileAccess.printWriter(path)
     try
       bars.foreach { bar =>
         out.println(s"${bar.dim},${Endpoints.formatEndpoint(bar.lower)},${Endpoints.formatEndpoint(bar.upper)}")

@@ -1,11 +1,8 @@
 package org.appliedtopology.tda4j
 
-import org.apache.commons.numbers.combinatorics.BinomialCoefficient
-
 import scala.collection.{immutable, mutable}
 import scala.collection.immutable.{Map, Seq, SortedSet}
-import scala.collection.concurrent.TrieMap
-import scala.collection.parallel.CollectionConverters.*
+
 import math.Ordering.Implicits.*
 
 trait Filterable[FiltrationT: Ordering]:
@@ -396,10 +393,10 @@ open class EnumeratingCofaceSimplexStream(
   // already-resident cell count adds no new memory concern, and there is no incremental formula for the
   // general max-pairwise-distance functional this stream computes by default.
   //
-  // TrieMap, not mutable.HashMap: a plain HashMap's getOrElseUpdate is not safe to call concurrently, and
-  // parallelFiltrationValue's pre-warm step (below) does exactly that -- TrieMap's own getOrElseUpdate is a
-  // genuine drop-in backed by a lock-free Ctrie. See .claude/WORKLOG-parallelization-survey.md item 2 (Cech).
-  private val filtrationValueCache = TrieMap.empty[Simplex[Int], Double]
+  // FiltrationCache (a TrieMap on the JVM), not mutable.HashMap: a plain HashMap's getOrElseUpdate is not safe to call
+  // concurrently, and parallelFiltrationValue's pre-warm step (below) does exactly that -- TrieMap's own getOrElseUpdate is
+  // a genuine drop-in backed by a lock-free Ctrie. See .claude/WORKLOG-parallelization-survey.md item 2 (Cech).
+  private val filtrationValueCache = FiltrationCache.empty[Simplex[Int], Double]
 
   override val filtrationValue: PartialFunction[Simplex[Int], Double] =
     filtrationValueOverride.getOrElse {
@@ -441,16 +438,15 @@ open class EnumeratingCofaceSimplexStream(
 
   // Bounded at metricSpace.size (a d-simplex needs d+1 distinct vertices, and there are none beyond that): a
   // real bound, not just a defensive one -- StratifiedCellStream's default .iterator relies on isDefinedAt
-  // eventually staying false, and BinomialCoefficient.value(metricSpace.size, d + 1) throws outright for
-  // d + 1 > metricSpace.size, so an unbounded catch-all here was the actual root cause of the "some engines'
-  // .iterator hangs / eventually crashes" bug (see StratifiedCellStream's doc).
+  // eventually staying false (an unbounded catch-all here was the actual root cause of the "some engines' .iterator
+  // hangs / eventually crashes" bug, see StratifiedCellStream's doc).
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
     case 0                                   => metricSpace.elements.map(v => Simplex(v)).iterator
     case 1                                   => sortedByFiltration(edges).iterator
     case d if d >= 0 && d < metricSpace.size =>
       // first, generate all simplices of this dimension
       sortedByFiltration(
-        (0 until BinomialCoefficient.value(metricSpace.size, d + 1).toInt).toSeq
+        (0 until SimplexIndexing.binomialInt(metricSpace.size, d + 1)).toSeq
           .flatMap { ix =>
             Some(simplexIndexing(ix, d + 1)).filter(keptByThresholdAndCriterion)
           }
@@ -490,7 +486,7 @@ open class RipserCofaceSimplexStream(
       if currentDimension != d - 1 then
         // we don't have a good cache, just generate entire previous dimension and deal with it
         lastDimensionCache = sortedByFiltration(
-          (0 until BinomialCoefficient.value(metricSpace.size, d).toInt).toSeq
+          (0 until SimplexIndexing.binomialInt(metricSpace.size, d)).toSeq
             .flatMap { ix =>
               Some(simplexIndexing(ix, d)).filter(keptByThresholdAndCriterion)
             }
@@ -507,7 +503,7 @@ open class RipserCofaceSimplexStream(
         // each applyOrElse call, in parallel; the returned values themselves are discarded, exactly the
         // same "parallel compute, sequential-cache-already-safe" pattern used elsewhere in this arc, except
         // here the safety comes from the TrieMap swap above rather than a separate sequential merge step.
-        rawCandidates.par.foreach(c => filtrationValue.applyOrElse(c, (_: Simplex[Int]) => Double.NaN))
+        Parallel.foreach(rawCandidates)(c => filtrationValue.applyOrElse(c, (_: Simplex[Int]) => Double.NaN))
       currentDimensionCache = sortedByFiltration(
         rawCandidates.filter(keptByThresholdAndCriterion)
       ).to(immutable.Queue) // we _would_ want to avoid creating the entire thing and sort it
@@ -573,7 +569,7 @@ open class InorderCofaceSimplexStream(
       if currentDimension != d - 1 then
         // we don't have a good cache, just generate entire previous dimension and deal with it
         lastDimensionCache = sortedByFiltration(
-          (0 until BinomialCoefficient.value(metricSpace.size, d).toInt).toSeq
+          (0 until SimplexIndexing.binomialInt(metricSpace.size, d)).toSeq
             .flatMap { ix =>
               Some(simplexIndexing(ix, d)).filter(keptByThresholdAndCriterion)
             }

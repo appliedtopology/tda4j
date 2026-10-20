@@ -1,8 +1,5 @@
 package org.appliedtopology.tda4j
 
-import scala.io.Source
-import java.io.PrintWriter
-
 /** Perseus's cubical toplex (dense grid) input format and its persistence-interval output format, as read by GUDHI.
   *
   * Perseus lists the first axis fastest, the opposite of [[CubicalImage.fromFlatArray]]; the readers and writers
@@ -16,7 +13,7 @@ object Perseus:
     * fastest.
     */
   def readCubicalImageData(path: String): (IndexedSeq[Int], IndexedSeq[Double]) =
-    val src = Source.fromFile(path)
+    val src = FileAccess.source(path)
     try
       val tokens = src.getLines().flatMap(_.trim.split("\\s+")).filter(_.nonEmpty)
       val d = tokens.next().toInt
@@ -55,7 +52,7 @@ object Perseus:
       "Perseus's cubical format has no infinite value: write a missing cell as NaN (it becomes -1), or a finite value"
     )
     val sizes = shape.reverse
-    val out = new PrintWriter(path)
+    val out = FileAccess.printWriter(path)
     try
       out.println(shape.size)
       sizes.foreach(out.println)
@@ -78,7 +75,7 @@ object Perseus:
     */
   def writePersistenceIntervals(pathPrefix: String, bars: Seq[PersistenceBar[Double, ?]]): Unit =
     bars.groupBy(_.dim).foreach { case (dim, dimBars) =>
-      val out = new PrintWriter(s"${pathPrefix}_$dim.txt")
+      val out = FileAccess.printWriter(s"${pathPrefix}_$dim.txt")
       try
         dimBars.foreach { bar =>
           val birth = endpointToStep(bar.lower)
@@ -94,7 +91,7 @@ object Perseus:
     * by the caller, since Perseus's own per-dimension output files don't repeat it inside the file.
     */
   def readPersistenceIntervals(path: String, dim: Int): Seq[PersistenceBar[Double, Nothing]] =
-    val src = Source.fromFile(path)
+    val src = FileAccess.source(path)
     try
       src
         .getLines()

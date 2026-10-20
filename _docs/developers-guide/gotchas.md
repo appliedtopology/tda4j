@@ -23,7 +23,7 @@ default `Ordering[Simplex[VertexT]]` in `Simplex`'s companion (or, in generic co
 `import OrderedCell.cellOrdering` derivation) means any
 `chainRM = summon[Chain[Simplex[VertexT], CoefficientT] is RingModule]` written *before* a stream-specific
 `given Ordering[Simplex[VertexT]] = stream.filtrationOrdering` is in scope silently captures that
-lexicographic fallback instead — every chain built through `⊠`/`.scale` afterward pivots on vertex label
+lexicographic fallback instead — every chain built through `⊠`/`.scalarMultiply` afterward pivots on vertex label
 order, not filtration order, regardless of what's nominally in scope at the call site.
 
 **The fix pattern, everywhere it's applied**: declare `given Ordering[CellT] = stream.filtrationOrdering`

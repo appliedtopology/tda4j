@@ -2,7 +2,6 @@ package org.appliedtopology.tda4j
 
 import scala.collection.immutable.Map
 import scala.collection.mutable
-import scala.collection.parallel.CollectionConverters.*
 
 /** The cubical complex of a full rectangular grid, filtered by the values of its top cells (pixels, voxels): every
   * other cube gets the minimum value of the top cells containing it, the sublevel-set convention of GUDHI, DIPHA and
@@ -78,7 +77,7 @@ open class CubicalGridStream(
     val values = new Array[Double](pixelCount.toInt)
     val pstride = shape.scanRight(1)(_ * _).tail
     def read(p: Int): Unit = values(p) = topCellValue(IndexedSeq.tabulate(ambientDim)(i => (p / pstride(i)) % shape(i)))
-    if parallelFiltrationValue then (0 until pixelCount.toInt).par.foreach(read)
+    if parallelFiltrationValue then Parallel.foreach(0 until pixelCount.toInt)(read)
     else
       var p = 0
       while p < values.length do

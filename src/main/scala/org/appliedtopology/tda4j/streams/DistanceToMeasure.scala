@@ -7,8 +7,8 @@ package org.appliedtopology.tda4j
   * }}}
   * As in GUDHI, `x` counts among its own neighbours (so `k = 1` gives `f = 0`) and `q` defaults to `2`.
   *
-  * The `SpatialQuery` chooses the nearest-neighbour search. `BruteForce` works for any distances; `JVPTree` requires
-  * the triangle inequality, which an [[ExplicitMetricSpace]] does not check.
+  * The `SpatialQuery` chooses the nearest-neighbour search. `BruteForce` works for any distances; `VantagePointQuery`
+  * requires the triangle inequality, which an [[ExplicitMetricSpace]] does not check.
   */
 object DistanceToMeasure:
   def apply(

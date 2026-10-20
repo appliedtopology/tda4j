@@ -15,3 +15,4 @@ object Optional:
   given fromValue: [A] => Conversion[A, Optional[A]] = a => Optional(Some(a))
   given fromOption: [A] => Conversion[Option[A], Optional[A]] = o => Optional(o)
   given fromInt: Conversion[Int, Optional[Double]] = i => Optional(Some(i.toDouble))
+  given fromInts: Conversion[Seq[Int], Optional[Seq[Double]]] = is => Optional(Some(is.map(_.toDouble)))

@@ -1,5 +1,6 @@
 package org.appliedtopology.tda4j.matlab
 
+import org.appliedtopology.tda4j.matlab.TDA4j.sessionLook
 import org.appliedtopology.tda4j.plot.{Figure, Plot}
 
 /** Toroidal coordinates from `TDA4j.toroidalCoordinates` (see `CircularCoordinates.computeToroidal`): `k` angles per
