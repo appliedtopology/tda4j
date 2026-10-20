@@ -30,8 +30,10 @@ jobs:
           java-version: 21
       - name: Setup sbt launcher
         uses: sbt/setup-sbt@v1
+      # `--server` runs sbt in the foreground, so no sbt server is left to race setup-sbt's post-job cache step (test.yml's
+      # header says why).
       - name: Run the tests with coverage
-        run: sbt "set Global / cacheStores := Nil ; clean ; coverage ; tda4j/testFull ; tda4j/coverageReport"
+        run: sbt --server "set Global / cacheStores := Nil ; clean ; coverage ; tda4j/testFull ; tda4j/coverageReport"
       - name: Summarize
         id: report
         run: |
