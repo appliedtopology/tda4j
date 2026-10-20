@@ -115,10 +115,16 @@ jobs:
       - name: Build the demo REPL jar
         # A separate sbt build (demo/README.md), in its own fresh sbt JVM, which sees the env var below. It resolves
         # `tda4j % VERSION` from ~/.ivy2/local, where the step above just put it, and everything else from Maven Central.
+        #
+        # The sbt disk cache is switched off for this build. setup-sbt restores ~/.cache/sbt from an earlier run, and
+        # sbt 2 then handed back the `assembly` jar of that run (`tda4j-demo-0.6.2.jar`, with that library inside) for
+        # `TDA4J_VERSION=0.7.0-preview`, so the smoke test below found no jar of the tag's name. `demo/build.sbt` says the same
+        # thing for the build; it is repeated here because a dispatch of this workflow builds the sources of the TAG,
+        # and an older tag has a `demo/build.sbt` without it.
         working-directory: demo
         env:
           TDA4J_VERSION: ${{ steps.version.outputs.version }}
-        run: sbt --server "++3.9.0! ; assembly"
+        run: sbt --server "set Global / cacheStores := Nil ; ++3.9.0! ; assembly"
       - name: Smoke-test the demo REPL jar
         # Checks the answer, not just the exit code: a REPL that starts and cannot run the library would still exit 0. The
         # REPL evaluates the first piped line and ends, so the script is run with `:load`. The unit square has five bars,

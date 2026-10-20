@@ -152,7 +152,7 @@ The tag push from step 3 triggers `.github/workflows/release.yml`, which:
    pins the build's version to the tag's: it changes nothing after `sbt release` (the tag's `version.sbt` already says
    `X.Y.Z`), and it is what lets a trial tag made by hand on a `-SNAPSHOT` commit (say `v0.7.0-preview`) publish `tda4j_3`,
    name the fat jar and pack the npm package under the tag's version, the one the demo build and the release globs ask for.
-   Builds the demo REPL jar (`sbt assembly` in `demo/`, with `TDA4J_VERSION` the tag's version) against that local
+   Builds the demo REPL jar (`sbt assembly` in `demo/`, with `TDA4J_VERSION` the tag's version and sbt's disk cache off) against that local
    publish, so it does not wait for Maven Central to serve the version `sbt release` has just published, and runs it on
    a four-point square, checking for the five bars.
 3. Commits the freshly-built docs directly into a `gh-pages` worktree, under `/X.Y.Z/`, alongside whatever's already

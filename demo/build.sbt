@@ -30,6 +30,10 @@ val tda4jVersion: String = sys.env.getOrElse(
 
 version := tda4jVersion
 
+// No sbt disk cache in this build. With it, `assembly` for one TDA4J_VERSION returned the jar an earlier run had built for
+// another one: under the earlier version's name, with the earlier library inside. (`WORKLOG-demo-assembly-cache.md`.)
+Global / cacheStores := Nil
+
 libraryDependencies += "org.appliedtopology" %% "tda4j"       % tda4jVersion
 libraryDependencies += "org.scala-lang"      %% "scala3-repl" % scalaVersion.value
 
