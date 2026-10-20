@@ -22,7 +22,7 @@ context-abstraction syntax is most of the gap; the first page covers it.
 4. **What traps look fine, compile fine, and only produce a wrong answer on specific inputs.** Ordering and
    reduction code is where they hide. Read [Hard-won invariants](gotchas.md) before changing it.
 5. **Whether a surprising result is a bug or the mathematically correct answer on a degenerate input.** See
-   [Degeneracies](degeneracies.md) before "fixing" something that isn't broken.
+   [Degeneracies](degeneracies.md).
 6. **What a user meets first, and the rules for new public API.** The
    `Persistence` verb, the `PersistenceDiagram` it returns, the labs, and the
    "easy, not simple" principles behind them. See

@@ -102,14 +102,11 @@ Persistent *co*homology via Ulrich Bauer's Ripser algorithm (arXiv:1908.02518), 
 deliberate narrowing from the generic `CellT: OrderedCell` engines above. One-shot only
 (`persistentCohomology()`, no incremental querying).
 
-**This class is not what production code calls.** `PackedRipserCohomologyEngine` (engine 4) is a faithful
-re-keying of the same algorithm onto a packed representation, and is what `matlab.TDA4j`'s
-`engine="ripser"` actually uses. This class's remaining value is narrower than "an independent check on the
-Ripser algorithm": both classes share `SimplexIndexing`, so a bug there passes both silently (engine 1 is the
-actually-independent oracle for the algorithm itself). What this class *does* catch is anything specific to
-engine 4's own packed representation — its `DiameterIndex` carrier's index-only `equals`/`hashCode`, its
-index-keyed lookup maps — that no other spec would flag. Its `Simplex[Int]`-keyed chains are also more
-directly legible for hand-debugging. Kept fully maintained; don't add new production call sites against it.
+**Production code does not call this class.** `PackedRipserCohomologyEngine` (engine 4) is the same algorithm on a
+packed representation, and is what `engine="ripser"` uses. Both share `SimplexIndexing`, so a bug there passes both;
+engine 1 is the independent oracle for the algorithm. This class catches what is specific to engine 4's packed
+representation (its `DiameterIndex` carrier's index-only `equals`/`hashCode`, its index-keyed lookup maps), and its
+`Simplex[Int]`-keyed chains are easier to debug by hand. It is maintained; do not add production call sites.
 
 Structural points worth knowing:
 
@@ -318,10 +315,9 @@ Unsupported combinations fall into a few categories:
 - **Representation-specific engines** — `fast-cubical` and `fast-alpha`
   operate only on their corresponding concrete constructions.
 
-`engine="cohomology"` (`CellularCohomologyEngine`, engine 5 above) is the one column with no "no" cells for a
-reason: it's generic over `CellT: OrderedCell` with no per-construction speed assumptions baked in, at the cost
-of none of engines 3/4's Vietoris-Rips-specific optimizations — see engine 5's own section above for what that
-tradeoff actually buys and costs.
+`engine="cohomology"` (`CellularCohomologyEngine`, engine 5 above) is the one column with no "no" cells because it
+is generic over `CellT: OrderedCell` and assumes nothing about the construction; the price is that it lacks engines
+3 and 4's Vietoris-Rips-specific optimizations.
 
 **Representatives through the facades.** `matlab.TDA4j` takes the option
 `representativeType`, `cycles` (the default) or `cocycles`, and the CLI takes

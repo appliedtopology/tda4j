@@ -37,3 +37,4 @@ spaces are an add-on with one more import, `import org.appliedtopology.tda4j.sse
   [circular and toroidal coordinates](circular-coordinates.md), the [boundary matrix](boundary-matrix.md).
 * [Files](input-output.md): CSV, Ripser, DIPHA, GUDHI and Perseus formats.
 * **Without Scala**: [MATLAB and Java](matlab.md), [JavaScript and TypeScript](javascript.md), the [command line](cli.md).
+* [Troubleshooting](troubleshooting.md) and a [glossary](glossary.md).

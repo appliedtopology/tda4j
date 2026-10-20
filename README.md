@@ -82,4 +82,5 @@ design principles. Questions, limitations and planned work are tracked as
 [issues](https://github.com/appliedtopology/tda4j/issues); [CHANGELOG.md](CHANGELOG.md) lists what changed in each
 release. The people behind tda4j are in [CONTRIBUTORS.md](CONTRIBUTORS.md).
 
-tda4j is released under the [MIT License](LICENSE.md).
+To cite tda4j, use GitHub's "Cite this repository" ([CITATION.cff](CITATION.cff)). Security reports:
+[SECURITY.md](SECURITY.md). tda4j is released under the [MIT License](LICENSE.md).

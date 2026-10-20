@@ -47,7 +47,7 @@ import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.*
 
 val square = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0))
-Persistence(square, maxDimension = 1).bettiNumbers   // Vector(1, 0)
+Persistence(square, maxDimension = 1).bettiNumbers   // Betti numbers at the end of the filtration
 ```
 
 ## Java and MATLAB
