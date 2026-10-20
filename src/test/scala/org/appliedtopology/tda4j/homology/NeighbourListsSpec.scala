@@ -2,6 +2,8 @@ package org.appliedtopology.tda4j
 
 import org.specs2.mutable
 
+import scala.compiletime.asMatchable
+
 /** `PackedRipserCohomologyEngine` with neighbour lists finds each simplex's cofacets by intersecting its vertices'
   * lists of neighbours within the threshold, instead of trying every vertex. It must be the same computation: the same
   * bars, in the same order, with the same cocycles and cycles term for term, as the all-vertex scan. Over F_3 and F_17,
@@ -17,7 +19,7 @@ class NeighbourListsSpec extends mutable.Specification:
       .collect { case ((d, i), k) if !fr.isEqual(k, fr.zero) => (d, i, k.toString) }
       .sortBy(_._2)
 
-  def cell(c: Any): (Double, Long) = c match
+  def cell(c: Any): (Double, Long) = c.asMatchable match
     case x: PackedRipserCohomologyEngine[?]#DiameterIndex => (x.diameter, x.index)
     case _                                                => (Double.NaN, -1L)
 

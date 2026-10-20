@@ -105,7 +105,7 @@ def mimaBaselineVersions(current: String, tags: Seq[String]): Seq[String] = {
 // of the checkout (`_docs`) is resolved from the build's base directory.
 def checkout: Def.Initialize[File] = Def.setting((ThisBuild / baseDirectory).value)
 
-// Compiler options: language features (implicitConversions, adhocExtensions) and warning flags.
+// Compiler options: language features (adhocExtensions) and warning flags. `implicitConversions` is test-only (below).
 val commonScalacOptions = List(
   "-source:future",
   "-language:experimental.modularity",
@@ -119,6 +119,10 @@ val commonScalacOptions = List(
 val commonSettings: Seq[Setting[?]] = Seq(
   name := "tda4j",
   scalacOptions ++= commonScalacOptions,
+  // specs2's matcher DSL IS implicit conversions (`typedValueCheck`, `matcherIsValueCheck`, `asResultToProp`, `Boolean ->
+  // Result`): every `must contain(x)` and `(a > b) ==> ...` uses one. The library's own code has none left (`into` replaced
+  // the language feature), so the flag is for the test sources alone and a new conversion in main still warns.
+  Test / scalacOptions += "-language:implicitConversions",
   // `%%` is platform-aware in sbt 2: on the JS row it resolves `..._sjs1_3` artifacts. Only libraries that have a build
   // for both platforms belong here; JVM-only ones go in `jvmSettings`.
   libraryDependencies ++= Seq(

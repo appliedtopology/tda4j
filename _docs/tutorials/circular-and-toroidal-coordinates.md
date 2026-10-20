@@ -25,7 +25,7 @@ import org.appliedtopology.tda4j.*
 val circlePoints = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
 val circle = EuclideanMetricSpace(circlePoints)
 val circleBars = CircularCoordinates.h1Bars(circle)     // (birth, death), longest-lived first
-circleBars            // Vector((0.595, 1.707)): one loop
+circleBars.toVector   // Vector((0.595, 1.707)): one loop
 ```
 
 Now choose a scale `r` at which the loop you want is alive, that is, between its birth and its death. The middle of the bar is the
