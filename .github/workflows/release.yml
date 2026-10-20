@@ -5,8 +5,7 @@ name: Release
 # already does that locally (publishSigned/sonaUpload/sonaRelease), and re-running those here would be a
 # duplicate publish attempt against an already-released coordinate. This workflow only covers what `sbt
 # release` doesn't: building the fat jar, the demo REPL jar and the npm package, attaching every release artifact to a
-# GitHub Release, publishing that version's docs snapshot under its own path on GitHub Pages, and (once the repository
-# has an `NPM_TOKEN` secret) publishing the npm package. `sbt release` publishes both Maven artifacts, `tda4j_3` (JVM)
+# GitHub Release, publishing that version's docs snapshot under its own path on GitHub Pages, and publishing the npm package. `sbt release` publishes both Maven artifacts, `tda4j_3` (JVM)
 # and `tda4j_sjs1_3` (Scala.js).
 
 on:
@@ -19,6 +18,9 @@ on:
   # gh-pages/<branch>/ and try to create a GitHub Release (and tag) named after the branch. docs.yml already
   # republishes the site on every push to `scala`.
   push:
+    paths-ignore:
+      - '.github/**'
+      - '.claude/**'
     tags:
       - "v*"
 
