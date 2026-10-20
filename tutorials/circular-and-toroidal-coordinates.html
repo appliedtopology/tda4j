@@ -136,7 +136,7 @@
 </span><span line-number="4" class=""><span class="tooltip-container"></span>val circlePoints = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
 </span><span line-number="5" class=""><span class="tooltip-container"></span>val circle = EuclideanMetricSpace(circlePoints)
 </span><span line-number="6" class=""><span class="tooltip-container"></span>val circleBars = CircularCoordinates.h1Bars(circle)     // (birth, death), longest-lived first
-</span><span line-number="7" class=""><span class="tooltip-container"></span>circleBars            // Vector((0.595, 1.707)): one loop
+</span><span line-number="7" class=""><span class="tooltip-container"></span>circleBars.toVector   // Vector((0.595, 1.707)): one loop
 </span></code></pre>
    <div class="buttons"></div>
   </div>
