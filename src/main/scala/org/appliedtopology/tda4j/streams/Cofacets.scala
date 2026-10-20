@@ -6,6 +6,10 @@ import scala.util.{Failure, Success, Try}
 import scala.util.chaining.scalaUtilChainingOps
 
 /** ******* Optimized Vietoris-Rips cofacet generation for fast coboundary computation *******
+  *
+  * Iterates the vertices `w` outside `simplex` for which `simplex + w` is a simplex of the sparse complex (every
+  * distance from `w` to a vertex of `simplex` finite in `sparseMetricSpace`), each once, in increasing order of the
+  * diameter of `simplex + w`. `simplex` must itself be a simplex of the sparse complex.
   */
 
 open class CofacetIterator[VertexT: Ordering](
@@ -59,6 +63,10 @@ open class CofacetIterator[VertexT: Ordering](
       if innerflag then // we bailed out because we walked through all neighbors of vi
         vPointers(vi) = wi
       vi += 1
+    // process() continues each vertex's walk where this one stopped. Starting it again from 0 counted every neighbour
+    // within alpha twice, so a vertex close to only some of the simplex's vertices was reported as a cofacet
+    // (`CofacetsSpec`, .claude/WORKLOG-js-test-trimming.md).
+    vertices.indices.foreach(i => pointers(vertices(i)) = vPointers(i))
   }
 
   // at this point, vPointers holds the positions of the pointers

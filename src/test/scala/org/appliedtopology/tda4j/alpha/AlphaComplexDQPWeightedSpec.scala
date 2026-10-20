@@ -18,7 +18,8 @@ import org.specs2.scalacheck.Parameters
   * correctly, or the sort/monotonicity-clamp fixes from WORKLOG.md regressing specifically in the weighted path.
   */
 class AlphaComplexDQPWeightedSpec extends org.specs2.mutable.Specification with ScalaCheck:
-  given Parameters = Parameters(minTestsOk = 2000)
+  // All 2000 cases on the JVM, a tenth on Scala.js (`TestPlatform`).
+  given Parameters = Parameters(minTestsOk = TestPlatform.propertyCases(2000))
 
   // Weights scaled to roughly match the [0,1)^d point cloud, so they meaningfully shift
   // power distances without dwarfing them entirely. (maxPower = Infinity below means no

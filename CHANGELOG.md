@@ -141,12 +141,16 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 - `fig.copy(palette = ...)` left heatmaps, cocycles' values and the color bar in the palette the plot was built with.
 - `DistanceToMeasure` through the vantage-point search returned fewer than `k` neighbours for some `k` that is a sizeable
   fraction of the number of points (a defect of the Java library it used); it returns `k`.
+- `CofacetIterator` reported vertices that are close to only some of the simplex's vertices as cofacets, and some cofacets
+  twice; it gives each cofacet of the sparse complex once, in order of its diameter.
 
 ### Build, CI and Documentation
 
 - The user guide's plotting page has a "Customizing a plot" section; the CLI and MATLAB pages point to it.
 - CI starts every sbt command with `--server`. The sbt server that the thin client left running intermittently failed a
   job (most visibly `mima` and `test-js`) in setup-sbt's post-job cache step, after every step of the job had passed.
+- The Scala.js test run is shorter: `APISpec` (a scratchpad for call syntax, its checks covered by other specs) is gone,
+  and the alpha complex properties that search for rare inputs run all their cases on the JVM and a tenth on Scala.js.
 
 
 ## 0.6.2 (2026-10-15)
