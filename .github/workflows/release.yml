@@ -87,6 +87,7 @@ jobs:
       - name: Build release artifacts
         env:
           TDA4J_DOCS_VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           # Docs only are built with 3.8.4 (see build.sbt), switched to with `++3.8.4!` inside ONE sbt invocation: one
           # project load, and it does not depend on how sbt is started. A second `TDA4J_SCALA_VERSION=3.8.4 sbt ...` call
@@ -99,12 +100,18 @@ jobs:
           #
           # `publishLocal` (still on 3.9.0, before the switch) puts this checkout's library into ~/.ivy2/local for the demo jar
           # below, which depends on a VERSION of the library: building it against the tag's own sources does not wait for
-          # Maven Central to serve the version `sbt release` has just published. Its scaladoc jar is left out of that
-          # publish (`packageDoc` below builds the one the release carries, with 3.8.4).
+          # Maven Central to serve the version `sbt release` has just published. `packageDoc` below builds the scaladoc jar
+          # the release carries, with 3.8.4.
+          #
+          # The first command pins the build's version to the tag's. `sbt release` tags the commit that set `version.sbt` to
+          # the release version, so on a real release this changes nothing; a tag made by hand on a commit that still says
+          # `-SNAPSHOT` (a trial run of this workflow, say) would otherwise publish `tda4j_3` as `X.Y.Z-SNAPSHOT` while the
+          # demo build asks ~/.ivy2/local for `X.Y.Z`, and name the assembly jar and the npm package after the snapshot, so
+          # that the `gh release create` globs below match nothing and `npm publish` would publish the snapshot version.
           #
           # Every command names its project: `tda4j` is the JVM build (fat jar, docs, the JVM Maven artifact), `tda4jJS` the
           # Scala.js build (the npm package).
-          sbt --server "tda4j/assembly ; tda4j/publishLocal ; tda4j/packageSrc ; tda4jJS/npmPack ; ++3.8.4! ; tda4j/packageDoc ; tda4j/doc"
+          sbt --server "set ThisBuild / version := \"$VERSION\" ; tda4j/assembly ; tda4j/publishLocal ; tda4j/packageSrc ; tda4jJS/npmPack ; ++3.8.4! ; tda4j/packageDoc ; tda4j/doc"
       - name: Build the demo REPL jar
         # A separate sbt build (demo/README.md), in its own fresh sbt JVM, which sees the env var below. It resolves
         # `tda4j % VERSION` from ~/.ivy2/local, where the step above just put it, and everything else from Maven Central.
@@ -193,5 +200,4 @@ jobs:
           case "$VERSION" in
             *-*) TAG_FLAG="--tag next" ;;
           esac
-          npm ci
           npm publish target/npm/*.tgz --access public $TAG_FLAG

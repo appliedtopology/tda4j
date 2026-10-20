@@ -145,10 +145,13 @@ whole sequence, per `sbt-release`'s own resume support.
 The tag push from step 3 triggers `.github/workflows/release.yml`, which:
 
 1. Checks that the ref is an existing `vX.Y.Z` tag, before anything is built or published.
-2. Runs `sbt "set tda4j / Compile / packageDoc / publishArtifact := false ; tda4j/assembly ; tda4j/publishLocal ;
-   tda4j/packageSrc ; tda4jJS/npmPack ; ++3.8.4! ; tda4j/packageDoc ; tda4j/doc"`: the npm package, the fat jar, the library published to `~/.ivy2/local` (for the demo jar, below) and the sources jar
+2. Runs `sbt "set ThisBuild / version := \"X.Y.Z\" ; tda4j/assembly ; tda4j/publishLocal ; tda4j/packageSrc ;
+   tda4jJS/npmPack ; ++3.8.4! ; tda4j/packageDoc ; tda4j/doc"`: the npm package, the fat jar, the library published to `~/.ivy2/local` (for the demo jar, below) and the sources jar
    with Scala 3.9.0, then the scaladoc jar and the docs site with 3.8.4 (scaladoc 3.9.0's JavaScript is broken), switched
-   inside the one invocation because a second `sbt` call would join the running server and keep 3.9.0.
+   inside the one invocation because a second `sbt` call would join the running server and keep 3.9.0. The leading `set`
+   pins the build's version to the tag's: it changes nothing after `sbt release` (the tag's `version.sbt` already says
+   `X.Y.Z`), and it is what lets a trial tag made by hand on a `-SNAPSHOT` commit (say `v0.7.0-preview`) publish `tda4j_3`,
+   name the fat jar and pack the npm package under the tag's version, the one the demo build and the release globs ask for.
    Builds the demo REPL jar (`sbt assembly` in `demo/`, with `TDA4J_VERSION` the tag's version) against that local
    publish, so it does not wait for Maven Central to serve the version `sbt release` has just published, and runs it on
    a four-point square, checking for the five bars.
