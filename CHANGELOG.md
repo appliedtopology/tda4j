@@ -141,6 +141,8 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 - `fig.copy(palette = ...)` left heatmaps, cocycles' values and the color bar in the palette the plot was built with.
 - `DistanceToMeasure` through the vantage-point search returned fewer than `k` neighbours for some `k` that is a sizeable
   fraction of the number of points (a defect of the Java library it used); it returns `k`.
+- `CofacetIterator` reported vertices that are close to only some of the simplex's vertices as cofacets, and some cofacets
+  twice; it gives each cofacet of the sparse complex once, in order of its diameter.
 
 ### Build, CI and Documentation
 
