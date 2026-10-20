@@ -12,16 +12,17 @@ quantified slowdown", so the output is that slowdown, per case and as a geometri
 # on the compute server, from the repository root
 export WORKDIR=/scratch/tda4j-bench        # tools, data and results go here (default ./bench-work)
 export JAVAPLEX_JAR=/path/to/javaplex.jar  # optional: TDA4j's predecessor
-# julia on PATH (or JULIA=/path/to/julia) adds Ripserer.jl
+# julia on PATH (or JULIA=/path/to/julia) adds Ripserer.jl and Eirene.jl
+# an MPI implementation with mpicxx (apt install libopenmpi-dev openmpi-bin) and cmake add DIPHA and PHAT
 # node 20.16 or newer on PATH (or NODE=/path/to/node) adds the Scala.js build of TDA4j
 
-bench/run.sh setup        # venv + pip tools, TDA4j (JVM), TDA4j (npm package), ripser.cpp (Z/2 and coefficient builds), Ripserer.jl, JavaPlex
+bench/run.sh setup        # venv + pip tools, TDA4j (JVM), TDA4j (npm package), ripser.cpp (Z/2 and coefficient builds), Ripserer.jl, JavaPlex, DIPHA, PHAT, Eirene.jl
 bench/run.sh prepare      # downloads the Ripser-paper data, generates the synthetic sets (seeded)
 bench/run.sh run --fields 2,17 --timeout 3600 --jvm-heap 32g
 ```
 
 Re-running is safe: `setup` and `prepare` skip what exists, and every `run` writes a new results directory.
-`bench/run.sh setup tda4j-js` redoes one component (`python tda4j tda4j-js ripser julia javaplex`), for example after
+`bench/run.sh setup tda4j-js` redoes one component (`python tda4j tda4j-js ripser julia javaplex dipha phat eirene`), for example after
 changing the library: the JVM tool uses the compiled classes, the JavaScript one the npm package, and both are rebuilt
 by their own `setup` step. Run the steps one after the other: they use sbt, and two sbt processes on one checkout
 corrupt each other's builds.
@@ -48,6 +49,31 @@ Useful options of `run`:
 | `--jvm-opts "-Xss8m"` | more JVM options |
 | `--node-heap 32g` | `--max-old-space-size` for the `tda4j-js` tools, in the same notation (default: `--jvm-heap`). Node's own default is a few GB, far below what the large cases need |
 | `--node-opts "--stack-size=4000"` | more options for node |
+
+## Counting the cells
+
+Each case has one reference count of the cells of the complex it reduces, in `bench/cells-reference.csv` (checked in). A
+benchmark run never counts: `bench.py summarize` joins the reference as the `cells` column of `summary.csv` and `summary.md`, so
+a time can be set against the size of the problem. The unit is the cells of dimension 0 to `dim + 1` at the case's threshold: the
+whole complex, not what an engine touches (no apparent pairs, no clearing, no implicit complex). The file also has the cells of
+each dimension, the source and a check, and the SHA-256 of the data file that was counted.
+
+`bench/run.sh count-cells --reference` makes or updates it (`count_cells.py`; `--cases a,b` recounts only those, a count that
+fails never replaces a good one), and `bench/run.sh count-cells --verify` checks that your `data/` has the files it was counted
+from. Without `--reference` the counts go to `$WORKDIR/results/cells-<timestamp>/` only: `cells.md` (the table), `cells.csv`,
+`cells_sources.csv` (one row per case and source, with time and peak memory).
+
+| task | counted by | check |
+|---|---|---|
+| Vietoris–Rips | `workers/count_cliques.cpp` (compiled with `g++`, OpenMP if there is any): every clique of the threshold graph, by degeneracy ordering and bitsets; exact | TDA4j's own stream iterated (`PaperBenchmarkDriver count=true`), when the count is under `--cross-check-max` (3e5; the stream yields about 8,000 cells per second) |
+| cubical | the images are full grids: the product over the axes of `(n + 1) + n x` | the unit tests enumerate small grids cell by cell |
+| alpha | GUDHI's alpha complex up to `--gudhi-max-ambient` (5), and TDA4j's stream; the second is the only count for the cases CGAL cannot reach (`unif10d_1000`, `o3_1024_alpha`, `cyclooctane_alpha`) | where both ran they are compared; a case with one source says "single source" |
+
+A count that needs more than `--timeout` seconds (3600) is a row that says so, with the vertices, the edges and the bound
+"every subset"; no row is an estimate. The graph is `distance <= threshold` with a relative margin of 1e-9, so the edge that
+defines the enclosing radius is in, and a distance matrix is read from its lower triangle (as ripser.cpp and TDA4j do).
+`--no-jvm` skips TDA4j (no `setup tda4j` needed), `--no-gudhi` skips GUDHI, `--threads N` limits the counter, and `--join
+RESULTS` adds the totals to a finished run's `summary.csv` as `summary_with_cells.csv` (for a run made before the reference existed).
 
 ## The image-engine size sweep
 
@@ -195,11 +221,24 @@ position (marked †).
 | `ripser.py`, `giotto-ph-1t`, `giotto-ph-mt` | pip | giotto-ph multithreaded is reported, never the baseline |
 | `gudhi`, `gudhi-collapse` | pip | edge collapse first in the second variant |
 | `cripser` | pip | CubicalRipser, Z/2 only |
+| `dionysus`, `dionysus-homology`, `dionysus-cocycles` | pip (`dionysus`) | Dionysus 2 on Vietoris–Rips only: `fill_rips`, then its cohomology algorithm (the fast one, so the main row), the clearing homology reduction, or cohomology with a representative cocycle read for every bar. float32. No alpha complex in the wheel (that needs CGAL), and `fill_freudenthal` is a lower-star filtration of the Freudenthal triangulation, not the T-construction of the cubical cases |
+| `oat`, `oat-cycles` | pip (`oat_python`) | OpenAppliedTopology (Rust), Vietoris–Rips only: a U-match decomposition of the boundary matrix; the second returns a cycle representative for every bar. It computes **over the rationals** whatever `p` is (no modulus), so a row at `p = 2` or `17` can differ from the reference where there is `p`-torsion; `summary.md` says so under "Agreement notes" |
 | `ripserer`, `ripserer-involuted` | Julia | the second asks for cycles (involuted), like TDA4j's default |
+| `eirene`, `eirene-cycles` | Julia (`setup eirene`) | Eirene.jl 1.4.0 (GitHub master at a pinned commit: the registered 1.0.0 to 1.3.6 cannot be resolved on Julia 1.10, their CSV and DataFrames bounds exclude each other), Vietoris–Rips, **Z/2 only**. `eirene` is `record="none"`, the barcode, as the Ripser paper's Dockerfile runs it; `eirene-cycles` is `record="cyclerep"` and reads a representative cycle for every bar |
+| `dipha`, `dipha-mt` | CMake + MPI (`setup dipha`) | DIPHA at a pinned commit, Vietoris–Rips, **Z/2 only**, always `--dual` as in the Ripser paper's Dockerfile, `--upper_dim dim + 1`. Its input is a sparse distance matrix with the threshold in it (`dipha_io.py`, written once into `data/dipha/` and not timed); its values are radii (half a distance), so the bars are doubled; the second row is `mpiexec -n <cores>`, reported but never the baseline, and its memory is the sum over the ranks. DIPHA's cubical input is the V-construction, not the T-construction of the cubical cases, so it runs only Vietoris–Rips |
+| `phat`, `phat-dual` | CMake (`setup phat`) | PHAT at a pinned commit reduces a prebuilt filtered boundary matrix over Z/2 (twist, bit-tree pivot columns; the second on the dual). It builds no complex: `make_phat` writes DIPHA's Vietoris–Rips complex as a boundary matrix beforehand (`data/phat/`, not timed), so these `kernel` rows time the reduction alone (reading the matrix, reducing, writing the pairs) and are never the baseline. A case above `--explicit-max-cells` (1e8, by `cells-reference.csv`) is not written out |
 | `javaplex` | `workers/JavaPlexWorker.java` | written against JavaPlex 4.x's API but **not yet compiled against a real jar** |
 
-TDA4j always returns a representative with every bar, while most of the others return bars only. `tda4j-cocycles`
-against `ripser.cpp` is the like-for-like comparison. `tda4j` against `ripserer-involuted` compares cycles with cycles.
+PHAT, DIPHA and the plain Eirene row return pairs or bars and no representative; `eirene-cycles`, `oat-cycles` and `dionysus-cocycles`
+read one for every bar. TDA4j always returns a representative with every bar, while most of the others return bars only. `tda4j-cocycles`
+against `ripser.cpp` is the like-for-like comparison. `tda4j` against `ripserer-involuted`, `oat-cycles` compares cycles
+with cycles, and `tda4j-cocycles` against `dionysus-cocycles` cocycles with cocycles.
+
+A variant that does more work than another tool (`dionysus-homology` and `dionysus-cocycles` after `dionysus`,
+`oat-cycles` after `oat`) is not run on a case where that tool timed out or ran out of memory: it would only spend the
+timeout again, and the table says so (`--rerun-timeouts` runs it anyway). Both build the complex explicitly, where
+Ripser's is implicit, so the large Vietoris–Rips cases may end in `timeout` or `oom` for them (not measured at that scale
+yet); `--tools` leaves them out of a quick run.
 
 ## Output (`$WORKDIR/results/<timestamp>/`)
 

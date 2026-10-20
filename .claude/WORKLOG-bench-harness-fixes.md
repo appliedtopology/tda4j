@@ -161,3 +161,159 @@ Cech, dual-QP and Helix barcodes agree, in the number of bars longer than 1e-6 i
 at d = 5 (H0 to H2: 40, 120, 111 bars), d = 6 (40, 232, 417) and d = 7 (40, 263, 626); the dual-QP has two more H2 bars at d = 6, of
 length 2.5e-9 and 4.2e-9 at filtration values 49 and 83 (nearly flat simplices). Times at n = 40: Cech 16 to 38 s, nearly independent of d.
 The first real run of the sweep with GUDHI 3.13 (installed in the scratch venv): see the next section when it is done.
+
+## Third addendum (same day, after the merge of #125): the sweep against GUDHI, on small draws
+
+`bench/sweep_alpha.py` with GUDHI 3.13 (installed in a scratch venv; it also runs the CGAL alpha complex) on 40 points of the unit cube,
+interior and surface, d = 5, 6, 7, two draws per cell, 4 cores and 15 GB (`--jvm-heap 6g`), warm medians in seconds. The run stopped
+after the last GUDHI cell of the surface at d = 7, before `tda4j-cech` there and before its own summary (the process was gone when I
+looked; the sandbox session had been reconnecting, so a restart is the likely cause; not investigated), so `sweep.md` was rebuilt
+from `sweep.csv` with `--summarize` and that one cell is empty.
+
+| 40 points | tda4j-helix | tda4j-dqp | tda4j-cech | gudhi |
+|---|---|---|---|---|
+| interior, d = 5 | 2.78 | 1.60 | 17.7 | 0.020 |
+| interior, d = 6 | 4.18 | 0.90 | 10.2 | 0.105 |
+| interior, d = 7 | 39.9 | 1.81 | 13.5 | 0.524 |
+| surface, d = 5 (some draw has d + 1 points on a facet) | 1.06 | 0.76 | 17.7 | 0.021 |
+| surface, d = 6 | 6.52 | 3.30 | 15.2 | 0.106 |
+| surface, d = 7 | 55.4 | 1.77 | | 0.458 |
+
+- **Agreement with GUDHI** (largest bottleneck distance to the reference over the two draws; the tolerance is 1e-5): Helix at most
+  2.9e-11 (0 in five cells of six), the Cech complex 0, the dual-QP at most 2.8e-8 (the near-zero bars it keeps that the others
+  drop). GUDHI against the Cech complex: 0, and 4.3e-9 against the dual-QP where the Cech complex is missing. So on these inputs
+  TDA4j's alpha complex agrees with CGAL's in all three of its implementations, degenerate surface draws included.
+- **Cost.** GUDHI is 100 times faster than Helix at d = 5 and 76 times at d = 7, and 3.5 times faster than the dual-QP at d = 7. GUDHI's time
+  grows by a factor 5 per dimension (0.020, 0.105, 0.524 s), Helix's by 1.5 to 10 (2.8, 4.2, 39.9), the dual-QP's hardly at all (1.6,
+  0.9, 1.8). If the trends hold the dual-QP overtakes GUDHI near d = 8 to 9: a projection from three points and two draws, not a
+  measurement; the server run measures it.
+- **Memory.** GUDHI 44 to 94 MB of RSS; TDA4j 1.0 to 2.5 GB, with the JVM heap pools' peak within a few percent of the RSS here
+  (the pre-sized heap and the parallel collector keep young garbage around). The Cech complex uses the most (2.2 to 2.5 GB) and takes
+  10 to 18 s, almost independent of d.
+- **Not shown:** anything above d = 7, where GUDHI is expected to stop; the cyclooctane and other real data against GUDHI (CGAL does
+  not reach 24 coordinates); more than two draws; failure rates.
+
+## Fourth addendum (same day): Dionysus 2 and OAT as Vietoris-Rips comparators
+
+The project lead noticed that the plan's comparator list (`PLAN-paper.md` §3.1) names OAT and Dionysus 2 but the harness ran neither. Both
+are now in `bench/` for the Vietoris-Rips task (#138 holds what is open).
+
+- **Dionysus 2.2.3** (the pip wheel, Python 3.13): `fill_rips(points or condensed distances, dim + 1, r)`, then
+  `cohomology_persistence` (the fast algorithm, the main row `dionysus`), `homology_persistence(..., "clearing")`
+  (`dionysus-homology`), or `cohomology_persistence(keep_cocycles=True)` with `pers.cocycle(pt.data)` read for every bar
+  (`dionysus-cocycles`). `init_diagrams` is cut to degrees up to `dim`: the last diagram belongs to the top skeleton and is not a result.
+  It is float32 (an edge of length 1 + 1e-9 reads as 1.0; from points its distances differ from a double matrix's by one float32 ulp, 3e-8
+  at 0.5), so it gets the same tolerance as ripser.cpp. The threshold gets a relative margin of 1e-6, the float32 rounding of the enclosing radius.
+- **OAT 0.2.0** (`oat_python`, Rust): `oat.dissimilarity.sparse_matrix_for_points` (scikit-learn's radius graph; entries strictly above
+  `max_dissimilarity` are dropped) or `sparse_matrix_for_dense`, then `oat.core.vietoris_rips.BoundaryMatrixDecomposition(max_homology_dimension=dim)`
+  and `persistent_homology_dataframe(return_cycle_representatives=...)`. **It has no modulus argument and its docstrings say the field is the
+  rationals**, so `oat` and `oat-cycles` are one computation whatever the row's p, and the summary notes a disagreement as "computed over the
+  rationals, the reference over F_p" instead of calling it a bug. I did not test this on torsion data. OAT prints timing lines to stdout;
+  `last_json` reads the last JSON line, so the output is unaffected. Its import (pandas, scikit-learn) is about 1.3 s, part of the cold time.
+- **What neither does:** Dionysus's wheel has no alpha complex; `fill_freudenthal` is a lower-star filtration on the Freudenthal triangulation, not the
+  T-construction, so not comparable to the cubical cases; OAT has no cubical or alpha complex. Both exit 3 (`unsupported`) on those tasks.
+- **Cost control.** The three slower variants are `slower_than` their fast one (`dionysus`, `oat`) and are not run on a case where it timed out or ran
+  out of memory (`--rerun-timeouts` overrides). At 120 uniform points in R^3, degree 2, at the enclosing radius (1.9 million simplices), in-process: Dionysus
+  homology/clearing 14.8 s, `row` 44 s, `column` 15.6 s, cohomology 1.7 s, cohomology with cocycles 2.1 s; OAT 0.72 s for the decomposition and 0.10 s for the
+  dataframe. One draw each; the point is the ratio between the Dionysus algorithms, which is why cohomology is the main row.
+- **Through the harness** (`bench.py run` on a 90-point cloud in R^3, degree 2, p = 2 and 17, GUDHI standing in for ripser.cpp as the reference, a 15 GB
+  sandbox, one warm-up and two trials): warm medians GUDHI 0.49 s, OAT 0.33 s (with cycles 0.33 s), Dionysus cohomology 3.2 s (with cocycles 3.2 s), Dionysus
+  homology 10.3 s; peak RSS 95, 270 (OAT, the interpreter and its imports included), 310 and 205 MB. Every row has 90/31/7 bars of degrees 0/1/2 and agrees with GUDHI
+  (OAT exactly, Dionysus 2e-8). Not a result for the paper: one draw, a noisy sandbox, and none of the benchmark's real cases.
+- **Tests.** `bench/test_bench.py` (65 tests, the venv with all three tools runs them all; without them four skip): the tool configuration (Vietoris-Rips only, OAT
+  characteristic zero, `slower_than` names real tools), the skip rule in the run loop (timeout and oom skip, error and limit do not, `--rerun-timeouts` overrides), the
+  characteristic-zero note in the summary, and the worker against GUDHI at p = 2 and 17 for every variant, with a distance-matrix input equal to the points input and
+  exit status 3 for cubical and alpha.
+
+## Fifth addendum (2026-10-19): counting the cells of every case
+
+The summary had the number of bars of each run and no size of the problem (#135 lists it as "simplex counts"). `bench/count_cells.py`
+(`bench/run.sh count-cells`) now counts the cells of dimension 0 to `dim + 1` of the complex each case reduces, at the case's threshold:
+the whole complex, not what an engine touches. I read "without shortcuts" that way: no apparent pairs, no clearing, no implicit complex, and no
+estimate, so a count that does not finish is a row that says so (vertices, edges, the bound "every subset"), never a guess.
+
+- **Vietoris-Rips: `workers/count_cliques.cpp`**, exact. kClist on a degeneracy ordering with the candidate sets as bitsets; the last level is
+  a popcount. A distance is compared with `threshold * (1 + 1e-9)` so the edge that IS the enclosing radius is in; a matrix is read from its
+  lower triangle. Checked against plain recursive enumeration (points, a matrix whose upper triangle is junk, a 3 x 3 lattice with ties at
+  exactly sqrt 2) and against GUDHI's Rips complex by dimension.
+- **Cubical:** the images are full grids, so the cells of dimension j are the coefficient of x^j in the product of `(n_i + 1) + n_i x`; the unit
+  tests enumerate small grids cell by cell (a coordinate per axis, even = vertex, odd = edge). This is a formula, the one place the script does not
+  enumerate the data.
+- **Alpha:** GUDHI's alpha complex up to ambient dimension 5 (`--gudhi-max-ambient`), and TDA4j's stream through the new `count=true` mode of
+  `PaperBenchmarkDriver` (JVM only), which builds the stream as `Persistence` does and iterates it. For `unif10d_1000`, `o3_1024_alpha` and
+  `cyclooctane_alpha` TDA4j is the only source, and the table says "single source (TDA4j's own count)".
+- **Cross-checks that ran:** TDA4j's `VietorisRips` stream has exactly the clique counts on three stand-in inputs (60 points at 0.4: 60/301/599/680;
+  a 48-point cloud in R^4: 78,758 cells; a 70 x 70 not-quite-symmetric matrix: 242,675); TDA4j's alpha stream has GUDHI's counts on 60 points in R^3
+  at no radius (60/354/566/271) and at 0.2 (60/220/218/67), on 200 points in R^2 and 50 in R^5, and the DQP backend agrees at 0.2.
+- **Scale (4 cores):** every Vietoris-Rips case of the suite is counted in under 12 s (clifford50000 takes 11.4 s, 2.2 million edges and 413 million
+  4-cliques; fractal-r 2.2 billion cells in 0.11 s; dragon2000 0.7 s).
+- **TDA4j's stream is slow to iterate:** about 8,000 cells per second (78,758 cells in 9 s, 242,675 in 33 s, one JVM each, JIT warm-up included), which
+  is why the cross-check stops at `--cross-check-max` 3e5. Not an A/B measurement, and not what the engines use (the packed Ripser engine does not
+  build the stream); unexamined.
+- **The reference (project lead: one count per example is enough, a run need not count).** `bench/cells-reference.csv` is checked in and
+  `bench.py summarize` joins it as `cells`; `bench/run.sh count-cells --reference` writes it, `--verify` compares the SHA-256 of `data/` with the
+  files that were counted. All 32 cases were counted in 4 minutes on 4 cores, from the real benchmark data (`bench.py prepare` in this
+  sandbox: the Ripser and roadmap files from GitHub, the cyclooctane `.mat` from the javaplex clone, the generated sets from their seeds):
+
+  | case | cells up to dim + 1 | | case | cells |
+  |---|---|---|---|---|
+  | sphere3_48 / 96 / 192 | 136,390 / 2,480,471 / 47,890,347 | | random2d_512 / 1024 / 2048 | 1,050,625 / 4,198,401 / 16,785,409 |
+  | dragon2000 (dim 1) | 546,815,948 | | random3d_32 / 64 / 128 | 274,625 / 2,146,689 / 16,974,593 |
+  | random16 (dim 7) | 15,834,007 | | unif2d_1000 / 10000 (alpha) | 5,959 / 59,943 |
+  | fractal-r | 2,201,692,044 | | unif3d_1000 / 5000 | 27,531 / 142,317 |
+  | o3_1024 / o3_4096 | 10,596,595 / 343,610,197 | | unif5d_500 | 268,107 |
+  | clifford50000 | 454,608,895 | | unif10d_1000 | 2,691,159 (TDA4j only) |
+  | cyclooctane (to 0.5) | 6,332,000 | | o3_1024_alpha / cyclooctane_alpha | 30,634 / 70,896 (TDA4j only) |
+
+  GUDHI and TDA4j count the same alpha complex in every case both ran (nine, the two degenerate ones included), and the TDA4j Vietoris-Rips stream has the
+  clique count of sphere3_48 (the only Vietoris-Rips case under the cross-check limit).
+- **clifford50000 is a small complex with a huge index range:** 454.6 million cells up to dimension 3, against the 2.6e17 subsets of size 4 that Ripser's
+  combinatorial indexing must be able to name (the `limit` of the first section). The `limit` comes from the index, not from the size of the problem.
+- **`sphere_3_192_points.dat` is 192 points on the unit sphere of R^3** (three coordinates, norms 1 to 1e-8), so the comment in `bench.py` that said S^3
+  was wrong and is corrected; whether "sphere3" in the Ripser paper means the 3 coordinates or the 3-sphere I did not look up.
+- **Open:** the `sweep_alpha.py` cells (the cube draws) have no count yet; the Scala.js twin has none (the count does not depend on the platform).
+  The counts above come from this sandbox's copy of the data; `--verify` on the server says whether its files are the same. #135.
+
+## Sixth addendum (2026-10-19): DIPHA, PHAT and Eirene
+
+The project lead asked for the three unless there was a compelling reason against. There is none against DIPHA or Eirene; PHAT is a different kind of
+tool, and the rows say so. Everything below was built and run in this sandbox (Ubuntu 24.04, 4 cores, OpenMPI 4.1.6, Julia 1.10.5).
+
+- **DIPHA** (commit `0b87476`): the Ripser paper's own Dockerfile runs it (`--dual --upper_dim dim + 1`) on sphere_3_192 and o3_1024 only; the o3_4096 and dragon stages
+  are commented out there. Z/2 only. Its Vietoris-Rips input is a sparse distance matrix with the threshold in it, written once by `bench/dipha_io.py` (SciPy's
+  `cKDTree`, both ends of each edge, a relative margin of 1e-9) and not timed. **Its filtration value is half the largest distance of a simplex** (`max / 2` in
+  `sparse_rips_complex.h` and `full_rips_complex.h`), so the bars are doubled on reading. `--upper_dim D` keeps the cells of dimension up to and including D (the
+  README says "the first D dimensions"; the code uses `breakpoints[upper_dim + 1]`), and the diagram omits the essential classes of that top dimension. Essential classes
+  are stored with the dimension `-d - 1` and the death `max_value`. A second row runs it under `mpiexec` with a rank per core; the memory of a job of several
+  processes is the sum of the ranks' VmHWM (`tree_hwm_mb`, an upper bound, ranks peak at different times). Open MPI 4's `mpiexec --version` says `OpenRTE`, which the
+  flavour check had to learn: a container needs `--allow-run-as-root` and a rank per hardware thread `--oversubscribe`.
+- **DIPHA's cubical input is the V-construction**, each cell taking the max of its vertex values (`weighted_cubical_complex.h`). The plan listed "DIPHA (T)" among the
+  cubical comparators; that was wrong and is corrected. It runs Vietoris-Rips only.
+- **Eirene**: Z/2 only (every persistence routine is `persistf2...`). The registered package (1.0.0 to 1.3.6) cannot be installed on Julia 1.10: its CSV compat
+  (up to 0.7.10) forces DataFrames up to 0.22.7, which SortingAlgorithms excludes. The repository's master (1.4.0, `julia = "1"`, last commit 2025-01-28) installs, precompiles
+  and loads, so `setup eirene` pins it by commit; Pkg warns that precompilation of Eirene itself is skipped for a circular dependency through its DataFrames and CSV
+  extensions, and the first call in a process compiles (about 7 s). The `pc` model takes the points as columns; values are distances, no halving. `eirene` is
+  `record="none"` (the Ripser paper's runs), `eirene-cycles` is `record="cyclerep"` and reads `classrep` for every bar. Eirene is not abandoned (the repository is
+  maintained); its author's newer system is OAT, which is already a row.
+- **PHAT** (commit `a74705e`): reduces a filtered boundary matrix and knows no complex, Z/2 only, no representatives. A fair row needs the matrix made by something else;
+  `workers/make_phat.cpp` is DIPHA's `create_phat_filtration` extended to write the filtration values and dimensions, so PHAT reduces DIPHA's complex in DIPHA's order.
+  The rows are `kernel` rows (`phat` twist with bit-tree pivot columns, `phat-dual` on the dual): excluded from "best other", marked in the summary, skipped above
+  `--explicit-max-cells` (1e8 cells, by the reference counts). Vietoris-Rips only; a T-construction matrix for the cubical cases is not written.
+- **Agreement:** all of them agree with ripser.cpp at p = 2 (distance at most 5.0e-6, the float32 error of the reference; GUDHI agrees to 0 for DIPHA at 1 and 3 ranks,
+  Eirene in both variants, PHAT twist and dual, in the unit tests). At p = 17 ripser.cpp finds 178 classes in degree 2 of o3_1024 against 180 at p = 2: the field matters
+  there, and the Z/2-only rows are refused at p = 17 (`only_p`, status `unsupported`, reason "Z/2 coefficients only").
+- **Measurements, one run each in a noisy 4-core sandbox, not for the paper** (cases from `bench.py prepare`; warm medians; ripser.cpp for scale):
+
+  | case (cells) | ripser.cpp | dipha | dipha-mt (4 ranks) | phat / phat-dual (reduction only) | eirene |
+  |---|---|---|---|---|---|
+  | sphere3_48 (136 k) | 0.011 s | 0.71 s | | 0.16 s / 0.065 s | 0.019 s (cold 13 s) |
+  | sphere3_96 (2.5 M) | 0.08 s | 8.0 s, 336 MB | 4.1 s, 478 MB | 5.1 s / 1.0 s | 0.49 s, 851 MB (cold 16 s) |
+  | o3_1024 (10.6 M) | 1.8 s, 14 MB | 47.5 s, 1381 MB | 29.5 s, 1576 MB | 15.5 s / 10.8 s | |
+  | random16 (15.8 M) | 6.0 s, 83 MB | | | | 5.2 s, 2477 MB (with cycles 17.5 s) |
+  | sphere3_192 (47.9 M) | 0.71 s | 236 s, 5.6 GB | | not run (above the cap) | |
+  | fractal-r (2.2 billion) | | `std::bad_alloc` on 15 GB | | | |
+
+  `make_phat` took 46 s for o3_1024 beforehand. Eirene's cold times are Julia's start and compilation. Eirene beating ripser.cpp on random16 (50 points in R^16, degree 7)
+  is one measurement.
+- **Not done / open (#139):** the three tools at the scale of the real suite (DIPHA and Eirene on the largest cases, the cap for PHAT); a T-construction boundary matrix to put
+  PHAT and DIPHA on the cubical cases; per-rank memory for `dipha-mt` is an upper bound.

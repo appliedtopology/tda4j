@@ -366,10 +366,16 @@ Planning document for the project lead. Nothing here is implemented.
   - giotto-ph, on 1 thread and on N threads;
   - GUDHI, with and without edge collapse;
   - Ripserer.jl;
-  - OAT;
-  - Dionysus 2;
+  - OAT (in the harness since 2026-10-18 as `oat`, `oat-cycles`; it computes over the rationals, so a row at p = 2 or 17 can differ
+    from the reference where there is torsion);
+  - Dionysus 2 (in the harness as `dionysus`, `dionysus-homology`, `dionysus-cocycles`; Vietoris–Rips only, float32);
   - JavaPlex, mandatory as the predecessor;
-  - Eirene, optional, already in the harness.
+  - Eirene (in the harness since 2026-10-19 as `eirene`, `eirene-cycles`: Z/2 only; GitHub master 1.4.0, since the registered package
+    cannot be resolved on Julia 1.10);
+  - DIPHA (in the harness as `dipha`, `dipha-mt`: Z/2 only, one rank and one rank per core; the Ripser paper's own Dockerfile runs it on
+    sphere_3_192 and o3_1024 only, the o3_4096 and dragon stages are commented out);
+  - PHAT, as `phat` and `phat-dual`: a **kernel** row. It reduces a prebuilt boundary matrix and builds no complex, so it times the
+    reduction alone, is never the baseline, and runs only the cases whose complex is written out (`--explicit-max-cells`).
 - **Datasets:** the seven cases in the Ripser-paper Dockerfile, with its exact flags (**verified**):
 
   | case | flags |
@@ -418,7 +424,8 @@ Planning document for the project lead. Nothing here is implemented.
 - **Comparators:**
   - CubicalRipser, in its T mode (check the flag or module in the pinned version);
   - GUDHI `CubicalComplex` with `top_dimensional_cells`;
-  - DIPHA (T);
+  - DIPHA, which is V-construction only (`weighted_cubical_complex.h` gives each cell the max of its vertex values; this line said T): a T run would need
+    the cells written as DIPHA's explicit `WEIGHTED_BOUNDARY_MATRIX`, which the harness does not do;
   - HomCloud (with representatives);
   - Ripserer.jl;
   - Flash Cubical, which is V only. A fair comparison needs a small V-construction loader on our side: vertex values,
@@ -769,6 +776,9 @@ The first full run (2026-10-14, before the Scala.js build) is not citable; readi
   implementations: GUDHI (CGAL) where it can run, and at higher d TDA4j's own Cech complex (minimum enclosing balls: the same
   barcode in general position by the nerve lemma) and dual-QP, three algorithms. At d = 5, 6, 7 on 40 interior points the Cech,
   dual-QP and Helix barcodes agree to 5e-16 on every bar longer than 1e-6 (`WORKLOG-bench-harness-fixes.md`, second addendum).
+- **§3.1 comparators:** Dionysus 2 and OAT, listed but not run by the first harness, are now rows for the Vietoris–Rips task
+  (`WORKLOG-bench-harness-fixes.md`, fourth addendum; #138). OAT has no modulus (rationals), Dionysus's wheel has no alpha complex and
+  its `fill_freudenthal` is not the T-construction, so neither enters the cubical or alpha tables.
 - **§5, cyclooctane:** the data is JavaPlex's `pointsCycloOctane.mat` (6040 points in R^24), wired into `bench` as the cases
   `cyclooctane` (Ripser to 0.5) and `cyclooctane_alpha` (DQP to 0.25). Per the rule of §5, Betti numbers are computed first and
   quoted after: the harness reports the bars alive at the radius, per field, and compares with no published value.
@@ -777,6 +787,8 @@ The first full run (2026-10-14, before the Scala.js build) is not citable; readi
 
 - **`ripser.cpp`'s coefficient bits** (2026-10-18): `num_coefficient_bits = 8` and `max_simplex_index = 2^55 - 1`, read in the
   copy inside the ripser.py 0.6.15 sdist from PyPI; the master copy that `bench/run.sh setup` clones is not yet compared.
+- **Dionysus 2.2.3 and OAT 0.2.0's interfaces** (2026-10-18): both pip packages installed in a scratch venv and called; the signatures, the
+  float32 rounding and the cocycle access of Dionysus were run, OAT's rational field is from its docstrings and was not tested on torsion data.
 - **The DQP paper's §4 numbers** (sizes, radii, timings), read from the arXiv PDF (2310.00536) with `pdftotext`.
 
 - **HAP** `PersistentHomologyOfSubGroupSeries`: the manual's §11.1-9, read as raw HTML from the GitHub Pages mirror
