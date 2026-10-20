@@ -1227,8 +1227,8 @@ scala&gt; <span class="hljs-function"><span class="hljs-keyword">def</span> <spa
   <span class="hljs-keyword">val</span> f = pixelgrid.map((x,y) =&gt; c*(a*x+b*y)*(a*x+b*y) + d*(a*x+b*y))
   <span class="hljs-keyword">val</span> centered = f.map(_ - f.sum/f.length).tail
   centered.map(_ / math.sqrt(centered.map(x =&gt; x*x).sum))
-<span class="hljs-keyword">val</span> rnd = scala.util.<span class="hljs-type">Random</span>(<span class="hljs-number">20261016</span>)
-<span class="hljs-keyword">val</span> klein = <span class="hljs-type">Array</span>.fill(<span class="hljs-number">15000</span>)(kleinPatch(rnd.nextDouble(), rnd.nextDouble()))
+scala&gt; <span class="hljs-keyword">val</span> rnd = scala.util.<span class="hljs-type">Random</span>(<span class="hljs-number">20261016</span>)
+scala&gt; <span class="hljs-keyword">val</span> klein = <span class="hljs-type">Array</span>.fill(<span class="hljs-number">15000</span>)(kleinPatch(rnd.nextDouble(), rnd.nextDouble()))
 </code></pre>
 <p>Or you can grab the file <a href="https://tda4j.appliedtopology.org/presentations/tutorial-2026-10-16/klein-15000.csv">https://tda4j.appliedtopology.org/presentations/tutorial-2026-10-16/klein-15000.csv</a>.</p>
 </section>
