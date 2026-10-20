@@ -111,7 +111,7 @@ jobs:
         working-directory: demo
         env:
           TDA4J_VERSION: ${{ steps.version.outputs.version }}
-        run: --server sbt "++3.9.0! ; assembly"
+        run: sbt --server "++3.9.0! ; assembly"
       - name: Smoke-test the demo REPL jar
         # Checks the answer, not just the exit code: a REPL that starts and cannot run the library would still exit 0. The
         # REPL evaluates the first piped line and ends, so the script is run with `:load`. The unit square has five bars,
