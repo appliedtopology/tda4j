@@ -39,7 +39,8 @@ jobs:
     env:
       # An npm access token that may publish to the `@appliedtopology` scope (RELEASE.md, "npm"). Without it the publish step is skipped, and
       # the package is still built and attached to the GitHub Release.
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      SCALA_BUILD_VERSION: 3.9.0
+      SCALA_DOCS_VERSION: 3.8.4
     steps:
       - uses: actions/checkout@v7
         with:
@@ -101,14 +102,14 @@ jobs:
           #
           # Every command names its project: `tda4j` is the JVM build (fat jar, docs, the JVM Maven artifact), `tda4jJS` the
           # Scala.js build (the npm package).
-          sbt --server "set tda4j / Compile / packageDoc / publishArtifact := false ; tda4j/assembly ; tda4j/publishLocal ; tda4j/packageSrc ; tda4jJS/npmPack ; ++3.8.4! ; tda4j/packageDoc ; tda4j/doc"
+          sbt --server "tda4j/assembly ; tda4j/publishLocal ; tda4j/packageSrc ; tda4jJS/npmPack ; ++3.8.4! ; tda4j/packageDoc ; tda4j/doc"
       - name: Build the demo REPL jar
         # A separate sbt build (demo/README.md), in its own fresh sbt JVM, which sees the env var below. It resolves
         # `tda4j % VERSION` from ~/.ivy2/local, where the step above just put it, and everything else from Maven Central.
         working-directory: demo
         env:
           TDA4J_VERSION: ${{ steps.version.outputs.version }}
-        run: sbt --server assembly
+        run: --server sbt "++3.9.0! ; assembly
       - name: Smoke-test the demo REPL jar
         # Checks the answer, not just the exit code: a REPL that starts and cannot run the library would still exit 0. The
         # REPL evaluates the first piped line and ends, so the script is run with `:load`. The unit square has five bars,
