@@ -30,7 +30,8 @@ concurrency:
   group: gh-pages-publish
 
 permissions:
-  contents: write
+  contents: write,read
+  id-token: write
 
 jobs:
   release:
@@ -52,7 +53,9 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
+          registry-url: 'https://registry.npmjs.org'
+          package-manager-cache: false
       - name: Setup sbt launcher
         uses: sbt/setup-sbt@v1
       - name: Derive release version
@@ -173,17 +176,15 @@ jobs:
             "demo/target/out/jvm/scala-3.9.0/tda4j-demo/tda4j-demo-${VERSION}.jar" \
             "docs-${VERSION}.zip"
       - name: Publish to npm
-        # Skipped until the repository has the NPM_TOKEN secret (RELEASE.md, "npm"). A version with a suffix (0.8.0-RC1)
-        # goes out under the `next` tag, so `npm install @appliedtopology/tda4j` keeps giving the last full release.
-        if: ${{ env.NPM_TOKEN != '' }}
+        # npm setup with Trusted Publisher, checks that this is in a run of `release.yml` to allow publishing
+        # Hence, NPM_TOKEN is no longer required.
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -e
-          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc"
           TAG_FLAG=""
           case "$VERSION" in
             *-*) TAG_FLAG="--tag next" ;;
           esac
+          npm ci
           npm publish target/npm/*.tgz --access public $TAG_FLAG
-          rm -f "$HOME/.npmrc"
