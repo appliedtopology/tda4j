@@ -10,7 +10,6 @@ import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.*
 
 given Double is Field = Field.DoubleApproximated(1e-9)
-given Epsilon = Epsilon(1e-5)        // the numerical tolerance of the triangulation
 
 val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.8), Array(0.2, 0.5))
 val delaunay = BowyerWatsonDelaunay(points)  // or HelixDelaunay(points) above 4 dimensions

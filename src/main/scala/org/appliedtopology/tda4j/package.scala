@@ -84,6 +84,7 @@ abstract class Lab(characteristic: Int, precision: Double = 1e-9):
     Endpoints,
     EnumeratingCofaceSimplexStream,
     Epsilon,
+    EpsilonFactor,
     Erf,
     EuclideanMetricSpace,
     ExplicitCubicalStream,
