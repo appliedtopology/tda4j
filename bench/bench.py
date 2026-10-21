@@ -173,6 +173,10 @@ def cells_reference():
 TOOLS = [
     ("tda4j", "tda4j", "vr", {"engine": "auto", "reps": "cycles"}),
     ("tda4j-cocycles", "tda4j", "vr", {"engine": "auto", "reps": "cocycles"}),
+    # The block-parallel experiments (#192, #194): bars only, no representatives, on every core.
+    ("tda4j-blocks-mt", "tda4j", "vr", {"engine": "blocks", "reps": "none", "threads": "ALL", "multithreaded": True}),
+    ("tda4j-parallel-1t", "tda4j", "vr", {"engine": "parallel", "reps": "none", "threads": "1"}),
+    ("tda4j-parallel-mt", "tda4j", "vr", {"engine": "parallel", "reps": "none", "threads": "ALL", "multithreaded": True}),
     ("ripser.cpp", "ripser", "vr", {}),
     # DIPHA (Bauer, Kerber and Reininghaus; MPI): Z/2 only, always the dualized algorithm (as in the Ripser paper's
     # Dockerfile). Its input is a sparse distance matrix with the threshold in it, made before the run and not timed
@@ -599,10 +603,14 @@ def command(kind, name, opts, case, data, p, threshold, warmup, trials, out, arg
     common += case_extra_args(case, data)
     if kind == "tda4j":
         cp = Path(os.environ["TDA4J_CP"]).read_text().strip()
-        return (["java"] + jvm_flags(args.jvm_heap, args.jvm_opts) +
+        threads = [] if "threads" not in opts else [os.cpu_count() if opts["threads"] == "ALL" else int(opts["threads"])]
+        # The parallel experiment's sorts run on the common fork-join pool: give it the same number of threads.
+        pool = [f"-Djava.util.concurrent.ForkJoinPool.common.parallelism={t}" for t in threads]
+        return (["java"] + jvm_flags(args.jvm_heap, args.jvm_opts) + pool +
                 ["-cp", cp, "org.appliedtopology.tda4j.PaperBenchmarkDriver",
                  f"engine={opts['engine']}", f"reps={opts['reps']}"] +
                 ([f"backend={opts['backend']}"] if "backend" in opts else []) +
+                [f"threads={t}" for t in threads] +
                 [f"{k}={opts[k]}" for k in ("collapse", "wvariant", "dual", "nu") if k in opts] + common)
     if kind == "tda4j-js":
         heap = args.node_heap or args.jvm_heap

@@ -128,10 +128,11 @@ class CaseTests(unittest.TestCase):
             if c.degenerate:
                 self.assertIn(c.name + "_gp", names)
 
-    def test_every_tool_runs_a_task_with_a_reference_except_cech_which_only_the_alpha_sweep_runs(self):
+    def test_every_tool_and_every_case_runs_a_task_with_a_reference(self):
         for name, kind, task, opts in bench.TOOLS:
-            self.assertTrue(task in bench.REFERENCE or task == "cech", name)
-        self.assertNotIn("cech", {c.task for c in bench.CASES}, "no case of the main run uses the Cech task")
+            self.assertIn(task, bench.REFERENCE, name)
+        for case in bench.CASES:
+            self.assertIn(case.task, bench.REFERENCE, case.name)
 
     def test_alpha_radius_has_about_k_neighbours(self):
         x = np.random.default_rng(1).random((1500, 3))
@@ -940,8 +941,9 @@ class CellCountTests(unittest.TestCase):
                          "the benchmark loop does not count cells")
 
     def test_every_case_is_countable_by_some_source(self):
+        # vr by the clique counter, cubical by the formula, alpha by GUDHI and TDA4j, the others by TDA4j's stream.
         for case in bench.CASES:
-            self.assertIn(case.task, ("vr", "cubical", "alpha"), case.name)
+            self.assertIn(case.task, ("vr", "cubical", "alpha", "cech", "sparse", "dtm", "witness", "dowker"), case.name)
 
 
 class DiphaPhatEireneTests(unittest.TestCase):
