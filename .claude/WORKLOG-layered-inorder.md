@@ -117,3 +117,33 @@ characteristic curves from per-edge clique counts.
 - Peak heap measurement; larger clouds; a sparse candidate search.
 - Deleting or fixing `InorderCofaceSimplexStream` (#182; the dispatcher no longer builds it).
 - Scala.js: the new code is pure Scala (own bitsets, `java.util.Arrays` only); the JS test job was not run here.
+
+## Follow-up: reducing by edge block in parallel (same day)
+
+Project lead asked whether one reduction per edge block, all at once, gives sensible results. The ideas of #185 are
+now one issue each (#187–#191); this one is #192.
+
+**Sound for the pairs inside a block.** Order cells by value, then block (first longest edge ascending: with ties, a
+face of diameter `α` not containing `e` has a first edge before `e`, so it is earlier), then dimension. A block's
+columns have rows in the block or earlier blocks, and only the block's columns have pivots in its rows, so reducing a
+block alone while the pivot stays inside is exactly what the sequential reduction does there. Columns whose pivot
+leaves the block are deferred. Same for the coboundary matrix in reverse order.
+
+`LayeredInorderBenchmarkDriver <n> <dim> 3 <t> blocks 1 7` (F₂, no clearing, no apparent pairs, simplices to dim 3):
+
+| cloud | cells | pairs (in one block) | cohomology additions: sequential / phase 1 / phase 2 (adding a phase-1 pair) / sequential remainder |
+|---|---|---|---|
+| 30, R³, ∞ | 31,930 | 4,089 (4,055) | 38,945 / 3,654 / 35,291 (35,220) / 2,222 |
+| 50, R³, enclosing radius | 70,425 | 9,091 (9,032) | 123,561 / 8,191 / 115,370 (115,225) / 28,920 |
+| 60, R², enclosing radius | 136,744 | 15,219 (15,149) | 189,390 / 13,944 / 175,446 (175,303) / 10,091 |
+| 60, R⁴, enclosing radius | 200,892 | 19,664 (19,576) | 347,705 / 18,228 / 329,477 (329,047) / 100,978 |
+| 100, R³, 0.35 | 5,986 | 2,044 (1,919) | 12,053 / 1,360 / 10,693 (10,352) / 2,471 |
+| 200, R³, 0.3 | 14,602 | 4,909 (4,633) | 34,040 / 3,353 / 30,687 (29,705) / 10,724 |
+
+Pairs identical to one sequential reduction in every case, homology and cohomology. The in-block pairs (94–99.6% of
+pairs) are cheap; the work is in the deferred columns, but almost all of it adds columns paired in phase 1, which are
+final then, so each deferred column can be reduced against them independently. "Sequential remainder" counts the
+additions from the first time a deferred column needs another deferred column: 5–32% of all additions (Amdahl 3–19x).
+Homology on the truncated complex defers every top-dimensional cycle and leaves 78–88% of additions in phase 2.
+Additions are not time; nothing here has clearing, apparent pairs or F_p. Prior art to compare: chunks (BKR),
+Ripser++, Morozov–Nigmetov lock-free reduction.

@@ -123,6 +123,148 @@ object LayeredInorderBenchmarkDriver:
         s"  sum of (lens graph components - 1) = $componentSum, H1 deaths + H2 bars = ${diagram.dim(1).bars.count(!_.death.isPosInfinity) + h2}"
       )
       return
+    // Reduction by edge blocks (F_2, plain homology, no clearing). Cells are ordered by value, then by block (first
+    // longest edge, ascending), then dimension, then layer order: a filtration in which every block's faces outside it
+    // come earlier. Phase 1 reduces each block's columns using only that block's columns, while the pivot stays in the
+    // block (the blocks are independent); a column whose pivot leaves the block is deferred to phase 2, which reduces
+    // the deferred columns in order against everything. Compared with one sequential reduction of the whole matrix.
+    if method == "blocks" then
+      val g = Generator(n, distance, threshold)
+      val layers = Iterator.iterate(g.edges)(g.cofacets).take(top).toVector
+      case class Cell(dim: Int, vertices: Array[Int], value: Double, a: Int, b: Int, block: Int, pos: Int)
+      val vertexCells = (0 until n).map(v => Cell(0, Array(v), 0.0, -1, v, -1 - v, v))
+      val higher = for
+        layer <- layers
+        i <- 0 until layer.size
+      yield
+        val r = layer.root(i)
+        val w = layer.dim + 1
+        Cell(layer.dim, layer.vertices.slice(i * w, (i + 1) * w), g.edgeLength(r), g.edgeA(r), g.edgeB(r), r, i)
+      val cells = (vertexCells ++ higher).sortBy(c => (c.value, c.a, c.b, c.dim, c.pos)).toArray
+      val index = cells.indices.map(i => cells(i).vertices.toSeq -> i).toMap
+      val boundary = cells.map(c =>
+        if c.dim == 0 then Array.empty[Int]
+        else c.vertices.indices.map(j => index(c.vertices.patch(j, Nil, 1).toSeq)).sorted.toArray
+      )
+      def add(x: Array[Int], y: Array[Int]): Array[Int] =
+        val out = IntBuffer()
+        var i = 0
+        var j = 0
+        while i < x.length || j < y.length do
+          if j == y.length || (i < x.length && x(i) < y(j)) then
+            out += x(i); i += 1
+          else if i == x.length || y(j) < x(i) then
+            out += y(j); j += 1
+          else
+            i += 1; j += 1
+        out.result
+      val N = cells.length
+      // One sequential reduction.
+      val fullCol = boundary.clone()
+      val fullPivot = Array.fill(N)(-1)
+      var fullAdds = 0L
+      for j <- 0 until N do
+        while fullCol(j).nonEmpty && fullPivot(fullCol(j).last) >= 0 do
+          fullCol(j) = add(fullCol(j), fullCol(fullPivot(fullCol(j).last)))
+          fullAdds += 1
+        if fullCol(j).nonEmpty then fullPivot(fullCol(j).last) = j
+      // Phase 1: blocks independently.
+      val col = boundary.clone()
+      val pivot = Array.fill(N)(-1)
+      var localAdds = 0L
+      var localPairs = 0
+      val deferred = scala.collection.mutable.ArrayBuffer.empty[Int]
+      for j <- 0 until N do
+        val blk = cells(j).block
+        while col(j).nonEmpty && cells(col(j).last).block == blk && pivot(col(j).last) >= 0 do
+          col(j) = add(col(j), col(pivot(col(j).last)))
+          localAdds += 1
+        if col(j).nonEmpty then
+          if cells(col(j).last).block == blk then
+            pivot(col(j).last) = j
+            localPairs += 1
+          else deferred += j
+      // Phase 2: the deferred columns, in order.
+      var globalAdds = 0L
+      for j <- deferred do
+        while col(j).nonEmpty && pivot(col(j).last) >= 0 do
+          col(j) = add(col(j), col(pivot(col(j).last)))
+          globalAdds += 1
+        if col(j).nonEmpty then pivot(col(j).last) = j
+      val samePairs = (0 until N).forall(r => pivot(r) == fullPivot(r))
+      val pairs = (0 until N).count(pivot(_) >= 0)
+      val positive = (0 until N).count(r => pivot(r) >= 0 && cells(pivot(r)).value > cells(r).value)
+      val unpaired = N - 2 * pairs
+      val blocks = higher.groupBy(_.block).values.map(_.size)
+      println(
+        s"n=$n ambient=$ambient top simplex dim=$top threshold=$threshold: $N cells, ${blocks.size} edge blocks (largest ${blocks.max})"
+      )
+      println(
+        s"  pairs: $pairs, of which inside one block: $localPairs; positive-length: $positive; unpaired: $unpaired"
+      )
+      println(s"  deferred to phase 2: ${deferred.size} columns; same pairs as one sequential reduction: $samePairs")
+      println(s"  column additions: sequential $fullAdds; phase 1 (parallel by block) $localAdds; phase 2 $globalAdds")
+      // The same two phases on the coboundary matrix (cohomology, as Ripser reduces): columns are the cells below the
+      // top dimension, in reverse filtration order, so the top dimension is only rows and its cycles cost nothing.
+      val rev = (i: Int) => N - 1 - i
+      val cob = Array.fill(N)(IntBuffer())
+      for j <- 0 until N; i <- boundary(j) do cob(i) += rev(j)
+      val coCols = (N - 1 to 0 by -1).filter(i => cells(i).dim < top)
+      def coboundary(i: Int): Array[Int] = cob(i).result.sorted
+      val coFull = Array.fill(N)(Array.empty[Int])
+      val coFullPivot = Array.fill(N)(-1)
+      var coFullAdds = 0L
+      for i <- coCols do
+        var c = coboundary(i)
+        while c.nonEmpty && coFullPivot(c.last) >= 0 do
+          c = add(c, coFull(coFullPivot(c.last)))
+          coFullAdds += 1
+        coFull(i) = c
+        if c.nonEmpty then coFullPivot(c.last) = i
+      val co = Array.fill(N)(Array.empty[Int])
+      val coPivot = Array.fill(N)(-1)
+      var coLocalAdds = 0L
+      var coLocalPairs = 0
+      val coDeferred = scala.collection.mutable.ArrayBuffer.empty[Int]
+      for i <- coCols do
+        val blk = cells(i).block
+        var c = coboundary(i)
+        while c.nonEmpty && cells(rev(c.last)).block == blk && coPivot(c.last) >= 0 do
+          c = add(c, co(coPivot(c.last)))
+          coLocalAdds += 1
+        co(i) = c
+        if c.nonEmpty then
+          if cells(rev(c.last)).block == blk then
+            coPivot(c.last) = i
+            coLocalPairs += 1
+          else coDeferred += i
+      var coGlobalAdds = 0L
+      var coAddsOfLocal = 0L
+      val locallyPaired = coPivot.clone()
+      // Additions a deferred column makes before it first needs another deferred column depend only on phase 1, so
+      // they can run in parallel too; the ones from then on are the sequential remainder.
+      var coSequentialAdds = 0L
+      for i <- coDeferred do
+        var c = co(i)
+        var waited = false
+        while c.nonEmpty && coPivot(c.last) >= 0 do
+          if locallyPaired(c.last) >= 0 then coAddsOfLocal += 1 else waited = true
+          if waited then coSequentialAdds += 1
+          c = add(c, co(coPivot(c.last)))
+          coGlobalAdds += 1
+        co(i) = c
+        if c.nonEmpty then coPivot(c.last) = i
+      val coSame = coCols.forall(i =>
+        (fullPivot(i) >= 0 && cells(fullPivot(i)).dim <= top) == (co(i).nonEmpty) &&
+          (co(i).isEmpty || rev(co(i).last) == fullPivot(i))
+      )
+      println(
+        s"  cohomology: ${coCols.size} columns, pairs inside one block: $coLocalPairs, deferred: ${coDeferred.size}; same pairs as homology: $coSame"
+      )
+      println(
+        s"  cohomology column additions: sequential $coFullAdds; phase 1 (parallel by block) $coLocalAdds; phase 2 $coGlobalAdds, of which adding a column paired in phase 1: $coAddsOfLocal, after first needing another deferred column: $coSequentialAdds"
+      )
+      return
     if method == "check" then
       val g = Generator(n, distance, threshold)
       val s = SortBaseline(n, distance, threshold)
