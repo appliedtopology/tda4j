@@ -42,6 +42,13 @@ its immediate cofaces), assigns values top-down by the Gabriel rule below, and s
 order. Circumspheres come from a Householder QR of the edge vectors (the Gram system squares the condition number and
 lost digits on slivers).
 
+The geometry it works with is public. `Hyperplane(normal, offset)` is `{ x : normal . x = offset }`, with `isLight`
+telling which side a point is on. `Hypersphere(center, radius)` (given an `Epsilon`) has `contains` and `onSphere`, and
+`Hypersphere(points)` is the sphere through a point set (a least-squares solve by singular value decomposition).
+`DelaunaySimplex(simplex, circumsphere)` pairs a simplex of the triangulation with its circumsphere.
+`LimitedAlphaShapesStream(helix, maxDim)` is the alpha complex without its simplices above `maxDim`, with the same
+values and order; `FastAlphaHomologyEngine` uses it for the degrees between `H_0` and `H_{d-1}`.
+
 ## `BowyerWatsonDelaunay` — incremental Delaunay with exact predicates, 1 to 4 dimensions
 
 `alpha/BowyerWatson.scala`, predicates in `alpha/DelaunayPredicates.scala`. Bowyer–Watson on flat arrays (cell

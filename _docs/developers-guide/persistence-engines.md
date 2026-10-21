@@ -50,6 +50,7 @@ parallelizable "clear-and-compress" algorithm: local reduction per chunk, active
 column compression/reduction. `PersistenceInChunksEngine[VertexT, CoefficientT]` is a one-line
 `Simplex`-specialized subclass, mirroring `SimplicialHomologyEngine`'s relationship to engine 1 — the class
 has no `Simplex`-specific behavior anywhere in its body, so any `OrderedCell` slots in directly.
+`CubicalPersistenceInChunksEngine[CoefficientT]` is the same one-line subclass for `Cube`s.
 
 Dimensions 0 and 1 go through a dedicated union-find fast path (`unionFindDim01`) instead of the general
 `Chain`-based reduction, which gives the same result on a fixed total order and is much faster when a large point cloud's
@@ -190,6 +191,20 @@ gives an essential bar.
 
 Representatives are reconstructed from the active dual components so the
 result remains compatible with the rest of the persistence API.
+
+Its pieces are public:
+
+- `SignedUnionFind[C](size)` is a union-find whose elements carry an orientation in the field `C`. `union(young, old,
+  flip)` hangs one root under another and multiplies the young component's orientations by `flip`; `find` composes
+  orientations along the path; `members(root)` lists a frozen region with its orientations relative to the root, which
+  is how a representative is read off. `UnitSignedUnionFind(size)` is the same with orientations `±1` kept in bytes,
+  exact whenever every flip is `±1` as in the cubical dual.
+- `DoubledGrid` walks the doubled grid (coordinate `2a` is the point `a`, `2a + 1` the interval `[a, a + 1]`) one
+  prefix at a time, so a caller can run a tight loop along the last axis.
+- `GridCellOrder` is the order `PackedCubicalCohomologyEngine` puts on the cubes of one grid: the rank of a cell's
+  value, then its doubled-grid index.
+- `LimitedCubicalGridStream(stream, maxDim)` is a grid stream cut off above a cell dimension, with the same values and
+  order; the engine uses it for the degrees between `H_0` and `H_{d-1}`.
 
 ## 7. `FastAlphaHomologyEngine` — dual union-find for alpha complexes
 

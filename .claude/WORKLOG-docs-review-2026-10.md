@@ -90,3 +90,7 @@ the result type of `LandmarkSelector.maxmin`, already documented.
 Unverified: the snippets in the two new pages are checked only by the docs build (CI); the `utilities.md` field
 example mirrors `SSetMapSpec`. The dev-only items of #179 (alpha geometry types, `Limited*` wrappers, matchings) are
 still undocumented.
+
+### Step 6b: developer-facing items of #179
+
+Documented in the dev guide: `SignedUnionFind`, `UnitSignedUnionFind`, `DoubledGrid`, `GridCellOrder`, `LimitedCubicalGridStream`, `CubicalPersistenceInChunksEngine` (persistence-engines); `Hyperplane`, `Hypersphere`, `DelaunaySimplex`, `LimitedAlphaShapesStream` (alpha-complex); `HopcroftKarp`, `Hungarian`, `TruncatedSimplexStream` (architecture). Descriptions are from the scaladoc and source, not exercised.

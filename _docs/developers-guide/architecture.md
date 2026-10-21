@@ -499,7 +499,15 @@ finitely presented persistence modules: `image`/`kernel`/`cokernel` of a map bet
 
 `BarcodeDistance` and `Vectorization` provide downstream operations on
 computed persistence diagrams, including diagram distances, landscapes, and
-persistence images.
+persistence images. The distances are built on two matching algorithms that are public: `HopcroftKarp.maximumMatching(
+nLeft, nRight, adjacency)` returns a maximum-cardinality bipartite matching (the bottleneck distance asks it whether a
+perfect matching exists using only edges below a threshold), and `Hungarian.minCostPerfectMatching(cost)` returns the
+assignment and total cost of a minimum-cost perfect matching on a square matrix of finite costs, in `O(n³)` (the
+Wasserstein distance).
+
+`TruncatedSimplexStream(stream, maxSimplexDimension)` cuts a stratified simplex stream off above a simplex dimension,
+keeping its order and values; the `Truncated` entry point takes a homological degree instead and is what you should
+call.
 
 ### Circular coordinates
 
