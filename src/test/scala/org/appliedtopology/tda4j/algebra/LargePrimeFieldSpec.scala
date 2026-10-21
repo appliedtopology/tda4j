@@ -30,6 +30,14 @@ class LargePrimeFieldSpec extends Specification:
     "still be exact at the default prime 17 and at 2" in (check(17) must beTrue).and(check(2) must beTrue)
   }
 
+  "FiniteField and Coefficients" should
+    "accept the largest prime up to the cap and refuse a larger one with a message instead of running out of memory" >>
+    (check(999983) must beTrue)
+      .and((new FiniteField(1000003): Any) must SpecThrows.throwWith[IllegalArgumentException]("primes up to 1000000"))
+      .and(
+        (Coefficients(1000000007): Any) must SpecThrows.throwWith[IllegalArgumentException]("at most 1000000")
+      )
+
   "a homology computation over a large prime" should {
     "agree with F_17 on a torsion-free space (the circle's Betti numbers)" in {
       def betti(p: Int) =

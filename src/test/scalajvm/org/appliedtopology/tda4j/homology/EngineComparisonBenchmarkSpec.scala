@@ -10,10 +10,10 @@ import scala.util.Random
 
 /** Cross-product benchmark: every (complex construction x homology engine) pairing this codebase actually supports,
   * timed across a sweep of point count, ambient point-cloud dimension, and max homology dimension. Like
-  * `ProfilingSpec`/`ApparentPairsBenchmarkSpec`/`SparseRipsBenchmarkSpec`, this is a profiling script, not a
-  * correctness check: it prints a timing table rather than asserting behavior (an exception is caught and reported as a
-  * per-cell finding, not a spec failure). Defaults are kept small so this stays cheap under plain `sbt test`/CI; pass
-  * larger values for a real sweep, e.g.:
+  * `ProfilingSpec`/`ApparentPairsBenchmarkSpec`/`ThresholdBenchmarkSpec`, this is a profiling script, not a correctness
+  * check: it prints a timing table rather than asserting behavior (an exception is caught and reported as a per-cell
+  * finding, not a spec failure). Defaults are kept small so this stays cheap under plain `sbt test`/CI; pass larger
+  * values for a real sweep, e.g.:
   *
   * {{{
   * sbt -DminSize=20 -DmaxSize=60 -DsizeStep=20 -DmaxAmbientDim=4 -DmaxMaxDim=3 -Dtrials=5 \

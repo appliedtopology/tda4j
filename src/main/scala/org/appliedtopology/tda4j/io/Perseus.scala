@@ -16,11 +16,14 @@ object Perseus:
     val src = FileAccess.source(path)
     try
       val tokens = src.getLines().flatMap(_.trim.split("\\s+")).filter(_.nonEmpty)
-      val d = tokens.next().toInt
+      def next(): String =
+        require(tokens.hasNext, s"$path: the file ends before the grid is complete")
+        tokens.next()
+      val d = next().toInt
       val sizes = new Array[Int](d)
       var i = 0
       while i < d do
-        sizes(i) = tokens.next().toInt
+        sizes(i) = next().toInt
         i += 1
       require(
         sizes.forall(_ > 0),
@@ -30,9 +33,10 @@ object Perseus:
       val raw = new Array[Double](n)
       i = 0
       while i < n do
-        val v = tokens.next().toDouble
+        val v = next().toDouble
         raw(i) = if v == -1.0 then Double.NaN else v
         i += 1
+      require(!tokens.hasNext, s"$path: the file has values beyond the ${sizes.mkString(" x ")} grid it declares")
       (sizes.reverse.toIndexedSeq, raw.toIndexedSeq)
     finally src.close()
 

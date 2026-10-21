@@ -138,6 +138,7 @@ object Persistence:
   object Input:
     private def ofMetricSpace(ms: FiniteMetricSpace[Int], points: Option[PointCloud]): Input[Simplex[Int]] =
       new Input[Simplex[Int]]:
+        require(ms.size > 0, "Persistence: the input has no points")
         def stream(maxDimension: Int, maxFiltrationValue: Option[Double], complex: PointCloudComplex) =
           points match
             case Some(pc) => complex.fromPoints(pc, maxDimension, maxFiltrationValue)
@@ -237,6 +238,7 @@ object Persistence:
       throw new IllegalArgumentException(
         "Persistence: engine = FastCubical gives cycles only; for cocycles use Engine.Auto or Engine.Cohomology"
       )
+    maxFiltrationValue.toOption.foreach(v => require(!v.isNaN, "Persistence: maxFiltrationValue is NaN"))
     val requested = maxDimension.toOption
     requested.foreach(k => require(k >= 0, s"Persistence: maxDimension must be >= 0, got $k"))
     given (CellT is OrderedCell) = input.cells

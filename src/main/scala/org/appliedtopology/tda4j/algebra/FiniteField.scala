@@ -5,6 +5,17 @@ import cats.Show
 import scala.collection.immutable.ArraySeq
 
 open class FiniteField(val p: Int):
+  require(
+    p > 1 && BigInt(p).isProbablePrime(certainty = 100),
+    s"tda4j: FiniteField needs a prime number, got $p (Z/$p is not a field)"
+  )
+  // Inverses are a table with one entry per residue, built on first use.
+  require(
+    p <= FiniteField.MaxPrime,
+    s"tda4j: FiniteField supports primes up to ${FiniteField.MaxPrime}, got $p (an inverse table of $p entries); " +
+      "for a larger prime, open an issue or a pull request"
+  )
+
   opaque type Fp = Int
 
   object Fp:
@@ -82,3 +93,8 @@ object FiniteField:
     * it shows signs and odd torsion.
     */
   val DefaultPrime: Int = 17
+
+  /** The largest prime a `FiniteField` (and so a `characteristic`) accepts: the inverse table has one entry per
+    * residue.
+    */
+  val MaxPrime: Int = 1000000
