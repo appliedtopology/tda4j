@@ -27,23 +27,39 @@ double[][] bars = result.toArray();
 Bars and simplices are numbered from 0, as everywhere in Java. The [tutorials](../tutorials/index.md) show most tasks
 in a MATLAB tab next to the Scala code.
 
+### Conventions
+
+* **Options** are a flat array of name-value strings: `{'maxDimension', '1', 'complex', 'alpha'}` in MATLAB,
+  `new String[] {"maxDimension", "1"}` in Java. Names are not case-sensitive; every value is a string, so write a number
+  with `sprintf('%.17g', x)` in MATLAB (`num2str` rounds). An odd-length array, an unknown name, an unknown value or an
+  option that does not apply to the entry point throws an `IllegalArgumentException` whose message names it and lists
+  the accepted ones.
+* **Numbering** is from 0 everywhere: bars, cells, landmarks, point indices and cocycle indices.
+* **Matrices** are `double[][]` (a MATLAB matrix converts by itself); one row per point.
+* Each `compute...` method has an overload without options.
+
 ### Entry points
 
-| method | input |
+| method | computes |
 |---|---|
-| `computeFromPoints(points, options)` | a point cloud, one row per point |
-| `computeFromDistanceMatrix(distances, options)` | a full distance matrix, of which the lower triangle is read (no `alpha`, `cech` or `dtm-alpha`: they need coordinates) |
-| `computeFromImage(pixels, options)` | a 2-D image |
-| `computeFromCubicalImage(shape, values, options)` | an image or voxel grid of any dimension, values in row-major order |
-| `computeFromRelation(relation, options)` | a relation, for the Dowker complex (options `engine`, `maxDimension`, `maxFiltrationValue`, `dual`, `field`, `prime`, `epsilon`, and the bar options) |
-| `selectLandmarksFromPoints`, `computeFromPointsAndLandmarks`, `coveringRadiusFromPoints` (and `...FromDistanceMatrix`) | the witness complex in two steps, see [witness complexes](topological-spaces/witness-complexes.md) |
-| `h1Bars`, `circularCoordinates`, `toroidalCoordinates` | see [circular coordinates](circular-coordinates.md) |
+| `computeFromPoints(points, options)` | a point cloud, one row per point, with Euclidean distances: any `complex` |
+| `computeFromDistanceMatrix(distances, options)` | a square, symmetric distance matrix with a zero diagonal (the lower triangle is read): `vr`, `witness`, `dtm-rips`, `sparse-rips`, not `alpha`, `cech` or `dtm-alpha`, which need coordinates |
+| `computeFromImage(pixels, options)` | a 2-D image as a matrix, `pixels(row, column)` |
+| `computeFromCubicalImage(shape, values, options)` | an image or voxel grid of any dimension: `shape` is the size along each axis, `values` are in row-major order (last axis fastest) |
+| `computeFromRelation(relation, options)` | the Dowker complex of a relation: `relation(x, w)` is the strength of the tie between row `x` and column `w` (smaller is stronger, `Infinity` for never, non-negative); it need not be square or symmetric. Options: `engine` (`naive`, the default, or `cohomology`), `maxDimension`, `maxFiltrationValue` (default `Infinity`), `dual`, `field`, `prime`, `epsilon`, and the bar options |
+| `selectLandmarksFromPoints(points, options)`, `selectLandmarksFromDistanceMatrix(distances, options)` | step 1 of the two-step witness complex: options `numLandmarks` (required), `landmarkSelector`, `landmarkSeed`, and no others. Returns a `LandmarkSelectionResult` |
+| `computeFromPointsAndLandmarks(points, landmarks, options)`, `computeFromDistanceMatrixAndLandmarks(distances, landmarks, options)` | step 2: the witness complex for given landmarks (0-based, non-empty, distinct). Options: `witnessVariant`, `nu`, `engine`, `representativeType`, `maxDimension`, `maxFiltrationValue`, `field`, `prime`, `epsilon`, the bar options, and `complex` only as `witness`. See [witness complexes](topological-spaces/witness-complexes.md) |
+| `coveringRadiusFromPoints(points, landmarks)`, `coveringRadiusFromDistanceMatrix(distances, landmarks)` | the covering radius `R` of a landmark set: the largest distance from a point to its nearest landmark |
+| `h1Bars(points)` | the loops of the Vietoris-Rips complex: one row `(birth, death)` per persistent H¹ class, most persistent first |
+| `circularCoordinates(points, r)`, `circularCoordinates(points, r, cocycleIndex, prime)` | circular coordinates of loop `cocycleIndex` of `h1Bars` at scale `r` (defaults `0` and `47`, an odd prime); throws `NoIntegerCocycleException` if the class has no integer lift at that prime |
+| `toroidalCoordinates(points, r, cocycleIndices)`, `toroidalCoordinates(points, r, cocycleIndices, prime, reduce)` | toroidal coordinates for several loops alive together at `r`; `reduce` (default `true`) applies lattice reduction |
 | `loadResult(path)` | a result saved by `result.save(path)` or `tda4j --save-result` |
+| `setPlotDefaults(settings)`, `clearPlotDefaults()` | session defaults for every plot, see [plotting](plotting.md#defaults-for-every-plot-a-given-look) |
 
-Each `compute...` method also has an overload without options. In an image, a pixel of value `NaN` is masked (missing
-data): it is not in the complex, whatever `sublevel` is. `Inf` and `-Inf` are ordinary values: with `sublevel` `true`,
-`Inf` enters after every finite value and `-Inf` before them; with `sublevel` `false`, the reverse. With `nanMask`
-`false`, masks are off and a `NaN` pixel is an error naming the pixel, for data where a `NaN` can only be a bug.
+In an image, a pixel of value `NaN` is masked (missing data): it is not in the complex, whatever `sublevel` is. `Inf` and
+`-Inf` are ordinary values: with `sublevel` `true`, `Inf` enters after every finite value and `-Inf` before them; with
+`sublevel` `false`, the reverse. With `nanMask` `false`, masks are off and a `NaN` pixel is an error naming the pixel,
+for data where a `NaN` can only be a bug.
 
 ### Options
 
@@ -108,14 +124,77 @@ For the witness complex the vertices are point numbers, not landmark numbers. Fo
 coordinates in the doubled grid (a pixel `(i, j)` is `(2i + 1, 2j + 1)`). The [boundary matrix](boundary-matrix.md) of
 the complex is also available.
 
-### Plots and saved results
+## Result objects
 
-A result draws itself: `result.plotBarcode().view()`, `result.plotDiagram().save('diagram.svg')`,
-`result.plotRepresentative(result.mostPersistentBar(1)).view()`, and more (see [plotting](plotting.md#from-matlab-java-and-the-command-line)).
-Each `plot...` method returns a figure object; call `view()` on it for the browser, `save(path)` for an `.svg` or
-`.html` file. Its look changes with methods that take strings and numbers and return the changed figure:
-`result.plotDiagram().withTitle('A circle').withXScale('log').withSize(800, 600).save('diagram.svg')` (the list is under
-[customizing a plot](plotting.md#from-matlab-and-the-command-line)). `result.save('result.json')` writes the whole result to a file, which `TDA4j.loadResult('result.json')`
-reads back (in MATLAB, Java, Scala or `tda4j --plot ...`); it is JSON, readable from other languages too.
+### `PersistenceResult`
+
+Bars are indexed from 0 in the order of `toArray()`: the reported bars only, as described above.
+
+| method | returns |
+|---|---|
+| `size()` | the number of reported bars |
+| `toArray()` | one row per reported bar, `[dimension birth death]`; `death` is `Inf` for an essential bar |
+| `dimension(i)`, `birth(i)`, `death(i)` | the parts of bar `i` |
+| `hiddenCount()` | how many computed bars the threshold hid; the result has `size() + hiddenCount()` in all |
+| `persistenceThreshold()` | the persistence a bar had to exceed to be reported (`0`: no threshold) |
+| `toArrayUnfiltered()` | every computed bar, laid out like `toArray()` |
+| `cycleVertices(i)`, `cycleCoefficients(i)` | the representative of bar `i`: its simplices as rows of sorted vertex numbers, and the coefficients (an integer representative over `Z/p`) |
+| `mostPersistentBar(dimension)` | the index of the reported bar of that dimension with the largest persistence (an essential bar first) |
+| `bottleneckDistance(other, dimension)`, `(other, dimension, groundNorm)` | the bottleneck distance between the bars of that dimension of two results; `groundNorm` is `Inf` (the default) or a finite `p >= 1`. `Inf` if the numbers of essential bars differ |
+| `wassersteinDistance(other, dimension)`, `(…, order)`, `(…, order, groundNorm)` | the Wasserstein distance; `order` defaults to `1` |
+| `landscape(dimension, numLevels, tMin, tMax, resolution)` | the first `numLevels` persistence landscapes sampled at `resolution` points of `[tMin, tMax]`; row `k` is level `k` |
+| `persistenceImage(dimension, sigma, birthMin, birthMax, persistenceMin, persistenceMax, birthResolution, persistenceResolution)`, and the same with a final `weightCap` | the persistence image; the weight rises to 1 at the largest persistence, or at `weightCap` |
+| `numCells()`, `boundaryRows()`, `boundaryCols()`, `boundaryValues()`, `columnDimension(j)`, `columnVertices(j)`, `columnFiltrationValue(j)` | the boundary matrix of the complex, see [boundary-matrix export](boundary-matrix.md) |
+| `save(path)` | writes the result as JSON and returns its absolute path |
+| `plot...` | figures, see below |
+
+Distances, landscapes and images use every bar of the result, reported or not. See [vectorization](vectorization.md).
+
+**Plots.** Each method returns a figure (or, in 3-D, a scene) that you `view()` in the browser or `save(path)` as `.svg` or
+`.html`, and restyle with the methods of [plotting](plotting.md#from-matlab-and-the-command-line).
+
+| method | draws |
+|---|---|
+| `plotBarcode()`, `plotBarcode(longest)`, `plotBarcode(order)` | the reported bars; the `longest` most persistent of each dimension; ordered by `'birth'` (default), `'persistence'` or `'death'` |
+| `plotDiagram()` | the persistence diagram |
+| `plotLandscape(dimension)`, `plotPersistenceImage(dimension)` | the vectorization of that dimension |
+| `plotInput()` | the points (first two coordinates) or the 2-D image |
+| `plotComplex(at)` | the complex at scale `at` over the points (`vr`, `cech` or `alpha`) |
+| `plotRepresentative(i)`, `plotRepresentative(i, at)` | bar `i`'s cycle or cocycle over the input; with `at`, over the complex at that scale |
+| `plotInput3D()`, `plotComplex3D(at)`, `plotRepresentative3D(i)` | the same in 3-D, from the first three coordinates |
+
+A plot method needs the input the result was computed from; a result from `loadResult` has it.
+
+**Saved results.** `result.save('result.json')` writes the whole result, which `TDA4j.loadResult('result.json')` reads
+back (in MATLAB, Java, Scala or `tda4j --plot ...`). The file is JSON, readable from other languages too; see
+[saved results](plotting.md#saved-results) for its layout. It does not contain the boundary matrix.
+
+### `LandmarkSelectionResult`
+
+`landmarks()` is the landmarks as 0-based row numbers; `coveringRadius()` is `R`, the largest distance from a point to its
+nearest landmark.
+
+### `CircularCoordinatesResult`
+
+| method | returns |
+|---|---|
+| `theta()` | one angle in `[0, 1)` per point, `NaN` for a point outside the loop's connected piece |
+| `hasCoordinate(i)` | whether point `i` has an angle |
+| `birth()`, `death()` | the loop's bar |
+| `r()`, `prime()` | the scale and the prime it was computed with |
+| `plot()` | the points on a cyclic color map by angle |
+
+### `ToroidalCoordinatesResult`
+
+| method | returns |
+|---|---|
+| `dimension()` | the number of coordinates |
+| `theta(c)` | the angles of coordinate `c`, one per point |
+| `hasCoordinate(i)` | whether point `i` has coordinates |
+| `cocycleIndices()` | the loops used, indices into `h1Bars` |
+| `basisChange()` | the integer change of basis chosen by lattice reduction |
+| `originalGram()`, `reducedGram()` | the Gram matrices before and after reduction |
+| `r()`, `prime()` | the scale and the prime |
+| `plot()`, `plot(c1, c2)` | coordinates `0` and `1`, or `c1` against `c2`, as a torus |
 
 The MATLAB tabs in the tutorials are checked as the same Java calls made from Scala, not in MATLAB itself.
