@@ -14,8 +14,8 @@ import scala.sys.process.*
   * aren't comparable to anything run today, but a same-machine, same-day re-measurement of real `ripser.cpp` (built
   * from `github.com/Ripser/ripser`, plain `make`, no `USE_COEFFICIENTS` -- its default build already computes over Z/2,
   * matching this class's `IntMod2.Fp` below) done alongside this spec. Like
-  * `ProfilingSpec`/`ApparentPairsBenchmarkSpec`/`SparseRipsBenchmarkSpec`, this is a profiling script, not a
-  * correctness check.
+  * `ProfilingSpec`/`ApparentPairsBenchmarkSpec`/`ThresholdBenchmarkSpec`, this is a profiling script, not a correctness
+  * check.
   *
   * '''Getting the data.''' The paper's `sphere3`/`o3` data sets are `ripser`'s own bundled examples; `random16`/
   * `dragon`/`fractal-r` come from the Otter et al. "roadmap" benchmark the paper cites. Exact URLs (confirmed against

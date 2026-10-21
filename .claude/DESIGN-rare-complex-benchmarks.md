@@ -17,7 +17,7 @@ is new *tasks and workers*, not a new harness. Reference tools per task live in 
 |---|---|---|
 | **Cech** | GUDHI `DelaunayCechComplex` (Python, in 3.13.0, checked); GUDHI C++ `Cech_complex` (no Python class in 3.13.0); `cechmate` (scikit-tda, pure Python); giotto-tda `EuclideanCechPersistence` (unverified; believed to wrap GUDHI's alpha complex) | Delaunay-Cech and Cech have the same persistent homology but different values per simplex and different cell counts. Compare barcodes, not cells. Alpha (GUDHI, already benchmarked) is a third route to the same barcode. |
 | **DTM** | GUDHI `WeightedRipsComplex` (importable in 3.13.0), `DTMRipsComplex` (needs scipy), `gudhi.point_cloud.dtm.DistanceToMeasure`; weighted alpha in GUDHI; giotto-tda weighted Rips (unverified); R `TDA::dtm` computes the function only | Our DTM-Rips p = 1 is already byte-identical to GUDHI's, so agreement is expected. |
-| **Dowker** | `dowker_homology` (Python/PyPI, sparsified Dowker nerves, uses GUDHI); Dowker-Rips code of arXiv 2508.08025; `dowker_persistence` (Julia, GPL-3.0, degrees 0-1, stale); PETLS (Laplacians). None in GUDHI, Dionysus, Ripser, JavaPlex, giotto-tda | Mostly approximations or surrogates. A hand-built GUDHI `SimplexTree` baseline is the honest "what you would write today" row. |
+| **Dowker** | `dowker_homology` (Python, GitHub only, not on PyPI: Blaser and Brun, exact and sparsified Dowker nerves, uses GUDHI); Dowker-Rips code of arXiv 2508.08025; `dowker_persistence` (Julia, GPL-3.0, degrees 0-1, stale); PETLS (Laplacians). None in GUDHI, Dionysus, Ripser, JavaPlex, giotto-tda | Mostly approximations or surrogates. A hand-built GUDHI `SimplexTree` baseline is the honest "what you would write today" row. |
 | **Witness** | JavaPlex `WitnessStream` (general) and `LazyWitnessStream` (our port was read against these); GUDHI `EuclideanWitnessComplex`, `EuclideanStrongWitnessComplex`, `WitnessComplex`, `StrongWitnessComplex` (all present in 3.13.0) | JavaPlex is the safe pair. Whether GUDHI's relaxed weak witness is our general variant is **unverified**: check cell for cell first (#171). |
 | **Sparse Rips** | GUDHI `RipsComplex(sparse=eps)` (Buchet-Chazal-Oudot-Sheehy; giotto-tda `SparseRipsPersistence` wraps it); SimBa (Dey-Shi-Wang) and Sparips (Brehm-Hardering) exist as papers, code availability **unverified**. Ripser/Ripserer sparse *matrices* are a threshold, not a Sheehy construction | Our `SparseRips` is Cavanna-Jahanseir-Sheehy 2015; the epsilons of the two constructions are not comparable. |
 
@@ -85,3 +85,44 @@ benchmark runs themselves, which belong on the compute server as for the alpha s
 - The Cech and Dowker rows may show large slowdowns against GUDHI's C++ and against nothing for Dowker; that is a result, not
   a reason to drop the row (the alpha benchmark found the quadratic `topValue` this way).
 - `pip`-installed research packages (Dowker) may not run on current Python/Julia; budget a failed install as a finding.
+
+## Update (same day): the harness was extended, and a first smoke run
+
+**Built** (all in `bench/`, driver in `PaperBenchmarkDriver`): tasks `cech`, `dtm`, `witness`, `sparse`, `dowker`; a
+`tda4j-collapse` row for `vr`; case `params` (`eps`, `k`, `L`) forwarded to every tool; shared maxmin landmark files for witness
+cases; GUDHI adapters for all five (Delaunay-Cech, `DTMRipsComplex`, weak and strong witness, `RipsComplex(sparse=)`, a hand-built
+`SimplexTree` for Dowker); workers for the three Dowker packages. `run.sh setup dowker` clones Blaser-Brun's
+`Sparse-Dowker-Nerves` (6dcb5f5) and Yoon's `Dowker_persistence` (3529742). #173 and #174 are done by this change
+(`SparseRipsBenchmarkSpec` is now `ThresholdBenchmarkSpec`).
+
+**Who wrote the Dowker packages.** `dowker_homology`: Nello Blaser and Morten Brun (arXiv 1802.03655, 1810.02149;
+github.com/mbr085/Sparse-Dowker-Nerves, last commit January 2020). `Dowker_persistence` (Julia, GPL-3.0): `CITATION.cff` names
+Hee Rhang Yoon (GitHub login `irishryoon`), accompanying the Dowker-persistence method of Chowdhury and Memoli
+(arXiv 1608.05432). "Flagifying the Dowker Complex" (arXiv 2508.08025): Marius Huber and Patrick Schnider; the abstract promises a
+Python implementation but the arXiv page links no repository, so there is no worker for it yet.
+
+**What ran** (4-core sandbox, 15 GB, JVM `-Xmx8g`, p = 2, one process per row, warm = median of 2 after 1 warm-up; stand-in data
+where the real files are downloaded by `prepare`: random Gaussian points for `sphere3_96`, uniform for `unif3d_1000`; the
+seeded Dowker, circle-with-outliers and `unif3d_80` files are the real ones). Numbers are a smoke test for the harness, not a result.
+
+| case | TDA4j | other tools | barcodes |
+|---|---|---|---|
+| `cech_unif3d_80` (dim 2, no radius) | 101 s | GUDHI Delaunay-Cech 0.003 s | identical |
+| `dtm_circle_outliers` (600 pts, dim 1) | 24 s | GUDHI `DTMRipsComplex` 0.28 s | identical |
+| `dowker_300x100` (dim 1) | 20 s; dual 1.1 s | GUDHI hand-built 0.7 s; dual 0.05 s; `dowker_homology` 10.6 s | identical in all five |
+| `dowker_60x200` (dim 2) | 10 s; dual timed out at 400 s | GUDHI hand-built 0.9 s; dual 69 s; `dowker_homology` 8.8 s | identical (where finished) |
+| `witness_unif3d_1000_L50` (dim 2) | lazy 2.8 s; general 17 s | GUDHI weak 155 s; strong timed out at 300 s | **differ** (bottleneck 0.064; H2 has 7 / 19 / 25 bars) |
+| `sparse_sphere3_96` (dim 2, eps 0.3) | 48 s | GUDHI sparse 0.58 s | no ripser.cpp binary here: error not measured |
+| `sphere3_96` Rips (dim 2) | 0.28 s; `tda4j-collapse` 0.09 s | | |
+
+Readings, with the confidence each deserves:
+- Agreement is strong evidence for four of the five: Delaunay-Cech, DTM-Rips and every Dowker variant (rows, columns, hand-built,
+  Blaser-Brun) give the same barcodes. That includes the hand-built SimplexTree baseline, so it is a trustworthy oracle.
+- **The witness disagreement is a real finding to resolve (#171)**: either GUDHI's weak witness complex is not de Silva-Carlsson's
+  lazy/general one, or one implementation has a bug. It is not a timing question yet.
+- TDA4j is two to five orders of magnitude slower than GUDHI on Cech, DTM-Rips, sparse Rips and the large Dowker side. Re-running
+  with 8 GB instead of 2 GB changed nothing (101 s both times), so it is not GC pressure. The causes are not diagnosed; filed in #176's
+  follow-up issue. A Dowker complex is smaller on its larger side's dual: dual is 18x faster at 300x100 but the dual of 60x200
+  (200 vertices, dim 2) did not finish, so "pick the smaller vertex side" is advice, not a rule.
+- Yoon's Julia package could not be run: no Julia in this session. Its worker is written (`dowker_yoon_worker.jl`) and untested.
+- `ripser.cpp` was not built here, so the sparse Rips approximation error against exact Rips is not measured.

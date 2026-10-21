@@ -16,7 +16,7 @@ import scala.util.Random
   * pass larger values for an actual benchmarking run, e.g.:
   *
   * {{{
-  * sbt -DminSize=40 -DmaxSize=100 -Dstep=20 -Dtrials=5 "testOnly org.appliedtopology.tda4j.SparseRipsBenchmarkSpec"
+  * sbt -DminSize=40 -DmaxSize=100 -Dstep=20 -Dtrials=5 "testOnly org.appliedtopology.tda4j.ThresholdBenchmarkSpec"
   * }}}
   *
   * The threshold is set relative to `n` (roughly the scale at which a uniform-random point in the unit square has a
@@ -24,7 +24,7 @@ import scala.util.Random
   * DENSER as `n` grows (more points within any fixed radius), defeating the point of measuring sparse behavior at
   * increasing `n`.
   */
-class SparseRipsBenchmarkSpec(args: Arguments) extends mutable.Specification:
+class ThresholdBenchmarkSpec(args: Arguments) extends mutable.Specification:
   // Skipped by default so plain `sbt test` never pays for this -- pass -DrunBenchmarks=true to actually run it
   // (see CLAUDE.md's "Commands" section). One shared flag gates every *BenchmarkSpec/ProfilingSpec in this package.
   if !args.commandLine.boolOr("runBenchmarks", false) then skipAll

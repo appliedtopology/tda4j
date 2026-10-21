@@ -139,7 +139,7 @@ already-computed per-class `theta`s (linearity of harmonic smoothing). Not a por
 `EngineComparisonBenchmarkSpec` times every (construction x engine) pairing over point count/dimension/`maxDim`
 (construction and reduction apart, per-cell timeout). Alpha and VR bar counts are never compared (radius vs diameter).
 
-**Benchmark specs** (`ProfilingSpec`, `ApparentPairsBenchmarkSpec`, `CubicalBenchmarkSpec`, `SparseRipsBenchmarkSpec`,
+**Benchmark specs** (`ProfilingSpec`, `ApparentPairsBenchmarkSpec`, `CubicalBenchmarkSpec`, `ThresholdBenchmarkSpec`,
 `DimensionCeilingBenchmarkSpec`, `EngineComparisonBenchmarkSpec`, `RipserPaperBenchmarkSpec`, `EdgeCollapseBenchmarkSpec`, all in
 `homology`) print timing tables; only an exception fails. All `skipAll` unless `-DrunBenchmarks=true` (a JVM property, not
 specs2 `--` syntax); scope with `testOnly` (`EngineComparisonBenchmarkSpec`: 15+ min; `RipserPaperBenchmarkSpec` also needs
