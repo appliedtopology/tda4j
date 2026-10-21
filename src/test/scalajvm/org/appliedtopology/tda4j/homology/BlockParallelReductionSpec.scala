@@ -1,6 +1,7 @@
 package org.appliedtopology.tda4j
 
 import BlockParallelReduction.{coboundary, complex, packedBars, persistence, Coboundary, Method}
+import BlockParallelReductionSpec.{grid, integerMetric, octagon}
 
 import java.util.concurrent.Executors
 import org.scalacheck.Gen
@@ -71,17 +72,6 @@ class BlockParallelReductionSpec extends Specification with ScalaCheck:
   private def zeroLengthPairs(cob: Coboundary, owner: Array[Int]): Int =
     (0 until cob.rows.size).count(r => owner(r) >= 0 && cob.rows.value(r) == cob.columns.value(owner(r)))
 
-  private val octagon = EuclideanMetricSpace(
-    Array.tabulate(8)(i => Array(math.cos(i * math.Pi / 4), math.sin(i * math.Pi / 4)))
-  )
-  private val grid = EuclideanMetricSpace(
-    (for x <- 0 to 2; y <- 0 to 2; z <- 0 to 1 yield Array(x.toDouble, y.toDouble, z.toDouble)).toArray
-  )
-  private def integerMetric(n: Int, seed: Long): ExplicitMetricSpace =
-    val rng = scala.util.Random(seed)
-    val values = Array.fill(n, n)(1.0 + rng.nextInt(3))
-    ExplicitMetricSpace(Seq.tabulate(n, n)((i, j) => if i == j then 0.0 else values(i max j)(i min j)))
-
   "BlockParallelReduction" should {
     "pair like one sequential reduction and give the packed engine's bars on points in general position" in
       forAll(matrixGen(Gen.double, Gen.chooseNum(2, 4), Gen.chooseNum(6, 12))) { pts =>
@@ -125,3 +115,16 @@ class BlockParallelReductionSpec extends Specification with ScalaCheck:
   }
 
   step(pool.shutdown())
+
+/** Tie-heavy metrics for the block experiments: equal edge lengths split a filtration value into several blocks. */
+object BlockParallelReductionSpec:
+  val octagon: EuclideanMetricSpace = EuclideanMetricSpace(
+    Array.tabulate(8)(i => Array(math.cos(i * math.Pi / 4), math.sin(i * math.Pi / 4)))
+  )
+  val grid: EuclideanMetricSpace = EuclideanMetricSpace(
+    (for x <- 0 to 2; y <- 0 to 2; z <- 0 to 1 yield Array(x.toDouble, y.toDouble, z.toDouble)).toArray
+  )
+  def integerMetric(n: Int, seed: Long): ExplicitMetricSpace =
+    val rng = scala.util.Random(seed)
+    val values = Array.fill(n, n)(1.0 + rng.nextInt(3))
+    ExplicitMetricSpace(Seq.tabulate(n, n)((i, j) => if i == j then 0.0 else values(i max j)(i min j)))
