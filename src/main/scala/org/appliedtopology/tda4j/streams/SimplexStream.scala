@@ -507,6 +507,7 @@ open class RipserCofaceSimplexStream(
       currentDimensionCache = sortedByFiltration(
         rawCandidates.filter(keptByThresholdAndCriterion)
       ).to(immutable.Queue) // we _would_ want to avoid creating the entire thing and sort it
+      currentDimension = d // so dimension d + 1 builds on this cache instead of enumerating every d-subset again
       currentDimensionCache.iterator
   }
 

@@ -5,10 +5,38 @@ import scala.math.{pow, sqrt}
 import scala.util.Random
 import scala.util.chaining.*
 
-/** The numerical tolerance of the triangulation's geometric tests (near-zero singular values and circumsphere margins).
-  * `AlphaShapes(...)` supplies `Epsilon(1e-5)`; pass a `given Epsilon` to change it.
+/** An absolute numerical tolerance of the triangulation's geometric tests (near-zero singular values and circumsphere
+  * margins), in the units of the coordinates. The triangulations ([[HelixDelaunay]], [[BowyerWatsonDelaunay]]) take an
+  * [[EpsilonFactor]] instead and derive this from the extent of their points, so that a barcode does not depend on the
+  * units of the data.
   */
 final case class Epsilon(epsilon: Double)
+
+/** The tolerance of the triangulation's geometric tests as a fraction of the extent of the point set (its largest
+  * coordinate range), so the same cloud in metres or in micrometres gives the same complex. `EpsilonFactor(1e-5)` is
+  * the default, found without an import; pass a `given EpsilonFactor` to change it. The tolerance is `factor * extent`
+  * (an extent of 0, a single point, counts as 1).
+  */
+final case class EpsilonFactor(factor: Double):
+  require(factor > 0.0 && factor.isFinite, s"EpsilonFactor must be a positive number, got $factor")
+
+  /** The absolute [[Epsilon]] for `points`. */
+  def forPoints(points: Array[Array[Double]]): Epsilon =
+    var extent = 0.0
+    if points.nonEmpty then
+      var k = 0
+      while k < points.head.length do
+        var lo = Double.PositiveInfinity
+        var hi = Double.NegativeInfinity
+        for p <- points do
+          lo = math.min(lo, p(k))
+          hi = math.max(hi, p(k))
+        extent = math.max(extent, hi - lo)
+        k += 1
+    Epsilon(factor * (if extent > 0.0 && extent.isFinite then extent else 1.0))
+
+object EpsilonFactor:
+  given default: EpsilonFactor = EpsilonFactor(1e-5)
 
 /** Which alpha-complex construction `AlphaShapes(points, backend)` uses: `BowyerWatson` (incremental Delaunay with
   * exact predicates, points spanning at most 4 dimensions), `Helix` (Delaunay by the Helix algorithm, any dimension),
@@ -70,7 +98,7 @@ object AlphaShapes extends PointCloudComplex:
     maxRadius: Optional[Double] = Optional.empty,
     maxDimension: Optional[Int] = Optional.empty
   )(using
-    epsilon: Epsilon = Epsilon(1e-5)
+    factor: EpsilonFactor
   ): AlphaShapes =
     val radius = maxRadius.toOption.filter(_.isFinite)
     backend match
@@ -938,8 +966,9 @@ abstract class DelaunayAlphaShapes(using epsilon: Epsilon) extends AlphaShapes:
   *   that cannot be repaired raises an exception instead of being returned as it is.
   */
 open class HelixDelaunay(pts: Array[Array[Double]], seed: Long = 0L, requireValidTriangulation: Boolean = false)(using
-  epsilon: Epsilon
-) extends DelaunayAlphaShapes:
+  factor: EpsilonFactor
+) extends DelaunayAlphaShapes(using factor.forPoints(pts)):
+  private given epsilon: Epsilon = factor.forPoints(pts)
   // If `pts` is globally coplanar -- its own affine rank is strictly less than the declared ambient dimension
   // (the array width) -- there is no genuine full-ambient-dimensional Delaunay simplex to find at all: every
   // point lies in some lower-dimensional flat, so the bootstrap's search for a supporting hyperplane plus one

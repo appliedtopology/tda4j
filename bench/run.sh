@@ -3,7 +3,7 @@
 # See bench/README.md. Idempotent: re-running skips what is already built or downloaded.
 #
 #   bench/run.sh setup [tool...]    build/install every tool into $WORKDIR, or only the named ones:
-#                                   python tda4j tda4j-js ripser julia javaplex dipha phat eirene
+#                                   python tda4j tda4j-js ripser julia javaplex dipha phat eirene dowker
 #   bench/run.sh prepare            download and generate the data sets into $WORKDIR/data
 #   bench/run.sh run [bench.py run options...]   e.g. --tasks vr --fields 2,17 --timeout 3600
 #   bench/run.sh all [options...]   setup + prepare + run
@@ -45,7 +45,7 @@ setup_python() {
   "$VENV/bin/python" -m pip install --upgrade pip >/dev/null
   # Unpinned on purpose: the versions actually installed are recorded in every run's env.json.
   # For the paper's final run, pin them here (pip install pkg==x.y.z).
-  for pkg in numpy scipy ripser giotto-ph gudhi cripser dionysus oat_python; do
+  for pkg in numpy scipy networkx pynverse matplotlib ripser giotto-ph gudhi cripser dionysus oat_python; do
     "$VENV/bin/python" -m pip install "$pkg" || echo "WARNING: could not install $pkg; it will be reported as missing"
   done
 }
@@ -108,6 +108,35 @@ setup_eirene() {
     echo "$julia" > "$TOOLS/eirene.path"
   else
     echo "WARNING: Eirene setup failed; it will be reported as missing"; rm -f "$TOOLS/eirene.path"
+  fi
+}
+
+setup_dowker() {
+  log "Dowker implementations: Blaser-Brun's dowker_homology and Yoon's Dowker persistence, cloned at pinned commits"
+  # dowker_homology does not build with a current setuptools (its setup.py asks for install_layout), so it is used from
+  # the clone; py_worker.dowker_nerves_tool shims what current Python removed. Its networkx/pynverse/matplotlib come
+  # from setup_python above.
+  if [ ! -d "$TOOLS/Sparse-Dowker-Nerves" ]; then
+    git clone https://github.com/mbr085/Sparse-Dowker-Nerves "$TOOLS/Sparse-Dowker-Nerves" \
+      && git -C "$TOOLS/Sparse-Dowker-Nerves" checkout 6dcb5f5a5563922966bc6d9af68e14bc8c3d33b5 \
+      || echo "WARNING: dowker_homology could not be cloned; it will be reported as missing"
+  fi
+  if [ ! -d "$TOOLS/Dowker_persistence" ]; then
+    git clone https://github.com/irishryoon/Dowker_persistence "$TOOLS/Dowker_persistence" \
+      && git -C "$TOOLS/Dowker_persistence" checkout 35297429115c97cf06040d9af5edd47a2cc9a9c0 \
+      || echo "WARNING: Dowker_persistence could not be cloned; it will be reported as missing"
+  fi
+  local julia="${JULIA:-$(command -v julia || true)}"
+  if [ -n "$julia" ] && [ -d "$TOOLS/Dowker_persistence" ]; then
+    # Its Project.toml and Manifest.toml want Julia 1.7.2 and pull in Plots, IJulia and Interact; if the instantiate
+    # fails the row is reported as missing and the Python rows are unaffected.
+    if "$julia" --project="$TOOLS/Dowker_persistence" -e 'import Pkg; Pkg.instantiate()' \
+       && "$julia" --project="$TOOLS/Dowker_persistence" "$BENCH/workers/dowker_yoon_worker.jl" \
+            task=dowker input="$DATA/relation_60x200.txt" dim=1 p=2 threshold=0.5 warmup=0 trials=1 >/dev/null; then
+      echo "$julia" > "$TOOLS/dowker_yoon.path"
+    else
+      echo "WARNING: Dowker_persistence setup failed; it will be reported as missing"; rm -f "$TOOLS/dowker_yoon.path"
+    fi
   fi
 }
 
@@ -225,6 +254,10 @@ export_env() {
   if [ -s "$TOOLS/eirene.path" ]; then
     export JULIA="${JULIA:-$(cat "$TOOLS/eirene.path")}" EIRENE_PROJECT="$TOOLS/eirene"
   fi
+  [ -d "$TOOLS/Sparse-Dowker-Nerves" ] && export DOWKER_HOMOLOGY_PATH="$TOOLS/Sparse-Dowker-Nerves"
+  if [ -s "$TOOLS/dowker_yoon.path" ]; then
+    export JULIA="${JULIA:-$(cat "$TOOLS/dowker_yoon.path")}" DOWKER_YOON_PROJECT="$TOOLS/Dowker_persistence"
+  fi
   [ -x "$TOOLS/dipha/build/dipha" ] && export DIPHA_BIN="$TOOLS/dipha/build/dipha"
   [ -x "$TOOLS/make_phat" ] && export MAKE_PHAT_BIN="$TOOLS/make_phat"
   [ -x "$TOOLS/phat/build/phat" ] && export PHAT_BIN="$TOOLS/phat/build/phat"
@@ -251,7 +284,8 @@ case "$cmd" in
         dipha) setup_dipha ;;
         phat) setup_phat ;;
         eirene) setup_eirene ;;
-        *) echo "unknown component '$component' (python tda4j tda4j-js ripser julia javaplex dipha phat eirene)"; exit 2 ;;
+        dowker) setup_dowker ;;
+        *) echo "unknown component '$component' (python tda4j tda4j-js ripser julia javaplex dipha phat eirene dowker)"; exit 2 ;;
       esac
     done
     ;;

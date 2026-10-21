@@ -67,8 +67,15 @@ trait PersistenceDiagram[CellT]:
   ): PersistenceDiagram.Of[CellT, Coefficient] =
     withBars(PersistenceFilter.significant(bars, fraction = fraction, scale = scale.toOption.orElse(this.scale)))
 
-  /** `dim H_k` of the whole complex for `k = 0 .. maxDimension`: the number of essential classes. */
-  def bettiNumbers: Vector[Int] = Vector.tabulate(maxDimension + 1)(k => essential.count(_.dim == k))
+  /** `dim H_k` for `k = 0 .. maxDimension`: the classes alive at the end of the diagram. For a whole diagram these are
+    * the essential classes, the Betti numbers of the complex; for `at(f)` they are the Betti numbers at `f`
+    * (`d.at(0.9).bettiNumbers`).
+    */
+  def bettiNumbers: Vector[Int] =
+    def aliveAtEnd(b: PersistenceBar[Double, ?]) = b.upper match
+      case PositiveInfinity() | ClosedEndpoint(_) => true
+      case _                                      => false
+    Vector.tabulate(maxDimension + 1)(k => bars.count(b => b.dim == k && aliveAtEnd(b)))
 
   /** `(dimension, birth, death)` triples, the shape `diagramAt` returns. */
   def triples: List[(Int, Double, Double)] = bars.map(_.toTriple)

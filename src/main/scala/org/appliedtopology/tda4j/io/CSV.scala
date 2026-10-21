@@ -29,16 +29,38 @@ package org.appliedtopology.tda4j
 object CSV:
   private val delimiterRegex = "[\\s,]+"
 
+  private def parseNumber(path: String, lineNumber: Int, token: String): Double =
+    token.toDoubleOption.getOrElse(
+      throw new IllegalArgumentException(s"$path, line $lineNumber: '$token' is not a number")
+    )
+
   private def readNumericRows(path: String): IndexedSeq[IndexedSeq[Double]] =
     val src = FileAccess.source(path)
     try
       src
         .getLines()
-        .map(_.trim)
-        .filter(_.nonEmpty)
-        .map(line => line.split(delimiterRegex).toIndexedSeq.map(_.toDouble))
+        .zipWithIndex
+        .map((line, i) => (line.trim, i + 1))
+        .filter((line, _) => line.nonEmpty)
+        .map((line, number) => line.split(delimiterRegex).toIndexedSeq.map(parseNumber(path, number, _)))
         .toIndexedSeq
     finally src.close()
+
+  /** The rows of `path`, where row `i` of `rows` must hold `width(rows, i)` numbers, or a message that says which row
+    * is wrong.
+    */
+  private def readShapedRows(
+    path: String
+  )(width: (IndexedSeq[IndexedSeq[Double]], Int) => Int): IndexedSeq[IndexedSeq[Double]] =
+    val rows = readNumericRows(path)
+    rows.zipWithIndex.foreach { (row, i) =>
+      val expected = width(rows, i)
+      require(
+        row.size == expected,
+        s"$path: row ${i + 1} has ${row.size} numbers, expected $expected (is this the format you meant?)"
+      )
+    }
+    rows
 
   private def writeRows(path: String, rows: Iterable[Iterable[Double]]): Unit =
     val out = FileAccess.printWriter(path)
@@ -47,7 +69,7 @@ object CSV:
 
   /** One point per line, coordinates separated by `,` or whitespace. */
   def readPointCloud(path: String): Array[Array[Double]] =
-    readNumericRows(path).map(_.toArray).toArray
+    readShapedRows(path)((rows, _) => rows.head.size).map(_.toArray).toArray
 
   def readEuclideanMetricSpace(path: String): EuclideanMetricSpace =
     EuclideanMetricSpace(readPointCloud(path))
@@ -60,7 +82,7 @@ object CSV:
     * instead, which only ever reads one triangle).
     */
   def readFullDistanceMatrix(path: String): Array[Array[Double]] =
-    readNumericRows(path).map(_.toArray).toArray
+    readShapedRows(path)((rows, _) => rows.size).map(_.toArray).toArray
 
   def readExplicitMetricSpace(path: String): ExplicitMetricSpace =
     ExplicitMetricSpace(readFullDistanceMatrix(path).map(_.toIndexedSeq).toIndexedSeq)
@@ -75,7 +97,7 @@ object CSV:
     * identical convention).
     */
   def readLowerTriangularDistanceMatrix(path: String): Array[Array[Double]] =
-    val rows = readNumericRows(path)
+    val rows = readShapedRows(path)((_, i) => i + 1)
     DistanceMatrices.expandLowerTriangular(rows.flatten, rows.size + 1)
 
   def readLowerTriangularExplicitMetricSpace(path: String): ExplicitMetricSpace =

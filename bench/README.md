@@ -130,6 +130,24 @@ cube, so the bottleneck distance between backends is mostly the agreement of nea
 correctness stress, not a statement about topology. Cube-surface draws with d + 1 points on one facet are not in general
 position (marked †).
 
+## The rarer complexes
+
+Tasks `cech`, `dtm`, `witness`, `sparse` and `dowker` (and the `tda4j-collapse` row of `vr`) time the complexes that few
+other libraries have. What each row computes is not always the same object, so read the agreement column with that in mind:
+
+| task | TDA4j | other rows | reference | what the agreement column means |
+|---|---|---|---|---|
+| `cech` | `Cech` | GUDHI `DelaunayCechComplex` | GUDHI | same persistent homology, so a real check (general position) |
+| `dtm` | `DtmRips.fromNeighbours` (`k`, p = 1) | GUDHI `DTMRipsComplex` | GUDHI | a real check (byte-identical on small inputs) |
+| `witness` | lazy (nu = 2) and `wvariant=general` | GUDHI weak and strong witness | GUDHI | unverified that GUDHI's are our definitions (#171): a nonzero distance is a finding, not yet a bug |
+| `sparse` | `SparseRips` (Cavanna-Jahanseir-Sheehy) | GUDHI `RipsComplex(sparse=eps)` (Buchet-Chazal-Oudot-Sheehy) | ripser.cpp, exact Rips | the approximation error of each construction; the two epsilons are not comparable |
+| `dowker` | `Dowker`, and `.dual` (`tda4j-dual`) | a GUDHI `SimplexTree` filled by hand, Blaser and Brun's `dowker_homology`, Yoon's Julia package | GUDHI | a real check for exact tools |
+
+A case's `params` (`eps`, `k`, `L`) reach every tool as `key=value`. A witness case's landmarks are chosen once by maxmin and
+written to `data/landmarks/` so that every tool uses the same ones. `bench/run.sh setup dowker` clones the two Dowker
+packages at pinned commits (neither is pip-installable with current tools; the Python one runs with three small shims in
+`py_worker.dowker_nerves_tool`, the Julia one wants Julia 1.7.2 and is skipped if its dependencies do not resolve).
+
 ## What is measured
 
 - **cold:** one process, one computation, from launch to exit: startup, JIT, reading the input. This is what a

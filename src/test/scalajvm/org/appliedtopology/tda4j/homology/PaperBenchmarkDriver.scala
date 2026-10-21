@@ -23,9 +23,18 @@ import scala.jdk.CollectionConverters.ListHasAsScala
   *     largest radius: bars alive at it are essential, and DQP builds only what lies within it. `engine=fastalpha` runs
   *     on the backend's triangulation and takes no threshold.
   *   - `task=cech`: points; filtration values are radii (the same barcode as alpha in general position).
-  *   - `count=true` (tasks `vr`, `alpha`, `cech`): build the complex the task would reduce, count its cells by
-  *     dimension (up to `dim + 1`, all a barcode up to degree `dim` needs) and print one JSON line with `cells`; no
-  *     engine runs (`bench/count_cells.py`).
+  *   - `task=vr collapse=true`: Vietoris-Rips after `EdgeCollapse.collapse` (the collapse is inside the timed region);
+  *     the cross-tool twin of GUDHI's edge collapse.
+  *   - `task=sparse eps=0.3`: Sheehy's sparse Rips (`SparseRips`, Cavanna-Jahanseir-Sheehy); points or a distance
+  *     matrix as for `vr`. A barcode that approximates the exact Rips one, not equal to it.
+  *   - `task=dtm k=10 [q=2] [dtmp=1]`: the DTM-weighted Rips complex (`DtmRips.fromNeighbours`, `k` self-inclusive).
+  *   - `task=witness [landmarks=file | L=50] [wvariant=lazy|general] [nu=2]`: the witness complex of the points on
+  *     landmarks given as a file of point indices, one per line (the same for every tool), or chosen by maxmin.
+  *   - `task=dowker [dual=true]`: a relation matrix (one row per vertex, one column per witness) in `input`, as `vr`'s
+  *     `format=distance` file; `dual=true` builds the complex on the other side.
+  *   - `count=true` (tasks `vr`, `alpha`, `cech`, `sparse`, `dtm`, `witness`, `dowker`): build the complex the task
+  *     would reduce, count its cells by dimension (up to `dim + 1`, all a barcode up to degree `dim` needs) and print
+  *     one JSON line with `cells`; no engine runs (`bench/count_cells.py`).
   *
   * Times cover the whole `Persistence(...)` call: building the complex, the reduction and the representatives. For
   * `task=cubical`, `read=true` also reads every representative's terms inside the timed region (the JSON line reports
@@ -73,6 +82,17 @@ object PaperBenchmarkDriver:
 
     val loadStart = System.nanoTime()
     val compute: () => List[(Int, Double, Double)] = task match
+      case "vr" if opts.get("collapse").contains("true") =>
+        val ms = metricSpaceOf(opts)
+        () =>
+          Persistence(
+            EdgeCollapse.collapse(ms, threshold),
+            maxDimension = dim,
+            maxFiltrationValue = threshold,
+            characteristic = p,
+            engine = engine,
+            representatives = reps
+          ).triples
       case "vr" =>
         opts.getOrElse("format", "points") match
           case "points" =>
@@ -160,7 +180,15 @@ object PaperBenchmarkDriver:
             engine = engine,
             representatives = reps
           ).triples
-      case other => throw IllegalArgumentException(s"task=$other (vr|cubical|alpha|cech)")
+      case "sparse" | "dtm" | "witness" | "dowker" =>
+        () =>
+          Persistence(
+            streamFor(task, opts, dim, threshold),
+            characteristic = p,
+            engine = engine,
+            representatives = reps
+          ).triples
+      case other => throw IllegalArgumentException(s"task=$other (vr|cubical|alpha|cech|sparse|dtm|witness|dowker)")
     val loadSeconds = (System.nanoTime() - loadStart) / 1e9
 
     var bars: List[(Int, Double, Double)] = Nil
@@ -220,8 +248,12 @@ object PaperBenchmarkDriver:
       case "alpha" =>
         val backend = AlphaBackend.parse(opts.getOrElse("backend", "default"))
         Truncated(AlphaShapes(readMatrix(input), backend, maxRadius = threshold, maxDimension = dim), dim)
-      case "cech" => Cech.fromPoints(readMatrix(input), dim, threshold)
-      case other  => throw IllegalArgumentException(s"count=true is for the tasks vr, alpha and cech, not $other")
+      case "cech"                                  => Cech.fromPoints(readMatrix(input), dim, threshold)
+      case "sparse" | "dtm" | "witness" | "dowker" => streamFor(task, opts, dim, threshold)
+      case other                                   =>
+        throw IllegalArgumentException(
+          s"count=true is for the tasks vr, alpha, cech, sparse, dtm, witness and dowker, not $other"
+        )
     val counts = scala.collection.mutable.TreeMap.empty[Int, Long]
     stream.iterator.foreach(cell => counts.update(cell.dim, counts.getOrElse(cell.dim, 0L) + 1L))
     val cells = counts.map((d, c) => s""""$d":$c""").mkString(",")
@@ -230,6 +262,52 @@ object PaperBenchmarkDriver:
           .nanoTime() - start) / 1e9},""" +
         s""""java":"${System.getProperty("java.version")}"}"""
     )
+
+  /** The metric space of a `format=points` (default) or `format=distance` input. */
+  private def metricSpaceOf(opts: Map[String, String]): FiniteMetricSpace[Int] =
+    opts.getOrElse("format", "points") match
+      case "points"   => EuclideanMetricSpace(readMatrix(opts("input")))
+      case "distance" => ExplicitMetricSpace(readMatrix(opts("input")).map(_.toSeq).toSeq)
+      case other      => throw IllegalArgumentException(s"format=$other (points|distance)")
+
+  /** The complex a rarer task builds, as a fresh stream (the caller times it together with the reduction). */
+  private def streamFor(
+    task: String,
+    opts: Map[String, String],
+    dim: Int,
+    threshold: Option[Double]
+  ): LevelwiseSimplexStream[Int, Double] = task match
+    case "sparse" => SparseRips(metricSpaceOf(opts), opts("eps").toDouble, dim, maxFiltrationValue = threshold)
+    case "dtm"    =>
+      DtmRips.fromNeighbours(
+        metricSpaceOf(opts),
+        opts("k").toInt,
+        dim,
+        q = opts.getOrElse("q", "2").toDouble,
+        p = opts.getOrElse("dtmp", "1").toDouble,
+        maxFiltrationValue = threshold
+      )
+    case "witness" =>
+      val ms = metricSpaceOf(opts)
+      val landmarks: IndexedSeq[Int] = opts.get("landmarks") match
+        case Some(path) =>
+          val src = scala.io.Source.fromFile(path)
+          try src.getLines().map(_.trim).filter(_.nonEmpty).map(_.toInt).toIndexedSeq
+          finally src.close()
+        case None => LandmarkSelector.maxmin(ms, opts("L").toInt).landmarks
+      val variant = opts.getOrElse("wvariant", "lazy") match
+        case "lazy"    => Witness.Variant.Lazy
+        case "general" => Witness.Variant.General
+        case other     => throw IllegalArgumentException(s"wvariant=$other (lazy|general)")
+      Witness(ms, landmarks, dim, variant, opts.getOrElse("nu", "2").toInt, threshold)
+    case "dowker" =>
+      Dowker(
+        readMatrix(opts("input")),
+        dim,
+        threshold.getOrElse(Double.PositiveInfinity),
+        dual = opts.get("dual").contains("true")
+      )
+    case other => throw IllegalArgumentException(s"no stream for task=$other")
 
   private def fastAlpha(
     pts: Array[Array[Double]],

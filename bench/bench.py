@@ -74,6 +74,7 @@ class Case(NamedTuple):
     threshold: Optional[float] = None  # the largest filtration value; None: the enclosing radius (VR) or no limit
     radius_k: Optional[int] = None  # alpha: a radius at which a point has about this many neighbours within 2r
     degenerate: bool = False  # not in general position: the reference is not ground truth for the barcode
+    params: tuple = ()  # (key, value) pairs every tool is given as key=value: eps, k, L, nu, ...
 
 
 CASES = [
@@ -127,6 +128,28 @@ CASES = [
     # a full Delaunay triangulation is out of reach. The bars alive at the radius are the Betti numbers there (the
     # summary's `betti` column, per field).
     Case("cyclooctane_alpha", "alpha", "cyclooctane.txt", "points", 2, threshold=0.25),
+
+    # --- the rarer complexes -------------------------------------------------------------------------------------
+    # cech: Cech radii. The reference is GUDHI's Delaunay-Cech complex (same persistent homology, other values per
+    # simplex and another number of cells). A radius bounds the work: Cech without one is every subset of dim + 2 points.
+    Case("cech_unif3d_80", "cech", "unif3d_80.txt", "points", 2),
+    Case("cech_unif3d_1000", "cech", "unif3d_1000.txt", "points", 2, threshold=0.08),
+    Case("cech_unif5d_500", "cech", "unif5d_500.txt", "points", 2, threshold=0.2),
+    # dtm: the DTM-weighted Rips complex of Anai et al. (p = 1), k neighbours counting the point itself. The circle with
+    # outliers is the reason the filtration exists: the outliers' bars should not be there.
+    Case("dtm_circle_outliers", "dtm", "circle_outliers_600.txt", "points", 1, threshold=0.6, params=(("k", 10),)),
+    Case("dtm_unif3d_1000", "dtm", "unif3d_1000.txt", "points", 2, threshold=0.15, params=(("k", 10),)),
+    # witness: landmarks are chosen once by maxmin (bench.py) and given to every tool as point indices.
+    Case("witness_unif3d_1000_L50", "witness", "unif3d_1000.txt", "points", 2, params=(("L", 50),)),
+    Case("witness_unif3d_5000_L100", "witness", "unif3d_5000.txt", "points", 2, params=(("L", 100),)),
+    # sparse: Sheehy's sparse Rips (TDA4j: Cavanna-Jahanseir-Sheehy) against exact Rips. The reference is ripser.cpp, so
+    # the agreement column is the approximation error (bottleneck distance), not a check that two tools agree.
+    Case("sparse_sphere3_96", "sparse", "sphere3_96.txt", "points", 2, params=(("eps", 0.3),)),
+    Case("sparse_o3_1024", "sparse", "o3_1024.txt", "points", 2, threshold=1.8, params=(("eps", 0.3),)),
+    Case("sparse_unif3d_1000", "sparse", "unif3d_1000.txt", "points", 2, threshold=0.25, params=(("eps", 0.3),)),
+    # dowker: a relation matrix, rows are the vertices of the complex and columns the witnesses (made by `prepare`).
+    Case("dowker_300x100", "dowker", "relation_300x100.txt", "distance", 1, threshold=0.35),
+    Case("dowker_60x200", "dowker", "relation_60x200.txt", "distance", 2, threshold=0.5),
 ]
 CASES = [c if isinstance(c, Case) else Case(*c) for c in CASES]
 
@@ -202,6 +225,33 @@ TOOLS = [
     # position (nerve lemma): a check of the alpha code by another algorithm. Its own task, so no case runs it by itself;
     # sweep_alpha.py does.
     ("tda4j-cech", "tda4j", "cech", {"engine": "auto", "reps": "cycles"}),
+    ("gudhi", "py", "cech", {}),
+    # The edge-collapsed Rips complex (Boissonnat-Pritam; GUDHI's `collapse_edges` is the other implementation, above).
+    ("tda4j-collapse", "tda4j", "vr", {"engine": "auto", "reps": "cycles", "collapse": "true"}),
+    # DTM-Rips; GUDHI's DTMRipsComplex (needs scipy).
+    ("tda4j", "tda4j", "dtm", {"engine": "auto", "reps": "cycles"}),
+    ("gudhi", "py", "dtm", {}),
+    # Witness complexes: TDA4j's lazy (flag; nu = 2) and general variants; GUDHI's weak and strong witness complexes.
+    # Whether either of GUDHI's is one of ours is unverified (issue #171), so the agreement column may be nonzero.
+    ("tda4j", "tda4j", "witness", {"engine": "auto", "reps": "cycles"}),
+    ("tda4j-general", "tda4j", "witness", {"engine": "auto", "reps": "cycles", "wvariant": "general"}),
+    ("gudhi", "py", "witness", {}),
+    ("gudhi-strong", "py", "witness", {"pytool": "gudhi", "variant": "strong"}),
+    # Sparse Rips: two different constructions with incomparable epsilons (TDA4j: Cavanna-Jahanseir-Sheehy 2015; GUDHI:
+    # Buchet-Chazal-Oudot-Sheehy). ripser.cpp is the exact barcode both approximate.
+    ("tda4j", "tda4j", "sparse", {"engine": "auto", "reps": "cycles"}),
+    ("gudhi", "py", "sparse", {}),
+    ("ripser.cpp", "ripser", "sparse", {}),
+    # Dowker: TDA4j on the rows and on the columns (`.dual`, the same barcode without zero-length bars), and the
+    # SimplexTree a user would fill by hand (a Python baseline, see py_worker.dowker_baseline).
+    ("tda4j", "tda4j", "dowker", {"engine": "auto", "reps": "cycles"}),
+    ("tda4j-dual", "tda4j", "dowker", {"engine": "auto", "reps": "cycles", "dual": "true"}),
+    ("gudhi", "py", "dowker", {}),
+    ("gudhi-dual", "py", "dowker", {"pytool": "gudhi", "variant": "dual"}),
+    # Blaser and Brun's `dowker_homology` (exact nerve; Python on GUDHI) and Yoon's Dowker persistence (Julia on a
+    # modified Eirene; degrees 0 and 1 over Z/2 only). `run.sh setup dowker` clones both at pinned commits.
+    ("dowker-nerves", "py", "dowker", {}),
+    ("dowker-yoon", "julia", "dowker", {"julia_tool": "dowker_yoon", "variant": "bars", "only_p": 2, "max_dim": 1}),
 ]
 # The Scala.js build of TDA4j (the npm package, on Node.js) beside each JVM variant above. A tool named `tda4j-js...`
 # is the JavaScript twin of `tda4j...`: summarize pairs them.
@@ -218,7 +268,8 @@ TOOLS += [
     ("tda4j-js-dqp", "tda4j-js", "alpha",
      {"engine": "auto", "reps": "cycles", "backend": "dqp", "needs_radius": True}),
 ]
-REFERENCE = {"vr": "ripser.cpp", "cubical": "gudhi", "alpha": "gudhi"}
+REFERENCE = {"vr": "ripser.cpp", "cubical": "gudhi", "alpha": "gudhi", "cech": "gudhi", "dtm": "gudhi",
+             "witness": "gudhi", "sparse": "ripser.cpp", "dowker": "gudhi"}
 CHARACTERISTIC_ZERO = {name for name, _, _, opts in TOOLS if opts.get("char0")}
 KERNEL_TOOLS = {name for name, _, _, opts in TOOLS if opts.get("kernel")}
 
@@ -294,6 +345,18 @@ def cyclooctane_points(data: Path):
     np.savetxt(data / "cyclooctane.txt", x, fmt="%.17g")
 
 
+def prepare_rare(data: Path):
+    """The inputs of the rarer complexes, from their own seeded generator (every earlier file stays byte-identical)."""
+    rng = np.random.default_rng(20261021)
+    np.savetxt(data / "unif3d_80.txt", rng.random((80, 3)), fmt="%.17g")
+    angle = rng.uniform(0, 2 * np.pi, 500)
+    circle = np.c_[np.cos(angle), np.sin(angle)] + rng.normal(0, 0.05, (500, 2))
+    np.savetxt(data / "circle_outliers_600.txt", np.r_[circle, rng.uniform(-2, 2, (100, 2))], fmt="%.17g")
+    for rows, cols in [(300, 100), (60, 200)]:
+        a, b = rng.random((rows, 3)), rng.random((cols, 3))
+        np.savetxt(data / f"relation_{rows}x{cols}.txt", np.linalg.norm(a[:, None] - b[None], axis=2), fmt="%.17g")
+
+
 def prepare(data: Path):
     data.mkdir(parents=True, exist_ok=True)
     for f in ["sphere_3_192_points.dat", "o3_1024.txt", "o3_4096.txt", "clifford_torus_50000.points.txt"]:
@@ -334,6 +397,7 @@ def prepare(data: Path):
     # The two degenerate alpha inputs, moved into general position: the same file for every tool.
     np.savetxt(data / "sphere_3_192.gp.txt", jitter(np.loadtxt(data / "sphere_3_192_points.dat"), rng), fmt="%.17g")
     np.savetxt(data / "dragon_2000.gp.txt", jitter(np.loadtxt(data / "dragon_2000.txt"), rng), fmt="%.17g")
+    prepare_rare(data)
     with open(data / "MANIFEST.json", "w") as f:
         json.dump({p.name: p.stat().st_size for p in sorted(data.iterdir()) if p.is_file()}, f, indent=1)
     print(f"data ready in {data}")
@@ -516,7 +580,9 @@ def available(kind, opts, python):
         return bool(env.get("JAVAPLEX_JAR")) and bool(env.get("JAVAPLEX_BUILD"))
     if kind == "py":
         mod = {"ripser.py": "ripser", "giotto-ph": "gph", "gudhi": "gudhi", "cripser": "cripser",
-               "dionysus": "dionysus", "oat": "oat_python"}[opts["pytool"]]
+               "dionysus": "dionysus", "oat": "oat_python"}.get(opts["pytool"])
+        if mod is None:  # dowker-nerves: a clone, not an installed package
+            return bool(env.get("DOWKER_HOMOLOGY_PATH")) and Path(env["DOWKER_HOMOLOGY_PATH"]).exists()
         r = subprocess.run([python, "-c", f"import {mod}"], capture_output=True)
         return r.returncode == 0
     return False
@@ -530,12 +596,14 @@ def command(kind, name, opts, case, data, p, threshold, warmup, trials, out, arg
         common.append(f"format={fmt}")
     if threshold is not None:
         common.append(f"threshold={threshold!r}")
+    common += case_extra_args(case, data)
     if kind == "tda4j":
         cp = Path(os.environ["TDA4J_CP"]).read_text().strip()
         return (["java"] + jvm_flags(args.jvm_heap, args.jvm_opts) +
                 ["-cp", cp, "org.appliedtopology.tda4j.PaperBenchmarkDriver",
                  f"engine={opts['engine']}", f"reps={opts['reps']}"] +
-                ([f"backend={opts['backend']}"] if "backend" in opts else []) + common)
+                ([f"backend={opts['backend']}"] if "backend" in opts else []) +
+                [f"{k}={opts[k]}" for k in ("collapse", "wvariant", "dual", "nu") if k in opts] + common)
     if kind == "tda4j-js":
         heap = args.node_heap or args.jvm_heap
         return ([os.environ.get("NODE", "node"), f"--max-old-space-size={node_heap_mb(heap)}"] + args.node_opts.split() +
@@ -545,6 +613,8 @@ def command(kind, name, opts, case, data, p, threshold, warmup, trials, out, arg
         extra = [f"tool={opts['pytool']}"]
         if "variant" in opts:
             extra.append(f"variant={opts['variant']}")
+            if opts["variant"] == "dual":
+                extra.append("dual=true")
         if "threads" in opts:
             extra.append(f"threads={os.cpu_count() if opts['threads'] == 'ALL' else opts['threads']}")
         return [args.python, str(HERE / "workers" / "py_worker.py")] + extra + common
@@ -584,6 +654,33 @@ def command(kind, name, opts, case, data, p, threshold, warmup, trials, out, arg
     raise ValueError(kind)
 
 
+def maxmin_landmarks(points, count):
+    """Indices of `count` landmarks by maxmin (farthest-point) selection starting at point 0: the same list for every tool."""
+    x = np.asarray(points, dtype=float)
+    chosen = [0]
+    nearest = np.linalg.norm(x - x[0], axis=1)
+    while len(chosen) < min(count, len(x)):
+        nxt = int(np.argmax(nearest))
+        chosen.append(nxt)
+        nearest = np.minimum(nearest, np.linalg.norm(x - x[nxt], axis=1))
+    return chosen
+
+
+def case_extra_args(case, data):
+    """The key=value arguments a case adds for every tool: its `params`, and for a witness case the landmark file (made
+    on first use, beside the data, so that all tools read the same landmarks)."""
+    args = [f"{k}={v}" for k, v in case.params]
+    if case.task == "witness":
+        count = int(dict(case.params)["L"])
+        path = data / "landmarks" / f"{case.name}.txt"
+        if not path.exists():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            idx = maxmin_landmarks(np.loadtxt(data / case.file, ndmin=2), count)
+            path.write_text("".join(f"{i}\n" for i in idx))
+        args.append(f"landmarks={path}")
+    return args
+
+
 def phat_matrix(case, data, threshold, fmt, fname, dim):
     """The filtered boundary matrix of a case for PHAT, made by make_phat from DIPHA's input unless it is there already
     (untimed: the complex is built beforehand). Its path."""
@@ -601,7 +698,8 @@ def phat_matrix(case, data, threshold, fmt, fname, dim):
 
 
 # The Julia tools: the environment variable holding the project each needs, and the worker script.
-JULIA_TOOLS = {"ripserer": ("RIPSERER_PROJECT", "ripserer_worker.jl"), "eirene": ("EIRENE_PROJECT", "eirene_worker.jl")}
+JULIA_TOOLS = {"ripserer": ("RIPSERER_PROJECT", "ripserer_worker.jl"), "eirene": ("EIRENE_PROJECT", "eirene_worker.jl"),
+               "dowker_yoon": ("DOWKER_YOON_PROJECT", "dowker_yoon_worker.jl")}
 
 
 def mpiexec_flags():
@@ -644,7 +742,7 @@ def case_threshold(case, data):
         return case.threshold
     if case.radius_k:
         return alpha_radius(np.loadtxt(data / case.file, ndmin=2), case.radius_k)
-    if case.task != "vr":
+    if case.task not in ("vr", "sparse"):
         return None
     if case.format == "distance":
         d = np.loadtxt(data / case.file)
@@ -669,6 +767,8 @@ def skip_reason(opts, case, ambient, threshold, p=None):
     """Why a tool is not run on a case at all (recorded as `unsupported`), or None."""
     if opts.get("only_p") and p is not None and p != opts["only_p"]:
         return f"Z/{opts['only_p']} coefficients only"
+    if opts.get("max_dim") is not None and case.dim > opts["max_dim"]:
+        return f"degrees up to {opts['max_dim']} only"
     if opts.get("max_ambient") and ambient > opts["max_ambient"]:
         return f"ambient dimension {ambient} is above the backend's limit of {opts['max_ambient']}"
     if opts.get("needs_radius") and threshold is None:
