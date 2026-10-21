@@ -5,12 +5,12 @@ import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.mutable
 import scala.util.Random
 
-/** Experiment (#192, PR #186): Vietoris-Rips persistent cohomology over F_p on implicit coboundaries, as the packed
-  * Ripser engine computes it (clearing, apparent pairs, a heap working column, cofacets enumerated on the fly), with
-  * each degree's columns cut into units of whole edge blocks and the units reduced in parallel. A column whose pivot
-  * leaves its unit is deferred: the deferred columns go on in parallel while their pivots are owned by the units' pairs
-  * (phase 2a), then one by one in the sequential order (phase 2b). The pairs, and the reduction log of every column,
-  * are those of one sequential reduction in the same order.
+/** An experiment (JVM only; #192, #194): Vietoris-Rips persistent cohomology over F_p on implicit coboundaries, as the
+  * packed Ripser engine computes it (clearing, apparent pairs, a heap working column, cofacets enumerated on the fly),
+  * with each degree's columns cut into units of whole edge blocks and the units reduced in parallel. A column whose
+  * pivot leaves its unit is deferred: the deferred columns go on in parallel while their pivots are owned by the units'
+  * pairs (phase 2a), then one by one in the sequential order (phase 2b). The pairs, and the reduction log of every
+  * column, are those of one sequential reduction in the same order.
   *
   * A simplex is one `Long` key: its block (1 + the rank of its first longest edge, edges ranked by (length, smaller
   * end, larger end); 0 for a vertex) above `mask - index` (`index` its combinatorial index; a larger index is older, as
@@ -26,7 +26,7 @@ import scala.util.Random
 object ParallelPackedCohomology:
 
   /** The edges within the threshold ranked, and the key encoding. */
-  final class Space(
+  open class Space(
     val n: Int,
     distance: (Int, Int) => Double,
     val threshold: Double,
@@ -101,7 +101,7 @@ object ParallelPackedCohomology:
       idx
 
   /** A working column: a binary min-heap of (key, coefficient), equal keys combined when they reach the top. */
-  final class Heap:
+  open class Heap:
     private var keys = new Array[Long](256)
     private var coefs = new Array[Int](256)
     var size = 0
@@ -164,14 +164,14 @@ object ParallelPackedCohomology:
       (ks.result(), cs.result())
 
   /** The column that owns a pivot: its reduced coboundary, or `null` arrays when that is its own coboundary. */
-  final class Owner(val column: Long, val keys: Array[Long], val coefs: Array[Int])
+  open class Owner(val column: Long, val keys: Array[Long], val coefs: Array[Int])
 
   /** A column whose pivot left its unit: its working column and its reduction log so far. */
-  final class Deferred(val column: Long, var keys: Array[Long], var coefs: Array[Int], val log: Log):
+  open class Deferred(val column: Long, var keys: Array[Long], var coefs: Array[Int], val log: Log):
     var additions = 0
 
   /** The columns added to one column, with their factors: V = column + sum of factor * V(added). */
-  final class Log:
+  open class Log:
     val added = mutable.ArrayBuilder.ofLong()
     val factors = mutable.ArrayBuilder.ofInt()
     var length = 0
@@ -180,7 +180,7 @@ object ParallelPackedCohomology:
       factors += factor
       length += 1
 
-  private final class Scratch(space: Space):
+  private class Scratch(space: Space):
     val vs = new Array[Int](space.maxDim + 3)
     val ws = new Array[Int](space.maxDim + 3)
     val cofKey = new Array[Long](space.n)
@@ -191,7 +191,7 @@ object ParallelPackedCohomology:
   private val DEFER = Long.MinValue
 
   /** Per-degree counts and times. */
-  final class Stats(val degree: Int, val columns: Int, val cleared: Int):
+  open class Stats(val degree: Int, val columns: Int, val cleared: Int):
     var units = 0
     var apparent = 0
     var claimed1 = 0
@@ -211,14 +211,14 @@ object ParallelPackedCohomology:
         f"additions $adds1%,d + $adds2a%,d + $adds2b%,d"
 
   /** One degree's pairs (birth key, death key or -1), its owners with reduced columns, its logs. */
-  final class Degree(val degree: Int, val stats: Stats):
+  open class Degree(val degree: Int, val stats: Stats):
     val pairs = mutable.ArrayBuffer.empty[(Long, Long)]
     val bars = mutable.ArrayBuffer.empty[(Int, Double, Double)]
     val reduced = mutable.LongMap.empty[Owner] // by column, for the columns with additions
     val logs = mutable.LongMap.empty[Log]
     val essential = mutable.ArrayBuffer.empty[Long]
 
-  final class Result(val space: Space, val degrees: Vector[Degree]):
+  open class Result(val space: Space, val degrees: Vector[Degree]):
     def bars: Vector[(Int, Double, Double)] = degrees.flatMap(_.bars).sorted
 
   private class WorkUnit(val start: Int, val end: Int, val lowBlock: Int, val highBlock: Int):

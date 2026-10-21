@@ -7,7 +7,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import scala.jdk.CollectionConverters.*
 import scala.util.Random
 
-/** Test-scope experiment (JVM): persistent cohomology of a Vietoris-Rips complex over F_p, degree by degree with
+/** An experiment (JVM only, #192): persistent cohomology of a Vietoris-Rips complex over F_p, degree by degree with
   * clearing as Ripser does (degree 0 by union-find), on explicit coboundary matrices, reduced either sequentially or by
   * edge blocks on a thread pool. Both reductions run the same column arithmetic on the same matrices.
   *
@@ -35,7 +35,7 @@ import scala.util.Random
 object BlockParallelReduction:
 
   /** One dimension's cells in filtration order: `dim + 1` ascending vertices each, value, block. */
-  final class Cells(val dim: Int, val vertices: Array[Int], val value: Array[Double], val block: Array[Int]):
+  open class Cells(val dim: Int, val vertices: Array[Int], val value: Array[Double], val block: Array[Int]):
     def size: Int = value.length
 
   /** The cells of dimensions `0 .. top` within `threshold`, in filtration order; blocks are numbered `0 until edges`.
@@ -102,7 +102,7 @@ object BlockParallelReduction:
   /** The coboundary from `columns` (degree-d cells) to `rows` (degree-(d+1) cells) over F_p, in compressed columns:
     * column `j`'s entries are `start(j) until start(j + 1)` of `entryRow` (ascending) and `entryCoeff`.
     */
-  final class Coboundary(
+  open class Coboundary(
     val columns: Cells,
     val rows: Cells,
     val start: Array[Int],
@@ -155,7 +155,7 @@ object BlockParallelReduction:
     Coboundary(columns, rows, start, entryRow, entryCoeff)
 
   /** Per-thread merge buffers. */
-  final class Scratch:
+  open class Scratch:
     var rows: Array[Int] = new Array[Int](64)
     var coeffs: Array[Int] = new Array[Int](64)
     def ensure(size: Int): Unit =
@@ -166,7 +166,7 @@ object BlockParallelReduction:
   /** One degree's columns as they are reduced: a column not yet changed is its slice of the coboundary. With
     * `cocycles`, also the reduction matrix (`V`, over column indices; a column never changed is itself).
     */
-  final class Store(val cob: Coboundary, p: Int, cocycles: Boolean):
+  open class Store(val cob: Coboundary, p: Int, cocycles: Boolean):
     private val size = cob.columns.size
     private val rows = new Array[Array[Int]](size)
     private val coeffs = new Array[Array[Int]](size)
@@ -254,7 +254,7 @@ object BlockParallelReduction:
         vCoeffs(j) = java.util.Arrays.copyOf(s.coeffs, vLen)
 
   /** How one degree's reduction went. */
-  final class Stats(val degree: Int, val columns: Int, val cleared: Int):
+  open class Stats(val degree: Int, val columns: Int, val cleared: Int):
     var nanos1, nanos2a, nanos2b: Long = 0L
     var adds1, adds2a, adds2b: Long = 0L
     // Phase-2b additions of a column phase 1 paired: only waiting for another deferred column made them sequential.
@@ -272,7 +272,7 @@ object BlockParallelReduction:
     case Blocks(threads: Int, chunk: Int = 0)
 
   /** One degree reduced: `owner(r)` is the column whose pivot is row `r`, or -1. */
-  final class Degree(val store: Store, val cleared: Array[Boolean], val owner: Array[Int], val stats: Stats):
+  open class Degree(val store: Store, val cleared: Array[Boolean], val owner: Array[Int], val stats: Stats):
     def cob: Coboundary = store.cob
 
   def reduce(
@@ -445,7 +445,7 @@ object BlockParallelReduction:
   /** Persistent cohomology in degrees `0 .. maxDim`: degree 0 by union-find over the edges in order (its deaths clear
     * degree 1), then each degree reduced by `method`, its pivots clearing the next degree.
     */
-  final class Result(val cells: Vector[Cells], val h0Deaths: Array[Boolean], val degrees: Vector[Degree]):
+  open class Result(val cells: Vector[Cells], val h0Deaths: Array[Boolean], val degrees: Vector[Degree]):
     /** Every bar of positive length as (degree, birth, death), sorted. */
     def bars: Vector[(Int, Double, Double)] =
       val edges = cells(1)

@@ -61,7 +61,7 @@ object LayeredInorderSimplexStream:
     * (dim + 1))`; its first longest edge is edge `root(i)` of the generator's edge list, and that edge's length is its
     * diameter.
     */
-  final class Layer(val dim: Int, val size: Int, val vertices: Array[Int], val root: Array[Int]):
+  open class Layer(val dim: Int, val size: Int, val vertices: Array[Int], val root: Array[Int]):
     def simplex(i: Int): Simplex[Int] =
       Simplex.from(ArraySeq.unsafeWrapArray(java.util.Arrays.copyOfRange(vertices, i * (dim + 1), (i + 1) * (dim + 1))))
 
@@ -383,7 +383,7 @@ object LayeredInorderSimplexStream:
     src
 
   /** A growable `Array[Int]`. */
-  final class IntBuffer:
+  open class IntBuffer:
     private var data = new Array[Int](16)
     var size: Int = 0
     def +=(x: Int): Unit =
@@ -395,7 +395,7 @@ object LayeredInorderSimplexStream:
     def result: Array[Int] = java.util.Arrays.copyOf(data, size)
 
   /** A growable `Array[Double]`. */
-  final class DoubleBuffer:
+  open class DoubleBuffer:
     private var data = new Array[Double](16)
     var size: Int = 0
     def +=(x: Double): Unit =
