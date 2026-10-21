@@ -19,8 +19,14 @@ class ParallelPackedCohomologySpec extends Specification with ScalaCheck:
   // (threads, units per thread): one unit per thread, several, and so many that most units are one block.
   private val parallel = Seq((3, 1), (3, 4), (3, 1000))
 
-  private def space(metricSpace: FiniteMetricSpace[Int], maxDim: Int, threshold: Double, p: Int) =
-    Space(metricSpace.size, metricSpace.distance(_, _), threshold, maxDim, p)
+  private def space(
+    metricSpace: FiniteMetricSpace[Int],
+    maxDim: Int,
+    threshold: Double,
+    p: Int,
+    ripserApparent: Boolean = false
+  ) =
+    Space(metricSpace.size, metricSpace.distance(_, _), threshold, maxDim, p, ripserApparent)
 
   private def reduce(sp: Space, threads: Int, unitsPerThread: Int): Result =
     persistence(sp, threads, unitsPerThread, cocycles = true, if threads > 1 then pool else null, keepPairs = true)
@@ -55,6 +61,13 @@ class ParallelPackedCohomologySpec extends Specification with ScalaCheck:
         firstDifference(sequential.bars, BlockParallelReduction.packedBars(metricSpace, maxDim, threshold, p)) must
           beNone
       )
+      .and {
+        // Apparent pairs found Ripser's way, from every facet's pairs: the same pairs.
+        val ripserWay = reduce(space(metricSpace, maxDim, threshold, p, ripserApparent = true), 1, 1)
+        TestResult.foreach(ripserWay.degrees.zip(sequential.degrees)) { (a, b) =>
+          firstDifference(a.pairs.sorted.toSeq, b.pairs.sorted.toSeq) must beNone
+        }
+      }
 
   // delta(V) = R for every column the reduction changed: R its stored reduced column, or zero for an essential one.
   private def cocyclesValid(metricSpace: FiniteMetricSpace[Int], p: Int): TestResult =

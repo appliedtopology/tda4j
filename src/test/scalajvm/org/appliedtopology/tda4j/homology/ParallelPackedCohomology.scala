@@ -26,7 +26,15 @@ import scala.util.Random
 object ParallelPackedCohomology:
 
   /** The edges within the threshold ranked, and the key encoding. */
-  final class Space(val n: Int, distance: (Int, Int) => Double, val threshold: Double, val maxDim: Int, val p: Int):
+  final class Space(
+    val n: Int,
+    distance: (Int, Int) => Double,
+    val threshold: Double,
+    val maxDim: Int,
+    val p: Int,
+    // Find apparent pairs Ripser's way (every facet's block from its pairs) instead of from the block's edge.
+    val ripserApparent: Boolean = false
+  ):
     val rank: Array[Int] = Array.fill(n * n)(-1)
     private val (ea, eb, el) =
       val as = mutable.ArrayBuilder.ofInt()
@@ -324,6 +332,98 @@ object ParallelPackedCohomology:
           v -= 1
         if older then -1L else key(rowBlock, indexOf(s.vs, k))
 
+  // The block of the simplex in `vs` (size k): 1 + the largest rank of its edges, as Ripser computes a diameter.
+  private def blockOf(space: Space, vs: Array[Int], k: Int): Int =
+    var top = -1
+    var i = 0
+    while i < k do
+      var j = i + 1
+      while j < k do
+        val q = space.rank(vs(i) * space.n + vs(j))
+        if q > top then top = q
+        j += 1
+      i += 1
+    top + 1
+
+  // The youngest facet of the simplex in s.ws (size k + 1) with block `block`, Ripser's way: facets by increasing index
+  // (dropping the largest vertex first), each block recomputed from its pairs; its vertices left in s.vs. The dropped
+  // vertex, or -1.
+  private def youngestFacetByPairs(space: Space, s: Scratch, k: Int, block: Int): Int =
+    var dropped = -1
+    var j = k
+    while dropped < 0 && j >= 0 do
+      var t = 0
+      var i = 0
+      while i <= k do
+        if i != j then
+          s.vs(t) = s.ws(i)
+          t += 1
+        i += 1
+      if blockOf(space, s.vs, k) == block then dropped = s.ws(j)
+      j -= 1
+    dropped
+
+  // The vertex of the oldest cofacet of the simplex in s.vs (size k) with block `block`, Ripser's way: every cofacet
+  // from the largest added vertex down until one has that block. -1 if none.
+  private def oldestCofacetVertexByScan(space: Space, s: Scratch, k: Int, target: Int): Int =
+    import space.*
+    var found = -1
+    var v = n - 1
+    while found < 0 && v >= 0 do
+      var member = false
+      var blk = target
+      var ok = true
+      var u = 0
+      while ok && u < k do
+        if s.vs(u) == v then member = true
+        else
+          val q = rank(s.vs(u) * n + v)
+          if q < 0 then ok = false else if q + 1 > blk then blk = q + 1
+        u += 1
+      if !member && ok && blk == target then found = v
+      v -= 1
+    found
+
+  private def apparentCofacetByScan(space: Space, s: Scratch, k: Int, sigmaIndex: Long, sigmaBlock: Int): Long =
+    if sigmaBlock == 0 then -1L
+    else
+      val v = oldestCofacetVertexByScan(space, s, k, sigmaBlock)
+      if v < 0 then -1L
+      else
+        // tau = sigma + v, ascending, into s.ws; sigma's vertices stay in s.vs until the facet search overwrites them.
+        var t = 0
+        var i = 0
+        while i < k && s.vs(i) < v do
+          s.ws(t) = s.vs(i)
+          t += 1
+          i += 1
+        s.ws(t) = v
+        t += 1
+        while i < k do
+          s.ws(t) = s.vs(i)
+          t += 1
+          i += 1
+        val tauIndex = space.indexOf(s.ws, k + 1)
+        val apparent = youngestFacetByPairs(space, s, k, sigmaBlock) == v
+        // The facet search used s.vs: put sigma back, which the caller enumerates next.
+        t = 0
+        i = 0
+        while i <= k do
+          if s.ws(i) != v then
+            s.vs(t) = s.ws(i)
+            t += 1
+          i += 1
+        if apparent then space.key(sigmaBlock, tauIndex) else -1L
+
+  private def apparentFacetByScan(space: Space, s: Scratch, k: Int, row: Long): Long =
+    val rowBlock = space.block(row)
+    if rowBlock == 0 then -1L
+    else
+      space.decode(space.index(row), k + 1, s.ws)
+      val w = youngestFacetByPairs(space, s, k, rowBlock)
+      if w < 0 || oldestCofacetVertexByScan(space, s, k, rowBlock) != w then -1L
+      else space.key(rowBlock, space.indexOf(s.vs, k))
+
   // Adds factor * (owner's reduced column) to the heap, the factor cancelling the heap's pivot `row`; the factor.
   private def addOwner(space: Space, s: Scratch, k: Int, owner: Owner, row: Long): Int =
     val p = space.p
@@ -374,7 +474,8 @@ object ParallelPackedCohomology:
         val owner =
           if known != null then known
           else
-            val facet = apparentFacet(space, s, k, row)
+            val facet =
+              if space.ripserApparent then apparentFacetByScan(space, s, k, row) else apparentFacet(space, s, k, row)
             if facet >= 0 then Owner(facet, null, null) else null
         if owner == null then result = row
         else
@@ -455,7 +556,9 @@ object ParallelPackedCohomology:
             val idx = index(column)
             val blk = block(column)
             decode(idx, k, s.vs)
-            val tau = apparentCofacet(space, s, k, idx, blk)
+            val tau =
+              if ripserApparent then apparentCofacetByScan(space, s, k, idx, blk)
+              else apparentCofacet(space, s, k, idx, blk)
             if tau >= 0 then
               unit.apparent += 1
               unit.pivots += tau
@@ -650,7 +753,8 @@ object ParallelPackedCohomology:
 
   def main(arguments: Array[String]): Unit =
     val check = arguments.contains("check")
-    val args = arguments.filterNot(_ == "check")
+    val ripserApparent = arguments.contains("ripser-apparent")
+    val args = arguments.filterNot(a => a == "check" || a == "ripser-apparent")
     val dataset = args(0)
     val n = args(1).toInt
     val maxDim = args(2).toInt
@@ -665,14 +769,14 @@ object ParallelPackedCohomology:
     val common = java.util.concurrent.ForkJoinPool.getCommonPoolParallelism
     println(
       s"$dataset n=$n maxDim=$maxDim threshold=$threshold p=$p threads=$threads units/thread=$unitsPerThread " +
-        s"(common pool parallelism $common)"
+        s"(common pool parallelism $common)${if ripserApparent then ", apparent pairs Ripser's way" else ""}"
     )
     val pool = if threads > 1 then Executors.newFixedThreadPool(threads) else null
     def once(): (Long, Result) =
       val t0 = System.nanoTime()
       val dist = new Array[Double](n * n)
       for i <- 0 until n; j <- 0 until n do dist(i * n + j) = metricSpace.distance(i, j)
-      val space = Space(n, (i, j) => dist(i * n + j), threshold, maxDim, p)
+      val space = Space(n, (i, j) => dist(i * n + j), threshold, maxDim, p, ripserApparent)
       val r = persistence(space, threads, unitsPerThread, cocycles = true, pool)
       (System.nanoTime() - t0, r)
     val runs = (1 to trials).map(_ => once())
