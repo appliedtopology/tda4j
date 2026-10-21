@@ -236,6 +236,11 @@ object BlockParallelReduction:
   final class Stats(val degree: Int, val columns: Int, val cleared: Int):
     var nanos1, nanos2a, nanos2b: Long = 0L
     var adds1, adds2a, adds2b: Long = 0L
+    // Phase-2b additions of a column phase 1 paired: only waiting for another deferred column made them sequential.
+    var adds2bOfPhase1: Long = 0L
+    // The longest chain of phase-2b additions in which each column waits for the deferred columns it adds: a bound
+    // on how far any schedule doing these additions could shorten phase 2b.
+    var criticalPath2b: Long = 0L
     var pairs1, deferred, finished2a: Int = 0
     def nanos: Long = nanos1 + nanos2a + nanos2b
     def adds: Long = adds1 + adds2a + adds2b
@@ -314,6 +319,7 @@ object BlockParallelReduction:
         val starts = taskStart.result
         val tasks = starts.length - 1
         val deferredOf = Array.fill(tasks)(IntBuffer())
+        val paired1 = new Array[Boolean](size)
         def run(work: Int => Long): Long =
           val next = AtomicInteger(0)
           val jobs = (0 until threads).map(_ =>
@@ -352,6 +358,7 @@ object BlockParallelReduction:
                     go = false
                   else if owner(piv) < 0 then
                     owner(piv) = j
+                    paired1(j) = true
                     pairs += 1
                     go = false
                   else
@@ -367,7 +374,7 @@ object BlockParallelReduction:
         stats.deferred = deferred.length
         // Phase 2a: each deferred column by the columns phase 1 paired, which no longer change; nothing is written to
         // `owner`, so the columns are independent.
-        val slice = 32
+        val slice = math.max(1, math.min(32, deferred.length / (threads * 8)))
         val slices = (deferred.length + slice - 1) / slice
         val finished = AtomicInteger(0)
         stats.adds2a = run { t =>
@@ -390,14 +397,24 @@ object BlockParallelReduction:
         // Phase 2b: in order, against everything paired so far.
         val s = Scratch()
         var adds = 0L
+        var addsOfPhase1 = 0L
+        val path = new Array[Long](size)
         for j <- deferred do
           var piv = store.pivot(j)
+          var own = 0L
+          var waited = 0L
           while piv >= 0 && owner(piv) >= 0 do
-            store.cancel(j, owner(piv), s)
+            val o = owner(piv)
+            if paired1(o) then addsOfPhase1 += 1 else waited = math.max(waited, path(o))
+            store.cancel(j, o, s)
             adds += 1
+            own += 1
             piv = store.pivot(j)
           if piv >= 0 then owner(piv) = j
+          path(j) = waited + own
+          stats.criticalPath2b = math.max(stats.criticalPath2b, path(j))
         stats.adds2b = adds
+        stats.adds2bOfPhase1 = addsOfPhase1
         val t3 = System.nanoTime()
         stats.nanos1 = t1 - t0
         stats.nanos2a = t2 - t1
@@ -572,19 +589,24 @@ object BlockParallelReduction:
     val pool = Executors.newFixedThreadPool(m match
       case Method.Blocks(t, _) => t
       case Method.Sequential   => 1)
-    var last: Result = null
-    val times = (1 to trials).map { _ =>
+    var bars = 0
+    val runs = (1 to trials).map { _ =>
       val start = System.nanoTime()
-      last = persistence(cells, cobs, p, m, cocycles = false, pool)
-      System.nanoTime() - start
+      val r = persistence(cells, cobs, p, m, cocycles = false, pool)
+      val nanos = System.nanoTime() - start
+      bars = r.bars.size
+      (nanos, r.degrees.map(_.stats))
     }
     pool.shutdown()
+    val times = runs.map(_._1)
     println(
-      f"  bars ${last.bars.size}, reduction median ${median(times)}%.1f ms, min ${times.min / 1e6}%.1f ms (last trial by degree below)"
+      f"  bars $bars, reduction median ${median(times)}%.1f ms, min ${times.min / 1e6}%.1f ms; by degree (medians):"
     )
-    for d <- last.degrees do
-      val s = d.stats
+    for k <- runs.head._2.indices do
+      val all = runs.map(_._2(k))
+      val s = all.last
+      def ms(f: Stats => Long) = median(all.map(f))
       println(
-        f"  degree ${s.degree}: ${s.columns}%,d columns (${s.cleared}%,d cleared), ${s.nanos / 1e6}%.1f ms = phase 1 ${s.nanos1 / 1e6}%.1f + 2a ${s.nanos2a / 1e6}%.1f + 2b ${s.nanos2b / 1e6}%.1f; " +
-          f"additions ${s.adds}%,d = ${s.adds1}%,d + ${s.adds2a}%,d + ${s.adds2b}%,d; phase-1 pairs ${s.pairs1}%,d, deferred ${s.deferred}%,d (${s.finished2a}%,d emptied in 2a)"
+        f"  degree ${s.degree}: ${s.columns}%,d columns (${s.cleared}%,d cleared), ${ms(_.nanos)}%.1f ms: phase 1 ${ms(_.nanos1)}%.1f, 2a ${ms(_.nanos2a)}%.1f, 2b ${ms(_.nanos2b)}%.1f; " +
+          f"additions ${s.adds}%,d = ${s.adds1}%,d + ${s.adds2a}%,d + ${s.adds2b}%,d (${s.adds2bOfPhase1}%,d of phase-1 columns, critical path ${s.criticalPath2b}%,d); phase-1 pairs ${s.pairs1}%,d, deferred ${s.deferred}%,d (${s.finished2a}%,d emptied in 2a)"
       )

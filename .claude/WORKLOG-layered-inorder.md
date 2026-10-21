@@ -147,3 +147,62 @@ additions from the first time a deferred column needs another deferred column: 5
 Homology on the truncated complex defers every top-dimensional cycle and leaves 78–88% of additions in phase 2.
 Additions are not time; nothing here has clearing, apparent pairs or F_p. Prior art to compare: chunks (BKR),
 Ripser++, Morozov–Nigmetov lock-free reduction.
+
+## Follow-up: the threaded experiment and benchmarks (same day)
+
+Project lead asked for the experiment itself and benchmarks to compare. `src/test/scalajvm/.../homology/
+BlockParallelReduction.scala` (driver and code) and `BlockParallelReductionSpec`; C++ Ripser through ripser.py with
+`.claude/scripts/ripser-cpp-timing.py` on the driver's `dump` of the same points.
+
+**What it does.** Explicit coboundary matrices over F_p from the layered generator's cells, ordered by block (the
+first longest edge by length, then smaller end, then larger end), dimension, layer order. Cohomology degree by degree
+with clearing, degree 0 by union-find, as Ripser. `seq`: one reduction. `blocks-<t>`: phase 1 on `t` threads, each
+block's columns by that block's columns while the pivot stays inside (rows of a block are written only by its own
+columns, so the tasks share nothing); 2a, deferred columns against phase-1 columns in parallel (read-only); 2b, the
+rest in order. `chunks-<t>-<c>`: blocks merged into units of at least `c` columns (Bauer–Kerber–Reininghaus chunks
+with boundaries on block boundaries). Soundness needs only that a unit is contiguous in a filtration order: that is
+BKR's argument, not something the three cases add; what blocks add is that in general position every zero-length pair
+lies inside one block, and that with ties a value splits into blocks by edge.
+
+**Correctness.** Spec: pairs identical to the sequential reduction in every degree for `Blocks(1)`, `Blocks(3)`,
+`Blocks(3, 5)`; bars identical to `PackedRipserCohomologyEngine` (F₁₇ and F₂; random clouds, octagon, grid, random
+integer metrics); `δV_j = R_j` for every column over F₁₇ and F₃; in general position phase 1 makes exactly the
+zero-length pairs. Mutations caught: no deferral in phase 1 (4 examples fail), blocks ordered by (length, larger end,
+smaller end) (the 2 tie examples fail: the lexicographic order is needed), V added with the wrong sign (cocycles
+fail). `check` mode on cube3 n=400 t=0.25, torus n=400 t=0.5, cube3 n=300 at the enclosing radius (98M tetrahedra):
+all agree. Bar counts agree with C++ Ripser on every benchmark cloud.
+
+**Benchmarks** (sandbox, 4 cores; n=1000 in R³, degrees 0–2, F₁₇; one method per JVM, `-Xms12g -XX:+UseParallelGC`,
+medians of 7–11; repeated runs of the same work vary by 20–30% here):
+
+| cloud | edges / triangles / tetrahedra | C++ Ripser (H1 only) | packed engine | explicit build: generate + coboundaries | reduce `seq` | reduce `blocks-4` |
+|---|---|---|---|---|---|---|
+| torus, t=0.6 | 44,106 / 825,500 / 10,026,575 | 873 (107) ms | 2,524 ms | 1,242 + 3,665 ms | 380 ms | 404 ms |
+| sphere, t=0.6 | 44,540 / 786,644 / 8,261,559 | 862 (85) ms | 2,669 ms | 830 + 2,335 ms | 220 ms | 388 ms |
+| cube, t=0.3 | 40,956 / 646,170 / 5,848,167 | 777 (67) ms | 2,388 ms | 806 + 1,921 ms | 128 ms | 124 ms |
+
+Where the reduction's work is (`blocks-4`; phase-1 times for 1 / 2 / 4 threads):
+
+| cloud | degree 1: deferred of columns; additions phase 1 + 2a + 2b (2b adding a phase-1 column); 2b critical path | degree 2: phase 1 ms; deferred |
+|---|---|---|
+| torus | 294 of 44,106; 0 + 591 + 5,574 (5,449); 2,683 | 42 / 21 / 13; 3 |
+| sphere | 283 of 44,540; 0 + 591 + 1,866 (1,725); 546 | 44 / 20 / 12; 8 (the essential H2 class: 2a 90–170 ms) |
+| cube | 484 of 40,956; 0 + 834 + 1,218 (972); 212 | 31 / 20 / 11; 120 |
+
+The critical path is the longest chain of 2b additions in which a column waits for the deferred columns it adds:
+no schedule doing these additions shortens 2b by more than 2.1x (torus), 3.4x (sphere), 5.7x (cube). Chunks of 5,000
+columns cut the deferred columns to 106 / 83 / 146 and change nothing in the totals.
+
+**Verdict.**
+1. Threads do not speed up the reduction of these matrices (1.0x at 4 threads). Phase 1 scales (3–3.6x) but holds
+   little work once the coboundary exists: with clearing, 98.8–100% of the columns left pair inside their block,
+   with few additions. The work is in a few hundred deferred degree-1 columns (the real H1 bars), sequential in 2b because they
+   wait for each other, and then mostly adding phase-1 columns.
+2. Explicit matrices are a dead end for speed: building them costs 3.5–5.6x C++ Ripser's whole run and more
+   than the packed engine, because they hold the 6–10M tetrahedra Ripser never builds.
+3. Where blocks could pay: C++ Ripser spends 88–91% of its time in degree 2 (H1 only: 67–107 ms of 777–873 ms), and
+   degree 2 is almost all phase-1 work here (3–120 deferred columns of 650–825k). In an implicit engine that per-column
+   work (enumerating cofacets, apparent and emergent pairs) is what a block-parallel phase 1 would split. Amdahl on
+   that split: about 2.5–3x on 4 threads, less where an essential class needs a long reduction (the sphere).
+   Unverified: it assumes Ripser's degree-2 time is per-column work; next step on #192 is a parallel phase 1 inside
+   the packed engine, measured.
