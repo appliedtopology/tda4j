@@ -11,9 +11,9 @@ import scala.jdk.CollectionConverters.ListHasAsScala
   *
   * {{{
   * java -cp $CP org.appliedtopology.tda4j.PaperBenchmarkDriver task=vr input=sphere.txt format=points dim=2 \
-  *   [threshold=1.8] [p=2] [engine=auto|ripser|cohomology|chunks|naive|fastcubical|fastalpha] \
+  *   [threshold=1.8] [p=2] [engine=auto|ripser|cohomology|chunks|naive|fastcubical|fastalpha|blocks|parallel] \
   *   [reps=cycles|cocycles|none] [backend=default|bowyer-watson|helix|dqp] [warmup=2] [trials=5] [out=bars.tsv]
-  *   [read=true] [hold=seconds] [count=true]
+  *   [read=true] [hold=seconds] [count=true] [threads=N]
   * }}}
   *
   *   - `task=vr`: points (`format=points`, one point per line) or a full distance matrix (`format=distance`).
@@ -23,6 +23,10 @@ import scala.jdk.CollectionConverters.ListHasAsScala
   *     largest radius: bars alive at it are essential, and DQP builds only what lies within it. `engine=fastalpha` runs
   *     on the backend's triangulation and takes no threshold.
   *   - `task=cech`: points; filtration values are radii (the same barcode as alpha in general position).
+  *   - `task=vr engine=blocks|parallel [threads=N]`: the two block-parallel experiments instead of `Persistence`, bars
+  *     only (no representatives): `BlockParallelReduction` (explicit coboundaries) and `ParallelPackedCohomology`
+  *     (implicit coboundaries), on `threads` threads (default: every processor). Without a threshold they stop at the
+  *     enclosing radius, as `Persistence` does; the edge table and the complex are built inside the timed region.
   *   - `task=vr collapse=true`: Vietoris-Rips after `EdgeCollapse.collapse` (the collapse is inside the timed region);
   *     the cross-tool twin of GUDHI's edge collapse.
   *   - `task=sparse eps=0.3`: Sheehy's sparse Rips (`SparseRips`, Cavanna-Jahanseir-Sheehy); points or a distance
@@ -80,8 +84,35 @@ object PaperBenchmarkDriver:
       case "fastcubical" => Persistence.Engine.FastCubical
       case other         => throw IllegalArgumentException(s"engine=$other not valid for task=$task")
 
+    val threads = opts.get("threads").fold(Runtime.getRuntime.availableProcessors)(_.toInt)
+
     val loadStart = System.nanoTime()
     val compute: () => List[(Int, Double, Double)] = task match
+      case "vr" if engineName == "blocks" || engineName == "parallel" =>
+        val ms = metricSpaceOf(opts)
+        val n = ms.size
+        require(n.toLong * n <= Int.MaxValue, s"engine=$engineName keeps n x n tables: $n points are too many")
+        val table = Array.tabulate(n * n)(k => ms.distance(k / n, k % n))
+        val distance: (Int, Int) => Double = (i, j) => table(i * n + j)
+        val t = threshold.getOrElse(ms.minimumEnclosingRadius)
+        // Daemon threads: the pool must not keep the JVM alive after the trials.
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(
+          threads,
+          (r: Runnable) =>
+            val thread = Thread(r)
+            thread.setDaemon(true)
+            thread
+        )
+        if engineName == "parallel" then
+          () =>
+            val space = ParallelPackedCohomology.Space(n, distance, t, dim, p)
+            ParallelPackedCohomology.persistence(space, threads, 8, cocycles = false, pool).bars.toList
+        else
+          () =>
+            val cells = BlockParallelReduction.complex(n, distance, t, dim + 1)
+            val cobs = (1 to dim).map(d => BlockParallelReduction.coboundary(n, cells(d), cells(d + 1), p)).toVector
+            val method = BlockParallelReduction.Method.Blocks(threads)
+            BlockParallelReduction.persistence(cells, cobs, p, method, cocycles = false, pool).bars.toList
       case "vr" if opts.get("collapse").contains("true") =>
         val ms = metricSpaceOf(opts)
         () =>

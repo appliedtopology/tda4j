@@ -123,6 +123,7 @@ abstract class Lab(characteristic: Int, precision: Double = 1e-9):
     LandmarkSelection,
     LandmarkSelector,
     LatticeReduction,
+    LayeredInorderSimplexStream,
     LazyWitnessSimplexStream,
     LevelwiseSimplexStream,
     LimitedAlphaShapesStream,

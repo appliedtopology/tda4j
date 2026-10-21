@@ -11,6 +11,8 @@
 #   bench/run.sh sweep-cubical [--dims 2,3] [...]   size sweep of TDA4j's image engines (sweep_cubical.py)
 #   bench/run.sh sweep-alpha [--seeds 1] [...]       dimension and point-count sweep of the alpha complex backends
 #                                   (sweep_alpha.py): cube and sphere samples, the Helix thesis's workloads
+#   bench/run.sh sweep-threads [--cases a,b] [--threads 1,2,4] [...]   the multithreaded Vietoris-Rips tools at 1, 2, 4,
+#                                   ... threads, pinned to as many CPUs (sweep_threads.py)
 #   bench/run.sh count-cells [--reference] [--cases a,b] [--verify] [...]   the number of cells of every case's complex,
 #                                   by dimension (count_cells.py); --reference writes bench/cells-reference.csv, which
 #                                   `summarize` joins: a benchmark run never counts
@@ -305,6 +307,10 @@ case "$cmd" in
     export_env
     "$VENV/bin/python" "$BENCH/sweep_alpha.py" --data "$DATA" --python "$VENV/bin/python" "$@"
     ;;
+  sweep-threads)
+    export_env
+    "$VENV/bin/python" "$BENCH/sweep_threads.py" --data "$DATA" --python "$VENV/bin/python" "$@"
+    ;;
   count-cells)
     export_env
     RESULTS="$WORKDIR/results/cells-$(date +%Y%m%d-%H%M%S)"
@@ -316,5 +322,5 @@ case "$cmd" in
     "$0" prepare
     "$0" run "$@"
     ;;
-  *) echo "usage: $0 setup [tool...]|prepare|run|all|summarize|sweep-cubical|sweep-alpha|count-cells [options]"; exit 2 ;;
+  *) echo "usage: $0 setup [tool...]|prepare|run|all|summarize|sweep-cubical|sweep-alpha|sweep-threads|count-cells [options]"; exit 2 ;;
 esac

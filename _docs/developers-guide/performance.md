@@ -103,3 +103,7 @@ It reports both:
 
 It records peak RSS for each. `bench/run.sh sweep-cubical` times the image
 engines across sizes; it is how the `Auto` default for images is chosen.
+`bench/run.sh sweep-threads` times the multithreaded Vietoris-Rips tools,
+the two block-parallel experiments among them, at 1, 2, 4, ... threads, each
+run pinned to as many CPUs, and checks that the barcode does not change with
+the thread count.

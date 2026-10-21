@@ -38,7 +38,9 @@ barcodes coincide.
    revive — `WORKLOG-chunks-representatives-incremental.md`). Invariants: a paired cell never becomes a pivot;
    `compress` runs to a fixpoint; a reconciliation step resolves "in limbo" cells first
    (`WORKLOG-benchmark-and-chunks-bug.md`, `WORKLOG-chunks-pairing-bug.md`). Parallel redesign attempted and
-   invalidated by measurement (`WORKLOG-parallelization-survey.md`).
+   invalidated by measurement (`WORKLOG-parallelization-survey.md`). Edge-block units on threads are exact: 1.0x on
+   4 cores on explicit coboundaries, 2.2-3.3x on implicit ones, where the packed engine's own costs (decoding, sort)
+   dominate (#192, #194, `WORKLOG-layered-inorder.md`).
    `advanceAll` runs the reduction ONCE (`advanced`). At `maxDimension = 1` (union-find has the edges) the triangles go in
    filtration order against a count of open degree-1 classes (`reduceTrianglesInOrder`): one that enters while none is
    open reduces to zero and is skipped, as in the capped naive engine; from `maxDimension = 2` every top cell is still
@@ -73,7 +75,10 @@ barcodes coincide.
    equal the cell-keyed reduction kept in the test tree (`CellKeyedCohomologyReference`) bar for bar, pair for pair,
    term for term and in list order (`CohomologyNumberingSpec`): re-run it after any change to the reduction
    (`WORKLOG-dense-cohomology.md`). On a `CubicalGridStream` the verb runs `PackedCubicalCohomologyEngine`,
-   which must equal this engine there (`rules/cubical.md`).
+   which must equal this engine there (`rules/cubical.md`). Simplices with `Int` vertices under an instance from
+   `simplexIsOrderedCell` (marked `StandardSimplexBoundary`) are reduced on flat arrays inside this class; the result
+   must equal `packSimplices = false` term for term (`PackedSimplexCohomologySpec`), so a column needing an addition
+   still goes through `Chain.reduceBy` (#193, `WORKLOG-layered-inorder.md`).
 
 **Cycles from cohomology (`Involution`, `homology/Involution.scala`)**: both cohomology engines expose
 `pairedCohomology` (bars + birth/death cells, zero-length pairs INCLUDED: their columns are pivots) and

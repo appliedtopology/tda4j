@@ -41,6 +41,12 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Added
 
+- Two JVM-only experiments that reduce Vietoris-Rips cohomology with each degree split into units of whole edge blocks
+  on a thread pool: `BlockParallelReduction` (explicit coboundaries) and `ParallelPackedCohomology` (implicit
+  coboundaries). Bars only, with no representatives; `Persistence` does not use them.
+- `LayeredInorderSimplexStream`: the Vietoris-Rips complex, each dimension generated from the one below already in
+  filtration order (arXiv:2411.05495), with no sort above the edges. `VietorisRips(..., implementation = Inorder)` builds
+  it.
 - **tda4j runs in JavaScript.** The library is built for the JVM and for Scala.js from the same sources (sbt 2 project
   matrix: `tda4j` and `tda4jJS`). Scala.js programs depend on the same coordinates (`"org.appliedtopology" %% "tda4j"`
   picks `tda4j_sjs1_3` in a Scala.js project); JavaScript and TypeScript programs install the npm package `@appliedtopology/tda4j`:
@@ -133,6 +139,11 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Changed
 
+- The cohomology engine (`Persistence.Engine.Cohomology`, the default for alpha, Čech, witness, Dowker, DTM, sparse Rips
+  and explicit complexes, also in MATLAB and the CLI) reduces simplices with `Int` vertices on flat arrays instead of
+  `Simplex` objects. The bars and representatives are the same term for term. The alpha complex of 10,000 points in R³
+  takes about a sixth of the time, that of 40 points in R¹⁰ to degree 9 about a tenth.
+  `CellularCohomologyEngine(packSimplices = false)` keeps the old reduction.
 - The Helix alpha backend (what `AlphaShapes` uses above 4-D) builds the faces of its triangulation in time linear in
   their number and makes the `Simplex` objects of a dimension only when it is read. 40 points in R^8 take 7 s (was
   105 s), in R^10 about a minute (the dimension sweep timed out after an hour); the simplices, values and order of the
@@ -147,6 +158,8 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Fixed
 
+- `VietorisRips(..., implementation = Inorder)` listed tied simplices out of the stream's order, and on tied distances
+  (points on a grid) some simplices twice; it now builds `LayeredInorderSimplexStream`.
 - The alpha complex on the BowyerWatson, Helix and Default backends gave a different filtration, and extra H1 bars, for
   points spanning less than about 0.1: the `1e-5` tolerance was absolute. It is now a fraction of the extent
   (`EpsilonFactor`), so the barcode of `c * points` is `c` times that of `points`.
