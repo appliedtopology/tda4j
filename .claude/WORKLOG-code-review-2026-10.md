@@ -86,6 +86,12 @@ PR #165 (draft): coface-loop fix, `FiniteField` prime check, file-reader validat
 validation, `bettiNumbers` of `at(f)`. Full JVM suite green locally (1553 specs); `test-js`, `lint`, `mima` only on CI.
 Issues: #164 (large primes), #166 (distances cubic), #168 (alpha not scale-invariant).
 
+Follow-ups decided by Mikael on 2026-10-21:
+- #164: hard cap at 10^6 (`FiniteField.MaxPrime`), done in #165; issue closed.
+- #168: relative tolerance, `EpsilonFactor` (BowyerWatson and Helix always relative), separate PR #177.
+- #166: bottleneck rewritten in #180 (1,500 bars 22 s -> 0.24 s, same values; the all-pairs matrix is gone, near pairs come
+  from a birth window and feasibility is two matchings). Wasserstein stays on #166; Hera's geometric auction is #178.
+
 ## Not yet reviewed (in priority order)
 
 the `homology/` engine sources (fuzzed above), the remaining streams (witness, Dowker, DTM,
