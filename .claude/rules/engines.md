@@ -38,8 +38,9 @@ barcodes coincide.
    revive — `WORKLOG-chunks-representatives-incremental.md`). Invariants: a paired cell never becomes a pivot;
    `compress` runs to a fixpoint; a reconciliation step resolves "in limbo" cells first
    (`WORKLOG-benchmark-and-chunks-bug.md`, `WORKLOG-chunks-pairing-bug.md`). Parallel redesign attempted and
-   invalidated by measurement (`WORKLOG-parallelization-survey.md`). Reducing explicit VR coboundaries by edge block on
-   threads is sound but gave 1.0x on 4 cores (#192, `WORKLOG-layered-inorder.md`).
+   invalidated by measurement (`WORKLOG-parallelization-survey.md`). Edge-block units on threads are exact: 1.0x on
+   4 cores on explicit coboundaries, 2.2-3.3x on implicit ones, where the packed engine's own costs (decoding, sort)
+   dominate (#192, #194, `WORKLOG-layered-inorder.md`).
    `advanceAll` runs the reduction ONCE (`advanced`). At `maxDimension = 1` (union-find has the edges) the triangles go in
    filtration order against a count of open degree-1 classes (`reduceTrianglesInOrder`): one that enters while none is
    open reduces to zero and is skipped, as in the capped naive engine; from `maxDimension = 2` every top cell is still

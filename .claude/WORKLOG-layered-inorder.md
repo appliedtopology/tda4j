@@ -248,3 +248,65 @@ whole cost is enumerating cells and their first cofacets, which is independent p
 #188 (generation per block) and a block-parallel phase 1 inside an implicit engine would split; unmeasured. For alpha
 in high dimension the reduction is likewise free and the library's verb loses to plain primitive arrays with clearing
 (the 10-d case: about 3x end to end).
+
+## Addendum: the library-edit issue, and parallel blocks in a packed engine (same day)
+
+Project lead chose: write up the stream-engine edit as an issue (#193), then run "parallel blocks in the packed
+engine".
+
+**#193 measurements.** `AlphaProfileDriver` (unsampled unless noted) on the Helix alpha complex, `Persistence` timed on
+the already-sorted stream: 10,000 points in [0,1]³ to H2 (286,139 cells) 3.9 s against 0.09 s coboundaries + 0.07 s
+reduction on flat arrays (`BlockParallelReduction`, no representatives); 40 points in [0,1]¹⁰ to H9 207 s under the
+stack sampler. Its top tda4j frames: the coboundary blocks built from `Simplex.boundary` and `HashMap[CellT, Int]`
+(`Cohomology.scala:159`) 20.6%, the involution's boundaries (`:56`) 11.8%, `SimplexOps.toArray` 11.0%; leading self frame
+`RedBlackTree$TreeIterator.<init>` 32.9% (`Simplex` is a `TreeSet`). Side note, not pursued: the Helix triangulation of
+the 10,000 points took 54 s; `AlphaShapes(pts)` with the default backend gave a slightly different complex in 1.3 s.
+
+**The experiment.** `ParallelPackedCohomology` (test scope, JVM): Vietoris-Rips cohomology over F_p on implicit
+coboundaries, as the packed engine computes it (clearing, apparent pairs, heap working column, cofacets on the fly,
+H0 by the same reduction). A simplex is one `Long`: block (1 + rank of its first longest edge) above `mask - index`.
+Each degree's sorted columns are cut into units of whole blocks (8 per thread), reduced in parallel youngest first
+against the unit's own owners; a column whose pivot leaves its unit is deferred, goes on in parallel while its pivot
+belongs to a phase-1 owner or an apparent pair (2a), then one by one in the sequential order (2b). Canonical cofacets
+are assembled in parallel chunks and sorted with `Arrays.parallelSort`. Apparent pairs come from the block's edge: the
+youngest same-block facet drops the largest vertex off the edge, the oldest same-block cofacet adds the first qualifying
+vertex above it (O(k) instead of Ripser's O(k³) facet scan); `ripserApparent` does it Ripser's way for comparison.
+
+`ParallelPackedCohomologySpec`: same pairs and same reduction log per column as the sequential run (3 threads, 1/4/1000
+units per thread), same pairs Ripser's way, the packed engine's bars, on general position (plus a threshold), the
+octagon and the grid over F_17 and F_2, random integer metrics; δV = R over F_17 and F_3. Mutations caught: no deferral
+(integer metrics), all-plus signs (bars). Bars also equal the packed engine's on the 10-d case at t = 1.45.
+
+**Times** (one JVM per row, 12 GB heap, ParallelGC, common-pool parallelism = threads; whole run from points to bars,
+reduction logs kept, no cocycles expanded; C++ is ripser.py 0.6.15's bundled Ripser, and the packed engine is
+`pairedCohomology(cocycles = false)`, both from the earlier rows). n=1000 to H2: median / min of 11, ms. 10-d: of 3, s.
+
+| case | C++ | packed engine | sequential | sequential, apparent Ripser's way | 2 threads | 4 threads |
+|---|---|---|---|---|---|---|
+| torus t0.6 | 873 | 2,524 | 1,252 / 715 | 1,390 / 721 | 895 / 475 | 483 / 321 |
+| sphere t0.6 | 862 | 2,669 | 1,366 / 695 | 1,245 / 686 | 643 / 434 | 410 / 312 |
+| cube3 t0.3 | 777 | 2,388 | 714 / 572 | 798 / 715 | 464 / 396 | 295 / 266 |
+| 40 pts in [0,1]¹⁰, H10, t1.45 | 52.4 | 131.7 | 10.4 / 9.96 | 12.1 / 12.0 | 6.8 / 4.8 | 4.27 / 3.35 |
+
+Sequential medians at n=1000 swing 1.2-2x above the minimum within one JVM (not explained; JIT or GC); 4 threads give
+2.2x by minimum, 2.4-3.3x by median. Where it goes (last trial of each): at n=1000 degree 2 is assembly+sort (358 ->
+89 ms on torus) and phase 1 (489 -> 113 ms, nearly all apparent pairs), both scaling; the serial rest is H0 by
+reduction (70-125 ms; Ripser's union-find would remove it) and degree 1's phase 2b (66-130 ms: ~200 deferred columns
+and ~5,000 additions, as in the explicit experiment). In 10 dimensions 41M columns need ~400 additions and no column is
+deferred from degree 4 up; sequentially 6.0 s is assembly+sort and 3.9 s phase 1 (apparent tests), both of which split
+by block. The edge-based apparent test is worth 14% there (10.4 vs 12.1 s) and nothing measurable at n=1000.
+
+**Why it is 13x the packed engine sequentially** (JFR of the packed engine on the 10-d case, its own frames only): about
+half its samples decode combinatorial indices (`SimplexIndexing.searchRow`, `decodeToArray`: a binary search over
+lazily filled binomial rows, several times per column), about a sixth to a quarter sort (`SortIndices.sort` over
+(diameter, index) with a closure), a tenth test apparent pairs, 3% box `Int`s. The experiment decodes once per column
+from a precomputed table and sorts a primitive `Long`. Against C++ Ripser the 5x is not attributed (C++ not profiled);
+the apparent test explains 14% of it at most.
+
+**Verdict.** Parallel blocks work in an implicit engine and are exact: 2.2-3.3x on 4 cores at n=1000 and 2.4-3.0x in
+10 dimensions, bounded by H0 and degree 1's sequential phase 2b at small degree and by memory bandwidth in assembly.
+The larger, cheaper win is sequential: one decode per column, a primitive sort key, and the edge-based apparent test
+make the same algorithm 2-13x faster than the library's packed engine; against ripser.py's C++ it is on par at
+n = 1000 (0.7-1.2x) and 5x faster in the 10-dimensional case. Limits: one `Long` key needs bits(C(n, maxDim + 2)) + bits(edges) <= 63 (n = 1000 to H2: 55;
+n = 10,000 to H2: 75, too many, so a two-word key); no sparse neighbour lists; cocycles recorded as logs, not
+expanded. Library edits filed: the packed engine #194, the stream engine #193.
