@@ -158,7 +158,7 @@ val torusErrors = coordinates.theta.map { theta =>
 <div class="tab" data-lang="MATLAB">
 
 ```matlab
-javaaddpath('target/out/jvm/scala-3.9.0/tda4j/tda4j-0.5.0-SNAPSHOT-assembly.jar');   % from the repository root, after sbt assembly
+javaaddpath('/path/to/tda4j-VERSION-assembly.jar');
 import org.appliedtopology.tda4j.matlab.*;
 
 % A circle
@@ -186,4 +186,4 @@ plot(theta1, theta2, '.');
 </div>
 </div>
 
-`h1Bars` returns the bars most persistent first, and `circularCoordinates`/`toroidalCoordinates` take the class numbers counted from 0, like every Java index. Unlike the Scala version, these MATLAB entry points cannot cap the complex with `maxFiltrationValue`, so the torus takes noticeably longer. `MatlabTabsSpec` makes these same calls from Scala and checks every number quoted in the MATLAB tab; MATLAB itself is not run by the test suite.
+`h1Bars` returns the bars most persistent first, and `circularCoordinates`/`toroidalCoordinates` take the class numbers counted from 0, like every Java index. Unlike the Scala version, these MATLAB entry points cannot cap the complex with `maxFiltrationValue`, so the torus takes noticeably longer.

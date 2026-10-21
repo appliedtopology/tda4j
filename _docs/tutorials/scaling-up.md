@@ -101,7 +101,7 @@ val collapsedSize = VietorisRips(collapsed, maxDimension = 1).iterator.size
 <div class="tab" data-lang="MATLAB">
 
 ```matlab
-javaaddpath('target/out/jvm/scala-3.9.0/tda4j/tda4j-0.5.0-SNAPSHOT-assembly.jar');   % from the repository root, after sbt assembly
+javaaddpath('/path/to/tda4j-VERSION-assembly.jar');
 import org.appliedtopology.tda4j.matlab.*;
 
 points = readmatrix('_docs/tutorials/data/noisy-circle.csv');
@@ -125,4 +125,4 @@ isequal(sortrows(round(collapsed.toArray() * 1e6)), answers{1})   % true: the sa
 </div>
 </div>
 
-The `engine` option takes `naive`, `chunks`, `cohomology` and `ripser`, and `edgeCollapse` applies to the Vietoris-Rips complex only. `MatlabTabsSpec` makes these same calls from Scala and checks every number quoted in the MATLAB tab; MATLAB itself is not run by the test suite.
+The `engine` option takes `naive`, `chunks`, `cohomology` and `ripser`, and `edgeCollapse` applies to the Vietoris-Rips complex only.

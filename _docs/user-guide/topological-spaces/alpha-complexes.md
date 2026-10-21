@@ -37,14 +37,14 @@ radius at most that value (also `AlphaShapes(points, maxRadius = r)`), and for a
   Carlsson 2024), dimension by dimension, among points within twice the radius of each other. It never builds the
   whole triangulation, so a small radius makes it cheap, and in high ambient dimension it reaches the low-dimensional
   simplices where a Delaunay triangulation is out of reach. Without a radius it is much slower than a triangulation.
-* **`AlphaBackend.Default`** (the default): BowyerWatson for points in at most 4 dimensions, Helix above; with a radius,
+* **`AlphaBackend.Default`** (the default): Bowyer-Watson for points in at most 4 dimensions, Helix above; with a radius,
   DQP instead when it is expected to be faster, judged from how many points lie within twice the radius of a point. In
   general position the result is the same whichever is used.
 
 In degenerate position the alpha complex contains higher-dimensional simplices than a triangulation would: four
-cospherical points span a 3-simplex, so a square grid in the plane produces 3-simplices with DQP. BowyerWatson and
+cospherical points span a 3-simplex, so a square grid in the plane produces 3-simplices with DQP. Bowyer-Watson and
 Helix triangulate such a cluster instead (not necessarily the same way). The persistent homology is the same, up to
 zero-length bars.
 
 For large point clouds, the [fast alpha engine](../homology-computation/fast-alpha-complexes.md) computes the diagram
-of a triangulated (BowyerWatson or Helix) alpha complex without general matrix reduction.
+of a triangulated (Bowyer-Watson or Helix) alpha complex without general matrix reduction.

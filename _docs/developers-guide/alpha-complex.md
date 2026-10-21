@@ -5,7 +5,7 @@ title: "Alpha complex: Bowyer-Watson, Helix and DQP"
 
 Three backends compute alpha complexes; `AlphaShapes(points, backend)` (`alpha/AlphaShapes.scala`) chooses between
 them. Two triangulate (`BowyerWatsonDelaunay`, `HelixDelaunay`, both `DelaunayAlphaShapes`); `AlphaComplexDQP` does not. This page is the developer-facing view. For the user-facing framing (which one to
-pick, and the honest tradeoffs), see the [User's Guide](../user-guide/index.md).
+pick, and the tradeoffs), see the [User's Guide](../user-guide/index.md).
 
 ## Dispatch
 
@@ -41,6 +41,13 @@ repeated points; the base enumerates the faces (a hash table of sorted vertex ro
 its immediate cofaces), assigns values top-down by the Gabriel rule below, and sorts each dimension in the filtration
 order. Circumspheres come from a Householder QR of the edge vectors (the Gram system squares the condition number and
 lost digits on slivers).
+
+The geometry it works with is public. `Hyperplane(normal, offset)` is `{ x : normal . x = offset }`, with `isLight`
+telling which side a point is on. `Hypersphere(center, radius)` (given an `Epsilon`) has `contains` and `onSphere`, and
+`Hypersphere(points)` is the sphere through a point set (a least-squares solve by singular value decomposition).
+`DelaunaySimplex(simplex, circumsphere)` pairs a simplex of the triangulation with its circumsphere.
+`LimitedAlphaShapesStream(helix, maxDim)` is the alpha complex without its simplices above `maxDim`, with the same
+values and order; `FastAlphaHomologyEngine` uses it for the degrees between `H_0` and `H_{d-1}`.
 
 ## `BowyerWatsonDelaunay` — incremental Delaunay with exact predicates, 1 to 4 dimensions
 
@@ -136,13 +143,13 @@ the paper's Definition 10 — `AlphaComplexDQP.radiusOf` takes the square root, 
 `HelixDelaunay.filtrationValue`'s units. The dual objective only needs *squared distances*:
 `B_ij = (d²(i,x) + d²(j,x) - d²(i,j))/2` — which is why `PowerDistance` sits on squared distance rather than
 extending `FiniteMetricSpace` directly, bridging via `PowerDistance.toMetricSpace` only where interop is
-actually needed (e.g. `cechNeighbours()`'s VP-tree spatial index). **Caveat**: `B` is PSD only for
+needed (e.g. `cechNeighbours()`'s VP-tree spatial index). **Caveat**: `B` is PSD only for
 Euclidean-embeddable metrics.
 
 `AlphaShapeDQP` always computes the complete, **untruncated** alpha complex, matching `HelixDelaunay`'s own
 always-untruncated behavior (a finite radius bound would silently exclude the arbitrarily-large-circumradius
 simplices degenerate configurations legitimately produce — see [Degeneracies](degeneracies.md)).
-Callers who want an actually radius-truncated alpha complex should call `AlphaComplexDQP.euclidean(points,
+Callers who want a radius-truncated alpha complex should call `AlphaComplexDQP.euclidean(points,
 maxRadius, maxDimension, settings)` directly.
 
 ### Numerical robustness

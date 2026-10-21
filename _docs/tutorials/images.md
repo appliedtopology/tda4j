@@ -175,7 +175,7 @@ val fastBars = FastCubicalHomologyEngine[Double]().persistentHomology(stream)
 <div class="tab" data-lang="MATLAB">
 
 ```matlab
-javaaddpath('target/out/jvm/scala-3.9.0/tda4j/tda4j-0.5.0-SNAPSHOT-assembly.jar');   % from the repository root, after sbt assembly
+javaaddpath('/path/to/tda4j-VERSION-assembly.jar');
 import org.appliedtopology.tda4j.matlab.*;
 
 % The same image as the Scala script, drawn from the same Java random number generator
@@ -213,4 +213,4 @@ size(dark.toArrayUnfiltered(), 1)                                 % 221 bars in 
 </div>
 </div>
 
-The facade takes an image as a matrix and has the engine choice as an option. `sublevel` false filters the *negated* image, which is why the bright features have negative births and deaths. `MatlabTabsSpec` makes these same calls from Scala and checks every number quoted in the MATLAB tab; MATLAB itself is not run by the test suite.
+The facade takes an image as a matrix and has the engine choice as an option. `sublevel` false filters the *negated* image, which is why the bright features have negative births and deaths.

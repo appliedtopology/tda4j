@@ -4,11 +4,9 @@ title: Hard-won invariants you must not break
 ---
 
 
-These are the load-bearing, non-obvious rules this codebase depends on. Every one of them was found by a
-real bug, not by reading a spec — which is itself the pattern worth internalizing (see
-[Process: validate empirically, not by inspection](#process-validate-empirically-not-by-inspection) at the
-bottom). If you're extending the persistence engines, complex-construction streams, or anything
-Ripser-flavored, read this page in full before you start.
+These are the non-obvious rules the code depends on. Each came from a real bug. If you are extending the persistence
+engines, the streams or anything Ripser-flavored, read the page in full first; the last section says how to test a
+change to them.
 
 ## 1. `given`/implicit resolution happens once, at construction, not per call
 
@@ -29,9 +27,8 @@ order, not filtration order, regardless of what's nominally in scope at the call
 **The fix pattern, everywhere it's applied**: declare `given Ordering[CellT] = stream.filtrationOrdering`
 as the *first* statement inside whatever state object holds the stream, before summoning `chainRM`.
 
-This is genuinely dangerous rather than a style nit because it compiles cleanly either way and only
-manifests as a wrong *answer* on inputs where lexicographic and filtration order actually disagree — most
-hand-built fixtures don't exercise that unless someone deliberately constructs one (a fixture with vertex 1
+This is not a style nit: it compiles either way and gives a wrong *answer* only on inputs where lexicographic and
+filtration order disagree. Most hand-built fixtures do not exercise that unless built to (a fixture with vertex 1
 born early and vertex 9 born late is the minimal discriminator). **Not every class-scope `chainRM` instance
 is a live bug**: whether it matters depends on whether anything downstream trusts that instance's output
 directly for pivot identity, or whether every consumer re-resolves ordering itself (e.g. via
@@ -72,8 +69,7 @@ independently be a valid tie-break.
 
 `Chain`'s `+`/`-`/`⊠` operators only lazily collapse the *head* of the underlying `PriorityQueue`, so a
 hand-rolled fold that repeatedly subtracts terms builds an ever-growing backlog of uncollapsed duplicate
-entries — confirmed directly by a first draft that hung on an 8-12 point complex that should take
-milliseconds. `Chain.reduceBy`/`reduceByUntil` go through a `SortedMap` that collapses duplicates on every
+entries, which can make a reduction of a small complex hang. `Chain.reduceBy`/`reduceByUntil` go through a `SortedMap` that collapses duplicates on every
 insertion. Reserve raw chain arithmetic for small, one-shot combinations (building a V-column fold), never
 for anything that accumulates over many reduction steps.
 
@@ -127,7 +123,7 @@ val xs: IndexedSeq[Simplex[Int]] = ...
 xs.forall(...)
 ```
 
-## 9. Dowker streams must reject genuinely infinite filtration values
+## 9. Dowker streams must reject infinite filtration values
 
 `DowkerGeometry.fromBoolean` uses `+Infinity` to represent a relation that is
 never witnessed. Since `+Infinity <= +Infinity` is true, the usual
@@ -166,14 +162,10 @@ others.
 
 ## Process: validate empirically, not by inspection
 
-Every substantive design decision in this codebase's persistence-engine work (pivot orientation, whether
-clearing is optional, whether an ordering fix is complete, whether an optimization is sound) has gone
-through at least one empirical discriminating test before being trusted — never a plausibility argument
-alone, even a careful one. "This class-scope `chainRM` should be inert because X" has been both correct and
-wrong for structurally similar-looking classes in this codebase; only a discriminating test told the two
-apart.
+Pivot orientation, optional clearing, the completeness of an ordering fix and the soundness of an optimization are
+settled by a discriminating test, not by a plausibility argument: "this class-scope `chainRM` should be inert
+because X" is right for some classes and wrong for structurally similar ones.
 
-The pattern to carry into new work: **when a change to reduction/ordering logic seems obviously sound by
-inspection, build the cheap discriminating test anyway before implementing it for real.** A good
+**When a change to reduction or ordering logic seems obviously sound, write the cheap discriminating test first.** A good
 discriminating fixture deliberately puts filtration order and some other natural order (vertex label,
 insertion order) in conflict — a fixture where they happen to agree will not catch this class of bug.
