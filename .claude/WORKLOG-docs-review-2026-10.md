@@ -75,3 +75,18 @@ plotting references that need no ScalaDoc; migration guides.
   Unverified: the claim that GUDHI and JavaPlex omit zero-length bars (left as "check your version").
 - Unverified in general: the docs build (CI runs it); the CLI reference's exit-status line for argument parse errors
   (Scallop's default exit code).
+
+## Step 6: capabilities no page described (#179)
+
+Audit by name match, then a read of each unmatched item. Added: the files page now lists every reader and writer by
+data kind (point clouds, distance matrices, grids, diagrams); new `barcode-algebra.md` (image/kernel/cokernel with the
+spec's own example, results as in `BarcodeSpec`); new `utilities.md` (dense matrices, `LinearAlgebra`, conjugate
+gradient, `Erf`, `Kruskal`, neighbour search, group helpers).
+
+Corrections to the audit: `isPowerOfP`, `compose` and `asPermutation` are local defs inside other methods, not public;
+`nearestNeighbors` belongs to `SpatialQuery`/`VantagePointTree`, not `FiniteMetricSpace`; `GreedyPermutation` is only
+the result type of `LandmarkSelector.maxmin`, already documented.
+
+Unverified: the snippets in the two new pages are checked only by the docs build (CI); the `utilities.md` field
+example mirrors `SSetMapSpec`. The dev-only items of #179 (alpha geometry types, `Limited*` wrappers, matchings) are
+still undocumented.

@@ -494,9 +494,8 @@ the one thread, giving the same answer.
 `OpenEndpoint`/`ClosedEndpoint`, with a total order that correctly interleaves finite and infinite
 endpoints) and `PersistenceBar[FiltrationT, AnnotationT]` (dimension, lower/upper endpoint, an optional
 annotation — in practice always the representative `Chain`). `Barcode` additionally implements algebra on
-finitely-presented persistence modules: `image`/`kernel`/`cokernel` of a map between two barcodes
-represented as a matrix — useful for interleaving distances or persistence-module morphisms, not needed for
-ordinary persistent-homology computation.
+finitely presented persistence modules: `image`/`kernel`/`cokernel` of a map between two barcodes given as a matrix
+(see [maps between barcodes](../user-guide/barcode-algebra.md)). Ordinary persistent-homology computation does not use it.
 
 `BarcodeDistance` and `Vectorization` provide downstream operations on
 computed persistence diagrams, including diagram distances, landscapes, and

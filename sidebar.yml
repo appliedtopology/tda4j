@@ -59,5 +59,7 @@ subsection:
       - page: user-guide/boundary-matrix.md
       - page: user-guide/circular-coordinates.md
       - page: user-guide/input-output.md
+      - page: user-guide/barcode-algebra.md
+      - page: user-guide/utilities.md
       - page: user-guide/vectorization.md
       - page: user-guide/plotting.md
