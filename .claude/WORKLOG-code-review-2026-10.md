@@ -68,6 +68,15 @@ alpha (#155) and the release workflow (#150, #151) were left alone.
 - **[probe] ok:** empty/NaN/Inf images, one point, two identical points, bad characteristic (clear message), negative
   `maxDimension`, distance matrices that are not symmetric (lower triangle by design).
 
+## Diagram queries, vectorizations, sset
+
+- **[probe] `d.at(f).bettiNumbers` was all zeros** (alive classes are closed bars `[birth, f]`, and `bettiNumbers` counted
+  essential ones only). Now counts classes alive at the end of the diagram; a circle of 12 points gives (12,0), (1,1),
+  (1,0) at 0.3, 0.9, 5.0. Fixed in the PR (`PersistenceVerbSpec`).
+- **[probe] `sset` group homology is right** on Z/4, Z/6, Z/2xZ/2, S3, A4 against the known `H_*(BG; F_p)` (A4 at p=2
+  matches the Poincare series `(1 + t^3) / ((1 - t^2)(1 - t^3))`).
+- **[reading] ok:** `Vectorization` (landscape/image formulas), SVG text is escaped, the plot viewer binds 127.0.0.1.
+
 ## Not yet reviewed (in priority order)
 
 the `homology/` engine sources (fuzzed above), the remaining streams (witness, Dowker, DTM,
