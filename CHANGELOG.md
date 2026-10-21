@@ -9,6 +9,11 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Breaking
 
+- The tolerance of the triangulations is relative: `HelixDelaunay`, `BowyerWatsonDelaunay` and `AlphaShapes(...)` take a
+  `using EpsilonFactor` (default `EpsilonFactor(1e-5)`, a fraction of the points' largest coordinate range) in place of
+  `using Epsilon`; a `given Epsilon` in your code is no longer read there. `Epsilon` stays the absolute tolerance of the
+  lower-level geometry (`Hyperplane`, `Hypersphere`). At an extent of 1 nothing changes.
+
 - `Plot.save` (and `PersistenceResult.save`, and so the MATLAB `save`) return the absolute path as a `String`, not a
   `java.nio.file.Path`: the Scala.js build has no `java.nio.file`. Call `Paths.get(result)` where you need a `Path`.
 - `CubicalImage.fromBufferedImage` and `CubicalImage.fromFile` are members of the JVM build only (they are still there, on
@@ -142,6 +147,9 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Fixed
 
+- The alpha complex on the BowyerWatson, Helix and Default backends gave a different filtration, and extra H1 bars, for
+  points spanning less than about 0.1: the `1e-5` tolerance was absolute. It is now a fraction of the extent
+  (`EpsilonFactor`), so the barcode of `c * points` is `c` times that of `points`.
 - `Cech`, `Witness`, `Dowker`, `DtmRips` and `SparseRips` built dimension `d + 1` by enumerating and testing every
   `(d + 1)`-subset of the points instead of extending the simplices kept in dimension `d`, so a sparse complex cost as
   much as a dense one; they extend the kept simplices, and give the same complex cell for cell.
