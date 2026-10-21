@@ -131,11 +131,10 @@
 </span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.*
 </span><span line-number="3" class=""><span class="tooltip-container"></span>
 </span><span line-number="4" class=""><span class="tooltip-container"></span>given Double is Field = Field.DoubleApproximated(1e-9)
-</span><span line-number="5" class=""><span class="tooltip-container"></span>given Epsilon = Epsilon(1e-5)        // the numerical tolerance of the triangulation
-</span><span line-number="6" class=""><span class="tooltip-container"></span>
-</span><span line-number="7" class=""><span class="tooltip-container"></span>val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.8), Array(0.2, 0.5))
-</span><span line-number="8" class=""><span class="tooltip-container"></span>val delaunay = BowyerWatsonDelaunay(points)  // or HelixDelaunay(points) above 4 dimensions
-</span><span line-number="9" class=""><span class="tooltip-container"></span>val bars = FastAlphaHomologyEngine[Double]().persistentHomology(delaunay)
+</span><span line-number="5" class=""><span class="tooltip-container"></span>
+</span><span line-number="6" class=""><span class="tooltip-container"></span>val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, 0.8), Array(0.2, 0.5))
+</span><span line-number="7" class=""><span class="tooltip-container"></span>val delaunay = BowyerWatsonDelaunay(points)  // or HelixDelaunay(points) above 4 dimensions
+</span><span line-number="8" class=""><span class="tooltip-container"></span>val bars = FastAlphaHomologyEngine[Double]().persistentHomology(delaunay)
 </span></code></pre>
    <div class="buttons"></div>
   </div>

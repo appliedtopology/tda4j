@@ -135,7 +135,7 @@
 </span><span line-number="5" class=""><span class="tooltip-container"></span>    requireValidTriangulation: Boolean = false,
 </span><span line-number="6" class=""><span class="tooltip-container"></span>    maxRadius: Optional[Double] = Optional.empty,
 </span><span line-number="7" class=""><span class="tooltip-container"></span>    maxDimension: Optional[Int] = Optional.empty
-</span><span line-number="8" class=""><span class="tooltip-container"></span>  )(using epsilon: Epsilon = Epsilon(1e-5)): AlphaShapes
+</span><span line-number="8" class=""><span class="tooltip-container"></span>  )(using factor: EpsilonFactor): AlphaShapes   // default EpsilonFactor(1e-5), a fraction of the extent of the points
 </span></code></pre>
    <div class="buttons"></div>
   </div>
