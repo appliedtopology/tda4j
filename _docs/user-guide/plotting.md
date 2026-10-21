@@ -9,6 +9,9 @@ the library, in the package `org.appliedtopology.tda4j.plot`, and need no other 
 a small built-in 3-D viewer, and they show up in your browser while you work in a REPL. The API is young and may still
 change between releases.
 
+The sections up to [What there is](#what-there-is) are all that most readers need. Everything under
+[Customizing a plot](#customizing-a-plot) is reference: look up the element you want to change.
+
 ## In a REPL: `view()`
 
 ```scala
@@ -108,7 +111,7 @@ A result computed from a distance matrix or a relation has no coordinates: it dr
 and persistence images, and says so for the rest. The command line draws the same figures with `--plot`:
 
 ```
-java -jar tda4j-assembly.jar --max-dimension 1 --save-result circle.json noisy-circle.csv
+java -jar tda4j-VERSION-assembly.jar --max-dimension 1 --save-result circle.json noisy-circle.csv
 java -jar tda4j-assembly.jar --plot diagram --output diagram.svg circle.json
 java -jar tda4j-assembly.jar --plot representative circle.json
 ```
@@ -367,7 +370,7 @@ val stars = Plot.diagram(d).withPoints(shape = Shape.Glyph("★"), size = 7, edg
 draws an open marker, an outline in its own color 1.5 pixels wide; the edge has a width (0 for none), a color or a palette
 role, an opacity and a dash, and `edgeVisible = false` takes it away. A plus, a cross and a bar are strokes: their edge is
 their color and their width is the edge's. A degree's markers (`Scale.degree(k, marker = MarkerStyle(...))`) win over the
-plot's, which win over the plot's own. A 3-D scene's points are round and filled, and take a size, an opacity and an edge.
+plot's marker settings, which win over the default. A 3-D scene's points are round and filled, and take a size, an opacity and an edge.
 
 **As text**, a shape is a name (`triangle-down`, `star`, `plus`, ...), a one-letter code of matplotlib (`o . ^ v < > s p h * + x
 D | _`), a number of R and ggplot's `pch` (`pch:16`, or a bare `0` to `25`: 0 to 14 are open shapes, 15 to 25 filled, the
@@ -727,16 +730,42 @@ val barcode = Plot.barcode(d) + Mark.Rule.vertical(0.5)
 
 ### From MATLAB and the command line
 
-MATLAB has no named or default arguments and cannot build a `Palette` or a `Transform`, so every figure also has the
-common changes as methods that take only strings and numbers, and return the changed figure: `withTitle`, `withSubtitle`,
-`withXLabel`, `withYLabel`, `withLegendTitle`, `withColorLabel`, `withSize(width, height)`, `withXScale('log')`
-(`'linear'`, `'log'`, `'sqrt'` or `'symlog'`), `withYScale`, `withXRange(min, max)`, `withYRange`,
-`withPalette('print')` (`'brand'`, `'reference'`, `'print'` or `'clear'`), `withStyle('print')` (`'default'`,
-`'slides'`, `'print'` or `'clear'`), `withDegreeColor(k, '#c2185b')`, `withDegreeLabel(k, 'loops')`,
-`withTextScale(1.3)`, `withMarkScale`, `withLegend('lower-right')` (`'right'`, `'left'`, `'top'`, `'bottom'`, `'upper-left'`, `'upper-right'`, `'lower-left'`, `'lower-right'` or `'none'`), `withoutGrid()` and
-`withTransparentBackground()` and, for everything finer, `withSetting('title.size=18')` (see above); a 3-D scene has the
-ones that need no axes. `save` takes the theme by name:
-`fig.save('diagram.svg', 'dark')`.
+MATLAB and Java have no named or default arguments and cannot build a `Palette` or a `Transform`. Every figure
+therefore has its changes as methods that take only strings and numbers; each returns the changed figure, so they chain.
+A `plot...` method of a result returns a figure (a `plot...3D` method a scene), and a scene has the subset marked below.
+
+**Showing and saving**
+
+| method | does |
+|---|---|
+| `view()` | shows the plot in the live viewer, a browser tab (see [In a REPL](#in-a-repl-view)) |
+| `save(path)` | writes an `.svg` (plain light colors) or an `.html` page (follows the reader's light or dark setting) and returns the absolute path |
+| `save(path, theme)` | the same with the theme `'light'`, `'dark'` or `'auto'` |
+
+**Changes** (a scene has those marked 3-D)
+
+| method | changes |
+|---|---|
+| `withTitle(text)`, `withSubtitle(text)` (3-D) | the title and subtitle |
+| `withXLabel(text)`, `withYLabel(text)`, `withLegendTitle(text)`, `withColorLabel(text)` | the axis labels, the legend heading, the color bar title |
+| `withCaption(text)`, `withTag(text)`, `withDescription(text)` | the line under the plot, the panel tag, the description a screen reader reads |
+| `withSize(width, height)` (3-D) | the size in pixels |
+| `withXScale(name)`, `withYScale(name)` | `'linear'`, `'log'`, `'sqrt'` or `'symlog'` |
+| `withXRange(min, max)`, `withYRange(min, max)` | the visible range of an axis |
+| `withAspect(ratio)` | the length of a y unit over an x unit |
+| `withPalette(name)` (3-D) | `'brand'`, `'reference'`, `'print'` or `'clear'` |
+| `withStyle(name)` (3-D) | `'default'`, `'slides'`, `'print'` or `'clear'` |
+| `withDegreeColor(k, color)` (3-D), `withDegreeLabel(k, label)` | the color (`'#c2185b'`) and legend label of degree `k` |
+| `withTextScale(factor)` (3-D), `withMarkScale(factor)` (3-D) | a factor on the size of text, of marks and lines |
+| `withLegend(position)` | `'right'`, `'left'`, `'top'`, `'bottom'`, `'upper-left'`, `'upper-right'`, `'lower-left'`, `'lower-right'` or `'none'` |
+| `withoutGrid()` | removes the gridlines |
+| `withTransparentBackground()` (3-D) | draws no background |
+| `withLocale(tag)` | writes numbers as a locale does (`'de'`, `'sv'`, ...) |
+| `withSetting(spec)` (3-D) | any change of an element, as `'element.property=value'` (see [finer control](#finer-control-text-lines-the-plot-area-the-sides-of-the-axes)) |
+| `withCamera(azimuth, elevation, zoom)` (3-D only) | the view of a 3-D scene |
+
+A word that is not one of those listed, or a change a plot cannot have, throws an `IllegalArgumentException` that says what to write
+instead. The boards and layout grids of the Scala API have no MATLAB or command-line counterpart.
 
 <div class="tabset">
 <div class="tab" data-lang="Scala">

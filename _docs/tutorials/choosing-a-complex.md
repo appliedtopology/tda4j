@@ -86,7 +86,7 @@ by the approximation. Smaller `ε` is closer to plain Rips and larger complexes.
 The witness complex first picks a small set of landmark points (here 15, chosen by the furthest-point rule so that they cover the
 cloud evenly) and builds the complex on them only, using the other points as witnesses that decide which simplices exist. That
 makes it tiny (441 simplices) and very cheap, at the cost of thinking about landmarks. The loop is still there, at its own
-scale. See the [user guide](../user-guide/topological-spaces/sparse-vietoris-rips.md) for choosing landmarks and the two witness
+scale. See the [user guide](../user-guide/topological-spaces/witness-complexes.md) for choosing landmarks and the two witness
 variants.
 
 ## Which one?
@@ -131,7 +131,7 @@ val sizes = List(
 <div class="tab" data-lang="MATLAB">
 
 ```matlab
-javaaddpath('target/out/jvm/scala-3.9.0/tda4j/tda4j-0.5.0-SNAPSHOT-assembly.jar');   % from the repository root, after sbt assembly
+javaaddpath('/path/to/tda4j-VERSION-assembly.jar');
 import org.appliedtopology.tda4j.matlab.*;
 
 points = readmatrix('_docs/tutorials/data/noisy-circle.csv');
@@ -157,4 +157,4 @@ end
 </div>
 </div>
 
-In MATLAB a complex is a value of the `complex` option rather than a function, and `numCells()` is the number of simplices the engine had to process. `MatlabTabsSpec` makes these same calls from Scala and checks every number quoted in the MATLAB tab; MATLAB itself is not run by the test suite.
+In MATLAB a complex is a value of the `complex` option rather than a function, and `numCells()` is the number of simplices the engine had to process.

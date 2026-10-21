@@ -3,30 +3,22 @@ layout: main
 title: Persistence engines: what to trust, and why
 ---
 
-`homology/Homology.scala`, `homology/PackedRipserCohomology.scala`, `homology/Cohomology.scala`,
-`homology/FastCubicalHomology.scala`, and `homology/FastAlphaHomology.scala` contain **five
-independently-implemented algorithms across seven concrete classes** (the last two classes share one
-algorithm — a dual-graph union-find via Alexander duality — applied to two different cell types, the same
-"one algorithm, several concrete classes" relationship engines 3/4 already have). They share the `Chain`
-reduction primitives from [Architecture](architecture.md), but they are not variants of one shared engine — a
-fix or bug found in one does not imply anything about the others. Read this page before choosing which engine
-to build on.
+The engines live in `homology/` (`Homology.scala`, `PackedRipserCohomology.scala`, `Cohomology.scala`,
+`FastCubicalHomology.scala`, `FastAlphaHomology.scala`, `PackedCubicalCohomology.scala`): five algorithms in several
+concrete classes. Engines 3 and 4 are one algorithm in two representations, and the two fast engines share one
+algorithm (a dual-graph union-find by Alexander duality) on two cell types. They share the `Chain` reduction primitives
+from [Architecture](architecture.md) but are not variants of one engine: a fix or bug in one says nothing about the
+others. Read this page before choosing which to build on.
 
-`PackedCubicalCohomologyEngine` (`homology/PackedCubicalCohomology.scala`) is
-an eighth class: engine 4's algorithm (clearing, apparent pairs, a packed
-involution) on a cubical grid's own cell indices, with no `Cube` or `Chain`
-inside the reduction. It must equal engine 5 on any `CubicalGridStream`, bar
-for bar and term for term. It is what `Engine.Cohomology` and engine 6's
-middle degrees run on a grid.
+`PackedCubicalCohomologyEngine` is engine 4's algorithm (clearing, apparent pairs, a packed involution) on a cubical
+grid's own cell indices, with no `Cube` or `Chain` inside the reduction. It must equal engine 5 on any
+`CubicalGridStream`, bar for bar and term for term. `Engine.Cohomology` and engine 6's middle degrees run it on a grid.
 
-Three of the five (`CellularHomologyEngine`, `CellularPersistenceInChunksEngine`, `CellularCohomologyEngine`)
-additionally implement the common `PersistenceEngine[CellT, C]` trait (`def barcode(stream): List[
-PersistenceBar[Double, Chain[CellT, C]]]`) via `PersistenceEngine.naive`/`.chunks`/`.cohomology` factories — a
-thin, opt-in adapter over each engine's own incremental API, for a caller (the MATLAB/CLI facade) that just
-wants a finished barcode without hand-writing each engine's own construct/advance/read dance. It does not
-change any engine's own contract; the incremental API (`advanceTo`/`diagramAt`/`barcodeAt`) stays available on
-the concrete class. `PackedRipserCohomologyEngine`/`RipserCohomologyEngine` don't implement it — they consume
-a `FiniteMetricSpace[Int]` directly, not a stream (see engine 4 below).
+`CellularHomologyEngine`, `CellularPersistenceInChunksEngine` and `CellularCohomologyEngine` also implement the
+`PersistenceEngine[CellT, C]` trait (`def barcode(stream): List[PersistenceBar[Double, Chain[CellT, C]]]`) through the
+`PersistenceEngine.naive`/`.chunks`/`.cohomology` factories: an adapter for callers, such as the MATLAB and CLI facade,
+that want a finished barcode. Each engine's incremental API (`advanceTo`/`diagramAt`/`barcodeAt`) stays available on
+the concrete class. The Ripser engines take a `FiniteMetricSpace[Int]` rather than a stream and do not implement it.
 
 ## 1. `CellularHomologyEngine` / `SimplicialHomologyEngine` — reference-grade, generic
 
@@ -58,11 +50,11 @@ parallelizable "clear-and-compress" algorithm: local reduction per chunk, active
 column compression/reduction. `PersistenceInChunksEngine[VertexT, CoefficientT]` is a one-line
 `Simplex`-specialized subclass, mirroring `SimplicialHomologyEngine`'s relationship to engine 1 — the class
 has no `Simplex`-specific behavior anywhere in its body, so any `OrderedCell` slots in directly.
+`CubicalPersistenceInChunksEngine[CoefficientT]` is the same one-line subclass for `Cube`s.
 
 Dimensions 0 and 1 go through a dedicated union-find fast path (`unionFindDim01`) instead of the general
-`Chain`-based reduction, since both dimensions are mathematically forced to agree with the general machinery
-on a fixed total order — a real, measured win when a large point cloud's dimension-0/1 structure dominates
-the complex. `barcodeAt(f)` returns a real representative for **every** bar, at every dimension, including
+`Chain`-based reduction, which gives the same result on a fixed total order and is much faster when a large point cloud's
+dimension-0/1 structure dominates the complex. `barcodeAt(f)` returns a real representative for **every** bar, at every dimension, including
 essential classes — reconstructed incrementally from this class's own already-computed
 `boundaries`/`cleared`/`paired`/`killer` state (`vcolOf`, memoized) rather than by delegating to a second
 engine run. `advanceAll()` runs the whole pipeline in one shot; there is no incremental querying the way
@@ -102,14 +94,11 @@ Persistent *co*homology via Ulrich Bauer's Ripser algorithm (arXiv:1908.02518), 
 deliberate narrowing from the generic `CellT: OrderedCell` engines above. One-shot only
 (`persistentCohomology()`, no incremental querying).
 
-**This class is not what production code calls.** `PackedRipserCohomologyEngine` (engine 4) is a faithful
-re-keying of the same algorithm onto a packed representation, and is what `matlab.TDA4j`'s
-`engine="ripser"` actually uses. This class's remaining value is narrower than "an independent check on the
-Ripser algorithm": both classes share `SimplexIndexing`, so a bug there passes both silently (engine 1 is the
-actually-independent oracle for the algorithm itself). What this class *does* catch is anything specific to
-engine 4's own packed representation — its `DiameterIndex` carrier's index-only `equals`/`hashCode`, its
-index-keyed lookup maps — that no other spec would flag. Its `Simplex[Int]`-keyed chains are also more
-directly legible for hand-debugging. Kept fully maintained; don't add new production call sites against it.
+**Production code does not call this class.** `PackedRipserCohomologyEngine` (engine 4) is the same algorithm on a
+packed representation, and is what `engine="ripser"` uses. Both share `SimplexIndexing`, so a bug there passes both;
+engine 1 is the independent oracle for the algorithm. This class catches what is specific to engine 4's packed
+representation (its `DiameterIndex` carrier's index-only `equals`/`hashCode`, its index-keyed lookup maps), and its
+`Simplex[Int]`-keyed chains are easier to debug by hand. It is maintained; do not add production call sites.
 
 Structural points worth knowing:
 
@@ -130,7 +119,7 @@ Vietoris-Rips/`SimplexIndexing` rather than a general engine.
 
 `DiameterIndex` overrides `equals`/`hashCode` to consider only the combinatorial index, not the diameter —
 so "same simplex" is true by construction regardless of which floating-point path computed its diameter,
-sidestepping a real footgun (two carriers for the same simplex comparing unequal on floating-point noise).
+so two carriers for the same simplex never compare unequal on floating-point noise.
 
 **Reduction internals.** The column being reduced is Ripser's working column: a binary heap of
 (diameter, index, coefficient) entries in primitive arrays, to which adding a column only pushes entries; equal
@@ -161,16 +150,13 @@ part of any result.
 
 ## 5. `CellularCohomologyEngine` — generic cohomology, for every cell type
 
-Persistent *co*homology, generic over `CellT: OrderedCell` — the cohomology counterpart to engine 1, filling
-in what used to be a real asymmetry: cohomology in this codebase meant engines 3/4 only, both hardcoded to
-`Simplex[Int]`. `Cube`, `FiniteSimplicialSet` generators, and `Simplex[Int]` complexes that aren't
-Vietoris-Rips (Cech, Alpha, the general witness complex) had no cohomology option at all before this class —
-not even Cech/Alpha, despite sharing `Simplex[Int]` as a cell type, since engines 3/4's speed optimizations
-(`insertionDiameter`, apparent pairs) are proven specifically for the max-pairwise-distance functional, not
-Cech's circumradius, Alpha's own filtration, or the general witness complex's per-dimension threshold. (The
-*lazy* witness complex is the one exception among these: it genuinely IS a max-pairwise-distance flag
-complex under its own `WitnessMetricSpace`, so engines 3/4 both work for it directly — see
-`architecture.md`'s "Witness complexes" section.)
+Persistent *co*homology, generic over `CellT: OrderedCell`: the cohomology counterpart to engine 1. It serves every
+cell type: `Cube`, `FiniteSimplicialSet` generators, and the `Simplex[Int]` complexes that are not Vietoris-Rips
+(Cech, Alpha, the general witness complex). Engines 3 and 4 cannot: their speed optimizations (`insertionDiameter`,
+apparent pairs) are proven only for the max-pairwise-distance functional, not for Cech's circumradius, Alpha's own
+filtration, or the general witness complex's per-dimension threshold. The lazy witness complex is the exception: it is
+a max-pairwise-distance flag complex under its own `WitnessMetricSpace`, so engines 3 and 4 work for it (see
+"Witness complexes" in `architecture.md`).
 
 **The key idea**: the coboundary matrix persistent cohomology reduces is the transpose of the ordinary
 boundary matrix, same coefficients. Every stream this class targets already gets fully materialized before
@@ -180,9 +166,8 @@ at a time (built, used, and discarded before moving to the next dimension, bound
 largest single band) — no `SimplexIndexing`-style combinatorial machinery, and no per-cell-type coboundary
 formula.
 
-**No `maxDim` parameter, and no apparent pairs — both deliberate.** The engine has no `maxDim` parameter; callers truncate the input stream when
-needed. Apparent-pair optimizations are not used because the coboundary
-relation is already materialized explicitly.
+**No `maxDim` parameter and no apparent pairs.** Callers truncate the input stream when needed, and the coboundary
+relation is already materialized, so apparent-pair optimizations have nothing to save.
 
 **Representatives**: Every bar carries a V-column. Essential bars yield genuine cocycles over the
 full complex; finite bars carry representatives valid over their persistence
@@ -206,6 +191,20 @@ gives an essential bar.
 
 Representatives are reconstructed from the active dual components so the
 result remains compatible with the rest of the persistence API.
+
+Its pieces are public:
+
+- `SignedUnionFind[C](size)` is a union-find whose elements carry an orientation in the field `C`. `union(young, old,
+  flip)` hangs one root under another and multiplies the young component's orientations by `flip`; `find` composes
+  orientations along the path; `members(root)` lists a frozen region with its orientations relative to the root, which
+  is how a representative is read off. `UnitSignedUnionFind(size)` is the same with orientations `±1` kept in bytes,
+  exact whenever every flip is `±1` as in the cubical dual.
+- `DoubledGrid` walks the doubled grid (coordinate `2a` is the point `a`, `2a + 1` the interval `[a, a + 1]`) one
+  prefix at a time, so a caller can run a tight loop along the last axis.
+- `GridCellOrder` is the order `PackedCubicalCohomologyEngine` puts on the cubes of one grid: the rank of a cell's
+  value, then its doubled-grid index.
+- `LimitedCubicalGridStream(stream, maxDim)` is a grid stream cut off above a cell dimension, with the same values and
+  order; the engine uses it for the degrees between `H_0` and `H_{d-1}`.
 
 ## 7. `FastAlphaHomologyEngine` — dual union-find for alpha complexes
 
@@ -250,8 +249,7 @@ cursor gives what a fresh cursor would. `snapshotAt(f)` copies the answer into
 an immutable `PersistenceDiagram`.
 
 Engine 2 answers `diagramAt(f)` and `barcodeAt(f)` with the same contract, but
-it runs the whole reduction on its first query and has no cursor. `DiagramQuerySpec` pins
-the contract for both engines.
+it runs the whole reduction on its first query and has no cursor.
 
 ## Cycles and cocycles from one pairing: `Involution`
 
@@ -299,11 +297,11 @@ listed below.
 |-------------------------------|-----------------|------------------------------------------------------|---------|-----------------------------------------------------|--------------|----------------|--------------|
 | `vr`                          | `ripser`        | yes                                                    | yes     | yes                                                   | yes          | **no**         | **no**       |
 | `cech`                        | `cohomology`         | **no** — not a max-pairwise-distance functional (radius, not diameter) | yes | yes | yes          | **no**       | **no**       |
-| `witness`, `witnessVariant=lazy`    | `ripser`  | yes — genuinely a flag complex under its own reified `WitnessMetricSpace` | yes | yes | yes | **no** | **no** |
+| `witness`, `witnessVariant=lazy`    | `ripser`  | yes — a flag complex under its own reified `WitnessMetricSpace` | yes | yes | yes | **no** | **no** |
 | `witness`, `witnessVariant=general` | `cohomology`   | **no** — not a flag complex (dimension-specific threshold) | yes | **no** | yes | **no** | **no** |
 | `dtm-rips`                    | `cohomology`         | **no** — vertices aren't born at 0, and the weighted-Rips functional isn't `insertionDiameter`-compatible | yes | yes | yes | **no** | **no** |
 | `dtm-alpha`                   | `cohomology`         | **no** — no notion of a Vietoris-Rips complex at all   | yes     | **no** — shares `AlphaComplexDQP`'s known stall/OOM risk (see `alpha-complex.md`) | yes | **no** | **no** — always uses `AlphaComplexDQP`, never a triangulation |
-| `alpha`                       | `cohomology`         | **no** — no notion of a Vietoris-Rips complex at all   | yes     | **no** — known stall/OOM risk (`HomologySpec`'s `BarcodeRegressionSpec`) | yes | **no** | **yes** — only a triangulating `alphaBackend` (`default`, `bowyer-watson`, `helix`), any ambient dimension `>= 2` |
+| `alpha`                       | `cohomology`         | **no** — no notion of a Vietoris-Rips complex at all   | yes     | **no** — known stall/OOM risk | yes | **no** | **yes** — only a triangulating `alphaBackend` (`default`, `bowyer-watson`, `helix`), any ambient dimension `>= 2` |
 | `sheehy-rips`                 | `cohomology`         | **no** — a simplex's value is not the maximum ambient pairwise distance among its vertices (some pairs sparsified away, others excluded outright) | yes | yes | yes | **no** | **no** |
 | cubical (`computeFromCubicalImage`/`computeFromImage`, no `complex` key) | `fast-cubical` (2-D and up) | **no** — `PackedRipserCohomologyEngine` is specialized to `Simplex[Int]` | yes | yes | yes | **yes** — any ambient dimension `>= 2` | **no** |
 | Dowker relation (`computeFromRelation`, no `complex` key) | `cohomology` | **no** — not a flag complex (a witness for a whole simplex need not witness any of its edges) | yes | **no** — same conservative refusal `witness`/general has (use `naive`/`cohomology`) | yes | **no** | **no** |
@@ -321,10 +319,9 @@ Unsupported combinations fall into a few categories:
 - **Representation-specific engines** — `fast-cubical` and `fast-alpha`
   operate only on their corresponding concrete constructions.
 
-`engine="cohomology"` (`CellularCohomologyEngine`, engine 5 above) is the one column with no "no" cells for a
-reason: it's generic over `CellT: OrderedCell` with no per-construction speed assumptions baked in, at the cost
-of none of engines 3/4's Vietoris-Rips-specific optimizations — see engine 5's own section above for what that
-tradeoff actually buys and costs.
+`engine="cohomology"` (`CellularCohomologyEngine`, engine 5 above) is the one column with no "no" cells because it
+is generic over `CellT: OrderedCell` and assumes nothing about the construction; the price is that it lacks engines
+3 and 4's Vietoris-Rips-specific optimizations.
 
 **Representatives through the facades.** `matlab.TDA4j` takes the option
 `representativeType`, `cycles` (the default) or `cocycles`, and the CLI takes

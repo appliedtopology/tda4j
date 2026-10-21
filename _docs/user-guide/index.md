@@ -22,6 +22,7 @@ spaces are an add-on with one more import, `import org.appliedtopology.tda4j.sse
 
 ## Contents
 
+* [Installation](installation.md): requirements and dependency lines for every build tool and language.
 * [Quickstart](quickstart.md): `Persistence(...)` and the diagram it returns, short bars, representatives, long
   computations, chains.
 * **Complexes** ([overview](topological-spaces/index.md)): [Vietoris-Rips](topological-spaces/vietoris-rips.md)
@@ -35,4 +36,8 @@ spaces are an add-on with one more import, `import org.appliedtopology.tda4j.sse
 * **Using the results**: [distances and vectorizations](vectorization.md),
   [circular and toroidal coordinates](circular-coordinates.md), the [boundary matrix](boundary-matrix.md).
 * [Files](input-output.md): CSV, Ripser, DIPHA, GUDHI and Perseus formats.
+* [Maps between barcodes](barcode-algebra.md): image, kernel and cokernel of a map of persistence modules.
+* [Linear algebra, graphs and neighbours](utilities.md): dense matrices, row reduction, spanning trees, nearest-neighbour search.
 * **Without Scala**: [MATLAB and Java](matlab.md), [JavaScript and TypeScript](javascript.md), the [command line](cli.md).
+* [Troubleshooting](troubleshooting.md) and a [glossary](glossary.md).
+* [Coming from JavaPlex, Ripser or GUDHI](coming-from-other-libraries.md): the calls you know, and what differs.
