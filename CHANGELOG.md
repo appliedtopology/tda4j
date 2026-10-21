@@ -128,6 +128,10 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Changed
 
+- `BarcodeDistance.bottleneckDistance` no longer builds the all-pairs cost matrix: near pairs are found in a window of
+  the other diagram sorted by birth, and feasibility is two matchings (one covering the bars too far from the diagonal on
+  each side). The values are the same; two random diagrams of 1,500 bars took 22 s and take 0.2 s.
+
 - The Helix alpha backend (what `AlphaShapes` uses above 4-D) builds the faces of its triangulation in time linear in
   their number and makes the `Simplex` objects of a dimension only when it is read. 40 points in R^8 take 7 s (was
   105 s), in R^10 about a minute (the dimension sweep timed out after an hour); the simplices, values and order of the
