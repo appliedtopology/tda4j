@@ -75,7 +75,10 @@ barcodes coincide.
    equal the cell-keyed reduction kept in the test tree (`CellKeyedCohomologyReference`) bar for bar, pair for pair,
    term for term and in list order (`CohomologyNumberingSpec`): re-run it after any change to the reduction
    (`WORKLOG-dense-cohomology.md`). On a `CubicalGridStream` the verb runs `PackedCubicalCohomologyEngine`,
-   which must equal this engine there (`rules/cubical.md`).
+   which must equal this engine there (`rules/cubical.md`). Simplices with `Int` vertices under an instance from
+   `simplexIsOrderedCell` (marked `StandardSimplexBoundary`) are reduced on flat arrays inside this class; the result
+   must equal `packSimplices = false` term for term (`PackedSimplexCohomologySpec`), so a column needing an addition
+   still goes through `Chain.reduceBy` (#193, `WORKLOG-layered-inorder.md`).
 
 **Cycles from cohomology (`Involution`, `homology/Involution.scala`)**: both cohomology engines expose
 `pairedCohomology` (bars + birth/death cells, zero-length pairs INCLUDED: their columns are pivots) and

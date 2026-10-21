@@ -310,3 +310,57 @@ make the same algorithm 2-13x faster than the library's packed engine; against r
 n = 1000 (0.7-1.2x) and 5x faster in the 10-dimensional case. Limits: one `Long` key needs bits(C(n, maxDim + 2)) + bits(edges) <= 63 (n = 1000 to H2: 55;
 n = 10,000 to H2: 75, too many, so a two-word key); no sparse neighbour lists; cocycles recorded as logs, not
 expanded. Library edits filed: the packed engine #194, the stream engine #193.
+
+## Addendum: the stream engine on flat arrays (#193), and the experiments into main (same day, later)
+
+Project lead: "implement the universal fast engine too", then (review on #186) move the experiments into main and wire
+them into the benchmark harness, in identifiable commits.
+
+**Where it went.** Not a new engine: `CellularCohomologyEngine` takes the packed path itself when its cell instance
+carries the private marker `StandardSimplexBoundary` (only `simplexIsOrderedCell` makes such instances, and they are
+anonymous, so nobody overrides their `boundary`) and every vertex is an `Int`, strictly ascending. Every caller (verb,
+`PersistenceEngine`, MATLAB, CLI, `FastAlphaHomology`'s middle degrees, `CircularCoordinates`) gets it unchanged;
+`packSimplices = false` is the old reduction, `reducesPacked(stream)` reports the choice. Deviation from #193's text,
+which proposed a separate engine and a dispatch: one class, no caller to switch, nothing new to document for users.
+
+**Exactness by construction.** Each dimension: cells in the stream's listing, values computed once; the engine's order
+(value ascending, then the stream's `filtrationOrdering`) is the listing with each equal-value run reversed, checked
+strictly, else a stable sort (the same stable sort the old path ran, so ties and even pathological equal cells come out
+the same). Cell numbers are positions; faces found by an open-addressing hash of vertex tuples (MurmurHash3). Coboundary
+blocks as CSR of `2 * row + signBit`, plus each cell's youngest facet. A column with a free first row is paired at once;
+any other goes through `Chain.reduceBy` with `fallback` building untouched owners' columns exactly as the old path
+stored them (`plus(zero, ±1)`), and the V-column arithmetic is the old code verbatim. The involution mirrors
+`Involution.cycles`: a death whose youngest facet is its birth needs nothing; otherwise `reduceBy` with a fallback for
+processed trivial pairs (the `processed` check only matters for inconsistent pairings: mutating it away changes nothing
+on valid input). Representatives are mapped back to cells only for bars returned.
+
+**Tests.** `PackedSimplexCohomologySpec`: packed against `packSimplices = false` on alpha in R²-R⁴, a truncated alpha,
+grid VR/Čech/witness (ties), RP² (fixed and filtered), shuffled listings; F₂, F₃, F₁₇ (3 seeds) and the reals; pairs,
+order, cocycles and cycles with and without zero-length bars; RP² H₁ over F₂ not F₃; cycles with zero boundary and
+essential cocycles with zero coboundary; fallbacks (`String` vertices, reversed vertex order, a user's instance).
+Mutations caught: facet 1's sign flipped (error), tie runs not reversed (failures), involution shortcut always taken
+(error), wrong V-column generator for an untouched pivot (errors). `CohomologyNumberingSpec` (engine against the
+cell-keyed reference) passes on the packed path. Full JVM suite: 1,561 tests, 0 failures.
+
+**Measurements** (`StreamCohomologyBenchmark`, test scope: the alpha stream built and listed before the clock, one JVM
+per row, F₁₇, 12 GB heap; median / min):
+
+| complex | cells | packed, cycles | cells, cycles | packed, cocycles | cells, cocycles |
+|---|---|---|---|---|---|
+| alpha, 10,000 uniform in [0,1]³, to H2 | 286,143 | 1.39 / 0.99 s (5) | 8.86 / 7.27 s (5) | 1.05 / 0.51 s (5) | 2.15 / 1.48 s (5) |
+| alpha, 40 uniform in [0,1]¹⁰, to H9 | 6,231,871 | 23.3 / 18.0 s (3) | 232 s (1) | | |
+
+So 6x (R³) and 10x (R¹⁰) for cycles, 2x for cocycles in R³. Far from the flat-array floor measured earlier (0.16 s and
+4.3 s, no representatives); not profiled yet. Suspects: one pass over `Simplex` objects (tree iterators) and one
+`filtrationValue` lookup per cell, the tie checks through `filtrationOrdering` (four lookups per comparison), and the
+`Chain`s of returned representatives under an ordering that looks values up per comparison.
+
+**Review on #186.** `BlockParallelReduction` and `ParallelPackedCohomology` moved to `src/main/scalajvm` (threads; a
+pure rename commit, then the main-code rules: `final` dropped, scaladoc without the test-scope wording; also
+`LayeredInorderSimplexStream`'s `Layer`, `IntBuffer`, `DoubleBuffer` lost their unexplained `final`).
+`PaperBenchmarkDriver` takes `engine=blocks|parallel threads=N` for `task=vr` (bars only; threshold defaults to the
+enclosing radius as the verb's does; the edge table and complex inside the timed region); `bench.py` has
+`tda4j-blocks-mt`, `tda4j-parallel-1t`, `tda4j-parallel-mt` (the parallel ones set the common fork-join pool's
+parallelism). Smoke run: identical barcodes to `engine=auto` on `bench/smoke-points.txt` and torus n=1000 t=0.6 over
+F₂ (verb 3.7 s, blocks 6.1 s, parallel 0.90 s, one cold trial each, 1 thread). Two harness tests were stale after
+the scala merge (Čech cases now in the main run; the new tasks countable by TDA4j's stream) and were updated.

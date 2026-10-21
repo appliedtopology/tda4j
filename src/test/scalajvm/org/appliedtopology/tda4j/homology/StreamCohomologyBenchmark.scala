@@ -20,9 +20,11 @@ object StreamCohomologyBenchmark:
     val start = System.nanoTime()
     val stream = Truncated(AlphaShapes(pts, backend), degree)
     val cells = stream.iterator.size
-    println(f"${pts.length} points in R^${pts.head.length}, degree $degree, $backend: $cells cells in " +
-      f"${(System.nanoTime() - start) / 1e9}%.1f s; ${if packed then "packed" else "cells"}, " +
-      s"${if cycles then "cycles" else "cocycles"}")
+    println(
+      f"${pts.length} points in R^${pts.head.length}, degree $degree, $backend: $cells cells in " +
+        f"${(System.nanoTime() - start) / 1e9}%.1f s; ${if packed then "packed" else "cells"}, " +
+        s"${if cycles then "cycles" else "cocycles"}"
+    )
     val ff = FiniteField(17)
     import ff.given
     val engine = CellularCohomologyEngine[Simplex[Int], ff.Fp, Double](packSimplices = packed)
