@@ -68,11 +68,9 @@ What differs between the platforms is behind a few small seams, each defined onc
 | `plot.RootText` | `Locale.ROOT` for lower-casing and `String.format`; `DecimalFormatSymbols` | plain lower-casing and `String.format`; `Intl.NumberFormat` for a locale's separators (`java.util.Locale` does not exist on Scala.js) |
 | `cli.ProcessExit` | `sys.exit` | sets `process.exitCode` (no `System.exit` on Scala.js) |
 
-The specs under `src/test/scala` run on both platforms and have one seam of their own, `TestPlatform` (in
-`src/test/scalajvm` and `src/test/scalajs`). A property that searches for rare inputs, such as the alpha complex
-properties' 2000 random point clouds, runs `TestPlatform.propertyCases(n)` cases: all `n` on the JVM and a tenth on
-Scala.js. The code under test is the same on both, so the search is done once, on the JVM, while the Scala.js run
-checks what can differ between the platforms.
+The specs under `src/test/scala` run on both platforms and have one seam of their own, `TestPlatform`. A property that
+searches for rare inputs runs `TestPlatform.propertyCases(n)` cases: all `n` on the JVM and a tenth on Scala.js, since
+the code under test is the same and the Scala.js run only needs to check what differs between platforms.
 
 The Scala.js build adds `javascript.Exports` (the functions the npm package exports, a thin layer over the
 [MATLAB facade](../user-guide/matlab.md)) and the `tda4j` command on Node.js (`cli.TDA4jNodeMain`; the command is
@@ -304,8 +302,7 @@ These are **alternative implementations with the same output contract, not layer
 `IncrementalVietorisRipsSimplexStream` all default `maxFiltrationValue` to `metricSpace.minimumEnclosingRadius`,
 not `Double.PositiveInfinity` — past that radius every vertex is within range of a common apex, so the
 complex is a cone from there on and provably contributes no further homology (real `ripser.cpp` uses the
-same default). Pass `maxFiltrationValue = Some(Double.PositiveInfinity)` for the old always-unbounded
-behavior. `RecursiveStackVietorisRipsSimplexStream` and the alpha-complex backends keep their own,
+same default). Pass `maxFiltrationValue = Some(Double.PositiveInfinity)` for the whole complex. `RecursiveStackVietorisRipsSimplexStream` and the alpha-complex backends keep their own,
 always-untruncated default (see [Alpha complex](alpha-complex.md)).
 
 `SimplexIndexing` (inside `SimplexIndexing.scala`) is the piece every Ripser-flavored part of this codebase
@@ -331,11 +328,9 @@ directly via the cartesian product over the cube's degenerate axes rather than a
 `CubicalImage` builds these from images/voxel grids (`fromFlatArray`/`fromBufferedImage`/`fromFile`/
 `fromVoxelGrid3D`); sublevel vs. superlevel filtration is handled by negating values on load, not as a flag
 on the stream itself. A NaN pixel is masked: not in the complex, in either direction (NaN has no sign, so
-negating a superlevel image keeps it). Every other cube takes the minimum over the UNMASKED pixels containing it and is
-absent when they are all masked, so the complex is the closure of the unmasked pixels; `filtrationValue` and
-`iterateDimension` leave masked cubes out. The grid engines rank a masked pixel `GridRanks.masked`, one past every real
-rank, so a minimum over ranks skips it and a cell of rank `masked` is skipped explicitly (reading its value would be out
-of bounds). Infinite values are ordinary values. `CubicalHomologyEngine` is a one-line `Cube`-specialized wrapper around
+negating a superlevel image keeps it). Every other cube takes the minimum over the unmasked pixels containing it and is
+absent when they are all masked, so the complex is the closure of the unmasked pixels. The grid engines rank a masked
+pixel `GridRanks.masked`, one past every real rank, and skip cells of that rank. Infinite values are ordinary values. `CubicalHomologyEngine` is a one-line `Cube`-specialized wrapper around
 `CellularHomologyEngine` — cubical complexes needed no new engine code, only a new `OrderedCell` instance.
 
 #### Fast cubical homology
@@ -380,9 +375,8 @@ generator at filtration value `0`); `x.filtered(f)` (`FilteredSimplicialSetStrea
 `SSetMap.scala` has simplicial maps (with `mappingCone` and the induced rank on homology), `FundamentalGroup.scala` a
 presentation of the fundamental group, and `CupProduct.scala` and `Steenrod.scala` the Alexander-Whitney cup product
 and the Steenrod squares over F₂. `Nerve`/`ClassifyingSpace` (`ClassifyingSpace.scala`, with `FiniteGroup.scala`) use the
-lazy `SimplicialSet` trait for the infinite nerve of a finite group. None of this has a MATLAB or CLI entry point (a
-simplicial set needs its own input encoding), and every construction is checked against homology computed by hand
-over F₂ and F₃ rather than by `validate()` alone.
+lazy `SimplicialSet` trait for the infinite nerve of a finite group. None of this has a MATLAB or CLI entry point: a
+simplicial set needs its own input encoding.
 
 Nerves of monoids and finite categories, persistent group homology and Brown's
 collapse are on their own page: [Nerves and group homology](nerves.md).
