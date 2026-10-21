@@ -130,6 +130,30 @@ cube, so the bottleneck distance between backends is mostly the agreement of nea
 correctness stress, not a statement about topology. Cube-surface draws with d + 1 points on one facet are not in general
 position (marked †).
 
+## The thread-scaling sweep
+
+`bench/run.sh sweep-threads` runs every multithreaded Vietoris–Rips tool (`tda4j-parallel-mt`, `tda4j-blocks-mt`,
+`giotto-ph-mt`, and `dipha-mt`, whose threads are MPI ranks) at 1, 2, 4, ... threads up to the machine's logical CPUs
+(`--threads 1,8,32` picks others), with `ripser.cpp` once per case for scale (`--baselines`). The default cases are
+fractal-r (2.2 billion cells to H2) and random16 (50 points in R^16 to H7), the heaviest that `tda4j-parallel-mt` can
+encode; `tda4j-blocks-mt` builds its matrices explicitly and only runs random16.
+
+A run at t threads is pinned to the CPUs 0 to t - 1 with `taskset`, so the JVM's garbage collector and compiler and the
+MPI ranks get those t CPUs too (with Open MPI the sweep adds `--bind-to none`, so the ranks stay inside the set). Use
+`--no-pin` to let them use the whole machine. A tool runs from the most threads down; its series stops at the first
+timeout or error, and goes on after running out of memory.
+
+Each run is the main harness's: a cold run, then one warm-up and three timed computations (`--warmup`, `--trials`) if
+the cold computation took under `--warm-cap` seconds. Output, in `$WORKDIR/sweeps/threads-<timestamp>/`: `sweep.csv`
+(the main run's columns plus `threads` and `pinned`), `bars/`, `logs/`, `env.json`, and `sweep.md`. Per case it shows
+each tool's time at each count, the speedup over its own single thread, its fastest time against ripser.cpp's, and two
+checks: the barcode is the same at every count, and its distance to ripser.cpp's.
+
+```sh
+bench/run.sh sweep-threads --jvm-heap 32g
+bench/run.sh sweep-threads --cases o3_1024 --tools tda4j-parallel-mt,giotto-ph-mt --threads 1,4,16,32
+```
+
 ## The rarer complexes
 
 Tasks `cech`, `dtm`, `witness`, `sparse` and `dowker` (and the `tda4j-collapse` row of `vr`) time the complexes that few
@@ -235,6 +259,8 @@ packages at pinned commits (neither is pip-installable with current tools; the P
 | `tda4j-js-cohomology`, `tda4j-js-fastalpha`, `tda4j-js-bw`, `tda4j-js-helix` | the same, named engines and backends | JavaScript twins of the next row's tools |
 | `tda4j-cohomology`, `tda4j-fastalpha` | named engines | cohomology on images (on a grid: the packed grid engine, the general engine's output); the dual union-find on alpha (on the default triangulation) |
 | `tda4j-bw`, `tda4j-helix`, `tda4j-dqp` | named alpha backends | `tda4j` uses the default: Bowyer–Watson up to 4 dimensions, Helix above, DQP for a small radius; these name each. Bowyer–Watson is `unsupported` above 4-D; DQP only runs on a case with a radius (untruncated it is about 100 times slower than Helix); `tda4j-fastalpha` takes no radius |
+| `tda4j-parallel-1t`, `tda4j-parallel-mt` | `PaperBenchmarkDriver engine=parallel threads=N` | the block-parallel experiment `ParallelPackedCohomology` (JVM only): implicit coboundaries, bars only, on 1 thread or every CPU. A simplex is one `Long` key, so it fails on a case whose keys do not fit (o3_4096; two-word keys are #194) or whose n × n tables do not (clifford50000) |
+| `tda4j-blocks-mt` | `PaperBenchmarkDriver engine=blocks threads=N` | the other experiment, `BlockParallelReduction`: explicit coboundary matrices, bars only, every CPU; not run above `--explicit-max-cells` |
 | `ripser.cpp` | vanilla build for p = 2, `ripser-coeff` for other primes | the reference for Vietoris–Rips |
 | `ripser.py`, `giotto-ph-1t`, `giotto-ph-mt` | pip | giotto-ph multithreaded is reported, never the baseline |
 | `gudhi`, `gudhi-collapse` | pip | edge collapse first in the second variant |

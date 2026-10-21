@@ -91,6 +91,7 @@ object PaperBenchmarkDriver:
       case "vr" if engineName == "blocks" || engineName == "parallel" =>
         val ms = metricSpaceOf(opts)
         val n = ms.size
+        require(n.toLong * n <= Int.MaxValue, s"engine=$engineName keeps n x n tables: $n points are too many")
         val table = Array.tabulate(n * n)(k => ms.distance(k / n, k % n))
         val distance: (Int, Int) => Double = (i, j) => table(i * n + j)
         val t = threshold.getOrElse(ms.minimumEnclosingRadius)

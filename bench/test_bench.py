@@ -32,6 +32,7 @@ sys.modules["bench_py"] = bench
 _spec.loader.exec_module(bench)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import sweep_alpha  # noqa: E402  (imports bench.py by name: a second copy of the module, which is fine here)
+import sweep_threads  # noqa: E402  (likewise)
 import count_cells  # noqa: E402
 import dipha_io  # noqa: E402
 import phat_io  # noqa: E402
@@ -1235,6 +1236,140 @@ class PythonWorkerTests(unittest.TestCase):
             for task in ("cubical", "alpha"):
                 r, _ = self.worker(tool, task=task)
                 self.assertEqual(r.returncode, 3, f"{tool} {task}: exit 3 is 'unsupported'")
+
+
+class ThreadSweepTests(unittest.TestCase):
+    """bench/sweep_threads.py: which counts run, how a tool is given its count and pinned, where a series stops, and the
+    barcode checks of the summary."""
+
+    def test_the_default_counts_are_the_powers_of_two_up_to_the_cpus_and_the_cpus_most_first(self):
+        self.assertEqual(sweep_threads.thread_counts("", 32), [32, 16, 8, 4, 2, 1])
+        self.assertEqual(sweep_threads.thread_counts("", 6), [6, 4, 2, 1])
+        self.assertEqual(sweep_threads.thread_counts("", 1), [1])
+        self.assertEqual(sweep_threads.thread_counts("1, 4,2", 32), [4, 2, 1])
+
+    def test_a_tool_gets_its_count_as_threads_or_as_mpi_ranks_and_a_pinned_run_gets_as_many_cpus(self):
+        self.assertEqual(sweep_threads.with_threads({"engine": "parallel", "threads": "ALL"}, 8)["threads"], "8")
+        self.assertEqual(sweep_threads.with_threads({"only_p": 2, "ranks": "ALL"}, 8), {"only_p": 2, "ranks": "8"})
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "cp").write_text("x.jar")
+            case = bench.Case("c", "vr", "pts.txt", "points", 2)
+            args = Namespace(jvm_heap="1g", jvm_opts="")
+            with mock.patch.dict(os.environ, {"TDA4J_CP": str(Path(d) / "cp")}):
+                cmd = bench.command("tda4j", "tda4j-parallel-mt@8", sweep_threads.with_threads(
+                    {"engine": "parallel", "reps": "none", "threads": "ALL"}, 8), case, Path(d), 2, 1.0, 0, 1, "o", args)
+        self.assertIn("threads=8", cmd)
+        self.assertIn("-Djava.util.concurrent.ForkJoinPool.common.parallelism=8", cmd)
+        self.assertEqual(bench.pinned(cmd, Namespace(pin_cpus=4))[:3], ["taskset", "-c", "0-3"])
+        self.assertEqual(bench.pinned(cmd, Namespace(pin_cpus=0)), cmd)
+        self.assertEqual(bench.pinned(cmd, Namespace()), cmd)
+        self.assertIsNone(bench.pinned(None, Namespace(pin_cpus=4)))
+
+    def sweep(self, statuses, cells=None, argv=()):
+        """Runs the sweep's loop with run_one faked: `statuses` maps "tool@threads" to a status (default ok)."""
+        calls = []
+        with tempfile.TemporaryDirectory() as d:
+            data, out = Path(d) / "data", Path(d) / "out"
+            data.mkdir()
+            np.savetxt(data / "pts.txt", np.random.default_rng(0).random((12, 3)))
+            b = sweep_threads.bench
+            saved = b.CASES, b.TOOLS, b.available, b.run_one, b.write_env, b.cells_reference
+            b.CASES = [b.Case("heavy", "vr", "pts.txt", "points", 1)]
+            b.TOOLS = [("one", "ripser", "vr", {}),
+                       ("par", "tda4j", "vr", {"engine": "parallel", "threads": "ALL", "multithreaded": True}),
+                       ("blk", "tda4j", "vr", {"engine": "blocks", "threads": "ALL", "multithreaded": True,
+                                               "explicit": True}),
+                       ("mpi", "dipha", "vr", {"only_p": 2, "ranks": "ALL", "multithreaded": True}),
+                       ("par-1t", "tda4j", "vr", {"engine": "parallel", "threads": "1"})]
+            b.available = lambda kind, opts, python: True
+            b.write_env = lambda out, args: None
+            b.cells_reference = lambda: cells or {}
+
+            def fake(w, f, data, out, case, p, threshold, name, kind, opts, args):
+                calls.append((name, opts.get("threads") or opts.get("ranks"), args.pin_cpus))
+                return statuses.get(name, "ok")
+            b.run_one = fake
+            args = sweep_threads.parser().parse_args(
+                ["--data", str(data), "--out", str(out), "--cases", "heavy", "--threads", "1,2,4", "--baselines", "one",
+                 *argv])
+            try:
+                with mock.patch.dict(os.environ, {"MPIEXEC_FLAGS": "--oversubscribe"}):
+                    sweep_threads.sweep(args, out, 4, pin=not args.no_pin)
+                with open(out / "sweep.csv") as f:
+                    rows = list(csv.DictReader(f))
+            finally:
+                b.CASES, b.TOOLS, b.available, b.run_one, b.write_env, b.cells_reference = saved
+        return calls, rows
+
+    def test_the_baseline_runs_once_and_each_multithreaded_tool_from_the_most_threads_down_pinned(self):
+        calls, rows = self.sweep({})
+        self.assertEqual(calls, [("one@1", None, 1),
+                                 ("par@4", "4", 4), ("par@2", "2", 2), ("par@1", "1", 1),
+                                 ("blk@4", "4", 4), ("blk@2", "2", 2), ("blk@1", "1", 1),
+                                 ("mpi@4", "4", 4), ("mpi@2", "2", 2), ("mpi@1", "1", 1)])
+        self.assertEqual(rows, [], "the run rows are run_one's to write")
+
+    def test_without_pinning_nothing_is_confined(self):
+        calls, _ = self.sweep({}, argv=("--no-pin",))
+        self.assertEqual({c[2] for c in calls}, {0})
+
+    def test_a_series_stops_at_a_timeout_or_an_error_and_goes_on_after_running_out_of_memory(self):
+        calls, rows = self.sweep({"par@2": "timeout", "blk@4": "error(1)", "mpi@4": "oom"})
+        self.assertEqual([c[0] for c in calls], ["one@1", "par@4", "par@2", "blk@4", "mpi@4", "mpi@2", "mpi@1"])
+        skipped = {(r["tool"], r["threads"]): (r["status"], r["reason"]) for r in rows}
+        self.assertEqual(skipped[("par", "1")], ("timeout", "not run: timeout at 2 threads"))
+        self.assertEqual(skipped[("blk", "1")], ("error(1)", "not run: error(1) at 4 threads"))
+        self.assertEqual({r["pinned"] for r in rows}, {"True"})
+
+    def test_the_explicit_tool_is_not_run_on_a_complex_above_the_cap(self):
+        calls, rows = self.sweep({}, cells={"heavy": "500000000"})
+        self.assertNotIn("blk", {c[0].split("@")[0] for c in calls})
+        blk = [r for r in rows if r["tool"] == "blk"]
+        self.assertEqual(len(blk), 1)
+        self.assertEqual(blk[0]["status"], "unsupported")
+        self.assertIn("500,000,000 cells", blk[0]["reason"])
+
+    def test_the_mpi_ranks_are_not_bound_by_open_mpi_when_the_runs_are_pinned(self):
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("MPIEXEC_FLAGS", None)
+            with mock.patch.object(sweep_threads.bench, "mpiexec_flags", lambda: ["--oversubscribe"]):
+                self.assertEqual(sweep_threads.pinned_mpi_flags(), "--oversubscribe --bind-to none")
+            with mock.patch.object(sweep_threads.bench, "mpiexec_flags", lambda: []):
+                self.assertIsNone(sweep_threads.pinned_mpi_flags(), "another MPI: left alone")
+            os.environ["MPIEXEC_FLAGS"] = "--mine"
+            self.assertIsNone(sweep_threads.pinned_mpi_flags(), "the user's flags win")
+
+    def test_the_summary_gives_speedups_and_flags_a_barcode_that_changes_with_the_count(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d)
+            (out / "bars").mkdir()
+            (out / "env.json").write_text(json.dumps({"cpu": "Test CPU", "cores": 4, "args": {"baselines": "ripser.cpp"}}))
+            good, bad = "0\t0.0\tinf\n1\t0.5\t0.75\n", "0\t0.0\tinf\n1\t0.5\t0.8\n"
+            rows = [run_row("heavy", "ripser.cpp", "warm", "ok", median="2.0", p="2", threads="1", pinned="True")]
+            (out / "bars" / "heavy__p2__ripser.cpp@1.tsv").write_text(good)
+            for tool, times, bars in [("tda4j-parallel-mt", {1: "8.0", 2: "4.0", 4: "2.5"}, {1: good, 2: good, 4: good}),
+                                      ("giotto-ph-mt", {1: "6.0", 2: "3.0", 4: ""}, {1: good, 2: bad})]:
+                for t, median in times.items():
+                    status = "ok" if median else "timeout"
+                    rows.append(run_row("heavy", tool, "cold" if not median else "warm", status, median=median, p="2",
+                                        threads=str(t), pinned="True", multithreaded="True"))
+                    if t in bars:
+                        (out / "bars" / f"heavy__p2__{tool}@{t}.tsv").write_text(bars[t])
+            with open(out / "sweep.csv", "w", newline="") as f:
+                w = csv.DictWriter(f, fieldnames=sweep_threads.COLUMNS)
+                w.writeheader()
+                for r in rows:
+                    w.writerow(r)
+            sweep_threads.summarize(out, bottleneck=stub_bottleneck)
+            md = (out / "sweep.md").read_text()
+        lines = {line.split("|")[1].strip(): line for line in md.splitlines() if line.startswith("| ")}
+        self.assertIn("pinned to t CPUs", md)
+        self.assertIn("| tool | 1 | 2 | 4 | fastest | barcode |", md)
+        self.assertIn("| 8 | 4 (2×) | 2.5 (3.2×) | 2.5 at 4 (1.2× ripser.cpp) | same at every count; ripser.cpp: 0 |",
+                      lines["tda4j-parallel-mt"])
+        self.assertIn("| 6 | 3 (2×) | timeout | 3 at 2 (1.5× ripser.cpp) | differs at 2 threads from 1 "
+                      "(H1: bar (0.5, 0.8) against (0.5, 0.75)); ripser.cpp: 0 |", lines["giotto-ph-mt"])
+        self.assertIn("| 2 |  |  |  |  |", lines["ripser.cpp (single-threaded)"])
 
 
 if __name__ == "__main__":
