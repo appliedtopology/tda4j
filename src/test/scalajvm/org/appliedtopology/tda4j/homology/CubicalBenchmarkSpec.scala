@@ -25,7 +25,7 @@ import scala.concurrent.duration.*
   * risk at complex sizes far smaller than a 3D grid can reach (CLAUDE.md's "Cross-engine benchmark" section: 102k
   * simplices stalled/OOM'd), and a 32-cubed grid is 274,625 cells, so a timeout here is a real safety net, not
   * defensive boilerplate -- a stall prints `"timeout"` in the table rather than hanging the run. Like
-  * `SparseRipsBenchmarkSpec`, prints a timing table rather than asserting behavior; not a correctness check, and kept
+  * `ThresholdBenchmarkSpec`, prints a timing table rather than asserting behavior; not a correctness check, and kept
   * small by default so `sbt test` stays fast:
   *
   * {{{

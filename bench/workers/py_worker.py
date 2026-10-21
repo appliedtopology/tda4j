@@ -10,9 +10,17 @@ with the timings, and writes the last barcode as `dim<TAB>birth<TAB>death` (`inf
 Tools and what they support (anything else exits with status 3, "unsupported"):
   ripser.py  vr                      ripser.ripser
   giotto-ph  vr                      gph.ripser_parallel, threads=N (variant ignored)
-  gudhi      vr, cubical, alpha      RipsComplex (variant=collapse: edge collapse first),
+  gudhi      vr, cubical, alpha,     RipsComplex (variant=collapse: edge collapse first),
+             cech, dtm, witness,
+             sparse, dowker
                                      CubicalComplex(top_dimensional_cells=...) = T-construction,
-                                     AlphaComplex (filtration values are squared radii: we take sqrt)
+                                     AlphaComplex (filtration values are squared radii: we take sqrt),
+                                     DelaunayCechComplex (task=cech; squared radii, sqrt), DTMRipsComplex (task=dtm
+                                     k=, q=), EuclideanWitnessComplex / EuclideanStrongWitnessComplex (task=witness,
+                                     landmarks=file of point indices; alpha-squared values, sqrt),
+                                     RipsComplex(sparse=eps) (task=sparse eps=; Buchet-Chazal-Oudot-Sheehy, NOT
+                                     the construction TDA4j's `SparseRips` implements), and for task=dowker a
+                                     SimplexTree filled from the relation (a naive Python baseline, see dowker_baseline)
   cripser    cubical                 tcripser = T-construction, F_2 only
   dionysus   vr                      Dionysus 2 (float32): fill_rips, then variant=cohomology (default; the fast one),
                                      homology (the clearing reduction) or cocycles (cohomology, and a representative
@@ -23,6 +31,7 @@ Tools and what they support (anything else exits with status 3, "unsupported"):
 """
 import json
 import math
+import os
 import sys
 import time
 
@@ -136,7 +145,102 @@ def gudhi_tool(opts, data):
             st.compute_persistence(homology_coeff_field=p, min_persistence=0)
             return intervals(st, transform=lambda x: math.sqrt(max(x, 0.0)) if math.isfinite(x) else x)
         return run
+    if task == "cech":
+        # Delaunay-Cech has the persistent homology of the Cech complex but different values per simplex; a threshold is
+        # the largest radius, as in TDA4j's truncated complex.
+        max_square = float(opts["threshold"]) ** 2 if "threshold" in opts else math.inf
+
+        def run():
+            st = gudhi.DelaunayCechComplex(points=data).create_simplex_tree(max_alpha_square=math.inf)
+            if math.isfinite(max_square):
+                st.prune_above_filtration(max_square)
+            st.prune_above_dimension(dim + 1)
+            st.compute_persistence(homology_coeff_field=p, min_persistence=0)
+            return intervals(st, transform=lambda x: math.sqrt(max(x, 0.0)) if math.isfinite(x) else x)
+        return run
+    if task == "dtm":
+        from gudhi.dtm_rips_complex import DTMRipsComplex
+        k, q = int(opts["k"]), float(opts.get("q", 2))
+        limit = float(opts["threshold"]) if "threshold" in opts else math.inf
+
+        def run():
+            st = DTMRipsComplex(points=data, k=k, q=q, max_filtration=limit).create_simplex_tree(max_dimension=dim + 1)
+            st.compute_persistence(homology_coeff_field=p, min_persistence=0)
+            return intervals(st)
+        return run
+    if task == "witness":
+        # Landmarks are the point indices in the `landmarks` file, the same for every tool. variant=strong is the strong
+        # witness complex; the default is the (weak) witness complex with the alpha-squared relaxation. Whether either is
+        # TDA4j's lazy or general witness complex is unverified (issue #171): the barcode agreement column says.
+        index = np.loadtxt(opts["landmarks"], dtype=int, ndmin=1)
+        landmarks = data[index]
+        max_square = float(opts["threshold"]) ** 2 if "threshold" in opts else math.inf
+        cls = gudhi.EuclideanStrongWitnessComplex if opts.get("variant") == "strong" else gudhi.EuclideanWitnessComplex
+
+        def run():
+            st = cls(landmarks=landmarks, witnesses=data).create_simplex_tree(
+                max_alpha_square=max_square, limit_dimension=dim + 1)
+            st.compute_persistence(homology_coeff_field=p, min_persistence=0)
+            return intervals(st, transform=lambda x: math.sqrt(max(x, 0.0)) if math.isfinite(x) else x)
+        return run
+    if task == "sparse":
+        eps = float(opts["eps"])
+        thresh = float(opts["threshold"]) if "threshold" in opts else math.inf
+        try:
+            gudhi.random.set_seed(0)  # reproducible sparsification
+        except Exception:
+            pass
+        if opts.get("format", "points") == "distance":
+            make = lambda: gudhi.RipsComplex(distance_matrix=data, max_edge_length=thresh, sparse=eps)
+        else:
+            make = lambda: gudhi.RipsComplex(points=data, max_edge_length=thresh, sparse=eps)
+
+        def run():
+            st = make().create_simplex_tree(max_dimension=dim + 1)
+            st.compute_persistence(homology_coeff_field=p, min_persistence=0)
+            return intervals(st)
+        return run
+    if task == "dowker":
+        return dowker_baseline(opts, data, gudhi)
     sys.exit(UNSUPPORTED)
+
+
+def dowker_baseline(opts, data, gudhi):
+    """The Dowker complex of the relation `data` (rows L, columns W) as a user would build it today: a SimplexTree filled
+    from the events (witness w, the r-th row in increasing order of R(., w), its value). The first insertion of a simplex
+    wins in a SimplexTree, so inserting the events in increasing order of value gives value(sigma) = min_w max_{x in
+    sigma} R(x, w) exactly. Only the (dim+1)-skeleton is built, with Python loops: a baseline, not a fast code.
+    dual=true builds the complex on the columns (the transpose relation)."""
+    import itertools
+    dim, p = int(opts["dim"]), int(opts.get("p", 2))
+    rel = data.T if opts.get("dual") == "true" else data
+    limit = float(opts["threshold"]) if "threshold" in opts else math.inf
+
+    def run():
+        events = []
+        for w in range(rel.shape[1]):
+            col = rel[:, w]
+            order = np.argsort(col, kind="stable")
+            seen = []
+            for x in order:
+                if not (math.isfinite(col[x]) and col[x] <= limit):
+                    break
+                events.append((float(col[x]), w, int(x), tuple(seen)))
+                seen.append(int(x))
+        events.sort(key=lambda e: e[0])
+        st = gudhi.SimplexTree()
+        for value, _, x, earlier in events:
+            st.insert([x], value)
+            for size in range(1, dim + 2):
+                for rest in itertools.combinations(earlier, size):
+                    st.insert(list(rest) + [x], value)
+        st.compute_persistence(homology_coeff_field=p, min_persistence=0)
+        out = []
+        for k in range(dim + 1):
+            for b, d in st.persistence_intervals_in_dimension(k):
+                out.append((k, float(b), finite_or_inf(d)))
+        return out
+    return run
 
 
 def cripser_tool(opts, data):
@@ -217,10 +321,42 @@ def oat_tool(opts, data):
     return run
 
 
+def dowker_nerves_tool(opts, data):
+    """The exact Dowker nerve of Blaser and Brun (github.com/mbr085/Sparse-Dowker-Nerves, `dowker_homology`; last commit
+    January 2020, GUDHI-based). It is not pip-installable with a current setuptools and needs three shims for current
+    Python, set up by `run.sh setup dowker`: DOWKER_HOMOLOGY_PATH is the clone; `miniball` (needed only by the ambient
+    Cech option) is stubbed; collections.Sequence is restored. Default arguments are the exact nerve (no interleaving,
+    no truncation); `dimension` is the homology degree. Z/p for any p. The matrix is given as is: if its rows turn out
+    to be the other side of the relation the barcode differs only in H0 (Dowker duality)."""
+    if opts["task"] != "dowker":
+        sys.exit(UNSUPPORTED)
+    import collections
+    import collections.abc
+    import types
+    for name in ("Sequence", "Mapping", "Iterable", "Set", "MutableMapping"):
+        setattr(collections, name, getattr(collections.abc, name))
+    stub = types.ModuleType("miniball")
+    stub.Miniball = object
+    sys.modules["miniball"] = stub
+    sys.path.insert(0, os.environ["DOWKER_HOMOLOGY_PATH"])
+    import warnings
+    warnings.simplefilter("ignore")
+    from dowker_homology.persistence import Persistence
+    dim, p = int(opts["dim"]), int(opts.get("p", 2))
+    rel = data.T if opts.get("dual") == "true" else data
+    if "threshold" in opts:
+        rel = np.where(rel <= float(opts["threshold"]), rel, np.inf)
+
+    def run():
+        dgms = Persistence(dimension=dim, coeff_field=p).persistent_homology(rel)
+        return [(k, float(b), finite_or_inf(d)) for k, dg in enumerate(dgms[:dim + 1]) for b, d in dg]
+    return run
+
+
 TOOLS = {"ripser.py": ripser_py, "giotto-ph": giotto_ph, "gudhi": gudhi_tool, "cripser": cripser_tool,
-         "dionysus": dionysus_tool, "oat": oat_tool}
+         "dionysus": dionysus_tool, "oat": oat_tool, "dowker-nerves": dowker_nerves_tool}
 DISTRIBUTION = {"ripser.py": "ripser", "giotto-ph": "giotto-ph", "gudhi": "gudhi", "cripser": "cripser",
-                "dionysus": "dionysus", "oat": "oat_python"}
+                "dionysus": "dionysus", "oat": "oat_python", "dowker-nerves": "dowker-homology"}
 
 
 def version_of(tool):

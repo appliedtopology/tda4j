@@ -168,7 +168,7 @@ def count_tda4j(case, path, threshold, args, out):
     cmd = (["java"] + bench.jvm_flags(args.jvm_heap, args.jvm_opts) +
            ["-cp", cp, "org.appliedtopology.tda4j.PaperBenchmarkDriver", f"task={case.task}", "count=true",
             f"input={path}", f"format={case.format}", f"dim={case.dim}"] +
-           ([f"threshold={threshold!r}"] if threshold is not None else []))
+           ([f"threshold={threshold!r}"] if threshold is not None else []) + bench.case_extra_args(case, path.parent))
     proc = bench.run_proc(cmd, args.timeout, out / "logs" / f"{case.name}__tda4j")
     if proc.status == "ok":
         j = bench.last_json(proc.text)
@@ -210,6 +210,8 @@ def count_case(case, args, data, out, counter):
             rows.append(count_gudhi(case, path, threshold, args, out))
         if have_jvm(args):
             rows.append(count_tda4j(case, path, threshold, args, out))
+    elif case.task in ("cech", "sparse", "dtm", "witness", "dowker") and have_jvm(args):
+        rows.append(count_tda4j(case, path, threshold, args, out))  # single source: no other tool builds the same complex
     for r in rows:
         r["threshold"] = "" if threshold is None else repr(threshold)
         r["ambient"] = bench.ambient_dimension(case, data) or ""
