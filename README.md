@@ -60,7 +60,7 @@ const result = persistence([[0, 0], [1, 0], [1, 1], [0, 1]], { maxDimension: 1 }
 result.bars;   // [{ dim: 0, birth: 0, death: Infinity }, ...]
 ```
 
-Scala.js programs use `%%%` in the sbt line above. `tda4j-demo-VERSION.jar` is a self-contained Scala REPL with the
+In a Scala.js project the same sbt line picks the Scala.js artifact. `tda4j-demo-VERSION.jar` is a self-contained Scala REPL with the
 library imported: `java -jar tda4j-demo-VERSION.jar`.
 
 ## Documentation

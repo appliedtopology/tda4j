@@ -21,9 +21,7 @@ The current version is on [Maven Central](https://central.sonatype.com/artifact/
 
 ```scala sc:nocompile
 // sbt
-libraryDependencies += "org.appliedtopology" %% "tda4j" % "VERSION"
-// sbt, Scala.js project
-libraryDependencies += "org.appliedtopology" %%% "tda4j" % "VERSION"
+libraryDependencies += "org.appliedtopology" %% "tda4j" % "VERSION"   // sbt 2: also picks the Scala.js artifact in a Scala.js project
 ```
 
 ```scala sc:nocompile

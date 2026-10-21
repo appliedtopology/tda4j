@@ -13,10 +13,10 @@ and GUDHI. This page maps the calls you know to tda4j's, and lists the differenc
 | Default coefficients | `Z/2` (`getDefaultSimplicialAlgorithm`) | `Z/2` | `Z/11` | `Z/17`; pass `characteristic = 2` to compare with the others |
 | Top degree | `maxDimension` is the top simplex dimension: `k + 1` for `H_k` | `--dim k` is `H_k` | `max_dimension` is the top simplex dimension: `k + 1` for `H_k` | `maxDimension = k` is `H_k` |
 | Filtration values | quantized to `numDivisions` steps | exact | exact | exact |
-| Default threshold | you give it | the enclosing radius | you give it | the minimum enclosing radius |
+| Default threshold | you give it | the enclosing radius | you give it | the enclosing radius |
 | Zero-length bars | check your version | not reported | check your version | not reported (`includeZeroLength = true` to see them) |
 | Short bars | all reported | all reported | all reported (`min_persistence = 0`) | all reported by `Persistence(...)`; the MATLAB, Java and command-line interfaces hide bars up to 1% of the data's scale (`minPersistence = 0` reports all) |
-| Alpha complex filtration | a radius | | the **squared** radius | a radius: square GUDHI's values to compare |
+| Alpha complex filtration | a radius | | the **squared** radius | a radius: square values to compare with GUDHI |
 | Representatives | generators of the bars | no | not from `persistence()` | a cycle or cocycle for every bar |
 
 Every number in tda4j's output is a filtration value of the complex you chose: a diameter for Vietoris-Rips, a radius for

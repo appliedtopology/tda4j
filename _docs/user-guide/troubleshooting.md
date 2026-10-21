@@ -6,8 +6,8 @@ title: Troubleshooting
 ### The compiler rejects the library's types, or reports dozens of errors
 
 Add `import scala.language.experimental.modularity` at the top of the file. The library is built with experimental
-Scala features, and Scala asks every file that uses it to opt in. In sbt, `-experimental` does the same for the whole
-project.
+Scala features, and Scala asks every file that uses it to opt in. In sbt, the compiler option `-language:experimental.modularity`
+does the same for the whole project.
 
 ### The barcode is empty or shorter than expected
 

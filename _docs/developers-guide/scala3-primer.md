@@ -4,7 +4,7 @@ title: A Scala 3.7+ primer for this codebase
 ---
 
 TDA4j uses the context-abstraction syntax introduced in Scala 3.7 and later. If it is new to you, read this page
-first: older Scala 3 examples look similar but do not compile here. Each construct below is shown with code from
+first: some of the constructs and idioms in wide use don't compile on earlier Scala 3 versions. Each construct below is shown with code from
 the source tree.
 
 ## The problem all of this solves
