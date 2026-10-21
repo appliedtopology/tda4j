@@ -72,3 +72,27 @@ class MalformedInputSpec extends Specification:
       )
     }
   }
+
+  "PointCloud and Persistence" should {
+    "refuse points with different numbers of coordinates (they used to be compared on the shorter prefix)" >> {
+      PointCloud(Array(Array(0.0, 0.0), Array(1.0), Array(2.0, 0.0))) must throwWith[IllegalArgumentException](
+        "point 1 has 1"
+      )
+    }
+    "refuse a NaN or infinite coordinate" >>
+      (PointCloud(Array(Array(0.0, 0.0), Array(1.0, Double.NaN))) must throwWith[IllegalArgumentException](
+        "point 1 has a coordinate that is NaN or infinite"
+      )).and(
+        PointCloud(Array(Array(Double.PositiveInfinity, 0.0))) must throwWith[IllegalArgumentException](
+          "point 0 has a coordinate"
+        )
+      )
+    "say that there are no points instead of failing inside the metric space" >> {
+      Persistence(Array.empty[Array[Double]]) must throwWith[IllegalArgumentException]("the input has no points")
+    }
+    "refuse a NaN maxFiltrationValue instead of returning the barcode of nothing" >> {
+      Persistence(Array(Array(0.0), Array(1.0)), maxFiltrationValue = Double.NaN) must throwWith[
+        IllegalArgumentException
+      ]("maxFiltrationValue is NaN")
+    }
+  }

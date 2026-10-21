@@ -150,6 +150,9 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   accepted rows of different lengths, `Ripser.readDistanceMatrix` failed on a trailing blank line, and
   `Perseus.readCubicalImageData` ignored values beyond its grid. Each now says which row or line is wrong; a token that is
   not a number is named with its line.
+- `PointCloud` accepted points with different numbers of coordinates (distances used the shorter prefix) and NaN or
+  infinite coordinates; `Persistence` of an empty cloud failed with `empty.min`, and with `maxFiltrationValue = NaN` it
+  returned the barcode of nothing. Each is refused with a message that names the problem.
 - `FiniteField(p)` with a `p` that is not a prime failed on first use with "/ by zero"; it says that `p` must be prime.
 - `fig.copy(palette = ...)` left heatmaps, cocycles' values and the color bar in the palette the plot was built with.
 - `DistanceToMeasure` through the vantage-point search returned fewer than `k` neighbours for some `k` that is a sizeable

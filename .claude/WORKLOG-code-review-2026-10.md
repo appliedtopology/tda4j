@@ -48,7 +48,27 @@ alpha (#155) and the release workflow (#150, #151) were left alone.
   numbers in the messages (`MalformedInputSpec`, shared so it runs on Scala.js too).
 - **[reading] ok:** `BarcodeDistance` conventions (diagonal distance for `LP`, essential bars), `DiagramPoint`.
 
+## Area 3 (rest): streams and alpha — fuzzed
+
+- **[probe] Stream contract holds.** VR (with and without threshold), Cech, lazy witness (nu 0/1/2), general witness,
+  Dowker (and dual), DtmRips, SparseRips on 30 random clouds each: no duplicates, every face present and earlier in the
+  iteration, face value <= cell value, values nondecreasing within a dimension. All six families are scale-invariant
+  (barcode of `c * points` is `c *` barcode) at c = 1e-6 and 1e6 (360 runs).
+- **[probe] Alpha complexes are not scale-invariant on the triangulation backends.** BowyerWatson, Helix and Default
+  disagree with Cech once the points span less than about 0.1 (already wrong at 1e-2); DQP is right at every scale. Cause:
+  `Epsilon(1e-5)` is absolute in the Gabriel test. Silent wrong barcode. Issue #168 (needs a decision: relative
+  `Epsilon`).
+- Alpha vs Cech at scale 1 and 1e4, ambient dimension 2, 3, 5: H0/H1 agree on all backends.
+
+## Verb inputs — edge probes
+
+- **[probe] Silent garbage:** a ragged cloud was compared on the shorter prefix of coordinates; a NaN or infinite
+  coordinate gave a barcode of isolated points; `maxFiltrationValue = NaN` gave the barcode of nothing; an empty cloud
+  failed with `empty.min`. Fixed in the PR (`PointCloud` validates; `Persistence` checks NaN threshold and empty input).
+- **[probe] ok:** empty/NaN/Inf images, one point, two identical points, bad characteristic (clear message), negative
+  `maxDimension`, distance matrices that are not symmetric (lower triangle by design).
+
 ## Not yet reviewed (in priority order)
 
 the `homology/` engine sources (fuzzed above), the remaining streams (witness, Dowker, DTM,
-sparse Rips, edge collapse), `barcode/` vectorizations and filters, `io/` Dipha/Gudhi, `alpha/` (not Helix), `matlab`/`cli` facade, `sset`, `plot`, Scala.js seams.
+sparse Rips, edge collapse), `barcode/` vectorizations and filters, `io/` Dipha/Gudhi, `matlab`/`cli` facade (the CLI's option checks were read: thorough), `sset`, `plot`, Scala.js seams.
