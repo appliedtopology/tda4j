@@ -17,7 +17,7 @@ object AlphaShapes:
     requireValidTriangulation: Boolean = false,
     maxRadius: Optional[Double] = Optional.empty,
     maxDimension: Optional[Int] = Optional.empty
-  )(using epsilon: Epsilon = Epsilon(1e-5)): AlphaShapes
+  )(using factor: EpsilonFactor): AlphaShapes   // default EpsilonFactor(1e-5), a fraction of the extent of the points
 ```
 
 With a `maxRadius`, every backend returns the simplices of alpha value at most `maxRadius`, with the same values (in

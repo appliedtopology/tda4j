@@ -134,6 +134,40 @@ class CofaceSimplexStreamSpec extends mutable.Specification with org.specs2.Scal
       direct === viaIterator
     }
 
+  // RipserCofaceSimplexStream must build dimension d + 1 from the simplices it kept in dimension d. It once left
+  // `currentDimension` at 0 after dimension 1, so every higher dimension re-enumerated all C(n, d + 1) subsets and
+  // evaluated the filtration value on each, however sparse the complex.
+  "RipserCofaceSimplexStream evaluates the filtration value on cofaces of kept simplices only, and agrees with " +
+    "the enumerating stream cell for cell" >> {
+      val rnd = new scala.util.Random(7)
+      val metricSpace = EuclideanMetricSpace(Array.fill(14)(Array.fill(3)(rnd.nextDouble())))
+      val threshold = Some(0.3)
+      var evaluations = 0L
+      val counting = new PartialFunction[Simplex[Int], Double]:
+        private val base = FiniteMetricSpace.MaximumDistanceFiltrationValue[Int](metricSpace)
+        def isDefinedAt(spx: Simplex[Int]): Boolean = base.isDefinedAt(spx)
+        def apply(spx: Simplex[Int]): Double =
+          evaluations += 1
+          base(spx)
+      val enumerating = EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = threshold)
+      val ripser =
+        RipserCofaceSimplexStream(metricSpace, maxFiltrationValue = threshold, filtrationValueOverride = Some(counting))
+      val dimensions = 0 to 4
+      val evaluationsAfter = dimensions.map { d =>
+        ripser.iterateDimension(d).toVector
+        evaluations
+      }
+      val cells = dimensions.map(d => ripser.iterateDimension(d).toVector)
+      val kept = cells.map(_.size)
+      (cells must beEqualTo(dimensions.map(d => enumerating.iterateDimension(d).toVector)))
+        .and(
+          // Each candidate of dimension d + 1 extends a kept d-simplex by one vertex: at most kept(d) * n evaluations.
+          // Re-enumerating the d-subsets instead costs C(14, 3) = 364 evaluations at dimension 3 and C(14, 4) at 4.
+          evaluationsAfter(2) - evaluationsAfter(1) must be_<=(kept(1).toLong * metricSpace.size)
+        )
+        .and(evaluationsAfter(4) - evaluationsAfter(3) must be_<=(kept(3).toLong * metricSpace.size))
+    }
+
   // Direct tests of StratifiedCellStream's own contract (see its doc comment): `.iterator` must actually
   // terminate, and the bound it terminates at must be exactly metricSpace.size, not one off in either
   // direction -- an off-by-one here would silently drop (or spuriously include) the top-dimensional simplex,

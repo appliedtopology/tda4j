@@ -6,6 +6,15 @@ package org.appliedtopology.tda4j
   * `PointCloud` is expected (`into`), so callers never need to care which collection their points are in.
   */
 into final case class PointCloud(points: Array[Array[Double]]):
+  require(
+    points.forall(_.length == ambientDimension),
+    s"PointCloud: the points have different numbers of coordinates (the first has $ambientDimension, point " +
+      s"${points.indexWhere(_.length != ambientDimension)} has ${points.find(_.length != ambientDimension).map(_.length).getOrElse(0)})"
+  )
+  require(
+    points.forall(_.forall(_.isFinite)),
+    s"PointCloud: point ${points.indexWhere(!_.forall(_.isFinite))} has a coordinate that is NaN or infinite"
+  )
   def size: Int = points.length
   def ambientDimension: Int = if points.isEmpty then 0 else points.head.length
   lazy val metricSpace: EuclideanMetricSpace = new EuclideanMetricSpace(points)

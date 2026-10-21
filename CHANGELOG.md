@@ -9,6 +9,11 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Breaking
 
+- The tolerance of the triangulations is relative: `HelixDelaunay`, `BowyerWatsonDelaunay` and `AlphaShapes(...)` take a
+  `using EpsilonFactor` (default `EpsilonFactor(1e-5)`, a fraction of the points' largest coordinate range) in place of
+  `using Epsilon`; a `given Epsilon` in your code is no longer read there. `Epsilon` stays the absolute tolerance of the
+  lower-level geometry (`Hyperplane`, `Hypersphere`). At an extent of 1 nothing changes.
+
 - `Plot.save` (and `PersistenceResult.save`, and so the MATLAB `save`) return the absolute path as a `String`, not a
   `java.nio.file.Path`: the Scala.js build has no `java.nio.file`. Call `Paths.get(result)` where you need a `Path`.
 - `CubicalImage.fromBufferedImage` and `CubicalImage.fromFile` are members of the JVM build only (they are still there, on
@@ -142,6 +147,26 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Fixed
 
+- The alpha complex on the BowyerWatson, Helix and Default backends gave a different filtration, and extra H1 bars, for
+  points spanning less than about 0.1: the `1e-5` tolerance was absolute. It is now a fraction of the extent
+  (`EpsilonFactor`), so the barcode of `c * points` is `c` times that of `points`.
+- `Cech`, `Witness`, `Dowker`, `DtmRips` and `SparseRips` built dimension `d + 1` by enumerating and testing every
+  `(d + 1)`-subset of the points instead of extending the simplices kept in dimension `d`, so a sparse complex cost as
+  much as a dense one; they extend the kept simplices, and give the same complex cell for cell.
+- A file in the wrong format was read as a different space instead of refused: `CSV.readLowerTriangularDistanceMatrix`
+  accepted a full matrix (as a point set one larger) and ragged rows, `CSV.readPointCloud` and `readFullDistanceMatrix`
+  accepted rows of different lengths, `Ripser.readDistanceMatrix` failed on a trailing blank line, and
+  `Perseus.readCubicalImageData` ignored values beyond its grid. Each now says which row or line is wrong; a token that is
+  not a number is named with its line.
+- `PointCloud` accepted points with different numbers of coordinates (distances used the shorter prefix) and NaN or
+  infinite coordinates; `Persistence` of an empty cloud failed with `empty.min`, and with `maxFiltrationValue = NaN` it
+  returned the barcode of nothing. Each is refused with a message that names the problem.
+- `PersistenceDiagram.bettiNumbers` of `d.at(f)` was all zeros (the classes alive at `f` are closed bars `[birth, f]`,
+  not essential ones); it counts the classes alive at the end of the diagram, so `d.at(f).bettiNumbers` is the Betti
+  numbers at `f`.
+- A `characteristic` above 10^6 (`FiniteField.MaxPrime`) is refused with a message; a prime of 10^9 used to run out of
+  memory building its inverse table.
+- `FiniteField(p)` with a `p` that is not a prime failed on first use with "/ by zero"; it says that `p` must be prime.
 - `fig.copy(palette = ...)` left heatmaps, cocycles' values and the color bar in the palette the plot was built with.
 - `DistanceToMeasure` through the vantage-point search returned fewer than `k` neighbours for some `k` that is a sizeable
   fraction of the number of points (a defect of the Java library it used); it returns `k`.

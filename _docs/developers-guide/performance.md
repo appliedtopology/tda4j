@@ -43,7 +43,7 @@ The specs are:
   engine over point count, dimension and degree, with construction and
   reduction timed apart and a timeout per cell. It runs for 15 minutes or more.
 - `ProfilingSpec`, `ApparentPairsBenchmarkSpec`, `CubicalBenchmarkSpec`,
-  `SparseRipsBenchmarkSpec`, `DimensionCeilingBenchmarkSpec` and
+  `ThresholdBenchmarkSpec`, `DimensionCeilingBenchmarkSpec` and
   `EdgeCollapseBenchmarkSpec` each cover one engine or construction.
 - `RipserPaperBenchmarkSpec` runs the datasets of the Ripser paper. It needs
   `-DdataDir`, and with `-DripserBin` it also times `ripser.cpp`.
@@ -56,8 +56,8 @@ everything in one JVM.
 For an A/B, use a driver: a `main` in the test tree that runs one engine on
 one workload and prints a median. The drivers include:
 - `PaperBenchmarkDriver`, which runs the `Persistence` verb (or a named
-  engine) on Vietoris-Rips, cubical, alpha or Čech input and is what `bench/`
-  calls;
+  engine) on Vietoris-Rips (optionally edge-collapsed), cubical, alpha, Čech, sparse
+  Rips, DTM-Rips, witness or Dowker input and is what `bench/` calls;
 - `SingleEngineProfileDriver` and `VRLowDimProfileDriver` for Vietoris-Rips,
   the first as a single-engine subprocess for comparisons with ripser.cpp;
 - `CubicalProfileDriver` and `FastCubicalProfileDriver` for images;
@@ -83,7 +83,13 @@ same inputs on one machine:
 - for Vietoris-Rips: ripser.cpp, ripser.py, giotto-ph, GUDHI, Ripserer.jl and
   JavaPlex;
 - for cubical complexes: GUDHI and CubicalRipser;
-- alpha complexes as well.
+- alpha complexes as well;
+- Čech (GUDHI's Delaunay-Čech), DTM-Rips (GUDHI), witness (GUDHI, JavaPlex),
+  sparse Rips (GUDHI's sparse Rips, a different construction, and the exact
+  Rips barcode from ripser.cpp as the reference) and Dowker complexes (a
+  hand-built GUDHI simplex tree, Blaser and Brun's `dowker_homology`, Yoon's
+  Julia package);
+- edge collapse: `tda4j-collapse` beside `gudhi-collapse`.
 
 It also checks that every tool returns the same barcode, by bottleneck
 distance per degree. `bench/run.sh setup`, `prepare` and `run` install the
