@@ -121,8 +121,8 @@ Readings, with the confidence each deserves:
 - **The witness disagreement is a real finding to resolve (#171)**: either GUDHI's weak witness complex is not de Silva-Carlsson's
   lazy/general one, or one implementation has a bug. It is not a timing question yet.
 - TDA4j is two to five orders of magnitude slower than GUDHI on Cech, DTM-Rips, sparse Rips and the large Dowker side. Re-running
-  with 8 GB instead of 2 GB changed nothing (101 s both times), so it is not GC pressure. The causes are not diagnosed; filed in #176's
-  follow-up issue. A Dowker complex is smaller on its larger side's dual: dual is 18x faster at 300x100 but the dual of 60x200
-  (200 vertices, dim 2) did not finish, so "pick the smaller vertex side" is advice, not a rule.
+  with 8 GB instead of 2 GB changed nothing (101 s both times), so it is not GC pressure. The causes are not diagnosed; filed as #181.
+  Dual is 18x faster at 300x100, but the dual of 60x200 (200 vertices, dim 2) did not finish, so
+  "pick the smaller vertex side" is advice, not a rule.
 - Yoon's Julia package could not be run: no Julia in this session. Its worker is written (`dowker_yoon_worker.jl`) and untested.
 - `ripser.cpp` was not built here, so the sparse Rips approximation error against exact Rips is not measured.
