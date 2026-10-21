@@ -4,11 +4,9 @@ title: Hard-won invariants you must not break
 ---
 
 
-These are the load-bearing, non-obvious rules this codebase depends on. Every one of them was found by a
-real bug, not by reading a spec — which is itself the pattern worth internalizing (see
-[Process: validate empirically, not by inspection](#process-validate-empirically-not-by-inspection) at the
-bottom). If you're extending the persistence engines, complex-construction streams, or anything
-Ripser-flavored, read this page in full before you start.
+These are the non-obvious rules the code depends on. Each came from a real bug. If you are extending the persistence
+engines, the streams or anything Ripser-flavored, read the page in full first; the last section says how to test a
+change to them.
 
 ## 1. `given`/implicit resolution happens once, at construction, not per call
 
@@ -71,8 +69,7 @@ independently be a valid tie-break.
 
 `Chain`'s `+`/`-`/`⊠` operators only lazily collapse the *head* of the underlying `PriorityQueue`, so a
 hand-rolled fold that repeatedly subtracts terms builds an ever-growing backlog of uncollapsed duplicate
-entries — confirmed directly by a first draft that hung on an 8-12 point complex that should take
-milliseconds. `Chain.reduceBy`/`reduceByUntil` go through a `SortedMap` that collapses duplicates on every
+entries, which can make a reduction of a small complex hang. `Chain.reduceBy`/`reduceByUntil` go through a `SortedMap` that collapses duplicates on every
 insertion. Reserve raw chain arithmetic for small, one-shot combinations (building a V-column fold), never
 for anything that accumulates over many reduction steps.
 

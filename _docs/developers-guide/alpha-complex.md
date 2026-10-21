@@ -5,7 +5,7 @@ title: "Alpha complex: Bowyer-Watson, Helix and DQP"
 
 Three backends compute alpha complexes; `AlphaShapes(points, backend)` (`alpha/AlphaShapes.scala`) chooses between
 them. Two triangulate (`BowyerWatsonDelaunay`, `HelixDelaunay`, both `DelaunayAlphaShapes`); `AlphaComplexDQP` does not. This page is the developer-facing view. For the user-facing framing (which one to
-pick, and the honest tradeoffs), see the [User's Guide](../user-guide/index.md).
+pick, and the tradeoffs), see the [User's Guide](../user-guide/index.md).
 
 ## Dispatch
 

@@ -93,7 +93,7 @@ It reports both:
 - **cold**, one computation per process including JVM start-up, which is what
   a command-line or first MATLAB call sees;
 - **warm**, the median of computations in one process, which is what a
-  long-running session sees.
+  long-running process sees.
 
 It records peak RSS for each. `bench/run.sh sweep-cubical` times the image
 engines across sizes; it is how the `Auto` default for images is chosen.
