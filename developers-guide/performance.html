@@ -147,7 +147,7 @@
   <p>The specs are:</p>
   <ul>
    <li><code>EngineComparisonBenchmarkSpec</code> times every pairing of construction and engine over point count, dimension and degree, with construction and reduction timed apart and a timeout per cell. It runs for 15 minutes or more.</li>
-   <li><code>ProfilingSpec</code>, <code>ApparentPairsBenchmarkSpec</code>, <code>CubicalBenchmarkSpec</code>, <code>SparseRipsBenchmarkSpec</code>, <code>DimensionCeilingBenchmarkSpec</code> and <code>EdgeCollapseBenchmarkSpec</code> each cover one engine or construction.</li>
+   <li><code>ProfilingSpec</code>, <code>ApparentPairsBenchmarkSpec</code>, <code>CubicalBenchmarkSpec</code>, <code>ThresholdBenchmarkSpec</code>, <code>DimensionCeilingBenchmarkSpec</code> and <code>EdgeCollapseBenchmarkSpec</code> each cover one engine or construction.</li>
    <li><code>RipserPaperBenchmarkSpec</code> runs the datasets of the Ripser paper. It needs <code>-DdataDir</code>, and with <code>-DripserBin</code> it also times <code>ripser.cpp</code>.</li>
   </ul>
   <p>Use them to see where time goes across the library, not for an A/B: they run everything in one JVM.</p>
@@ -156,7 +156,7 @@
   <h2 class="h500"><a href="#profile-drivers" class="anchor"></a>Profile drivers</h2>
   <p>For an A/B, use a driver: a <code>main</code> in the test tree that runs one engine on one workload and prints a median. The drivers include:</p>
   <ul>
-   <li><code>PaperBenchmarkDriver</code>, which runs the <code>Persistence</code> verb (or a named engine) on Vietoris-Rips, cubical, alpha or Čech input and is what <code>bench/</code> calls;</li>
+   <li><code>PaperBenchmarkDriver</code>, which runs the <code>Persistence</code> verb (or a named engine) on Vietoris-Rips (optionally edge-collapsed), cubical, alpha, Čech, sparse Rips, DTM-Rips, witness or Dowker input and is what <code>bench/</code> calls;</li>
    <li><code>SingleEngineProfileDriver</code> and <code>VRLowDimProfileDriver</code> for Vietoris-Rips, the first as a single-engine subprocess for comparisons with ripser.cpp;</li>
    <li><code>CubicalProfileDriver</code> and <code>FastCubicalProfileDriver</code> for images;</li>
    <li><code>UnionFindEdgeDriver</code> for the chunks engine's union-find;</li>
@@ -171,7 +171,9 @@
   <ul>
    <li>for Vietoris-Rips: ripser.cpp, ripser.py, giotto-ph, GUDHI, Ripserer.jl and JavaPlex;</li>
    <li>for cubical complexes: GUDHI and CubicalRipser;</li>
-   <li>alpha complexes as well.</li>
+   <li>alpha complexes as well;</li>
+   <li>Čech (GUDHI's Delaunay-Čech), DTM-Rips (GUDHI), witness (GUDHI, JavaPlex), sparse Rips (GUDHI's sparse Rips, a different construction, and the exact Rips barcode from ripser.cpp as the reference) and Dowker complexes (a hand-built GUDHI simplex tree, Blaser and Brun's <code>dowker_homology</code>, Yoon's Julia package);</li>
+   <li>edge collapse: <code>tda4j-collapse</code> beside <code>gudhi-collapse</code>.</li>
   </ul>
   <p>It also checks that every tool returns the same barcode, by bottleneck distance per degree. <code>bench/run.sh setup</code>, <code>prepare</code> and <code>run</code> install the tools, generate the data and run the cases; <code>bench/README.md</code> has the options.</p>
   <p>It reports both:</p>
