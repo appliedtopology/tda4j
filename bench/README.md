@@ -135,8 +135,10 @@ position (marked †).
 `bench/run.sh sweep-threads` runs every multithreaded Vietoris–Rips tool (`tda4j-parallel-mt`, `tda4j-blocks-mt`,
 `giotto-ph-mt`, and `dipha-mt`, whose threads are MPI ranks) at 1, 2, 4, ... threads up to the machine's logical CPUs
 (`--threads 1,8,32` picks others), with `ripser.cpp` once per case for scale (`--baselines`). The default cases are
-fractal-r (2.2 billion cells to H2) and random16 (50 points in R^16 to H7), the heaviest that `tda4j-parallel-mt` can
-encode; `tda4j-blocks-mt` builds its matrices explicitly and only runs random16.
+fractal-r (2.2 billion cells to H2), the heaviest case of the main run that `tda4j-parallel-mt` can encode, and
+`cube10_40`, which the sweep generates: 40 points uniform in [0,1]^10 to H10 at t = 1.6 (235 million cells), high
+degrees where the work splits by edge block. `tda4j-blocks-mt` builds its matrices explicitly, so it skips both
+(`--cases random16` is one it runs).
 
 A run at t threads is pinned to the CPUs 0 to t - 1 with `taskset`, so the JVM's garbage collector and compiler and the
 MPI ranks get those t CPUs too (with Open MPI the sweep adds `--bind-to none`, so the ranks stay inside the set). Use

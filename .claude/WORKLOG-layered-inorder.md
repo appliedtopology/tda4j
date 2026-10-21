@@ -364,3 +364,44 @@ enclosing radius as the verb's does; the edge table and complex inside the timed
 parallelism). Smoke run: identical barcodes to `engine=auto` on `bench/smoke-points.txt` and torus n=1000 t=0.6 over
 F₂ (verb 3.7 s, blocks 6.1 s, parallel 0.90 s, one cold trial each, 1 thread). Two harness tests were stale after
 the scala merge (Čech cases now in the main run; the new tasks countable by TDA4j's stream) and were updated.
+
+## Addendum: a thread-scaling sweep for the multithreaded tools (2026-10-21, late)
+
+The project lead asked how the thread count is set and for a sweep on a heavy example or two, to show how the `-mt`
+tools scale on the 32-core compute server. `bench/sweep_threads.py` (`bench/run.sh sweep-threads`) runs every
+`multithreaded` Vietoris-Rips row of `bench.py` (`tda4j-parallel-mt`, `tda4j-blocks-mt`, `giotto-ph-mt`, `dipha-mt`
+with ranks) at 1, 2, 4, ... threads up to `os.cpu_count()`, ripser.cpp once per case for scale, each run through
+`bench.run_one` (cold, then warm under `--warm-cap`). Design points:
+
+- **Pinning** (default when `taskset` exists): a run at t threads gets CPUs 0..t-1 (`bench.pinned`, via
+  `args.pin_cpus`), so a 1-thread JVM does not collect garbage on 32 cores; Open MPI gets `--bind-to none` so its ranks
+  stay in the set. Not tested here (no MPI in the sandbox).
+- **Order and stopping:** most threads first; a series stops at the first failure other than `oom` (fewer threads
+  only take longer; an error does not depend on the count; fewer threads may need less memory).
+- **The invariant checked:** the barcode does not depend on the thread count (exact multiset equality against the
+  fewest threads that finished), plus the bottleneck distance to the baseline's when GUDHI is installed.
+- **Explicit cap:** `tda4j-blocks-mt` is tagged `explicit` and skipped above `--explicit-max-cells` like PHAT, in the
+  main run too (`bench.explicit_too_large`); it would otherwise spend its timeout or heap on fractal-r, dragon2000,
+  o3_4096, clifford50000. The driver now says why when the experiments' n x n tables cannot be allocated.
+
+**Which cases the parallel experiment can run.** Its key needs bits(max C(n, q), q <= dim + 2) + bits(edges + 1) <= 63:
+o3_4096 needs 54 + 18 = 72 (does not fit; two-word keys are #194), cyclooctane exactly 63, fractal-r 49, o3_1024 60,
+dragon2000 52, random16 42. clifford50000 fails earlier, on the n x n tables. Default cases: fractal-r and a generated
+`cube10_40` (40 points uniform in [0,1]^10, numpy `default_rng(20261021)`, to H10). The generated draw is much lighter
+than the earlier Scala-drawn cloud at the same threshold (ripser.cpp 1.7 s at t = 1.45 against ripser.py's 52 s there):
+the high-dimensional cell count lives in the tail of the distances. Calibrated by ripser.cpp: 9.0 s at 1.5, 22.8 s at 1.55
+(27.8M cells), 144 s at 1.6 (234.7M cells, `workers/count_cliques.cpp`); t = 1.6 chosen, and the count recorded in the
+script so the explicit tools skip it.
+
+**Smoke measurements** (4-core sandbox, pinned, one JVM per run, F₂; warm medians unless noted; not for the paper):
+
+| case | ripser.cpp | tda4j-parallel-mt, 1 / 2 / 4 threads | tda4j-blocks-mt, 1 / 2 / 4 |
+|---|---|---|---|
+| random16 (15.8M cells, to H7) | 5.7 s | 2.78 / 1.39 / 0.753 s (3.7x) | 19.3 / 15.9 / 15.1 s (1.3x) |
+| fractal-r (2.2B cells, to H2) | 7.49 s | 17.2 / – / 6.81 s (2.5x) | skipped (explicit) |
+| cube10_40, t = 1.55 (27.8M) | 22.8 s | 7.92 / – / 2.75 s (2.9x), one trial | |
+| cube10_40, t = 1.6 (234.7M) | 144 s, one run | 57.9 / – / 24.8 s (2.3x), one trial, heap peak 6.1 GB | skipped (explicit) |
+
+Barcodes identical at every thread count on all four (cube10_40: 81 bars, as ripser.cpp's). Sequentially the experiment
+is 2.3x slower than ripser.cpp on fractal-r and 2-2.5x faster on random16 and cube10_40. Not verified: anything above 4
+threads, `giotto-ph-mt` and `dipha-mt` in the sweep (not installed here), the GUDHI distance column.

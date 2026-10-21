@@ -1248,6 +1248,23 @@ class ThreadSweepTests(unittest.TestCase):
         self.assertEqual(sweep_threads.thread_counts("", 1), [1])
         self.assertEqual(sweep_threads.thread_counts("1, 4,2", 32), [4, 2, 1])
 
+    def test_the_generated_case_is_written_once_and_the_same_every_time(self):
+        case = next(c for c in sweep_threads.SWEEP_CASES if c.name == "cube10_40")
+        self.assertEqual((case.task, case.dim, case.threshold), ("vr", 10, 1.6))
+        self.assertGreater(int(sweep_threads.GENERATED_CELLS["cube10_40"]), 1e8, "above the explicit tools' cap")
+        self.assertIn("cube10_40", sweep_threads.DEFAULT_CASES.split(","))
+        self.assertNotIn("cube10_40", {c.name for c in bench.CASES}, "not a case of the main run")
+        with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b:
+            sweep_threads.generate(case, Path(a))
+            sweep_threads.generate(case, Path(b))
+            x = np.loadtxt(Path(a) / case.file)
+            self.assertEqual(x.shape, (40, 10))
+            self.assertTrue(((x >= 0) & (x < 1)).all())
+            np.testing.assert_array_equal(x, np.loadtxt(Path(b) / case.file))
+            (Path(a) / case.file).write_text("1 2\n")
+            sweep_threads.generate(case, Path(a))
+            self.assertEqual((Path(a) / case.file).read_text(), "1 2\n", "an existing file is kept")
+
     def test_a_tool_gets_its_count_as_threads_or_as_mpi_ranks_and_a_pinned_run_gets_as_many_cpus(self):
         self.assertEqual(sweep_threads.with_threads({"engine": "parallel", "threads": "ALL"}, 8)["threads"], "8")
         self.assertEqual(sweep_threads.with_threads({"only_p": 2, "ranks": "ALL"}, 8), {"only_p": 2, "ranks": "8"})
