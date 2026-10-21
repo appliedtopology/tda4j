@@ -36,6 +36,7 @@ subsection:
       - page: user-guide/cli.md
       - page: user-guide/matlab.md
       - page: user-guide/javascript.md
+      - page: user-guide/coming-from-other-libraries.md
       - page: user-guide/troubleshooting.md
       - page: user-guide/glossary.md
       - index: user-guide/topological-spaces/index.md

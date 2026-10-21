@@ -55,3 +55,23 @@ gets a pointer separating the common sections from the reference. Link check ove
 anchors): no broken ones remain. Not changed on purpose: the long reference sections of plotting.md (structure fine,
 length is the content); developer's guide beyond the earlier steps (human-edited per Mikael).
 Not done: docs build (CI `docs-build` runs it on the PR).
+
+## Step 5: Mikael's follow-up (2026-10-21)
+
+Asked for: a careful pass over the developer's guide using jmatuszewski's edits as the guide; complete MATLAB, CLI and
+plotting references that need no ScalaDoc; migration guides.
+
+- Jordan Matuszewski's one commit (82743b6, 2026-10-02, "First pass at developer guide documentation", -722/+259 lines
+  over 8 pages) is the editorial standard. What he removed: provenance narratives ("no paper access", "confirmed
+  empirically", counterexample stories), pointers to `.claude/` DESIGN/WORKLOG files, per-class cross-validation
+  asides, repeated explanations; he broke long paragraphs into short lists and kept the invariants, signatures and
+  warnings. Since then Claude added about 12 KB to architecture.md and similar to the engines page; the additions that
+  matched his standard (platform seams, givens rule, chain storages) were kept and tightened, the rest cut.
+- References, written from the source rather than from the old pages: `cli.md` from `TDA4jConf` (every flag, default,
+  value; exit status), `matlab.md` from `TDA4j.scala` and the result classes (every entry point, option key set,
+  every result method), `plotting.md` MATLAB/Java section from `Figure`/`Scene` (every string/number method).
+- Migration guide `user-guide/coming-from-other-libraries.md`. The JavaPlex column was checked against `Plex4.java` in
+  appliedtopology/javaplex; the Ripser and GUDHI columns are from memory of their public interfaces and say so.
+  Unverified: the claim that GUDHI and JavaPlex omit zero-length bars (left as "check your version").
+- Unverified in general: the docs build (CI runs it); the CLI reference's exit-status line for argument parse errors
+  (Scallop's default exit code).
