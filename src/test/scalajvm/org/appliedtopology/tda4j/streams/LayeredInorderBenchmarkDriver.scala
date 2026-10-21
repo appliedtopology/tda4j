@@ -14,9 +14,11 @@ import scala.util.Random
   * java -cp $CP org.appliedtopology.tda4j.LayeredInorderBenchmarkDriver <n> <ambientDim> <topSimplexDim> <threshold> <method> [trials] [seed]
   * }}}
   *
-  * `method` is `bitsets`, `lists`, `sort`, `enumerating`, `ripser` or `inorder`, one per JVM, or `check` (the layered
-  * and sorted dimensions are identical). `threshold` is a number or `mer` (the minimum enclosing radius). Prints one
-  * line per dimension: size, median milliseconds, bytes allocated, bytes the dimension's arrays keep.
+  * `method` is `bitsets`, `lists`, `sort`, `countsort` (sorted by a counting sort on the diameter's rank among the edge
+  * lengths, then colex within ties), `layered` (the stream, boxed), `enumerating`, `ripser` or `inorder`, one per JVM,
+  * or `check` (the layered and sorted dimensions are identical). `threshold` is a number or `mer` (the minimum
+  * enclosing radius). Prints one line per dimension: size, median milliseconds, bytes allocated, bytes the dimension's
+  * arrays keep.
   */
 object LayeredInorderBenchmarkDriver:
   def main(args: Array[String]): Unit =
@@ -36,6 +38,7 @@ object LayeredInorderBenchmarkDriver:
 
     val threads = ManagementFactory.getThreadMXBean.asInstanceOf[com.sun.management.ThreadMXBean]
     def allocated(): Long = threads.getThreadAllocatedBytes(Thread.currentThread().getId)
+    val sortTimes = scala.collection.mutable.ArrayBuffer.empty[Map[Int, Long]]
 
     // One trial: (size, nanoseconds, bytes allocated, bytes kept) per dimension 1..top.
     def trial(): Vector[(Int, Long, Long, Long)] = method match
@@ -54,10 +57,10 @@ object LayeredInorderBenchmarkDriver:
           out += ((layer.size, System.nanoTime() - t0, allocated() - a0, kept(layer)))
         if g.tieRunsSorted > 0 then println(s"  tie runs sorted: ${g.tieRunsSorted}")
         out.result()
-      case "sort" =>
+      case "sort" | "countsort" =>
         var t0 = System.nanoTime()
         var a0 = allocated()
-        val s = SortBaseline(n, distance, threshold)
+        val s = SortBaseline(n, distance, threshold, counting = method == "countsort")
         var layer = s.edges
         val out = Vector.newBuilder[(Int, Long, Long, Long)]
         out += ((layer.size, System.nanoTime() - t0, allocated() - a0, layer.kept))
@@ -66,9 +69,11 @@ object LayeredInorderBenchmarkDriver:
           a0 = allocated()
           layer = s.cofacets(layer)
           out += ((layer.size, System.nanoTime() - t0, allocated() - a0, layer.kept))
+        sortTimes += s.sortNanos.toMap
         out.result()
-      case "enumerating" | "ripser" | "inorder" =>
+      case "enumerating" | "ripser" | "inorder" | "layered" =>
         val stream = method match
+          case "layered"     => LayeredInorderSimplexStream(metricSpace, maxFiltrationValue = Some(threshold))
           case "enumerating" => EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = Some(threshold))
           case "ripser"      => RipserCofaceSimplexStream(metricSpace, maxFiltrationValue = Some(threshold))
           case _             => InorderCofaceSimplexStream(metricSpace, maxFiltrationValue = Some(threshold))
@@ -76,12 +81,48 @@ object LayeredInorderBenchmarkDriver:
         (1 to top).toVector.map { d =>
           val t0 = System.nanoTime()
           val a0 = allocated()
-          val size = stream.iterateDimension(d).size
+          val size = stream.iterateDimension(d).foldLeft(0)((count, s) => count + s.size / s.size)
           (size, System.nanoTime() - t0, allocated() - a0, -1L)
         }
 
     def kept(layer: Layer): Long = 4L * layer.vertices.length + 4L * layer.root.length
 
+    // The block of simplices whose first longest edge is ab (length alpha) is ab joined with the clique complex of the
+    // lens graph (the vertices closer than alpha to a and to b, joined when closer than alpha), so in general position
+    // the H1 classes born at alpha number 1 if the lens is empty (and ab joins no two components), 0 otherwise, and
+    // H1 deaths plus H2 births at alpha number (components of the lens graph) - 1. Compared with the Ripser engine.
+    if method == "lens" then
+      var emptyLens = 0
+      var componentSum = 0
+      def root(parent: Array[Int], x: Int): Int = if parent(x) == x then x else root(parent, parent(x))
+      val parent = Array.range(0, n)
+      var components = n
+      val edgeOrder = (for b <- 0 until n; a <- 0 until b if dist(a * n + b) <= threshold yield (a, b))
+        .sortBy((a, b) => dist(a * n + b))
+      for (a, b) <- edgeOrder do
+        val alpha = dist(a * n + b)
+        val lens = (0 until n).filter(w => dist(w * n + a) < alpha && dist(w * n + b) < alpha)
+        if lens.isEmpty then emptyLens += 1
+        else
+          val lensParent = Array.range(0, n)
+          var c = lens.size
+          for x <- lens; y <- lens if x < y && dist(x * n + y) < alpha && root(lensParent, x) != root(lensParent, y) do
+            lensParent(root(lensParent, x)) = root(lensParent, y)
+            c -= 1
+          componentSum += c - 1
+        if root(parent, a) != root(parent, b) then
+          parent(root(parent, a)) = root(parent, b)
+          components -= 1
+      val diagram = Persistence(pts, maxDimension = 2, maxFiltrationValue = threshold)
+      val h1 = diagram.dim(1).bars.size
+      val h2 = diagram.dim(2).bars.size
+      println(
+        s"n=$n threshold=$threshold: empty lenses - (n - components) = ${emptyLens - (n - components)}, H1 bars = $h1"
+      )
+      println(
+        s"  sum of (lens graph components - 1) = $componentSum, H1 deaths + H2 bars = ${diagram.dim(1).bars.count(!_.death.isPosInfinity) + h2}"
+      )
+      return
     if method == "check" then
       val g = Generator(n, distance, threshold)
       val s = SortBaseline(n, distance, threshold)
@@ -97,6 +138,12 @@ object LayeredInorderBenchmarkDriver:
       return
     println(s"n=$n ambient=$ambient top=$top threshold=$threshold method=$method trials=$trials")
     val runs = Vector.fill(trials)(trial())
+    if sortTimes.nonEmpty then
+      println(
+        "  of which sorting: " + (1 to top)
+          .map(d => f"dim $d ${sortTimes.map(_(d)).sorted.apply(trials / 2) / 1e6}%.1f ms")
+          .mkString(", ")
+      )
     for d <- 1 to top do
       val rows = runs.map(_(d - 1))
       val ms = rows.map(_._2).sorted.apply(trials / 2) / 1e6
@@ -108,14 +155,14 @@ object LayeredInorderBenchmarkDriver:
     * the threshold of every vertex (a word-wise AND of threshold-adjacency bitsets), each with its diameter computed,
     * then the dimension sorted by diameter and colexicographically descending.
     */
-  final class SortBaseline(n: Int, distance: (Int, Int) => Double, threshold: Double):
+  final class SortBaseline(n: Int, distance: (Int, Int) => Double, threshold: Double, counting: Boolean = false):
     final class SortedLayer(val dim: Int, val vertices: Array[Int], val diameter: Array[Double]):
       def size: Int = diameter.length
       def kept: Long = 4L * vertices.length + 8L * diameter.length
 
     private val words = (n + 63) >>> 6
     private val rows = new Array[Long](n * words)
-    private val binomials = Array.tabulate(n + 1, 8)((m, k) => SimplexIndexing.binomial(m, k))
+    private val binomials = Array.tabulate(n + 1, 6)((m, k) => SimplexIndexing.binomial(m, k))
 
     def edges: SortedLayer =
       val vs = IntBuffer()
@@ -168,7 +215,16 @@ object LayeredInorderBenchmarkDriver:
         i += 1
       sorted(SortedLayer(k + 1, vs.result, ds.result))
 
+    /** Nanoseconds spent sorting, per dimension. */
+    val sortNanos: scala.collection.mutable.Map[Int, Long] = scala.collection.mutable.Map.empty
+
+    // The distinct edge lengths, ascending: every diameter is one of them, so `counting` sorts by its rank here with a
+    // counting sort and then sorts each run of equal diameters by colex.
+    private var distinctLengths: Array[Double] = Array.empty
+
     private def sorted(layer: SortedLayer): SortedLayer =
+      val t0 = System.nanoTime()
+      if layer.dim == 1 then distinctLengths = layer.diameter.distinct.sorted
       val w = layer.dim + 1
       val colex = Array.tabulate(layer.size) { i =>
         var c = 0L
@@ -178,16 +234,45 @@ object LayeredInorderBenchmarkDriver:
           j += 1
         c
       }
-      val order = sortIndices(
-        layer.size,
-        (x, y) =>
-          java.lang.Double.compare(layer.diameter(x), layer.diameter(y)) match
-            case 0 => java.lang.Long.compare(colex(y), colex(x))
-            case c => c
-      )
+      val order =
+        if !counting then
+          sortIndices(
+            layer.size,
+            (x, y) =>
+              java.lang.Double.compare(layer.diameter(x), layer.diameter(y)) match
+                case 0 => java.lang.Long.compare(colex(y), colex(x))
+                case c => c
+          )
+        else
+          val rank = layer.diameter.map(d => java.util.Arrays.binarySearch(distinctLengths, d))
+          val start = new Array[Int](distinctLengths.length + 1)
+          rank.foreach(r => start(r + 1) += 1)
+          for r <- 0 until distinctLengths.length do start(r + 1) += start(r)
+          val fill = java.util.Arrays.copyOf(start, distinctLengths.length)
+          val byRank = new Array[Int](layer.size)
+          var i = 0
+          while i < layer.size do
+            byRank(fill(rank(i))) = i
+            fill(rank(i)) += 1
+            i += 1
+          var r = 0
+          while r < distinctLengths.length do
+            val lo = start(r)
+            val hi = start(r + 1)
+            if hi - lo > 1 then
+              val run = java.util.Arrays.copyOfRange(byRank, lo, hi)
+              val runOrder = sortIndices(hi - lo, (x, y) => java.lang.Long.compare(colex(run(y)), colex(run(x))))
+              var t = 0
+              while t < runOrder.length do
+                byRank(lo + t) = run(runOrder(t))
+                t += 1
+            r += 1
+          byRank
       val vs = new Array[Int](layer.vertices.length)
       var t = 0
       while t < order.length do
         System.arraycopy(layer.vertices, order(t) * w, vs, t * w, w)
         t += 1
-      SortedLayer(layer.dim, vs, order.map(layer.diameter))
+      val result = SortedLayer(layer.dim, vs, order.map(layer.diameter))
+      sortNanos(layer.dim) = System.nanoTime() - t0
+      result

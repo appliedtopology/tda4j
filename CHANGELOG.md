@@ -36,6 +36,9 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Added
 
+- `LayeredInorderSimplexStream`: the Vietoris-Rips complex, each dimension generated from the one below already in
+  filtration order (arXiv:2411.05495), with no sort above the edges. `VietorisRips(..., implementation = Inorder)` builds
+  it.
 - **tda4j runs in JavaScript.** The library is built for the JVM and for Scala.js from the same sources (sbt 2 project
   matrix: `tda4j` and `tda4jJS`). Scala.js programs depend on the same coordinates (`"org.appliedtopology" %% "tda4j"`
   picks `tda4j_sjs1_3` in a Scala.js project); JavaScript and TypeScript programs install the npm package `@appliedtopology/tda4j`:
@@ -142,6 +145,8 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Fixed
 
+- `VietorisRips(..., implementation = Inorder)` listed tied simplices out of the stream's order, and on tied distances
+  (points on a grid) some simplices twice; it now builds `LayeredInorderSimplexStream`.
 - `fig.copy(palette = ...)` left heatmaps, cocycles' values and the color bar in the palette the plot was built with.
 - `DistanceToMeasure` through the vantage-point search returned fewer than `k` neighbours for some `k` that is a sizeable
   fraction of the number of points (a defect of the Java library it used); it returns `k`.
