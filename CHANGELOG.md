@@ -156,6 +156,8 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 - `PersistenceDiagram.bettiNumbers` of `d.at(f)` was all zeros (the classes alive at `f` are closed bars `[birth, f]`,
   not essential ones); it counts the classes alive at the end of the diagram, so `d.at(f).bettiNumbers` is the Betti
   numbers at `f`.
+- A `characteristic` above 10^6 (`FiniteField.MaxPrime`) is refused with a message; a prime of 10^9 used to run out of
+  memory building its inverse table.
 - `FiniteField(p)` with a `p` that is not a prime failed on first use with "/ by zero"; it says that `p` must be prime.
 - `fig.copy(palette = ...)` left heatmaps, cocycles' values and the color bar in the palette the plot was built with.
 - `DistanceToMeasure` through the vantage-point search returned fewer than `k` neighbours for some `k` that is a sizeable
