@@ -23,6 +23,14 @@ class BlockParallelReductionSpec extends Specification with ScalaCheck:
     val cells = complex(n, metricSpace.distance(_, _), threshold, maxDim + 1)
     (cells, (1 to maxDim).map(d => coboundary(n, cells(d), cells(d + 1), p)).toVector)
 
+  // The first place two sequences differ, if any. A `must beEqualTo` on whole arrays renders both into its message, and
+  // thousands of those kept by `Result.foreach` exhaust the shared test JVM's heap.
+  private def firstDifference[A](a: Seq[A], b: Seq[A]): Option[String] =
+    Option.when(a != b) {
+      val i = a.indices.find(i => i >= b.size || a(i) != b(i)).getOrElse(b.size)
+      s"sizes ${a.size} and ${b.size}, first difference at $i: ${a.lift(i)} vs ${b.lift(i)}"
+    }
+
   private def agrees(
     metricSpace: FiniteMetricSpace[Int],
     maxDim: Int = 2,
@@ -34,9 +42,11 @@ class BlockParallelReductionSpec extends Specification with ScalaCheck:
     Result
       .foreach(parallel) { m =>
         val r = persistence(cells, cobs, p, m, cocycles = false, pool)
-        Result.foreach(r.degrees.zip(sequential.degrees))((a, b) => a.owner.toSeq must beEqualTo(b.owner.toSeq))
+        Result.foreach(r.degrees.zip(sequential.degrees)) { (a, b) =>
+          firstDifference(a.owner.toSeq, b.owner.toSeq) must beNone
+        }
       }
-      .and(sequential.bars must beEqualTo(packedBars(metricSpace, maxDim, threshold, p)))
+      .and(firstDifference(sequential.bars, packedBars(metricSpace, maxDim, threshold, p)) must beNone)
 
   // delta(V_j) = R_j for every column reduced, and R_j's pivot is the row it owns.
   private def cocyclesValid(metricSpace: FiniteMetricSpace[Int], p: Int): Result =
@@ -45,19 +55,16 @@ class BlockParallelReductionSpec extends Specification with ScalaCheck:
       val r = persistence(cells, cobs, p, m, cocycles = true, pool)
       Result.foreach(r.degrees) { d =>
         val cob = d.cob
-        val columns = (0 until cob.columns.size).filterNot(d.cleared)
-        Result
-          .foreach(columns) { j =>
-            val (vR, vC) = d.store.cocycle(j)
-            val sum = scala.collection.mutable.Map.empty[Int, Int].withDefaultValue(0)
-            for (i, c) <- vR.zip(vC); e <- cob.start(i) until cob.start(i + 1) do
-              sum(cob.entryRow(e)) = (sum(cob.entryRow(e)) + c * cob.entryCoeff(e)) % p
-            val (rR, rC) = d.store.reduced(j)
-            sum.filter(_._2 != 0).toMap must beEqualTo(rR.zip(rC).toMap)
-          }
-          .and(Result.foreach((0 until cob.rows.size).filter(d.owner(_) >= 0)) { row =>
-            d.store.pivot(d.owner(row)) must beEqualTo(row)
-          })
+        val wrongCocycles = (0 until cob.columns.size).filterNot(d.cleared).filterNot { j =>
+          val (vR, vC) = d.store.cocycle(j)
+          val sum = scala.collection.mutable.Map.empty[Int, Int].withDefaultValue(0)
+          for (i, c) <- vR.zip(vC); e <- cob.start(i) until cob.start(i + 1) do
+            sum(cob.entryRow(e)) = (sum(cob.entryRow(e)) + c * cob.entryCoeff(e)) % p
+          val (rR, rC) = d.store.reduced(j)
+          sum.filter(_._2 != 0).toMap == rR.zip(rC).toMap
+        }
+        val wrongPivots = (0 until cob.rows.size).filter(r => d.owner(r) >= 0 && d.store.pivot(d.owner(r)) != r)
+        (wrongCocycles.take(3) must beEmpty).and(wrongPivots.take(3) must beEmpty)
       }
     }
 

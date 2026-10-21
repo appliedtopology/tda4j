@@ -18,11 +18,19 @@ class LayeredInorderSimplexStreamSpec extends Specification with ScalaCheck:
   private def listing(s: LevelwiseSimplexStream[Int, Double], d: Int): Vector[(Simplex[Int], Double)] =
     s.iterateDimension.applyOrElse(d, (_: Int) => Iterator.empty).toVector.map(c => (c, s.filtrationValue(c)))
 
+  // The first place two listings differ, if any. A `must beEqualTo` on whole listings renders both into its message, and
+  // thousands of those kept by `Result.foreach` exhaust the shared test JVM's heap.
+  private def firstDifference[A](a: Seq[A], b: Seq[A]): Option[String] =
+    Option.when(a != b) {
+      val i = a.indices.find(i => i >= b.size || a(i) != b(i)).getOrElse(b.size)
+      s"sizes ${a.size} and ${b.size}, first difference at $i: ${a.lift(i)} vs ${b.lift(i)}"
+    }
+
   private def agrees(metricSpace: FiniteMetricSpace[Int], threshold: Option[Double], candidates: Candidates): Result =
     val layered = LayeredInorderSimplexStream(metricSpace, threshold, candidates)
     val enumerating = EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = threshold)
     Result.foreach(0 to math.min(topDimension, metricSpace.size - 1)) { d =>
-      listing(layered, d) must beEqualTo(listing(enumerating, d))
+      firstDifference(listing(layered, d), listing(enumerating, d)) must beNone
     }
 
   private def allAgree(metricSpace: FiniteMetricSpace[Int]): Result =
@@ -85,16 +93,17 @@ class LayeredInorderSimplexStreamSpec extends Specification with ScalaCheck:
       def check(metricSpace: FiniteMetricSpace[Int]): Result =
         val g = Generator(metricSpace.size, metricSpace.distance(_, _), Double.PositiveInfinity)
         val layers = Iterator.iterate(g.edges)(g.cofacets).take(topDimension).toVector
-        Result.foreach(layers) { (layer: Layer) =>
-          Result.foreach(0 until layer.size) { i =>
-            val vs = layer.simplex(i).toList
-            val pairs = for a <- vs; b <- vs if a < b yield (a, b)
-            val alpha = pairs.map(metricSpace.distance(_, _)).max
-            val first = pairs.filter(metricSpace.distance(_, _) == alpha).max
-            val r = layer.root(i)
-            ((g.edgeA(r), g.edgeB(r)) must beEqualTo(first)).and(g.edgeLength(r) must beEqualTo(alpha))
-          }
-        }
+        val wrong = for
+          layer <- layers
+          i <- 0 until layer.size
+          vs = layer.simplex(i).toList
+          pairs = for a <- vs; b <- vs if a < b yield (a, b)
+          alpha = pairs.map(metricSpace.distance(_, _)).max
+          first = pairs.filter(metricSpace.distance(_, _) == alpha).max
+          r = layer.root(i)
+          if (g.edgeA(r), g.edgeB(r)) != first || g.edgeLength(r) != alpha
+        yield vs
+        wrong.take(3) must beEmpty
       check(octagon).and(check(grid)).and(check(threeValues))
     }
   }

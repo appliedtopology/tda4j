@@ -206,3 +206,11 @@ columns cut the deferred columns to 106 / 83 / 146 and change nothing in the tot
    that split: about 2.5–3x on 4 threads, less where an essential class needs a long reduction (the sphere).
    Unverified: it assumes Ripser's degree-2 time is per-column work; next step on #192 is a parallel phase 1 inside
    the packed engine, measured.
+
+**CI out of memory (same day).** The JVM `test` job on `9754103` died with `OutOfMemoryError` in
+`LayeredInorderSimplexStreamSpec` and `MatlabTabsSpec`. Cause: `LayeredInorderSimplexStreamSpec` and
+`BlockParallelReductionSpec` compared whole listings and arrays with `must beEqualTo` inside `Result.foreach`, which
+keeps every rendered message: run alone, the first OOMed at 256 MB and the second at 128 MB, and together they pushed
+the shared 2 GB suite JVM over. Both now compare with `==` and report only the first difference (or the first three
+failures): each passes in 128 MB (the block spec in 0.25 s instead of 8 s), and the no-deferral and V-sign mutations
+are still caught. Rule in `rules/testing.md`.
