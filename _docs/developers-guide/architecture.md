@@ -5,7 +5,7 @@ title: Architecture: from algebra to persistence
 
 
 This page walks the two lower layers of the library: the algebraic core (what a "chain" and a
-"coefficient" actually are) and complex construction (how a sequence of cells in filtration order gets
+"coefficient" are) and complex construction (how a sequence of cells in filtration order gets
 produced). [Persistence engines](persistence-engines.md) covers what consumes the stream this layer
 produces.
 
@@ -68,11 +68,9 @@ What differs between the platforms is behind a few small seams, each defined onc
 | `plot.RootText` | `Locale.ROOT` for lower-casing and `String.format`; `DecimalFormatSymbols` | plain lower-casing and `String.format`; `Intl.NumberFormat` for a locale's separators (`java.util.Locale` does not exist on Scala.js) |
 | `cli.ProcessExit` | `sys.exit` | sets `process.exitCode` (no `System.exit` on Scala.js) |
 
-The specs under `src/test/scala` run on both platforms and have one seam of their own, `TestPlatform` (in
-`src/test/scalajvm` and `src/test/scalajs`). A property that searches for rare inputs, such as the alpha complex
-properties' 2000 random point clouds, runs `TestPlatform.propertyCases(n)` cases: all `n` on the JVM and a tenth on
-Scala.js. The code under test is the same on both, so the search is done once, on the JVM, while the Scala.js run
-checks what can differ between the platforms.
+The specs under `src/test/scala` run on both platforms and have one seam of their own, `TestPlatform`. A property that
+searches for rare inputs runs `TestPlatform.propertyCases(n)` cases: all `n` on the JVM and a tenth on Scala.js, since
+the code under test is the same and the Scala.js run only needs to check what differs between platforms.
 
 The Scala.js build adds `javascript.Exports` (the functions the npm package exports, a thin layer over the
 [MATLAB facade](../user-guide/matlab.md)) and the `tda4j` command on Node.js (`cli.TDA4jNodeMain`; the command is
@@ -178,9 +176,8 @@ trait OrderedCell extends Cell:
 `OrderedCell` instances (`cells/SimplexOrderedCell.scala`, `cells/CubicalOrderedCell.scala`,
 `sset/SimplicialSet.scala`): `boundary` returns each codimension-1 face paired with alternating signs.
 
-There is no dual `Cocell`/`OrderedCocell` trait pair — an earlier version of this codebase had one, and it was
-removed: coboundary is *extrinsic* to a cell (it depends on which higher-dimensional cells actually exist in
-the ambient, possibly-truncated complex), not intrinsic the way `boundary` is, so a per-cell `coboundary`
+There is no dual `Cocell`/`OrderedCocell` trait pair: coboundary is *extrinsic* to a cell (it depends on which
+higher-dimensional cells exist in the ambient, possibly truncated complex), not intrinsic the way `boundary` is, so a per-cell `coboundary`
 method with no complex to consult can only be correct when the complex is always the full
 combinatorially-possible one. `RipserCohomologyEngine`/`PackedRipserCohomologyEngine` compute coboundaries
 directly against `SimplexIndexing`'s cofacet iterator instead (see
@@ -229,8 +226,7 @@ nothing else. The library has two storages (both `final`: the reductions match o
 homological degree you want and building one dimension higher internally. The sections below describe the implementation
 classes those objects choose between (`EnumeratingCofaceSimplexStream`, `CechCofaceSimplexStream`, ...). They are
 public: the objects are the documented entry, and the classes are what to extend when building a new filtered complex
-on the same machinery (most of them reuse `RipserCofaceSimplexStream`'s coface loop). See
-`.claude/DESIGN-stream-naming.md`.
+on the same machinery (most of them reuse `RipserCofaceSimplexStream`'s coface loop).
 
 A `CellStream[CellT, FiltrationT]` is the abstract interface every persistence engine consumes: an iterator
 over cells in filtration order, plus a `filtrationValue: PartialFunction[CellT, FiltrationT]` and a
@@ -288,8 +284,8 @@ stream it wraps.
 
 ### Vietoris-Rips: several independent generation strategies
 
-These are **alternate engines with the same output contract, not layers on one another** — check which
-`iterateDimension`/`iterator` implementation is actually in play before reasoning about a bug:
+These are **alternative implementations with the same output contract, not layers on one another**. Check which
+`iterateDimension`/`iterator` implementation is in play before reasoning about a bug:
 
 - `EnumeratingCofaceSimplexStream` — generates each dimension explicitly via `SimplexIndexing`'s
   combinatorial-number-system enumeration, filtered by an optional `keepCriterion`.
@@ -312,8 +308,7 @@ These are **alternate engines with the same output contract, not layers on one a
 `IncrementalVietorisRipsSimplexStream` all default `maxFiltrationValue` to `metricSpace.minimumEnclosingRadius`,
 not `Double.PositiveInfinity` — past that radius every vertex is within range of a common apex, so the
 complex is a cone from there on and provably contributes no further homology (real `ripser.cpp` uses the
-same default). Pass `maxFiltrationValue = Some(Double.PositiveInfinity)` for the old always-unbounded
-behavior. `RecursiveStackVietorisRipsSimplexStream` and the alpha-complex backends keep their own,
+same default). Pass `maxFiltrationValue = Some(Double.PositiveInfinity)` for the whole complex. `RecursiveStackVietorisRipsSimplexStream` and the alpha-complex backends keep their own,
 always-untruncated default (see [Alpha complex](alpha-complex.md)).
 
 `SimplexIndexing` (inside `SimplexIndexing.scala`) is the piece every Ripser-flavored part of this codebase
@@ -339,11 +334,9 @@ directly via the cartesian product over the cube's degenerate axes rather than a
 `CubicalImage` builds these from images/voxel grids (`fromFlatArray`/`fromBufferedImage`/`fromFile`/
 `fromVoxelGrid3D`); sublevel vs. superlevel filtration is handled by negating values on load, not as a flag
 on the stream itself. A NaN pixel is masked: not in the complex, in either direction (NaN has no sign, so
-negating a superlevel image keeps it). Every other cube takes the minimum over the UNMASKED pixels containing it and is
-absent when they are all masked, so the complex is the closure of the unmasked pixels; `filtrationValue` and
-`iterateDimension` leave masked cubes out. The grid engines rank a masked pixel `GridRanks.masked`, one past every real
-rank, so a minimum over ranks skips it and a cell of rank `masked` is skipped explicitly (reading its value would be out
-of bounds). Infinite values are ordinary values. `CubicalHomologyEngine` is a one-line `Cube`-specialized wrapper around
+negating a superlevel image keeps it). Every other cube takes the minimum over the unmasked pixels containing it and is
+absent when they are all masked, so the complex is the closure of the unmasked pixels. The grid engines rank a masked
+pixel `GridRanks.masked`, one past every real rank, and skip cells of that rank. Infinite values are ordinary values. `CubicalHomologyEngine` is a one-line `Cube`-specialized wrapper around
 `CellularHomologyEngine` — cubical complexes needed no new engine code, only a new `OrderedCell` instance.
 
 #### Fast cubical homology
@@ -388,9 +381,8 @@ generator at filtration value `0`); `x.filtered(f)` (`FilteredSimplicialSetStrea
 `SSetMap.scala` has simplicial maps (with `mappingCone` and the induced rank on homology), `FundamentalGroup.scala` a
 presentation of the fundamental group, and `CupProduct.scala` and `Steenrod.scala` the Alexander-Whitney cup product
 and the Steenrod squares over F₂. `Nerve`/`ClassifyingSpace` (`ClassifyingSpace.scala`, with `FiniteGroup.scala`) use the
-lazy `SimplicialSet` trait for the infinite nerve of a finite group. None of this has a MATLAB or CLI entry point (a
-simplicial set needs its own input encoding), and every construction is checked against homology computed by hand
-over F₂ and F₃ rather than by `validate()` alone.
+lazy `SimplicialSet` trait for the infinite nerve of a finite group. None of this has a MATLAB or CLI entry point: a
+simplicial set needs its own input encoding.
 
 Nerves of monoids and finite categories, persistent group homology and Brown's
 collapse are on their own page: [Nerves and group homology](nerves.md).
@@ -508,13 +500,20 @@ the one thread, giving the same answer.
 `OpenEndpoint`/`ClosedEndpoint`, with a total order that correctly interleaves finite and infinite
 endpoints) and `PersistenceBar[FiltrationT, AnnotationT]` (dimension, lower/upper endpoint, an optional
 annotation — in practice always the representative `Chain`). `Barcode` additionally implements algebra on
-finitely-presented persistence modules: `image`/`kernel`/`cokernel` of a map between two barcodes
-represented as a matrix — useful for interleaving distances or persistence-module morphisms, not needed for
-ordinary persistent-homology computation.
+finitely presented persistence modules: `image`/`kernel`/`cokernel` of a map between two barcodes given as a matrix
+(see [maps between barcodes](../user-guide/barcode-algebra.md)). Ordinary persistent-homology computation does not use it.
 
 `BarcodeDistance` and `Vectorization` provide downstream operations on
 computed persistence diagrams, including diagram distances, landscapes, and
-persistence images.
+persistence images. The distances are built on two matching algorithms that are public: `HopcroftKarp.maximumMatching(
+nLeft, nRight, adjacency)` returns a maximum-cardinality bipartite matching (the bottleneck distance asks it whether a
+perfect matching exists using only edges below a threshold), and `Hungarian.minCostPerfectMatching(cost)` returns the
+assignment and total cost of a minimum-cost perfect matching on a square matrix of finite costs, in `O(n³)` (the
+Wasserstein distance).
+
+`TruncatedSimplexStream(stream, maxSimplexDimension)` cuts a stratified simplex stream off above a simplex dimension,
+keeping its order and values; the `Truncated` entry point takes a homological degree instead and is what you should
+call.
 
 ### Circular coordinates
 

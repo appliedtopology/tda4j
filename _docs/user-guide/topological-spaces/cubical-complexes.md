@@ -37,7 +37,7 @@ Persistence(stream)
 ```
 
 `CubicalImage` also has `fromGrayscale2D` and `fromVoxelGrid3D` (arrays), `fromBufferedImage` and `fromFile` (image
-files); [files](../input-output.md) reads Perseus and DIPHA grids. A pixel with value `NaN` is masked (missing data): it is
+files, JVM only); [files](../input-output.md) reads Perseus and DIPHA grids. A pixel with value `NaN` is masked (missing data): it is
 not in the complex, in a sublevel and a superlevel image alike (NaN has no sign). Its edges and corners are there when a
 neighbouring pixel is, with that pixel's value; a hole of masked pixels is a hole that never fills. Infinite values are
 ordinary values: `Infinity` enters after every finite value of a sublevel image and before them in a superlevel one,

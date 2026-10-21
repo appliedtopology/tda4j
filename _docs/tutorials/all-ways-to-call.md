@@ -3,58 +3,35 @@ layout: main
 title: All the ways to call TDA4j
 ---
 
-There are several ways to access the methods in the TDA4j library, depending on how much code you want to write, what systems you want to interact with, and what you are ready to learn. In the following snippets we will show off the primary ways available. Some set-up and tasks:
+TDA4j can be used from the command line, MATLAB, Scala, a lab and an engine run by hand. This page does the same three
+tasks each way:
 
-1. We want to build a hollow octahedron by hand (6 vertices, 12 edges, 8 triangles) and compute its homology. It is a 2-sphere, so we expect one connected component, no loops and one void.
-2. We have the following file with data points, and we want the Vietoris-Rips barcode:
-``` sc:nocompile
-1.0, 4.2e-15
-0.9659, 0.2588
-0.866, 0.5
-0.7071, 0.7071
-0.5, 0.866
-0.2588, 0.9659
-6.123e-17, 1.0
--0.2588, 0.9659
--0.5, 0.866
--0.7071, 0.7071
--0.866, 0.5
--0.9659, 0.2588
--1.0, 1.225e-16
--0.9659, -0.2588
--0.866, -0.5
--0.7071, -0.7071
--0.5, -0.866
--0.2588, -0.9659
--1.837e-16, -1.0
-0.2588, -0.9659
-0.5, -0.866
-0.7071, -0.7071
-0.866, -0.5
-0.9659, -0.2588
-1.0, -2.449e-16
-```
-3. We also want a circular coordinate function of this point cloud.
+1. Build a hollow octahedron by hand (6 vertices, 12 edges, 8 triangles) and compute its homology. It is a 2-sphere, so
+   expect one connected component, no loops and one void.
+2. Compute the Vietoris-Rips barcode of the 25 points of
+   [`examplepoints.csv`](https://github.com/appliedtopology/tda4j/blob/scala/_docs/tutorials/examplepoints.csv), which
+   lie on a circle.
+3. Compute a circular coordinate function of that point cloud.
 
 ## Command Line
 
-We package TDA4j so that it can execute common tasks from the command line, without writing any code at all. This method is somewhat limited in what it can do, but it gets you from just a file with data to a result.
+The command line gets you from a data file to a result without writing code, for a limited set of tasks.
 
 Task 1 is not possible from the command line.
 
 Task 2 can be done as follows:
 ```shell sc:nocompile
-java -jar target/out/jvm/scala-3.9.0/tda4j/tda4j-0.5.0-SNAPSHOT-assembly.jar -r --max-dimension 1 _docs/tutorials/examplepoints.csv
+java -jar /path/to/tda4j-VERSION-assembly.jar -r --max-dimension 1 _docs/tutorials/examplepoints.csv
 ```
 
 Task 3 is not possible from the command line.
 
-## Matlab
+## MATLAB
 
-MATLAB talks to TDA4j through its built-in Java interface: put the assembly jar (`sbt assembly`) on the Java path and call `org.appliedtopology.tda4j.matlab.TDA4j` directly. MATLAB can handle all three tasks. See [Calling from MATLAB or Java](../user-guide/matlab.md) for the complete list of options.
+MATLAB talks to TDA4j through its built-in Java interface: put the assembly jar ([installation](../user-guide/installation.md)) on the Java path and call `org.appliedtopology.tda4j.matlab.TDA4j` directly. MATLAB can handle all three tasks. See [Calling from MATLAB or Java](../user-guide/matlab.md) for the complete list of options.
 
 ```matlab
-javaaddpath('target/out/jvm/scala-3.9.0/tda4j/tda4j-0.5.0-SNAPSHOT-assembly.jar');
+javaaddpath('/path/to/tda4j-VERSION-assembly.jar');
 import org.appliedtopology.tda4j.matlab.*;   % makes TDA4j (a static Java class, not an object to construct) callable by its short name
 
 % Task 1: the octahedron is the flag complex of its own edge graph, so a distance matrix is enough.
@@ -85,8 +62,8 @@ Two details worth knowing: MATLAB passes the Java `String[]` of options as a cel
 
 ## Scala REPL
 
-Every Scala file that uses TDA4j starts with two lines. The first accepts the experimental language features the library
-is built with (its typeclasses use them, so Scala asks every user file to opt in); the second brings in the library:
+Every Scala file that uses TDA4j starts with two imports: the first accepts the experimental language features the
+library is built with, the second brings in the library.
 
 ```scala
 import scala.language.experimental.modularity
@@ -125,8 +102,7 @@ println(chain.show)
 
 ## Scala by extension
 
-If you are not working interactively, one useful approach is instead to extend a lab, which sets up the environment
-inside your object:
+Outside a REPL, extend a lab to set up the environment inside your object:
 
 ```scala
 import scala.language.experimental.modularity

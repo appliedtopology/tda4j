@@ -35,6 +35,7 @@ diagram.dim(1).longest                     // the loop, with a cycle that goes a
 
 ## Where to start
 
+* [Installation](user-guide/installation.md).
 * The [user guide](user-guide/index.md), starting with the [quickstart](user-guide/quickstart.md).
 * The [tutorials](tutorials/index.md): one question and one data set each, worked through to the answer.
 * The [developer's guide](developers-guide/index.md), for how the library is built.
