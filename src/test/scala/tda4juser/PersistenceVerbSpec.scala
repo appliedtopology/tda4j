@@ -21,6 +21,16 @@ class PersistenceVerbSpec extends Specification:
       .map((d, b, e) => (d, math.rint(b * 1e9) / 1e9, if e.isInfinite then e else math.rint(e * 1e9) / 1e9))
       .sorted
 
+  "PersistenceDiagram.bettiNumbers" should {
+    "be the Betti numbers of the complex, and at(f) those at f (a circle exists from 0.52 to 1.73)" in {
+      val d = Persistence(circle(12), maxDimension = 1)
+      (d.bettiNumbers must beEqualTo(Vector(1, 0)))
+        .and(d.at(0.3).bettiNumbers must beEqualTo(Vector(12, 0)))
+        .and(d.at(0.9).bettiNumbers must beEqualTo(Vector(1, 1)))
+        .and(d.at(5.0).bettiNumbers must beEqualTo(Vector(1, 0)))
+    }
+  }
+
   "Persistence(points)" should {
     "find the circle's loop as its longest H1 bar, with a representative cycle from Engine.Chunks" in {
       val d = Persistence(circle(16), maxFiltrationValue = 2.0, engine = Persistence.Engine.Chunks)

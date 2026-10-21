@@ -18,6 +18,10 @@ object Coefficients:
         override given field: (Double is Field) = Field.DoubleApproximated(precision)
         def fromInt(x: Int): Double = x.toDouble
         def characteristic = 0
+    case p if p > FiniteField.MaxPrime && BigInt(p).isProbablePrime(certainty = 100) =>
+      throw IllegalArgumentException(
+        s"tda4j: the coefficient characteristic is at most ${FiniteField.MaxPrime}, got $p; for a larger prime, open an issue or a pull request"
+      )
     case p if p > 1 && BigInt(p).isProbablePrime(certainty = 100) =>
       val ff = FiniteField(p)
       new Coefficients:

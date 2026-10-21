@@ -32,7 +32,7 @@ import scala.util.Random
   *   3. `.diagramAt(...)` -- the actual `advanceAll`/reduction loop.
   *
   * The point cloud is sparse by construction (threshold scaled as `thresholdScale / sqrt(n)`, the same "roughly
-  * constant expected neighbor count as n grows" convention `SparseRipsBenchmarkSpec` already uses) -- a fixed threshold
+  * constant expected neighbor count as n grows" convention `ThresholdBenchmarkSpec` already uses) -- a fixed threshold
   * would make the complex denser as `n` grows, which is not the "large point cloud, low maxDim" scenario this driver
   * exists to characterize.
   */

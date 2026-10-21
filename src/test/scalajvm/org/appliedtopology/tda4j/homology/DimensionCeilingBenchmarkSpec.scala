@@ -33,7 +33,7 @@ import scala.util.Random
   *     the CURRENT default across this codebase's VR constructions. In a unit hypercube this stays roughly constant
   *     (~0.7 in 2D) as `n` grows -- it's a correctness cap (excludes only the genuinely cone-redundant long tail), not
   *     a scaling lever, so it should NOT be expected to keep complex size bounded as `n` grows.
-  *   - `sparse`: `maxFiltrationValue = thresholdScale / sqrt(n)` (same convention as `SparseRipsBenchmarkSpec`) -- a
+  *   - `sparse`: `maxFiltrationValue = thresholdScale / sqrt(n)` (same convention as `ThresholdBenchmarkSpec`) -- a
   *     threshold that genuinely SHRINKS with `n`, keeping the expected local neighborhood size roughly constant. This
   *     is the regime a user restricting attention to local/short-range topology would actually want, and is the one
   *     that isolates whether "longest distance" is a real, independent lever from "highest dimension."
@@ -58,8 +58,8 @@ import scala.util.Random
   * complex got smaller" from "the same-size complex got faster."
   *
   * '''Single trial per step, not median-of-several''' -- this is a ceiling-finding exploratory sweep, not a precise
-  * timing comparison (that's what `SparseRipsBenchmarkSpec`/`ApparentPairsBenchmarkSpec` are for at a fixed `n`).
-  * Expect noise of a step or two in the reported ceiling `n`, not a load-bearing number to two significant figures.
+  * timing comparison (that's what `ThresholdBenchmarkSpec`/`ApparentPairsBenchmarkSpec` are for at a fixed `n`). Expect
+  * noise of a step or two in the reported ceiling `n`, not a load-bearing number to two significant figures.
   *
   * '''A global wall-clock deadline bounds the whole run''', independent of every other parameter -- a single
   * misbehaving cell (e.g. an engine whose ceiling sits just past `nCap` and keeps retrying near the edge) cannot make

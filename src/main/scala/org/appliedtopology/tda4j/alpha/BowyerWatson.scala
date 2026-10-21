@@ -17,8 +17,9 @@ import scala.collection.mutable
   * @param seed
   *   seeds the insertion order, which affects only the running time
   */
-open class BowyerWatsonDelaunay(pts: Array[Array[Double]], seed: Long = 0L)(using epsilon: Epsilon)
-    extends DelaunayAlphaShapes:
+open class BowyerWatsonDelaunay(pts: Array[Array[Double]], seed: Long = 0L)(using factor: EpsilonFactor)
+    extends DelaunayAlphaShapes(using factor.forPoints(pts)):
+  private given epsilon: Epsilon = factor.forPoints(pts)
   // A single point (or none) spans nothing: zero coordinates, a lone vertex.
   private val coordinates: Array[Array[Double]] =
     if pts.length <= 1 then pts.map(_ => Array.empty[Double]) else HelixDelaunay.projectToAffineRank(pts)

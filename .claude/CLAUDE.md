@@ -11,8 +11,9 @@ Last condensed 2026-10-17; earlier, longer versions: `git show e5e86ec:.claude/C
 
 TDA4j is a Scala 3 library for persistent homology and topological data analysis (a spiritual successor to
 JavaPlex/Ripser, from the Stanford Computational Topology workgroup lineage). One library for the JVM and Scala.js
-(an sbt project matrix), root package `org.appliedtopology.tda4j`, pre-1.0 (version in `version.sbt`), actively evolving API. **0.5.0 deliberately does not keep binary
-compatibility with 0.4.x** (project lead: still in flux) — no compat shims for renames/signature changes.
+(an sbt project matrix), root package `org.appliedtopology.tda4j`, pre-1.0 (version in `version.sbt`), actively evolving API. **A 0.Y series does not keep binary
+compatibility with the one before** (0.7.0 starts a fresh MiMa baseline; `build.sbt` `mimaBaselineVersions`) — no compat shims for
+renames/signature changes; a break inside a series is a commented `mimaBinaryIssueFilters` entry plus a Breaking line.
 
 ## Working stance
 

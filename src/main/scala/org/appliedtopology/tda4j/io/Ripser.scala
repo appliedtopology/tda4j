@@ -69,11 +69,17 @@ object Ripser:
   def readDistanceMatrix(path: String): Array[Array[Double]] =
     val src = FileAccess.source(path)
     try
-      val lines = src.getLines().toIndexedSeq
+      val lines = src.getLines().toIndexedSeq.reverse.dropWhile(_.trim.isEmpty).reverse
       val n = lines.size
       val flat = lines.zipWithIndex
         .flatMap { case (line, i) =>
-          line.trim.split(delimiterRegex).filter(_.nonEmpty).take(i)
+          val values = line.trim.split(delimiterRegex).filter(_.nonEmpty)
+          require(
+            values.length >= i,
+            s"$path: line ${i + 1} has ${values.length} numbers, a distance matrix needs at least $i there " +
+              "(the entries below the diagonal)"
+          )
+          values.take(i)
         }
         .map(_.toDouble)
       DistanceMatrices.expandLowerTriangular(flat, n)
