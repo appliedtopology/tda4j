@@ -213,7 +213,7 @@ class BarcodeDistanceSpec extends Specification with ScalaCheck:
       val candidates = m.flatten.distinct.sorted
       def feasible(t: Double) =
         HopcroftKarp.maximumMatching(n, n, i => (0 until n).filter(m(i)(_) <= t)).count(_ != -1) == n
-      candidates.find(feasible).get
+      if n == 0 then 0.0 else candidates.find(feasible).get
 
     val pointGen: Gen[(Double, Double)] =
       for
