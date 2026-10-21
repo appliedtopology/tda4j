@@ -1,0 +1,15 @@
+cff-version: 1.2.0
+message: "If you use tda4j in your work, please cite it as below."
+title: "tda4j"
+type: software
+license: MIT
+repository-code: "https://github.com/appliedtopology/tda4j"
+url: "https://tda4j.appliedtopology.org/"
+abstract: "Persistent homology and topological data analysis for Scala, Java, MATLAB, JavaScript and the command line."
+authors:
+  - family-names: "Vejdemo-Johansson"
+    given-names: "Mikael"
+  - family-names: "Matuszewski"
+    given-names: "Jordan"
+  - family-names: "Hope"
+    given-names: "Daniel"
