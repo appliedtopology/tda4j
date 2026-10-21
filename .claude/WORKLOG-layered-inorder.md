@@ -238,7 +238,7 @@ method, same bars as `Persistence` on the alpha complex. 40 points in R¹⁰ to 
 
 | threshold | cells (dims 0..11) | C++ Ripser | packed engine | explicit: generate + coboundaries + reduction | additions |
 |---|---|---|---|---|---|
-| 1.3 | 784k in all (166,621 at dim 7) | 945 ms | 1,678 ms | 223 + 426 + 39 ms = 0.69 s | 434 |
+| 1.3 | 778k in all (166,621 at dim 7) | 945 ms | 1,678 ms | 223 + 426 + 39 ms = 0.69 s | 434 |
 | 1.45 | 56.6M in all (15.1M at dim 11) | 52.4 s | 131.7 s | 36.2 + 75.6 + 0.5 s = 112 s | 434 |
 
 All three agree on 81 bars. In every case here the reduction is essentially free: 41M columns at t=1.45 need 434
