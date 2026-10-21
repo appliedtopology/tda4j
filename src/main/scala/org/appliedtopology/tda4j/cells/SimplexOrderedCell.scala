@@ -10,7 +10,7 @@ import cats.Show
 def simplexIsOrderedCell[VertexT](using
   vtxOrd: Ordering[VertexT]
 )(setOrdering: Ordering[Simplex[VertexT]] = simplexOrdering(using vtxOrd)): Simplex[VertexT] is OrderedCell =
-  new (Simplex[VertexT] is OrderedCell):
+  new (Simplex[VertexT] is OrderedCell) with StandardSimplexBoundary:
     override lazy val ordering = setOrdering
     extension (spx: Simplex[VertexT])
       // Delegates to `SimplexOps.dim` (qualified explicitly, not via `spx.dim`, to avoid this same extension
@@ -25,6 +25,13 @@ def simplexIsOrderedCell[VertexT](using
           spx.iterator.zipWithIndex.map { (vtx, i) =>
             (spx - vtx, if i % 2 == 0 then fr.one else fr.negate(fr.one))
           }.toVector
+
+/** Marks the instances [[simplexIsOrderedCell]] makes, whose `boundary` is the alternating sum of the faces in the
+  * vertex set's own order: `CellularCohomologyEngine` reproduces it on flat vertex arrays without calling it.
+  */
+// `private[tda4j]`: mixing it in claims that boundary, which the engine then trusts unchecked (openness reason 1). The
+// instances that carry it are anonymous, so nothing can override their `boundary`.
+private[tda4j] trait StandardSimplexBoundary
 
 /** `Simplex`'s default instances, mixed into `object Simplex` so they sit in the type's IMPLICIT scope: found with no
   * import at all, and consulted only when no given is lexically visible -- a stream's or a user's own
