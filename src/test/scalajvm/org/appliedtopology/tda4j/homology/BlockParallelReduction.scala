@@ -25,10 +25,12 @@ import scala.util.Random
   * java -cp $CP org.appliedtopology.tda4j.BlockParallelReduction <dataset> <n> <maxDim> <threshold|mer> <method> [trials] [seed] [p]
   * }}}
   *
-  * `dataset` is `cube3`, `cube4` (uniform in the unit cube), `torus` or `sphere` (in R^3, with noise); `method` is
-  * `seq`, `blocks-<threads>`, `chunks-<threads>-<columns>`, `packed` (`PackedRipserCohomologyEngine`, pairs only),
-  * `packed-cocycles`, `check` (every method agrees) or `dump <file>` (the points as CSV, for C++ Ripser). Each run
-  * builds the matrices once and reduces `trials` times; times are medians.
+  * `dataset` is `cube<d>` (uniform in the unit cube of R^d), `torus` or `sphere` (in R^3, with noise), or
+  * `alpha:<cloud>` for the cloud's alpha complex instead (blocks by filtration value, `fromStream`; threshold ignored);
+  * `method` is `seq`, `blocks-<threads>`, `chunks-<threads>-<columns>`, `packed` (`PackedRipserCohomologyEngine`, pairs
+  * only), `packed-cocycles`, `verb` (alpha: `AlphaShapes`, then `Persistence`), `check` (every method agrees) or
+  * `dump <file>` (the points as CSV, for C++ Ripser). Each run builds the matrices once and reduces `trials` times;
+  * times are medians.
   */
 object BlockParallelReduction:
 
@@ -77,6 +79,25 @@ object BlockParallelReduction:
       Cells(layer.dim, vs, values, blocks)
     val vertices = Cells(0, Array.range(0, n), new Array[Double](n), Array.fill(n)(-1))
     vertices +: Iterator.iterate(g.edges)(g.cofacets).take(top).map(ordered).toVector
+
+  /** The cells of dimensions `0 .. top` of any filtered complex on vertices `0 until n`, ordered by value, then
+    * dimension, then the stream's own order, with one block per filtration value. On points in general position the
+    * cells of one value are one Vietoris-Rips edge block, or one interval of an alpha complex's radius function.
+    */
+  def fromStream(stream: LevelwiseSimplexStream[Int, Double], top: Int): Vector[Cells] =
+    val levels = (0 to top).map(d => stream.iterateDimension.applyOrElse(d, (_: Int) => Iterator.empty).toArray)
+    val values = levels.map(_.map(stream.filtrationValue))
+    val distinct = values.flatten.distinct.sorted.toArray
+    levels.indices.toVector.map { d =>
+      val level = levels(d)
+      val rank = values(d).map(v => java.util.Arrays.binarySearch(distinct, v))
+      val order = sortIndices(level.length, (x, y) => Integer.compare(rank(x), rank(y)))
+      val vs = new Array[Int](level.length * (d + 1))
+      for i <- level.indices do
+        val sorted = level(order(i)).toSeq.sorted
+        for t <- 0 to d do vs(i * (d + 1) + t) = sorted(t)
+      Cells(d, vs, order.map(values(d)), if d == 0 then Array.fill(level.length)(-1) else order.map(rank))
+    }
 
   /** The coboundary from `columns` (degree-d cells) to `rows` (degree-(d+1) cells) over F_p, in compressed columns:
     * column `j`'s entries are `start(j) until start(j + 1)` of `entryRow` (ascending) and `entryCoeff`.
@@ -505,8 +526,8 @@ object BlockParallelReduction:
       .sorted
 
   def points(dataset: String, n: Int, rng: Random): Array[Array[Double]] = dataset match
-    case "cube3" => Array.fill(n)(Array.fill(3)(rng.nextDouble()))
-    case "cube4" => Array.fill(n)(Array.fill(4)(rng.nextDouble()))
+    case cube if cube.startsWith("cube") && cube.drop(4).nonEmpty && cube.drop(4).forall(_.isDigit) =>
+      Array.fill(n)(Array.fill(cube.drop(4).toInt)(rng.nextDouble()))
     case "torus" =>
       Array.fill(n) {
         val (s, t) = (2 * math.Pi * rng.nextDouble(), 2 * math.Pi * rng.nextDouble())
@@ -523,7 +544,7 @@ object BlockParallelReduction:
         val r = math.sqrt(v.map(x => x * x).sum)
         v.map(x => x / r + 0.03 * rng.nextGaussian())
       }
-    case other => throw IllegalArgumentException(s"unknown dataset $other: cube3, cube4, torus or sphere")
+    case other => throw IllegalArgumentException(s"unknown dataset $other: cube<d>, torus or sphere")
 
   def method(name: String): Method = name.split('-').toList match
     case List("seq")              => Method.Sequential
@@ -541,9 +562,14 @@ object BlockParallelReduction:
     val trials = if args.length > 5 && name != "dump" then args(5).toInt else 5
     val seed = if args.length > 6 then args(6).toLong else 42L
     val p = if args.length > 7 then args(7).toInt else 17
-    val pts = points(dataset, n, Random(seed))
+    // `alpha:<cloud>`: the alpha complex of the cloud (threshold ignored) instead of its Vietoris-Rips complex.
+    val alpha = dataset.startsWith("alpha:")
+    val pts = points(dataset.stripPrefix("alpha:"), n, Random(seed))
     val metricSpace = EuclideanMetricSpace(pts)
-    val threshold = if args(3) == "mer" then metricSpace.minimumEnclosingRadius else args(3).toDouble
+    val threshold =
+      if alpha then Double.PositiveInfinity
+      else if args(3) == "mer" then metricSpace.minimumEnclosingRadius
+      else args(3).toDouble
     println(s"$dataset n=$n maxDim=$maxDim threshold=$threshold p=$p method=$name")
     if name == "dump" then
       val out = java.io.PrintWriter(args(5))
@@ -564,11 +590,33 @@ object BlockParallelReduction:
       }
       println(f"  bars $count, median ${median(times)}%.1f ms")
       return
+    // The library's verb on the same alpha complex: the stream, then `Persistence` on it.
+    def alphaStream() =
+      given Epsilon = Epsilon(1e-5)
+      AlphaShapes(pts)
+    def verbBars(stream: LevelwiseSimplexStream[Int, Double]): Vector[(Int, Double, Double)] =
+      Persistence(Truncated(stream, maxDim), characteristic = p).bars
+        .map(b => (b.dim, endpoint(b.lower), endpoint(b.upper)))
+        .toVector
+        .sorted
+    if name == "verb" then
+      val times = (1 to trials).map { _ =>
+        val t0 = System.nanoTime()
+        val stream = alphaStream()
+        val t1 = System.nanoTime()
+        val count = verbBars(stream).size
+        val t2 = System.nanoTime()
+        println(f"  alpha complex ${(t1 - t0) / 1e6}%.1f ms, Persistence ${(t2 - t1) / 1e6}%.1f ms, bars $count")
+        t2 - t0
+      }
+      println(f"  median ${median(times)}%.1f ms")
+      return
     val dist = new Array[Double](n * n)
     for i <- 0 until n; j <- 0 until n do dist(i * n + j) = metricSpace.distance(i, j)
     val distance: (Int, Int) => Double = (i, j) => dist(i * n + j)
     val t0 = System.nanoTime()
-    val cells = complex(n, distance, threshold, maxDim + 1)
+    lazy val stream = alphaStream()
+    val cells = if alpha then fromStream(stream, maxDim + 1) else complex(n, distance, threshold, maxDim + 1)
     val t1 = System.nanoTime()
     val cobs = (1 to maxDim).map(d => coboundary(n, cells(d), cells(d + 1), p)).toVector
     val t2 = System.nanoTime()
@@ -582,7 +630,11 @@ object BlockParallelReduction:
         val r = persistence(cells, cobs, p, m, cocycles = false, pool)
         val same = r.degrees.zip(seq.degrees).forall((a, b) => java.util.Arrays.equals(a.owner, b.owner))
         println(s"  $m: same pairs as sequential: $same")
-      println(s"  same bars as the packed Ripser engine: ${seq.bars == packedBars(metricSpace, maxDim, threshold, p)}")
+      if alpha then println(s"  same bars as Persistence on the alpha complex: ${seq.bars == verbBars(stream)}")
+      else
+        println(
+          s"  same bars as the packed Ripser engine: ${seq.bars == packedBars(metricSpace, maxDim, threshold, p)}"
+        )
       pool.shutdown()
       return
     val m = method(name)

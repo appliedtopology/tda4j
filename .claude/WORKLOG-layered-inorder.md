@@ -214,3 +214,37 @@ keeps every rendered message: run alone, the first OOMed at 256 MB and the secon
 the shared 2 GB suite JVM over. Both now compare with `==` and report only the first difference (or the first three
 failures): each passes in 128 MB (the block spec in 0.25 s instead of 8 s), and the no-deferral and V-sign mutations
 are still caught. Rule in `rules/testing.md`.
+
+## Addendum: high degrees and alpha complexes (same day)
+
+Project lead asked: why explicit matrices (the library's `Chain`s would do); what happens in high degrees (H4 and
+up); does it pair with alpha shapes; 40 points in a 10-cube up to H10? Driver: `cube<d>` clouds, `alpha:<cloud>` (the
+alpha complex via `fromStream`: any filtered complex, one block per filtration value, which on points in general
+position is one interval of the radius function), `verb` (alpha: `AlphaShapes`, then `Persistence`).
+
+**Explicit matrices are not needed by the argument**: it uses only columns in reverse order and a pivot table, so it
+works on implicit coboundaries (Ripser's way) as well. The arrays were the quickest way to test the reduction; boxed
+`Chain`s would mostly measure boxing (the library's `Chain`-based engine on the 10-d alpha complex below: 243 s).
+
+**Alpha.** `check` on `alpha:cube3` n=300 (H2) and `alpha:cube4` n=100 (H3): same pairs as sequential for every
+method, same bars as `Persistence` on the alpha complex. 40 points in R¹⁰ to H9 (one run each, 12 GB heap):
+
+| | cells (dims 0..10) | build | reduction | total | bars |
+|---|---|---|---|---|---|
+| explicit, `seq` | 40 777 9,126 65,814 293,823 828,515 1,497,213 1,727,810 1,230,764 493,019 84,970 | 85.0 s (library alpha complex, then `fromStream`) + 4.2 s coboundaries | 0.13 s, 362 additions in all degrees | 89 s | 7,277 |
+| library | same complex | 22.3 s `AlphaShapes` | `Persistence` 242.8 s (includes the stream's own sorted faces) | 265 s | 7,277 |
+
+**Vietoris-Rips, 40 points in [0,1]¹⁰ to H10** (distances: median 1.27, 90% below 1.55):
+
+| threshold | cells (dims 0..11) | C++ Ripser | packed engine | explicit: generate + coboundaries + reduction | additions |
+|---|---|---|---|---|---|
+| 1.3 | 784k in all (166,621 at dim 7) | 945 ms | 1,678 ms | 223 + 426 + 39 ms = 0.69 s | 434 |
+| 1.45 | 56.6M in all (15.1M at dim 11) | 52.4 s | 131.7 s | 36.2 + 75.6 + 0.5 s = 112 s | 434 |
+
+All three agree on 81 bars. In every case here the reduction is essentially free: 41M columns at t=1.45 need 434
+column additions in all degrees together (clearing removes 30–50% of each degree's columns and almost every other
+column pairs with its first cofacet inside its block). High degrees do differentiate, but not for the reduction: the
+whole cost is enumerating cells and their first cofacets, which is independent per block. That is the parallel work
+#188 (generation per block) and a block-parallel phase 1 inside an implicit engine would split; unmeasured. For alpha
+in high dimension the reduction is likewise free and the library's verb loses to plain primitive arrays with clearing
+(the 10-d case: about 3x end to end).
