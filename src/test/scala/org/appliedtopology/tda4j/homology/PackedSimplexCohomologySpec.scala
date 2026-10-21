@@ -81,7 +81,7 @@ class PackedSimplexCohomologySpec extends Specification:
   "CellularCohomologyEngine on simplices with Int vertices" should {
     "give exactly the unpacked reduction's pairs and representatives over F_2, F_3 and F_17" in {
       val failures = for
-        seed <- 0L until 3L
+        seed <- 0L until TestPlatform.propertyCases(3).toLong
         ff <- Seq(FiniteField(2), FiniteField(3), FiniteField(17))
         (name, stream) <- streams(seed)
         failure <-
