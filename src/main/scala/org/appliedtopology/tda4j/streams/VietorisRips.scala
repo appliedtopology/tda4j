@@ -171,7 +171,7 @@ object VietorisRips extends PointCloudComplex:
     /** Ripser's coface order, via its combinatorial number system indexing. */
     case RipserCoface
 
-    /** Cofaces generated in filtration order. */
+    /** Each dimension generated from the one below already in filtration order ([[LayeredInorderSimplexStream]]). */
     case Inorder
 
     /** Rieser's New-VR (arXiv:2301.07191): a cross-validation baseline, not a fast construction. */
@@ -197,8 +197,10 @@ object VietorisRips extends PointCloudComplex:
           topSimplexDimension
         )
       case Implementation.Inorder =>
+        // Not InorderCofaceSimplexStream: it lists ties out of the stream's order and, on tied distances, some
+        // simplices twice (.claude/WORKLOG-layered-inorder.md).
         LimitedCofaceSimplexStream(
-          InorderCofaceSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue.toOption),
+          LayeredInorderSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue.toOption),
           topSimplexDimension
         )
       case Implementation.Incremental =>

@@ -173,6 +173,13 @@ def cells_reference():
 TOOLS = [
     ("tda4j", "tda4j", "vr", {"engine": "auto", "reps": "cycles"}),
     ("tda4j-cocycles", "tda4j", "vr", {"engine": "auto", "reps": "cocycles"}),
+    # The block-parallel experiments (#192, #194): bars only, no representatives, on every core. `blocks` builds the
+    # coboundary matrices explicitly (`explicit`: not run above --explicit-max-cells); bench/sweep_threads.py runs the
+    # `multithreaded` rows at 1, 2, 4, ... threads.
+    ("tda4j-blocks-mt", "tda4j", "vr",
+     {"engine": "blocks", "reps": "none", "threads": "ALL", "multithreaded": True, "explicit": True}),
+    ("tda4j-parallel-1t", "tda4j", "vr", {"engine": "parallel", "reps": "none", "threads": "1"}),
+    ("tda4j-parallel-mt", "tda4j", "vr", {"engine": "parallel", "reps": "none", "threads": "ALL", "multithreaded": True}),
     ("ripser.cpp", "ripser", "vr", {}),
     # DIPHA (Bauer, Kerber and Reininghaus; MPI): Z/2 only, always the dualized algorithm (as in the Ripser paper's
     # Dockerfile). Its input is a sparse distance matrix with the threshold in it, made before the run and not timed
@@ -599,10 +606,14 @@ def command(kind, name, opts, case, data, p, threshold, warmup, trials, out, arg
     common += case_extra_args(case, data)
     if kind == "tda4j":
         cp = Path(os.environ["TDA4J_CP"]).read_text().strip()
-        return (["java"] + jvm_flags(args.jvm_heap, args.jvm_opts) +
+        threads = [] if "threads" not in opts else [os.cpu_count() if opts["threads"] == "ALL" else int(opts["threads"])]
+        # The parallel experiment's sorts run on the common fork-join pool: give it the same number of threads.
+        pool = [f"-Djava.util.concurrent.ForkJoinPool.common.parallelism={t}" for t in threads]
+        return (["java"] + jvm_flags(args.jvm_heap, args.jvm_opts) + pool +
                 ["-cp", cp, "org.appliedtopology.tda4j.PaperBenchmarkDriver",
                  f"engine={opts['engine']}", f"reps={opts['reps']}"] +
                 ([f"backend={opts['backend']}"] if "backend" in opts else []) +
+                [f"threads={t}" for t in threads] +
                 [f"{k}={opts[k]}" for k in ("collapse", "wvariant", "dual", "nu") if k in opts] + common)
     if kind == "tda4j-js":
         heap = args.node_heap or args.jvm_heap
@@ -763,6 +774,20 @@ def ambient_dimension(case, data):
     return 0
 
 
+def explicit_too_large(kind, opts, cells, cap):
+    """Why a tool that writes out the whole boundary or coboundary matrix (the phat rows, `explicit` rows) is not run on
+    a complex of `cells` cells (bench/cells-reference.csv; None or "" when the case has no count), or None."""
+    if (kind == "phat" or opts.get("explicit")) and cells and int(cells) > cap:
+        return f"the explicit boundary matrix would have {int(cells):,} cells (above --explicit-max-cells {cap:,.0f})"
+    return None
+
+
+def pinned(cmd, args):
+    """`cmd` confined by taskset to the logical CPUs 0 .. n - 1 when `args.pin_cpus` is n (the thread sweep), else as is."""
+    n = getattr(args, "pin_cpus", 0)
+    return ["taskset", "-c", f"0-{n - 1}"] + cmd if n and cmd else cmd
+
+
 def skip_reason(opts, case, ambient, threshold, p=None):
     """Why a tool is not run on a case at all (recorded as `unsupported`), or None."""
     if opts.get("only_p") and p is not None and p != opts["only_p"]:
@@ -894,10 +919,10 @@ def run(args):
                     if why:
                         not_run("unsupported", why)
                         continue
-                    explicit = cells.get(case.name)
-                    if kind == "phat" and explicit and int(explicit) > getattr(args, "explicit_max_cells", 1e8):
-                        not_run("unsupported", f"the explicit boundary matrix would have {int(explicit):,} cells "
-                                               f"(above --explicit-max-cells {getattr(args, 'explicit_max_cells', 1e8):,.0f})")
+                    too_large = explicit_too_large(kind, opts, cells.get(case.name),
+                                                   getattr(args, "explicit_max_cells", 1e8))
+                    if too_large:
+                        not_run("unsupported", too_large)
                         continue
                     earlier = timed_out.get((case.name, name))
                     if earlier is not None and not args.rerun_timeouts:
@@ -942,7 +967,7 @@ def run_one(w, f, data, out, case, p, threshold, name, kind, opts, args):
               f"rss={rss:.0f}MB {info} {proc.reason}".rstrip(), flush=True)
 
     if kind in BINARY_KINDS:
-        cmd = command(kind, name, opts, case, data, p, threshold, 0, 1, bars_path, args)
+        cmd = pinned(command(kind, name, opts, case, data, p, threshold, 0, 1, bars_path, args), args)
         if cmd is None:
             record("cold", Proc("missing", 0, 0, "", "no coefficient build for p != 2"))
             return "missing"
@@ -968,7 +993,7 @@ def run_one(w, f, data, out, case, p, threshold, name, kind, opts, args):
         record("warm", last, "median of cold runs", walls, counts, wall=sum(walls), rss=rss_max)
         return "ok"
 
-    cmd = command(kind, name, opts, case, data, p, threshold, 0, 1, bars_path, args)
+    cmd = pinned(command(kind, name, opts, case, data, p, threshold, 0, 1, bars_path, args), args)
     cold = run_proc(cmd, args.timeout, out / "logs" / f"{tag}__cold")
     j = last_json(cold.text) if cold.status == "ok" else None
     record("cold", cold, times=j["times_s"] if j else None, bars=j["bars"] if j else None, j=j)
@@ -978,7 +1003,7 @@ def run_one(w, f, data, out, case, p, threshold, name, kind, opts, args):
         # Warm-up is irrelevant at this scale, and warmup+trials repetitions could cost hours: reuse the cold run.
         record("warm", cold, f"cold computation > {args.warm_cap:g}s: warm = cold", j["times_s"], j["bars"], j=j)
         return "ok"
-    cmd = command(kind, name, opts, case, data, p, threshold, args.warmup, args.trials, bars_path, args)
+    cmd = pinned(command(kind, name, opts, case, data, p, threshold, args.warmup, args.trials, bars_path, args), args)
     warm = run_proc(cmd, args.timeout * (args.warmup + args.trials), out / "logs" / f"{tag}__warm")
     j = last_json(warm.text) if warm.status == "ok" else None
     record("warm", warm, times=j["times_s"] if j else None, bars=j["bars"] if j else None, j=j)

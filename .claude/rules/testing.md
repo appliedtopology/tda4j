@@ -36,3 +36,9 @@ error stream (`TDA4jCLI.run(args, out, err)`); pass a buffer (`WORKLOG-cli-spec-
 **A property that hunts rare inputs** (2000 cases because a bug showed once in thousands of clouds) takes its count from
 `TestPlatform.propertyCases(n)`: all `n` on the JVM, a tenth on Scala.js (`rules/scalajs.md`). A spec that shared code
 runs must stay cheap on JS, where it is 3 to 60 times slower than on the JVM.
+
+**Compare big values, then report the first difference**: `must beEqualTo` renders both sides into its message and
+`Result.foreach`/`forAll` keep every message, so thousands of comparisons of whole listings or arrays exhaust the shared
+2 GB test JVM (CI's OOM on #186: one spec needed more than 256 MB alone). Compare with `==` and assert on the first
+difference as an `Option[String]` (`must beNone`), or collect the failures (`wrong.take(3) must beEmpty`)
+(`WORKLOG-layered-inorder.md`).

@@ -3,6 +3,8 @@ package org.appliedtopology.tda4j
 import OrderedCell.cellOrdering
 
 import scala.collection.mutable
+import scala.compiletime.asMatchable
+import scala.util.hashing.MurmurHash3
 
 /** Persistent cohomology for any cell type (simplices, cubes, simplicial-set generators): the reduction of the
   * coboundary matrix, following Bauer's Ripser (arXiv:1908.02518) without its Vietoris-Rips-specific shortcuts. Over a
@@ -17,8 +19,20 @@ import scala.collection.mutable
   * Representatives: every bar carries its V-column. For an essential bar it is a cocycle of the whole complex; for a
   * finite bar its coboundary is the bar's reduced column, which is born at or after the bar's death, so it is a cocycle
   * on the subcomplex before the death. `coboundaryOfChain` checks either.
+  *
+  * Simplices with `Int` vertices (every complex the library builds: alpha, Čech, witness, Dowker, explicit streams) are
+  * reduced on flat arrays: each dimension's vertex tuples, a hash table from a tuple to its cell, and each coboundary
+  * block as compressed columns of signs. Only a column that needs an addition becomes a `Chain`, and only the cells of
+  * the representatives returned are looked up again. The bars and representatives are exactly those of reducing the
+  * cells themselves.
+  *
+  * @param packSimplices
+  *   reduce simplices with `Int` vertices on flat arrays (see above). `false` reduces the cells themselves, with the
+  *   same results, more slowly; [[reducesPacked]] tells which a stream gets.
   */
-open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, FiltrationT: Ordering]:
+open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, FiltrationT: Ordering](
+  val packSimplices: Boolean = true
+):
 
   /** Every bar of `stream`'s persistent cohomology with its representative (see the class doc); zero-length bars only
     * if `includeZeroLength`. Works one degree at a time, so memory is bounded by the largest coboundary block.
@@ -27,7 +41,19 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
     stream: => CellStream[CellT, FiltrationT],
     includeZeroLength: Boolean = false
   ): List[PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]]] =
-    PersistenceBar.dropZeroLength(pairedCohomology(stream)._1.map(_._1), includeZeroLength)
+    val theStream = stream
+    val cells = theStream.iterator.toVector
+    packed(theStream, cells) match
+      case Some(p) => p.cocycleBars(includeZeroLength)
+      case None    =>
+        PersistenceBar.dropZeroLength(paired(theStream, cells)._1.map(_._1), includeZeroLength)
+
+  /** Whether `stream` is reduced on flat arrays (simplices with `Int` vertices, ascending under the vertex order, under
+    * the library's own cell instance; see the class doc) rather than as cells. Reads the whole stream.
+    */
+  def reducesPacked(stream: => CellStream[CellT, FiltrationT]): Boolean =
+    val theStream = stream
+    packedLevels(theStream, theStream.iterator.toVector).isDefined
 
   /** The same bars with '''cycles''' as representatives: the pairing is computed by cohomology, then only the boundary
     * columns of the death cells are reduced ([[Involution]]). A finite bar's cycle is the reduced boundary of its death
@@ -45,7 +71,19 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
     val limit = theStream match
       case s: StratifiedCellStream[?, ?] => s.homologyDegreeLimit.getOrElse(Int.MaxValue)
       case _                             => Int.MaxValue
-    reduction(theStream) match
+    val cells = theStream.iterator.toVector
+    packed(theStream, cells)
+      .map(_.cycleBars(limit, includeZeroLength))
+      .getOrElse:
+        cellHomology(theStream, cells, limit, includeZeroLength)
+
+  private def cellHomology(
+    theStream: CellStream[CellT, FiltrationT],
+    cells: Vector[CellT],
+    limit: Int,
+    includeZeroLength: Boolean
+  ): List[PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]]] =
+    reduction(theStream, cells) match
       case None    => List.empty
       case Some(r) =>
         // The involution runs on the same cell numbers: within one dimension, a larger number is younger.
@@ -73,7 +111,15 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
   def pairedCohomology(
     stream: => CellStream[CellT, FiltrationT]
   ): (List[(PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]], Involution.Pair[CellT])], Ordering[CellT]) =
-    reduction(stream) match
+    val theStream = stream
+    val cells = theStream.iterator.toVector
+    packed(theStream, cells).map(_.pairs).getOrElse(paired(theStream, cells))
+
+  private def paired(
+    theStream: CellStream[CellT, FiltrationT],
+    cells: Vector[CellT]
+  ): (List[(PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]], Involution.Pair[CellT])], Ordering[CellT]) =
+    reduction(theStream, cells) match
       case None    => (List.empty, Ordering.by[CellT, Int](_ => 0))
       case Some(r) =>
         val paired = r.entries.toList.map { e =>
@@ -116,9 +162,8 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
   // dimension's cells sorted oldest first under the engine's order, a cell's number its position. The reduction then
   // compares and hashes `Int`s instead of cells, with the same pivots, bars and V-columns as reducing over the cells
   // themselves (CohomologyNumberingSpec; WORKLOG-dense-numbering.md, WORKLOG-dense-cohomology.md).
-  private def reduction(stream: => CellStream[CellT, FiltrationT]): Option[Reduction] =
-    val theStream = stream
-    val grouped: Map[Int, Vector[CellT]] = theStream.iterator.toVector.groupBy(_.dim)
+  private def reduction(theStream: CellStream[CellT, FiltrationT], cells: Vector[CellT]): Option[Reduction] =
+    val grouped: Map[Int, Vector[CellT]] = cells.groupBy(_.dim)
     if grouped.isEmpty then None
     else
       val fv: PartialFunction[CellT, FiltrationT] = theStream.filtrationValue
@@ -193,6 +238,443 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
         cleared = nextCleared
 
       Some(Reduction(cellsByDim, entries.toIndexedSeq, cohomologyOrdering, cellFv))
+
+  // Simplices with `Int` vertices on flat arrays (#193, WORKLOG-layered-inorder.md). The same reduction as `reduction`
+  // above, column for column: the same cell numbers, the same pairs, and every `Chain` operation it performs is the one
+  // `reduction` performs (a column that needs an addition is reduced by `Chain.reduceBy`, with the columns no addition
+  // touched handed to it on demand), so the representatives agree term for term, over the reals too.
+
+  /** The cells of dimension `dim`, oldest first: cell `i` has vertices `vertices((dim + 1) * i until (dim + 1) * (i +
+    * 1))`, ascending, and value `values(i)`; `face` finds a cell's number from its vertices.
+    */
+  private final class PackedCells(
+    val dim: Int,
+    val cells: Array[AnyRef],
+    val values: Array[AnyRef],
+    val vertices: Array[Int]
+  ):
+    val size: Int = cells.length
+    private val width = dim + 1
+    // Open addressing: a slot holds a cell's number + 1, or 0 when empty; built at the first lookup (nothing looks up
+    // the top dimension's cells). A cell listed twice keeps its last number, as `numberCells` does.
+    private var slots: Array[Int] = null
+    private var mask = 0
+
+    private def hash(src: Array[Int], from: Int, length: Int, skip: Int): Int =
+      var h = 0x3c074a61
+      var r = 0
+      while r < length do
+        if r != skip then h = MurmurHash3.mix(h, src(from + r))
+        r += 1
+      MurmurHash3.finalizeHash(h, width)
+
+    private def matches(i: Int, src: Array[Int], from: Int, length: Int, skip: Int): Boolean =
+      var k = i * width
+      var r = 0
+      var same = true
+      while same && r < length do
+        if r != skip then
+          same = vertices(k) == src(from + r)
+          k += 1
+        r += 1
+      same
+
+    private def slotOf(src: Array[Int], from: Int, length: Int, skip: Int): Int =
+      var slot = hash(src, from, length, skip) & mask
+      while slots(slot) != 0 && !matches(slots(slot) - 1, src, from, length, skip) do slot = (slot + 1) & mask
+      slot
+
+    private def index(): Unit =
+      var capacity = 4
+      while capacity < 2 * size do capacity <<= 1
+      slots = new Array[Int](capacity)
+      mask = capacity - 1
+      var i = 0
+      while i < size do
+        slots(slotOf(vertices, i * width, width, -1)) = i + 1
+        i += 1
+
+    /** The number of the cell whose vertices are `src(from until from + dim + 2)` without the one at `from + skip`, or
+      * -1 if there is none.
+      */
+    def face(src: Array[Int], from: Int, skip: Int): Int =
+      if slots == null then index()
+      slots(slotOf(src, from, width + 1, skip)) - 1
+
+    def cell(i: Int): CellT = cells(i).asInstanceOf[CellT]
+    def value(i: Int): FiltrationT = values(i).asInstanceOf[FiltrationT]
+
+  // The order `reduction` puts each dimension in: ascending value, then the stream's tie-break, a stable sort of the
+  // stream's own listing. A stream lists each dimension oldest first, so each run of equal values comes reversed, and
+  // the sort is a reversal of each run that is checked strictly; anything else gets the stable sort.
+  private def cohomologyOrder(
+    cells: Array[AnyRef],
+    values: Array[AnyRef],
+    tieBreak: Ordering[CellT]
+  ): Array[Int] =
+    val byValue = summon[Ordering[FiltrationT]]
+    def value(i: Int) = values(i).asInstanceOf[FiltrationT]
+    def cell(i: Int) = cells(i).asInstanceOf[CellT]
+    val n = cells.length
+    val order = Array.range(0, n)
+    def stableSort(from: Int, until: Int): Unit =
+      val part = order.slice(from, until)
+      scala.util.Sorting.stableSort(
+        part,
+        (a: Int, b: Int) =>
+          val c = byValue.compare(value(a), value(b))
+          (if c != 0 then c else tieBreak.compare(cell(a), cell(b))) < 0
+      )
+      System.arraycopy(part, 0, order, from, until - from)
+    if (1 until n).exists(i => byValue.compare(value(i - 1), value(i)) > 0) then stableSort(0, n)
+    else
+      var start = 0
+      while start < n do
+        var end = start + 1
+        while end < n && byValue.compare(value(start), value(end)) == 0 do end += 1
+        if end - start > 1 then
+          var a = start
+          var b = end - 1
+          while a < b do
+            val t = order(a)
+            order(a) = order(b)
+            order(b) = t
+            a += 1
+            b -= 1
+          if (start + 1 until end).exists(k => tieBreak.compare(cell(order(k - 1)), cell(order(k))) >= 0) then
+            var k = start
+            while k < end do
+              order(k) = k
+              k += 1
+            stableSort(start, end)
+        start = end
+    order
+
+  /** `cells` as levels, if they are simplices with `Int` vertices under the library's own cell instance, and form
+    * dimensions `0..k` without gaps (anything else goes to `reduction`, which reports a gap).
+    */
+  private def packedLevels(
+    theStream: CellStream[CellT, FiltrationT],
+    cells: Vector[CellT]
+  ): Option[Array[PackedCells]] =
+    if !packSimplices || !summon[CellT is OrderedCell].isInstanceOf[StandardSimplexBoundary] || cells.isEmpty then None
+    else
+      val fv: PartialFunction[CellT, FiltrationT] = theStream.filtrationValue
+      val cellsByDim = mutable.ArrayBuffer.empty[mutable.ArrayBuffer[AnyRef]]
+      val valuesByDim = mutable.ArrayBuffer.empty[mutable.ArrayBuffer[AnyRef]]
+      val verticesByDim = mutable.ArrayBuffer.empty[mutable.ArrayBuilder.ofInt]
+      // Copies a cell's vertices; false unless they are `Int`s, strictly ascending (then a set's equality is its
+      // tuple's, and its boundary's signs follow the tuple). On Scala.js a `Double` vertex with an integral value
+      // matches `Int` too; it is the same number there, with the same order and equality, so the result is the same.
+      def copied(spx: Simplex[Any], to: mutable.ArrayBuilder.ofInt): Boolean =
+        val it = spx.iterator
+        var previous = 0
+        var first = true
+        var ok = true
+        while ok && it.hasNext do
+          it.next().asMatchable match
+            case v: Int if first || v > previous =>
+              to += v
+              previous = v
+              first = false
+            case _ => ok = false
+        ok
+      val it = cells.iterator
+      var ok = true
+      while ok && it.hasNext do
+        val c = it.next()
+        val d = c.dim
+        if d < 0 then ok = false
+        else
+          while cellsByDim.size <= d do
+            cellsByDim += mutable.ArrayBuffer.empty
+            valuesByDim += mutable.ArrayBuffer.empty
+            verticesByDim += new mutable.ArrayBuilder.ofInt
+          ok = copied(c.asInstanceOf[Simplex[Any]], verticesByDim(d))
+          cellsByDim(d) += c.asInstanceOf[AnyRef]
+          valuesByDim(d) += fv.applyOrElse(c, (_: CellT) => theStream.smallest).asInstanceOf[AnyRef]
+      if !ok || cellsByDim.exists(_.isEmpty) then None
+      else
+        val tieBreak = theStream.filtrationOrdering
+        Some(Array.tabulate(cellsByDim.size) { d =>
+          val (cs, vs, ts) = (cellsByDim(d).toArray, valuesByDim(d).toArray, verticesByDim(d).result())
+          val order = cohomologyOrder(cs, vs, tieBreak)
+          val width = d + 1
+          val tuples = new Array[Int](ts.length)
+          var i = 0
+          while i < order.length do
+            System.arraycopy(ts, order(i) * width, tuples, i * width, width)
+            i += 1
+          new PackedCells(d, order.map(cs(_)), order.map(vs(_)), tuples)
+        })
+
+  private def packed(theStream: CellStream[CellT, FiltrationT], cells: Vector[CellT]): Option[PackedReduction] =
+    packedLevels(theStream, cells).map(new PackedReduction(theStream, _))
+
+  /** The reduction on levels. Bars are numbered in the order they are found (degree ascending, youngest birth first),
+    * as `reduction` lists them: bar `e` is born at cell `births(e)` of dimension `dims(e)` and dies at `deaths(e)` one
+    * dimension up (-1: essential). A bar whose column needed no addition has the V-column of its own cell alone;
+    * `cocycles` holds the others.
+    */
+  private final class PackedReduction(theStream: CellStream[CellT, FiltrationT], levels: Array[PackedCells]):
+    private val fr = summon[CoefficientT is Field]
+    private val one = fr.one
+    private val minusOne = fr.negate(fr.one)
+    private val topDim = levels.length - 1
+    private val fv: PartialFunction[CellT, FiltrationT] = theStream.filtrationValue
+    private def cellFv(c: CellT): FiltrationT = fv.applyOrElse(c, (_: CellT) => theStream.smallest)
+    private val olderFirst: Ordering[CellT] =
+      Ordering.by[CellT, FiltrationT](cellFv).orElse(theStream.filtrationOrdering)
+
+    private val dims = mutable.ArrayBuilder.ofInt()
+    private val births = mutable.ArrayBuilder.ofInt()
+    private val deaths = mutable.ArrayBuilder.ofInt()
+    private val cocycles = mutable.HashMap.empty[Int, Seq[(Int, CoefficientT)]]
+    // youngestFacet(d)(j): the largest number among the faces of cell j of dimension d (-1 if none is in the stream).
+    private val youngestFacet: Array[Array[Int]] = new Array[Array[Int]](levels.length)
+    private var count = 0
+
+    private def found(dim: Int, birth: Int, death: Int, cocycle: Option[Seq[(Int, CoefficientT)]] = None): Unit =
+      dims += dim
+      births += birth
+      deaths += death
+      cocycle.foreach(cocycles(count) = _)
+      count += 1
+
+    // The coboundary block of dimension `d`: column i (a cell of `d` not cleared) is rows(offsets(i) until
+    // offsets(i + 1)), cofacet numbers ascending, each as `2 * number + (1 if its sign is -1)`. Records the youngest
+    // facet of every cell one dimension up.
+    private def coboundaries(d: Int, cleared: Array[Boolean]): (Array[Int], Array[Int]) =
+      val (lower, upper) = (levels(d), levels(d + 1))
+      val width = d + 2
+      val faces = new Array[Int](upper.size * width)
+      val offsets = new Array[Int](lower.size + 1)
+      val youngest = new Array[Int](upper.size)
+      var j = 0
+      while j < upper.size do
+        var y = -1
+        var r = 0
+        while r < width do
+          val f = lower.face(upper.vertices, j * width, r)
+          faces(j * width + r) = f
+          if f >= 0 then
+            if !cleared(f) then offsets(f + 1) += 1
+            if f > y then y = f
+          r += 1
+        youngest(j) = y
+        j += 1
+      youngestFacet(d + 1) = youngest
+      var i = 0
+      while i < lower.size do
+        offsets(i + 1) += offsets(i)
+        i += 1
+      val rows = new Array[Int](offsets(lower.size))
+      val next = offsets.clone()
+      j = 0
+      while j < upper.size do
+        var r = 0
+        while r < width do
+          val f = faces(j * width + r)
+          if f >= 0 && !cleared(f) then
+            rows(next(f)) = (j << 1) | (r & 1)
+            next(f) += 1
+          r += 1
+        j += 1
+      (offsets, rows)
+
+    locally:
+      val idOrdering: Ordering[Int] = Ordering.Int // ascending number = oldest first = a column's leading term
+      var cleared = new Array[Boolean](levels(0).size)
+      for d <- 0 to topDim do
+        val size = levels(d).size
+        val (offsets, rows) =
+          if d < topDim then coboundaries(d, cleared) else (new Array[Int](size + 1), Array.empty[Int])
+        val upSize = if d < topDim then levels(d + 1).size else 0
+        // owner(j): the column whose pivot is row j, or -1. Columns that needed an addition also keep their reduced
+        // column and V-column, under their pivot; the others are their own coboundary and their own cell.
+        val owner = Array.fill(upSize)(-1)
+        val basis = mutable.HashMap.empty[Int, Chain[Int, CoefficientT]]
+        val generators = mutable.HashMap.empty[Int, Seq[(Int, CoefficientT)]]
+        def column(i: Int): Seq[(Int, CoefficientT)] =
+          (offsets(i) until offsets(i + 1)).map(k => (rows(k) >>> 1, if (rows(k) & 1) == 0 then one else minusOne))
+        // A column no addition touched, as `reduction` stores it.
+        def untouched(pivot: Int): Option[Chain[Int, CoefficientT]] =
+          Option.when(owner(pivot) >= 0)(
+            Chain.from(column(owner(pivot)).map((j, c) => (j, fr.plus(fr.zero, c))))(using idOrdering)
+          )
+        val nextCleared = new Array[Boolean](upSize)
+        var i = size - 1
+        while i >= 0 do // youngest first
+          if !cleared(i) then
+            if offsets(i) == offsets(i + 1) then found(d, i, -1)
+            else if owner(rows(offsets(i)) >>> 1) < 0 then
+              val pivot = rows(offsets(i)) >>> 1
+              owner(pivot) = i
+              nextCleared(pivot) = true
+              found(d, i, pivot)
+            else
+              val z = Chain.from(column(i))(using idOrdering)
+              val (reduced, log) =
+                Chain.reduceBy(z, basis, Chain.empty[Int, CoefficientT](using idOrdering), untouched)(using idOrdering)
+              val acc = mutable.HashMap(i -> fr.one)
+              log.rawEntries.foreach { case (pivot, coeff) =>
+                generators
+                  .getOrElse(pivot, Seq((owner(pivot), fr.one)))
+                  .foreach { case (k, c) => acc(k) = fr.minus(acc.getOrElse(k, fr.zero), fr.times(coeff, c)) }
+              }
+              val vterms = acc.toSeq.filterNot((_, c) => fr.isEqual(c, fr.zero))
+              if reduced.isZero() then found(d, i, -1, Some(vterms))
+              else
+                val pivot = reduced.leadingCell.get
+                basis(pivot) = reduced
+                generators(pivot) = vterms
+                owner(pivot) = i
+                nextCleared(pivot) = true
+                found(d, i, pivot, Some(vterms))
+          i -= 1
+        cleared = nextCleared
+
+    private val barDims = dims.result()
+    private val barBirths = births.result()
+    private val barDeaths = deaths.result()
+
+    private def cocycle(e: Int): Seq[(Int, CoefficientT)] = cocycles.getOrElse(e, Seq((barBirths(e), fr.one)))
+    private def lower(e: Int): BarcodeEndpoint[FiltrationT] = ClosedEndpoint(levels(barDims(e)).value(barBirths(e)))
+    private def upper(e: Int): BarcodeEndpoint[FiltrationT] =
+      if barDeaths(e) < 0 then PositiveInfinity() else OpenEndpoint(levels(barDims(e) + 1).value(barDeaths(e)))
+    private def isZeroLength(e: Int): Boolean =
+      barDeaths(e) >= 0 &&
+        summon[Ordering[FiltrationT]]
+          .equiv(levels(barDims(e)).value(barBirths(e)), levels(barDims(e) + 1).value(barDeaths(e)))
+
+    private def cocycleChain(e: Int): Chain[CellT, CoefficientT] =
+      val level = levels(barDims(e))
+      Chain.from(cocycle(e).map((i, c) => (level.cell(i), c)))(using olderFirst)
+
+    def pairs
+      : (List[(PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]], Involution.Pair[CellT])], Ordering[CellT]) =
+      val paired = List.tabulate(count) { e =>
+        val (dim, level) = (barDims(e), levels(barDims(e)))
+        val death = Option.when(barDeaths(e) >= 0)(levels(dim + 1).cell(barDeaths(e)))
+        (
+          PersistenceBar(dim, lower(e), upper(e), Some(cocycleChain(e))),
+          Involution.Pair(dim, level.cell(barBirths(e)), death)
+        )
+      }
+      (paired, olderFirst)
+
+    def cocycleBars(includeZeroLength: Boolean): List[PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]]] =
+      (0 until count).iterator
+        .filter(e => includeZeroLength || !isZeroLength(e))
+        .map(e => PersistenceBar(barDims(e), lower(e), upper(e), Some(cocycleChain(e))))
+        .toList
+
+    // The faces of cell `j` of dimension `dim` that are in the stream, with their signs, as `boundary` lists them.
+    private def boundary(dim: Int, j: Int): Seq[(Int, CoefficientT)] =
+      val width = dim + 1
+      val vertices = levels(dim).vertices
+      (0 until width).flatMap { r =>
+        val f = levels(dim - 1).face(vertices, j * width, r)
+        Option.when(f >= 0)((f, if r % 2 == 0 then fr.one else fr.negate(fr.one)))
+      }
+
+    /** The bars of degree at most `limit` with cycle representatives: `Involution.cycles` on cell numbers, where a
+      * death cell whose youngest face is its birth cell needs no reduction, and only the cycles returned are built.
+      */
+    def cycleBars(
+      limit: Int,
+      includeZeroLength: Boolean
+    ): List[PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]]] =
+      given youngestFirst: Ordering[Int] = Ordering.Int.reverse
+      val chainRM = summon[Chain[Int, CoefficientT] is RingModule]
+      import chainRM.*
+      val kept = (0 until count).filter(e => barDims(e) <= limit)
+      // pairedBirth(d)(t): the birth paired with death cell t of dimension d, deathOf(d)(s) the death paired with birth
+      // cell s of dimension d (-1 for none), over the kept bars.
+      val pairedBirth = levels.map(level => Array.fill(level.size)(-1))
+      val deathOf = levels.map(level => Array.fill(level.size)(-1))
+      for e <- kept if barDeaths(e) >= 0 do
+        pairedBirth(barDims(e) + 1)(barDeaths(e)) = barBirths(e)
+        deathOf(barDims(e))(barBirths(e)) = barDeaths(e)
+      // Per death dimension, as in `Involution.cycles`: the columns that needed a reduction (reduced and V-column, under
+      // their birth cell); `processed(d)`: death cells of dimension d below it have been reduced.
+      val basisByDim = mutable.Map.empty[Int, mutable.Map[Int, Chain[Int, CoefficientT]]]
+      val generatorsByDim = mutable.Map.empty[Int, mutable.Map[Int, Chain[Int, CoefficientT]]]
+      val processed = Array.fill(levels.length)(0)
+      def trivialDeath(d: Int, sigma: Int): Int =
+        val tau = deathOf(d - 1)(sigma)
+        if tau >= 0 && tau < processed(d) && youngestFacet(d)(tau) == sigma then tau else -1
+      def unreduced(d: Int, tau: Int): Chain[Int, CoefficientT] =
+        val c = Chain.from(boundary(d, tau).map((f, x) => (f, fr.plus(fr.zero, x))))
+        c.collapseAll()
+        c
+
+      def reduce(z: Chain[Int, CoefficientT], seed: Int, d: Int): (Chain[Int, CoefficientT], Chain[Int, CoefficientT]) =
+        val basis = basisByDim.getOrElseUpdate(d, mutable.Map.empty)
+        val generators = generatorsByDim.getOrElseUpdate(d, mutable.Map.empty)
+        def fallback(sigma: Int): Option[Chain[Int, CoefficientT]] =
+          val tau = trivialDeath(d, sigma)
+          Option.when(tau >= 0)(unreduced(d, tau))
+        val (reduced, log) = Chain.reduceBy(z, basis, Chain.empty, fallback)
+        val vcol = log.rawEntries.foldLeft(Chain(seed)) { case (acc, (pivot, coeff)) =>
+          acc - coeff ⊠ generators.getOrElse(
+            pivot, {
+              val tau = trivialDeath(d, pivot)
+              if tau < 0 then
+                throw new IllegalStateException(s"Involution: pivot $pivot has a reduced column but no V-column")
+              val g = Chain[Int, CoefficientT](tau)
+              g.collapseAll()
+              g
+            }
+          )
+        }
+        vcol.collapseAll()
+        reduced.collapseAll()
+        (reduced, vcol)
+
+      for d <- 1 to topDim do
+        var tau = 0
+        while tau < levels(d).size do
+          val sigma = pairedBirth(d)(tau)
+          processed(d) = tau
+          if sigma >= 0 && youngestFacet(d)(tau) != sigma then
+            val (reduced, vcol) = reduce(Chain.from(boundary(d, tau)), tau, d)
+            reduced.leadingCell match
+              case Some(pivot) if pivot == sigma =>
+                basisByDim(d)(sigma) = reduced
+                generatorsByDim(d)(sigma) = vcol
+              case other =>
+                throw new IllegalStateException(
+                  s"Involution: the boundary of $tau reduces to pivot $other, not to its paired birth cell $sigma " +
+                    "(the pairing and the order disagree)"
+                )
+          tau += 1
+        processed(d) = Int.MaxValue
+
+      val youngestCellFirst = olderFirst.reverse
+      kept.iterator
+        .filter(e => includeZeroLength || !isZeroLength(e))
+        .map { e =>
+          val (dim, sigma, tau) = (barDims(e), barBirths(e), barDeaths(e))
+          val cycle: Seq[(Int, CoefficientT)] =
+            if tau >= 0 then
+              basisByDim.get(dim + 1).flatMap(_.get(sigma)) match
+                case Some(reduced) => reduced.terms
+                case None          =>
+                  boundary(dim + 1, tau).map((f, x) => (f, fr.plus(fr.zero, x))).sortBy(_._1)(using youngestFirst)
+            else if dim == 0 then Chain[Int, CoefficientT](sigma).terms
+            else
+              val (reduced, vcol) = reduce(Chain.from(boundary(dim, sigma)), sigma, dim)
+              if !reduced.isZero() then
+                throw new IllegalStateException(
+                  s"Involution: the boundary of the essential cell $sigma does not reduce to zero"
+                )
+              vcol.terms
+          val level = levels(dim)
+          val rep = Chain.from(cycle.map((i, c) => (level.cell(i), c)))(using youngestCellFirst)
+          new PersistenceBar(dim, lower(e), upper(e), Some(rep))
+        }
+        .toList
 
   /** The coboundary of `chain`, a chain of dimension-`d` cells, computed against `cofacets`, the dimension-`(d + 1)`
     * cells to consider. For checking representatives: `coboundaryOfChain(rep, cellsOfDimension(d + 1)).isZero()`.

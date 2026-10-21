@@ -173,6 +173,23 @@ relation is already materialized, so apparent-pair optimizations have nothing to
 full complex; finite bars carry representatives valid over their persistence
 interval.
 
+**Simplices on flat arrays.** When the cells are simplices with `Int` vertices and the cell instance is the library's
+own (`simplexIsOrderedCell`, which every complex the library builds uses), the engine works on arrays instead of
+`Simplex` objects: each dimension's vertex tuples in the engine's order, a hash table from a tuple to its cell number,
+and each coboundary block as compressed columns of signs. A column whose first row is free is paired without building
+anything. A column that needs an addition is reduced by `Chain.reduceBy` as before, with the columns it adds built on
+demand, so the bars and representatives are exactly those of reducing the cells. Cycles take the same route: a death
+cell whose youngest face is its birth cell needs no reduction, and only the representatives returned are turned back
+into `Simplex` objects. `CellularCohomologyEngine(packSimplices = false)` reduces the cells themselves, and
+`reducesPacked(stream)` says which a stream gets. Other vertex types, a vertex order other than `Int`'s and a cell
+instance of your own fall back to the cells.
+
+**Experiments: edge blocks on threads.** Two JVM-only objects try reducing Vietoris-Rips cohomology in parallel, with
+each degree cut into units of whole edge blocks (a simplex's block is its first longest edge):
+`BlockParallelReduction` on explicit coboundary matrices, `ParallelPackedCohomology` on implicit ones, as engine 4
+computes them. Both give exactly the pairs of a sequential reduction. They return bars only, no representatives, and
+`Persistence` does not call them; the benchmark harness runs them as `tda4j-blocks-mt` and `tda4j-parallel-1t/-mt`.
+
 ## 6. `FastCubicalHomologyEngine` — dual-graph union-find
 
 `FastCubicalHomologyEngine` is specialized to `CubicalGridStream`.
