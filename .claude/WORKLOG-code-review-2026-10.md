@@ -36,7 +36,10 @@ alpha (#155) and the release workflow (#150, #151) were left alone.
   threshold over F0/F2/F3/F5 with and without zero-length bars (about 160 runs), and 2-D/3-D images over FastCubical,
   Cohomology, Chunks and Naive (160 runs). Every cycle representative of every engine has zero boundary. The harness
   was a scratch `main` under `src/test` (not committed): compare `triples` after rounding, check `Chain.boundary`.
-- Not covered by the fuzz: alpha and witness inputs, `includeZeroLength` for cubical images, dimension > 3.
+- Images with NaN masks, +/-Infinity pixels, sub- and superlevel, 2-D to 4-D shapes: FastCubical, Cohomology, Chunks and
+  Naive agree (480 runs). `parallel` DQP and `parallelFiltrationValue` Cech equal their sequential runs (90 runs).
+- Not covered by the fuzz: `FastAlphaHomologyEngine` against the generic engines (it has its own reference spec),
+  circular coordinates, dimension > 3 point clouds.
 
 ## Area 4 (first part): `barcode/` distances and `io/`
 
@@ -76,6 +79,12 @@ alpha (#155) and the release workflow (#150, #151) were left alone.
 - **[probe] `sset` group homology is right** on Z/4, Z/6, Z/2xZ/2, S3, A4 against the known `H_*(BG; F_p)` (A4 at p=2
   matches the Poincare series `(1 + t^3) / ((1 - t^2)(1 - t^3))`).
 - **[reading] ok:** `Vectorization` (landscape/image formulas), SVG text is escaped, the plot viewer binds 127.0.0.1.
+
+## Outcome
+
+PR #165 (draft): coface-loop fix, `FiniteField` prime check, file-reader validation, `PointCloud`/`Persistence` input
+validation, `bettiNumbers` of `at(f)`. Full JVM suite green locally (1553 specs); `test-js`, `lint`, `mima` only on CI.
+Issues: #164 (large primes), #166 (distances cubic), #168 (alpha not scale-invariant).
 
 ## Not yet reviewed (in priority order)
 
