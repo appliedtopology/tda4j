@@ -24,6 +24,32 @@ Work is sequential, one issue at a time, in as few PRs as possible (project lead
 `sed -i 's/else streamOrdering.compare(x, y)/else -streamOrdering.compare(x, y)/' CellRanks.scala` (then `else 0`), then
 `sbt "tda4j/testOnly *PersistenceInChunksSpec *CellRanksSpec *ChunksTrianglesSpec"`; restored with `git checkout`.
 
-## Still to do
+## Outcomes after the triage
 
-Real work, in this order: file I/O strings and formats (#118, #69, #195), JavaScript API (#119), engines (#57, #82, #91).
+- **#118, #195, part of #69 (file formats).** Every format in `io/` has `parse*`/`format*` on text or bytes, with
+  `read*`/`write*` delegating through `FileAccess` (`StringFormatsSpec`; Scala.js prints `1.0` as `1`, so shared specs
+  interpolate `${1.0}`). New: Ripser sparse (`RipserSparseSpec`, CLI `ripser-sparse`), PHAT boundary matrices (ASCII and
+  binary, Z/2), Perseus uniform and non-uniform simplicial toplex (`PhatPerseusToplexSpec`). Not done for #69: facade and
+  CLI input for PHAT/toplex (the facade has no entry for an explicit simplicial complex), and a round trip against files
+  written by the real PHAT and Perseus tools. #69 stays open, `unverified`.
+- **#119 (JavaScript).** `Exports` gained landmarks, `h1Bars`, circular and toroidal coordinates, the three text
+  parsers and the `Result` members `persistenceImage`, `numCells`, `boundary()`, `column...`; typings, README, user guide
+  and `rules/scalajs.md` follow (`ExportsSpec` on Scala.js, 10 examples).
+- **#82 (boxed coefficients).** JFR `ObjectAllocationSample` of `PackedRipserCohomologyEngine` over F2 on 192 random
+  points of the 3-sphere in R^4, degrees <= 2, via `SingleEngineProfileDriver` (3 timed trials after the first, median
+  3.05 s): of 1,101,696 simplices, 1,078,323 are apparent pairs and only 2,334 need a substitution (a column
+  reduction). Allocation by class: `int[]` 29.8%, `long[]` 18.1%, `DiameterIndex` 14.0%, `FacetCursor` 9.8%, `Some` 9.0%,
+  `double[]` 6.1%, `Integer` 3.8%, `Object[]` 2.8%; the top allocation sites are `SimplexIndexing.decodeToArray`
+  (22.9%), `DiameterIndex.apply` (14.0%), `Arrays.copyOf` (19.5%). So on this input the boxed coefficients are about 6.6% of
+  the allocated bytes and the working columns see 2,334 reductions: the cost is the cofacet enumeration of the apparent-pair
+  test, not the coefficients. Not measured: F17 (more reductions), the Ripser paper's reduction-heavy sets (`o3_1024`),
+  and the Scala Native case that motivates the issue. A 300-point random O(3) cloud I tried runs 0.4 s, too short to say
+  anything.
+- **#57 (emergent pairs).** Not started. The profile above bounds it on random spheres: 98% of the columns are already
+  apparent pairs, so an emergent-pair shortcut can only change the remaining ~2%; what it could save is part of the
+  enumeration cost of the apparent test, which needs an implementation to measure. Needs the paper's data sets for the A/B.
+- **#91 (chunks from `maxDimension` 2).** Not started; the issue's own estimate is that the gain is bounded by the
+  capped naive engine's time (430 vs 220-240 ms at 30 points in R^3).
+
+Native scalafmt (`.claude/scripts/install-scalafmt.sh`) formats; `sbt scalafmtAll` still cannot download its config here.
+`sbt tda4jJS/...` works in this environment.
