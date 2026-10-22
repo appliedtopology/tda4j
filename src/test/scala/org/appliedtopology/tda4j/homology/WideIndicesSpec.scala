@@ -144,6 +144,13 @@ class WideIndicesSpec extends mutable.Specification:
       def size: Int = 1_000_000_000
       def elements: Iterable[Int] = Iterable.empty
       def contains(x: Int): Boolean = false
-    PackedRipserCohomologyEngine[f3.Fp](space, 5, maxFiltrationValue = Some(0.0), neighbourLists = Some(false)) must
-      throwAn[IllegalArgumentException]("points are too many .* lower maxDimension")
+    // By substring: the regular-expression form of `throwAn` ("points are too many .* lower maxDimension") passed on the
+    // JVM and failed on Scala.js against the same message (cause not investigated).
+    val refused = scala.util.Try(
+      PackedRipserCohomologyEngine[f3.Fp](space, 5, maxFiltrationValue = Some(0.0), neighbourLists = Some(false))
+    )
+    val message = refused.failed.toOption.collect { case e: IllegalArgumentException => e.getMessage }.getOrElse("")
+    (refused.isFailure must beTrue)
+      .and(message must contain("points are too many"))
+      .and(message must contain("lower maxDimension"))
   }
