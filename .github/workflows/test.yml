@@ -7,8 +7,8 @@ on:
       - '.claude/**'
     branches:
       - scala
-  # No `paths-ignore` here: a required check that is skipped by a path filter never reports, which blocks the merge
-  # (and the merge queue) on a PR that only touches `.github/` or `.claude/`. `merge_group` takes no path filter.
+  # No `paths-ignore` on pull_request (nor `merge_group`, which takes none): a path-filtered required check never
+  # reports and blocks the merge; the `changes` job below skips the build jobs instead.
   pull_request:
     branches:
       - scala
@@ -35,7 +35,33 @@ concurrency:
 # '**/*.properties')`); a file deleted under that walk fails the job ("Post Setup sbt launcher") after every step passed.
 # A new sbt step keeps the flag.
 jobs:
+  # Decides whether the build jobs below run. A job skipped by `if` reports as passed, so a required check never hangs
+  # the way it does under a workflow-level `paths-ignore`; a PR that only touches `.github/` or `.claude/` skips the
+  # build, a merge-queue batch and a push always run it.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.base_ref }}
+        run: |
+          code=true
+          if [ "$EVENT" = pull_request ] && \
+             ! git diff --name-only "origin/$BASE...HEAD" | grep -qvE '^(\.github|\.claude)/'; then
+            code=false
+          fi
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+
   test:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -66,6 +92,8 @@ jobs:
   # Node 22 because the file access reads `process.getBuiltinModule` (Node 20.16 and newer have it). A spec that needs
   # a JVM (files, the live viewer, benchmarks) is in `src/test/scalajvm` and does not run here.
   test-js:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -89,6 +117,8 @@ jobs:
   # the optimized link, installed from its tarball into an empty project, and run the way a user runs it, as a library
   # (`import { persistence } from "@appliedtopology/tda4j"`) and as the command (`npx tda4j`). The unit square has one loop.
   npm-package:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -129,6 +159,8 @@ jobs:
   # Compiles every Scala fence in `_docs`. The tutorial specs run the same fences inside `test`; this job is what catches a
   # broken fence in a page that has no spec, and a broken site build.
   docs-build:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -151,6 +183,8 @@ jobs:
   # and tags. A build with no earlier plain release in its series (an X.Y.0-SNAPSHOT, like 0.7.0-SNAPSHOT now) has an
   # empty baseline, and the job passes trivially ("mimaPreviousArtifacts is empty").
   mima:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

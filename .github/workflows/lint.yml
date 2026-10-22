@@ -7,8 +7,8 @@ on:
       - '.claude/**'
     branches:
       - scala
-  # No `paths-ignore` here: a required check that is skipped by a path filter never reports, which blocks the merge
-  # (and the merge queue) on a PR that only touches `.github/` or `.claude/`. `merge_group` takes no path filter.
+  # No `paths-ignore` on pull_request (nor `merge_group`, which takes none): a path-filtered required check never
+  # reports and blocks the merge; the `changes` job below skips the build jobs instead.
   pull_request:
     branches:
       - scala
@@ -24,7 +24,33 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Decides whether the build jobs below run. A job skipped by `if` reports as passed, so a required check never hangs
+  # the way it does under a workflow-level `paths-ignore`; a PR that only touches `.github/` or `.claude/` skips the
+  # build, a merge-queue batch and a push always run it.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.base_ref }}
+        run: |
+          code=true
+          if [ "$EVENT" = pull_request ] && \
+             ! git diff --name-only "origin/$BASE...HEAD" | grep -qvE '^(\.github|\.claude)/'; then
+            code=false
+          fi
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+
   lint:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
