@@ -1,5 +1,7 @@
 package org.appliedtopology.tda4j
 
+import scala.collection.immutable.ArraySeq
+
 /** Bottleneck and Wasserstein distances between persistence diagrams, by bipartite matching where each point may also
   * be matched to its projection on the diagonal.
   *
@@ -80,27 +82,87 @@ object BarcodeDistance:
       else 0.0
     }
 
-  /** Bottleneck distance restricted to already-finite points, via binary search over candidate distances (every
-    * distinct entry of the augmented cost matrix) plus a Hopcroft-Karp feasibility check at each candidate. Every
-    * candidate distance is achievable with SOME perfect matching (the largest one trivially, since at that threshold
-    * the bipartite graph is complete), so the search always succeeds once it starts.
+  /** Bottleneck distance restricted to already-finite points. A threshold `t` is feasible when the points can be paired
+    * (distance at most `t`) or sent to the diagonal (diagonal distance at most `t`); the diagonal takes any number of
+    * points. So with `A` the left points and `B` the right points whose diagonal distance exceeds `t`, it is feasible
+    * exactly when one matching of the near pairs covers `A` and another covers `B` (Mendelsohn-Dulmage: then one covers
+    * both). That is two Hopcroft-Karp runs on the near pairs only, not on the `(nL + nR)^2` augmented graph, and the
+    * near pairs of a point are found in a window of the other diagram sorted by birth (every `LP` norm is at least the
+    * birth difference), so no matrix of all pairs is built.
+    *
+    * The answer is one of the pair distances, a diagonal distance, or `0`. Sending everything to the diagonal is
+    * feasible, which caps the search at the largest diagonal distance. The search halves `[0, cap]` down to a bracket
+    * `(lo, hi]` that holds the answer, then takes the smallest feasible value among the distances inside the bracket.
     */
   private def finiteBottleneck(left: Seq[Point], right: Seq[Point], groundNorm: GroundNorm): Double =
-    val n = left.size + right.size
-    if n == 0 then 0.0
+    if left.isEmpty && right.isEmpty then 0.0
     else
-      val matrix = augmentedCostMatrix(left, right, groundNorm)
-      val candidates = matrix.flatten.distinct.sorted
-      def feasible(threshold: Double): Boolean =
-        val adjacency: Array[Array[Int]] =
-          Array.tabulate(n)(i => (0 until n).filter(j => matrix(i)(j) <= threshold).toArray)
-        HopcroftKarp.maximumMatching(n, n, adjacency(_).toIndexedSeq).count(_ != -1) == n
-      var lo = 0
-      var hi = candidates.length - 1
-      while lo < hi do
-        val mid = lo + (hi - lo) / 2
-        if feasible(candidates(mid)) then hi = mid else lo = mid + 1
-      candidates(lo)
+      val l = left.sortBy(_.birth).toArray
+      val r = right.sortBy(_.birth).toArray
+      val diagL = l.map(p => diagonalDistance(p.persistence, groundNorm))
+      val diagR = r.map(p => diagonalDistance(p.persistence, groundNorm))
+      val birthL = l.map(_.birth)
+      val birthR = r.map(_.birth)
+
+      // The first index of `births` (ascending) that is >= `bound`.
+      def lowerBound(births: Array[Double], bound: Double): Int =
+        var lo = 0
+        var hi = births.length
+        while lo < hi do
+          val mid = (lo + hi) >>> 1
+          if births(mid) < bound then lo = mid + 1 else hi = mid
+        lo
+
+      // The points of `other` within `t` of `p` (p's birth sorted into `births`), as indices into `other`.
+      def near(p: Point, other: Array[Point], births: Array[Double], t: Double): Array[Int] =
+        val found = Array.newBuilder[Int]
+        var k = lowerBound(births, p.birth - t)
+        while k < other.length && births(k) <= p.birth + t do
+          if pointDistance(p, other(k), groundNorm) <= t then found += k
+          k += 1
+        found.result()
+
+      def covers(must: Array[Int], neighbours: Int => Array[Int], others: Int): Boolean =
+        val adjacency = must.map(neighbours)
+        adjacency.forall(_.nonEmpty) &&
+        HopcroftKarp
+          .maximumMatching(must.length, others, u => ArraySeq.unsafeWrapArray(adjacency(u)))
+          .count(_ != -1) == must.length
+
+      def feasible(t: Double): Boolean =
+        covers(l.indices.filter(diagL(_) > t).toArray, i => near(l(i), r, birthR, t), r.length) &&
+          covers(r.indices.filter(diagR(_) > t).toArray, j => near(r(j), l, birthL, t), l.length)
+
+      val cap = math.max(diagL.maxOption.getOrElse(0.0), diagR.maxOption.getOrElse(0.0))
+      if feasible(0.0) then 0.0
+      else
+        var lo = 0.0
+        var hi = cap
+        var steps = 0
+        while steps < 100 && math.nextUp(lo) < hi do
+          val mid = lo + (hi - lo) / 2
+          if mid <= lo || mid >= hi then steps = 100
+          else if feasible(mid) then hi = mid
+          else lo = mid
+          steps += 1
+        // The answer is a distance in (lo, hi]: the diagonal distances, and the pair distances found by a window of `hi`.
+        val inside = Array.newBuilder[Double]
+        (diagL ++ diagR).foreach(d => if d > lo && d <= hi then inside += d)
+        for i <- l.indices do
+          var k = lowerBound(birthR, birthL(i) - hi)
+          while k < r.length && birthR(k) <= birthL(i) + hi do
+            val d = pointDistance(l(i), r(k), groundNorm)
+            if d > lo && d <= hi then inside += d
+            k += 1
+        inside += hi
+        val candidates = inside.result()
+        java.util.Arrays.sort(candidates)
+        var a = 0
+        var z = candidates.length - 1
+        while a < z do
+          val mid = a + (z - a) / 2
+          if feasible(candidates(mid)) then z = mid else a = mid + 1
+        candidates(a)
 
   /** Bottleneck distance between two persistence diagrams of a single homological dimension. `diagram1`/ `diagram2`
     * must each be internally homogeneous in `.dim` (a mismatch usually means an unfiltered multi-dimensional barcode
