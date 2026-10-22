@@ -926,12 +926,12 @@ object TDA4j:
             // A packed bar's annotation is keyed by DiameterIndex, which carries a combinatorial index but not its
             // own vertex count -- unlike Simplex[Int]'s `.underlying`, decoding needs `size` from outside. Every
             // cell in one bar's cocycle is a simplex of the SAME dimension as the bar itself (`bar.dim`), so
-            // `dim + 1` (vertex count) is exactly the `size` `si.decodeToArray` needs -- known from the bar, not
+            // `dim + 1` (vertex count) is exactly the `size` `vertices` needs -- known from the bar, not
             // guessed.
             fromBars[ctx.DiameterIndex, C](
               if cycles then ctx.persistentHomology(includeZeroLength = true)
               else ctx.persistentCohomology(includeZeroLength = true),
-              (dim, cell) => ctx.si.decodeToArray(cell.index, dim + 1),
+              (dim, cell) => ctx.vertices(cell, dim + 1),
               toDouble,
               requestedMaxDimension,
               vrBoundaryMatrixOf
@@ -1319,7 +1319,7 @@ object TDA4j:
             fromBars[ctx.DiameterIndex, C](
               if cycles then ctx.persistentHomology(includeZeroLength = true)
               else ctx.persistentCohomology(includeZeroLength = true),
-              (dim, cell) => ctx.si.decodeToArray(cell.index, dim + 1).map(landmarks),
+              (dim, cell) => ctx.vertices(cell, dim + 1).map(landmarks),
               toDouble,
               requestedMaxDimension,
               lazyBoundaryMatrixOf

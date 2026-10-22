@@ -165,7 +165,7 @@ object Persistence:
           // Cells come back packed (diameter, combinatorial index): decode them to simplices.
           def decode(bar: PersistenceBar[Double, Chain[engine.DiameterIndex, coefficients.C]]) =
             val chain = Chain.from(bar.representative.terms.map { (cell, c) =>
-              (Simplex(engine.si.decodeToArray(cell.index, bar.dim + 1)*), c)
+              (Simplex(engine.vertices(cell, bar.dim + 1)*), c)
             })
             new PersistenceBar(bar.dim, bar.lower, bar.upper, Some(chain))
           // The longest edge within the threshold, one pair at a time: collecting every pairwise distance first is
