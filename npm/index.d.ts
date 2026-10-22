@@ -31,8 +31,10 @@ export interface Options {
   sublevel?: boolean;
   /** For images: a NaN pixel is a missing pixel (default) or an error. */
   nanMask?: boolean;
+  /** How many landmarks `selectLandmarks` picks (required there), or the witness complex uses. */
   numLandmarks?: number;
   witnessVariant?: string;
+  /** `"maxmin"` (default) or `"random"`. */
   landmarkSelector?: string;
   landmarkSeed?: number;
   nu?: number;
@@ -91,6 +93,36 @@ export class Result {
   wassersteinDistance(other: Result, dimension: number, order?: number): number;
   /** `landscape[k][j]` is level `k` of the persistence landscape at sample `j` of `[tMin, tMax]`. */
   landscape(dimension: number, numLevels: number, tMin: number, tMax: number, resolution: number): number[][];
+  /**
+   * `image[i][j]` is the pixel of the persistence image of the bars of degree `dimension` at birth sample `i` and
+   * persistence sample `j`, over `[birthMin, birthMax] x [persistenceMin, persistenceMax]`, with a Gaussian of width
+   * `sigma`. Essential bars are left out. A bar's weight grows with its persistence up to `weightCap` (default: the
+   * largest persistence).
+   */
+  persistenceImage(
+    dimension: number,
+    sigma: number,
+    birthMin: number,
+    birthMax: number,
+    persistenceMin: number,
+    persistenceMax: number,
+    birthResolution: number,
+    persistenceResolution: number,
+    weightCap?: number
+  ): number[][];
+  /** The number of cells of the complex: the size of the boundary matrix. */
+  readonly numCells: number;
+  /**
+   * The nonzero entries of the boundary matrix, in the cells' filtration order: cell `cols[k]` has cell `rows[k]` in
+   * its boundary with coefficient `values[k]` (a residue over a prime field).
+   */
+  boundary(): { rows: number[]; cols: number[]; values: number[] };
+  /** The dimension of cell `j`. */
+  columnDimension(j: number): number;
+  /** Cell `j` as its vertices (point numbers from 0), or a cube's doubled coordinates for an image. */
+  columnVertices(j: number): number[];
+  /** The complex at scale `r` holds the cells with a value of at most `r`. */
+  columnFiltrationValue(j: number): number;
   plotBarcode(): Chart;
   plotDiagram(): Chart;
   /** The complex at scale `at`, over the input points. */
@@ -109,3 +141,74 @@ export function persistenceFromDistances(distances: number[][], options?: Option
 export function persistenceFromImage(pixels: number[][], options?: Options): Result;
 /** The persistent homology of a grid of any dimension: its shape and its values in row-major order. */
 export function persistenceFromGrid(shape: number[], values: number[], options?: Options): Result;
+
+/** The persistent homology of a witness-style complex on the landmarks (point numbers from 0) of a point cloud. */
+export function persistenceFromLandmarks(points: number[][], landmarks: number[], options?: Options): Result;
+/** `persistenceFromLandmarks` for a finite metric space given as its full matrix of distances. */
+export function persistenceFromDistancesAndLandmarks(distances: number[][], landmarks: number[], options?: Options): Result;
+
+export interface LandmarkSelection {
+  /** Point numbers from 0. */
+  landmarks: number[];
+  /** The largest distance from a point to its nearest landmark; compute with `maxFiltrationValue: 2 * coveringRadius`. */
+  coveringRadius: number;
+}
+/** Picks `options.numLandmarks` landmarks (`options.landmarkSelector`: `"maxmin"` or `"random"`, with `landmarkSeed`). */
+export function selectLandmarks(points: number[][], options?: Options): LandmarkSelection;
+/** `selectLandmarks` for a finite metric space given as its full matrix of distances. */
+export function selectLandmarksFromDistances(distances: number[][], options?: Options): LandmarkSelection;
+/** The covering radius of any set of landmarks (point numbers from 0). */
+export function coveringRadius(points: number[][], landmarks: number[]): number;
+
+/** The loops of a point cloud's Vietoris-Rips complex as `[birth, death]`, the most persistent first. */
+export function h1Bars(points: number[][]): number[][];
+
+export interface CircularCoordinates {
+  /** One angle in `[0, 1)` per point; `NaN` for a point outside the loop's connected component. */
+  theta: number[];
+  birth: number;
+  death: number;
+  r: number;
+  prime: number;
+}
+/**
+ * Circular coordinates for the loop `options.cocycleIndex` (default 0) of `h1Bars`, at a scale `r` between its birth and
+ * death, over the field with `options.prime` elements (an odd prime, default 47). Throws if the loop has no integer lift at
+ * that prime: use a larger one.
+ */
+export function circularCoordinates(
+  points: number[][],
+  r: number,
+  options?: { cocycleIndex?: number; prime?: number }
+): CircularCoordinates;
+
+export interface ToroidalCoordinates {
+  /** `theta[c][i]` is coordinate `c` of point `i`, in `[0, 1)`. */
+  theta: number[][];
+  cocycleIndices: number[];
+  basisChange: number[][];
+  originalGram: number[][];
+  reducedGram: number[][];
+  r: number;
+  prime: number;
+}
+/** Toroidal coordinates combining the loops `cocycleIndices` of `h1Bars` that are alive together at `r`. */
+export function toroidalCoordinates(
+  points: number[][],
+  r: number,
+  cocycleIndices: number[],
+  options?: { prime?: number; reduce?: boolean }
+): ToroidalCoordinates;
+
+/** A point cloud from the text of a file: one point per line, separated by commas or whitespace. */
+export function parsePointCloud(text: string): number[][];
+/** A point cloud from the text of a GUDHI OFF or nOFF file. */
+export function parseOff(text: string): number[][];
+/**
+ * The full matrix of distances from the text of a file. `format` is `"full"` (default), `"lower"`, `"ripser-lower"`,
+ * `"ripser-upper"`, `"ripser-dense"` or `"ripser-sparse"` (`i j d` per line; a pair not listed is at distance `Infinity`).
+ */
+export function parseDistanceMatrix(
+  text: string,
+  format?: "full" | "lower" | "ripser-lower" | "ripser-upper" | "ripser-dense" | "ripser-sparse"
+): number[][];

@@ -44,6 +44,26 @@ A `Result` also has `bottleneckDistance(other, dimension)`, `wassersteinDistance
 `plotComplex(at)` and `plotRepresentative(i, at)`. A plot has `svg()` and `html()` for the text of a picture or a page,
 `show()` to put it in the page (in a browser) or open it in the default browser (from Node.js), and `save(path)`.
 
+A `Result` also has `persistenceImage(dimension, sigma, birthMin, birthMax, persistenceMin, persistenceMax,
+birthResolution, persistenceResolution)`, and the complex it was computed from: `numCells`, `boundary()` (the nonzero
+entries as `{ rows, cols, values }`, cells in filtration order) and, for cell `j`, `columnDimension(j)`,
+`columnVertices(j)` and `columnFiltrationValue(j)`.
+
+Landmarks, circular coordinates and the text of files have functions of their own:
+
+| function | result |
+|---|---|
+| `selectLandmarks(points, { numLandmarks })` | `{ landmarks, coveringRadius }`; `selectLandmarksFromDistances` for a distance matrix |
+| `persistenceFromLandmarks(points, landmarks, options)` | a `Result` on the witness complex of the landmarks; `persistenceFromDistancesAndLandmarks` for a distance matrix |
+| `coveringRadius(points, landmarks)` | the covering radius of any landmarks |
+| `h1Bars(points)` | the loops of the Vietoris-Rips complex as `[birth, death]`, most persistent first |
+| `circularCoordinates(points, r, { cocycleIndex, prime })` | `{ theta, birth, death, r, prime }`: one angle in [0, 1) per point for loop `cocycleIndex` of `h1Bars`, with `r` between its birth and death |
+| `toroidalCoordinates(points, r, cocycleIndices, { prime, reduce })` | `{ theta, cocycleIndices, basisChange, originalGram, reducedGram, r, prime }`: `theta[c][i]` is coordinate `c` of point `i` |
+| `parsePointCloud(text)`, `parseOff(text)` | the points of a CSV or Ripser point-cloud text, or of a GUDHI OFF text |
+| `parseDistanceMatrix(text, format)` | a full matrix from a text in `"full"` (default), `"lower"`, `"ripser-lower"`, `"ripser-upper"`, `"ripser-dense"` or `"ripser-sparse"` format |
+
+The parsers take the text, so a page can read a file the user picked with `file.text()`.
+
 A bad option or a malformed input throws an `Error` that says what to change.
 
 ### On the command line

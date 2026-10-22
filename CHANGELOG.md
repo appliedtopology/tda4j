@@ -61,6 +61,10 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   and `persistenceFromGrid` returning a `Result` (bars, representatives, distances, landscapes, plots) and typings. `npx
   tda4j` is the command line on Node.js. Browsers and Node.js 20.16 or newer; one thread; no file access in a browser. See
   *Using it from JavaScript* in the user guide.
+- The npm package exports landmark selection (`selectLandmarks`, `persistenceFromLandmarks`, `coveringRadius`), `h1Bars`,
+  `circularCoordinates` and `toroidalCoordinates`, parsers for the text of point clouds, OFF files and distance matrices
+  (`parsePointCloud`, `parseOff`, `parseDistanceMatrix`), and `Result.persistenceImage`, `numCells`, `boundary()` and the
+  `column...` accessors, all with typings.
 - `CubicalImage.fromImageData` (Scala.js) builds a cubical complex from the pixels of a canvas.
 - The benchmark harness (`bench/`) times the Scala.js build, installed as the npm package and run on Node.js, beside the
   JVM build and the other tools on the same machine and inputs: `bench/run.sh setup tda4j-js`, then the `tda4j-js*` tools
