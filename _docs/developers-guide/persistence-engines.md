@@ -188,7 +188,8 @@ instance of your own fall back to the cells.
 each degree cut into units of whole edge blocks (a simplex's block is its first longest edge):
 `BlockParallelReduction` on explicit coboundary matrices, `ParallelPackedCohomology` on implicit ones, as engine 4
 computes them. Both give exactly the pairs of a sequential reduction. They return bars only, no representatives, and
-`Persistence` does not call them; the benchmark harness runs them as `tda4j-blocks-mt` and `tda4j-parallel-1t/-mt`.
+`Persistence` does not call them. The benchmark harness runs `ParallelPackedCohomology` as `tda4j-parallel-1t/-mt`;
+`BlockParallelReduction` builds its matrices in full and is not run there.
 
 ## 6. `FastCubicalHomologyEngine` — dual-graph union-find
 

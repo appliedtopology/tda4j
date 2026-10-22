@@ -132,13 +132,12 @@ position (marked †).
 
 ## The thread-scaling sweep
 
-`bench/run.sh sweep-threads` runs every multithreaded Vietoris–Rips tool (`tda4j-parallel-mt`, `tda4j-blocks-mt`,
+`bench/run.sh sweep-threads` runs every multithreaded Vietoris–Rips tool (`tda4j-parallel-mt`,
 `giotto-ph-mt`, and `dipha-mt`, whose threads are MPI ranks) at 1, 2, 4, ... threads up to the machine's logical CPUs
 (`--threads 1,8,32` picks others), with `ripser.cpp` once per case for scale (`--baselines`). The default cases are
-fractal-r (2.2 billion cells to H2), the heaviest case of the main run that `tda4j-parallel-mt` can encode, and
-`cube10_40`, which the sweep generates: 40 points uniform in [0,1]^10 to H10 at t = 1.6 (235 million cells), high
-degrees where the work splits by edge block. `tda4j-blocks-mt` builds its matrices explicitly, so it skips both
-(`--cases random16` is one it runs).
+fractal-r (2.2 billion cells to H2) and `cube10_40`, which the sweep generates: 40 points uniform in [0,1]^10 to H10
+at t = 1.6 (235 million cells), high degrees where the work splits by edge block. `--cases o3_4096` is the heaviest case
+of the main run that `tda4j-parallel-mt` can run.
 
 A run at t threads is pinned to the CPUs 0 to t - 1 with `taskset`, so the JVM's garbage collector and compiler and the
 MPI ranks get those t CPUs too (with Open MPI the sweep adds `--bind-to none`, so the ranks stay inside the set). Use
@@ -261,8 +260,7 @@ packages at pinned commits (neither is pip-installable with current tools; the P
 | `tda4j-js-cohomology`, `tda4j-js-fastalpha`, `tda4j-js-bw`, `tda4j-js-helix` | the same, named engines and backends | JavaScript twins of the next row's tools |
 | `tda4j-cohomology`, `tda4j-fastalpha` | named engines | cohomology on images (on a grid: the packed grid engine, the general engine's output); the dual union-find on alpha (on the default triangulation) |
 | `tda4j-bw`, `tda4j-helix`, `tda4j-dqp` | named alpha backends | `tda4j` uses the default: Bowyer–Watson up to 4 dimensions, Helix above, DQP for a small radius; these name each. Bowyer–Watson is `unsupported` above 4-D; DQP only runs on a case with a radius (untruncated it is about 100 times slower than Helix); `tda4j-fastalpha` takes no radius |
-| `tda4j-parallel-1t`, `tda4j-parallel-mt` | `PaperBenchmarkDriver engine=parallel threads=N` | the block-parallel experiment `ParallelPackedCohomology` (JVM only): implicit coboundaries, bars only, on 1 thread or every CPU. A simplex is one `Long` key, so it fails on a case whose keys do not fit (o3_4096; two-word keys are #194) or whose n × n tables do not (clifford50000) |
-| `tda4j-blocks-mt` | `PaperBenchmarkDriver engine=blocks threads=N` | the other experiment, `BlockParallelReduction`: explicit coboundary matrices, bars only, every CPU; not run above `--explicit-max-cells` |
+| `tda4j-parallel-1t`, `tda4j-parallel-mt` | `PaperBenchmarkDriver engine=parallel threads=N` | the block-parallel experiment `ParallelPackedCohomology` (JVM only): implicit coboundaries, bars only, on 1 thread or every CPU. A simplex is one `Long` key where it fits and a block and an index beyond (o3_4096); it fails on a case whose n × n tables do not fit (clifford50000) |
 | `ripser.cpp` | vanilla build for p = 2, `ripser-coeff` for other primes | the reference for Vietoris–Rips |
 | `ripser.py`, `giotto-ph-1t`, `giotto-ph-mt` | pip | giotto-ph multithreaded is reported, never the baseline |
 | `gudhi`, `gudhi-collapse` | pip | edge collapse first in the second variant |
