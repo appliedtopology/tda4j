@@ -7,12 +7,12 @@ on:
       - '.claude/**'
     branches:
       - scala
+  # No `paths-ignore` here: a required check that is skipped by a path filter never reports, which blocks the merge
+  # (and the merge queue) on a PR that only touches `.github/` or `.claude/`. `merge_group` takes no path filter.
   pull_request:
-    paths-ignore:
-      - '.github/**'
-      - '.claude/**'
     branches:
       - scala
+  merge_group:
   workflow_dispatch:
 
 permissions:
