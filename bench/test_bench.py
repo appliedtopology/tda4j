@@ -1238,6 +1238,110 @@ class PythonWorkerTests(unittest.TestCase):
                 self.assertEqual(r.returncode, 3, f"{tool} {task}: exit 3 is 'unsupported'")
 
 
+class RevisionTests(unittest.TestCase):
+    """Which TDA4j a run measured: the commit of the checkout the JVM classes were built in, the tracked files changed
+    since, and whether the classes are older than the sources."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.dir.cleanup)
+        self.repo = Path(self.dir.name) / "checkout"
+        (self.repo / "src" / "main" / "scala").mkdir(parents=True)
+        (self.repo / "src" / "main" / "scala" / "A.scala").write_text("object A")
+        (self.repo / "notes.txt").write_text("notes")
+        self.git("init", "-q")
+        self.git("add", "-A")
+        self.git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "first")
+        self.head = self.git("rev-parse", "HEAD")
+        self.classes = self.repo / "target" / "out" / "jvm" / "scala-3.9.0" / "tda4j" / "classes"
+        self.classes.mkdir(parents=True)
+        (self.classes / "A.class").write_text("class")
+
+    def git(self, *args):
+        return subprocess.run(["git", "-C", str(self.repo), *args], capture_output=True, text=True, check=True).stdout.strip()
+
+    def age(self, path, seconds_ago):
+        t = time.time() - seconds_ago
+        os.utime(path, (t, t))
+
+    def test_a_clean_checkout_is_its_head_and_nothing_else(self):
+        rev = bench.revision(self.classes)
+        self.assertEqual((rev["tda4j_git"], rev["tda4j_dirty"]), (self.head, []))
+
+    def test_the_checkout_is_the_one_the_classes_were_built_in_not_the_harness_s(self):
+        elsewhere = Path(self.dir.name) / "other"
+        elsewhere.mkdir()
+        # no checkout above these classes: the fallback is the harness's own, here a directory that is no repository
+        rev = bench.revision(elsewhere, default_repo=elsewhere)
+        self.assertEqual((rev["tda4j_git"], rev["tda4j_dirty"]), ("unavailable", []))
+        self.assertEqual(bench.revision(self.classes, default_repo=elsewhere)["tda4j_git"], self.head)
+
+    def test_changed_tracked_files_are_listed_staged_or_not_and_untracked_ones_are_not(self):
+        (self.repo / "notes.txt").write_text("changed")
+        (self.repo / "src" / "main" / "scala" / "A.scala").write_text("object A { val x = 1 }")
+        self.git("add", "src/main/scala/A.scala")
+        (self.repo / "scratch.txt").write_text("untracked")
+        self.assertEqual(bench.revision(self.classes)["tda4j_dirty"], ["notes.txt", "src/main/scala/A.scala"])
+
+    def test_classes_older_than_a_source_are_stale_and_newer_ones_are_not(self):
+        source, compiled = self.repo / "src" / "main" / "scala" / "A.scala", self.classes / "A.class"
+        self.age(source, 100)
+        self.age(compiled, 10)
+        self.assertIs(bench.revision(self.classes)["tda4j_classes_stale"], False)
+        self.age(compiled, 1000)
+        self.assertIs(bench.revision(self.classes)["tda4j_classes_stale"], True)
+
+    def test_without_classes_staleness_is_unknown(self):
+        self.assertIsNone(bench.revision(None, default_repo=self.repo)["tda4j_classes_stale"])
+        self.assertIsNone(bench.revision(self.repo / "no-such-dir", default_repo=self.repo)["tda4j_classes_stale"])
+
+    def test_the_first_entry_of_the_classpath_file_is_the_classes_directory(self):
+        cp = Path(self.dir.name) / "tda4j.classpath"
+        cp.write_text(os.pathsep.join([str(self.classes), "/x/scala3-library.jar"]))
+        with mock.patch.dict(os.environ, {"TDA4J_CP": str(cp)}):
+            self.assertEqual(bench.classes_directory(), self.classes)
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertIsNone(bench.classes_directory())
+
+    def test_the_text_names_the_commit_and_says_when_it_is_not_the_whole_story(self):
+        env = {"tda4j_git": "0123456789abcdef0123", "tda4j_dirty": [], "tda4j_classes_stale": False}
+        self.assertEqual(bench.revision_text(env), "TDA4j `0123456789ab`.")
+        self.assertEqual(bench.revision_text({**env, "tda4j_dirty": ["a", "b"]}),
+                         "TDA4j `0123456789ab` with 2 changed files (a, b).")
+        self.assertEqual(bench.revision_text({**env, "tda4j_dirty": ["a"]}), "TDA4j `0123456789ab` with 1 changed file (a).")
+        self.assertEqual(bench.revision_text({**env, "tda4j_classes_stale": True}),
+                         "TDA4j `0123456789ab`; the classes the JVM rows ran are older than the sources.")
+        self.assertEqual(bench.revision_text({"tda4j_git": "0123456789abcdef0123"}), "TDA4j `0123456789ab`.")
+        self.assertEqual(bench.revision_text({"tda4j_git": "unavailable"}), "")
+        self.assertEqual(bench.revision_text({}), "")
+
+    def test_many_changed_files_are_counted_and_the_first_few_named(self):
+        text = bench.revision_text({"tda4j_git": "0123456789abcdef", "tda4j_dirty": [f"f{i}" for i in range(12)]})
+        self.assertEqual(text, "TDA4j `0123456789ab` with 12 changed files (f0, f1, f2, f3, f4, ...).")
+
+    def test_both_summaries_say_which_commit_they_measured(self):
+        env = {"tda4j_git": self.head, "tda4j_dirty": ["notes.txt"], "cpu": "Test CPU", "cores": 4,
+               "args": {"baselines": "ripser.cpp"}}
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d)
+            (out / "env.json").write_text(json.dumps(env))
+            (out / "bars").mkdir()
+            write_runs(out, [run_row("small", "tda4j", "warm", "ok", wall="1", median="1")])
+            bench.summarize(out, bottleneck=stub_bottleneck)
+            self.assertIn(f"TDA4j `{self.head[:12]}` with 1 changed file (notes.txt).", (out / "summary.md").read_text())
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d)
+            (out / "env.json").write_text(json.dumps(env))
+            (out / "bars").mkdir()
+            with open(out / "sweep.csv", "w", newline="") as f:
+                w = csv.DictWriter(f, fieldnames=sweep_threads.COLUMNS)
+                w.writeheader()
+                w.writerow(run_row("small", "tda4j-parallel-mt", "warm", "ok", median="1", threads="1", pinned="False",
+                                   multithreaded="True"))
+            sweep_threads.summarize(out, bottleneck=stub_bottleneck)
+            self.assertIn(f"TDA4j `{self.head[:12]}` with 1 changed file (notes.txt).", (out / "sweep.md").read_text())
+
+
 class ThreadSweepTests(unittest.TestCase):
     """bench/sweep_threads.py: which counts run, how a tool is given its count and pinned, where a series stops, and the
     barcode checks of the summary."""

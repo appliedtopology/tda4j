@@ -1014,6 +1014,66 @@ def js_package_version():
     return json.load(open(manifest)).get("version", "") if manifest and manifest.exists() else ""
 
 
+def classes_directory():
+    """TDA4j's compiled classes: the first entry of the classpath file TDA4J_CP names, or None."""
+    cp = os.environ.get("TDA4J_CP")
+    try:
+        first = Path(cp).read_text().strip().split(os.pathsep)[0] if cp else ""
+    except OSError:
+        return None
+    return Path(first) if first else None
+
+
+def revision(classes, default_repo=HERE.parent):
+    """Which TDA4j a run measured. The checkout is the one the classes were built in (the directory above their
+    `target`), else `default_repo`, the harness's own. `tda4j_git` is its HEAD; `tda4j_dirty` the tracked files that
+    differ from it (untracked ones are not named); `tda4j_classes_stale` whether a JVM source is newer than the newest
+    class, which a checkout made after `setup` leaves true (None when there are no classes to compare)."""
+    def git(repo, *args):
+        try:
+            r = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, timeout=60)
+        except Exception:
+            return None
+        return r.stdout.strip() if r.returncode == 0 else None
+
+    repo = next((p.parent for p in (classes.resolve() if classes else Path()).parents if p.name == "target"),
+                default_repo)
+    stale = None
+    if classes is not None and classes.is_dir():
+        built = max((Path(d, f).stat().st_mtime for d, _, fs in os.walk(classes) for f in fs), default=None)
+        sources = (git(repo, "ls-files", "--", "src/main/scala", "src/main/scalajvm") or "").splitlines()
+        edited = max((Path(repo, s).stat().st_mtime for s in sources if Path(repo, s).exists()), default=None)
+        stale = None if built is None or edited is None else edited > built
+    return {"tda4j_git": git(repo, "rev-parse", "HEAD") or "unavailable",
+            "tda4j_dirty": (git(repo, "diff", "--name-only", "HEAD") or "").splitlines(),
+            "tda4j_classes_stale": stale}
+
+
+def revision_text(env):
+    """The line the summaries carry: the commit, and what keeps it from being the whole story. Empty where the run
+    recorded no commit."""
+    head = env.get("tda4j_git") or ""
+    if not re.fullmatch(r"[0-9a-f]{7,40}", head):
+        return ""
+    text = f"TDA4j `{head[:12]}`"
+    dirty = env.get("tda4j_dirty") or []
+    if dirty:
+        named = ", ".join(dirty[:5]) + (", ..." if len(dirty) > 5 else "")
+        text += f" with {len(dirty)} changed file{'' if len(dirty) == 1 else 's'} ({named})"
+    if env.get("tda4j_classes_stale"):
+        text += "; the classes the JVM rows ran are older than the sources"
+    return text + "."
+
+
+def read_env(out):
+    """The run's env.json, or {} where it is missing or unreadable."""
+    try:
+        with open(Path(out) / "env.json") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
 def write_env(out, args):
     def cmd_out(cmd):
         try:
@@ -1034,7 +1094,7 @@ def write_env(out, args):
         "python_packages": cmd_out([args.python, "-m", "pip", "freeze"]),
         "julia": cmd_out([os.environ["JULIA"], "--version"]) if os.environ.get("JULIA") else "",
         "ripser_git": cmd_out(["git", "-C", str(Path(os.environ.get("RIPSER_BIN", ".")).parent), "rev-parse", "HEAD"]),
-        "tda4j_git": cmd_out(["git", "-C", str(HERE.parent), "rev-parse", "HEAD"]),
+        **revision(classes_directory()),
         "jvm_flags": jvm_flags(args.jvm_heap, args.jvm_opts),
         "args": vars(args),
     }
@@ -1111,7 +1171,8 @@ def summarize(out: Path, bottleneck=None):
         w.writeheader()
         w.writerows(summary)
 
-    lines = ["# TDA4j cross-platform benchmark", "", f"Results: `{out}`. Environment: `env.json`.", "",
+    rev = revision_text(read_env(out))
+    lines = ["# TDA4j cross-platform benchmark", "", f"Results: `{out}`. Environment: `env.json`." + (f" {rev}" if rev else ""), "",
              "Status: `ok`; `timeout`; `limit` (the tool's own index range); `oom`; `unsupported`; `error(code)`; "
              "`missing` (not installed). Peak MB is the kernel's peak RSS of the process (`≤` where it could only be "
              "read from `ru_maxrss`, an upper bound); heap MB is the JVM's peak use of its heap pools. "
