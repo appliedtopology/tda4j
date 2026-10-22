@@ -10,8 +10,9 @@ import java.nio.{ByteBuffer, ByteOrder}
   * order, matching both.
   */
 object BinaryIO:
-  def readAllLE(path: String): ByteBuffer =
-    ByteBuffer.wrap(FileAccess.readBytes(path)).order(ByteOrder.LITTLE_ENDIAN)
+  def readAllLE(path: String): ByteBuffer = wrapLE(FileAccess.readBytes(path))
+
+  def wrapLE(bytes: Array[Byte]): ByteBuffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
 
   def newBufferLE(byteSize: Int): ByteBuffer =
     ByteBuffer.allocate(byteSize).order(ByteOrder.LITTLE_ENDIAN)

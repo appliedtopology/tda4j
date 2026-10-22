@@ -41,6 +41,13 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Added
 
+- Every file format has an in-memory form: `parse...(text)` / `format...(data)` for the text formats and
+  `parse...(bytes)` / `format...(data)` for the binary ones (`CSV`, `Ripser`, `Gudhi`, `Dipha`, `Perseus`), so a browser
+  page that holds a file's contents can use them; the path methods are these on a file's contents.
+- Ripser's `sparse` format (`Ripser.readSparseDistanceMatrix`, `--input-format ripser-sparse`): a pair not listed has no
+  edge. A metric space with infinite distances now has the largest finite distance as its `minimumEnclosingRadius`.
+- PHAT boundary matrices (`Phat`, ASCII and binary, `Phat.fromStream`) and Perseus's simplicial toplex formats
+  (`Perseus.readUniformToplex`, `readNonUniformToplex`, `toplexStream`).
 - Two JVM-only experiments that reduce Vietoris-Rips cohomology with each degree split into units of whole edge blocks
   on a thread pool: `BlockParallelReduction` (explicit coboundaries) and `ParallelPackedCohomology` (implicit
   coboundaries). Bars only, with no representatives; `Persistence` does not use them.

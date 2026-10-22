@@ -54,7 +54,7 @@ tda4j implements Ripser's algorithm (clearing, cohomology, apparent pairs) as it
 | Ripser | tda4j |
 |---|---|
 | `ripser --format point-cloud --dim k --threshold t --modulus p file` | `java -jar tda4j-VERSION-assembly.jar --input-format ripser-points --max-dimension k --max-filtration-value t --prime p --min-persistence 0 file` |
-| `--format point-cloud`, `distance`, `lower-distance`, `upper-distance`, `binary` | `--input-format ripser-points`, `ripser-distance`, `ripser-lower`, `ripser-upper`, `ripser-binary` |
+| `--format point-cloud`, `distance`, `lower-distance`, `upper-distance`, `sparse`, `binary` | `--input-format ripser-points`, `ripser-distance`, `ripser-lower`, `ripser-upper`, `ripser-sparse`, `ripser-binary` |
 | `ripser(X, maxdim=k, thresh=t, coeff=p)` (ripser.py) | `Persistence(X, maxDimension = k, maxFiltrationValue = t, characteristic = p)` |
 | `ripser(D, distance_matrix=True)` | `Persistence(ExplicitMetricSpace(rows))` |
 | `result['dgms'][d]` | `diagram.dim(d).triples` (degree, birth, death), death `Infinity` for an essential bar |

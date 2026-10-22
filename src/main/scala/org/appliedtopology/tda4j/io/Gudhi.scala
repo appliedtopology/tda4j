@@ -10,35 +10,33 @@ object Gudhi:
     * comments, skipped anywhere. Faces/edges are never read -- GUDHI's own reader doesn't use them for a point set
     * either.
     */
-  def readOff(path: String): Array[Array[Double]] =
-    val src = FileAccess.source(path)
-    try
-      val lines = src.getLines().map(_.trim).filterNot(l => l.isEmpty || l.startsWith("#")).toIndexedSeq
-      val header = lines.head.toUpperCase
-      val dim =
-        if header == "OFF" then 3
-        else
-          val m = "^([0-9]+)OFF$".r.findFirstMatchIn(header)
-          require(m.isDefined, s"unrecognized OFF header: '${lines.head}'")
-          m.get.group(1).toInt
-      val nVertices = lines(1).split("\\s+")(0).toInt
-      lines.slice(2, 2 + nVertices).map(_.split("\\s+").take(dim).map(_.toDouble)).toArray
-    finally src.close()
+  def parseOff(text: String): Array[Array[Double]] =
+    val lines = text.linesIterator.map(_.trim).filterNot(l => l.isEmpty || l.startsWith("#")).toIndexedSeq
+    val header = lines.head.toUpperCase
+    val dim =
+      if header == "OFF" then 3
+      else
+        val m = "^([0-9]+)OFF$".r.findFirstMatchIn(header)
+        require(m.isDefined, s"unrecognized OFF header: '${lines.head}'")
+        m.get.group(1).toInt
+    val nVertices = lines(1).split("\\s+")(0).toInt
+    lines.slice(2, 2 + nVertices).map(_.split("\\s+").take(dim).map(_.toDouble)).toArray
+
+  def readOff(path: String): Array[Array[Double]] = parseOff(FileAccess.readText(path))
 
   def readEuclideanMetricSpace(path: String): EuclideanMetricSpace =
     EuclideanMetricSpace(readOff(path))
 
   /** Writes an `OFF` (3D) or `nOFF` (any other dimension) point cloud, no faces/edges. */
-  def writeOff(path: String, points: Array[Array[Double]]): Unit =
+  def formatOff(points: Array[Array[Double]]): String =
     require(points.nonEmpty, "cannot write an OFF file for an empty point cloud")
     val dim = points.head.size
     require(points.forall(_.size == dim), "every point must have the same dimension")
-    val out = FileAccess.printWriter(path)
-    try
-      out.println(if dim == 3 then "OFF" else s"${dim}OFF")
-      out.println(s"${points.size} 0 0")
-      points.foreach(p => out.println(p.mkString(" ")))
-    finally out.close()
+    val header = (if dim == 3 then "OFF" else s"${dim}OFF") + "\n" + s"${points.size} 0 0\n"
+    header + points.map(_.mkString(" ") + "\n").mkString
+
+  def writeOff(path: String, points: Array[Array[Double]]): Unit =
+    FileAccess.writeText(path, formatOff(points))
 
   /** GUDHI's `.pers` diagram format: `#`-prefixed comment lines are ignored; every other line has 2, 3, or 4
     * whitespace-separated fields, `[[field] dimension] birth death`. This reads the LAST two fields as birth/death
@@ -46,31 +44,30 @@ object Gudhi:
     * represented in [[PersistenceBar]] and is discarded); 3 fields -> the first field is `dimension`; 2 fields ->
     * `dimension` defaults to `0`. `inf`/`-inf` (any case) are infinite endpoints.
     */
+  def parsePersistenceDiagram(text: String): Seq[PersistenceBar[Double, Nothing]] =
+    text.linesIterator
+      .map(_.trim)
+      .filterNot(l => l.isEmpty || l.startsWith("#"))
+      .map { line =>
+        val fields = line.split("\\s+")
+        val dim = fields.length match
+          case 2 => 0
+          case 3 => fields(0).toInt
+          case 4 => fields(1).toInt
+          case n => throw new IllegalArgumentException(s"expected 2-4 fields, got $n in line '$line'")
+        Endpoints.toBar(dim, fields(fields.length - 2), fields(fields.length - 1))
+      }
+      .toSeq
+
   def readPersistenceDiagram(path: String): Seq[PersistenceBar[Double, Nothing]] =
-    val src = FileAccess.source(path)
-    try
-      src
-        .getLines()
-        .map(_.trim)
-        .filterNot(l => l.isEmpty || l.startsWith("#"))
-        .map { line =>
-          val fields = line.split("\\s+")
-          val dim = fields.length match
-            case 2 => 0
-            case 3 => fields(0).toInt
-            case 4 => fields(1).toInt
-            case n => throw new IllegalArgumentException(s"expected 2-4 fields, got $n in line '$line'")
-          Endpoints.toBar(dim, fields(fields.length - 2), fields(fields.length - 1))
-        }
-        .toSeq
-    finally src.close()
+    parsePersistenceDiagram(FileAccess.readText(path))
 
   /** Writes a 3-column `dim birth death` `.pers` file, or 4-column `field dim birth death` when `field` is given. */
+  def formatPersistenceDiagram(bars: Seq[PersistenceBar[Double, ?]], field: Option[Int] = None): String =
+    val prefix = field.map(f => s"$f ").getOrElse("")
+    bars
+      .map(bar => s"$prefix${bar.dim} ${Endpoints.formatEndpoint(bar.lower)} ${Endpoints.formatEndpoint(bar.upper)}\n")
+      .mkString
+
   def writePersistenceDiagram(path: String, bars: Seq[PersistenceBar[Double, ?]], field: Option[Int] = None): Unit =
-    val out = FileAccess.printWriter(path)
-    try
-      bars.foreach { bar =>
-        val prefix = field.map(f => s"$f ").getOrElse("")
-        out.println(s"$prefix${bar.dim} ${Endpoints.formatEndpoint(bar.lower)} ${Endpoints.formatEndpoint(bar.upper)}")
-      }
-    finally out.close()
+    FileAccess.writeText(path, formatPersistenceDiagram(bars, field))
