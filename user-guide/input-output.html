@@ -206,6 +206,11 @@
      <td>none: write <code>CSV.writeFullDistanceMatrix</code></td>
     </tr>
     <tr>
+     <td>Ripser <code>sparse</code> (<code>i j d</code> triples; a pair not listed has no edge, read as <code>Infinity</code>)</td>
+     <td><code>Ripser.readSparseDistanceMatrix</code>, <code>Ripser.readSparseDistanceExplicitMetricSpace</code></td>
+     <td><code>Ripser.writeSparseDistanceMatrix</code></td>
+    </tr>
+    <tr>
      <td>Ripser <code>binary</code> (32-bit floats)</td>
      <td><code>Ripser.readBinaryLowerDistanceMatrix</code>, <code>Ripser.readBinaryExplicitMetricSpace</code></td>
      <td><code>Ripser.writeBinaryLowerDistanceMatrix</code></td>
@@ -217,7 +222,7 @@
     </tr>
    </tbody>
   </table>
-  <p>Ripser's <code>sparse</code> format is not supported.</p>
+  <p>A matrix with infinite entries is the flag complex of its finite edges; without a <code>maxFiltrationValue</code> the filtration runs to the largest finite distance.</p>
  </section>
  <section id="images-and-grids">
   <h2 class="h500"><a href="#images-and-grids" class="anchor"></a>Images and grids</h2>
@@ -243,6 +248,36 @@
     </tr>
    </tbody>
   </table>
+ </section>
+ <section id="complexes-and-boundary-matrices">
+  <h2 class="h500"><a href="#complexes-and-boundary-matrices" class="anchor"></a>Complexes and boundary matrices</h2>
+  <table>
+   <thead>
+    <tr>
+     <th>format</th>
+     <th>read</th>
+     <th>write</th>
+    </tr>
+   </thead>
+   <tbody>
+    <tr>
+     <td>Perseus <code>simtop</code> (simplices of one dimension: <code>d</code>, coordinates per vertex <code>n</code>, then each simplex's vertices and birth time)</td>
+     <td><code>Perseus.readUniformToplex</code></td>
+     <td><code>Perseus.formatUniformToplex</code></td>
+    </tr>
+    <tr>
+     <td>Perseus <code>nmfsimtop</code> (each simplex starts with its own dimension)</td>
+     <td><code>Perseus.readNonUniformToplex</code></td>
+     <td><code>Perseus.formatNonUniformToplex</code></td>
+    </tr>
+    <tr>
+     <td>PHAT boundary matrix, ASCII and binary</td>
+     <td><code>Phat.readAscii</code>, <code>Phat.readBinary</code></td>
+     <td><code>Phat.writeAscii</code>, <code>Phat.writeBinary</code></td>
+    </tr>
+   </tbody>
+  </table>
+  <p>The Perseus readers return the listed simplices with their birth times; <code>Perseus.toplexStream(simplices)</code> is the filtered complex they generate (a face is born with the earliest simplex containing it, a birth time of <code>-1</code> is skipped), which <code>Persistence(...)</code> takes like any other stream. <code>Phat.fromStream(stream)</code> is the boundary matrix of a stream over Z/2, columns in filtration order, for PHAT or your own reduction.</p>
  </section>
  <section id="persistence-diagrams">
   <h2 class="h500"><a href="#persistence-diagrams" class="anchor"></a>Persistence diagrams</h2>
@@ -280,9 +315,13 @@
   </table>
   <p>Perseus's intervals are integer filtration steps, not filtration values: the writer rounds, and an essential class is written with death <code>-1</code>. Convert your values to step indices first if you need Perseus's own meaning. The 4-column <code>.pers</code> form carries the field's characteristic, which the reader discards.</p>
  </section>
+ <section id="text-and-bytes-in-memory">
+  <h2 class="h500"><a href="#text-and-bytes-in-memory" class="anchor"></a>Text and bytes in memory</h2>
+  <p>A browser page has no file system. Every reader and writer above has a counterpart that works on the text or the bytes themselves: <code>parse...(text)</code> and <code>format...(data)</code> for the text formats (<code>CSV.parsePointCloud</code>, <code>Ripser.parseLowerDistanceMatrix</code>, <code>Gudhi.parseOff</code>, <code>Perseus.parseCubicalImageData</code>, <code>CSV.formatPersistenceDiagram</code>, ...), and <code>parse...(bytes)</code> and <code>format...(data): Array[Byte]</code> for the binary ones (<code>Dipha.parseDistanceMatrix</code>, <code>Ripser.parseBinaryLowerDistanceMatrix</code>, ...). The path versions are these on a file's contents. A parser that can fail on a line takes an optional second argument naming the text in its error messages.</p>
+ </section>
  <section id="details">
   <h2 class="h500"><a href="#details" class="anchor"></a>Details</h2>
   <p>Two details if you compare with another tool: Ripser's binary distance matrices are 32-bit floats, and DIPHA's and Perseus's grids list the first axis fastest (the readers and writers convert for you). A Perseus value of <code>-1</code> is a missing cell, read as <code>NaN</code>: masked, not in the complex, sublevel or superlevel. Writing a grid writes <code>NaN</code> as <code>-1</code> and refuses an infinite value (the format has none).</p>
   <p>A whole result of the <a href="matlab.html">MATLAB interface</a> or the <a href="cli.html">command line</a>, with its representatives and the points or image it was computed from, is saved as one JSON file by <code>result.save(path)</code> (<code>--save-result</code>) and read back by <code>TDA4j.loadResult(path)</code>: see <a href="plotting.html#saved-results">saved results</a>.</p>
  </section>
-</main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#point-clouds">Point clouds</a></li><li><a href="#distance-matrices">Distance matrices</a></li><li><a href="#images-and-grids">Images and grids</a></li><li><a href="#persistence-diagrams">Persistence diagrams</a></li><li><a href="#details">Details</a></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>
+</main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#point-clouds">Point clouds</a></li><li><a href="#distance-matrices">Distance matrices</a></li><li><a href="#images-and-grids">Images and grids</a></li><li><a href="#complexes-and-boundary-matrices">Complexes and boundary matrices</a></li><li><a href="#persistence-diagrams">Persistence diagrams</a></li><li><a href="#text-and-bytes-in-memory">Text and bytes in memory</a></li><li><a href="#details">Details</a></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>

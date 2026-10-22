@@ -265,12 +265,12 @@
    </thead>
    <tbody>
     <tr>
-     <td><code>ripser --dim k --threshold t --modulus p file</code></td>
+     <td><code>ripser --format point-cloud --dim k --threshold t --modulus p file</code></td>
      <td><code>java -jar tda4j-VERSION-assembly.jar --input-format ripser-points --max-dimension k --max-filtration-value t --prime p --min-persistence 0 file</code></td>
     </tr>
     <tr>
-     <td><code>--format point-cloud</code>, <code>distance</code>, <code>lower-distance</code>, <code>upper-distance</code>, <code>binary</code></td>
-     <td><code>--input-format ripser-points</code>, <code>ripser-distance</code>, <code>ripser-lower</code>, <code>ripser-upper</code>, <code>ripser-binary</code></td>
+     <td><code>--format point-cloud</code>, <code>distance</code>, <code>lower-distance</code>, <code>upper-distance</code>, <code>sparse</code>, <code>binary</code></td>
+     <td><code>--input-format ripser-points</code>, <code>ripser-distance</code>, <code>ripser-lower</code>, <code>ripser-upper</code>, <code>ripser-sparse</code>, <code>ripser-binary</code></td>
     </tr>
     <tr>
      <td><code>ripser(X, maxdim=k, thresh=t, coeff=p)</code> (ripser.py)</td>
@@ -319,7 +319,7 @@
      <td><code>Persistence(Image(pixels))</code>; <code>Image(pixels).superlevel</code> for superlevel sets</td>
     </tr>
     <tr>
-     <td><code>DTMRipsComplex</code>, <code>gudhi.weighted_rips</code></td>
+     <td><code>DTMRipsComplex</code>, <code>WeightedRipsComplex</code></td>
      <td><code>DtmRips.fromNeighbours(metricSpace, k, maxDimension)</code>, see <a href="user-guide/topological-spaces/vietoris-rips.html#distance-to-measure-weighting">Vietoris-Rips</a></td>
     </tr>
     <tr>
@@ -348,6 +348,6 @@
     </tr>
    </tbody>
   </table>
-  <p>The JavaPlex, Ripser and GUDHI columns describe those libraries from memory of their public interfaces; check names against the version you have.</p>
+  <p>Names and defaults change between versions of these libraries; check the ones you use against your version.</p>
  </section>
 </main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#differences-that-change-results">Differences that change results</a></li><li><a href="#from-javaplex">From JavaPlex</a></li><li><a href="#from-ripser-and-ripserpy">From Ripser and ripser.py</a></li><li><a href="#from-gudhi">From GUDHI</a></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>

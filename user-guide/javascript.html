@@ -172,6 +172,51 @@
    </tbody>
   </table>
   <p>A <code>Result</code> also has <code>bottleneckDistance(other, dimension)</code>, <code>wassersteinDistance(other, dimension, order)</code>, <code>landscape(dimension, numLevels, tMin, tMax, resolution)</code> and the plots <code>plotBarcode()</code>, <code>plotDiagram()</code>, <code>plotComplex(at)</code> and <code>plotRepresentative(i, at)</code>. A plot has <code>svg()</code> and <code>html()</code> for the text of a picture or a page, <code>show()</code> to put it in the page (in a browser) or open it in the default browser (from Node.js), and <code>save(path)</code>.</p>
+  <p>A <code>Result</code> also has <code>persistenceImage(dimension, sigma, birthMin, birthMax, persistenceMin, persistenceMax, birthResolution, persistenceResolution)</code>, and the complex it was computed from: <code>numCells</code>, <code>boundary()</code> (the nonzero entries as <code>{ rows, cols, values }</code>, cells in filtration order) and, for cell <code>j</code>, <code>columnDimension(j)</code>, <code>columnVertices(j)</code> and <code>columnFiltrationValue(j)</code>.</p>
+  <p>Landmarks, circular coordinates and the text of files have functions of their own:</p>
+  <table>
+   <thead>
+    <tr>
+     <th>function</th>
+     <th>result</th>
+    </tr>
+   </thead>
+   <tbody>
+    <tr>
+     <td><code>selectLandmarks(points, { numLandmarks })</code></td>
+     <td><code>{ landmarks, coveringRadius }</code>; <code>selectLandmarksFromDistances</code> for a distance matrix</td>
+    </tr>
+    <tr>
+     <td><code>persistenceFromLandmarks(points, landmarks, options)</code></td>
+     <td>a <code>Result</code> on the witness complex of the landmarks; <code>persistenceFromDistancesAndLandmarks</code> for a distance matrix</td>
+    </tr>
+    <tr>
+     <td><code>coveringRadius(points, landmarks)</code></td>
+     <td>the covering radius of any landmarks</td>
+    </tr>
+    <tr>
+     <td><code>h1Bars(points)</code></td>
+     <td>the loops of the Vietoris-Rips complex as <code>[birth, death]</code>, most persistent first</td>
+    </tr>
+    <tr>
+     <td><code>circularCoordinates(points, r, { cocycleIndex, prime })</code></td>
+     <td><code>{ theta, birth, death, r, prime }</code>: one angle in [0, 1) per point for loop <code>cocycleIndex</code> of <code>h1Bars</code>, with <code>r</code> between its birth and death</td>
+    </tr>
+    <tr>
+     <td><code>toroidalCoordinates(points, r, cocycleIndices, { prime, reduce })</code></td>
+     <td><code>{ theta, cocycleIndices, basisChange, originalGram, reducedGram, r, prime }</code>: <code>theta[c][i]</code> is coordinate <code>c</code> of point <code>i</code></td>
+    </tr>
+    <tr>
+     <td><code>parsePointCloud(text)</code>, <code>parseOff(text)</code></td>
+     <td>the points of a CSV or Ripser point-cloud text, or of a GUDHI OFF text</td>
+    </tr>
+    <tr>
+     <td><code>parseDistanceMatrix(text, format)</code></td>
+     <td>a full matrix from a text in <code>"full"</code> (default), <code>"lower"</code>, <code>"ripser-lower"</code>, <code>"ripser-upper"</code>, <code>"ripser-dense"</code> or <code>"ripser-sparse"</code> format</td>
+    </tr>
+   </tbody>
+  </table>
+  <p>The parsers take the text, so a page can read a file the user picked with <code>file.text()</code>.</p>
   <p>A bad option or a malformed input throws an <code>Error</code> that says what to change.</p>
  </section>
  <section id="on-the-command-line">
