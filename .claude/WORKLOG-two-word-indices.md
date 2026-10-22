@@ -48,6 +48,19 @@ when they encounter potentially huge dimension layers." This is the derivation; 
   (`SimplexIndexing.binomialInt` refuses past `Int.MaxValue`: C(20000, 5) is 2.6e19, C(20000, 4) already 6.7e15) and
   breaks ties by a `Long` index, and the engine holds every cell. Below 126 bits the packed engine itself now runs.
 
+## The second word is optional in memory (after review, same day)
+
+The first version made `DiameterIndex` a case class with a third field. Mikael asked whether that doubles the memory
+and whether the word can be optional. The arrays already were (`Level.highs`, `WorkingColumn.hi`, `Pairing.birthH` and
+`deathH` are null in a one-word run), but the cell object was not: a class histogram of live `DiameterIndex` objects in
+a cocycle run gives 32 bytes per instance before the change, 40 with the third field (not double, but 25% on every
+cell, and the cells live in the reduction logs of the cocycles path), and 32 again with this layout:
+`DiameterIndex(diameter, index)` with a method `high = 0`, and `final class WideDiameterIndex` adding the field; the
+companion's `apply(d, i, high = 0)` picks the class. `Column` likewise: `Column` has no high array, `WideColumn` adds it
+(a reference field more would cost a stored column up to 8 bytes: an estimate from the object layout, not measured). Cost: `DiameterIndex` is no longer a
+case class (nothing matched on or copied it), and `high` is a virtual call with two implementations in equality and the
+order of the working column's ties (bimorphic; the A/B below is of this layout).
+
 ## Checks
 
 - The 174 specs that touch the engine (`PackedRipserCohomologySpec`, `NeighbourListsSpec`, `PackedWorkingColumnSpec`,
@@ -71,7 +84,27 @@ when they encounter potentially huge dimension layers." This is the derivation; 
 
 ## Measurements
 
-(See the A/B section below once filled in.)
+What was timed: the one-word path (`wideIndices` off, which is what every run that fits a Long takes) of the packed
+Ripser engine, cocycles, F_17, with the classes from before this work (a separate class directory built from the old
+files) and the new classes, in one sweep. One JVM per run, `taskset -c 0-3`, 8 GB, ParallelGC, 1 warm-up and 9 timed trials, three
+rounds interleaved before/after. Inputs: `random_point_cloud_50_16_.txt` to degree 5 at threshold 1.7754, and
+`cube10_40.txt` to degree 7 at threshold 1.5 (the benchmark data of `bench/`). Medians in seconds, per round:
+
+| layout | random 50x16, H5 | cube10, H7 |
+|---|---|---|
+| before | 2.033, 2.127, 2.019 | 4.879, 5.123, 4.916 (first sweep) |
+| `DiameterIndex` as a case class with a third field | 2.048, 2.081, 2.027 | 5.008, 4.984, 5.098 |
+| before (second sweep) | 2.049, 2.002, 2.030 | 5.036, 5.043, 5.016 |
+| optional second word (this layout) | 2.162, 2.171, 2.080 | 5.139, 5.017, 4.944 |
+
+The case-class version shows no difference. The optional layout: cube10 shows none (the three medians straddle the old
+ones). On the random cloud the optional layout's median is higher in all three rounds (by 0.05 to 0.17 s, 2 to 8%),
+while the minimum over the nine trials is the same or lower (1.846, 1.897, 1.887 against 1.929, 1.942, 1.899). With
+noise of that size on this machine (the old code's own medians move by 0.12 s between rounds), this is an **unconfirmed**
+effect of at most a few percent on one input, not a measured cost; no further rounds were run. The suspect would be the
+virtual `high` call in the order and equality of `DiameterIndex` (two implementations exist once the class is loaded,
+though a one-word run only ever sees one receiver class). Memory is measured, not estimated: 32 bytes per cell object
+before, 40 with the third field, 32 with the optional layout.
 
 ## Not done
 
@@ -80,5 +113,5 @@ when they encounter potentially huge dimension layers." This is the derivation; 
 - The parallel experiment's own index (one Long, #194), and `BlockParallelReduction` (explicit matrices; dropped from the
   benchmark on the project lead's word, 2026-10-22: `tda4j-parallel-mt` is the same idea on implicit columns; the class
   stays because the parallel experiment's specs use its helpers).
-- A cost measurement of the two-word path on a real run at the sizes where it is needed (a 16,000-point H3 run is
-  hours): only the forced two-word path on runs that also fit one word, below.
+- A cost measurement of the two-word path itself, on a real run at the sizes where it is needed (a 16,000-point H3 run
+  is hours) or forced on a run that also fits one word: not done. The timings above are of the one-word path only.

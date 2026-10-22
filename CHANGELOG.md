@@ -9,10 +9,11 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Breaking
 
-- `PackedRipserCohomologyEngine#DiameterIndex` has a third field, `high`: `DiameterIndex(diameter, index, high)`, with
-  `high = 0` whenever one `Long` holds the index. A pattern `DiameterIndex(d, i)` becomes `DiameterIndex(d, i, _)`. Decode
-  a cell with `engine.vertices(cell, size)`; `engine.si.decodeToArray(cell.index, size)` is right only while
-  `engine.usesWideIndices` is false.
+- `PackedRipserCohomologyEngine#DiameterIndex` is a plain class, not a case class (no `copy`, no pattern
+  `DiameterIndex(d, i)`; `DiameterIndex(d, i)` still makes one). It has a method `high`, 0 for every cell whose index fits
+  in a `Long`; a cell past that is a `WideDiameterIndex`, which holds the second word. A one-word run stores no second
+  word and its cells are the size they were. Decode a cell with `engine.vertices(cell, size)`;
+  `engine.si.decodeToArray(cell.index, size)` is right only while `engine.usesWideIndices` is false.
 - The tolerance of the triangulations is relative: `HelixDelaunay`, `BowyerWatsonDelaunay` and `AlphaShapes(...)` take a
   `using EpsilonFactor` (default `EpsilonFactor(1e-5)`, a fraction of the points' largest coordinate range) in place of
   `using Epsilon`; a `given Epsilon` in your code is no longer read there. `Epsilon` stays the absolute tolerance of the

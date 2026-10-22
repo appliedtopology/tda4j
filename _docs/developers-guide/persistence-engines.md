@@ -111,8 +111,7 @@ Structural points worth knowing:
 ## 4. `PackedRipserCohomologyEngine` — the production Ripser engine
 
 Same algorithm as engine 3, method for method, keyed on a packed diameter/combinatorial-index pair
-(`DiameterIndex`, with a second index word `high` that is 0 while one `Long` holds the index) instead of a
-materialized `Simplex[Int]`. This is what `matlab.TDA4j`'s
+(`DiameterIndex`) instead of a materialized `Simplex[Int]`. This is what `matlab.TDA4j`'s
 `engine="ripser"` calls, and the fastest, most memory-efficient engine in the library — a deliberate
 representation choice on top of an already-validated algorithm, not a new algorithm. Kept in its own file,
 separate from the three generic-`OrderedCell` algorithms in `Homology.scala`, since it's specific to
@@ -126,9 +125,11 @@ so two carriers for the same simplex never compare unequal on floating-point noi
 (16,000 points to degree 3, 122,000 to degree 2). Beyond that the engine numbers the simplices with two words
 (`WideSimplexIndexing`, up to 126 bits; its cursors find the same cofacets and facets in the same order). The choice is
 made once, in the constructor (`wideIndices` forces either, `usesWideIndices` reports it), and a run that fits in one
-`Long` runs the one-word code. The working column and the levels carry the second word only when it is in use, and the
-maps keyed by index (pivots, the cleared set) are keyed by a dense number of the two-word index (`WideKeys`). Decode
-a returned cell with `engine.vertices(cell, size)`, which reads either width.
+`Long` runs the one-word code. The second word exists only where it is used: a cell past 63 bits is a
+`WideDiameterIndex` (a plain `DiameterIndex` has `high = 0` and no field for it), and the working column, the levels, the
+pairing and a stored column keep high-word arrays only in a two-word run. The maps keyed by index (pivots, the cleared
+set) are keyed by a dense number of the two-word index (`WideKeys`). Decode a returned cell with
+`engine.vertices(cell, size)`, which reads either width.
 
 **Reduction internals.** The column being reduced is Ripser's working column: a binary heap of
 (diameter, index, coefficient) entries in primitive arrays, to which adding a column only pushes entries; equal

@@ -56,7 +56,8 @@ barcodes coincide.
    `WORKLOG-packed-ripser-engine.md`).
    The PACKED engine numbers simplices with one `Long` index or, when C(n + maxDim + 2, maxDim + 2) passes 2^63, two
    words (`WideSimplexIndexing`; `usesWideIndices`, chosen in the constructor; `WideKeys` numbers two-word cells for the
-   pivot maps and cleared set). Every new index-keyed structure carries the high word, and `WideIndicesSpec` /
+   pivot maps and cleared set). Every new index-keyed structure carries the high word, and only in a two-word run
+   (`WideDiameterIndex`, `WideColumn`, null arrays; a one-word run has no second word in memory), and `WideIndicesSpec` /
    `WideIndicesPastLongSpec` hold the two paths equal; a comparison of the high word is observable only when two
    simplices share their low 63 bits, so it has unit tests only (`WORKLOG-two-word-indices.md`).
    The PACKED engine reduces on a primitive-array heap, expands cocycles lazily from

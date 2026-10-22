@@ -174,17 +174,30 @@ open class PackedRipserCohomologyEngine[CoefficientT: Field](
     maxD
   private val fr = summon[CoefficientT is Field]
 
-  /** A simplex as its (diameter, combinatorial index): the cell type of the returned chains. With two-word indices
-    * ([[usesWideIndices]]) `index` holds the low 63 bits and `high` the bits above, otherwise `high` is 0; decode with
-    * [[vertices]]. Equality and hash use the index alone, so the same simplex reached by different floating-point paths
-    * is one key.
+  /** A simplex as its (diameter, combinatorial index): the cell type of the returned chains. The index is one `Long`
+    * while that holds it. With two-word indices ([[usesWideIndices]]) a cell whose index passes 63 bits is a
+    * [[WideDiameterIndex]], which also holds `high`, the bits above the low 63 that `index` keeps; every other cell has
+    * `high = 0` and no second word in memory. Decode with [[vertices]]. Equality and hash use the index alone (both
+    * words), so the same simplex reached by different floating-point paths is one key.
     */
-  final case class DiameterIndex(diameter: Double, index: Long, high: Long = 0L):
+  open class DiameterIndex(val diameter: Double, val index: Long):
+    def high: Long = 0L
     // `.asMatchable` only satisfies the Matchable check on an `Any` selector; no runtime cost.
     override def equals(other: Any): Boolean = other.asMatchable match
       case that: DiameterIndex => this.index == that.index && this.high == that.high
       case _                   => false
     override def hashCode(): Int = index.hashCode() ^ (31 * high.hashCode())
+    override def toString: String = s"DiameterIndex($diameter,$index)"
+
+  // Final: a value type, equal by its index; the library's fast paths read `high` through the base class.
+  final class WideDiameterIndex(diameter: Double, index: Long, override val high: Long)
+      extends DiameterIndex(diameter, index):
+    override def toString: String = s"DiameterIndex($diameter,$index,$high)"
+
+  object DiameterIndex:
+    /** The cell for `index` (the low 63 bits) and `high`; a plain `DiameterIndex` when `high` is 0. */
+    def apply(diameter: Double, index: Long, high: Long = 0L): DiameterIndex =
+      if high == 0L then new DiameterIndex(diameter, index) else new WideDiameterIndex(diameter, index, high)
 
   // Ascending by diameter; on a tie the larger index is older (as RipserCohomologyEngine.cohomologyOrdering).
   // Same-index pairs compare equal before the diameter is looked at, so this agrees with `DiameterIndex.equals`
@@ -204,15 +217,18 @@ open class PackedRipserCohomologyEngine[CoefficientT: Field](
   /** A reduced column: its pivot first, with its combined non-zero coefficient; the other terms in no particular order
     * and not combined (equal cells may repeat, sums may cancel). Adding it to a working column combines them there.
     */
-  private final class Column(
-    val diameters: Array[Double],
-    val indices: Array[Long],
-    val coefficients: Array[Any],
-    // The high words of two-word indices, else null.
-    val highs: Array[Long] = null
-  ):
+  private open class Column(val diameters: Array[Double], val indices: Array[Long], val coefficients: Array[Any]):
+    // The high words of two-word indices: only a `WideColumn` has them, so a one-word run stores no second word.
+    def highs: Array[Long] = null
     def leadingCoefficient: CoefficientT = coefficients(0).asInstanceOf[CoefficientT]
     def isEmpty: Boolean = indices.isEmpty
+
+  private final class WideColumn(
+    diameters: Array[Double],
+    indices: Array[Long],
+    coefficients: Array[Any],
+    override val highs: Array[Long]
+  ) extends Column(diameters, indices, coefficients)
 
   // Replaces `Chain.reduceBy`'s `TreeMap` working column, whose lookups were most of the engine's time
   // (`.claude/WORKLOG-vr-working-column.md`); `PackedWorkingColumnSpec` holds it to the old reduction term for term.
@@ -305,12 +321,13 @@ open class PackedRipserCohomologyEngine[CoefficientT: Field](
       found
 
     def addScaled(column: Column, factor: CoefficientT): Unit =
+      val highs = column.highs
       var k = 0
       while k < column.indices.length do
         push(
           column.diameters(k),
           column.indices(k),
-          if column.highs != null then column.highs(k) else 0L,
+          if highs != null then highs(k) else 0L,
           fr.times(factor, column.coefficients(k).asInstanceOf[CoefficientT])
         )
         k += 1
@@ -322,12 +339,12 @@ open class PackedRipserCohomologyEngine[CoefficientT: Field](
       if !pivot() then Column(Array.empty, Array.empty, Array.empty)
       else
         // `pivot()` left the combined pivot at the top of the heap, slot 0.
-        val column = Column(
-          java.util.Arrays.copyOf(diam, size),
-          java.util.Arrays.copyOf(idx, size),
-          java.util.Arrays.copyOf(coef.asInstanceOf[Array[AnyRef]], size).asInstanceOf[Array[Any]],
-          if hi != null then java.util.Arrays.copyOf(hi, size) else null
-        )
+        val diameters = java.util.Arrays.copyOf(diam, size)
+        val indices = java.util.Arrays.copyOf(idx, size)
+        val coefficients = java.util.Arrays.copyOf(coef.asInstanceOf[Array[AnyRef]], size).asInstanceOf[Array[Any]]
+        val column =
+          if hi != null then WideColumn(diameters, indices, coefficients, java.util.Arrays.copyOf(hi, size))
+          else Column(diameters, indices, coefficients)
         size = 0
         column
 
