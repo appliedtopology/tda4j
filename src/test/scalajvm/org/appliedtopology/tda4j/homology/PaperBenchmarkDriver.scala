@@ -27,6 +27,7 @@ import scala.jdk.CollectionConverters.ListHasAsScala
   *     only (no representatives): `BlockParallelReduction` (explicit coboundaries) and `ParallelPackedCohomology`
   *     (implicit coboundaries), on `threads` threads (default: every processor). Without a threshold they stop at the
   *     enclosing radius, as `Persistence` does; the edge table and the complex are built inside the timed region.
+  *     `engine=parallel wide=true` uses two-word keys even where one Long would do (what they cost).
   *   - `task=vr collapse=true`: Vietoris-Rips after `EdgeCollapse.collapse` (the collapse is inside the timed region);
   *     the cross-tool twin of GUDHI's edge collapse.
   *   - `task=sparse eps=0.3`: Sheehy's sparse Rips (`SparseRips`, Cavanna-Jahanseir-Sheehy); points or a distance
@@ -105,7 +106,8 @@ object PaperBenchmarkDriver:
         )
         if engineName == "parallel" then
           () =>
-            val space = ParallelPackedCohomology.Space(n, distance, t, dim, p)
+            val space =
+              ParallelPackedCohomology.Space(n, distance, t, dim, p, forceWide = opts.get("wide").contains("true"))
             ParallelPackedCohomology.persistence(space, threads, 8, cocycles = false, pool).bars.toList
         else
           () =>
