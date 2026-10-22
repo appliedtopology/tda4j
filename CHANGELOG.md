@@ -150,6 +150,9 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Changed
 
+- `BarcodeDistance.bottleneckDistance` no longer builds the all-pairs cost matrix: near pairs are found in a window of
+  the other diagram sorted by birth, and feasibility is two matchings (one covering the bars too far from the diagonal on
+  each side). The values are the same; two random diagrams of 1,500 bars took 22 s and take 0.2 s.
 - The cohomology engine (`Persistence.Engine.Cohomology`, the default for alpha, Čech, witness, Dowker, DTM, sparse Rips
   and explicit complexes, also in MATLAB and the CLI) reduces simplices with `Int` vertices on flat arrays instead of
   `Simplex` objects. The bars and representatives are the same term for term. The alpha complex of 10,000 points in R³
