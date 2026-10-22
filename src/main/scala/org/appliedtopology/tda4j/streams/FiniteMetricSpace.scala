@@ -37,12 +37,20 @@ trait FiniteMetricSpace[VertexT]:
   def contains(x: VertexT): Boolean
 
   /** Beyond this radius, the Vietoris-Rips complex is a cone and will have no further homological structure. See e.g.
-    * the Ripser paper, page 412.
+    * the Ripser paper, page 412. A space with infinite distances (a sparse distance matrix: a pair that is not listed
+    * has no edge) has no such cone; its radius is then the largest finite distance, past which nothing enters.
     */
-  lazy val minimumEnclosingRadius =
-    elements.map { x =>
+  lazy val minimumEnclosingRadius: Double =
+    val radius = elements.map { x =>
       elements.map(y => distance(x, y)).max
     }.min
+    if !radius.isInfinite then radius
+    else
+      elements.iterator
+        .flatMap(x => elements.iterator.map(y => distance(x, y)))
+        .filter(!_.isInfinite)
+        .maxOption
+        .getOrElse(0.0)
 
 /** Convenience functionality for metric spaces.
   */

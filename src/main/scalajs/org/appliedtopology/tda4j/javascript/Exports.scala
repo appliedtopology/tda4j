@@ -50,8 +50,195 @@ object Exports:
   ): Result =
     guarded(Result(TDA4j.computeFromCubicalImage(shape.toArray, values.toArray, optionArray(options))))
 
+  /** The persistent homology of the witness complex on `landmarks` (point numbers, from 0), as `persistence` computes
+    * it with `complex: "witness"` but with the landmarks you chose (see `selectLandmarks`).
+    */
+  @JSExportTopLevel("persistenceFromLandmarks")
+  def persistenceFromLandmarks(
+    points: js.Array[js.Array[Double]],
+    landmarks: js.Array[Int],
+    options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
+  ): Result =
+    guarded(Result(TDA4j.computeFromPointsAndLandmarks(matrix(points), landmarks.toArray, optionArray(options))))
+
+  /** [[persistenceFromLandmarks]] for a finite metric space given as its full matrix of distances. */
+  @JSExportTopLevel("persistenceFromDistancesAndLandmarks")
+  def persistenceFromDistancesAndLandmarks(
+    distances: js.Array[js.Array[Double]],
+    landmarks: js.Array[Int],
+    options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
+  ): Result =
+    guarded(
+      Result(TDA4j.computeFromDistanceMatrixAndLandmarks(matrix(distances), landmarks.toArray, optionArray(options)))
+    )
+
+  /** Picks landmarks from a point cloud: options `numLandmarks` (required), `landmarkSelector` (`"maxmin"` or
+    * `"random"`) and `landmarkSeed`. Returns `{ landmarks, coveringRadius }`, the landmarks as point numbers from 0 and
+    * the covering radius `R` (compute with `maxFiltrationValue: 2 * R`, the JavaPlex tutorials' recipe).
+    */
+  @JSExportTopLevel("selectLandmarks")
+  def selectLandmarks(
+    points: js.Array[js.Array[Double]],
+    options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
+  ): js.Object = guarded {
+    val selection = TDA4j.selectLandmarksFromPoints(matrix(points), optionArray(options))
+    landmarkObject(selection.landmarks(), selection.coveringRadius())
+  }
+
+  /** [[selectLandmarks]] for a finite metric space given as its full matrix of distances. */
+  @JSExportTopLevel("selectLandmarksFromDistances")
+  def selectLandmarksFromDistances(
+    distances: js.Array[js.Array[Double]],
+    options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
+  ): js.Object = guarded {
+    val selection = TDA4j.selectLandmarksFromDistanceMatrix(matrix(distances), optionArray(options))
+    landmarkObject(selection.landmarks(), selection.coveringRadius())
+  }
+
+  /** The covering radius `R` of any set of landmarks (point numbers, from 0). */
+  @JSExportTopLevel("coveringRadius")
+  def coveringRadius(points: js.Array[js.Array[Double]], landmarks: js.Array[Int]): Double =
+    guarded(TDA4j.coveringRadiusFromPoints(matrix(points), landmarks.toArray))
+
+  /** The loops of the point cloud's Vietoris-Rips complex: `[birth, death]` for each persistent class of degree 1, the
+    * most persistent first. Loop `i` is `cocycleIndex: i` of `circularCoordinates`; pick `r` between its birth and
+    * death.
+    */
+  @JSExportTopLevel("h1Bars")
+  def h1Bars(points: js.Array[js.Array[Double]]): js.Array[js.Array[Double]] =
+    guarded(grid(TDA4j.h1Bars(matrix(points))))
+
+  /** Circular coordinates of a point cloud at scale `r`: one angle in `[0, 1)` per point for the loop `cocycleIndex`
+    * (option, default 0) of `h1Bars`, over the field with `prime` elements (option, an odd prime, default 47). Returns
+    * `{ theta, birth, death, r, prime }`, where `theta[i]` is `NaN` for a point outside the loop's connected component.
+    * Throws if the loop has no integer lift at `prime`: use a larger prime.
+    */
+  @JSExportTopLevel("circularCoordinates")
+  def circularCoordinates(
+    points: js.Array[js.Array[Double]],
+    r: Double,
+    options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
+  ): js.Object = guarded {
+    val chosen = numbers(options, Set("cocycleIndex", "prime"))
+    val result = TDA4j.circularCoordinates(
+      matrix(points),
+      r,
+      chosen.get("cocycleIndex").fold(0)(integer("cocycleIndex", _)),
+      chosen.get("prime").fold(47)(integer("prime", _))
+    )
+    js.Dynamic
+      .literal(
+        theta = js.Array(result.theta()*),
+        birth = result.birth(),
+        death = result.death(),
+        r = result.r(),
+        prime = result.prime()
+      )
+      .asInstanceOf[js.Object]
+  }
+
+  /** Toroidal coordinates of a point cloud at scale `r`: `k` angles per point, combining the loops `cocycleIndices` of
+    * `h1Bars` that are alive together at `r`. Options: `prime` (default 47) and `reduce` (lattice reduction of the
+    * coordinates, default `true`). Returns
+    * `{ theta, cocycleIndices, basisChange, originalGram, reducedGram, r, prime }`, where `theta[c][i]` is coordinate
+    * `c` of point `i`.
+    */
+  @JSExportTopLevel("toroidalCoordinates")
+  def toroidalCoordinates(
+    points: js.Array[js.Array[Double]],
+    r: Double,
+    cocycleIndices: js.Array[Int],
+    options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
+  ): js.Object = guarded {
+    val dictionary = options.getOrElse(js.Dictionary[js.Any]())
+    val unknown = dictionary.keys.filterNot(Set("prime", "reduce")).toSeq
+    require(unknown.isEmpty, s"unknown option ${unknown.mkString(", ")}; the options are prime and reduce")
+    val prime = dictionary.get("prime").fold(47)(integer("prime", _))
+    val reduce = dictionary.get("reduce").fold(true) { value =>
+      require(js.typeOf(value) == "boolean", s"option reduce must be a boolean, not a ${js.typeOf(value)}")
+      value.asInstanceOf[Boolean]
+    }
+    val result = TDA4j.toroidalCoordinates(matrix(points), r, cocycleIndices.toArray, prime, reduce)
+    js.Dynamic
+      .literal(
+        theta = js.Array((0 until result.dimension()).map(c => js.Array(result.theta(c)*))*),
+        cocycleIndices = js.Array(result.cocycleIndices()*),
+        basisChange = js.Array(result.basisChange().map(row => js.Array(row*))*),
+        originalGram = grid(result.originalGram()),
+        reducedGram = grid(result.reducedGram()),
+        r = result.r(),
+        prime = result.prime()
+      )
+      .asInstanceOf[js.Object]
+  }
+
+  /** A point cloud from the text of a file: one point per line, coordinates separated by commas or whitespace (CSV, or
+    * Ripser's `point-cloud` format).
+    */
+  @JSExportTopLevel("parsePointCloud")
+  def parsePointCloud(text: String): js.Array[js.Array[Double]] =
+    guarded(grid(CSV.parsePointCloud(text)))
+
+  /** A point cloud from the text of a GUDHI OFF or nOFF file. */
+  @JSExportTopLevel("parseOff")
+  def parseOff(text: String): js.Array[js.Array[Double]] =
+    guarded(grid(Gudhi.parseOff(text)))
+
+  /** The full matrix of distances from the text of a file. `format` is `"full"` (a square matrix, the default),
+    * `"lower"` (row `i` has its `i` entries below the diagonal), or one of Ripser's formats: `"ripser-lower"`,
+    * `"ripser-upper"`, `"ripser-dense"` (only the part below the diagonal is read) and `"ripser-sparse"` (`i j d` per
+    * line; a pair not listed has distance `Infinity`).
+    */
+  @JSExportTopLevel("parseDistanceMatrix")
+  def parseDistanceMatrix(text: String, format: js.UndefOr[String] = js.undefined): js.Array[js.Array[Double]] =
+    guarded {
+      val parsed = format.getOrElse("full") match
+        case "full"          => CSV.parseFullDistanceMatrix(text)
+        case "lower"         => CSV.parseLowerTriangularDistanceMatrix(text)
+        case "ripser-lower"  => Ripser.parseLowerDistanceMatrix(text)
+        case "ripser-upper"  => Ripser.parseUpperDistanceMatrix(text)
+        case "ripser-dense"  => Ripser.parseDistanceMatrix(text)
+        case "ripser-sparse" => Ripser.parseSparseDistanceMatrix(text)
+        case other           =>
+          throw new IllegalArgumentException(
+            s"unrecognized format '$other'; expected full, lower, ripser-lower, ripser-upper, ripser-dense or ripser-sparse"
+          )
+      grid(parsed)
+    }
+
   private[javascript] def matrix(rows: js.Array[js.Array[Double]]): Array[Array[Double]] =
     rows.map(_.toArray).toArray
+
+  private[javascript] def grid(rows: Array[Array[Double]]): js.Array[js.Array[Double]] =
+    js.Array(rows.map(row => js.Array(row*))*)
+
+  private def landmarkObject(landmarks: Array[Int], coveringRadius: Double): js.Object =
+    js.Dynamic
+      .literal(landmarks = js.Array(landmarks*), coveringRadius = coveringRadius)
+      .asInstanceOf[js.Object]
+
+  /** The numeric options of `options`, refusing a key outside `allowed` and a value that is not a number. */
+  private def numbers(options: js.UndefOr[js.Dictionary[js.Any]], allowed: Set[String]): Map[String, Double] =
+    options.toOption.fold(Map.empty[String, Double]) { dictionary =>
+      val unknown = dictionary.keys.filterNot(allowed).toSeq
+      require(
+        unknown.isEmpty,
+        s"unknown option ${unknown.mkString(", ")}; the options are ${allowed.toSeq.sorted.mkString(", ")}"
+      )
+      dictionary.toMap.collect {
+        case (key, value) if !js.isUndefined(value) =>
+          require(js.typeOf(value) == "number", s"option $key must be a number, not a ${js.typeOf(value)}")
+          key -> value.asInstanceOf[Double]
+      }
+    }
+
+  private def integer(name: String, value: Double): Int =
+    require(value == math.rint(value) && math.abs(value) < Int.MaxValue, s"option $name must be an integer, not $value")
+    value.toInt
+
+  private def integer(name: String, value: js.Any): Int =
+    require(js.typeOf(value) == "number", s"option $name must be a number, not a ${js.typeOf(value)}")
+    integer(name, value.asInstanceOf[Double])
 
   /** The facade takes its options as `[key, value, key, value, ...]`; a JavaScript object is turned into that, with its
     * numbers and booleans as the text they print as. An option set to `undefined` is not set.
@@ -128,6 +315,80 @@ final class Result private[javascript] (underlying: PersistenceResult):
   ): js.Array[js.Array[Double]] =
     Exports.guarded(grid(underlying.landscape(dimension, numLevels, tMin, tMax, resolution)))
 
+  /** The persistence image of the dimension-`dimension` bars over `[birthMin, birthMax] x [persistenceMin,
+    * persistenceMax]`, `birthResolution` by `persistenceResolution` pixels with a Gaussian of width `sigma`:
+    * `image[i][j]` is the pixel at birth sample `i` and persistence sample `j`. Essential bars are left out; the weight
+    * of a bar grows with its persistence up to the largest persistence, or up to `weightCap` when given.
+    */
+  @JSExport
+  def persistenceImage(
+    dimension: Int,
+    sigma: Double,
+    birthMin: Double,
+    birthMax: Double,
+    persistenceMin: Double,
+    persistenceMax: Double,
+    birthResolution: Int,
+    persistenceResolution: Int,
+    weightCap: js.UndefOr[Double] = js.undefined
+  ): js.Array[js.Array[Double]] = Exports.guarded {
+    grid(weightCap.toOption match
+      case Some(cap) =>
+        underlying.persistenceImage(
+          dimension,
+          sigma,
+          birthMin,
+          birthMax,
+          persistenceMin,
+          persistenceMax,
+          birthResolution,
+          persistenceResolution,
+          cap
+        )
+      case None =>
+        underlying.persistenceImage(
+          dimension,
+          sigma,
+          birthMin,
+          birthMax,
+          persistenceMin,
+          persistenceMax,
+          birthResolution,
+          persistenceResolution
+        ))
+  }
+
+  /** The number of cells of the complex the result was computed from: the size of its boundary matrix. */
+  @JSExport
+  def numCells: Int = Exports.guarded(underlying.numCells())
+
+  /** The nonzero entries of the boundary matrix, in the cells' filtration order: cell `cols[k]` has cell `rows[k]` in
+    * its boundary with coefficient `values[k]`. Cells are numbered from 0; `columnDimension`, `columnVertices` and
+    * `columnFiltrationValue` describe them. Over a prime field, a coefficient is a residue.
+    */
+  @JSExport
+  def boundary(): js.Object = Exports.guarded {
+    js.Dynamic
+      .literal(
+        rows = js.Array(underlying.boundaryRows()*),
+        cols = js.Array(underlying.boundaryCols()*),
+        values = js.Array(underlying.boundaryValues()*)
+      )
+      .asInstanceOf[js.Object]
+  }
+
+  /** The dimension of cell `j` (a column of the boundary matrix, not a bar). */
+  @JSExport
+  def columnDimension(j: Int): Int = Exports.guarded(underlying.columnDimension(j))
+
+  /** Cell `j` as its vertices (point numbers from 0), or a cube's doubled coordinates for an image. */
+  @JSExport
+  def columnVertices(j: Int): js.Array[Int] = Exports.guarded(js.Array(underlying.columnVertices(j)*))
+
+  /** The filtration value of cell `j`: the cells with value at most `r` are the complex at scale `r`. */
+  @JSExport
+  def columnFiltrationValue(j: Int): Double = Exports.guarded(underlying.columnFiltrationValue(j))
+
   /** The barcode, a bar per line. */
   @JSExport
   def plotBarcode(): Chart = Chart(underlying.plotBarcode())
@@ -156,8 +417,7 @@ final class Result private[javascript] (underlying: PersistenceResult):
       rows.map(row => js.Dynamic.literal(dim = row(0).toInt, birth = row(1), death = row(2)).asInstanceOf[js.Object])*
     )
 
-  private def grid(rows: Array[Array[Double]]): js.Array[js.Array[Double]] =
-    js.Array(rows.map(row => js.Array(row*))*)
+  private def grid(rows: Array[Array[Double]]): js.Array[js.Array[Double]] = Exports.grid(rows)
 
 /** A plot: `svg()` for a picture to put in a page or a file, `html()` for a page of its own. */
 final class Chart private[javascript] (underlying: plot.Plot):

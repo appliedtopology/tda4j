@@ -190,6 +190,50 @@ class BarcodeDistanceSpec extends Specification with ScalaCheck:
       }
   }
 
+  "bottleneck on larger diagrams (the brute force above stops at 3 bars)" >> {
+    // The dense formulation: the (nL + nR)^2 augmented cost matrix, a binary search over its distinct entries, and a
+    // perfect-matching test at each threshold.
+    def dense(pts1: Seq[(Double, Double)], pts2: Seq[(Double, Double)], groundNorm: GroundNorm): Double =
+      def diag(p: (Double, Double)) = groundNorm match
+        case GroundNorm.LInfinity => (p._2 - p._1) / 2
+        case GroundNorm.LP(q)     => (p._2 - p._1) * math.pow(2.0, 1.0 / q - 1.0)
+      def dist(a: (Double, Double), b: (Double, Double)) =
+        val (db, dd) = (math.abs(a._1 - b._1), math.abs(a._2 - b._2))
+        groundNorm match
+          case GroundNorm.LInfinity => math.max(db, dd)
+          case GroundNorm.LP(q)     => math.pow(math.pow(db, q) + math.pow(dd, q), 1.0 / q)
+      val (nL, nR) = (pts1.size, pts2.size)
+      val n = nL + nR
+      val m = Array.tabulate(n, n) { (i, j) =>
+        if i < nL && j < nR then dist(pts1(i), pts2(j))
+        else if i < nL then diag(pts1(i))
+        else if j < nR then diag(pts2(j))
+        else 0.0
+      }
+      val candidates = m.flatten.distinct.sorted
+      def feasible(t: Double) =
+        HopcroftKarp.maximumMatching(n, n, i => (0 until n).filter(m(i)(_) <= t)).count(_ != -1) == n
+      if n == 0 then 0.0 else candidates.find(feasible).get
+
+    val pointGen: Gen[(Double, Double)] =
+      for
+        b <- Gen.choose(0, 40).map(_ / 8.0) // a grid, so ties between distances occur
+        p <- Gen.choose(0, 30).map(_ / 8.0)
+      yield (b, b + p)
+    val diagramGen: Gen[Seq[(Double, Double)]] = Gen.choose(0, 40).flatMap(n => Gen.listOfN(n, pointGen))
+
+    "agree with the dense formulation, ties and zero-persistence bars included" >>
+      forAll(diagramGen, diagramGen, Gen.oneOf(GroundNorm.LInfinity, GroundNorm.LP(2.0), GroundNorm.LP(3.0))) {
+        (pts1, pts2, groundNorm) =>
+          val diagram1 = pts1.map((b, d) => bar(0, b, d))
+          val diagram2 = pts2.map((b, d) => bar(0, b, d))
+          BarcodeDistance.bottleneckDistance(diagram1, diagram2, groundNorm) must beCloseTo(
+            dense(pts1, pts2, groundNorm),
+            1e-9
+          )
+      }.set(minTestsOk = 200)
+  }
+
   "input validation at the diagram-comparison boundary" >> {
     "rejects a diagram mixing several dimensions (likely an unfiltered barcode passed by mistake)" >> {
       val mixed = List(bar(0, 0.0, 1.0), bar(1, 0.0, 1.0))

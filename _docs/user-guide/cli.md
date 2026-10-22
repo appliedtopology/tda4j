@@ -34,7 +34,7 @@ java -jar tda4j-VERSION-assembly.jar --output-format gudhi --output circle.pers 
 | `csv-points` (default) | a point cloud, one point per row |
 | `csv-distances` | a full distance matrix in CSV |
 | `csv-lower` | the lower triangle of a distance matrix in CSV |
-| `ripser-points`, `ripser-lower`, `ripser-upper`, `ripser-distance`, `ripser-binary` | Ripser's point-cloud and distance-matrix formats |
+| `ripser-points`, `ripser-lower`, `ripser-upper`, `ripser-distance`, `ripser-sparse`, `ripser-binary` | Ripser's point-cloud and distance-matrix formats; `ripser-sparse` is `i j d` triples, a pair not listed has no edge |
 | `dipha-distance` | DIPHA's distance matrix |
 | `off` | a GUDHI OFF point cloud |
 | `perseus-cubical` | a Perseus cubical toplex (an image or voxel grid) |

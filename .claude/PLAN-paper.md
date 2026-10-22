@@ -240,7 +240,7 @@ Planning document for the project lead. Nothing here is implemented.
   - This was read through a summarizer of MathWorks' "Versions of OpenJDK Compatible with MATLAB by Release" page. The raw
     page did not load here. Re-check before relying on it.
 - So: test in R2024a or later, with `jenv` pointing at a JDK 17 or 21, end to end:
-  - `matlab_example.m`;
+  - `examples/matlab_example.m`;
   - one tutorial MATLAB tab;
   - representatives and the boundary-matrix export.
 - Document the requirement. For older MATLAB the CLI is the fallback; check whether Scala 3.9 can emit older bytecode at all.

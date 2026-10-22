@@ -114,4 +114,7 @@ before, 40 with the third field, 32 with the optional layout.
   benchmark on the project lead's word, 2026-10-22: `tda4j-parallel-mt` is the same idea on implicit columns; the class
   stays because the parallel experiment's specs use its helpers).
 - A cost measurement of the two-word path itself, on a real run at the sizes where it is needed (a 16,000-point H3 run
-  is hours) or forced on a run that also fits one word: not done. The timings above are of the one-word path only.
+  is hours) or forced on a run that also fits one word: not done. The timings above are of the one-word path only. The
+  same issue (#200) holds the unconfirmed few-percent slowdown of the one-word path on the random cloud.
+- Related, found while reading how the working column is stored: `Chain.reduceBy` copies into a `TreeMap` (#199); the
+  packed Ripser engine does not call it and keeps its own array heap.

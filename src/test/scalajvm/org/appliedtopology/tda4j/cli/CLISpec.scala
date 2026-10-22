@@ -82,6 +82,16 @@ class CLISpec extends mutable.Specification:
         (TDA4jCLI.resolveInput("csv-distances", csvDist) must beAnInstanceOf[TDA4jCLI.ResolvedInput.Distances])
     }
 
+    "read ripser-sparse as a distance matrix, a pair not listed having no edge" >> {
+      val path = tempFile(".txt")
+      FileAccess.writeText(path, "0 1 1\n1 2 1\n2 3 1\n3 0 1\n")
+      TDA4jCLI.resolveInput("ripser-sparse", path) match
+        case TDA4jCLI.ResolvedInput.Distances(m) =>
+          (m.length must beEqualTo(4)) and (m(0)(2) must beEqualTo(Double.PositiveInfinity)) and
+            (m(3)(0) must beEqualTo(1.0))
+        case other => ko(s"expected Distances, got $other")
+    }
+
     "dispatch a cubical-image format to ResolvedInput.CubicalGrid, round-tripping shape and values exactly" >> {
       val path = tempFile(".txt")
       // Perseus's own toplex format: dimension, then one size per axis, then values in Perseus's own
