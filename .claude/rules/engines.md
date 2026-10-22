@@ -54,6 +54,11 @@ barcodes coincide.
    apparent pairs with lazy substitution; emergent pairs (Def 3.11) not implemented; `memoizeFiltrationValue`
    defaults **false** (project lead: memory over speed) (`WORKLOG-ripser-profiling.md`,
    `WORKLOG-packed-ripser-engine.md`).
+   The PACKED engine numbers simplices with one `Long` index or, when C(n + maxDim + 2, maxDim + 2) passes 2^63, two
+   words (`WideSimplexIndexing`; `usesWideIndices`, chosen in the constructor; `WideKeys` numbers two-word cells for the
+   pivot maps and cleared set). Every new index-keyed structure carries the high word, and `WideIndicesSpec` /
+   `WideIndicesPastLongSpec` hold the two paths equal; a comparison of the high word is observable only when two
+   simplices share their low 63 bits, so it has unit tests only (`WORKLOG-two-word-indices.md`).
    The PACKED engine reduces on a primitive-array heap, expands cocycles lazily from
    reduction logs (only for reported bars), and derives cycles with its own copy of `Involution.cycles`. It must
    equal the `Chain`-based engine kept in the test tree (`ChainPackedRipserReference`) term for term, cocycles and
