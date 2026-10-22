@@ -148,6 +148,7 @@ abstract class Lab(characteristic: Int, precision: Double = 1e-9):
     PersistenceEngine,
     PersistenceFilter,
     PersistenceInChunksEngine,
+    Phat,
     PointCloud,
     PointCloudComplex,
     PositiveInfinity,

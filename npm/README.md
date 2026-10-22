@@ -14,7 +14,9 @@ result.representative(1);          // the loop: { cells: [[0, 1], [1, 2], ...], 
 result.plotBarcode().svg();        // an SVG document
 ```
 
-Other inputs: `persistenceFromDistances(matrix)`, `persistenceFromImage(pixels)`, `persistenceFromGrid(shape, values)`.
+Other inputs: `persistenceFromDistances(matrix)`, `persistenceFromImage(pixels)`, `persistenceFromGrid(shape, values)`,
+`persistenceFromLandmarks(points, landmarks)`. Landmarks, circular and toroidal coordinates, and parsers for point clouds,
+OFF files and distance matrices (`parsePointCloud(text)`) are exported too.
 The options are listed in `index.d.ts`; by default coefficients are in the field with 17 elements, degrees 0 to 2 are
 computed, and a bar shorter than 1% of the scale of the data is hidden (`allBars` has every bar).
 

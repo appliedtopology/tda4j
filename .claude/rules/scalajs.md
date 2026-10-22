@@ -62,7 +62,9 @@ the JS side throwing an `UnsupportedOperationException` that says what to do, ne
 ## The JavaScript API and the npm package
 
 `javascript.Exports` (`src/main/scalajs/.../javascript/`) is the npm package's API: `persistence`,
-`persistenceFromDistances`, `persistenceFromImage`, `persistenceFromGrid`, and the classes `Result` and `Chart`, a thin
+`persistenceFromDistances`, `persistenceFromImage`, `persistenceFromGrid`, the landmark functions
+(`selectLandmarks`, `persistenceFromLandmarks`, `coveringRadius`), `h1Bars`, `circularCoordinates`, `toroidalCoordinates`,
+the text parsers (`parsePointCloud`, `parseOff`, `parseDistanceMatrix`), and the classes `Result` and `Chart`, a thin
 layer over `matlab.TDA4j`. Options are the facade's option names (an object, not a string array); a Scala exception becomes
 a JavaScript `Error` with the same message (`guarded`). It is hand-typed twice: `npm/index.d.ts` must list every option
 the facade accepts and every exported member (change both in one commit). `npm/package.json` (package `@appliedtopology/tda4j`; a scoped package needs `npm publish --access public`) has `@VERSION@`, filled in

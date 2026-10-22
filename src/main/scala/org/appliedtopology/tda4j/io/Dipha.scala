@@ -20,8 +20,11 @@ object Dipha:
     * (`d(1,1)...d(1,n) d(2,1)...d(n,n)` per the README) -- the FULL matrix, diagonal included, not a triangular
     * packing.
     */
-  def readDistanceMatrix(path: String): Array[Array[Double]] =
-    val buf = BinaryIO.readAllLE(path)
+  def readDistanceMatrix(path: String): Array[Array[Double]] = parseDistanceMatrix(FileAccess.readBytes(path))
+
+  /** [[readDistanceMatrix]] on the bytes of such a file. */
+  def parseDistanceMatrix(bytes: Array[Byte]): Array[Array[Double]] =
+    val buf = BinaryIO.wrapLE(bytes)
     requireMagicAndType(buf, TypeDistanceMatrix)
     val n = buf.getLong().toInt
     val m = Array.ofDim[Double](n, n)
@@ -35,6 +38,9 @@ object Dipha:
     ExplicitMetricSpace(readDistanceMatrix(path).map(_.toIndexedSeq).toIndexedSeq)
 
   def writeDistanceMatrix(path: String, matrix: Array[Array[Double]]): Unit =
+    FileAccess.writeBytes(path, formatDistanceMatrix(matrix))
+
+  def formatDistanceMatrix(matrix: Array[Array[Double]]): Array[Byte] =
     val n = matrix.size
     val buf = BinaryIO.newBufferLE(8 + 8 + 8 + n * n * 8)
     buf.putLong(Magic)
@@ -44,15 +50,18 @@ object Dipha:
       i <- 0 until n
       j <- 0 until n
     do buf.putDouble(matrix(i)(j))
-    BinaryIO.writeLE(path, buf)
+    buf.array()
 
   /** `IMAGE_DATA` (file type 1): magic, type, `n` (Int64, total value count), `d` (Int64, dimension), `d` Int64 grid
     * sizes `g(1)...g(d)` (`g(1)` fastest-varying), then `n` `Float64` values in "x-fastest" order. Returned as
     * `(shape, flatValues)` in `CubicalImage.fromFlatArray`'s own last-axis-fastest convention -- i.e. `shape` here is
     * `g.reverse`, not `g` -- ready to pass straight to `fromFlatArray`/`readCubicalGridStream`.
     */
-  def readImageData(path: String): (IndexedSeq[Int], IndexedSeq[Double]) =
-    val buf = BinaryIO.readAllLE(path)
+  def readImageData(path: String): (IndexedSeq[Int], IndexedSeq[Double]) = parseImageData(FileAccess.readBytes(path))
+
+  /** [[readImageData]] on the bytes of such a file. */
+  def parseImageData(bytes: Array[Byte]): (IndexedSeq[Int], IndexedSeq[Double]) =
+    val buf = BinaryIO.wrapLE(bytes)
     requireMagicAndType(buf, TypeImageData)
     val n = buf.getLong().toInt
     val d = buf.getLong().toInt
@@ -78,6 +87,9 @@ object Dipha:
     * DIPHA's own `g(1)`-fastest convention before writing (the inverse of `readImageData`'s own reversal).
     */
   def writeImageData(path: String, shape: IndexedSeq[Int], flatValues: IndexedSeq[Double]): Unit =
+    FileAccess.writeBytes(path, formatImageData(shape, flatValues))
+
+  def formatImageData(shape: IndexedSeq[Int], flatValues: IndexedSeq[Double]): Array[Byte] =
     require(flatValues.size == shape.product, "flatValues size must equal the product of shape")
     val g = shape.reverse
     val d = g.size
@@ -89,14 +101,18 @@ object Dipha:
     buf.putLong(d.toLong)
     g.foreach(gi => buf.putLong(gi.toLong))
     flatValues.foreach(v => buf.putDouble(v))
-    BinaryIO.writeLE(path, buf)
+    buf.array()
 
   /** A `PERSISTENCE_DIAGRAM` file (type 2): the count, then `(dim, birth, death)` triples (`Int64`, `Float64`,
     * `Float64`). A dimension `-k` marks an essential class of dimension `k - 1`, whose death is ignored (written
     * `0.0`).
     */
   def readPersistenceDiagram(path: String): Seq[PersistenceBar[Double, Nothing]] =
-    val buf = BinaryIO.readAllLE(path)
+    parsePersistenceDiagram(FileAccess.readBytes(path))
+
+  /** [[readPersistenceDiagram]] on the bytes of such a file. */
+  def parsePersistenceDiagram(bytes: Array[Byte]): Seq[PersistenceBar[Double, Nothing]] =
+    val buf = BinaryIO.wrapLE(bytes)
     requireMagicAndType(buf, TypePersistenceDiagram)
     val p = buf.getLong().toInt
     (0 until p).map { _ =>
@@ -112,6 +128,9 @@ object Dipha:
     }
 
   def writePersistenceDiagram(path: String, bars: Seq[PersistenceBar[Double, ?]]): Unit =
+    FileAccess.writeBytes(path, formatPersistenceDiagram(bars))
+
+  def formatPersistenceDiagram(bars: Seq[PersistenceBar[Double, ?]]): Array[Byte] =
     val p = bars.size
     val buf = BinaryIO.newBufferLE(8 + 8 + 8 + p * (8 + 8 + 8))
     buf.putLong(Magic)
@@ -132,4 +151,4 @@ object Dipha:
       buf.putDouble(birth)
       buf.putDouble(death)
     }
-    BinaryIO.writeLE(path, buf)
+    buf.array()

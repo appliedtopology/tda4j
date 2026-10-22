@@ -24,7 +24,8 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     name = "input-format",
     default = Some("csv-points"),
     descr = "input format. Point clouds and distance matrices: csv-points (default), csv-distances, " +
-      "csv-lower, ripser-points, ripser-lower, ripser-upper, ripser-distance, ripser-binary, dipha-distance, off. " +
+      "csv-lower, ripser-points, ripser-lower, ripser-upper, ripser-distance, ripser-sparse, ripser-binary, " +
+      "dipha-distance, off. " +
       "Images: perseus-cubical, dipha-image, image. Relations: csv-relation (one row per point, one column per " +
       "witness), for the Dowker complex. A result saved with --save-result: result (chosen by itself when " +
       "--input-format is not given)"

@@ -53,8 +53,8 @@ tda4j implements Ripser's algorithm (clearing, cohomology, apparent pairs) as it
 
 | Ripser | tda4j |
 |---|---|
-| `ripser --dim k --threshold t --modulus p file` | `java -jar tda4j-VERSION-assembly.jar --input-format ripser-points --max-dimension k --max-filtration-value t --prime p --min-persistence 0 file` |
-| `--format point-cloud`, `distance`, `lower-distance`, `upper-distance`, `binary` | `--input-format ripser-points`, `ripser-distance`, `ripser-lower`, `ripser-upper`, `ripser-binary` |
+| `ripser --format point-cloud --dim k --threshold t --modulus p file` | `java -jar tda4j-VERSION-assembly.jar --input-format ripser-points --max-dimension k --max-filtration-value t --prime p --min-persistence 0 file` |
+| `--format point-cloud`, `distance`, `lower-distance`, `upper-distance`, `sparse`, `binary` | `--input-format ripser-points`, `ripser-distance`, `ripser-lower`, `ripser-upper`, `ripser-sparse`, `ripser-binary` |
 | `ripser(X, maxdim=k, thresh=t, coeff=p)` (ripser.py) | `Persistence(X, maxDimension = k, maxFiltrationValue = t, characteristic = p)` |
 | `ripser(D, distance_matrix=True)` | `Persistence(ExplicitMetricSpace(rows))` |
 | `result['dgms'][d]` | `diagram.dim(d).triples` (degree, birth, death), death `Infinity` for an essential bar |
@@ -72,7 +72,7 @@ other tools read with `--output-format gudhi`, `dipha` or `csv`.
 | `AlphaComplex(points=X)`, `create_simplex_tree()` | `Persistence(X, complex = AlphaShapes)`; radii, where GUDHI has squared radii |
 | `RipsComplex(distance_matrix=D)` | `Persistence(ExplicitMetricSpace(rows))` |
 | `CubicalComplex(top_dimensional_cells=img)` | `Persistence(Image(pixels))`; `Image(pixels).superlevel` for superlevel sets |
-| `DTMRipsComplex`, `gudhi.weighted_rips` | `DtmRips.fromNeighbours(metricSpace, k, maxDimension)`, see [Vietoris-Rips](topological-spaces/vietoris-rips.md#distance-to-measure-weighting) |
+| `DTMRipsComplex`, `WeightedRipsComplex` | `DtmRips.fromNeighbours(metricSpace, k, maxDimension)`, see [Vietoris-Rips](topological-spaces/vietoris-rips.md#distance-to-measure-weighting) |
 | `EuclideanWitnessComplex`, `EuclideanStrongWitnessComplex` | `Witness(...)`, see [witness complexes](topological-spaces/witness-complexes.md) |
 | sparse Rips, `RipsComplex(sparse=ε)` | `SparseRips(metricSpace, epsilon, maxDimension)` |
 | edge collapse | `EdgeCollapse.collapse(metricSpace)` |
@@ -80,5 +80,4 @@ other tools read with `--output-format gudhi`, `dipha` or `csv`.
 | `gudhi.representations` landscapes and images | `Vectorization.landscape`, `Vectorization.persistenceImage` |
 | `read_points_from_off_file`, persistence files | `Gudhi.readOff`, `Gudhi.readPersistenceDiagram` and `Gudhi.writePersistenceDiagram` ([files](input-output.md)) |
 
-The JavaPlex, Ripser and GUDHI columns describe those libraries from memory of their public interfaces; check names
-against the version you have.
+Names and defaults change between versions of these libraries; check the ones you use against your version.

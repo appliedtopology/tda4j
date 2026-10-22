@@ -303,6 +303,7 @@ object TDA4jCLI:
       case "ripser-lower"    => ResolvedInput.Distances(Ripser.readLowerDistanceMatrix(path))
       case "ripser-upper"    => ResolvedInput.Distances(Ripser.readUpperDistanceMatrix(path))
       case "ripser-distance" => ResolvedInput.Distances(Ripser.readDistanceMatrix(path))
+      case "ripser-sparse"   => ResolvedInput.Distances(Ripser.readSparseDistanceMatrix(path))
       case "ripser-binary"   => ResolvedInput.Distances(Ripser.readBinaryLowerDistanceMatrix(path))
       case "dipha-distance"  => ResolvedInput.Distances(Dipha.readDistanceMatrix(path))
       case "off"             => ResolvedInput.Points(Gudhi.readOff(path))
@@ -324,7 +325,7 @@ object TDA4jCLI:
       case other          =>
         throw new IllegalArgumentException(
           s"unrecognized --input-format '$other'; expected one of csv-points, csv-distances, csv-lower, " +
-            "ripser-points, ripser-lower, ripser-upper, ripser-distance, ripser-binary, dipha-distance, off, " +
+            "ripser-points, ripser-lower, ripser-upper, ripser-distance, ripser-sparse, ripser-binary, dipha-distance, off, " +
             "perseus-cubical, dipha-image, image, csv-relation, result"
         )
 
