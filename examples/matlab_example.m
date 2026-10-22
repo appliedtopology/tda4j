@@ -8,7 +8,7 @@
 % back what breaks, if anything, before trusting the facade end to end.
 
 % Point the JVM MATLAB embeds at the library's fat jar (built via `sbt assembly`).
-javaaddpath('target/out/jvm/scala-3.9.0/tda4j/tda4j-0.5.1-SNAPSHOT-assembly.jar');  % the version sbt assembly printed
+javaaddpath('target/out/jvm/scala-3.9.0/tda4j/tda4j-VERSION-assembly.jar');  % built by `sbt tda4j/assembly`; VERSION is in version.sbt
 
 import org.appliedtopology.tda4j.matlab.TDA4j
 

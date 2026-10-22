@@ -6,7 +6,7 @@ paths:
   - "src/**/barcode/PersistenceFilter*.scala"
   - "_docs/user-guide/matlab.md"
   - "_docs/user-guide/cli.md"
-  - "matlab_example.m"
+  - "examples/matlab_example.m"
 ---
 
 # The MATLAB facade, the CLI and file I/O (and which bars they report)
