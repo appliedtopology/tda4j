@@ -297,7 +297,10 @@ yet); `--tools` leaves them out of a quick run.
   JVM**: for each `tda4j-js*` row, the warm and cold time ratios and the memory ratios to its JVM twin (`tda4j-js` to
   `tda4j`, `tda4j-js-cocycles` to `tda4j-cocycles`, ...), per case and as geometric means per task.
 - `env.json`: the machine, the JVM, Node.js and the npm package's version, every Python package's version, the
-  ripser.cpp and TDA4j commits, the options.
+  ripser.cpp commit, the options, and which TDA4j was measured: `tda4j_git` (the HEAD of the checkout the JVM classes
+  were built in), `tda4j_dirty` (the tracked files that differ from it; untracked ones are not listed) and
+  `tda4j_classes_stale` (a JVM source is newer than the newest class: the checkout moved after `setup`, so rerun it).
+  `summary.md` and `sweep.md` repeat the commit in their first lines, with the changed files when there are any.
 - `bars/*.tsv`: every barcode (`dim birth death`); `logs/`: each process's stdout and stderr.
 
 `bench.py summarize RESULTS_DIR` rebuilds the tables, for example after merging the directories of several partial

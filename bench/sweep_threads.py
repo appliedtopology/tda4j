@@ -260,6 +260,7 @@ def summarize(out, bottleneck=None):
              + ("Each run at t threads was pinned to t CPUs (taskset). " if pinned == {"True"} else
                 "Runs were not pinned: garbage collection, compilation and MPI could use every CPU. "
                 if pinned == {"False"} else "")
+             + (bench.revision_text(env) + " " if bench.revision_text(env) else "")
              + "Times in seconds: the warm median, or the cold computation when it was too slow to repeat. "
                "In parentheses, the speedup over the tool's own run at 1 thread.", ""]
     for cname, p in dict.fromkeys((r["case"], r["p"]) for r in rows):
