@@ -23,10 +23,11 @@ import scala.jdk.CollectionConverters.ListHasAsScala
   *     largest radius: bars alive at it are essential, and DQP builds only what lies within it. `engine=fastalpha` runs
   *     on the backend's triangulation and takes no threshold.
   *   - `task=cech`: points; filtration values are radii (the same barcode as alpha in general position).
-  *   - `task=vr engine=blocks|parallel [threads=N]`: the two block-parallel experiments instead of `Persistence`, bars
-  *     only (no representatives): `BlockParallelReduction` (explicit coboundaries) and `ParallelPackedCohomology`
-  *     (implicit coboundaries), on `threads` threads (default: every processor). Without a threshold they stop at the
-  *     enclosing radius, as `Persistence` does; the edge table and the complex are built inside the timed region.
+  *   - `task=vr engine=parallel [threads=N]`: the block-parallel experiment `ParallelPackedCohomology` (implicit
+  *     coboundaries) instead of `Persistence`, bars only (no representatives), on `threads` threads (default: every
+  *     processor). Without a threshold it stops at the enclosing radius, as `Persistence` does; the edge table and the
+  *     complex are built inside the timed region. `engine=parallel wide=true` uses two-word keys even where one Long
+  *     would do (what they cost).
   *   - `task=vr collapse=true`: Vietoris-Rips after `EdgeCollapse.collapse` (the collapse is inside the timed region);
   *     the cross-tool twin of GUDHI's edge collapse.
   *   - `task=sparse eps=0.3`: Sheehy's sparse Rips (`SparseRips`, Cavanna-Jahanseir-Sheehy); points or a distance
@@ -88,10 +89,10 @@ object PaperBenchmarkDriver:
 
     val loadStart = System.nanoTime()
     val compute: () => List[(Int, Double, Double)] = task match
-      case "vr" if engineName == "blocks" || engineName == "parallel" =>
+      case "vr" if engineName == "parallel" =>
         val ms = metricSpaceOf(opts)
         val n = ms.size
-        require(n.toLong * n <= Int.MaxValue, s"engine=$engineName keeps n x n tables: $n points are too many")
+        require(n.toLong * n <= Int.MaxValue, s"engine=parallel keeps n x n tables: $n points are too many")
         val table = Array.tabulate(n * n)(k => ms.distance(k / n, k % n))
         val distance: (Int, Int) => Double = (i, j) => table(i * n + j)
         val t = threshold.getOrElse(ms.minimumEnclosingRadius)
@@ -103,16 +104,10 @@ object PaperBenchmarkDriver:
             thread.setDaemon(true)
             thread
         )
-        if engineName == "parallel" then
-          () =>
-            val space = ParallelPackedCohomology.Space(n, distance, t, dim, p)
-            ParallelPackedCohomology.persistence(space, threads, 8, cocycles = false, pool).bars.toList
-        else
-          () =>
-            val cells = BlockParallelReduction.complex(n, distance, t, dim + 1)
-            val cobs = (1 to dim).map(d => BlockParallelReduction.coboundary(n, cells(d), cells(d + 1), p)).toVector
-            val method = BlockParallelReduction.Method.Blocks(threads)
-            BlockParallelReduction.persistence(cells, cobs, p, method, cocycles = false, pool).bars.toList
+        () =>
+          val space =
+            ParallelPackedCohomology.Space(n, distance, t, dim, p, forceWide = opts.get("wide").contains("true"))
+          ParallelPackedCohomology.persistence(space, threads, 8, cocycles = false, pool).bars.toList
       case "vr" if opts.get("collapse").contains("true") =>
         val ms = metricSpaceOf(opts)
         () =>

@@ -14,8 +14,10 @@ import scala.util.Random
   *
   * A simplex is one `Long` key: its block (1 + the rank of its first longest edge, edges ranked by (length, smaller
   * end, larger end); 0 for a vertex) above `mask - index` (`index` its combinatorial index; a larger index is older, as
-  * in the packed engine). Within one dimension, ascending keys are the filtration order, oldest first. Coefficients are
-  * `Int`s mod `p`.
+  * in the packed engine). Within one dimension, ascending keys are the filtration order, oldest first. When the block
+  * and the index do not fit in one `Long` together (`Space.wide`), a key is two words: `mask - index`, which still
+  * names the simplex within its dimension, and the block beside it in every array, heap and column that orders keys;
+  * the order is then by block, then key. Coefficients are `Int`s mod `p`.
   *
   * {{{
   * java -cp $CP org.appliedtopology.tda4j.ParallelPackedCohomology <dataset> <n> <maxDim> <threshold|mer> <threads> [units per thread] [trials] [seed] [p]
@@ -33,7 +35,9 @@ object ParallelPackedCohomology:
     val maxDim: Int,
     val p: Int,
     // Find apparent pairs Ripser's way (every facet's block from its pairs) instead of from the block's edge.
-    val ripserApparent: Boolean = false
+    val ripserApparent: Boolean = false,
+    // Two-word keys even where one Long would do: for tests of the wide layout.
+    forceWide: Boolean = false
   ):
     val rank: Array[Int] = Array.fill(n * n)(-1)
     private val (ea, eb, el) =
@@ -63,16 +67,19 @@ object ParallelPackedCohomology:
     val binom: Array[Array[Long]] = Array.tabulate(maxDim + 3, n + 1)((q, v) => SimplexIndexing.binomial(v, q))
     // C(n, q) is not monotone in q: the largest index over every size used.
     val bits: Int = 64 - java.lang.Long.numberOfLeadingZeros((1 to math.min(maxDim + 2, n)).map(q => binom(q)(n)).max)
-    require(
-      bits + (32 - Integer.numberOfLeadingZeros(edgeA.length + 1)) <= 63,
-      s"keys do not fit in a Long: $bits index bits and ${edgeA.length} edges"
-    )
-    val mask: Long = (1L << bits) - 1
+    require(bits <= 63, s"combinatorial indices do not fit in a Long: C($n, q) needs $bits bits for q <= ${maxDim + 2}")
+
+    /** Whether keys are two words: the block and the index need more than 63 bits together. */
+    val wide: Boolean = forceWide || bits + (32 - Integer.numberOfLeadingZeros(edgeA.length + 1)) > 63
+    val mask: Long = if bits == 63 then Long.MaxValue else (1L << bits) - 1
     val inverse: Array[Int] = Array.tabulate(p)(a => if a == 0 then 0 else (1 until p).find(b => a * b % p == 1).get)
 
-    def block(key: Long): Int = (key >>> bits).toInt
+    /** A one-word key's block; a two-word key carries its block beside it. */
+    def block(key: Long): Int =
+      if wide then throw IllegalStateException("a two-word key carries its block beside it")
+      (key >>> bits).toInt
     def index(key: Long): Long = mask - (key & mask)
-    def key(block: Int, index: Long): Long = (block.toLong << bits) | (mask - index)
+    def key(block: Int, index: Long): Long = if wide then mask - index else (block.toLong << bits) | (mask - index)
     def value(block: Int): Double = if block == 0 then 0.0 else edgeLength(block - 1)
 
     /** The `size` vertices of the simplex at `index`, ascending, into `out`. */
@@ -100,28 +107,40 @@ object ParallelPackedCohomology:
         i += 1
       idx
 
-  /** A working column: a binary min-heap of (key, coefficient), equal keys combined when they reach the top. */
-  open class Heap:
+  /** A working column: a binary min-heap of (key, coefficient), equal keys combined when they reach the top. With
+    * two-word keys (`wide`) each entry also holds its block, and entries are ordered by block, then key.
+    */
+  open class Heap(wide: Boolean, bits: Int):
     private var keys = new Array[Long](256)
     private var coefs = new Array[Int](256)
+    private var blocks: Array[Int] = if wide then new Array[Int](256) else null
     var size = 0
     def clear(): Unit = size = 0
-    def push(k: Long, c: Int): Unit =
+    private inline def less(k1: Long, b1: Int, k2: Long, b2: Int): Boolean =
+      if wide then b1 < b2 || b1 == b2 && k1 < k2 else k1 < k2
+    private inline def blockAt(i: Int): Int = if wide then blocks(i) else 0
+    private inline def set(i: Int, k: Long, b: Int, c: Int): Unit =
+      keys(i) = k
+      coefs(i) = c
+      if wide then blocks(i) = b
+
+    /** Adds `c` times the key `k`, whose block is `b` (read only for two-word keys). */
+    def push(k: Long, b: Int, c: Int): Unit =
       if size == keys.length then
         keys = java.util.Arrays.copyOf(keys, 2 * size)
         coefs = java.util.Arrays.copyOf(coefs, 2 * size)
+        if wide then blocks = java.util.Arrays.copyOf(blocks, 2 * size)
       var i = size
       size += 1
-      while i > 0 && keys((i - 1) / 2) > k do
-        keys(i) = keys((i - 1) / 2)
-        coefs(i) = coefs((i - 1) / 2)
+      while i > 0 && less(k, b, keys((i - 1) / 2), blockAt((i - 1) / 2)) do
+        set(i, keys((i - 1) / 2), blockAt((i - 1) / 2), coefs((i - 1) / 2))
         i = (i - 1) / 2
-      keys(i) = k
-      coefs(i) = c
+      set(i, k, b, c)
     private def pop(): Unit =
       size -= 1
       if size > 0 then
         val k = keys(size)
+        val b = blockAt(size)
         val c = coefs(size)
         var i = 0
         var go = true
@@ -129,45 +148,68 @@ object ParallelPackedCohomology:
           val l = 2 * i + 1
           if l >= size then go = false
           else
-            val m = if l + 1 < size && keys(l + 1) < keys(l) then l + 1 else l
-            if keys(m) < k then
-              keys(i) = keys(m)
-              coefs(i) = coefs(m)
+            val m = if l + 1 < size && less(keys(l + 1), blockAt(l + 1), keys(l), blockAt(l)) then l + 1 else l
+            if less(keys(m), blockAt(m), k, b) then
+              set(i, keys(m), blockAt(m), coefs(m))
               i = m
             else go = false
-        keys(i) = k
-        coefs(i) = c
+        set(i, k, b, c)
 
     /** The smallest key with a non-zero combined coefficient, left alone on top; -1 if the column is zero. */
     def pivot(p: Int): Long =
       var result = -1L
       while result < 0 && size > 0 do
         val k = keys(0)
+        val b = blockAt(0)
         var c = 0
         while size > 0 && keys(0) == k do
           c = (c + coefs(0)) % p
           pop()
         if c != 0 then
-          push(k, c)
+          push(k, b, c)
           result = k
       result
     def topCoefficient: Int = coefs(0)
 
-    /** Every entry, combined and ascending; empties the heap. */
-    def drain(p: Int): (Array[Long], Array[Int]) =
+    /** The top key's block. */
+    def topBlock: Int = if wide then blocks(0) else (keys(0) >>> bits).toInt
+
+    /** Every entry, combined and ascending, as keys, coefficients and (two-word keys only, else `null`) blocks; empties
+      * the heap.
+      */
+    def drain(p: Int): (Array[Long], Array[Int], Array[Int]) =
       val ks = mutable.ArrayBuilder.ofLong()
       val cs = mutable.ArrayBuilder.ofInt()
+      val bs = if wide then mutable.ArrayBuilder.ofInt() else null
       while pivot(p) >= 0 do
         ks += keys(0)
         cs += coefs(0)
+        if wide then bs += blocks(0)
         pop()
-      (ks.result(), cs.result())
+      (ks.result(), cs.result(), if wide then bs.result() else null)
 
-  /** The column that owns a pivot: its reduced coboundary, or `null` arrays when that is its own coboundary. */
-  open class Owner(val column: Long, val keys: Array[Long], val coefs: Array[Int])
+  /** The column that owns a pivot, with its block: its reduced coboundary, or `null` arrays when that is its own
+    * coboundary (`blocks`: the reduced column's blocks, for two-word keys only); `pivotBlock` the pivot's block, or -1
+    * for an owner that is only looked up.
+    */
+  open class Owner(
+    val column: Long,
+    val columnBlock: Int,
+    val keys: Array[Long],
+    val coefs: Array[Int],
+    val blocks: Array[Int] = null,
+    val pivotBlock: Int = -1
+  )
 
-  /** A column whose pivot left its unit: its working column and its reduction log so far. */
-  open class Deferred(val column: Long, var keys: Array[Long], var coefs: Array[Int], val log: Log):
+  /** A column whose pivot left its unit: its working column (`blocks` as in `Owner`) and its reduction log so far. */
+  open class Deferred(
+    val column: Long,
+    val columnBlock: Int,
+    var keys: Array[Long],
+    var coefs: Array[Int],
+    var blocks: Array[Int],
+    val log: Log
+  ):
     var additions = 0
 
   /** The columns added to one column, with their factors: V = column + sum of factor * V(added). */
@@ -184,9 +226,11 @@ object ParallelPackedCohomology:
     val vs = new Array[Int](space.maxDim + 3)
     val ws = new Array[Int](space.maxDim + 3)
     val cofKey = new Array[Long](space.n)
+    val cofBlock = new Array[Int](space.n)
     val cofCoef = new Array[Int](space.n)
-    val heap = Heap()
+    val heap = Heap(space.wide, space.bits)
     var added = 0
+    var rowBlock = -1 // the block of the pivot `run` returned last
 
   private val DEFER = Long.MinValue
 
@@ -217,6 +261,7 @@ object ParallelPackedCohomology:
     val reduced = mutable.LongMap.empty[Owner] // by column, for the columns with additions
     val logs = mutable.LongMap.empty[Log]
     val essential = mutable.ArrayBuffer.empty[Long]
+    val essentialBlocks = mutable.ArrayBuffer.empty[Int]
 
   open class Result(val space: Space, val degrees: Vector[Degree]):
     def bars: Vector[(Int, Double, Double)] = degrees.flatMap(_.bars).sorted
@@ -229,6 +274,7 @@ object ParallelPackedCohomology:
     val logs = mutable.LongMap.empty[Log]
     val reduced = mutable.LongMap.empty[Owner]
     val essential = mutable.ArrayBuffer.empty[Long]
+    val essentialBlocks = mutable.ArrayBuffer.empty[Int]
     var apparent = 0
     var claimed = 0
     var additions = 0L
@@ -256,6 +302,7 @@ object ParallelPackedCohomology:
           u += 1
         if ok then
           s.cofKey(count) = key(blk, iB + binom(pp + 1)(v) + iA)
+          s.cofBlock(count) = blk
           s.cofCoef(count) = if (pp & 1) == 0 then 1 else p - 1
           count += 1
       v -= 1
@@ -296,11 +343,10 @@ object ParallelPackedCohomology:
         v -= 1
       found
 
-  // The apparent facet of the row `row` (size k + 1): its youngest same-block facet, if `row` is that facet's oldest
-  // same-block cofacet; -1 otherwise. Leaves the facet's vertices in s.vs.
-  private def apparentFacet(space: Space, s: Scratch, k: Int, row: Long): Long =
+  // The apparent facet of the row `row` (size k + 1, block rowBlock): its youngest same-block facet, if `row` is that
+  // facet's oldest same-block cofacet; -1 otherwise. Leaves the facet's vertices in s.vs.
+  private def apparentFacet(space: Space, s: Scratch, k: Int, row: Long, rowBlock: Int): Long =
     import space.*
-    val rowBlock = space.block(row)
     if rowBlock == 0 then -1L
     else
       decode(index(row), k + 1, s.ws)
@@ -415,8 +461,7 @@ object ParallelPackedCohomology:
           i += 1
         if apparent then space.key(sigmaBlock, tauIndex) else -1L
 
-  private def apparentFacetByScan(space: Space, s: Scratch, k: Int, row: Long): Long =
-    val rowBlock = space.block(row)
+  private def apparentFacetByScan(space: Space, s: Scratch, k: Int, row: Long, rowBlock: Int): Long =
     if rowBlock == 0 then -1L
     else
       space.decode(space.index(row), k + 1, s.ws)
@@ -431,13 +476,14 @@ object ParallelPackedCohomology:
     if owner.keys != null then
       val f = (p - a) * space.inverse(owner.coefs(0)) % p
       var i = 0
+      val blocks = owner.blocks
       while i < owner.keys.length do
-        s.heap.push(owner.keys(i), owner.coefs(i) * f % p)
+        s.heap.push(owner.keys(i), if blocks != null then blocks(i) else 0, owner.coefs(i) * f % p)
         i += 1
       f
     else
       space.decode(space.index(owner.column), k, s.vs)
-      val count = cofacets(space, s, k, space.index(owner.column), space.block(owner.column))
+      val count = cofacets(space, s, k, space.index(owner.column), owner.columnBlock)
       var lead = 0
       var i = 0
       while i < count do
@@ -446,17 +492,18 @@ object ParallelPackedCohomology:
       val f = (p - a) * space.inverse(lead) % p
       i = 0
       while i < count do
-        s.heap.push(s.cofKey(i), s.cofCoef(i) * f % p)
+        s.heap.push(s.cofKey(i), s.cofBlock(i), s.cofCoef(i) * f % p)
         i += 1
       f
 
-  // Reduces the heap: while the pivot is owned (by `lookup`, or as an apparent pair), add the owner. Returns the
-  // unowned pivot, -1 when the column is zero, DEFER when the pivot's block is above `highBlock`.
+  // Reduces the heap: while the pivot is owned (by `lookup`, given the pivot and its block, or as an apparent pair),
+  // add the owner. Returns the unowned pivot (its block in s.rowBlock), -1 when the column is zero, DEFER when the
+  // pivot's block is above `highBlock`.
   private def run(
     space: Space,
     s: Scratch,
     k: Int,
-    lookup: Long => Owner | Null,
+    lookup: (Long, Int) => Owner | Null,
     highBlock: Int,
     log: Log | Null
   ): Long =
@@ -467,17 +514,21 @@ object ParallelPackedCohomology:
       // A wrong owner (a wrong key, a wrong apparent pair) makes the pivot cycle instead of moving on.
       if steps > 10_000_000 then throw IllegalStateException("the reduction of a column does not terminate")
       val row = s.heap.pivot(space.p)
+      val rowBlock = if row < 0 then -1 else s.heap.topBlock
       if row < 0 then result = -1L
-      else if space.block(row) > highBlock then result = DEFER
+      else if rowBlock > highBlock then result = DEFER
       else
-        val known = lookup(row)
+        val known = lookup(row, rowBlock)
         val owner =
           if known != null then known
           else
             val facet =
-              if space.ripserApparent then apparentFacetByScan(space, s, k, row) else apparentFacet(space, s, k, row)
-            if facet >= 0 then Owner(facet, null, null) else null
-        if owner == null then result = row
+              if space.ripserApparent then apparentFacetByScan(space, s, k, row, rowBlock)
+              else apparentFacet(space, s, k, row, rowBlock)
+            if facet >= 0 then Owner(facet, rowBlock, null, null) else null
+        if owner == null then
+          result = row
+          s.rowBlock = rowBlock
         else
           val f = addOwner(space, s, k, owner, row)
           s.added += 1
@@ -501,6 +552,34 @@ object ParallelPackedCohomology:
   private def sort(keys: Array[Long], threads: Int): Unit =
     if threads > 1 then java.util.Arrays.parallelSort(keys) else java.util.Arrays.sort(keys)
 
+  // Two-word keys into order: by block (a counting sort, blocks being 0 .. blockCount - 1), then by key within each
+  // block. `blocks` ends up sorted with `keys`.
+  private def sortWide(keys: Array[Long], blocks: Array[Int], blockCount: Int, threads: Int): Unit =
+    val start = new Array[Int](blockCount + 1)
+    var i = 0
+    while i < blocks.length do
+      start(blocks(i) + 1) += 1
+      i += 1
+    var b = 0
+    while b < blockCount do
+      start(b + 1) += start(b)
+      b += 1
+    val next = start.clone()
+    val sorted = new Array[Long](keys.length)
+    i = 0
+    while i < keys.length do
+      sorted(next(blocks(i))) = keys(i)
+      next(blocks(i)) += 1
+      i += 1
+    System.arraycopy(sorted, 0, keys, 0, keys.length)
+    b = 0
+    while b < blockCount do
+      java.util.Arrays.fill(blocks, start(b), start(b + 1), b)
+      b += 1
+    val within: java.util.function.IntConsumer = b => java.util.Arrays.sort(keys, start(b), start(b + 1))
+    val range = java.util.stream.IntStream.range(0, blockCount)
+    (if threads > 1 then range.parallel() else range).forEach(within)
+
   /** Every bar of degrees `0 .. maxDim`; `unitsPerThread` 1 with `threads` 1 is the sequential reduction. */
   def persistence(
     space: Space,
@@ -513,7 +592,9 @@ object ParallelPackedCohomology:
     import space.*
     val scratch = ThreadLocal.withInitial[Scratch](() => Scratch(space))
     var level: Array[Long] = Array.tabulate(n)(v => key(0, v.toLong))
-    sort(level, 1)
+    // The blocks of `level`, for two-word keys only.
+    var levelBlocks: Array[Int] = if wide then new Array[Int](n) else null
+    if wide then sortWide(level, levelBlocks, edgeA.length + 1, 1) else sort(level, 1)
     var cleared: Array[Long] = Array.empty
     val degrees = Vector.newBuilder[Degree]
     var assembleNanos = 0L
@@ -523,6 +604,8 @@ object ParallelPackedCohomology:
       val stats = Stats(d, level.length, cleared.length)
       stats.nanosAssemble = assembleNanos
       val degree = Degree(d, stats)
+      val (keysOfLevel, blocksOfLevel) = (level, levelBlocks)
+      def levelBlock(pos: Int): Int = if wide then blocksOfLevel(pos) else block(keysOfLevel(pos))
 
       // Units: contiguous runs of whole blocks, about level.length / (threads * unitsPerThread) columns each.
       val target = math.max(1, level.length / math.max(1, threads * unitsPerThread))
@@ -531,14 +614,13 @@ object ParallelPackedCohomology:
       while start < level.length do
         var end = math.min(level.length, start + target)
         if threads * unitsPerThread == 1 then end = level.length
-        while end < level.length && block(level(end)) == block(level(end - 1)) do end += 1
-        unitsB += WorkUnit(start, end, block(level(start)), block(level(end - 1)))
+        while end < level.length && levelBlock(end) == levelBlock(end - 1) do end += 1
+        unitsB += WorkUnit(start, end, levelBlock(start), levelBlock(end - 1))
         start = end
       val units = unitsB.toArray
       stats.units = units.length
       val unitLow = units.map(_.lowBlock)
-      def unitOf(row: Long): WorkUnit | Null =
-        val b = block(row)
+      def unitOf(b: Int): WorkUnit | Null =
         var i = java.util.Arrays.binarySearch(unitLow, b)
         if i < 0 then i = -i - 2
         if i >= 0 && units(i).highBlock >= b then units(i) else null
@@ -548,13 +630,13 @@ object ParallelPackedCohomology:
       parallel(pool, threads, units.length) { u =>
         val unit = units(u)
         val s = scratch.get()
-        val lookup: Long => Owner | Null = row => unit.owners.getOrNull(row)
+        val lookup: (Long, Int) => Owner | Null = (row, _) => unit.owners.getOrNull(row)
         var pos = unit.end - 1
         while pos >= unit.start do
           val column = level(pos)
           if !isCleared(column) then
             val idx = index(column)
-            val blk = block(column)
+            val blk = levelBlock(pos)
             decode(idx, k, s.vs)
             val tau =
               if ripserApparent then apparentCofacetByScan(space, s, k, idx, blk)
@@ -568,26 +650,28 @@ object ParallelPackedCohomology:
               val count = cofacets(space, s, k, idx, blk)
               var i = 0
               while i < count do
-                s.heap.push(s.cofKey(i), s.cofCoef(i))
+                s.heap.push(s.cofKey(i), s.cofBlock(i), s.cofCoef(i))
                 i += 1
               s.added = 0
               val log = if cocycles then Log() else null
               val row = run(space, s, k, lookup, unit.highBlock, log)
               unit.additions += s.added
               if row == DEFER then
-                val (ks, cs) = s.heap.drain(p)
-                unit.deferred += Deferred(column, ks, cs, log)
+                val (ks, cs, bs) = s.heap.drain(p)
+                unit.deferred += Deferred(column, blk, ks, cs, bs, log)
               else
                 if log != null && log.length > 0 then unit.logs(column) = log
                 if row < 0 then
                   unit.essential += column
+                  unit.essentialBlocks += blk
                   if keepPairs then unit.pairs += ((column, -1L))
                 else
+                  val rowBlock = s.rowBlock
                   val owner =
                     if s.added > 0 then
-                      val (ks, cs) = s.heap.drain(p)
-                      Owner(column, ks, cs)
-                    else Owner(column, null, null)
+                      val (ks, cs, bs) = s.heap.drain(p)
+                      Owner(column, blk, ks, cs, bs, rowBlock)
+                    else Owner(column, blk, null, null, null, rowBlock)
                   if s.added > 0 then unit.reduced(column) = owner
                   unit.owners(row) = owner
                   unit.pivots += row
@@ -601,11 +685,14 @@ object ParallelPackedCohomology:
       stats.adds1 = units.map(_.additions).sum
 
       // Phase 2a: the deferred columns, in parallel, while their pivots belong to the units' pairs.
-      val deferred = units.flatMap(_.deferred).sortBy(-_.column)
+      // Youngest first: by block, then key, descending.
+      val deferred = units
+        .flatMap(_.deferred)
+        .sortWith((a, b) => a.columnBlock > b.columnBlock || a.columnBlock == b.columnBlock && a.column > b.column)
       stats.deferred = deferred.length
       val t2 = System.nanoTime()
-      val lookupUnits: Long => Owner | Null = row =>
-        val u = unitOf(row)
+      val lookupUnits: (Long, Int) => Owner | Null = (row, rowBlock) =>
+        val u = unitOf(rowBlock)
         if u == null then null else u.owners.getOrNull(row)
       val emptied = new Array[Boolean](deferred.length)
       val adds2a = new Array[Long](deferred.length)
@@ -615,16 +702,18 @@ object ParallelPackedCohomology:
         for i <- c * slice until math.min(deferred.length, (c + 1) * slice) do
           val df = deferred(i)
           s.heap.clear()
-          for j <- df.keys.indices do s.heap.push(df.keys(j), df.coefs(j))
+          for j <- df.keys.indices do
+            s.heap.push(df.keys(j), if df.blocks != null then df.blocks(j) else 0, df.coefs(j))
           s.added = 0
           // An unowned pivot here may still be owned by a deferred column: stop and leave it to phase 2b.
           val row = run(space, s, k, lookupUnits, Int.MaxValue, df.log)
           adds2a(i) = s.added
           df.additions = s.added
           if row == -1L then emptied(i) = true
-          val (ks, cs) = s.heap.drain(p)
+          val (ks, cs, bs) = s.heap.drain(p)
           df.keys = ks
           df.coefs = cs
+          df.blocks = bs
       }
       stats.nanos2a = System.nanoTime() - t2
       stats.adds2a = adds2a.sum
@@ -634,8 +723,8 @@ object ParallelPackedCohomology:
       val t3 = System.nanoTime()
       val late = mutable.LongMap.empty[Owner]
       val latePivots = mutable.ArrayBuilder.ofLong()
-      val lookupAll: Long => Owner | Null = row =>
-        val o = lookupUnits(row)
+      val lookupAll: (Long, Int) => Owner | Null = (row, rowBlock) =>
+        val o = lookupUnits(row, rowBlock)
         if o != null then o else late.getOrNull(row)
       val s = scratch.get()
       var adds2b = 0L
@@ -646,7 +735,8 @@ object ParallelPackedCohomology:
           if emptied(i) then -1L
           else
             s.heap.clear()
-            for j <- df.keys.indices do s.heap.push(df.keys(j), df.coefs(j))
+            for j <- df.keys.indices do
+              s.heap.push(df.keys(j), if df.blocks != null then df.blocks(j) else 0, df.coefs(j))
             s.added = 0
             val r = run(space, s, k, lookupAll, Int.MaxValue, log)
             adds2b += s.added
@@ -654,10 +744,12 @@ object ParallelPackedCohomology:
         if log != null && log.length > 0 then degree.logs(df.column) = log
         if row < 0 then
           degree.essential += df.column
+          degree.essentialBlocks += df.columnBlock
           if keepPairs then degree.pairs += ((df.column, -1L))
         else
-          val (ks, cs) = s.heap.drain(p)
-          val owner = Owner(df.column, ks, cs)
+          val rowBlock = s.rowBlock
+          val (ks, cs, bs) = s.heap.drain(p)
+          val owner = Owner(df.column, df.columnBlock, ks, cs, bs, rowBlock)
           degree.reduced(df.column) = owner
           late(row) = owner
           latePivots += row
@@ -670,14 +762,15 @@ object ParallelPackedCohomology:
         degree.logs ++= unit.logs
         degree.reduced ++= unit.reduced
         degree.essential ++= unit.essential
-      // Bars of positive length: the owners' pairs, and the essential columns.
-      def bar(column: Long, row: Long): Unit =
-        val birth = value(block(column))
-        val death = if row < 0 then Double.PositiveInfinity else value(block(row))
+        degree.essentialBlocks ++= unit.essentialBlocks
+      // Bars of positive length: the owners' pairs, and the essential columns (death block -1).
+      def bar(columnBlock: Int, rowBlock: Int): Unit =
+        val birth = value(columnBlock)
+        val death = if rowBlock < 0 then Double.PositiveInfinity else value(rowBlock)
         if death > birth then degree.bars += ((d, birth, death))
-      for unit <- units do unit.owners.foreach((row, o) => bar(o.column, row))
-      late.foreach((row, o) => bar(o.column, row))
-      degree.essential.foreach(c => bar(c, -1L))
+      for unit <- units do unit.owners.foreach((_, o) => bar(o.columnBlock, o.pivotBlock))
+      late.foreach((_, o) => bar(o.columnBlock, o.pivotBlock))
+      degree.essentialBlocks.foreach(b => bar(b, -1))
 
       // Clearing for the next degree, and its simplices: every canonical cofacet within the threshold.
       val pivotChunks = units.map(_.pivots.result()) :+ latePivots.result()
@@ -691,35 +784,43 @@ object ParallelPackedCohomology:
         val t4 = System.nanoTime()
         val chunks = math.max(1, threads * 8)
         val parts = new Array[Array[Long]](chunks)
+        val blockParts = new Array[Array[Int]](chunks)
         val current = level
         parallel(pool, threads, chunks) { c =>
           val s = scratch.get()
           val out = mutable.ArrayBuilder.ofLong()
+          val outBlocks = if wide then mutable.ArrayBuilder.ofInt() else null
           for pos <- (c * current.length.toLong / chunks).toInt until ((c + 1) * current.length.toLong / chunks).toInt
           do
             val column = current(pos)
+            val columnBlock = levelBlock(pos)
             val idx = index(column)
             decode(idx, k, s.vs)
             val top = s.vs(k - 1)
             var v = n - 1
             while v > top do
               var ok = true
-              var blk = block(column)
+              var blk = columnBlock
               var u = 0
               while ok && u < k do
                 val q = rank(s.vs(u) * n + v)
                 if q < 0 then ok = false else if q + 1 > blk then blk = q + 1
                 u += 1
-              if ok then out += key(blk, idx + binom(k + 1)(v))
+              if ok then
+                out += key(blk, idx + binom(k + 1)(v))
+                if wide then outBlocks += blk
               v -= 1
           parts(c) = out.result()
+          if wide then blockParts(c) = outBlocks.result()
         }
         level = new Array[Long](parts.map(_.length).sum)
+        levelBlocks = if wide then new Array[Int](level.length) else null
         at = 0
-        for part <- parts do
-          System.arraycopy(part, 0, level, at, part.length)
-          at += part.length
-        sort(level, threads)
+        for c <- parts.indices do
+          System.arraycopy(parts(c), 0, level, at, parts(c).length)
+          if wide then System.arraycopy(blockParts(c), 0, levelBlocks, at, parts(c).length)
+          at += parts(c).length
+        if wide then sortWide(level, levelBlocks, edgeA.length + 1, threads) else sort(level, threads)
         assembleNanos = System.nanoTime() - t4
       degrees += degree
     Result(space, degrees.result())
@@ -730,7 +831,7 @@ object ParallelPackedCohomology:
     val sum = mutable.LongMap.empty[Int]
     for (c, f) <- cochain do
       space.decode(space.index(c), k, s.vs)
-      val count = cofacets(space, s, k, space.index(c), space.block(c))
+      val count = cofacets(space, s, k, space.index(c), blockOf(space, s.vs, k))
       for i <- 0 until count do sum(s.cofKey(i)) = (sum.getOrElse(s.cofKey(i), 0) + f * s.cofCoef(i)) % space.p
     sum.filter(_._2 != 0).toMap
 

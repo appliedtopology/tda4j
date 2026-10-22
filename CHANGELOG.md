@@ -9,6 +9,11 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Breaking
 
+- `PackedRipserCohomologyEngine#DiameterIndex` is a plain class, not a case class (no `copy`, no pattern
+  `DiameterIndex(d, i)`; `DiameterIndex(d, i)` still makes one). It has a method `high`, 0 for every cell whose index fits
+  in a `Long`; a cell past that is a `WideDiameterIndex`, which holds the second word. A one-word run stores no second
+  word and its cells are the size they were. Decode a cell with `engine.vertices(cell, size)`;
+  `engine.si.decodeToArray(cell.index, size)` is right only while `engine.usesWideIndices` is false.
 - The tolerance of the triangulations is relative: `HelixDelaunay`, `BowyerWatsonDelaunay` and `AlphaShapes(...)` take a
   `using EpsilonFactor` (default `EpsilonFactor(1e-5)`, a fraction of the points' largest coordinate range) in place of
   `using Epsilon`; a `given Epsilon` in your code is no longer read there. `Epsilon` stays the absolute tolerance of the
@@ -50,7 +55,12 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   (`Perseus.readUniformToplex`, `readNonUniformToplex`, `toplexStream`).
 - Two JVM-only experiments that reduce Vietoris-Rips cohomology with each degree split into units of whole edge blocks
   on a thread pool: `BlockParallelReduction` (explicit coboundaries) and `ParallelPackedCohomology` (implicit
-  coboundaries). Bars only, with no representatives; `Persistence` does not use them.
+  coboundaries). Bars only, with no representatives; `Persistence` does not use them. `ParallelPackedCohomology` packs
+  a simplex into one `Long` key where that fits and keeps the edge block beside the index where it does not (o3_4096
+  to degree 3 on 4 threads in 31 s, ripser.cpp 36 s).
+- `WideSimplexIndexing`: the combinatorial number system with two-word indices of up to 126 bits (`SimplexIndexing`
+  stops at 63), with the same cursors. `SimplexIndexing.fitsLong(vertexCount, size)` says when one `Long` is enough.
+  `PackedRipserCohomologyEngine` takes `wideIndices` to force either width and reports `usesWideIndices`.
 - `LayeredInorderSimplexStream`: the Vietoris-Rips complex, each dimension generated from the one below already in
   filtration order (arXiv:2411.05495), with no sort above the edges. `VietorisRips(..., implementation = Inorder)` builds
   it.
@@ -172,6 +182,11 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Fixed
 
+- The packed Ripser engine, which `Persistence` uses for point clouds and metric spaces (also in MATLAB and the CLI), no
+  longer fails with `binomial(n, k) overflows Long` once C(n + d + 2, d + 2) passes 2^63 for `maxDimension = d`
+  (about 16,000 points to degree 3, 122,000 to degree 2). It numbers the simplices with two words from there on, and
+  chooses before the run: a run whose indices fit in one `Long` is the engine as it was. Past 126 bits (hundreds of
+  millions of points) the constructor says to lower `maxDimension`.
 - `VietorisRips(..., implementation = Inorder)` listed tied simplices out of the stream's order, and on tied distances
   (points on a grid) some simplices twice; it now builds `LayeredInorderSimplexStream`.
 - The alpha complex on the BowyerWatson, Helix and Default backends gave a different filtration, and extra H1 bars, for

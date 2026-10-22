@@ -173,11 +173,8 @@ def cells_reference():
 TOOLS = [
     ("tda4j", "tda4j", "vr", {"engine": "auto", "reps": "cycles"}),
     ("tda4j-cocycles", "tda4j", "vr", {"engine": "auto", "reps": "cocycles"}),
-    # The block-parallel experiments (#192, #194): bars only, no representatives, on every core. `blocks` builds the
-    # coboundary matrices explicitly (`explicit`: not run above --explicit-max-cells); bench/sweep_threads.py runs the
-    # `multithreaded` rows at 1, 2, 4, ... threads.
-    ("tda4j-blocks-mt", "tda4j", "vr",
-     {"engine": "blocks", "reps": "none", "threads": "ALL", "multithreaded": True, "explicit": True}),
+    # The block-parallel experiment (#194): bars only, no representatives, implicit coboundaries; bench/sweep_threads.py
+    # runs the `multithreaded` rows at 1, 2, 4, ... threads.
     ("tda4j-parallel-1t", "tda4j", "vr", {"engine": "parallel", "reps": "none", "threads": "1"}),
     ("tda4j-parallel-mt", "tda4j", "vr", {"engine": "parallel", "reps": "none", "threads": "ALL", "multithreaded": True}),
     ("ripser.cpp", "ripser", "vr", {}),

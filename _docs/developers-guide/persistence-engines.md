@@ -110,16 +110,26 @@ Structural points worth knowing:
 
 ## 4. `PackedRipserCohomologyEngine` — the production Ripser engine
 
-Same algorithm as engine 3, method for method, keyed on a packed `(Double, Long)` diameter/combinatorial-
-index pair (`DiameterIndex`) instead of a materialized `Simplex[Int]`. This is what `matlab.TDA4j`'s
+Same algorithm as engine 3, method for method, keyed on a packed diameter/combinatorial-index pair
+(`DiameterIndex`) instead of a materialized `Simplex[Int]`. This is what `matlab.TDA4j`'s
 `engine="ripser"` calls, and the fastest, most memory-efficient engine in the library — a deliberate
 representation choice on top of an already-validated algorithm, not a new algorithm. Kept in its own file,
 separate from the three generic-`OrderedCell` algorithms in `Homology.scala`, since it's specific to
 Vietoris-Rips/`SimplexIndexing` rather than a general engine.
 
-`DiameterIndex` overrides `equals`/`hashCode` to consider only the combinatorial index, not the diameter —
+`DiameterIndex` overrides `equals`/`hashCode` to consider only the combinatorial index (both words), not the diameter —
 so "same simplex" is true by construction regardless of which floating-point path computed its diameter,
 so two carriers for the same simplex never compare unequal on floating-point noise.
+
+**Index width.** The index of a simplex is one `Long` while C(n + d + 2, d + 2) fits in 63 bits for `maxDimension = d`
+(16,000 points to degree 3, 122,000 to degree 2). Beyond that the engine numbers the simplices with two words
+(`WideSimplexIndexing`, up to 126 bits; its cursors find the same cofacets and facets in the same order). The choice is
+made once, in the constructor (`wideIndices` forces either, `usesWideIndices` reports it), and a run that fits in one
+`Long` runs the one-word code. The second word exists only where it is used: a cell past 63 bits is a
+`WideDiameterIndex` (a plain `DiameterIndex` has `high = 0` and no field for it), and the working column, the levels, the
+pairing and a stored column keep high-word arrays only in a two-word run. The maps keyed by index (pivots, the cleared
+set) are keyed by a dense number of the two-word index (`WideKeys`). Decode a returned cell with
+`engine.vertices(cell, size)`, which reads either width.
 
 **Reduction internals.** The column being reduced is Ripser's working column: a binary heap of
 (diameter, index, coefficient) entries in primitive arrays, to which adding a column only pushes entries; equal
@@ -187,8 +197,10 @@ instance of your own fall back to the cells.
 **Experiments: edge blocks on threads.** Two JVM-only objects try reducing Vietoris-Rips cohomology in parallel, with
 each degree cut into units of whole edge blocks (a simplex's block is its first longest edge):
 `BlockParallelReduction` on explicit coboundary matrices, `ParallelPackedCohomology` on implicit ones, as engine 4
-computes them. Both give exactly the pairs of a sequential reduction. They return bars only, no representatives, and
-`Persistence` does not call them; the benchmark harness runs them as `tda4j-blocks-mt` and `tda4j-parallel-1t/-mt`.
+computes them (its key is one `Long` where the block and the index fit, else the block beside the index; the index
+itself is still one `Long`). Both give exactly the pairs of a sequential reduction. They return bars only, no representatives, and
+`Persistence` does not call them. The benchmark harness runs `ParallelPackedCohomology` as `tda4j-parallel-1t/-mt`;
+`BlockParallelReduction` builds its matrices in full and is not run there.
 
 ## 6. `FastCubicalHomologyEngine` — dual-graph union-find
 

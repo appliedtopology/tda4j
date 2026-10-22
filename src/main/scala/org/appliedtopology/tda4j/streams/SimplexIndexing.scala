@@ -365,6 +365,13 @@ object SimplexIndexing:
         i += 1
       result
 
+  /** Whether a `SimplexIndexing(vertexCount)` can index and decode every simplex with at most `size` vertices: its
+    * decoding looks up coefficients up to `C(vertexCount + size, size)`, which must fit in a `Long`. Otherwise use
+    * [[WideSimplexIndexing]].
+    */
+  def fitsLong(vertexCount: Int, size: Int): Boolean =
+    WideSimplexIndexing.binomial(vertexCount + size, size).bitLength <= 63
+
   /** [[binomial]] as an `Int`, for enumerating every index `0 until C(n, k)`. Throws `IllegalArgumentException` when
     * there are more than `Int.MaxValue` of them (such an enumeration cannot be held in a `Range`).
     */

@@ -45,6 +45,10 @@ coface streams have none; use `VietorisRips` (`DESIGN-stream-naming.md`, `WORKLO
    apparent pairs with lazy substitution; emergent pairs (Def 3.11) not implemented (#57); `memoizeFiltrationValue`
    defaults **false** (project lead: memory over speed) (`WORKLOG-ripser-profiling.md`,
    `WORKLOG-packed-ripser-engine.md`).
+   The PACKED engine numbers simplices with one `Long` or, past 2^63 (C(n + maxDim + 2, maxDim + 2)), two words
+   (`WideSimplexIndexing`, `usesWideIndices`, `WideKeys` for the maps keyed by index); the second word exists only in a
+   two-word run, every new index-keyed structure carries it, and `WideIndicesSpec` / `WideIndicesPastLongSpec` hold both
+   paths equal (`WORKLOG-two-word-indices.md`).
    The PACKED engine reduces on a primitive-array heap, expands cocycles lazily from reduction logs (only for reported
    bars) and derives cycles with its own copy of `Involution.cycles`. It must equal the `Chain`-based engine in the test
    tree (`ChainPackedRipserReference`) term for term, essentials included (`PackedWorkingColumnSpec`): re-run it after any
