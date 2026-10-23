@@ -167,6 +167,23 @@ class PlotCLISpec extends Specification:
         drawn("--title", "A circle", "--x-label", "born", "--y-label", "dies", "--width", "800", "--height", "300")
       got must beEqualTo(expected(_.withTitle("A circle").withXLabel("born").withYLabel("dies").withSize(800, 300)))
     }
+    "write a caption, a panel tag and a description, as the tweaks do" >> {
+      drawn("--caption", "Figure 1. Two loops", "--tag", "(a)", "--description", "a diagram of two loops") must
+        beEqualTo(
+          expected(_.withCaption("Figure 1. Two loops").withTag("(a)").withDescription("a diagram of two loops"))
+        )
+      drawn("--caption", "Figure 1. Two loops") must contain("Figure 1. Two loops")
+      drawn("--tag", "(a)") must not(beEqualTo(expected(identity)))
+    }
+    "take a whole look in one flag, which the more specific flags override" >> {
+      drawn("--look", "print") must beEqualTo(expected(_.withPalette("print").withStyle("print")))
+      drawn("--look", "clear") must beEqualTo(expected(_.withPalette("clear").withStyle("clear")))
+      drawn("--look", "default") must beEqualTo(expected(identity))
+      drawn("--look", "print", "--palette", "reference") must
+        beEqualTo(expected(_.withPalette("print").withStyle("print").withPalette("reference")))
+      drawn("--look", "print", "--text-scale", "1.5") must
+        beEqualTo(expected(_.withPalette("print").withStyle("print").withTextScale(1.5)))
+    }
     "choose the palette, the scales and the text size" >> {
       drawn("--palette", "reference") must beEqualTo(expected(_.withPalette("reference")))
       drawn("--palette", "print", "--style", "print") must
@@ -262,6 +279,12 @@ class PlotCLISpec extends Specification:
       early("--plot", "input-3d", "--set", "tick-label.size=9") must contain("a 3-D scene has a title")
       early("--plot", "input-3d", "--set", "camera.zoom=20") must contain("the zoom should be between 0.2 and 8")
       early("--plot", "diagram", "--set", "title.size=big") must contain("'big' is not a number")
+      early("--plot", "diagram", "--look", "neon") must contain("expected one of default, print, clear")
+      early("--plot", "input-3d", "--caption", "c") must contain("--caption is for 2-D plots")
+      early("--plot", "input-3d", "--tag", "(a)") must contain("--tag is for 2-D plots")
+      early("--plot", "input-3d", "--description", "d") must contain("--description is for 2-D plots")
+      early("--caption", "c") must contain("--caption is for --plot")
+      early("--look", "print") must contain("--look is for --plot")
     }
     "be an error that says what to do, never ignored" >> {
       val (c1, e1) = failure("--title", "A circle")

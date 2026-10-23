@@ -249,6 +249,28 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     opt[String](name = "x-label", noshort = true, descr = "for --plot: the x axis label")
   val yLabel: ScallopOption[String] =
     opt[String](name = "y-label", noshort = true, descr = "for --plot: the y axis label")
+  val caption: ScallopOption[String] = opt[String](
+    name = "caption",
+    noshort = true,
+    descr = "for 2-D --plot kinds: a line of text under the plot (a figure number and what it shows)"
+  )
+  val tag: ScallopOption[String] = opt[String](
+    name = "tag",
+    noshort = true,
+    descr =
+      "for 2-D --plot kinds: a short label in the plot's corner, such as (a), when it will be one panel of a figure"
+  )
+  val description: ScallopOption[String] = opt[String](
+    name = "description",
+    noshort = true,
+    descr = "for 2-D --plot kinds: what a screen reader says of the plot, the <desc> of the SVG"
+  )
+  val look: ScallopOption[String] = opt[String](
+    name = "look",
+    noshort = true,
+    descr = "for --plot: a whole look at once, default, print (--palette print and --style print) or clear " +
+      "(--palette clear and --style clear); --palette, --style and --set after it win"
+  )
   val width: ScallopOption[Int] =
     opt[Int](name = "width", noshort = true, descr = "for --plot: the width in pixels (100 to 20000)")
   val height: ScallopOption[Int] =

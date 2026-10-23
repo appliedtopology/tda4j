@@ -159,6 +159,8 @@ follows the reader's light or dark setting) or, without `--output`, a page opene
 | `--dimension D` | for `representative` (without `--bar`), `landscape` and `persistence-image`; default `1` |
 | `--at X` | the scale: required for `complex`; for `representative`, a cycle is drawn over the complex at `X` and a cocycle restricted to it |
 | `--title`, `--x-label`, `--y-label` | the words |
+| `--caption`, `--tag`, `--description` | a line under the plot, a letter in its corner for one panel of a figure (`(a)`), and what a screen reader says of it; 2-D plots only |
+| `--look` | a whole look at once: `default`, `print` (`--palette print --style print`) or `clear`; the flags below, after it, win |
 | `--width`, `--height` | the size in pixels, 100 to 20000 |
 | `--palette` | `brand` (default), `reference`, `print` (black on pure white, for a paper), `clear` (black for a light page, white for a dark one) |
 | `--style` | `default`, `slides` (larger text and marks), `print`, `clear` (portable fonts, no background) |
@@ -169,7 +171,7 @@ follows the reader's light or dark setting) or, without `--output`, a page opene
 
 The settings `--set` takes are listed under [finer control](plotting.md#finer-control-text-lines-the-plot-area-the-sides-of-the-axes)
 on the plotting page, with the other plot flags in [From MATLAB and the command line](plotting.md#from-matlab-and-the-command-line).
-`--palette print --style print` makes a figure for a paper; `--palette clear --style clear` one with no background.
+`--look print` (or `--palette print --style print`) makes a figure for a paper; `--look clear` one with no background.
 A flag a plot cannot use (an x scale for a 3-D scene) is an error, reported before anything is computed.
 
 ## Exit status

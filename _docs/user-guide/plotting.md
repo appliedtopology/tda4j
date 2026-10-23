@@ -801,8 +801,9 @@ result.plotBarcode().withXScale('sqrt').withTextScale(1.3).save('barcode.svg');
 </div>
 </div>
 
-The command line has a flag for the same changes of a `--plot`: `--title`, `--x-label`, `--y-label`, `--width`,
-`--height`, `--palette` (`brand`, `reference`, `print` or `clear`), `--style` (`default`, `slides`, `print` or `clear`), `--theme`
+The command line has a flag for the same changes of a `--plot`: `--title`, `--x-label`, `--y-label`, `--caption`, `--tag`,
+`--description`, `--look` (`default`, `print` or `clear`: the palette and style together, which the flags after it
+override), `--width`, `--height`, `--palette` (`brand`, `reference`, `print` or `clear`), `--style` (`default`, `slides`, `print` or `clear`), `--theme`
 (`light`, `dark` or `auto`), `--text-scale` (applied to the `--style`), `--set` (repeated, `element.property=value`), `--x-scale` and
 `--y-scale` (`linear`, `log`, `sqrt` or `symlog`). A word that is not one, a size out of range and a flag a plot cannot
 use (an x scale for a 3-D scene) are errors, reported before anything is computed:

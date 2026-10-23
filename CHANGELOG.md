@@ -166,7 +166,8 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 - MATLAB: the figures returned by the `plot...` methods have the common tweaks as methods that take strings and numbers
   (`withTitle`, `withSize`, `withXScale('log')`, `withPalette`, `withDegreeColor`, `withTextScale`, `withLegend`, ...,
   and `save(path, 'dark')`); command line: `--title`, `--x-label`, `--y-label`, `--width`, `--height`, `--palette`,
-  `--theme`, `--text-scale`, `--x-scale` and `--y-scale` for a `--plot`.
+  `--theme`, `--text-scale`, `--x-scale` and `--y-scale` for a `--plot`; also `--caption`, `--tag`, `--description` and
+  `--look` (`default`, `print` or `clear`, the palette and style together) (#106).
 - `VantagePointTree(elements, distance)`: a vantage-point tree over any metric, with `withinDistance(query, radius)` (the
   boundary included) and `nearest(query, k)` (the first `k` of the stable sort by distance); and
   `MinimumEnclosingBall(points)`, the smallest ball around points in any dimension, with `center`, `squaredRadius` and

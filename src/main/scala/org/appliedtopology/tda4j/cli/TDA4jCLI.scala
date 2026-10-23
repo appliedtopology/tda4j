@@ -6,6 +6,7 @@ import org.appliedtopology.tda4j.matlab.{LandmarkSelectionResult, PersistenceRes
 import org.appliedtopology.tda4j.plot.{
   Figure,
   Labels,
+  Look,
   Palette,
   Plot,
   Scale,
@@ -544,6 +545,10 @@ object TDA4jCLI:
       "--title" -> conf.title.isSupplied,
       "--x-label" -> conf.xLabel.isSupplied,
       "--y-label" -> conf.yLabel.isSupplied,
+      "--caption" -> conf.caption.isSupplied,
+      "--tag" -> conf.tag.isSupplied,
+      "--description" -> conf.description.isSupplied,
+      "--look" -> conf.look.isSupplied,
       "--width" -> conf.width.isSupplied,
       "--height" -> conf.height.isSupplied,
       "--palette" -> conf.palette.isSupplied,
@@ -582,7 +587,7 @@ object TDA4jCLI:
         appearance(conf)
         conf.theme.foreach(Theme.named)
         if kind.endsWith("-3d") then
-          Seq("--x-label", "--y-label", "--x-scale", "--y-scale").foreach { flag =>
+          Seq("--x-label", "--y-label", "--x-scale", "--y-scale", "--caption", "--tag", "--description").foreach { flag =>
             if looks.contains(flag) then
               throw new IllegalArgumentException(s"$flag is for 2-D plots, and --plot $kind draws a 3-D scene")
           }
@@ -611,9 +616,24 @@ object TDA4jCLI:
 
   /** The changes the look flags ask for, in one tweak; `None` when none was given. */
   private def appearance(conf: TDA4jConf): Option[Tweak] =
+    val look = conf.look.toOption.map(Look.named)
+    // --text-scale changes the style it is given, so --look's style is the one it scales unless --style names another
+    val lookStyle = look.flatMap(_.tweaks.collect { case s: Style => s }.lastOption)
     val asked: Seq[Option[Tweak]] = Seq(
-      Option.when(conf.title.isSupplied || conf.xLabel.isSupplied || conf.yLabel.isSupplied)(
-        Labels(title = conf.title.toOption, x = conf.xLabel.toOption, y = conf.yLabel.toOption)
+      // the look first: the more specific flags after it win
+      look.flatMap(_.tweaks.reduceOption(_ + _)),
+      Option.when(
+        conf.title.isSupplied || conf.xLabel.isSupplied || conf.yLabel.isSupplied || conf.caption.isSupplied ||
+          conf.tag.isSupplied || conf.description.isSupplied
+      )(
+        Labels(
+          title = conf.title.toOption,
+          x = conf.xLabel.toOption,
+          y = conf.yLabel.toOption,
+          caption = conf.caption.toOption,
+          tag = conf.tag.toOption,
+          description = conf.description.toOption
+        )
       ),
       Option.when(conf.width.isSupplied || conf.height.isSupplied)(
         Size(width = conf.width.toOption, height = conf.height.toOption)
@@ -621,7 +641,7 @@ object TDA4jCLI:
       conf.palette.toOption.map(Palette.named),
       // a Style replaces the whole style, so --style and --text-scale are one change: the preset, then its text scale
       Option.when(conf.style.isSupplied || conf.textScale.isSupplied) {
-        val preset = conf.style.toOption.map(Style.named).getOrElse(Style.default)
+        val preset = conf.style.toOption.map(Style.named).orElse(lookStyle).getOrElse(Style.default)
         conf.textScale.toOption.fold(preset)(factor => preset.copy(textScale = factor))
       },
       conf.xScale.toOption.map(name => Scale.x(Transform.named(name))),
