@@ -9,7 +9,7 @@ import org.specs2.mutable.Specification
 import org.specs2.scalacheck.Parameters
 
 class SimplexIndexingSpec extends Specification with ScalaCheck:
-  given Parameters = Parameters(minTestsOk = 500)
+  given Parameters = Parameters(minTestsOk = TestPlatform.propertyCases(500))
 
   "Testing the simplex indexing code against Ulrich Bauer's paper examples" >> {
 

@@ -3,9 +3,9 @@ package org.appliedtopology.tda4j
 import org.scalacheck.Gen.listOfN
 import org.scalacheck.Prop.forAll
 import org.scalacheck.{Arbitrary, Gen}
-import org.specs2.{mutable, ScalaCheck}
+import org.specs2.mutable
 
-class UnionFindSpec extends mutable.Specification with ScalaCheck:
+class UnionFindSpec extends mutable.Specification with PlatformScalaCheck:
   "UnionFind will find exactly the correct edges" >> {
     val ms: FiniteMetricSpace[Int] = ExplicitMetricSpace(
       Seq(Seq(0.0, 1.0, 2.0), Seq(1.0, 0.0, 3.0), Seq(2.0, 3.0, 0.0))

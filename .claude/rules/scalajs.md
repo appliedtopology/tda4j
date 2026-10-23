@@ -85,7 +85,8 @@ specs2's `throwA[E]("message")` reports a mismatch on JS for a message that matc
 **Test time on JS** (`WORKLOG-js-test-trimming.md`). sbt runs the JS specs on one Node process per core, so one long
 example sets the wall clock while the other cores idle. A property that hunts rare inputs takes its count
 from `TestPlatform.propertyCases(n)` (the test seam, `src/test/scalajvm` and `src/test/scalajs`): all `n` on the JVM, a
-tenth on JS, whose run is there to catch platform differences. specs2's "Finished in" is wrong on JS for many specs (13 ms
+tenth on JS, whose run is there to catch platform differences (`PlatformScalaCheck` is the `ScalaCheck` mixin with that
+default; `TestPlatform.perPlatform(jvm, js)` sizes a loop over seeds, primes or groups the same way). specs2's "Finished in" is wrong on JS for many specs (13 ms
 for a 12-minute spec): time JS specs by the gaps between "Total for specification" lines in a run with
 `set LocalProject("tda4jJS") / Test / parallelExecution := false`, or exclude one example with `testOnly * -- ex
 ^(?!its.description).*`.

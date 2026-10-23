@@ -85,7 +85,7 @@ class FlatLayersSpec extends Specification:
 
     val dtm = for
       (name, metric) <- metrics
-      p <- Seq(1.0, 2.0)
+      p <- TestPlatform.perPlatform(jvm = Seq(1.0, 2.0), js = Seq(2.0))
       max <- Seq(None, Some(2.4))
       keep <- criteria
     yield s"DTM-Rips (p = $p) of the $name, threshold $max, ${
@@ -106,7 +106,7 @@ class FlatLayersSpec extends Specification:
 
     val dowker = for
       infinite <- Seq(false, true)
-      seed <- 0L until 3L
+      seed <- 0L until TestPlatform.perPlatform(jvm = 3L, js = 1L)
       max <- Seq(Double.PositiveInfinity, 2.0)
       keep <- criteria
     yield s"Dowker, ${if infinite then "boolean" else "integer"} relation $seed, threshold $max, ${

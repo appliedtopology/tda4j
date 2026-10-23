@@ -56,7 +56,9 @@ class ClassifyingSpaceSpec extends Specification:
     }
     "S_4 over F_2: H_1 = abelianization (Z/2), H_2 from Schur multiplier Z/2 plus Tor (so 2)" in {
       // H_3 (dimension 3 in H*(S_4;F_2), by hand: 3) needs 280k cells and takes > 9 minutes with the chunks engine: not run here.
-      ClassifyingSpace.bettiNumbers(FiniteGroup.symmetric(4), 2, 2) must beEqualTo(Vector(1, 1, 2))
+      // Scala.js stops at degree 1; the persistent example below checks degree 2 of S_4 on both platforms.
+      val top = TestPlatform.perPlatform(jvm = 2, js = 1)
+      ClassifyingSpace.bettiNumbers(FiniteGroup.symmetric(4), top, 2) must beEqualTo(Vector(1, 1, 2).take(top + 1))
     }
   }
 
@@ -87,7 +89,7 @@ class ClassifyingSpaceSpec extends Specification:
         Seq(Seq(gens(0)), Seq(gens(0), gens(1)), gens.take(3)).map(s4.subgroupGeneratedBy) :+ (0 until s4.order).toSet
       val bg = ClassifyingSpace(s4, 3)
       val level = ClassifyingSpace.filtrationBy(chain)
-      Seq(2, 3).forall { p =>
+      TestPlatform.perPlatform(jvm = Seq(2, 3), js = Seq(3)).forall { p =>
         val diagram: PersistenceDiagram[NerveSimplex] = ClassifyingSpace.persistentGroupHomology(s4, chain, 2, p)
         import diagram.given
         given (NerveSimplex is OrderedCell) = bg.cellInstance

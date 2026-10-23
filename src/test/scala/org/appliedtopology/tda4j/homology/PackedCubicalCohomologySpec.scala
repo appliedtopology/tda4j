@@ -56,9 +56,10 @@ class PackedCubicalCohomologySpec extends mutable.Specification:
     if cocycles then packed.persistentCohomology(zeroLength) == generic.persistentCohomology(cells, zeroLength)
     else packed.persistentHomology(zeroLength) == generic.persistentHomology(cells, zeroLength)
 
+  // Seeds search for rare inputs; the JVM run does that, Scala.js only has to show any platform difference.
   def failures(topDims: CubicalGridStream => Seq[Int]): Seq[String] =
     for
-      seed <- 0L until 3L
+      seed <- 0L until TestPlatform.perPlatform(jvm = 3L, js = 1L)
       grid <- grids(seed)
       topDim <- topDims(grid)
       ff <- fields
@@ -86,8 +87,9 @@ class PackedCubicalCohomologySpec extends mutable.Specification:
     given Ordering[Cube] = cubeOrdering
     def endpoints(bars: List[PersistenceBar[Double, Chain[Cube, Double]]]) =
       bars.map(b => (b.dim, b.lower, b.upper))
+    // Seeds: as in `failures`.
     val problems = for
-      seed <- 0L until 2L
+      seed <- 0L until TestPlatform.perPlatform(jvm = 2L, js = 1L)
       grid <- grids(seed)
       topDim <- (1 until grid.ambientDim) :+ grid.ambientDim
       zeroLength <- Seq(false, true)

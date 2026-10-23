@@ -231,7 +231,7 @@ class BarcodeDistanceSpec extends Specification with ScalaCheck:
             dense(pts1, pts2, groundNorm),
             1e-9
           )
-      }.set(minTestsOk = 200)
+      }.set(minTestsOk = TestPlatform.propertyCases(200))
   }
 
   "input validation at the diagram-comparison boundary" >> {

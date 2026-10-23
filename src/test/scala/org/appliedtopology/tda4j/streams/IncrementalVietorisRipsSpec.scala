@@ -4,14 +4,14 @@ import org.appliedtopology.tda4j.HomologyFixtures.naiveBars
 
 import org.scalacheck.Gen
 import org.scalacheck.Prop.forAll
-import org.specs2.{mutable as s2mutable, ScalaCheck}
+import org.specs2.mutable as s2mutable
 import org.specs2.execute.Result
 
 /** Cross-validation for `IncrementalVietorisRipsSimplexStream` (Rieser's New-VR algorithm, arXiv:2301.07191v3) against
   * ground truth built two independent ways: a brute-force subset scan, and the existing (already cross-validated)
   * `EnumeratingCofaceSimplexStream`. `matrixGen` comes from `VietorisRipsSpec.scala`.
   */
-class IncrementalVietorisRipsSpec extends s2mutable.Specification with ScalaCheck:
+class IncrementalVietorisRipsSpec extends s2mutable.Specification with PlatformScalaCheck:
   given Double is Field = Field.DoubleApproximated(1e-9)
 
   // Same construction as RipserCohomologySpec.midThreshold: the interior midpoint of two adjacent distinct

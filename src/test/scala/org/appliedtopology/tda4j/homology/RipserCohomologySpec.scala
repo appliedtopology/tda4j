@@ -10,7 +10,7 @@ import org.specs2.scalacheck.Parameters
 
 class RipserCohomologySpec extends mutable.Specification with ScalaCheck:
   given Double is Field = Field.DoubleApproximated(1e-9)
-  given Parameters = Parameters(minTestsOk = 200)
+  given Parameters = Parameters(minTestsOk = TestPlatform.propertyCases(200))
 
   private def endpointValue(e: BarcodeEndpoint[Double]): Double = e match
     case NegativeInfinity() => Double.NegativeInfinity

@@ -1,7 +1,6 @@
 package org.appliedtopology.tda4j
 
 import org.scalacheck.Gen
-import org.specs2.ScalaCheck
 import org.specs2.execute.AsResult
 
 /** `SheehyRipsSimplexStream` (Cavanna, Jahanseir & Sheehy, "A Geometric Perspective on Sparse Filtrations",
@@ -17,7 +16,7 @@ import org.specs2.execute.AsResult
   * reduces to plain Vietoris-Rips cell-for-cell (not just barcode-for-barcode), and a fresh `chunks`-vs-`naive`
   * cross-validation (not assumed to carry over from any other stream).
   */
-class SheehyRipsStreamSpec extends org.specs2.mutable.Specification with ScalaCheck:
+class SheehyRipsStreamSpec extends org.specs2.mutable.Specification with PlatformScalaCheck:
   given Double is Field = Field.DoubleApproximated(1e-9)
 
   "SheehyRipsSimplexStream.edgeBirth" should {

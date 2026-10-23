@@ -159,7 +159,7 @@ class AlphaComplexSpec extends org.specs2.mutable.Specification with ScalaCheck:
   * time this runs.
   */
 class AlphaComplexDQPParallelSpec extends org.specs2.mutable.Specification with ScalaCheck:
-  given Parameters = Parameters(minTestsOk = 200)
+  given Parameters = Parameters(minTestsOk = TestPlatform.propertyCases(200))
 
   private val pointsGen =
     matrixGen[Double](Gen.double, Gen.chooseNum(2, 4), Gen.chooseNum(6, 14))
