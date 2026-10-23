@@ -147,6 +147,10 @@ classDiagram
     class StratifiedCellStream {
         iterateDimension: PartialFunction~Int, Iterator~
     }
+    class FlatLayerStream {
+        <<trait: dimensions as vertex and value arrays>>
+        flatLayers: Option of Iterator of Layer
+    }
     Filtration <|-- CellStream
     CellStream <|-- SimplexStream
     CellStream <|-- StratifiedCellStream
@@ -155,6 +159,7 @@ classDiagram
     LevelwiseSimplexStream <|-- CofaceSimplexStream
     CofaceSimplexStream <|-- EnumeratingCofaceSimplexStream
     EnumeratingCofaceSimplexStream <|-- RipserCofaceSimplexStream
+    FlatLayerStream <|.. RipserCofaceSimplexStream
     RipserCofaceSimplexStream <|-- CechCofaceSimplexStream
     RipserCofaceSimplexStream <|-- LazyWitnessSimplexStream
     RipserCofaceSimplexStream <|-- WitnessCofaceSimplexStream

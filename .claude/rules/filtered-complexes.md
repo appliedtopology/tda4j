@@ -32,6 +32,22 @@ not reducing them, was about 90 % of their time** (the reduction ~10 %; Cech's b
   stream again builds the complex a second time.
 - Against GUDHI's Delaunay-Cech, Cech stays orders of magnitude slower by construction (every `dim + 2`-subset is a cell);
   `AlphaShapes` gives the same barcode of a Euclidean point cloud.
+- **Flat layers (#206, `WORKLOG-rare-complex-performance.md`)**: a stream whose `flatFiltration` is defined builds each
+  dimension on arrays (`FlatLayerStream.Layer`: ascending vertex tuples, values, cohomology order = value ascending then
+  colex ascending) and the cohomology engine reads them without a `Simplex`, a `cohomologyOrder` pass or a second read.
+  The default Vietoris-Rips value (`filtrationIsDefault`, so also the lazy witness complex), DTM-Rips, Dowker and sparse
+  Rips have an array-level `FlatFiltration`; Cech and the general witness complex wrap their `Simplex` function
+  (`FlatFiltration.ofSimplices`: still faster, the ball is what is left). A `FlatFiltration` must equal the stream's
+  `filtrationValue` bit for bit; `FlatLayersSpec` compares every complex with itself built from cells (turn the hook off
+  by overriding `flatFiltration` to `None`), so a new hook goes into its `pairs`. A `keepCriterion` other than
+  `CofaceSimplexStream.keepAll` is asked about a `Simplex` per candidate, so the shared constant is the default of every
+  coface stream: a literal `{ case _ => true }` default silently takes the slow path. A subclass that changes which
+  values are kept overrides `keptValue`, not only `keptByThresholdAndCriterion` (Dowker: finite values only).
+- A flag-like hook gets the value of the simplex without its smallest vertex (`parentValue`) and only adds the edges of
+  that vertex; an edge ignores it (a DTM vertex is born at `2 f`, which the edge value never undercuts).
+- Left, filed in #206: Cech's ball and facet floor on arrays (needs a facet lookup in the previous layer, and a facet
+  missing from it for a reason other than the threshold changes the value), the Dowker value per parent instead of per
+  candidate, the JS `FiltrationCache`.
 
 ## Cech complexes
 

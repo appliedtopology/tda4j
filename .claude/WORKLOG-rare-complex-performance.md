@@ -102,3 +102,55 @@ About ten `TrieMap` lookups per cell, each keyed by a `TreeSet` (hash plus a cac
 GUDHI is 5-15x for Dowker, DTM-Rips and sparse Rips and, for Cech, the construction (every `dim + 2`-subset against the
 Delaunay triangulation's few cells). Only generating layers on arrays, as `LayeredInorderSimplexStream` does, removes
 it. Not measured: the witness complexes (same loop), Scala.js timings, the 60x200 Dowker case.
+
+## Round 2 (2026-10-23): dimensions on flat arrays (#206)
+
+The profiles above ended at "only generating layers on arrays removes it". Done in the same coface loop, not a new
+stream: `RipserCofaceSimplexStream` builds a dimension as a `FlatLayerStream.Layer` (ascending vertex tuples, values;
+cells in the order a cohomology reduction takes them: value ascending, equal values colex ascending) when its protected
+`flatFiltration` is defined.
+
+- **Generation**: the candidates of a simplex are read off the kept-edge bitset table (as before) into chunked arrays
+  (`2^15` candidates, each with its parent's value), valued by the stream's `FlatFiltration` (in parallel parts of `2^11`
+  with `parallelFiltrationValue`), filtered by `keptValue` and the criterion, then sorted on primitives (`LayerSorter`: a
+  merge sort on the value's bits, then colex of the vertices; a boxed `Integer` sort with a comparator was a third of a
+  large Cech run). Two layers are cached; dimensions asked out of order rebuild from 0.
+- **Value functions on arrays** (`FlatFiltration.value(vertices, from, width, parentValue)`): the default Vietoris-Rips
+  value and the lazy witness complex (`FlatFiltration.flag`: the new vertex's distances on top of the parent's value),
+  DTM-Rips (weights as an array, `edgeValue` directly), Dowker (`DowkerGeometry.filtrationValue(Array, from, width)`),
+  sparse Rips (`edgeBirth` of the smallest vertex's edges, the vanish check over all vertices). Cech and the general
+  witness complex use `FlatFiltration.ofSimplices` (a `Simplex` per candidate for their function). **The incremental
+  forms are exact because every one of these values is a max (or min-max) over edges or witnesses**; a hook must equal
+  the stream's `filtrationValue` bit for bit, and `FlatLayersSpec` checks that against the same stream built from cells
+  (a mutation of the sparse Rips hook, dropping the parent's value, fails four of its five examples).
+- **Engine**: `CellularCohomologyEngine` asks a `FlatLayerStream` for its layers first and builds `PackedCells` from them
+  (cells and boxed values only on demand, for the representatives), so no `Simplex`, no `cohomologyOrder` pass, no
+  second read of the stream; `largestFiltrationValue` is the last value of the last layers. `Truncated` and
+  `LimitedCofaceSimplexStream` pass the layers on (`take(maxDim + 1)`). The cell path is the fallback for every other
+  stream and for a non-natural `Ordering[Double]`.
+- `keepCriterion` defaults are now the shared `CofaceSimplexStream.keepAll`: a criterion that is that very function costs
+  nothing per candidate, any other is asked about a `Simplex` per candidate (the flat path stays correct for it).
+  `keptValue(value)` is the value half of `keptByThresholdAndCriterion` (Dowker's finite-only override moved there).
+- The `Simplex` listing (`iterateDimension`) of a flat stream comes from the same layers (each run of equal values
+  reversed), and still fills `currentDimension`, `lastDimensionCache` and `currentDimensionCache`.
+
+Same barcode files (md5) as the PR #205 build for all four rows. One cold JVM each, alone on 4 cores, p = 2,
+`PaperBenchmarkDriver`; warm = 1 warm-up, median of 3:
+
+| row | PR #205 build | flat layers | warm, flat layers |
+|---|---|---|---|
+| Dowker 300x100, dim 1 | 4.2 s | 1.6 s | 1.0 s |
+| DTM-Rips, 600 pts, dim 1, 0.6 | 3.4 s | 1.0 s | 0.35 s |
+| Sparse Rips, 96 pts, dim 2, eps 0.3 | 6.6 s | 1.1 s | 0.45 s |
+| Cech, 80 pts in R^3, dim 2 | 20 s | 13.6-14.7 s | |
+
+(The PR #205 column was re-measured in this session's last runs, so it is slower than the table above, which was taken
+on a quieter machine; compare within a column pair.) Against the start of #181: Dowker 24 to 1.6, DTM 32 to 1.0, sparse
+38 to 1.1, Cech 101 to 14.
+
+What is left: Dowker's value is 64 % of its time (the min over witnesses, per candidate, from scratch: a per-parent
+vector of maxima would make it a third); Cech is the ball solve (`distanceToCenter`, `computeRadius`, `Solver`, ~30 %),
+the `Simplex` the adapter builds, the sort (17 %) and the engine's face lookups (`slotOf`, 10 %), over millions of
+cells that GUDHI's Delaunay-Cech does not have. Not done: Cech's radius on arrays (needs the facet values from the
+previous layer, and a facet missing for another reason than the threshold changes the answer), a JS `FiltrationCache`
+that is not a `HashMap`, timings on Scala.js.
