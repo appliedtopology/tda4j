@@ -25,7 +25,11 @@ object Truncated:
   */
 open class TruncatedSimplexStream(stream: LevelwiseSimplexStream[Int, Double], maxSimplexDimension: Int)
     extends LevelwiseSimplexStream[Int, Double]
+    with FlatLayerStream
     with DoubleFiltration[Simplex[Int]]:
+  override def flatLayers: Option[Iterator[FlatLayerStream.Layer]] = stream match
+    case flat: FlatLayerStream => flat.flatLayers.map(_.take(maxSimplexDimension + 1))
+    case _                     => None
   override def homologyDegreeLimit: Option[Int] =
     Some(stream.homologyDegreeLimit.fold(maxSimplexDimension - 1)(math.min(_, maxSimplexDimension - 1)))
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {

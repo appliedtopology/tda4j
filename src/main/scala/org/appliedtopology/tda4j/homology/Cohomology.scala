@@ -34,6 +34,21 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
   val packSimplices: Boolean = true
 ):
 
+  private var largest: Option[FiltrationT] = None
+
+  /** The largest filtration value among the cells of the stream the last run read, `None` before any run: what a caller
+    * needs of the whole stream without iterating it again.
+    */
+  def largestFiltrationValue: Option[FiltrationT] = largest
+
+  private def readCells(theStream: CellStream[CellT, FiltrationT]): Vector[CellT] =
+    largest = None
+    theStream.iterator.toVector
+
+  private def noteLargest(values: Iterator[FiltrationT]): Unit =
+    val ordering = summon[Ordering[FiltrationT]]
+    largest = values.reduceOption(ordering.max)
+
   /** Every bar of `stream`'s persistent cohomology with its representative (see the class doc); zero-length bars only
     * if `includeZeroLength`. Works one degree at a time, so memory is bounded by the largest coboundary block.
     */
@@ -42,7 +57,7 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
     includeZeroLength: Boolean = false
   ): List[PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]]] =
     val theStream = stream
-    val cells = theStream.iterator.toVector
+    lazy val cells = readCells(theStream)
     packed(theStream, cells) match
       case Some(p) => p.cocycleBars(includeZeroLength)
       case None    =>
@@ -53,7 +68,7 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
     */
   def reducesPacked(stream: => CellStream[CellT, FiltrationT]): Boolean =
     val theStream = stream
-    packedLevels(theStream, theStream.iterator.toVector).isDefined
+    packedLevels(theStream, readCells(theStream)).isDefined
 
   /** The same bars with '''cycles''' as representatives: the pairing is computed by cohomology, then only the boundary
     * columns of the death cells are reduced ([[Involution]]). A finite bar's cycle is the reduced boundary of its death
@@ -71,7 +86,7 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
     val limit = theStream match
       case s: StratifiedCellStream[?, ?] => s.homologyDegreeLimit.getOrElse(Int.MaxValue)
       case _                             => Int.MaxValue
-    val cells = theStream.iterator.toVector
+    lazy val cells = readCells(theStream)
     packed(theStream, cells)
       .map(_.cycleBars(limit, includeZeroLength))
       .getOrElse:
@@ -112,7 +127,7 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
     stream: => CellStream[CellT, FiltrationT]
   ): (List[(PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]], Involution.Pair[CellT])], Ordering[CellT]) =
     val theStream = stream
-    val cells = theStream.iterator.toVector
+    lazy val cells = readCells(theStream)
     packed(theStream, cells).map(_.pairs).getOrElse(paired(theStream, cells))
 
   private def paired(
@@ -168,6 +183,7 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
     else
       val fv: PartialFunction[CellT, FiltrationT] = theStream.filtrationValue
       def cellFv(c: CellT): FiltrationT = fv.applyOrElse(c, (_: CellT) => theStream.smallest)
+      noteLargest(cells.iterator.map(cellFv))
 
       // Ascending filtration value, then the stream's tie-break. Not `filtrationOrdering.reverse`: that would also flip
       // the tie-break. Only cells of one dimension are ever compared under it.
@@ -249,11 +265,14 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
     */
   private final class PackedCells(
     val dim: Int,
-    val cells: Array[AnyRef],
-    val values: Array[AnyRef],
-    val vertices: Array[Int]
+    val size: Int,
+    val vertices: Array[Int],
+    // The cells and their values, or `null` for a level read from a stream's flat layers: then a cell is built from its
+    // vertices when a representative asks for it, and a value is read from `doubles`.
+    cells: Array[AnyRef],
+    values: Array[AnyRef],
+    doubles: Array[Double]
   ):
-    val size: Int = cells.length
     private val width = dim + 1
     // Open addressing: a slot holds a cell's number + 1, or 0 when empty; built at the first lookup (nothing looks up
     // the top dimension's cells). A cell listed twice keeps its last number, as `numberCells` does.
@@ -301,8 +320,12 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
       if slots == null then index()
       slots(slotOf(src, from, width + 1, skip)) - 1
 
-    def cell(i: Int): CellT = cells(i).asInstanceOf[CellT]
-    def value(i: Int): FiltrationT = values(i).asInstanceOf[FiltrationT]
+    def cell(i: Int): CellT =
+      if cells != null then cells(i).asInstanceOf[CellT]
+      else FlatLayerStream.simplexOf(vertices, i * width, width).asInstanceOf[CellT]
+    def value(i: Int): FiltrationT =
+      if values != null then values(i).asInstanceOf[FiltrationT]
+      else java.lang.Double.valueOf(doubles(i)).asInstanceOf[FiltrationT]
 
   // The order `reduction` puts each dimension in: ascending value, then the stream's tie-break, a stable sort of the
   // stream's own listing. A stream lists each dimension oldest first, so each run of equal values comes reversed, and
@@ -355,9 +378,35 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
     */
   private def packedLevels(
     theStream: CellStream[CellT, FiltrationT],
+    cells: => Vector[CellT]
+  ): Option[Array[PackedCells]] =
+    if !packSimplices || !summon[CellT is OrderedCell].isInstanceOf[StandardSimplexBoundary] then None
+    else flatLevels(theStream).orElse(levelsOfCells(theStream, cells))
+
+  // The levels of a stream that holds its dimensions as flat arrays (`FlatLayerStream`), already in the order the
+  // reduction takes them: no cell is built, and the stream is not read again to find its largest value. Only for
+  // `Double` values under their natural order, which is what such a stream has.
+  private def flatLevels(theStream: CellStream[CellT, FiltrationT]): Option[Array[PackedCells]] =
+    val ordering = summon[Ordering[FiltrationT]].asInstanceOf[Ordering[Any]]
+    val natural = ordering.compare(1.0, 2.0) < 0 && ordering.compare(2.0, 1.0) > 0 && ordering.compare(1.0, 1.0) == 0
+    theStream match
+      case flat: FlatLayerStream if natural =>
+        flat.flatLayers.flatMap { layers =>
+          val levels = layers.map(l => new PackedCells(l.dim, l.size, l.vertices, null, null, l.values)).toArray
+          // A gap is for the cell reduction to report.
+          if levels.isEmpty || levels.exists(_.size == 0) then None
+          else
+            // A layer ends in its largest value, the layers being ascending.
+            largest = levels.iterator.map(l => l.value(l.size - 1)).reduceOption(summon[Ordering[FiltrationT]].max)
+            Some(levels)
+        }
+      case _ => None
+
+  private def levelsOfCells(
+    theStream: CellStream[CellT, FiltrationT],
     cells: Vector[CellT]
   ): Option[Array[PackedCells]] =
-    if !packSimplices || !summon[CellT is OrderedCell].isInstanceOf[StandardSimplexBoundary] || cells.isEmpty then None
+    if cells.isEmpty then None
     else
       val fv: PartialFunction[CellT, FiltrationT] = theStream.filtrationValue
       val cellsByDim = mutable.ArrayBuffer.empty[mutable.ArrayBuffer[AnyRef]]
@@ -393,6 +442,7 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
           ok = copied(c.asInstanceOf[Simplex[Any]], verticesByDim(d))
           cellsByDim(d) += c.asInstanceOf[AnyRef]
           valuesByDim(d) += fv.applyOrElse(c, (_: CellT) => theStream.smallest).asInstanceOf[AnyRef]
+      noteLargest(valuesByDim.iterator.flatMap(_.iterator).map(_.asInstanceOf[FiltrationT]))
       if !ok || cellsByDim.exists(_.isEmpty) then None
       else
         val tieBreak = theStream.filtrationOrdering
@@ -405,10 +455,10 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
           while i < order.length do
             System.arraycopy(ts, order(i) * width, tuples, i * width, width)
             i += 1
-          new PackedCells(d, order.map(cs(_)), order.map(vs(_)), tuples)
+          new PackedCells(d, order.length, tuples, order.map(cs(_)), order.map(vs(_)), null)
         })
 
-  private def packed(theStream: CellStream[CellT, FiltrationT], cells: Vector[CellT]): Option[PackedReduction] =
+  private def packed(theStream: CellStream[CellT, FiltrationT], cells: => Vector[CellT]): Option[PackedReduction] =
     packedLevels(theStream, cells).map(new PackedReduction(theStream, _))
 
   /** The reduction on levels. Bars are numbered in the order they are found (degree ascending, youngest birth first),

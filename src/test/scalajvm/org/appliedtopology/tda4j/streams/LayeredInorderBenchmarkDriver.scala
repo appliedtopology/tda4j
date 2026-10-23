@@ -15,10 +15,9 @@ import scala.util.Random
   * }}}
   *
   * `method` is `bitsets`, `lists`, `sort`, `countsort` (sorted by a counting sort on the diameter's rank among the edge
-  * lengths, then colex within ties), `layered` (the stream, boxed), `enumerating`, `ripser` or `inorder`, one per JVM,
-  * or `check` (the layered and sorted dimensions are identical). `threshold` is a number or `mer` (the minimum
-  * enclosing radius). Prints one line per dimension: size, median milliseconds, bytes allocated, bytes the dimension's
-  * arrays keep.
+  * lengths, then colex within ties), `layered` (the stream, boxed), `enumerating` or `ripser`, one per JVM, or `check`
+  * (the layered and sorted dimensions are identical). `threshold` is a number or `mer` (the minimum enclosing radius).
+  * Prints one line per dimension: size, median milliseconds, bytes allocated, bytes the dimension's arrays keep.
   */
 object LayeredInorderBenchmarkDriver:
   def main(args: Array[String]): Unit =
@@ -71,12 +70,11 @@ object LayeredInorderBenchmarkDriver:
           out += ((layer.size, System.nanoTime() - t0, allocated() - a0, layer.kept))
         sortTimes += s.sortNanos.toMap
         out.result()
-      case "enumerating" | "ripser" | "inorder" | "layered" =>
+      case "enumerating" | "ripser" | "layered" =>
         val stream = method match
           case "layered"     => LayeredInorderSimplexStream(metricSpace, maxFiltrationValue = Some(threshold))
           case "enumerating" => EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = Some(threshold))
-          case "ripser"      => RipserCofaceSimplexStream(metricSpace, maxFiltrationValue = Some(threshold))
-          case _             => InorderCofaceSimplexStream(metricSpace, maxFiltrationValue = Some(threshold))
+          case _             => RipserCofaceSimplexStream(metricSpace, maxFiltrationValue = Some(threshold))
         stream.iterateDimension(0).size
         (1 to top).toVector.map { d =>
           val t0 = System.nanoTime()

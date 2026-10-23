@@ -14,6 +14,41 @@ paths:
 
 Loads when you work on one of these complexes. Project-wide rules are in `.claude/CLAUDE.md`; the stream ordering contract they all satisfy is in `streams.md`.
 
+## The coface loop they share (`RipserCofaceSimplexStream`; `WORKLOG-rare-complex-performance.md`, #181)
+
+Cech, witness, Dowker, DTM and sparse Rips all generate cells in `RipserCofaceSimplexStream`, and **generating the cells,
+not reducing them, was about 90 % of their time** (the reduction ~10 %; Cech's ball only 6 % of Cech's). Invariants:
+
+- Candidates of dimension `d >= 2` are `spx + i` for `i` below `spx.min` and adjacent, in the table of KEPT edges
+  (`keptEdgeNeighbours`, bitset rows, built from dimension 1 or on first use), to every vertex of `spx`. A `keepCriterion`
+  or filtration that keeps a simplex but not one of its edges is outside the stream contract (and now yields fewer cells).
+- Keep per-cell work to ONE hash lookup of the `Simplex` (a `TreeSet`, whose own `hashCode`/`equals` allocate):
+  `FiltrationCache` (JVM) hashes by traversal; `MemoizedFiltration` answers a cache hit before it checks the domain;
+  `FiltrationOrdering.canonical` calls `applyOrElse` once per cell; `sortedByFiltration` sorts on arrays. Do not add
+  `isDefinedAt`-then-`apply` pairs or `Simplex`-keyed `HashMap`s back on the per-cell path.
+- A hash of a `Simplex` that is linear in its vertices collides for every equal vertex sum (a sum of `x * c` made sparse
+  Rips run 7+ minutes); mix each element (MurmurHash3's finalizer).
+- `Persistence` takes the stream's largest value from `CellularCohomologyEngine.largestFiltrationValue`; iterating the
+  stream again builds the complex a second time.
+- Against GUDHI's Delaunay-Cech, Cech stays orders of magnitude slower by construction (every `dim + 2`-subset is a cell);
+  `AlphaShapes` gives the same barcode of a Euclidean point cloud.
+- **Flat layers (#206, `WORKLOG-rare-complex-performance.md`)**: a stream whose `flatFiltration` is defined builds each
+  dimension on arrays (`FlatLayerStream.Layer`: ascending vertex tuples, values, cohomology order = value ascending then
+  colex ascending) and the cohomology engine reads them without a `Simplex`, a `cohomologyOrder` pass or a second read.
+  The default Vietoris-Rips value (`filtrationIsDefault`, so also the lazy witness complex), DTM-Rips, Dowker and sparse
+  Rips have an array-level `FlatFiltration`; Cech and the general witness complex wrap their `Simplex` function
+  (`FlatFiltration.ofSimplices`: still faster, the ball is what is left). A `FlatFiltration` must equal the stream's
+  `filtrationValue` bit for bit; `FlatLayersSpec` compares every complex with itself built from cells (turn the hook off
+  by overriding `flatFiltration` to `None`), so a new hook goes into its `pairs`. A `keepCriterion` other than
+  `CofaceSimplexStream.keepAll` is asked about a `Simplex` per candidate, so the shared constant is the default of every
+  coface stream: a literal `{ case _ => true }` default silently takes the slow path. A subclass that changes which
+  values are kept overrides `keptValue`, not only `keptByThresholdAndCriterion` (Dowker: finite values only).
+- A flag-like hook gets the value of the simplex without its smallest vertex (`parentValue`) and only adds the edges of
+  that vertex; an edge ignores it (a DTM vertex is born at `2 f`, which the edge value never undercuts).
+- Left, filed in #206: Cech's ball and facet floor on arrays (needs a facet lookup in the previous layer, and a facet
+  missing from it for a reason other than the threshold changes the value), the Dowker value per parent instead of per
+  candidate, the JS `FiltrationCache`.
+
 ## Cech complexes
 
 `streams/CechStream.scala`, `WORKLOG-cech-complex.md`. Over `Simplex[Int]`, built on the VR coface machinery via

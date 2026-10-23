@@ -9,6 +9,9 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Breaking
 
+- `InorderCofaceSimplexStream` is removed. It listed ties out of the stream's order and, on tied distances, some simplices
+  twice (#182). `VietorisRips(..., implementation = Inorder)` builds `LayeredInorderSimplexStream` now and
+  needs no change; replace a direct use with `LayeredInorderSimplexStream(metricSpace)`.
 - `PackedRipserCohomologyEngine#DiameterIndex` is a plain class, not a case class (no `copy`, no pattern
   `DiameterIndex(d, i)`; `DiameterIndex(d, i)` still makes one). It has a method `high`, 0 for every cell whose index fits
   in a `Long`; a cell past that is a `WideDiameterIndex`, which holds the second word. A one-word run stores no second
@@ -45,6 +48,13 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   `VantagePointTree`, and `neighbors(point, eps)` returns every index within `eps`, repeated points included.
 
 ### Added
+
+- `FlatLayerStream`: a stream that hands over its dimensions as vertex and value arrays (`FlatLayerStream.Layer`);
+  `CellularCohomologyEngine` reduces one without making a `Simplex` per cell. The coface streams behind `Cech`,
+  `Witness`, `Dowker`, `DtmRips`, `SparseRips` and `VietorisRips(implementation = RipserCoface)` are one, and `Truncated`
+  passes it on. To build a new filtered complex that way, give `RipserCofaceSimplexStream` a
+  `RipserCofaceSimplexStream.FlatFiltration` (the value of a simplex from its vertices in an array) by overriding
+  `flatFiltration`; a `Simplex` function does too, through `FlatFiltration.ofSimplices`.
 
 - Every file format has an in-memory form: `parse...(text)` / `format...(data)` for the text formats and
   `parse...(bytes)` / `format...(data)` for the binary ones (`CSV`, `Ripser`, `Gudhi`, `Dipha`, `Perseus`), so a browser
@@ -179,6 +189,19 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 - A plot's colors for data follow its palette: a persistence image, an image, a cocycle and circular coordinates hold
   their values (`Paint.Value`) and a `ColorScale` colors them when drawn.
 - The `∞` line of a persistence diagram and its diagonal run across the whole plot.
+
+- Čech, DTM-Rips, sparse Rips and Dowker are several times faster, with the same cells and barcodes (the witness
+  complexes share the loop and were not timed). The reduction was under a tenth of the time. The rest was the coface
+  loop that generates the cells: its candidate list (every smaller vertex for every simplex; now the vertices adjacent
+  to the whole simplex), lookups keyed by `Simplex` in the filtration caches and the ordering, a second pass
+  `Persistence` made over the complex to find its largest value (`CellularCohomologyEngine.largestFiltrationValue` gives
+  it now), and a `Simplex` for every candidate. The streams now build each dimension as vertex and value arrays
+  (`FlatLayerStream`), with an array-level value function per complex, and the cohomology engine reduces those arrays
+  without making a `Simplex` for any cell it does not return a representative of. One cold JVM each, 4 cores: Čech of 80
+  points in R³ to degree 2 101 s to 14 s, Dowker 300 x 100 to degree 1 24 s to 1.6 s, DTM-Rips of 600 points to degree
+  1 32 s to 1.0 s, sparse Rips of 96 points to degree 2 38 s to 1.1 s. A `keepCriterion` must keep the edges of every
+  simplex it keeps, and the default one (`CofaceSimplexStream.keepAll`) is what lets a stream skip building a `Simplex`
+  to ask it.
 
 ### Fixed
 

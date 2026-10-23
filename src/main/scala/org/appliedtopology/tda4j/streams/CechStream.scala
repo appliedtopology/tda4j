@@ -34,11 +34,9 @@ object CechFiltration:
         .flatMap(i => cache.get(facet(i)))
         .getOrElse(raw)
       math.max(radius, facetFloor)
-    new PartialFunction[Simplex[Int], Double]:
-      def isDefinedAt(spx: Simplex[Int]): Boolean =
-        spx.forall(v => euclideanMetricSpace.contains(v))
-      def apply(spx: Simplex[Int]): Double =
-        cache.getOrElseUpdate(spx, if spx.dim <= 0 then 0.0 else computeRadius(spx))
+    MemoizedFiltration(cache, spx => spx.forall(v => euclideanMetricSpace.contains(v)))(spx =>
+      if spx.dim <= 0 then 0.0 else computeRadius(spx)
+    )
 
 /** The Cech complex, built like `RipserCofaceSimplexStream` builds Vietoris-Rips: dimension by dimension, each simplex
   * as a coface of an accepted simplex one dimension down. This finds every Cech simplex because the Cech complex is
@@ -48,7 +46,7 @@ object CechFiltration:
   */
 open class CechCofaceSimplexStream(
   val euclideanMetricSpace: EuclideanMetricSpace,
-  keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true },
+  keepCriterion: PartialFunction[Simplex[Int], Boolean] = CofaceSimplexStream.keepAll,
   maxFiltrationValue: Option[Double] = None,
   // Threaded straight through to RipserCofaceSimplexStream's own parameter of the same name -- see its doc
   // there. Cech's own minimum-enclosing-ball radius computation is exactly the case this exists for: unlike a
@@ -61,4 +59,7 @@ open class CechCofaceSimplexStream(
       maxFiltrationValue,
       Some(CechFiltration(euclideanMetricSpace)),
       parallelFiltrationValue
-    )
+    ):
+  // The radius of a ball is not computed from an array; each candidate is a `Simplex` for the function.
+  override protected def flatFiltration: Option[RipserCofaceSimplexStream.FlatFiltration] =
+    Some(RipserCofaceSimplexStream.FlatFiltration.ofSimplices(filtrationValue))

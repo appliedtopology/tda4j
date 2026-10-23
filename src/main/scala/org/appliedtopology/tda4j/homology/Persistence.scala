@@ -339,8 +339,8 @@ object Persistence:
             val bars =
               if cycles then engine.persistentHomology(stream, includeZeroLength)
               else engine.persistentCohomology(stream, includeZeroLength)
-            val fv = stream.filtrationValue
-            (bars, stream.iterator.map(c => fv.applyOrElse(c, _ => Double.NegativeInfinity)).maxOption.getOrElse(0.0))
+            // The engine read every cell once; iterating the stream again would build the complex a second time.
+            (bars, engine.largestFiltrationValue.getOrElse(0.0))
       case Engine.Ripser | Engine.Auto | Engine.FastCubical =>
         throw new IllegalStateException("unreachable: resolved before compute")
     PersistenceDiagram[CellT, coefficients.C](bars.filter(_.dim <= maxDimension), maxDimension, last, scale)

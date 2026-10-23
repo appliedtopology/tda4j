@@ -38,13 +38,13 @@ comparisons must be cheap: `EnumeratingCofaceSimplexStream`/`CubicalGridStream` 
 (`WORKLOG-autonomous-session-2026-09-19.md`).
 
 **VR constructions** (same output contract, alternate engines): `EnumeratingCofaceSimplexStream`,
-`RipserCofaceSimplexStream` (+ `SimplexIndexing`), `InorderCofaceSimplexStream`,
+`RipserCofaceSimplexStream` (+ `SimplexIndexing`),
 `RecursiveStackVietorisRipsSimplexStream`, `IncrementalVietorisRipsSimplexStream` (Rieser's New-VR, arXiv:2301.07191
 — cross-validation baseline, not a fast engine); `CofacetIterator` for lazy coboundaries. `LayeredInorderSimplexStream` (what
 `Implementation.Inorder` builds; arXiv:2411.05495 mirrored, smallest vertex first): each simplex carries only its
 first longest edge (inherited by its cofacets: diameter and case flags from it), candidates from sweep-updated bitset
 balls (`n²/4` bytes), no sort above the edges in general position; tied runs are checked and sorted only when out of
-order. `InorderCofaceSimplexStream` breaks the tie order and duplicates on tied distances (#182).
+order. The old `InorderCofaceSimplexStream` (tie order broken, duplicates on tied distances) is deleted (#182).
 `WORKLOG-layered-inorder.md`. `FiniteMetricSpace` has
 a VP-tree impl (`VantagePointTree`, `VantagePointQuery`; `WORKLOG-scalajs-numerics-spatial.md`) and `SparseMetricSpace` (+∞ past its cutoff rather than excluding — don't use it as a
 thresholded oracle).

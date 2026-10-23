@@ -45,6 +45,23 @@ open class DowkerGeometry(val relation: Array[Array[Double]]):
       w += 1
     best
 
+  /** The same value for the simplex with the ascending vertices `vertices(from until from + width)`, with nothing built
+    * for it.
+    */
+  def filtrationValue(vertices: Array[Int], from: Int, width: Int): Double =
+    var best = Double.PositiveInfinity
+    var w = 0
+    while w < numWitnesses do
+      var dmax = 0.0
+      var i = from
+      while i < from + width do
+        val d = relation(vertices(i))(w)
+        if d > dmax then dmax = d
+        i += 1
+      if dmax < best then best = dmax
+      w += 1
+    best
+
   /** The transposed relation: the columns become the vertices, witnessed by the rows. */
   lazy val dual: DowkerGeometry =
     new DowkerGeometry(Array.tabulate(numWitnesses, numLeft)((w, x) => relation(x)(w)))
@@ -65,9 +82,9 @@ object DowkerGeometry:
 object DowkerFiltration:
   def apply(geometry: DowkerGeometry): PartialFunction[Simplex[Int], Double] =
     val cache = FiltrationCache.empty[Simplex[Int], Double]
-    new PartialFunction[Simplex[Int], Double]:
-      def isDefinedAt(spx: Simplex[Int]): Boolean = spx.forall(v => 0 <= v && v < geometry.numLeft)
-      def apply(spx: Simplex[Int]): Double = cache.getOrElseUpdate(spx, geometry.filtrationValue(spx.toIndexedSeq))
+    MemoizedFiltration(cache, spx => spx.forall(v => 0 <= v && v < geometry.numLeft))(spx =>
+      geometry.filtrationValue(spx.toIndexedSeq)
+    )
 
 /** Stands in for `RipserCofaceSimplexStream`'s own `FiniteMetricSpace[Int]` constructor parameter, purely to supply
   * `size`/`elements`/`contains` over `0 until n` -- `distance` is never actually read, since
@@ -89,7 +106,7 @@ private class DowkerPlaceholderMetricSpace(n: Int) extends FiniteMetricSpace[Int
 open class DowkerCofaceSimplexStream(
   val geometry: DowkerGeometry,
   val maxFiltrationValue: Double = Double.PositiveInfinity,
-  keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true }
+  keepCriterion: PartialFunction[Simplex[Int], Boolean] = CofaceSimplexStream.keepAll
 ) extends RipserCofaceSimplexStream(
       DowkerPlaceholderMetricSpace(geometry.numLeft),
       keepCriterion,
@@ -109,9 +126,13 @@ open class DowkerCofaceSimplexStream(
   // complete graph K5's 10 edges, not the intended 5-cycle, before this override existed). A finite value is
   // always `<= +Infinity` regardless of this override, so untruncated callers see no behavior change for any
   // simplex that is genuinely, finitely witnessed.
-  override protected def keptByThresholdAndCriterion(spx: Simplex[Int]): Boolean =
-    super.keptByThresholdAndCriterion(spx) &&
-      filtrationValue.applyOrElse(spx, (_: Simplex[Int]) => Double.PositiveInfinity).isFinite
+  override protected def keptValue(value: Double): Boolean = super.keptValue(value) && value.isFinite
+
+  private val flat = new RipserCofaceSimplexStream.FlatFiltration:
+    def value(vertices: Array[Int], from: Int, width: Int, parentValue: Double): Double =
+      geometry.filtrationValue(vertices, from, width)
+
+  override protected def flatFiltration: Option[RipserCofaceSimplexStream.FlatFiltration] = Some(flat)
 
   // The base class's own inherited `case 0` (EnumeratingCofaceSimplexStream/RipserCofaceSimplexStream) emits
   // metricSpace.elements unsorted and unfiltered by threshold -- only safe when every vertex ties at filtration 0
@@ -138,7 +159,7 @@ object DowkerCofaceSimplexStream:
   def apply(
     relation: Array[Array[Double]],
     maxFiltrationValue: Double = Double.PositiveInfinity,
-    keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true }
+    keepCriterion: PartialFunction[Simplex[Int], Boolean] = CofaceSimplexStream.keepAll
   ): DowkerCofaceSimplexStream =
     new DowkerCofaceSimplexStream(DowkerGeometry(relation), maxFiltrationValue, keepCriterion)
 
@@ -148,10 +169,10 @@ object DowkerCofaceSimplexStream:
     * primary constructor's own defaults by hand instead of sharing them.
     */
   def apply(geometry: DowkerGeometry): DowkerCofaceSimplexStream =
-    new DowkerCofaceSimplexStream(geometry, Double.PositiveInfinity, { case _ => true })
+    new DowkerCofaceSimplexStream(geometry, Double.PositiveInfinity, CofaceSimplexStream.keepAll)
 
   def apply(geometry: DowkerGeometry, maxFiltrationValue: Double): DowkerCofaceSimplexStream =
-    new DowkerCofaceSimplexStream(geometry, maxFiltrationValue, { case _ => true })
+    new DowkerCofaceSimplexStream(geometry, maxFiltrationValue, CofaceSimplexStream.keepAll)
 
   def apply(
     geometry: DowkerGeometry,

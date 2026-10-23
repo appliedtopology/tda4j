@@ -99,7 +99,7 @@ class CofaceSimplexStreamSpec extends mutable.Specification with org.specs2.Scal
     forAll(matrixGen[Double](Gen.double, Gen.chooseNum(2, 10), Gen.chooseNum(15, 15))) { (pts: Array[Array[Double]]) =>
       val metricSpace = EuclideanMetricSpace(pts)
       val enumerating = EnumeratingCofaceSimplexStream(metricSpace)
-      val inorder = InorderCofaceSimplexStream(metricSpace)
+      val inorder = LayeredInorderSimplexStream(metricSpace)
       // Driven dimension-by-dimension, strictly increasing -- required for RipserCofaceSimplexStream's own
       // incremental cache (currentDimension/lastDimensionCache) to stay valid across calls.
       val ripser = RipserCofaceSimplexStream(metricSpace)
@@ -112,8 +112,8 @@ class CofaceSimplexStreamSpec extends mutable.Specification with org.specs2.Scal
         (enumerated.map(spx => enumerating.filtrationValue(spx)) must beSorted) and
           (inordered.map(spx => inorder.filtrationValue(spx)) must beSorted) and
           (ripsered.map(spx => ripser.filtrationValue(spx)) must beSorted) and
-          // using size as proxy for equality for CI testing; change to `enumerated === inordered` if debugging
-          (enumerated.size === inordered.size) and
+          // cell for cell and in order: the layered stream is the same complex in the same order, ties included
+          (enumerated === inordered) and
           (enumerated.size === ripsered.size)
       }
     }
