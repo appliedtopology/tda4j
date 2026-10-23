@@ -371,6 +371,82 @@ object Guide:
       dashed.toOption
     )
 
+  /** The legend's box and columns. A legend has no box unless asked for: `box = true` gives it the page's own color, a
+    * little see-through (`opacity` 0.9), and a thin frame; `background` (a CSS color) or `backgroundPaint` and
+    * `opacity` set the fill, `frame` and `frameColor` or `framePaint` and `frameWidth` the line round it, `padding` the
+    * room inside, in pixels (6). Giving a fill or a frame turns the box on; `box = false` takes it away.
+    *
+    * `columns` puts the entries in that many columns, filled one column before the next (a legend of seven entries in
+    * three columns is 3, 3, 1). A legend never takes more than two fifths of the figure's width beside the plot or more
+    * than the plot area's width above, below or inside it: the columns that do not fit are given up.
+    */
+  def legend(
+    box: Optional[Boolean] = Optional.empty,
+    background: Optional[String] = Optional.empty,
+    backgroundPaint: Optional[Paint] = Optional.empty,
+    opacity: Optional[Double] = Optional.empty,
+    frame: Optional[Boolean] = Optional.empty,
+    frameColor: Optional[String] = Optional.empty,
+    framePaint: Optional[Paint] = Optional.empty,
+    frameWidth: Optional[Double] = Optional.empty,
+    padding: Optional[Double] = Optional.empty,
+    columns: Optional[Int] = Optional.empty
+  ): Tweak =
+    Check.fraction("Guide.legend", "opacity", opacity)
+    Check.positive("Guide.legend", "frameWidth", frameWidth)
+    Check.atLeastZero("Guide.legend", "padding", padding)
+    columns.toOption.foreach(n => require(n >= 1, s"Guide.legend: columns must be 1 or more, not $n"))
+    val fillPaint = Check.paint("Guide.legend (background)", background, backgroundPaint)
+    val framed = Check.paint("Guide.legend (frame)", frameColor, framePaint)
+    // a fill or a frame asked for turns that part on, and `box` turns both on or off
+    val boxOn = box.toOption
+    val boxOff = boxOn.contains(false)
+    val fillOn = fillPaint.isDefined || opacity.toOption.isDefined || boxOn.contains(true)
+    val frameOn =
+      if boxOff then Some(false)
+      else
+        frame.toOption.orElse(
+          Option.when(framed.isDefined || frameWidth.toOption.isDefined || boxOn.contains(true))(true)
+        )
+    LegendChange(
+      boxOff,
+      fillOn,
+      fillPaint,
+      opacity.toOption,
+      LineStyle(frameOn, frameWidth.toOption, framed, None, None),
+      padding.toOption,
+      columns.toOption.map(_.toInt)
+    )
+
+  private final case class LegendChange(
+    boxOff: Boolean,
+    fillOn: Boolean,
+    fillPaint: Option[Paint],
+    opacity: Option[Double],
+    frame: LineStyle,
+    padding: Option[Double],
+    columns: Option[Int]
+  ) extends Tweak:
+    def onFigure(f: Figure): Figure =
+      val old = f.elements.legendBox
+      val (defaultPaint, defaultOpacity) = Elements.DefaultLegendFill
+      val fill =
+        if boxOff then None
+        else if fillOn then
+          Some(
+            (
+              fillPaint.orElse(old.fill.map(_._1)).getOrElse(defaultPaint),
+              opacity.orElse(old.fill.map(_._2)).getOrElse(defaultOpacity)
+            )
+          )
+        else old.fill
+      f.copy(elements =
+        f.elements.copy(legendBox =
+          LegendBox(fill, old.frame.merge(frame), padding.orElse(old.padding), columns.orElse(old.columns))
+        )
+      )
+    override def toString: String = s"Guide.legend($boxOff, $fillPaint, $opacity, $frame, $padding, $columns)"
+
   private final case class PanelChange(paint: Option[Paint], opacity: Option[Double], visible: Option[Boolean])
       extends Tweak:
     def onFigure(f: Figure): Figure =
@@ -424,14 +500,16 @@ object Guide:
   * `color-title`, `note`) with the properties `size`, `weight`, `italic`, `align`, `angle`, `font` and `color`; `grid`,
   * `minor-grid`, `axis-line` and `frame` with `visible`, `width`, `color`, `dash`, `opacity`; `ticks` and `minor-ticks`
   * with `length`, `direction`, `visible`, `width`, `color`, `opacity`; `panel` with `color`, `opacity`, `visible`;
-  * `diagonal` with `shade` (`none` or a color), `shade-opacity`, `color`, `width`, `dashed`; `marker` with `shape` (a
-  * name, a matplotlib code, an R `pch`, `glyph:text`; see [[MarkerStyle.named]]), `size`, `opacity`, `fill`,
-  * `edge-width` (0 for none), `edge-color`, `edge-opacity`, `edge-dash`, `edge-visible`; `degree-0`, `degree-1`, ...
-  * with `color`, `dark-color`, `label` and the `marker` properties; `segments` (`width`, `opacity`), `polygons` and
-  * `discs` (`opacity`), `lines` (`width`); `numbers` (`locale`, `decimal`, `grouping`, `minus`); `size` (`width`,
-  * `height`, in pixels or with `in`, `cm`, `mm`, `pt`); `camera` (`azimuth`, `elevation`, `zoom`, of a 3-D scene);
-  * `palette` and `style` alone (`palette=print`); `aspect` (`1`, or `free`); and `x-axis` and `y-axis`, alone
-  * (`x-axis=top`) or with `side`, `reverse`, `padding`, `min`, `max`, `format`.
+  * `legend-box` with `background` (a color, or `none` for no box at all), `opacity`, `frame` (a color or `none`),
+  * `frame-width`, `padding` and `columns`; `diagonal` with `shade` (`none` or a color), `shade-opacity`, `color`,
+  * `width`, `dashed`; `marker` with `shape` (a name, a matplotlib code, an R `pch`, `glyph:text`; see
+  * [[MarkerStyle.named]]), `size`, `opacity`, `fill`, `edge-width` (0 for none), `edge-color`, `edge-opacity`,
+  * `edge-dash`, `edge-visible`; `degree-0`, `degree-1`, ... with `color`, `dark-color`, `label` and the `marker`
+  * properties; `segments` (`width`, `opacity`), `polygons` and `discs` (`opacity`), `lines` (`width`); `numbers`
+  * (`locale`, `decimal`, `grouping`, `minus`); `size` (`width`, `height`, in pixels or with `in`, `cm`, `mm`, `pt`);
+  * `camera` (`azimuth`, `elevation`, `zoom`, of a 3-D scene); `palette` and `style` alone (`palette=print`); `aspect`
+  * (`1`, or `free`); and `x-axis` and `y-axis`, alone (`x-axis=top`) or with `side`, `reverse`, `padding`, `min`,
+  * `max`, `format`.
   */
 object Settings:
   private val textProperties = Seq("size", "weight", "italic", "align", "angle", "font", "color", "limit")
@@ -447,6 +525,7 @@ object Settings:
         "minor-ticks",
         "frame",
         "panel",
+        "legend-box",
         "diagonal",
         "marker",
         "degree-<k>",
@@ -647,6 +726,24 @@ object Settings:
                 case "opacity" => Guide.panel(opacity = number(spec, value))
                 case "visible" => Guide.panel(visible = flag(spec, value))
                 case _         => unknownProperty(element, property, Seq("color", "opacity", "visible"))
+            case "legend-box" =>
+              def none = value.equalsIgnoreCase("none")
+              property match
+                case "background"  => if none then Guide.legend(box = false) else Guide.legend(background = value)
+                case "opacity"     => Guide.legend(opacity = number(spec, value))
+                case "frame"       => if none then Guide.legend(frame = false) else Guide.legend(frameColor = value)
+                case "frame-width" => Guide.legend(frameWidth = number(spec, value))
+                case "padding"     => Guide.legend(padding = number(spec, value))
+                case "columns"     =>
+                  val n = number(spec, value)
+                  require(n >= 1 && n == n.toInt, s"$spec: columns must be a whole number, 1 or more")
+                  Guide.legend(columns = n.toInt)
+                case _ =>
+                  unknownProperty(
+                    element,
+                    property,
+                    Seq("background", "opacity", "frame", "frame-width", "padding", "columns")
+                  )
             case "marker"            => Geom.pointsOf(markerSetting(spec, element, property, value))
             case "x-axis" | "y-axis" => axisSetting(spec, element, property, value)
             case "numbers"           =>

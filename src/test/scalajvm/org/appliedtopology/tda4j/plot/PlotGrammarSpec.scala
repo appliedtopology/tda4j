@@ -1332,6 +1332,177 @@ class PlotGrammarSpec extends Specification:
     }
   }
 
+  "the box and the columns of a legend" should {
+    val diagram = Plot.diagram(circleDiagram)
+    val (dx, dy, dw, dh) = plotArea(diagram.svg(Theme.Light))
+    val rows = diagram.legend.size
+    def boxes(svg: String) = elements(svg, "rect").filter(_.getAttribute("rx") == "3")
+    def entry(svg: String, words: String) = elements(svg, "text").filter(_.getTextContent == words).last
+    // the box of a legend: its fill and its frame, if it has both, are the same rectangle
+    def box(f: Figure): Element =
+      val all = boxes(f.svg(Theme.Light))
+      all.map(b => Seq("x", "y", "width", "height").map(b.getAttribute)).distinct.size must beEqualTo(1)
+      all.head
+    // six entries of unlike widths
+    val labels = Seq("a", "a long one", "bb", "c", "another", "dd")
+    val many = Figure(
+      marks = dots(1, 2).marks,
+      legend = labels.zipWithIndex.map((l, k) => LegendItem(l, Paint.Series(k))).toVector
+    )
+
+    "draw nothing behind a legend unless asked, and ask for nothing by asking for nothing" in {
+      boxes(diagram.svg(Theme.Light)) must beEmpty
+      sameUpToIds((diagram + Guide.legend()).svg(Theme.Light), diagram.svg(Theme.Light))
+      sameUpToIds((diagram + Guide.legend(box = false)).svg(Theme.Light), diagram.svg(Theme.Light))
+      sameUpToIds(
+        (diagram + Guide.legend(box = true) + Guide.legend(box = false)).svg(Theme.Light),
+        diagram.svg(Theme.Light)
+      )
+    }
+    "put a box round the entries of a legend in a corner, clear of the plot's edges, over the marks" in {
+      val svg = (diagram + Guide.legend(box = true)).svg(Theme.Light)
+      val b = box(diagram + Guide.legend(box = true))
+      val (bx, by, bw, bh) = (number(b, "x"), number(b, "y"), number(b, "width"), number(b, "height"))
+      bx + bw must beCloseTo(dx + dw - 8.0, 0.02) // 8 px from the plot's right edge, as the bare legend
+      by + bh must beCloseTo(dy + dh - 8.0, 0.02)
+      bh must beCloseTo(20.0 * rows + 12.0, 0.02) // a row is 20 px, and 6 px inside the box on each side
+      Seq("H0", "H1").foreach { word =>
+        val e = entry(svg, word)
+        number(e, "x") must beGreaterThan(bx + 20.0) // the text is 20 px after its key, 6 px inside the box
+        number(e, "x") + TextWidth.of(word, 12.0) must beLessThan(bx + bw)
+        number(e, "y") must beGreaterThan(by)
+        number(e, "y") must beLessThan(by + bh)
+      }
+      // the box is drawn after the marks and before the entries, so that it covers the first and the second show
+      val order = elements(svg, "*").map(e => e.getTagName + e.getTextContent)
+      order.indexWhere(_.startsWith("rect")) must beLessThan(order.indexOf("textH0"))
+      boxes(svg).size must beEqualTo(2) // the fill, then the frame
+      boxes(svg).head.getAttribute("style") must contain("fill-opacity:0.9")
+    }
+    "frame the box, fill it, or both, as told" in {
+      val b = Guide.legend(background = "#fafafa", opacity = 0.5)
+      boxes((diagram + b).svg(Theme.Light)).map(_.getAttribute("style")) must beEqualTo(
+        Seq("fill:#fafafa;fill-opacity:0.5")
+      )
+      val frame = Guide.legend(frameColor = "#336699", frameWidth = 2)
+      val framed = boxes((diagram + frame).svg(Theme.Light))
+      framed.size must beEqualTo(1) // a frame alone: no fill behind it
+      framed.head.getAttribute("fill") must beEqualTo("none")
+      framed.head.getAttribute("style") must contain("stroke:#336699")
+      framed.head.getAttribute("stroke-width") must beEqualTo("2")
+      boxes((diagram + Guide.legend(box = true)).svg(Theme.Light)).size must beEqualTo(2) // a fill and its frame
+      boxes((diagram + Guide.legend(box = true, frame = false)).svg(Theme.Light)).size must beEqualTo(1)
+      boxes((diagram + Guide.legend(background = "white") + Guide.legend(box = false)).svg(Theme.Light)) must beEmpty
+    }
+    "grow its padding with the text of the legend, and take the padding asked for" in {
+      def height(f: Figure) = number(box(f + Guide.legend(box = true)), "height")
+      height(diagram) must beCloseTo(20.0 * rows + 12.0, 0.02)
+      height(diagram + Style(textScale = 2)) must beCloseTo(2 * (20.0 * rows + 12.0), 0.02)
+      height(diagram + Guide.legend(padding = 10)) must beCloseTo(20.0 * rows + 20.0, 0.02)
+      height(diagram + Guide.legend(padding = 0)) must beCloseTo(20.0 * rows, 0.02)
+      height(diagram + Text(TextRole.Legend, size = 24)) must beCloseTo(2 * (20.0 * rows + 12.0), 0.02)
+    }
+    "take room beside the plot for the box, and add it above and below" in {
+      val beside = diagram + Style(legend = LegendPosition.Right)
+      val boxed = beside + Guide.legend(box = true)
+      val (px, _, pw, _) = plotArea(boxed.svg(Theme.Light))
+      pw must beLessThan(plotArea(beside.svg(Theme.Light))._3 + 1) // room is made, never taken from the legend
+      val b = box(boxed)
+      val (bx, bw) = (number(b, "x"), number(b, "width"))
+      bx must beGreaterThan(px + pw) // clear of the plot
+      number(entry(boxed.svg(Theme.Light), "H0"), "x") must beCloseTo(bx + 6.0 + 20.0, 0.02)
+      bx + bw must beCloseTo(560.0 - 16.0, 0.02) // the figure's right margin, as for a bare legend
+      val below = diagram + Style(legend = LegendPosition.Bottom)
+      plotArea((below + Guide.legend(box = true)).svg(Theme.Light))._4 must
+        beCloseTo(plotArea(below.svg(Theme.Light))._4 - 12.0, 0.02)
+      val above = diagram + Style(legend = LegendPosition.Top) + Guide.legend(box = true)
+      val ab = box(above)
+      number(ab, "y") + number(ab, "height") must beLessThan(plotArea(above.svg(Theme.Light))._2) // over the plot
+      number(entry(above.svg(Theme.Light), "H0"), "x") must beCloseTo(number(ab, "x") + 6.0 + 20.0, 0.02)
+    }
+    "put the entries in columns, one filled before the next" in {
+      val svg = (many + Style(legend = LegendPosition.Right) + Guide.legend(columns = 2)).svg(Theme.Light)
+      val at = labels.map(l => (number(entry(svg, l), "x"), number(entry(svg, l), "y")))
+      // three rows of two columns, a column going down: the second entry is under the first, the fourth beside the first
+      at(1)._1 must beEqualTo(at(0)._1)
+      at(1)._2 must beGreaterThan(at(0)._2)
+      at(3)._2 must beEqualTo(at(0)._2)
+      at(3)._1 must beGreaterThan(at(0)._1 + TextWidth.of(labels(1), 12.0)) // clear of the widest label of the first
+      at(4)._1 must beEqualTo(at(3)._1)
+      at(5)._2 must beEqualTo(at(2)._2)
+      at.map(_._2).distinct.size must beEqualTo(3)
+      // the plot area gives up the room
+      plotArea(svg)._3 must beLessThan(plotArea((many + Style(legend = LegendPosition.Right)).svg(Theme.Light))._3)
+    }
+    "line the columns of a legend above or below the plot up as a grid" in {
+      val titled =
+        many + Labels(legend = "degree") // its heading is a column of its own, which every row keeps clear of
+      val grid = (titled + Style(legend = LegendPosition.Bottom) + Guide.legend(columns = 2)).svg(Theme.Light)
+      val at = labels.map(l => (number(entry(grid, l), "x"), number(entry(grid, l), "y")))
+      at.map(_._2).distinct.size must beEqualTo(3)
+      Seq(0, 1, 2).map(at(_)._1).distinct.size must beEqualTo(1) // a column, whatever the width of its labels
+      Seq(3, 4, 5).map(at(_)._1).distinct.size must beEqualTo(1)
+      at(3)._1 must beGreaterThan(at(0)._1 + TextWidth.of(labels(1), 12.0))
+      at(0)._1 must beGreaterThan(number(entry(grid, "degree"), "x") + TextWidth.of("degree", 12.0, bold = true))
+      textsOnPage(grid) must beTrue
+      // without the columns the entries fill a row as far as it goes, and do not line up
+      val flow = (many + Style(legend = LegendPosition.Bottom)).svg(Theme.Light)
+      labels.map(l => number(entry(flow, l), "y")).distinct.size must beLessThan(3)
+    }
+    "give up the columns that do not fit, rather than run off the figure or over the plot" in {
+      val wide = Figure(
+        marks = dots(1, 2).marks,
+        legend = Vector.tabulate(6)(k => LegendItem(s"a rather long label $k", Paint.Series(k))),
+        width = 400
+      )
+      val side = (wide + Style(legend = LegendPosition.Right) + Guide.legend(columns = 6)).svg(Theme.Light)
+      val sideEntries = elements(side, "text").filter(_.getTextContent.startsWith("a rather"))
+      sideEntries.map(number(_, "x")).distinct.size must beEqualTo(1) // two columns of this width are over two fifths
+      plotArea(side)._3 must beGreaterThan(100.0)
+      textsOnPage(side) must beTrue
+      val below = (wide + Style(legend = LegendPosition.Bottom) + Guide.legend(columns = 6)).svg(Theme.Light)
+      val belowEntries = elements(below, "text").filter(_.getTextContent.startsWith("a rather"))
+      belowEntries.map(number(_, "x")).distinct.size must beLessThan(3) // as many as fit under 400 pixels
+      belowEntries.map(number(_, "x")).max must beLessThan(400.0 - 100.0)
+      textsOnPage(below) must beTrue
+      val corner = (wide + Style(legend = LegendPosition.UpperLeft) + Guide.legend(columns = 6)).svg(Theme.Light)
+      val cornerX = elements(corner, "text").filter(_.getTextContent.startsWith("a rather")).map(number(_, "x"))
+      val (cx, _, cw, _) = plotArea(corner)
+      cornerX.max must beLessThan(cx + cw)
+    }
+    "keep a single column when 1 is asked, and refuse what means nothing" in {
+      sameUpToIds((many + Guide.legend(columns = 1)).svg(), many.svg())
+      Guide.legend(columns = 0) must throwAn[IllegalArgumentException]("columns must be 1 or more")
+      Guide.legend(opacity = 2) must throwAn[IllegalArgumentException]("opacity must be between 0 and 1")
+      Guide.legend(padding = -1) must throwAn[IllegalArgumentException]("padding must be 0 or more")
+      Guide.legend(frameWidth = 0) must throwAn[IllegalArgumentException]("frameWidth must be a positive number")
+      Guide.legend(background = "red", backgroundPaint = Paint.Grid) must throwAn[IllegalArgumentException](
+        "give color or paint, not both"
+      )
+    }
+    "be set in words, for MATLAB and the command line" in {
+      def same(spec: String, tweak: Tweak) = diagram.withSetting(spec) must beEqualTo(diagram + tweak)
+      same("legend-box.background=#fafafa", Guide.legend(background = "#fafafa"))
+      same("legend-box.opacity=0.5", Guide.legend(opacity = 0.5))
+      same("legend-box.frame=#336699", Guide.legend(frameColor = "#336699"))
+      same("legend-box.frame=none", Guide.legend(frame = false))
+      same("legend-box.frame-width=2", Guide.legend(frameWidth = 2))
+      same("legend-box.padding=10", Guide.legend(padding = 10))
+      same("legend-box.columns=3", Guide.legend(columns = 3))
+      same("legend-box.background=none", Guide.legend(box = false))
+      diagram.withLegendBox("white") must beEqualTo(diagram + Guide.legend(box = true, background = "white"))
+      diagram.withLegendColumns(2) must beEqualTo(diagram + Guide.legend(columns = 2))
+      Settings.parse("legend-box.colour=red") must throwAn[IllegalArgumentException](
+        "unknown property 'colour' of legend-box; expected one of background, opacity, frame, frame-width, padding, columns"
+      )
+      Settings.parse("legend-box.columns=0") must throwAn[IllegalArgumentException]("columns must be a whole number")
+      Settings.parse("legend-box.columns=1.5") must throwAn[IllegalArgumentException]("columns must be a whole number")
+    }
+    "refuse a 3-D scene, which has no legend" in {
+      Plot.points3D(circle3) + Guide.legend(box = true) must throwAn[UnsupportedOperationException]("no axes, legend")
+    }
+  }
+
   "the bars of a barcode" should {
     val bars = Persistence(circle, maxDimension = 1).bars
     def ends(f: Figure) = f.marks.collectFirst { case m: Mark.Segments => m.ends }.get

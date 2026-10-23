@@ -209,6 +209,7 @@ one (`.withLabels(title = "A").withLabels(title = "B")` titles the plot `B`).
 | the color, legend label and marker of a homological degree | `withDegree(1, color = "#c2185b", label = "loops", shape = Shape.Diamond)` | `Scale.degree(...)` |
 | the color scheme | `withPalette(Palette.reference)` | the `Palette` itself |
 | fonts, size of text and marks, gridlines, the legend's place, the background | `withStyle(Style.slides)` | the `Style` itself |
+| a box round the legend, and its entries in columns | `withLegendBox(box = true, background = "white", columns = 2)` | `Guide.legend(...)` |
 | the markers of points: shape, size, opacity, open or filled, the edge | `withPoints(shape = Shape.Star, size = 6, fill = false, edgeWidth = 0)` | `Geom.points(...)` |
 | a barcode's bars, a complex's edges, triangles and balls | `withSegments(width = 3)`, `withPolygons(opacity = 0.3)`, `withDiscs(...)`, `withLines(width = 3)` | `Geom.segments(...)`, `Geom.polygons(...)`, `Geom.discs(...)`, `Geom.lines(...)` |
 | each kind of text: size, weight, slant, alignment, font, color | `withText(TextRole.Title, size = 18, align = Anchor.Middle)` | `Text(TextRole.Title, ...)` |
@@ -387,7 +388,27 @@ that wrap), or inside the plot area at a corner (`UpperLeft`, `UpperRight`, `Low
 nowhere (`Hidden`). A persistence diagram puts it at the lower right by itself, below the diagonal where no point can be, in
 the shaded half plane. `withLegend("right")` or `Style(legend = LegendPosition.Right)` puts it beside the plot again; a style
 that does not name a place leaves each plot's own. A corner of a barcode over its bars covers some of them: choose the place
-for the plot.
+for the plot, or give the legend a box.
+
+A legend has no box unless you ask for one. `withLegendBox(box = true)` gives it the page's own color, a little
+see-through (`opacity` 0.9), and a thin frame, which keeps it readable over data wherever it is; `background = "white"`
+(or `backgroundPaint`) and `opacity` set the fill, `frame = true`, `frameColor` and `frameWidth` the line round it, and
+`padding` the room inside (6 pixels, growing with the legend's text size). A fill or a frame alone is a box of that
+kind, `box = false` takes it away. `columns` puts the entries in that many columns, a column filled before the next
+(seven entries in three columns are 3, 3 and 1); above or below the plot the columns line up as a grid beside the
+heading.
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+
+val d = Persistence(Array.tabulate(16)(i => Array(math.cos(2 * math.Pi * i / 16), math.sin(2 * math.Pi * i / 16))))
+Plot.barcode(d).withLegend("upper-right").withLegendBox(box = true)
+Plot.diagram(d).withLegend("bottom").withLegendBox(background = "white", columns = 3)
+```
+
+A legend takes at most two fifths of the figure's width beside the plot and at most the plot's width above, below or
+inside it: the columns that would take more are given up, so a legend never runs off the figure or over the plot.
 
 ### The bars of a barcode
 
@@ -451,6 +472,7 @@ earlier ones set, and tweaks of different elements come in any order, a `Style` 
 | `grid`, `minor-grid`, `axis-line`, `frame` | `visible`, `width`, `color`, `dash` (`solid`, `dashed`, `dotted`), `opacity` |
 | `ticks`, `minor-ticks` | `length`, `direction` (`out`, `in`), `visible`, `width`, `color`, `opacity` |
 | `panel` | `color`, `opacity`, `visible` |
+| `legend-box` | `background` (a color, or `none` for no box), `opacity`, `frame` (a color, or `none`), `frame-width`, `padding` (pixels), `columns` |
 | `diagonal` | `shade` (`none` or a color), `shade-opacity`, `color`, `width`, `dashed` |
 | `marker` | `shape` (a name, a matplotlib code, `pch:N`, `glyph:text`), `size`, `opacity`, `fill`, `edge-width` (0 for none), `edge-color`, `edge-opacity`, `edge-dash`, `edge-visible` |
 | `degree-0`, `degree-1`, ... | `color`, `dark-color`, `label` and the `marker` properties |
@@ -763,6 +785,7 @@ A `plot...` method of a result returns a figure (a `plot...3D` method a scene), 
 | `withDegreeColor(k, color)` (3-D), `withDegreeLabel(k, label)` | the color (`'#c2185b'`) and legend label of degree `k` |
 | `withTextScale(factor)` (3-D), `withMarkScale(factor)` (3-D) | a factor on the size of text, of marks and lines |
 | `withLegend(position)` | `'right'`, `'left'`, `'top'`, `'bottom'`, `'upper-left'`, `'upper-right'`, `'lower-left'`, `'lower-right'` or `'none'` |
+| `withLegendBox(color)`, `withLegendColumns(n)` | a box round the legend, filled with `color` and framed; the entries in `n` columns (`withSetting('legend-box.padding=10')` and its siblings reach the rest) |
 | `withoutGrid()` | removes the gridlines |
 | `withTransparentBackground()` (3-D) | draws no background |
 | `withLocale(tag)` | writes numbers as a locale does (`'de'`, `'sv'`, ...) |

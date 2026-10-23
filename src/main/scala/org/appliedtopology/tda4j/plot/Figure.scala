@@ -437,6 +437,34 @@ final case class Figure(
     visible: Optional[Boolean] = Optional.empty
   ): Figure = this + Guide.panel(color, paint, opacity, visible)
 
+  /** A box round the legend and its entries in columns:
+    * `withLegendBox(background = "white", frame = true, columns = 2)`. See [[Guide.legend]].
+    */
+  def withLegendBox(
+    box: Optional[Boolean] = Optional.empty,
+    background: Optional[String] = Optional.empty,
+    backgroundPaint: Optional[Paint] = Optional.empty,
+    opacity: Optional[Double] = Optional.empty,
+    frame: Optional[Boolean] = Optional.empty,
+    frameColor: Optional[String] = Optional.empty,
+    framePaint: Optional[Paint] = Optional.empty,
+    frameWidth: Optional[Double] = Optional.empty,
+    padding: Optional[Double] = Optional.empty,
+    columns: Optional[Int] = Optional.empty
+  ): Figure =
+    this + Guide.legend(
+      box,
+      background,
+      backgroundPaint,
+      opacity,
+      frame,
+      frameColor,
+      framePaint,
+      frameWidth,
+      padding,
+      columns
+    )
+
   /** The markers of the points: `withPoints(size = 3.5, opacity = 0.6, edgeVisible = false)`. See [[Geom.points]]. */
   def withPoints(
     shape: Optional[Shape] = Optional.empty,
@@ -539,6 +567,12 @@ final case class Figure(
 
   /** A factor on the size of markers and the width of lines. */
   def withMarkScale(factor: Double): Figure = withStyle(style.copy(markScale = factor))
+
+  /** A box round the legend, filled with `color` (a CSS color) and framed: `withLegendBox("white")`. */
+  def withLegendBox(color: String): Figure = withLegendBox(box = true, background = color)
+
+  /** The legend's entries in `columns` columns, one filled before the next. */
+  def withLegendColumns(columns: Int): Figure = withLegendBox(columns = columns)
 
   /** The legend at `right`, `bottom`, or `none`. */
   def withLegend(position: String): Figure = withStyle(style.copy(legend = LegendPosition.named(position)))

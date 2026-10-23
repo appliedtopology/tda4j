@@ -61,6 +61,9 @@ class PlotCustomizationFacadeSpec extends Specification:
       fig.withSetting("marker.shape=pch:1") must beEqualTo(fig + Geom.points(shape = Shape.Circle, fill = false))
       fig.withSetting("degree-1.size=8") must beEqualTo(fig + Scale.degree(1, marker = MarkerStyle(size = Some(8))))
       fig.withLegend("lower-right") must beEqualTo(fig + Style(legend = LegendPosition.LowerRight))
+      fig.withLegendBox("white") must beEqualTo(fig + Guide.legend(box = true, background = "white"))
+      fig.withLegendColumns(2) must beEqualTo(fig + Guide.legend(columns = 2))
+      fig.withSetting("legend-box.padding=10") must beEqualTo(fig + Guide.legend(padding = 10))
       fig.withSetting("title.size=18").withSetting("x-axis=top") must
         beEqualTo(fig + Text(TextRole.Title, size = 18) + Scale.x(position = Side.Top))
       fig.withDegreeColor(1, "#d62728") must beEqualTo(fig + Scale.degree(1, color = "#d62728"))
@@ -100,6 +103,8 @@ class PlotCustomizationFacadeSpec extends Specification:
         "withTextScale",
         "withMarkScale",
         "withLegend",
+        "withLegendBox",
+        "withLegendColumns",
         "withoutGrid",
         "withTransparentBackground"
       )

@@ -38,3 +38,26 @@ on `claude/project-thread-uhbr7a`. Point-in-time record; the rules that came out
   witness complex is relabelled from landmark numbers to point numbers (`ExplicitStreamBuilder`), so its tooltips and
   a representative drawn over it agree. `maxFiltrationValue` caps the scale; the subtitle says so. Dowker and
   distance-matrix results still have no coordinates.
+- **#108 text width.** `TextWidth.of(text, size, family, bold)`: Helvetica and Times advance widths for ASCII (a 95-entry
+  table each), monospace 0.6 em, the characters outside the table by class (`…`/`∞` 1000, accented letters as their
+  base, wide scripts 1000); bold is x1.06 (sans) or x1.08 (serif) on everything but digits and spaces. `Family.of`
+  takes the first known face of the font list (`sans-serif` is Sans, not Serif). `TextFace.fit` cuts by cumulative
+  widths, the ellipsis counting; the legend column and the legend items are `max(old 7.5 px/character estimate,
+  34/30/14 scale + measured width)`, so no legend gets narrower. One explained default-output change: the `H0` legend
+  column of a diagram is 49.34 px, not 49.0.
+- **#103 legend box and columns.** `Elements.legendBox: LegendBox(fill, frame, padding, columns)`, none drawn unless a
+  fill or a visible frame is asked for; `Guide.legend(box, background, backgroundPaint, opacity, frame, frameColor,
+  framePaint, frameWidth, padding, columns)`; settings `legend-box.background|opacity|frame|frame-width|padding|columns`
+  (`none` for the fill or the frame); `Figure.withLegendBox(...)` and the plain `withLegendBox(color)`,
+  `withLegendColumns(n)`. Layout in `Svg.render`: `boxPad = padding * sLegends` (padding grows with the legend's text);
+  entries in columns are filled a column before the next (`grouped(ceil(n / columns))`: 7 entries in 3 columns are
+  3, 3, 1), a column is as wide as its widest item (`pitch`); beside the plot the reserved width is `18 + block + 2
+  boxPad` when boxed, so the box ends at the figure's right margin; above or below the plot the columns are a grid
+  beside the heading and the rows after the first keep clear of it; in a corner the box is `pad` (8 sLegends) from the
+  plot's edges. Columns are given up, from the number asked down, until they fit: two fifths of the figure's width
+  beside the plot, the plot's width otherwise. Default output is byte-identical (specs compare up to ids).
+  Decisions: the default fill is the page (`Paint.Surface`) at 0.9 with an `Axis`-colored 1 px frame; a legend box on a
+  3-D scene is refused like any 2-D tweak. Mutations killed: padding not scaled, row-major fill, columns ignoring the
+  room, rows ignoring the title, no room reserved for the box, no fill, columns not limited beside the plot. Looked at
+  in Chromium: right, bottom, top (slides) and lower-left with a data point under the box.
+- **Formatter.** The native scalafmt rewrote `TextWidth.scala` (the Times table); committed on its own.

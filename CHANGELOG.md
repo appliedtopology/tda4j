@@ -158,6 +158,11 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 - `Labels(title = ...)` on a board draws the title above the panels (`Board.heading`); it was only the page's title. The
   color bar of a transformed scale (`Scale.color(transform = Transform.Sqrt)`) labels round numbers between its ends,
   each where the transform puts it (#97).
+- A legend can have a box and columns: `Guide.legend(box = true, background = ..., opacity = ..., frame = ..., padding = ...,
+  columns = 2)` (`withLegendBox(...)`, the settings `legend-box.background/opacity/frame/frame-width/padding/columns`,
+  MATLAB `withLegendBox('white')` and `withLegendColumns(2)`). Without it a legend is drawn as before. The room inside
+  a box grows with the legend's text, and columns that would run a legend off the figure or over the plot are given up
+  (#103).
 - `Camera(azimuth, elevation, zoom)` (`Scene.withCamera`, settings `camera.azimuth/elevation/zoom`) sets the view of a 3-D
   scene: the saved `.svg` is that view, a page's canvas starts from it; a 2-D plot refuses it, and the CLI says so before
   computing.
