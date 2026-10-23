@@ -234,7 +234,8 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     name = "at",
     noshort = true,
     descr = "the scale, in the units of the complex: required for --plot complex; for --plot representative, a " +
-      "cycle is drawn over the complex at this scale and a cocycle restricted to it"
+      "cycle is drawn over the complex at this scale and a cocycle restricted to it (default for a cocycle: its " +
+      "bar's birth; Infinity draws it whole)"
   )
   val saveResult: ScallopOption[String] = opt[String](
     name = "save-result",

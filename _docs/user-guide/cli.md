@@ -157,7 +157,7 @@ follows the reader's light or dark setting) or, without `--output`, a page opene
 |---|---|
 | `--bar N` | for `representative`: the bar, by its 0-based line number in the text output; default the most persistent bar of `--dimension` |
 | `--dimension D` | for `representative` (without `--bar`), `landscape` and `persistence-image`; default `1` |
-| `--at X` | the scale: required for `complex`; for `representative`, a cycle is drawn over the complex at `X` and a cocycle restricted to it |
+| `--at X` | the scale: required for `complex`; for `representative`, a cycle is drawn over the complex at `X` and a cocycle restricted to it (a cocycle is restricted to its bar's birth unless you say; `--at Infinity` draws it whole) |
 | `--title`, `--x-label`, `--y-label` | the words |
 | `--caption`, `--tag`, `--description` | a line under the plot, a letter in its corner for one panel of a figure (`(a)`), and what a screen reader says of it; 2-D plots only |
 | `--look` | a whole look at once: `default`, `print` (`--palette print --style print`) or `clear`; the flags below, after it, win |

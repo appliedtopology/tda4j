@@ -177,6 +177,14 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Changed
 
+- A result's `plotRepresentative(i)` draws a cocycle restricted to the complex at its bar's birth, the few edges that
+  close the loop, instead of the whole cocycle across the data (#75). `plotRepresentative(i, Double.PositiveInfinity)`
+  (CLI `--at Infinity`) draws it whole; `Plot.cocycle` itself is as it was.
+- A result's `plotComplex(at)`, `plotComplex3D(at)` and `plotRepresentative(i, at)` draw the complex the computation
+  built, for every point-cloud complex: witness (on its landmarks), `dtm-rips`, `dtm-alpha` and `sparse-rips` as well as
+  `vr`, `cech` and `alpha`, with the alpha backend and parameters the result used. Past the result's
+  `maxFiltrationValue` the plot stops there and says so (#76).
+
 - The brand is Teal & Gold (was Slate & Gold): the teal is `#1a729b` (`#81bde0` in dark mode). The default plot palette
   (`Palette.brand`) and the live viewer follow: degree 0 is `#1a729b` in light mode and the secondary ink is teal; the
   other slots are as they were.

@@ -159,8 +159,8 @@ Distances, landscapes and images use every bar of the result, reported or not. S
 | `plotDiagram()` | the persistence diagram |
 | `plotLandscape(dimension)`, `plotPersistenceImage(dimension)` | the vectorization of that dimension |
 | `plotInput()` | the points (first two coordinates) or the 2-D image |
-| `plotComplex(at)` | the complex at scale `at` over the points (`vr`, `cech` or `alpha`) |
-| `plotRepresentative(i)`, `plotRepresentative(i, at)` | bar `i`'s cycle or cocycle over the input; with `at`, over the complex at that scale |
+| `plotComplex(at)` | the complex the result was computed from, at scale `at`, over the points; it stops at the result's `maxFiltrationValue` and says so |
+| `plotRepresentative(i)`, `plotRepresentative(i, at)` | bar `i`'s cycle over the input, or its cocycle restricted to the complex at the bar's birth; with `at`, over the complex at that scale (`Inf` draws a cocycle whole) |
 | `plotInput3D()`, `plotComplex3D(at)`, `plotRepresentative3D(i)` | the same in 3-D, from the first three coordinates |
 
 A plot method needs the input the result was computed from; a result from `loadResult` has it.

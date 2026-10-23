@@ -99,9 +99,9 @@ functions. MATLAB itself is not run by the test suite; the same calls are made f
 | method | draws |
 |---|---|
 | `plotBarcode()`, `plotBarcode(longest)`, `plotDiagram()` | the reported bars; the subtitle says how many the threshold hid |
-| `plotRepresentative(i)` | bar `i`'s cycle or cocycle over the points, or its cubical chain over a 2-D image |
-| `plotRepresentative(i, at)` | a cycle over the complex at scale `at`, or a cocycle restricted to the complex at `at` (at the bar's birth: the edges that close the loop) |
-| `plotInput()`, `plotComplex(at)` | the points or the image; the `vr`, `cech` or `alpha` complex at `at` |
+| `plotRepresentative(i)` | bar `i`'s cycle over the points, its cubical chain over a 2-D image, or its cocycle restricted to the complex at the bar's birth: the edges that close the loop |
+| `plotRepresentative(i, at)` | a cycle over the complex at scale `at`, or a cocycle restricted to the complex at `at` (`Inf` draws the whole cocycle) |
+| `plotInput()`, `plotComplex(at)` | the points or the image; the complex the result was computed from at `at` (a witness complex on its landmarks) |
 | `plotLandscape(dimension)`, `plotPersistenceImage(dimension)` | the vectorizations, of every bar (as `landscape` and `persistenceImage` compute them) |
 | `plotInput3D()`, `plotComplex3D(at)`, `plotRepresentative3D(i)` | the same in 3-D (cycles only) |
 | `mostPersistentBar(dimension)` | not a plot: the index of the most persistent reported bar of that dimension |
@@ -172,7 +172,8 @@ Plot.cycle(points, loop.representative).over(Plot.complex(points, loop.birth)).v
 ```
 
 A cocycle of a bar lives on the complex where the bar dies, so it has edges right across the data; restricted to the
-complex at the bar's birth (`at = loop.birth`) it shows the edges that cut the loop as it closes.
+complex at the bar's birth (`at = loop.birth`) it shows the edges that cut the loop as it closes. A result's
+`plotRepresentative(i)` draws a cocycle that way, and `plotRepresentative(i, Inf)` draws it whole.
 
 ## Customizing a plot
 

@@ -141,6 +141,79 @@ object TDA4j:
     heights: Array[Double]
   ): plot.Board = plot.Plot.layout(rows, cols, width, height, gap, widths.toSeq, heights.toSeq)
 
+  /** The complex a result was computed from, up to dimension 2 at the scale `scale`, as a plot draws it: its cells'
+    * vertices number the input's points. `stoppedAt` is the `maxFiltrationValue` that cut the computation short of the
+    * scale asked.
+    */
+  private[matlab] final class DrawnComplex(
+    val stream: CellStream[Simplex[Int], Double],
+    val ball: Option[Double],
+    val name: String,
+    val scale: Double,
+    val stoppedAt: Option[Double]
+  )
+
+  /** The complex of a result with these `options` and `complex` over `ps` at `at` (but no later than the result's own
+    * `maxFiltrationValue`), from the options that built it: its alpha backend, its landmarks, its DTM and sparse
+    * parameters.
+    */
+  private[matlab] def drawnComplex(
+    options: Array[String],
+    complex: String,
+    ps: Array[Array[Double]],
+    landmarks: Array[Int],
+    at: Double
+  ): DrawnComplex =
+    val opts = parseOptions(options)
+    val stop = opts.get("maxfiltrationvalue").map(parseDoubleOption("maxFiltrationValue", _))
+    val r = stop.fold(at)(math.min(at, _))
+    val stoppedAt = stop.filter(_ < at)
+    val space = EuclideanMetricSpace(ps)
+    def upToTriangles(stream: CofaceSimplexStream[Int, Double]): CellStream[Simplex[Int], Double] =
+      LimitedCofaceSimplexStream(stream, 2)
+    def result(stream: CellStream[Simplex[Int], Double], ball: Option[Double], name: String) =
+      DrawnComplex(stream, ball, name, r, stoppedAt)
+    ComplexKind.parse(complex) match
+      case ComplexKind.VR =>
+        result(VietorisRips.fromPoints(ps, 1, Some(r)), Some(r / 2), "Vietoris-Rips")
+      case ComplexKind.Cech =>
+        result(Cech.fromPoints(ps, 1, Some(r)), Some(r), "Cech")
+      case ComplexKind.Alpha =>
+        val requireValid =
+          opts.get("requirevalidtriangulation").exists(parseBooleanOption("requireValidTriangulation", _))
+        val backend = AlphaBackend.parse(opts.getOrElse("alphabackend", "default"))
+        result(AlphaShapes(ps.toIndexedSeq, backend, requireValid, Some(r)), Some(r), "Alpha")
+      case ComplexKind.Witness =>
+        val chosen =
+          if landmarks.nonEmpty then landmarks.toIndexedSeq else resolveLandmarkSelection(opts, space).landmarks
+        val stream = resolveWitnessVariant(opts) match
+          case WitnessVariantKind.Lazy =>
+            upToTriangles(LazyWitnessSimplexStream(space, chosen, resolveWitnessNu(opts), maxFiltrationValue = Some(r)))
+          case WitnessVariantKind.General =>
+            upToTriangles(WitnessCofaceSimplexStream(WitnessGeometry(space, chosen), r))
+        // the stream's vertices are landmark numbers: name them by the points they are, as the representatives do
+        val builder = ExplicitStreamBuilder[Int, Double]()
+        stream.iterator.foreach(c => builder += (stream.filtrationValue(c) -> Simplex.from(c.toIndexedSeq.map(chosen))))
+        result(builder.result(), None, s"Witness (${chosen.size} landmarks)")
+      case ComplexKind.DtmRips =>
+        val k = parseIntOption("dtmK", opts.getOrElse("dtmk", "1"))
+        val q = opts.get("dtmq").map(parseDoubleOption("dtmQ", _)).getOrElse(2.0)
+        val p = opts.get("dtmp").map(parseDoubleOption("dtmP", _)).getOrElse(1.0)
+        val weight = DistanceToMeasure(space, k, q)
+        result(upToTriangles(DtmRipsSimplexStream(space, weight, p, maxFiltrationValue = Some(r))), None, "DTM-Rips")
+      case ComplexKind.DtmAlpha =>
+        val k = parseIntOption("dtmK", opts.getOrElse("dtmk", "1"))
+        val q = opts.get("dtmq").map(parseDoubleOption("dtmQ", _)).getOrElse(2.0)
+        val ac = AlphaComplexDQP.dtm(ps, k, Double.PositiveInfinity, ps.headOption.map(_.length).getOrElse(0), q)
+        result(AlphaComplexDQPStream(ps, ac), None, "DTM-alpha")
+      case ComplexKind.SparseRips =>
+        val epsilon = parseDoubleOption("sparseEpsilon", opts.getOrElse("sparseepsilon", "0.5"))
+        result(
+          upToTriangles(SheehyRipsSimplexStream(space, epsilon, maxFiltrationValue = Some(r))),
+          None,
+          "Sparse Rips"
+        )
+
   def computeFromPoints(points: Array[Array[Double]]): PersistenceResult =
     computeFromPoints(points, Array.empty[String])
 
