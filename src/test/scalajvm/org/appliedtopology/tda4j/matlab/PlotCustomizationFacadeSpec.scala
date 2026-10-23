@@ -95,6 +95,8 @@ class PlotCustomizationFacadeSpec extends Specification:
         "withYScale",
         "withXRange",
         "withYRange",
+        "withXCrossesAt",
+        "withYCrossesAt",
         "withPalette",
         "withStyle",
         "withSetting",

@@ -477,7 +477,7 @@ earlier ones set, and tweaks of different elements come in any order, a `Style` 
 | `marker` | `shape` (a name, a matplotlib code, `pch:N`, `glyph:text`), `size`, `opacity`, `fill`, `edge-width` (0 for none), `edge-color`, `edge-opacity`, `edge-dash`, `edge-visible` |
 | `degree-0`, `degree-1`, ... | `color`, `dark-color`, `label` and the `marker` properties |
 | `segments`, `polygons`, `discs`, `lines` | `width`, `opacity` for segments; `opacity` for polygons and discs; `width` for lines |
-| `x-axis`, `y-axis` | the side alone (`x-axis=top`, `y-axis=right`), or `side`, `reverse` (`true` runs the axis backwards), `padding` (the room around the data, as a fraction of their extent), `min`, `max`, `format` |
+| `x-axis`, `y-axis` | the side alone (`x-axis=top`, `y-axis=right`), or `side`, `reverse` (`true` runs the axis backwards), `padding` (the room around the data, as a fraction of their extent), `min`, `max`, `format`, `crosses-at` (the value of the other axis it goes through) |
 | `aspect` | the length of a y unit over an x unit (`aspect=1` for equal units), or `free` |
 | `numbers` | `locale` (`de`, `fr`, `sv`, ...), `decimal`, `grouping`, `minus` (`space` is a space) |
 | `size` | `width`, `height`: pixels, or a number with a unit, `3.4in`, `8.6cm`, `86mm`, `245pt` |
@@ -519,6 +519,24 @@ val loose = Plot.diagram(d).withAspect(free = true)
 A scale of your own gives a name (the one messages use), the map to the line and the map back, which must undo each other;
 the ticks are round numbers of the data, as on a square-root axis. Keep the functions in a `val`: two axes are on one
 scale (for `Board.shared()`) when they hold the same functions.
+
+**An axis through a value.** An axis is drawn at the bottom (or the top) of the plot and at its left (or right). For data
+that go negative, `crossesAt` draws it through a value of the other axis instead: `Scale.x(crossesAt = 0)` is the x axis
+through `y = 0`, `Scale.y(crossesAt = 0)` the y axis through `x = 0`, each value in the units of the axis it crosses
+(a log axis takes the data's own number, not its logarithm). The numbers stay beside the line, below it or to the left of
+it, or above it and to the right when the axis is given the other `position`; the tick marks start on it and the
+gridlines still run across the plot. The axis label stays at the edge, where the data are not, and the margin the numbers
+needed is given back to the plot. `reverse` is followed, so is any scale.
+
+```scala
+// a ring of points drawn round the origin, as a mathematician draws it
+val ring = Plot.points(points).withXScale(crossesAt = 0).withYScale(crossesAt = 0)
+```
+
+A value the other axis does not show (a plot of positive numbers asked to cross at 0) or cannot place (0 on a log axis)
+leaves the axis at the edge, and a line of small print under the plot says so, so one house style with `crossesAt` fits
+every plot. `x-axis.crosses-at=0` and `y-axis.crosses-at=0` are the same as settings, `withXCrossesAt(0)` and
+`withYCrossesAt(0)` from MATLAB.
 
 ### Numbers
 
@@ -779,6 +797,7 @@ A `plot...` method of a result returns a figure (a `plot...3D` method a scene), 
 | `withSize(width, height)` (3-D) | the size in pixels |
 | `withXScale(name)`, `withYScale(name)` | `'linear'`, `'log'`, `'sqrt'` or `'symlog'` |
 | `withXRange(min, max)`, `withYRange(min, max)` | the visible range of an axis |
+| `withXCrossesAt(y)`, `withYCrossesAt(x)` | the x axis through `y = value`, the y axis through `x = value` |
 | `withAspect(ratio)` | the length of a y unit over an x unit |
 | `withPalette(name)` (3-D) | `'brand'`, `'reference'`, `'print'` or `'clear'` |
 | `withStyle(name)` (3-D) | `'default'`, `'slides'`, `'print'` or `'clear'` |

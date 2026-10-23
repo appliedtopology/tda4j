@@ -1644,6 +1644,138 @@ class PlotGrammarSpec extends Specification:
     }
   }
 
+  "an axis that crosses at a value" should {
+    // dots at (-1, -1), (0, 0), (2, 3): the one in the middle is where each axis should be drawn through
+    val data = Figure(
+      marks = Vector(Mark.Points(IndexedSeq((-1.0, -1.0), (0.0, 0.0), (2.0, 3.0)), IndexedSeq(Paint.Series(0))))
+    )
+    def middle(svg: String): (Double, Double) =
+      val d = drawnMarks(svg)(1)
+      (number(d, "cx"), number(d, "cy"))
+    val axisColor = "#c5c9c9" // Paint.Axis of the light brand palette
+    def horizontalAxis(svg: String): Element =
+      val (px, _, pw, _) = plotArea(svg)
+      lines(svg)
+        .filter(l => l.getAttribute("style").startsWith(s"stroke:$axisColor"))
+        .find { l =>
+          l.getAttribute("y1") == l.getAttribute("y2") && number(l, "x1") == px && number(l, "x2") == px + pw
+        }
+        .get
+    def verticalAxis(svg: String): Element =
+      val (_, py, _, ph) = plotArea(svg)
+      lines(svg)
+        .filter(l => l.getAttribute("style").startsWith(s"stroke:$axisColor"))
+        .find { l =>
+          l.getAttribute("x1") == l.getAttribute("x2") && number(l, "y1") == py && number(l, "y2") == py + ph
+        }
+        .get
+    def numbersOf(svg: String) = elements(svg, "text").filter(_.getAttribute("style").contains("tabular-nums"))
+
+    "draw the x axis through the value of y asked for, with its numbers beside it" in {
+      val svg = (data + Scale.x(crossesAt = 0)).svg(Theme.Light)
+      val (_, y0) = middle(svg)
+      val (_, py, _, ph) = plotArea(svg)
+      number(horizontalAxis(svg), "y1") must beCloseTo(y0, 0.02) // through the dot at y = 0, not at the bottom
+      number(horizontalAxis(svg), "y1") must beLessThan(py + ph - 5)
+      val xNumbers = numbersOf(svg).filter(t => t.getAttribute("text-anchor") == "middle")
+      xNumbers.map(number(_, "y")).distinct must beEqualTo(Seq(y0 + 16.0)) // 16 px below the line, as at the edge
+      // the y axis stays at the left, with its numbers beside it
+      number(verticalAxis(svg), "x1") must beCloseTo(plotArea(svg)._1, 0.02)
+    }
+    "draw the y axis through the value of x asked for, its numbers to the left of it" in {
+      val svg = (data + Scale.y(crossesAt = 0)).svg(Theme.Light)
+      val (x0, _) = middle(svg)
+      val (px, _, _, _) = plotArea(svg)
+      number(verticalAxis(svg), "x1") must beCloseTo(x0, 0.02)
+      number(verticalAxis(svg), "x1") must beGreaterThan(px + 5)
+      val yNumbers = numbersOf(svg).filter(t => t.getAttribute("text-anchor") == "end")
+      yNumbers.map(number(_, "x")).distinct must beEqualTo(Seq(x0 - 6.0))
+    }
+    "follow a reversed axis and a scale that is not linear" in {
+      val flipped = (data + Scale.x(crossesAt = 0) + Scale.y(reverse = true)).svg(Theme.Light)
+      number(horizontalAxis(flipped), "y1") must beCloseTo(middle(flipped)._2, 0.02)
+      val mirrored = (data + Scale.y(crossesAt = 0) + Scale.x(reverse = true)).svg(Theme.Light)
+      number(verticalAxis(mirrored), "x1") must beCloseTo(middle(mirrored)._1, 0.02)
+      val sqrt = Figure(
+        marks = Vector(Mark.Points(IndexedSeq((1.0, 1.0), (2.0, 4.0), (3.0, 9.0)), IndexedSeq(Paint.Series(0))))
+      ) + Scale.y(Transform.Sqrt) + Scale.x(crossesAt = 4)
+      val sq = sqrt.svg(Theme.Light)
+      number(horizontalAxis(sq), "y1") must beCloseTo(number(drawnMarks(sq)(1), "cy"), 0.02) // the dot at y = 4
+    }
+    "keep the axis label at the edge, and take the room the numbers no longer need" in {
+      val labelled = data + Labels(x = "born", y = "dies")
+      val at = labelled + Scale.x(crossesAt = 0) + Scale.y(crossesAt = 0)
+      val (ex, ey, ew, eh) = plotArea(labelled.svg(Theme.Light))
+      val (cx, cy, cw, ch) = plotArea(at.svg(Theme.Light))
+      val svg = at.svg(Theme.Light)
+      // the edge band is the label's 16 px, where it was the numbers' 30 and the label's 16 (the y axis: 42 and 16)
+      (ch - eh) must beCloseTo(30.0, 0.02)
+      (cw - ew) must beCloseTo(42.0 + 16.0 - 16.0, 0.02)
+      number(elements(svg, "text").find(_.getTextContent == "born").get, "y") must beCloseTo(cy + ch + 12.0, 0.02)
+      val dies = elements(svg, "text").find(_.getTextContent == "dies").get
+      number(dies, "x") must beCloseTo(cx - 4.0, 0.02)
+      textsOnPage(svg) must beTrue
+      // the room grows with the text, as the numbers' did
+      val big = (labelled + Style(textScale = 2)).svg(Theme.Light)
+      val bigAt = (at + Style(textScale = 2)).svg(Theme.Light)
+      (plotArea(bigAt)._4 - plotArea(big)._4) must beCloseTo(60.0, 0.02)
+    }
+    "leave a margin when there is no label, and the numbers move with the side asked for" in {
+      val plain = plotArea(data.svg(Theme.Light))
+      plotArea((data + Scale.x(crossesAt = 0)).svg(Theme.Light))._4 must beCloseTo(plain._4 + 16.0, 0.02) // 30 to 14
+      val top = (data + Scale.x(crossesAt = 0, position = Side.Top)).svg(Theme.Light)
+      val y0 = middle(top)._2
+      numbersOf(top).filter(_.getAttribute("text-anchor") == "middle").map(number(_, "y")).distinct must
+        beEqualTo(Seq(y0 - 8.0)) // above the line
+      val right = (data + Scale.y(crossesAt = 0, position = Side.Right)).svg(Theme.Light)
+      val x0 = middle(right)._1
+      numbersOf(right).filter(_.getAttribute("text-anchor") == "start").map(number(_, "x")).distinct must
+        beEqualTo(Seq(x0 + 6.0))
+    }
+    "start the tick marks on the axis, and leave the gridlines across the plot" in {
+      val ticked = (data + Lines.ticks(length = 4) + Scale.x(crossesAt = 0)).svg(Theme.Light)
+      val y0 = middle(ticked)._2
+      val marks = lines(ticked).filter(l =>
+        l.getAttribute("style").startsWith("stroke:#7d8a91") && l.getAttribute("x1") == l.getAttribute("x2")
+      )
+      marks.size must beGreaterThan(2)
+      marks.map(number(_, "y1")).distinct must beEqualTo(Seq(y0))
+      marks.map(number(_, "y2")).distinct must beEqualTo(Seq(y0 + 4.0))
+      val (_, gy, _, gh) = plotArea(ticked)
+      stroked(ticked, "#e4e2dc").count(l => l.getAttribute("x1") == l.getAttribute("x2")) must beGreaterThan(2)
+      stroked(ticked, "#e4e2dc")
+        .filter(l => l.getAttribute("x1") == l.getAttribute("x2"))
+        .forall(l => number(l, "y1") == gy && number(l, "y2") == gy + gh) must beTrue
+    }
+    "stay at the edge, and say so, when the other axis does not show the value" in {
+      val svg = (data + Scale.x(crossesAt = 10)).svg(Theme.Light)
+      val (_, py, _, ph) = plotArea(svg)
+      number(horizontalAxis(svg), "y1") must beCloseTo(py + ph, 0.02)
+      words(svg) must contain("the x axis cannot cross at 10: the y axis does not show it, so it stays at the edge")
+      val sameAsDefault = plotArea(svg)
+      sameAsDefault._4 must beLessThan(plotArea(data.svg(Theme.Light))._4) // room for the note, as for any
+      // 0 is nowhere on a log axis
+      val log =
+        (data.copy(marks = Vector(Mark.Points(IndexedSeq((1.0, 1.0), (2.0, 10.0)), IndexedSeq(Paint.Series(0))))) +
+          Scale.y(Transform.Log10) + Scale.x(crossesAt = 0)).svg(Theme.Light)
+      words(log) must contain("the x axis cannot cross at 0: the y axis does not show it, so it stays at the edge")
+      // a value that is shown makes no note
+      words((data + Scale.x(crossesAt = 0)).svg(Theme.Light)).exists(_.contains("cannot cross")) must beFalse
+    }
+    "draw nothing new for an axis that does not ask" in
+      sameUpToIds((data + Scale.x(position = Side.Bottom)).svg(Theme.Light), data.svg(Theme.Light))
+    "be written as settings, and refuse a value that is not a number" in {
+      data.withSetting("x-axis.crosses-at=0") must beEqualTo(data + Scale.x(crossesAt = 0))
+      data.withSetting("y-axis.crosses-at=-1.5") must beEqualTo(data + Scale.y(crossesAt = -1.5))
+      data.withXCrossesAt(0) must beEqualTo(data + Scale.x(crossesAt = 0))
+      data.withYCrossesAt(2) must beEqualTo(data + Scale.y(crossesAt = 2))
+      data.withXScale(crossesAt = 1).x.crossesAt must beSome(1.0)
+      (data + Scale.x(crossesAt = 1) + Scale.x(min = 0)).x.crossesAt must beSome(1.0) // a later tweak keeps it
+      Settings.parse("x-axis.crosses-at=zero") must throwAn[IllegalArgumentException]("'zero' is not a number")
+      Scale.x(crossesAt = Double.NaN) must throwAn[IllegalArgumentException]("crossesAt = NaN is not a number")
+    }
+  }
+
   "the numbers of a plot" should {
     val signed = Figure(marks = Vector(Mark.Points(IndexedSeq((-1.0, -1.0), (1.0, 1.0)), IndexedSeq(Paint.Series(0)))))
     def tickWords(svg: String) = elements(svg, "text").filter(_.getTextContent.exists(_.isDigit)).map(_.getTextContent)

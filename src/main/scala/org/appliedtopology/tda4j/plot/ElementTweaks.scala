@@ -509,7 +509,7 @@ object Guide:
   * (`locale`, `decimal`, `grouping`, `minus`); `size` (`width`, `height`, in pixels or with `in`, `cm`, `mm`, `pt`);
   * `camera` (`azimuth`, `elevation`, `zoom`, of a 3-D scene); `palette` and `style` alone (`palette=print`); `aspect`
   * (`1`, or `free`); and `x-axis` and `y-axis`, alone (`x-axis=top`) or with `side`, `reverse`, `padding`, `min`,
-  * `max`, `format`.
+  * `max`, `format`, `crosses-at` (the value of the other axis it goes through).
   */
 object Settings:
   private val textProperties = Seq("size", "weight", "italic", "align", "angle", "font", "color", "limit")
@@ -625,19 +625,39 @@ object Settings:
       padding: Optional[Double] = Optional.empty,
       min: Optional[Double] = Optional.empty,
       max: Optional[Double] = Optional.empty,
-      format: Optional[String] = Optional.empty
+      format: Optional[String] = Optional.empty,
+      crossesAt: Optional[Double] = Optional.empty
     ): Tweak =
       if element == "x-axis" then
-        Scale.x(min = min, max = max, format = format, position = position, reverse = reverse, padding = padding)
-      else Scale.y(min = min, max = max, format = format, position = position, reverse = reverse, padding = padding)
+        Scale.x(
+          min = min,
+          max = max,
+          format = format,
+          position = position,
+          reverse = reverse,
+          padding = padding,
+          crossesAt = crossesAt
+        )
+      else
+        Scale.y(
+          min = min,
+          max = max,
+          format = format,
+          position = position,
+          reverse = reverse,
+          padding = padding,
+          crossesAt = crossesAt
+        )
     property match
-      case "side"    => scale(position = Side.named(value))
-      case "reverse" => scale(reverse = flag(spec, value))
-      case "padding" => scale(padding = number(spec, value))
-      case "min"     => scale(min = number(spec, value))
-      case "max"     => scale(max = number(spec, value))
-      case "format"  => scale(format = value)
-      case _         => unknownProperty(element, property, Seq("side", "reverse", "padding", "min", "max", "format"))
+      case "side"       => scale(position = Side.named(value))
+      case "reverse"    => scale(reverse = flag(spec, value))
+      case "padding"    => scale(padding = number(spec, value))
+      case "min"        => scale(min = number(spec, value))
+      case "max"        => scale(max = number(spec, value))
+      case "format"     => scale(format = value)
+      case "crosses-at" => scale(crossesAt = number(spec, value))
+      case _            =>
+        unknownProperty(element, property, Seq("side", "reverse", "padding", "min", "max", "format", "crosses-at"))
 
   /** The degree `degree-1.color=#c2185b` and its markers (`degree-1.size=6`, `degree-1.shape=pch:1`). */
   private def degreeSetting(spec: String, element: String, property: String, value: String): Tweak =

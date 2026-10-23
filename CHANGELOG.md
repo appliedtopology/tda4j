@@ -163,6 +163,11 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   MATLAB `withLegendBox('white')` and `withLegendColumns(2)`). Without it a legend is drawn as before. The room inside
   a box grows with the legend's text, and columns that would run a legend off the figure or over the plot are given up
   (#103).
+- An axis can cross the other at a value: `Scale.x(crossesAt = 0)` draws the x axis through `y = 0`, `Scale.y(crossesAt =
+  0)` the y axis through `x = 0` (`Axis.crossesAt`, `withXScale(crossesAt = ...)`, the settings `x-axis.crosses-at` and
+  `y-axis.crosses-at`, MATLAB `withXCrossesAt(0)`). The numbers stay beside the line, the label at the edge, and the
+  margin the numbers needed goes to the plot. A value the other axis does not show leaves the axis at the edge, with a
+  note under the plot (#104).
 - `Camera(azimuth, elevation, zoom)` (`Scene.withCamera`, settings `camera.azimuth/elevation/zoom`) sets the view of a 3-D
   scene: the saved `.svg` is that view, a page's canvas starts from it; a 2-D plot refuses it, and the CLI says so before
   computing.

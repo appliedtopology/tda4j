@@ -61,3 +61,15 @@ on `claude/project-thread-uhbr7a`. Point-in-time record; the rules that came out
   room, rows ignoring the title, no room reserved for the box, no fill, columns not limited beside the plot. Looked at
   in Chromium: right, bottom, top (slides) and lower-left with a data point under the box.
 - **Formatter.** The native scalafmt rewrote `TextWidth.scala` (the Times table); committed on its own.
+- **#104 axis through a value.** `Axis.crossesAt: Option[Double]`, set by `Scale.x/y(crossesAt = ...)`,
+  `withXScale/withYScale(crossesAt = ...)`, `x-axis.crosses-at`/`y-axis.crosses-at`, plain `withXCrossesAt(v)` and
+  `withYCrossesAt(v)`. Decision (reversible): the value is in the units of the axis it crosses, so `Scale.x(crossesAt = 0)`
+  is the x axis through `y = 0` ("the x axis crosses at 0", as MATLAB's `XAxisLocation = 'origin'`); `Scale.xy` has no
+  `crossesAt`. A crossing is kept when the other axis shows the value in the range before an equal aspect widens it (the
+  margins must not depend on the plot area they shape), else the axis stays at the edge and a note says why; a log axis
+  cannot show 0 or a negative number, so that is the same case. The numbers sit beside the line on the axis's side, the
+  tick marks start on the line, the gridlines still run across. The label stays at the edge: baseline 12 sAxis below the
+  bottom edge (4 above the top, 4 left of the left edge, 12 right of the right edge); the edge band is the label's 16
+  sAxis (14 px at least) in place of the numbers' 30 sTick + label + marks + slant. The range block of `Svg.render` moved
+  above the margins to decide this. Mutations to run: axis at the edge, numbers at the edge, margin kept, label beside the
+  axis.

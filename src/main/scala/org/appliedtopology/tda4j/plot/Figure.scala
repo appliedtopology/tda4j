@@ -167,7 +167,10 @@ enum Ticks:
   * (panels that must line up), `Some(false)` never, leaving what is at 0 out and counting it. `reverse` runs the axis
   * the other way (large values at the left, or at the bottom); `padding` is the fraction of the data's extent left
   * empty at each end when the range is not fixed (default 0.04). `side` puts the axis on the other side of the plot (an
-  * x axis at the `Top`, a y axis at the `Right`). Change an axis of a figure with `Scale.x(...)` and `Labels(x = ...)`.
+  * x axis at the `Top`, a y axis at the `Right`). `crossesAt` draws the axis where the other axis has that value (an x
+  * axis through `y = 0`, a y axis through `x = 0`), in the data units of the other axis, with the numbers beside it and
+  * the label at the edge; a value the other axis does not show leaves the axis at the edge. Change an axis of a figure
+  * with `Scale.x(...)` and `Labels(x = ...)`.
   */
 final case class Axis(
   label: String = "",
@@ -182,7 +185,8 @@ final case class Axis(
   minusInfinity: Option[Boolean] = None,
   side: Option[Side] = None,
   reverse: Boolean = false,
-  padding: Option[Double] = None
+  padding: Option[Double] = None,
+  crossesAt: Option[Double] = None
 ):
   /** Where the axis sits: `side`, or the bottom of an x axis and the left of a y axis, which are the defaults. */
   def sideOr(default: Side): Side = side.getOrElse(default)
@@ -275,9 +279,23 @@ final case class Figure(
     minusInfinity: Optional[Boolean] = Optional.empty,
     position: Optional[Side] = Optional.empty,
     reverse: Optional[Boolean] = Optional.empty,
-    padding: Optional[Double] = Optional.empty
+    padding: Optional[Double] = Optional.empty,
+    crossesAt: Optional[Double] = Optional.empty
   ): Figure =
-    this + Scale.x(transform, min, max, breaks, format, grid, visible, minusInfinity, position, reverse, padding)
+    this + Scale.x(
+      transform,
+      min,
+      max,
+      breaks,
+      format,
+      grid,
+      visible,
+      minusInfinity,
+      position,
+      reverse,
+      padding,
+      crossesAt
+    )
 
   /** The y axis; as [[withXScale]]. */
   def withYScale(
@@ -291,9 +309,23 @@ final case class Figure(
     minusInfinity: Optional[Boolean] = Optional.empty,
     position: Optional[Side] = Optional.empty,
     reverse: Optional[Boolean] = Optional.empty,
-    padding: Optional[Double] = Optional.empty
+    padding: Optional[Double] = Optional.empty,
+    crossesAt: Optional[Double] = Optional.empty
   ): Figure =
-    this + Scale.y(transform, min, max, breaks, format, grid, visible, minusInfinity, position, reverse, padding)
+    this + Scale.y(
+      transform,
+      min,
+      max,
+      breaks,
+      format,
+      grid,
+      visible,
+      minusInfinity,
+      position,
+      reverse,
+      padding,
+      crossesAt
+    )
 
   /** Both axes alike: a log-log diagram is `withXYScale(Transform.Log10)`. */
   def withXYScale(
@@ -543,6 +575,12 @@ final case class Figure(
 
   /** The y axis on the scale called `name`: `linear`, `log`, `sqrt` or `symlog`. */
   def withYScale(name: String): Figure = withYScale(Transform.named(name))
+
+  /** The x axis drawn through `y = value` (see [[Scale.x]]), for MATLAB and Java: `withXCrossesAt(0)`. */
+  def withXCrossesAt(value: Double): Figure = withXScale(crossesAt = value)
+
+  /** The y axis drawn through `x = value` (see [[Scale.y]]), for MATLAB and Java: `withYCrossesAt(0)`. */
+  def withYCrossesAt(value: Double): Figure = withYScale(crossesAt = value)
 
   /** The visible range of the x axis, in data units. */
   def withXRange(min: Double, max: Double): Figure = withXScale(min = min, max = max)

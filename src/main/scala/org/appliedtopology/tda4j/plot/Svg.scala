@@ -308,6 +308,21 @@ object Svg:
       case _: Mark.Diagonal | _: Mark.Rule => 0
     }.sum
 
+    // the range shown
+    val ext = extent(fig.marks, xt, yt, zeroOkX, zeroOkY)
+    val (rangeX, rangeY) = (spaceRange(fig.x, xt, ext.x), spaceRange(fig.y, yt, ext.y))
+    var (x0, x1) = rangeX
+    var (y0, y1) = rangeY
+    checkRange("x", xt, x0, x1)
+    checkRange("y", yt, y0, y1)
+    // where an axis crosses the other: at the value asked for when the other axis shows it (the range before an equal
+    // aspect widens it, so that the margins do not depend on the plot area), else at the edge
+    def shows(tr: Transform, range: (Double, Double))(v: Double): Boolean =
+      val u = tr(v)
+      u.isFinite && u >= math.min(range._1, range._2) && u <= math.max(range._1, range._2)
+    val xAxisAt = fig.x.crossesAt.filter(shows(yt, rangeY)) // a value of y
+    val yAxisAt = fig.y.crossesAt.filter(shows(xt, rangeX)) // a value of x
+
     // layout: the margins make room for the title, the axes, the legend and the color bar
     val legendPlace =
       if legend.isEmpty then LegendPosition.Hidden else style.legend.toOption.getOrElse(fig.legendPlace)
@@ -392,17 +407,25 @@ object Svg:
         case _                     => 6
       if angle == 0.0 then 0.0
       else math.max(0.0, px(TextRole.TickLabel) * (chars * 0.6 * math.sin(angle) + 0.9 * math.cos(angle) - 0.9))
+    // an axis through the middle of the plot has its numbers there, and needs the margin for its label alone
     val xAxisBand =
-      if fig.x.visible then 30.0 * sTick + (if fig.x.label.nonEmpty then 16.0 * sAxis else 0.0) + markOut + slant
-      else 0.0
-    val yAxisBand = if fig.y.visible then 16.0 * sAxis + 42.0 * sTick + markOut else 0.0
+      if !fig.x.visible then 0.0
+      else if xAxisAt.isDefined then if fig.x.label.nonEmpty then 16.0 * sAxis else 0.0
+      else 30.0 * sTick + (if fig.x.label.nonEmpty then 16.0 * sAxis else 0.0) + markOut + slant
+    val yAxisBand =
+      if !fig.y.visible then 0.0
+      else if yAxisAt.isDefined then if fig.y.label.nonEmpty then 16.0 * sAxis else 0.0
+      else 16.0 * sAxis + 42.0 * sTick + markOut
     val head =
       16.0 + (if fig.title.nonEmpty then 22.0 * sc(TextRole.Title) else 0.0) +
         (if fig.subtitle.nonEmpty then 16.0 * sc(TextRole.Subtitle) else 0.0)
-    val left = legendWidthLeft + (if fig.y.visible && !yRight then yAxisBand else 14.0)
+    val left = legendWidthLeft +
+      (if fig.y.visible && !yRight then if yAxisAt.isDefined then math.max(14.0, yAxisBand) else yAxisBand
+       else 14.0)
     val rightAxisBand = if fig.y.visible && yRight then yAxisBand else 0.0
     // what is below the plot: the axis (or a margin, when it is above or not drawn)
-    val axisBand = if fig.x.visible && !xTop then xAxisBand else 14.0
+    val axisBand =
+      if fig.x.visible && !xTop then if xAxisAt.isDefined then math.max(14.0, xAxisBand) else xAxisBand else 14.0
     val right = 16.0 + rightAxisBand + legendWidth + colorbarWidth
     val w = math.max(40.0, fig.width - left - right)
 
@@ -448,6 +471,9 @@ object Svg:
         val why =
           if withoutLine then "at 0 on a log axis drawn without a -∞ line" else "a position that is not a number"
         s"$notShown ${if notShown == 1 then "mark" else "marks"} not shown: $why"
+      } ++ Seq(("x", fig.x.crossesAt, xAxisAt, "y"), ("y", fig.y.crossesAt, yAxisAt, "x")).collect {
+        case (name, Some(v), None, other) =>
+          s"the $name axis cannot cross at ${number(v)}: the $other axis does not show it, so it stays at the edge"
       }
     val noteBand = 14.0 * sc(TextRole.Note) * notes.size
     val captionBand = if fig.caption.isEmpty then 0.0 else 16.0 * sc(TextRole.Caption)
@@ -455,12 +481,6 @@ object Svg:
       axisBand + (if legendPlace == LegendPosition.Bottom then legendBand else 0.0) + noteBand + captionBand
     val h = math.max(40.0, fig.height - top - bottom)
 
-    // the range shown
-    val ext = extent(fig.marks, xt, yt, zeroOkX, zeroOkY)
-    var (x0, x1) = spaceRange(fig.x, xt, ext.x)
-    var (y0, y1) = spaceRange(fig.y, yt, ext.y)
-    checkRange("x", xt, x0, x1)
-    checkRange("y", yt, y0, y1)
     // What is at 0 on a log axis goes on a `-∞` line below the lowest number; the numbers keep the pixels the line and
     // the room for a marker under it leave (`reserveX`, `reserveY`), which is also the length equal units are measured on.
     val bandOnX = zeroOkX && (ext.zeroX || fig.x.minusInfinity.contains(true))
@@ -585,8 +605,11 @@ object Svg:
     val minorX = minorOf(fig.x, xt, mainX, startX, x1)
     val minorY = minorOf(fig.y, yt, mainY, startY, y1)
     val (gridStroke, minorGridStroke, axisStroke) = (el.gridStroke, el.minorGridStroke, el.axisStroke)
-    val xAxisY = if xTop then top else top + h
-    val yAxisX = if yRight then left + w else left
+    // the axis lines: at the edge of the plot area, or through the value asked for
+    val xEdgeY = if xTop then top else top + h
+    val yEdgeX = if yRight then left + w else left
+    val xAxisY = xAxisAt.fold(xEdgeY)(f.py)
+    val yAxisX = yAxisAt.fold(yEdgeX)(f.px)
     // a tick mark of `length` pixels on an axis, pointing out of the plot or into it
     def markEnd(axisAt: Double, outSign: Double, m: TickMarks): Double =
       axisAt + outSign * m.length * (if m.direction == TickDirection.Out then 1.0 else -1.0)
@@ -635,7 +658,8 @@ object Svg:
           case Anchor.Middle => (left + w / 2, "middle")
           case Anchor.End    => (left + w, "end")
         val labelBase =
-          if xTop then xAxisY - markOut - 30.0 * sTick - slant + 0.7 * sAxis
+          if xAxisAt.isDefined then if xTop then xEdgeY - 4.0 * sAxis else xEdgeY + 12.0 * sAxis
+          else if xTop then xAxisY - markOut - 30.0 * sTick - slant + 0.7 * sAxis
           else xAxisY + markOut + 30.0 * sTick + 6.0 * sAxis + slant
         sb ++= s"""<text x="${fmt(lx)}" y="${fmt(labelBase)}" text-anchor="$anchor" font-size="${fmt(
             px(TextRole.AxisLabel)
@@ -668,7 +692,8 @@ object Svg:
           case Anchor.Middle => (top + h / 2, "middle")
           case Anchor.End    => (top, "end")
         val lx =
-          if yRight then yAxisX + markOut + 42.0 * sTick + 2.0 * sAxis
+          if yAxisAt.isDefined then if yRight then yEdgeX + 12.0 * sAxis else yEdgeX - 4.0 * sAxis
+          else if yRight then yAxisX + markOut + 42.0 * sTick + 2.0 * sAxis
           else yAxisX - markOut - (42.0 * sTick + 2.0 * sAxis)
         sb ++= s"""<text x="${fmt(lx)}" y="${fmt(cy)}" transform="rotate(-90 ${fmt(lx)} ${fmt(
             cy
