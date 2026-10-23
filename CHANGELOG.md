@@ -240,6 +240,10 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Fixed
 
+- `Numbers.locale("ar")`, `"fa"` and the other locales that write their own digits (Burmese, Bengali, Nepali,
+  Marathi, ...) take their separators for the digits 0 to 9 the plot writes; `ar` gave the Arabic decimal separator `٫`
+  between Latin digits. On Scala.js the invisible direction mark that `Intl.NumberFormat` puts before a minus sign is
+  left out (#107).
 - The packed Ripser engine, which `Persistence` uses for point clouds and metric spaces (also in MATLAB and the CLI), no
   longer fails with `binomial(n, k) overflows Long` once C(n + d + 2, d + 2) passes 2^63 for `maxDimension = d`
   (about 16,000 points to degree 3, 122,000 to degree 2). It numbers the simplices with two words from there on, and

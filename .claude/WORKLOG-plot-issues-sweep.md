@@ -93,3 +93,12 @@ on `claude/project-thread-uhbr7a`. Point-in-time record; the rules that came out
   "Persistence diagram" and the `<desc>` as its description in the accessibility tree; dragging and the wheel change the
   3-D canvas (the page script starts at `az=0.698…, el=0.349…, zoom=1.5`). Not checkable here: MATLAB, `view()` in a
   desktop browser, R's composite `pch` shapes, other browsers.
+- **#107 locale data (found by the check, fixed).** `Numbers.locale` on JDK 21 (CLDR) for 26 tags: `de fr pt-BR ru pl nl it
+  tr da cs` a comma and `-`; `sv-SE nb fi` a comma and `−` (U+2212); `en-* ja zh ko hi-IN he es-MX de-CH en-IN` a point;
+  `ar` and `fa` gave `٫` (U+066B, Arabic decimal separator) because their default digits are Arabic-Indic, while a plot
+  writes 0-9: the JVM now asks for the `nu=latn` numbering system, Scala.js passes `numberingSystem: "latn"` to
+  `Intl.NumberFormat` and drops the direction marks (U+200E, U+200F, U+061C) it puts before a minus. With Latin digits
+  every tag above has ASCII separators; `fa` and `sv`, `nb`, `fi` keep a true minus. `Locale.forLanguageTag` never
+  throws, so a nonsense tag still gives the root locale's symbols (`.` and `-`), as before. The spec fails on the old code.
+  The Scala.js half compiles (`sbt tda4jJS/compile`) and its option was tried in Node 20 (`ar`: `-` and `.`); the Scala.js
+  specs of it were not run separately.

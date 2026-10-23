@@ -16,9 +16,12 @@ private[plot] object RootText:
   /** `String.format` with `Locale.ROOT`: a point for a decimal separator, whatever the default locale. */
   def format(pattern: String, args: AnyRef*): String = String.format(Locale.ROOT, pattern, args*)
 
-  /** The decimal separator and the minus sign of the locale `tag` (`de`, `fr`, `sv-SE`); the root locale's for a tag
-    * that names none.
+  /** The decimal separator and the minus sign of the locale `tag` (`de`, `fr`, `sv-SE`), for the digits 0 to 9 a plot
+    * writes (so `ar` has a point, not the Arabic decimal separator of its own digits); the root locale's for a tag that
+    * names none.
     */
   def decimalAndMinus(tag: String): (String, String) =
-    val symbols = java.text.DecimalFormatSymbols.getInstance(Locale.forLanguageTag(tag.trim))
+    val latin =
+      Locale.Builder().setLocale(Locale.forLanguageTag(tag.trim)).setUnicodeLocaleKeyword("nu", "latn").build()
+    val symbols = java.text.DecimalFormatSymbols.getInstance(latin)
     (symbols.getDecimalSeparator.toString, symbols.getMinusSign.toString)

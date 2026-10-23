@@ -1871,6 +1871,15 @@ class PlotGrammarSpec extends Specification:
       Numbers(decimal = "1") must throwAn[IllegalArgumentException]("not a digit")
       Numbers(minus = "toolong") must throwAn[IllegalArgumentException]("one to three characters")
     }
+    "take a locale's separators for the digits 0 to 9, whatever digits the locale writes with" in {
+      // Arabic, Persian, Burmese, Bengali, Nepali and Marathi write their own digits by default; a tick label has the
+      // digits it always has, so a separator of those digits (Arabic `٫`) would sit in a number of other ones
+      val ascii = Seq("ar", "fa", "my", "bn", "ne", "mr").map(tag => tag -> NumberStyle.locale(tag))
+      ascii.forall((_, style) => style.decimal.exists(d => d == "." || d == ",")) must beTrue
+      NumberStyle.locale("ar").decimal must beSome(".")
+      NumberStyle.locale("fa").minus must beSome("−") // Persian has a true minus even with these digits
+      tickWords((signed + Numbers.locale("ar")).svg(Theme.Light)) must contain("-0.5")
+    }
     "be written as settings" in {
       (three + Settings.parse("numbers.locale=sv")).elements.numbers.decimal must beSome(",")
       (three + Settings.parse("numbers.minus=−")).elements.numbers.minus must beSome("−")

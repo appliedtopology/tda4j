@@ -543,7 +543,8 @@ every plot. `x-axis.crosses-at=0` and `y-axis.crosses-at=0` are the same as sett
 
 `Numbers` sets how the numbers of the tick labels and the color bar are written: the decimal separator, a mark between
 groups of three digits, and the minus sign. `Numbers.locale("de")` takes what a locale writes (a comma and a hyphen for
-German, a comma and a true minus sign `−` for Swedish); the symbols can also be given one by one. Anything that is not a
+German, a comma and a true minus sign `−` for Swedish; the digits stay `0` to `9`, so Arabic has a point, not its
+own decimal separator); the symbols can also be given one by one. Anything that is not a
 number, such as an `H0` in a legend, is left alone.
 
 ```scala
