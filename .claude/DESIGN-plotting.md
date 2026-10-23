@@ -65,5 +65,5 @@ The project lead asked for the brand colors as the defaults: `Palette.brand` (Sl
 fail chart checks (slate's chroma 0.06 "reads gray"; teal sits 5.4 ΔE from slate), so slots were searched in OKLCH at
 the brand hues (slate 234°, gold 87°, brick 28° from the site's error color, then teal, orange, violet, olive, rose) for
 the lightness band, chroma floor and contrast on the brand surfaces (`#f8f7f4`, `#161b1e`), closest to the brand
-values, and confirmed with the dataviz validator. Gold came out at `#a68018` (the brand-mark gold is `#a67f07`).
+values, and confirmed with the dataviz validator. Gold came out at `#a68018` (the brand-mark gold is `#a67f07`). (2026-10-23: the brand moved to Teal & Gold, `WORKLOG-brand-teal.md`; slot 0 is now the brand-mark teal `#1a729b`, which passes the chroma floor.)
 `Palette.reference` keeps the method's neutral palette.

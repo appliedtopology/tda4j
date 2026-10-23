@@ -3,7 +3,7 @@
 <style>
      :root {
           /* text */
-          --text-primary: #3c5a6b;
+          --text-primary: #205976;
           --text-secondary: #866504;
           --text-text-tertiary: #206f6f;
           --text-text-inverted: #eef3f5;
@@ -16,8 +16,8 @@
      :root.theme-dark {
 
           /* text */
-          --text-primary: #8fb4c7;
-          --text-secondary: #f3d068;
+          --text-primary: #81bde0;
+          --text-secondary: #f0c647;
           --text-text-tertiary: #75c7c7;
           --text-text-inverted: #1a262b;
 
@@ -31,6 +31,10 @@
      :is(#content h1, h2, h3, h4, h5, h6, .h50, .h100, .h200, .h300, .h400, .h500, .h600, .h700) {
           color: var(--text-secondary);
      }
+     /* The large logo comes in a light and a dark version (brand/large-logo.svg, large-logo-dark.svg); the page holds both. */
+     .logo-dark { display: none; }
+     :root.theme-dark .logo-light { display: none; }
+     :root.theme-dark .logo-dark { display: inline; }
 </style>
 <style>
      /* Language tabsets: <div class="tabset"><div class="tab" data-lang="Scala">...</div>...</div>; see WORKLOG-tutorial-tabs.md */

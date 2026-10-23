@@ -40,7 +40,7 @@ chrome roles (`Ink`, `Muted`, `Grid`, ...), `Paint.Value(v)` for a data value th
 transform, stops) colors through the palette AT RENDER, `Fixed(hex)` only for a color the user chose. A mark never holds a
 color computed from a palette at construction: that is what made `copy(palette = ...)` leave heatmaps behind. `Theme.Auto` = CSS variables of the `<svg>` with a
 `prefers-color-scheme` block (pages, viewer); `Light`/`Dark` = plain hex (files; `.svg` saves default to `Light`).
-`Palette.brand` (default, Slate & Gold from `brand/DECISIONS.md`) was searched in OKLCH around the brand hues and checked
+`Palette.brand` (default, Teal & Gold from `brand/DECISIONS.md`) was searched in OKLCH around the brand hues and checked
 with the dataviz validator: slots 0-2 pass ALL pairs in both modes (a diagram puts any two degrees side by side), 0-7
 adjacent pairs. Re-run the validator after changing any slot; never cycle hues past 8. Degree also gets a marker shape.
 
