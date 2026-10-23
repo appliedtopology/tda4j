@@ -91,7 +91,8 @@ class WideIndicesSpec extends mutable.Specification:
       .and(again must beEqualTo(a))
       .and(keys.find(2L, 5L) must beEqualTo(b))
       .and(keys.find(99999L, 5L) must beEqualTo(WideKeys.Absent))
-      .and(many.map((h, l) => keys.find(h, l)) must beEqualTo(numbered))
+      // `==` and a Boolean: `beEqualTo` renders both 5,000-element sides (3.5 s) before it compares them.
+      .and((many.map((h, l) => keys.find(h, l)) == numbered) must beTrue)
       .and(numbered.distinct.size must beEqualTo(many.size))
   }
 
