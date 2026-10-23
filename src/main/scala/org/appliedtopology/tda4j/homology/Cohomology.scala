@@ -36,8 +36,8 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
 
   private var largest: Option[FiltrationT] = None
 
-  /** The largest filtration value among the cells of the stream the last run read, `None` before any run: what a
-    * caller needs of the whole stream without iterating it again.
+  /** The largest filtration value among the cells of the stream the last run read, `None` before any run: what a caller
+    * needs of the whole stream without iterating it again.
     */
   def largestFiltrationValue: Option[FiltrationT] = largest
 
