@@ -102,3 +102,13 @@ on `claude/project-thread-uhbr7a`. Point-in-time record; the rules that came out
   throws, so a nonsense tag still gives the root locale's symbols (`.` and `-`), as before. The spec fails on the old code.
   The Scala.js half compiles (`sbt tda4jJS/compile`) and its option was tried in Node 20 (`ar`: `-` and `.`); the Scala.js
   specs of it were not run separately.
+- **#101 PNG and PDF (decision: documented external conversion only).** User guide section "PNG and PDF". Run here on a
+  saved diagram SVG (print look, 560 × 520): `cairosvg 2.9.1` (pip, in a scratch venv) `--scale 2` gave 1120 × 1040 and
+  `--scale 3.125` 1750 × 1625, `-d` changes only inches and centimetres, not the pixels, so the guide uses `--scale`; its PDF
+  embeds `LiberationSans` and `LiberationSans-Bold` as subsets (text stays text, fonts inside). Chromium's command line
+  (`--headless --force-device-scale-factor=2 --window-size=560,520 --screenshot`) gave 1120 × 1040; `--print-to-pdf` gives a
+  Letter page (612 × 792 pt) with the figure in the corner, which the guide says. Not run (no Inkscape, no `rsvg-convert`
+  here; ImageMagick 6.9 has no SVG delegate): the Inkscape 1.x lines (`--export-type`, `--export-dpi`,
+  `--export-text-to-path`) and the `rsvg-convert` lines (`-f`, `-z`) are written from those tools' manuals. Whether a given
+  converter resolves `Helvetica, Arial, 'Liberation Sans'` the same way was seen only for cairosvg and Chromium (both reach
+  Liberation Sans here).

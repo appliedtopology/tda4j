@@ -50,6 +50,37 @@ Plot.side(Plot.barcode(diagram), Plot.diagram(diagram)).save("both.svg")
 
 `figure.svg()` is the SVG as a string: a notebook cell that displays HTML, or any web page, shows it as it is.
 
+### PNG and PDF
+
+`save` writes SVG and HTML; a PNG or a PDF is one command on the saved `.svg`, with a tool that is already on most
+machines. The SVG is 96 pixels to the inch, so a scale of 2 is 192 dpi and 3.125 is 300 dpi.
+
+```shell sc:nocompile
+# cairosvg (pip install cairosvg): PNG at 300 dpi, and a PDF that has the fonts it used inside
+cairosvg diagram.svg -o diagram.png --scale 3.125
+cairosvg diagram.svg -o diagram.pdf
+
+# Chromium or Chrome: PNG at twice the size (the window is the figure's width and height), PDF on a page
+chromium --headless --hide-scrollbars --force-device-scale-factor=2 --window-size=560,520 \
+  --screenshot=diagram.png file:///path/to/diagram.svg
+chromium --headless --no-pdf-header-footer --print-to-pdf=diagram.pdf file:///path/to/diagram.svg
+
+# Inkscape 1.x: PNG, and a PDF with the text turned into outlines, for a publisher who wants no fonts
+inkscape diagram.svg --export-type=png --export-dpi=300 --export-filename=diagram.png
+inkscape diagram.svg --export-type=pdf --export-text-to-path --export-filename=diagram.pdf
+
+# librsvg
+rsvg-convert -f png -z 3.125 diagram.svg -o diagram.png
+rsvg-convert -f pdf diagram.svg -o diagram.pdf
+```
+
+The figure names its fonts in a list, `system-ui, ...` by default and `Helvetica, Arial, 'Liberation Sans', sans-serif`
+in the print look (`Style(font = ...)` sets another), and a converter takes the first one it has installed: the letters of a
+PNG are those of that machine. For a figure that must look the same wherever it is opened, use a PDF, which holds the
+font, or Inkscape's outlines. Chromium's command line puts the figure in the corner of a letter-size page. A page that
+follows the reader's dark setting (`.html`) is not what a converter should be given: save the `.svg` in the theme you
+want (`save("d.svg", Some(Theme.Dark))`).
+
 ## From MATLAB, Java and the command line
 
 A result of the [MATLAB interface](matlab.md) draws itself: each `plot...` method returns a figure, to `view()` or

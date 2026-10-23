@@ -279,6 +279,8 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Build, CI and Documentation
 
+- The plotting guide has a section on PNG and PDF: the commands for `cairosvg`, Chromium, Inkscape (text as outlines) and
+  `rsvg-convert` that turn a saved `.svg` into either, with the resolution and the font caveats (#101).
 - The logo, favicons, header icons and docs theme colors are teal and gold. The docs site has a dark-mode favicon
   (`favicon-dark-N.png`, which the dark `prefers-color-scheme` links in the page head use in place of the light ones) and a
   dark-mode front-page logo; the dark icon PNGs and the dark web manifest sit on the dark surface instead of white.
