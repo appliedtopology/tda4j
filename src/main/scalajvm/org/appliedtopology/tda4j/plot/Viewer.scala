@@ -193,8 +193,8 @@ object Viewer extends cask.MainRoutes:
       |<html lang="en"><head><meta charset="utf-8"><meta name="color-scheme" content="light dark">
       |<title>TDA4j plots</title>
       |<style>
-      |:root{--surface:#f8f7f4;--ink:#1f2d36;--muted:#7d8a91;--line:#e4e2dc;--accent:#3c5a6b}
-      |@media (prefers-color-scheme: dark){:root{--surface:#161b1e;--ink:#e8eef1;--muted:#7f8c93;--line:#252d32;--accent:#8fb4c7}}
+      |:root{--surface:#f8f7f4;--ink:#1f2d36;--muted:#7d8a91;--line:#e4e2dc;--accent:#205976}
+      |@media (prefers-color-scheme: dark){:root{--surface:#161b1e;--ink:#e8eef1;--muted:#7f8c93;--line:#252d32;--accent:#81bde0}}
       |html,body{margin:0;height:100%;background:var(--surface);color:var(--ink);font-family:system-ui,-apple-system,'Segoe UI',sans-serif}
       |body{display:flex}
       |nav{width:220px;border-right:1px solid var(--line);overflow:auto;padding:12px 0;flex:none}

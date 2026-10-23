@@ -70,7 +70,7 @@ class PlotSpec extends Specification:
       auto must contain("prefers-color-scheme: dark")
       val light = fig.svg(Theme.Light)
       light must not(contain("var(--"))
-      light must contain(Palette.brand.seriesLight(0)) // degree 0 in slate
+      light must contain(Palette.brand.seriesLight(0)) // degree 0 in teal
       light must contain(Palette.brand.seriesLight(1)) // degree 1 in gold
       fig.svg(Theme.Dark) must contain(Palette.brand.seriesDark(1))
     }

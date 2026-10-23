@@ -4,7 +4,7 @@ layout: main
 
 <center>
 
-![TDA4j](/images/large-logo.svg)
+<img class="logo-light" src="/images/large-logo.svg" alt="TDA4j" width="400"><img class="logo-dark" src="/images/large-logo-dark.svg" alt="TDA4j" width="400">
 
 </center>
 

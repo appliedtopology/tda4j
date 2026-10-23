@@ -170,6 +170,9 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Changed
 
+- The brand is Teal & Gold (was Slate & Gold): the teal is `#1a729b` (`#81bde0` in dark mode). The default plot palette
+  (`Palette.brand`) and the live viewer follow: degree 0 is `#1a729b` in light mode and the secondary ink is teal; the
+  other slots are as they were.
 - `BarcodeDistance.bottleneckDistance` no longer builds the all-pairs cost matrix: near pairs are found in a window of
   the other diagram sorted by birth, and feasibility is two matchings (one covering the bars too far from the diagonal on
   each side). The values are the same; two random diagrams of 1,500 bars took 22 s and take 0.2 s.
@@ -240,6 +243,10 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Build, CI and Documentation
 
+- The logo, favicons, header icons and docs theme colors are teal and gold. The docs site has a dark-mode favicon
+  (`favicon-dark-N.png`, which the dark `prefers-color-scheme` links in the page head use in place of the light ones) and a
+  dark-mode front-page logo; the dark icon PNGs and the dark web manifest sit on the dark surface instead of white.
+  `brand/build-assets.cjs` regenerates the files in `_assets/images/` from the masters in `brand/`.
 - The user guide's plotting page has a "Customizing a plot" section; the CLI and MATLAB pages point to it.
 - CI starts every sbt command with `--server`. The sbt server that the thin client left running intermittently failed a
   job (most visibly `mima` and `test-js`) in setup-sbt's post-job cache step, after every step of the job had passed.

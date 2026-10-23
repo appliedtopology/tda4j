@@ -295,10 +295,10 @@ val patchDocFavicon: Seq[Setting[?]] = Seq(
           |<link rel="manifest" href="/images/manifest.json"/>
           |<link rel="shortcut icon" type="image/svg+xml" href="/images/header-icon-dark.svg" media="(prefers-color-scheme: dark)" />
           |<link rel="apple-touch-icon" sizes="180x180" href="/images/header-icon-dark-180.png" media="(prefers-color-scheme: dark)" />
-          |<link rel="icon" sizes="16x16" type="image/png" href="/images/favicon-16.png" media="(prefers-color-scheme: dark)" />
-          |<link rel="icon" sizes="32x32" type="image/png" href="/images/favicon-32.png" media="(prefers-color-scheme: dark)" />
-          |<link rel="icon" sizes="48x48" type="image/png" href="/images/favicon-48.png" media="(prefers-color-scheme: dark)" />
-          |<link rel="icon" sizes="64x64" type="image/png" href="/images/favicon-64.png" media="(prefers-color-scheme: dark)" />
+          |<link rel="icon" sizes="16x16" type="image/png" href="/images/favicon-dark-16.png" media="(prefers-color-scheme: dark)" />
+          |<link rel="icon" sizes="32x32" type="image/png" href="/images/favicon-dark-32.png" media="(prefers-color-scheme: dark)" />
+          |<link rel="icon" sizes="48x48" type="image/png" href="/images/favicon-dark-48.png" media="(prefers-color-scheme: dark)" />
+          |<link rel="icon" sizes="64x64" type="image/png" href="/images/favicon-dark-64.png" media="(prefers-color-scheme: dark)" />
           |<link rel="icon" sizes="128x128" type="image/png" href="/images/header-icon-dark-128.png" media="(prefers-color-scheme: dark)" />
           |<link rel="icon" sizes="256x256" type="image/png" href="/images/header-icon-dark-256.png" media="(prefers-color-scheme: dark)" />
           |<link rel="manifest" href="/images/manifest-dark.json" media="(prefers-color-scheme: dark)" />

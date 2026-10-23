@@ -546,7 +546,7 @@ object Plot:
   private def gridPoint(a0: Double, a1: Double): XY = (a1, -a0)
 
   /** A chain of cubes (a cycle or cocycle of an image's diagram) drawn over the image: edges as thick segments,
-    * vertices as dots, squares filled; coefficients in the tooltips. Its degree's color, gold on the slate ramp in the
+    * vertices as dots, squares filled; coefficients in the tooltips. Its degree's color, gold on the teal ramp in the
     * brand palette.
     */
   def cubicalChain(img: Image, chain: Terms[Cube], title: String = "Representative")(using look: Look): Figure =

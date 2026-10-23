@@ -256,8 +256,8 @@ diagram, and it starts where the numbers do, not at the `-∞` line.
 
 ### Colors
 
-Homological degree `k` always has the same color and marker shape: degree 0 slate, degree 1 gold, degree 2 brick, so
-`H1` looks the same in every plot whichever degrees are shown. The default palette is TDA4j's Slate & Gold, stepped for
+Homological degree `k` always has the same color and marker shape: degree 0 teal, degree 1 gold, degree 2 brick, so
+`H1` looks the same in every plot whichever degrees are shown. The default palette is TDA4j's Teal & Gold, stepped for
 charts and checked for color-vision deficiencies (the first three degrees stay distinguishable side by side for every
 common deficiency). `Palette.reference` is a neutral alternative, and `Palette.print` is for a paper: black text on a
 background of exactly white, where the default's cream would print as a grey patch, and `Palette.clear` is black or white
