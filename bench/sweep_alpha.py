@@ -4,7 +4,7 @@ what do the ambient dimension and the point count cost each backend?
 
     bench/run.sh sweep-alpha [--dims 5,6,7,8,10,12,15,20,25] [--points 40,60] [--shapes interior,surface]
                              [--grid "11:40,100,300,900"] [--extra 800:11:interior] [--seeds 3] [--timeout 1800]
-                             [--jvm-heap 64g] [--py-mem-gb 128]
+                             [--jvm-heap 64g] [--py-mem-gb 128] [--count] [--validity "interior:4:25:1000;..."]
 
 `run.sh setup` must have run. The inputs are random points of the unit cube [0,1]^d, the kind the Helix thesis uses (as it
 was described to us): n points uniform in the interior, or on the surface (a facet chosen uniformly, one coordinate fixed
@@ -31,6 +31,13 @@ it, and d + 1 points on one facet lie in a hyperplane, which breaks general posi
 of 10 draws at d = 5, 4 of 10 at d = 6, and not from d = 8). Points on a sphere are not sampled: they are all cospherical,
 and every Delaunay-based tool then triangulates the one degenerate cell its own way.
 
+`--count` also counts the cells (dimension 0 to dim + 1) of the complex TDA4j's stream and GUDHI's simplex tree build on
+each draw (the `cells` column and a table in sweep.md), so time can be set against the size of the triangulation.
+`--validity shape:d:n:draws;..` runs the Helix failure rate in one JVM per cell (`PaperBenchmarkDriver task=helix-validity`,
+its own draws): the clouds whose triangulation fails the fast alpha engine's checks, those where
+`requireValidTriangulation` throws, and those where the walk fell back to its slow search; validity.csv and a table in
+sweep.md. A rate of 1 in 170 needs on the order of 1000 draws per cell.
+
 Output, in --out (default $WORKDIR/sweeps/alpha-<timestamp>): sweep.csv (one row per run), bars/, logs/, sweep.md (time,
 memory, and the distance to the reference barcode). `sweep_alpha.py --summarize DIR` rebuilds the tables.
 """
@@ -48,12 +55,14 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bench  # noqa: E402  (Case, TOOLS, command, run_proc, last_json, available, agreement, read_bars)
+import count_cells  # noqa: E402  (count_tda4j, count_gudhi: the size of the complex a draw produces)
 
 TOOL_NAMES = ["tda4j", "tda4j-helix", "tda4j-fastalpha", "tda4j-dqp", "tda4j-cech", "gudhi",
               "tda4j-js", "tda4j-js-helix", "tda4j-js-fastalpha", "tda4j-js-dqp"]
 REFERENCES = ["gudhi", "tda4j-cech", "tda4j-dqp"]  # the barcode a row is compared with: the first that finished
 COLUMNS = ["shape", "n", "d", "series", "seed", "tool", "status", "reason", "degenerate", "densest_facet", "cold_wall_s",
-           "cold_s", "warm_median_s", "rss_mb", "rss_src", "heap_peak_mb", "old_peak_mb", "bars"]
+           "cold_s", "warm_median_s", "rss_mb", "rss_src", "heap_peak_mb", "old_peak_mb", "bars", "cells"]
+COUNTED = ("tda4j", "gudhi")  # the tools whose complex is counted per draw: TDA4j's own stream and GUDHI's simplex tree
 
 
 def points(shape, n, d, seed):
@@ -115,7 +124,7 @@ def run_cell(name, kind, opts, shape, n, d, seed, series, args, bench_args, out)
            "cold_wall_s": f"{cold.wall:.3f}", "cold_s": f"{j['times_s'][0]:.4f}" if j else "", "warm_median_s": "",
            "rss_mb": f"{cold.rss_mb:.0f}", "rss_src": cold.rss_src,
            "heap_peak_mb": j.get("heap_peak_mb", "") if j else "", "old_peak_mb": j.get("old_peak_mb", "") if j else "",
-           "bars": json.dumps(j["bars"]) if j else ""}
+           "bars": json.dumps(j["bars"]) if j else "", "cells": ""}
     if j and j["times_s"][0] < args.warm_cap and args.trials > 0:
         warm = bench.run_proc(bench.command(kind, name, opts, case, data, args.field, None, 1, args.trials, bars,
                                             bench_args), args.timeout * (args.trials + 1),
@@ -128,7 +137,42 @@ def run_cell(name, kind, opts, shape, n, d, seed, series, args, bench_args, out)
                 row[key] = max(float(row[key] or 0), float(jw.get(key, 0))) or ""
         elif warm.status != "ok":
             row["status"], row["reason"] = warm.status, "warm run: " + warm.reason
+    if row["status"] == "ok" and name in COUNTED and args.count:
+        row["cells"] = cell_counts(name, case, data / rel, args, out)
     return row
+
+
+def cell_counts(name, case, path, args, out):
+    """The cells of dimension 0 to dim + 1 of the complex `name` built on this draw (`count_cells.py`: TDA4j's stream
+    iterated and not reduced, or GUDHI's simplex tree), as JSON; empty if the count did not finish."""
+    cargs = Namespace(python=args.python, timeout=args.timeout, jvm_heap=args.jvm_heap, jvm_opts=args.jvm_opts,
+                      gudhi_python_ok=True, gudhi_mem_gb=args.py_mem_gb)
+    count = count_cells.count_gudhi if name == "gudhi" else count_cells.count_tda4j
+    r = count(case, path, None, cargs, out)
+    return r["cells"] if r and r["status"] == "ok" else ""
+
+
+def validity_runs(args, out):
+    """`--validity shape:d:n:draws;..`: the failure rate of the Helix triangulation, one JVM per cell (driver mode
+    `task=helix-validity`). Rows go to validity.csv; the draws are the driver's own, not the sweep's."""
+    cp = Path(os.environ["TDA4J_CP"]).read_text().strip()
+    rows = []
+    for item in [t for t in args.validity.split(";") if t.strip()]:
+        shape, d, n, draws = item.split(":")
+        cmd = (["java"] + bench.jvm_flags(args.jvm_heap, args.jvm_opts) +
+               ["-cp", cp, "org.appliedtopology.tda4j.PaperBenchmarkDriver", "task=helix-validity",
+                f"shape={shape}", f"d={d}", f"n={n}", f"draws={draws}"])
+        proc = bench.run_proc(cmd, args.timeout * 4, out / "logs" / f"validity_{shape}_{d}_{n}")
+        j = bench.last_json(proc.text) if proc.status == "ok" else None
+        rows.append({"shape": shape, "d": d, "n": n, "draws": draws, "status": proc.status,
+                     "invalid": j["invalid"] if j else "", "repair_threw": j["repair_threw"] if j else "",
+                     "fallback_draws": j["fallback_draws"] if j else "", "seconds": f"{proc.wall:.0f}"})
+        print(f"validity {item}: {rows[-1]}", flush=True)
+    with open(out / "validity.csv", "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=["shape", "d", "n", "draws", "status", "invalid", "repair_threw",
+                                          "fallback_draws", "seconds"])
+        w.writeheader()
+        w.writerows(rows)
 
 
 def plan(args):
@@ -157,6 +201,10 @@ def main():
     ap.add_argument("--dim", type=int, default=2, help="the highest homological degree")
     ap.add_argument("--field", type=int, default=17)
     ap.add_argument("--trials", type=int, default=3)
+    ap.add_argument("--count", action="store_true",
+                    help="also count the cells of each draw's complex for tda4j and gudhi (the `cells` column)")
+    ap.add_argument("--validity", default="",
+                    help="Helix failure rates, shape:d:n:draws;.. e.g. interior:4:25:1000;interior:6:40:300")
     ap.add_argument("--timeout", type=float, default=1800)
     ap.add_argument("--warm-cap", type=float, default=30,
                     help="repeat a computation (warm-up + trials) only if one cold run took less than this (s)")
@@ -190,6 +238,8 @@ def main():
             continue
         if kind == "tda4j-js" and args.no_js:
             continue
+        if any(t[0] == name for t in tools):  # `gudhi` is listed for both the alpha and the cech task: one row, not two
+            continue
         opts = dict(opts, pytool=name)
         if not bench.available(kind, opts, args.python):
             print(f"{name} is not installed: left out", flush=True)
@@ -217,6 +267,8 @@ def main():
                         if series is not None:
                             stopped.add((series, name))
                         break
+    if args.validity:
+        validity_runs(args, out)
     summarize(out)
     print(f"\nresults in {out}")
 
@@ -286,12 +338,22 @@ def summarize(out, bottleneck=None):
             return f"{shape} points of the unit cube, d = {d}", f"n = {n}"
         return f"{shape} points of the unit cube, n = {n}", f"d = {d}"
 
+    def cells_cell(shape, n, d, tool, rs):
+        """Total cells of the counted complex (median over draws), by dimension of the first draw."""
+        counted = [r for r in rs if r.get("cells")]
+        if not counted:
+            return ""
+        totals = [sum(json.loads(r["cells"]).values()) for r in counted]
+        return f"{int(statistics.median(totals)):,}"
+
     lines = ["# Alpha complex: dimension and point-count sweep", "",
              "Each cell is the median over the draws that finished (`ok/draws` if some did not; otherwise the status). "
              "† marks a degenerate draw: d + 1 points on one facet of the cube.", ""]
     for title, cell in [("Time in seconds (warm median; the cold computation if it was too slow to repeat)", time_cell),
                         ("Peak memory in MB: RSS (JVM heap pools' peak in parentheses)", memory_cell),
-                        ("Largest bottleneck distance to the reference barcode (in parentheses)", distance_cell)]:
+                        ("Largest bottleneck distance to the reference barcode (in parentheses)", distance_cell)] + \
+                       ([("Cells of the complex up to dimension dim + 1 (median over draws; tda4j: its own stream, "
+                          "gudhi: the simplex tree)", cells_cell)] if any(r.get("cells") for r in rows) else []):
         lines += [f"## {title}", ""]
         for group in dict.fromkeys(group_of(*c)[0] for c in cells):
             members = [c for c in cells if group_of(*c)[0] == group]
@@ -302,6 +364,16 @@ def summarize(out, bottleneck=None):
                 body = " | ".join(cell(s, n, d, t, by.get((s, n, d, t), [])) for t in tools)
                 lines.append(f"| {label} | {body} |")
             lines.append("")
+    if (out / "validity.csv").exists():
+        with open(out / "validity.csv") as f:
+            vrows = list(csv.DictReader(f))
+        lines += ["## Helix triangulation failure rate", "",
+                  "Clouds whose triangulation fails the fast alpha engine's checks (`invalid`), for which "
+                  "`requireValidTriangulation` throws (`repair threw`), and where the walk used its slow fallback.", "",
+                  "| shape | d | n | draws | invalid | repair threw | fallback | status |", "|---|---|---|---|---|---|---|---|"]
+        lines += [f"| {v['shape']} | {v['d']} | {v['n']} | {v['draws']} | {v['invalid']} | {v['repair_threw']} | "
+                  f"{v['fallback_draws']} | {v['status']} |" for v in vrows]
+        lines.append("")
     (out / "sweep.md").write_text("\n".join(lines) + "\n")
     print("\n".join(lines))
 
