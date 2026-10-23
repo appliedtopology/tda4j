@@ -60,14 +60,16 @@ class BowyerWatsonSpec extends mutable.Specification:
   }
 
   "on degenerate input the triangulation does not depend on the insertion order, and keeps its invariants" >> {
+    // The 81-point 4-D lattice is the one input with 4-D degeneracy at scale and costs 0.6 s per insertion order on the
+    // JVM and several times that on Scala.js, which keeps the 30-point integer cloud in 4-D.
+    val lattice4d = TestPlatform.perPlatform(jvm = Seq("3^4 grid" -> grid(3, 4)), js = Seq.empty)
     val inputs = Seq(
       "6x6 grid" -> grid(6, 2),
       "4x4x4 grid" -> grid(4, 3),
-      "3^4 grid" -> grid(3, 4),
       "integer 2-D" -> integerCloud(2, 40, 1),
       "integer 3-D" -> integerCloud(3, 40, 2),
       "integer 4-D" -> integerCloud(4, 30, 3)
-    )
+    ) ++ lattice4d
     // `checkEveryStep` verifies the whole triangulation after each insertion, which is quadratic in the point count: for
     // the 81-point 3^4 grid that is 16 s of this example's 26 on the JVM (its plain run takes 0.7 s). Inputs of more than
     // `stepwiseMax` points are verified once, at the end; Scala.js also runs two insertion orders instead of four.
