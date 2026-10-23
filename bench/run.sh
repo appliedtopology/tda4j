@@ -34,6 +34,7 @@ BENCH="$REPO/bench"
 WORKDIR="${WORKDIR:-$PWD/bench-work}"
 mkdir -p "$WORKDIR"
 WORKDIR="$(cd "$WORKDIR" && pwd)"
+export WORKDIR  # the sweep scripts put their output in $WORKDIR/sweeps; unexported they wrote to the current directory
 VENV="$WORKDIR/venv"
 TOOLS="$WORKDIR/tools"
 DATA="$WORKDIR/data"
