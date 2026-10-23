@@ -65,9 +65,9 @@ object DowkerGeometry:
 object DowkerFiltration:
   def apply(geometry: DowkerGeometry): PartialFunction[Simplex[Int], Double] =
     val cache = FiltrationCache.empty[Simplex[Int], Double]
-    new PartialFunction[Simplex[Int], Double]:
-      def isDefinedAt(spx: Simplex[Int]): Boolean = spx.forall(v => 0 <= v && v < geometry.numLeft)
-      def apply(spx: Simplex[Int]): Double = cache.getOrElseUpdate(spx, geometry.filtrationValue(spx.toIndexedSeq))
+    MemoizedFiltration(cache, spx => spx.forall(v => 0 <= v && v < geometry.numLeft))(spx =>
+      geometry.filtrationValue(spx.toIndexedSeq)
+    )
 
 /** Stands in for `RipserCofaceSimplexStream`'s own `FiniteMetricSpace[Int]` constructor parameter, purely to supply
   * `size`/`elements`/`contains` over `0 until n` -- `distance` is never actually read, since

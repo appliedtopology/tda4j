@@ -39,3 +39,36 @@ share. Three things in it:
    `TreeSet.equals` 8 %).
 3. The filtration function itself: Dowker's `min_w max_x R(x,w)` is 100 witnesses times the size, Sheehy's recomputes
    all edge births of a simplex from the metric space.
+
+## Fix 1 (commit 60a6306): candidates from the kept-edge table, sort on primitive keys
+
+`RipserCofaceSimplexStream` keeps a bitset table of the kept edges (built from dimension 1 as it is computed, or on
+first use when dimensions are asked for out of order; skipped past 2^25 words, about 40000 vertices). A candidate for
+dimension `d >= 2` must be adjacent to every vertex of its facet, so the candidates of a simplex are the set bits of the
+AND of its vertices' rows below its smallest vertex. `sortedByFiltration` reads each cell's value and index once into
+arrays and sorts a permutation, where it hashed each `TreeSet` in two `HashMap`s.
+
+Alone on 4 cores, one cold JVM per row, `PaperBenchmarkDriver`, p = 2, same `out=` barcode files (md5 equal):
+
+| row | before | after fix 1 |
+|---|---|---|
+| Dowker 300x100 | 23.8 s | 6.9 s |
+| DTM-Rips | 31.7 s | 5.8 s |
+| Sparse Rips | 38.1 s | 13.6 s |
+
+## Fix 2
+
+Second profile (after fix 1): the filtration function is still 55-65 % of the time, not its arithmetic but the
+`TrieMap` lookups keyed by a `TreeSet`, and `isDefinedAt` (a `forall` over the vertices) before every `applyOrElse`.
+
+- `FiltrationCache` (JVM) hashes and compares a `TreeSet` key by a traversal, not through the allocating iterators of
+  `TreeSet.hashCode`/`equals`. **A first version summed `x * c` per element, which collides for every simplex with the
+  same vertex sum; sparse Rips ran for more than 7 minutes. The element hash is MurmurHash3's finalizer.**
+- `MemoizedFiltration`: `applyOrElse` looks in the cache before it checks the domain. Used by the default Vietoris-Rips
+  function and by Cech, DTM-Rips, Dowker and Sheehy (the recursive general witness function calls itself and keeps its
+  own).
+- Sheehy's value computed its edge births through `for` comprehensions over `Seq`s and a `Map[Int, Double]`; it is now
+  loops over an array of insertion radii.
+- `Persistence` iterated the stream a second time after the engine to find the largest filtration value, which built
+  the complex twice (12-18 % of a row). `CellularCohomologyEngine.largestFiltrationValue` is recorded from the values the
+  run reads anyway.

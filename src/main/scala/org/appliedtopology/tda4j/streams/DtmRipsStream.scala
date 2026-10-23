@@ -110,8 +110,5 @@ object DtmRipsSimplexStream:
   def filtrationValueOverride(reified: DtmMetricSpace): PartialFunction[Simplex[Int], Double] =
     val base = FiniteMetricSpace.MaximumDistanceFiltrationValue[Int](reified)
     val cache = FiltrationCache.empty[Simplex[Int], Double]
-    new PartialFunction[Simplex[Int], Double]:
-      def isDefinedAt(spx: Simplex[Int]): Boolean = base.isDefinedAt(spx)
-      def apply(spx: Simplex[Int]): Double =
-        cache.getOrElseUpdate(spx, if spx.dim <= 0 then 2.0 * reified.f(spx.min) else base(spx))
+    MemoizedFiltration(cache, base.isDefinedAt)(spx => if spx.dim <= 0 then 2.0 * reified.f(spx.min) else base(spx))
 end DtmRipsSimplexStream

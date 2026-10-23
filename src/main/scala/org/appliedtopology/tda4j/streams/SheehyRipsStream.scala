@@ -118,30 +118,34 @@ object SheehyRipsSimplexStream:
   ): PartialFunction[Simplex[Int], Double] =
     val lambda = permutation.insertionRadius
     val cache = FiltrationCache.empty[Simplex[Int], Double]
-    new PartialFunction[Simplex[Int], Double]:
-      def isDefinedAt(spx: Simplex[Int]): Boolean = spx.forall(ambientMetricSpace.contains)
-      def apply(spx: Simplex[Int]): Double =
-        cache.getOrElseUpdate(
-          spx,
-          if spx.dim <= 0 then 0.0
-          else
-            val vertices = spx.toSeq
-            val edgeBirths =
-              for
-                i <- vertices.indices
-                j <- (i + 1) until vertices.size
-              yield edgeBirth(
-                lambda(vertices(i)),
-                lambda(vertices(j)),
+    // `lambda` as an array: the Map boxes every lookup, and this runs for every edge of every candidate simplex.
+    lazy val lambdaOf = Array.tabulate(ambientMetricSpace.size)(lambda)
+    MemoizedFiltration(cache, spx => spx.forall(ambientMetricSpace.contains))(spx =>
+      if spx.dim <= 0 then 0.0
+      else
+        val vertices = spx.underlying.toArray
+        var largestBirth = Double.NegativeInfinity
+        var never = false
+        var i = 0
+        while i < vertices.length && !never do
+          var j = i + 1
+          while j < vertices.length && !never do
+            val birth =
+              edgeBirth(
+                lambdaOf(vertices(i)),
+                lambdaOf(vertices(j)),
                 ambientMetricSpace.distance(vertices(i), vertices(j)),
                 epsilon
               )
-            if edgeBirths.exists(_.isPosInfinity) then Double.PositiveInfinity
-            else
-              val raw = edgeBirths.max
-              val vanishMin = vertices.map(v => vanishDoubled(lambda(v), epsilon)).min
-              if raw > vanishMin then Double.PositiveInfinity else raw
-        )
+            if birth.isPosInfinity then never = true else largestBirth = math.max(largestBirth, birth)
+            j += 1
+          i += 1
+        if never then Double.PositiveInfinity
+        else
+          var earliestVanish = Double.PositiveInfinity
+          vertices.foreach(v => earliestVanish = math.min(earliestVanish, vanishDoubled(lambdaOf(v), epsilon)))
+          if largestBirth > earliestVanish then Double.PositiveInfinity else largestBirth
+    )
 
   /** The largest FINITE edge birth this construction produces on `ambientMetricSpace` -- a valid `maxFiltrationValue`
     * default because every finite simplex's own value is a `max` over its edges (see the class doc). Materializes every

@@ -34,11 +34,9 @@ object CechFiltration:
         .flatMap(i => cache.get(facet(i)))
         .getOrElse(raw)
       math.max(radius, facetFloor)
-    new PartialFunction[Simplex[Int], Double]:
-      def isDefinedAt(spx: Simplex[Int]): Boolean =
-        spx.forall(v => euclideanMetricSpace.contains(v))
-      def apply(spx: Simplex[Int]): Double =
-        cache.getOrElseUpdate(spx, if spx.dim <= 0 then 0.0 else computeRadius(spx))
+    MemoizedFiltration(cache, spx => spx.forall(v => euclideanMetricSpace.contains(v)))(spx =>
+      if spx.dim <= 0 then 0.0 else computeRadius(spx)
+    )
 
 /** The Cech complex, built like `RipserCofaceSimplexStream` builds Vietoris-Rips: dimension by dimension, each simplex
   * as a coface of an accepted simplex one dimension down. This finds every Cech simplex because the Cech complex is

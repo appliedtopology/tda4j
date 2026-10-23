@@ -401,9 +401,7 @@ open class EnumeratingCofaceSimplexStream(
   override val filtrationValue: PartialFunction[Simplex[Int], Double] =
     filtrationValueOverride.getOrElse {
       val base = FiniteMetricSpace.MaximumDistanceFiltrationValue[Int](metricSpace)
-      new PartialFunction[Simplex[Int], Double]:
-        def isDefinedAt(spx: Simplex[Int]): Boolean = base.isDefinedAt(spx)
-        def apply(spx: Simplex[Int]): Double = filtrationValueCache.getOrElseUpdate(spx, base(spx))
+      MemoizedFiltration(filtrationValueCache, base.isDefinedAt)(base(_))
     }
 
   /** Filtration value reversed, then dimension, then colexicographic order of the vertex sets (their combinatorial
