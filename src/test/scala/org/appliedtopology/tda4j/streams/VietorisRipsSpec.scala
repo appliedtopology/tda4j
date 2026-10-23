@@ -4,7 +4,7 @@ import SimplexIndexing.binomial
 
 import org.scalacheck.Gen
 import org.scalacheck.Prop.forAll
-import org.specs2.{mutable as s2mutable, ScalaCheck, Specification}
+import org.specs2.{mutable as s2mutable, Specification}
 import org.specs2.specification.core.Fragment
 import org.specs2.execute.Result
 import org.specs2.specification.AllExpectations
@@ -14,7 +14,7 @@ import scala.collection.mutable
 import scala.math.{cos, sin}
 import scala.reflect.ClassTag
 
-class VietorisRipsSpec extends s2mutable.Specification with ScalaCheck with AllExpectations:
+class VietorisRipsSpec extends s2mutable.Specification with PlatformScalaCheck with AllExpectations:
   "This is a specification of the Vietoris-Rips simplex stream implementation\n\n".txt
 
   val N = 50
@@ -27,7 +27,6 @@ class VietorisRipsSpec extends s2mutable.Specification with ScalaCheck with AllE
     "have sorted layers" >> forAll(matrixGen(Gen.double, Gen.chooseNum(5, 10), Gen.chooseNum(15, 50))) { pts =>
       val metricSpace = EuclideanMetricSpace(pts)
       val vrstream = RecursiveStackVietorisRipsSimplexStream(metricSpace)
-      println(s"${pts.size} x ${pts(0).size}")
       var spxseq = vrstream.iterateDimension(0).toSeq
       spxseq.size.toLong === binomial(pts.length, 1)
       spxseq.map(vrstream.filtrationValue) must beSorted

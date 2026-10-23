@@ -1,7 +1,6 @@
 package org.appliedtopology.tda4j
 
 import org.scalacheck.Gen
-import org.specs2.ScalaCheck
 import org.specs2.execute.AsResult
 
 /** `EdgeCollapse` (Boissonnat-Pritam/Glisse-Pritam, `.claude/WORKLOG-mainstream-feature-gap-analysis.md` item 5).
@@ -11,7 +10,7 @@ import org.specs2.execute.AsResult
   * the real oracle here (`WORKLOG-edge-collapse.md`), not a comparison against any external tool (this session could
   * not verify the reference algorithm's own paper directly -- see the class doc).
   */
-class EdgeCollapseStreamSpec extends org.specs2.mutable.Specification with ScalaCheck:
+class EdgeCollapseStreamSpec extends org.specs2.mutable.Specification with PlatformScalaCheck:
   given Double is Field = Field.DoubleApproximated(1e-9)
 
   "EdgeCollapse.collapse on a hand-built domination fixture" should {

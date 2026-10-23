@@ -68,12 +68,19 @@ class BowyerWatsonSpec extends mutable.Specification:
       "integer 3-D" -> integerCloud(3, 40, 2),
       "integer 4-D" -> integerCloud(4, 30, 3)
     )
+    // `checkEveryStep` verifies the whole triangulation after each insertion: for the 81-point 3^4 grid that is 16 s of
+    // this example's 26 on the JVM (its plain run takes 0.7 s), so that input is verified once, at the end, and the
+    // other five after every insertion. Scala.js runs two insertion orders instead of four.
+    val seeds = TestPlatform.perPlatform(jvm = 4, js = 2)
     val problems = for (name, pts) <- inputs yield
-      val runs = (0 until 4).map(seed => BowyerWatsonTriangulation(pts, seed, checkEveryStep = seed == 0))
+      val stepwise = name != "3^4 grid"
+      val runs =
+        (0 until seeds).map(seed => BowyerWatsonTriangulation(pts, seed, checkEveryStep = seed == 0 && stepwise))
       val tops = runs.map(_.topSimplices.toSet)
       Seq(
         Option.when(tops.distinct.size != 1)(s"$name: ${tops.map(_.size).mkString("/")} cells across seeds"),
         Option.when(runs.head.insertionErrors.nonEmpty)(s"$name: ${runs.head.insertionErrors.head}"),
+        Option.when(runs.exists(_.invariantProblems().nonEmpty))(s"$name: ${runs.flatMap(_.invariantProblems()).head}"),
         Option.when(runs.map(_.duplicates).distinct.size != 1)(s"$name: duplicates depend on the seed")
       ).flatten
     problems.flatten must beEmpty

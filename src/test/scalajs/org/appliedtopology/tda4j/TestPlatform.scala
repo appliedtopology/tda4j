@@ -9,3 +9,6 @@ object TestPlatform:
     * platform (number formatting, emulated `Long`, the last digits of `Math.pow`), which any input shows.
     */
   def propertyCases(n: Int): Int = math.max(1, n / 10)
+
+  /** A value that differs by platform: how many seeds or configurations of a loop to run, or which cases of a table. */
+  def perPlatform[A](jvm: => A, js: => A): A = js

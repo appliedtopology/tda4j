@@ -10,7 +10,7 @@ import org.scalacheck.Prop.forAll
 
 import scala.collection.mutable as cmutable
 
-class SimplexStreamSpec extends mutable.Specification with org.specs2.ScalaCheck:
+class SimplexStreamSpec extends mutable.Specification with PlatformScalaCheck:
   "Test suite for the abstraction and implementations of `SimplexStream`".txt
 
   val esb: ExplicitStreamBuilder[Int, Double] =
@@ -94,7 +94,7 @@ class SimplexStreamSpec extends mutable.Specification with org.specs2.ScalaCheck
     }
   }
 
-class CofaceSimplexStreamSpec extends mutable.Specification with org.specs2.ScalaCheck:
+class CofaceSimplexStreamSpec extends mutable.Specification with PlatformScalaCheck:
   "Different coface simplex streams should agree" >>
     forAll(matrixGen[Double](Gen.double, Gen.chooseNum(2, 10), Gen.chooseNum(15, 15))) { (pts: Array[Array[Double]]) =>
       val metricSpace = EuclideanMetricSpace(pts)

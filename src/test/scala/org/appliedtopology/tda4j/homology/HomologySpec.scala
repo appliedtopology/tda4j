@@ -4,9 +4,8 @@ import org.appliedtopology.tda4j.StreamFixtures.explicitStream
 import org.scalacheck.Gen
 import org.scalacheck.Prop.forAll
 import org.specs2.mutable
-import org.specs2.ScalaCheck
 
-class HomologySpec extends mutable.Specification with ScalaCheck:
+class HomologySpec extends mutable.Specification with PlatformScalaCheck:
   given Double is Field = Field.DoubleApproximated(1e-25)
 
   "Homology of a triangle" >> {
@@ -327,7 +326,7 @@ class HomologySpec extends mutable.Specification with ScalaCheck:
     }
   }
 
-class BarcodeRegressionSpec extends org.specs2.mutable.Specification with ScalaCheck:
+class BarcodeRegressionSpec extends org.specs2.mutable.Specification with PlatformScalaCheck:
   // The cloud is bounded by what the constructions can enumerate, not by the engine (`WORKLOG-chunks-top-cells.md`,
   // measured with the chunks engine, degrees 0..3, 2 GB heap, one case per JVM): the unthresholded Vietoris-Rips complex
   // to dimension 4 takes 1 - 2 s at 25 points, 12 - 17 s at 40, over 90 s at 60 and runs out of memory at 100 and 150, in
