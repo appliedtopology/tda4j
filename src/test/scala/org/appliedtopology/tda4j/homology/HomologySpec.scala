@@ -347,7 +347,13 @@ class BarcodeRegressionSpec extends org.specs2.mutable.Specification with Platfo
         LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(EuclideanMetricSpace(pts)), 4)
     )
   )
-  val points = matrixGen[Double](Gen.double, Gen.chooseNum(2, 6), Gen.chooseNum(25, 30)).sample.get
+  // Scala.js takes a cloud half the size: the property is the same and the enumeration is what costs.
+  val points =
+    matrixGen[Double](
+      Gen.double,
+      Gen.chooseNum(2, 6),
+      TestPlatform.perPlatform(jvm = Gen.chooseNum(25, 30), js = Gen.chooseNum(12, 15))
+    ).sample.get
   for (name, streamBuilder) <- cases do
     s"$name complex should have births before deaths" >> {
       // matrixGen is defined in streams/Generators.scala
