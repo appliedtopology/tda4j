@@ -137,14 +137,24 @@ Sequential spec work on the 4-core cloud sandbox, same method as the baseline:
 | JVM (`tda4j/testOnly *`, one spec at a time) | 200 s, 1660 examples | 160 s, 1662 examples |
 | Scala.js (`tda4jJS/testFull`, one spec at a time) | 730 s, 1171 examples | 270 s, 1173 examples |
 
-All pass on both platforms. CI's `test-js` ran its specs 2.1x faster than the sequential sum (350 s for 730 s), so the
-step should drop from about 350 s to about 130 s and the job from 8 min to about 4.5 to 5 min (resolve, compile and link,
-about 140 s, are untouched); the PR's own CI run is the confirmation. The JVM job's spec step should lose about 20 s of
-its 112 s. The two examples added are the hand-derived weighted alpha ones.
+All pass on both platforms. CI on the PR (run 40006759144, 4-core runners; the baseline is run 39987498508):
+
+| job | step | baseline | after |
+|---|---|---|---|
+| `test-js` | `clean ; tda4jJS/test` | 8 min 03 s | **3 min 42 s** |
+| `test` (JVM) | `clean ; tda4j/test` | 3 min 40 s | 4 min 18 s |
+
+The JVM job did **not** get faster in CI. Its spec phase (first to last "Total for specification" line) was 112 s in both
+runs although the sequential spec work fell from 200 s to 160 s; the 38 s difference is in the phase before the first spec
+(sbt start and compile: about 108 s before, 145 s now; one run each, so runner variance cannot be ruled out). CI runs
+the specs 3 to 4 in parallel (the per-spec "Finished in" sum is 332 s before and 354 s after, over 112 s of wall), and
+whatever bounds that phase is not the sum of the spec work: `BowyerWatsonSpec`, the longest spec, dropped from 57 s to
+29 s in CI without moving the end. Not understood; the JVM figures above are sequential, local ones. The two examples
+added are the hand-derived weighted alpha ones.
 
 Scala.js is now dominated by `ClassifyingSpaceSpec` (26 s), `NaiveCappedSpec` (22 s), `CollapsedNerveSpec` (20 s),
-`FlatLayersSpec` (13 s), `BowyerWatsonSpec` (12 s), `SheehyRipsStreamSpec` (12 s). They are 27 examples of a few
-hundred ms each, not one hot spot, so further cuts there are small per example.
+`FlatLayersSpec` (13 s), `BowyerWatsonSpec` (12 s), `SheehyRipsStreamSpec` (12 s). None has a hot spot left
+(`ClassifyingSpaceSpec` is 27 examples of a few hundred ms), so further cuts there are small per example.
 
 ### Unchecked semantics for the Scala.js test link (measured, not applied)
 
@@ -152,7 +162,7 @@ hundred ms each, not one hot spot, so further cuts there are small per example.
 dev-mode linker keeps (array bounds, null pointers, class casts become undefined behaviour instead of exceptions). Same
 specs, same machine, after the cuts above: **311 s -> 210 s (-32%)**, all 1173 pass. Not applied: those checks are what
 turns a platform-specific indexing mistake into a failure rather than a wrong answer, and the JS run exists to catch
-platform differences. Offered to the project lead as a decision.
+platform differences. The project lead decided against it (2026-10-23): the checks stay.
 
 ### Not changed, and why
 
@@ -167,4 +177,4 @@ platform differences. Offered to the project lead as a decision.
 ## Open items
 
 - #211: two Bowyer-Watson mutants survive every spec.
-- Unchecked-semantics linking for the Scala.js tests (above): the project lead's decision.
+- What bounds the JVM job's spec phase in CI (112 s before and after, see Results).
