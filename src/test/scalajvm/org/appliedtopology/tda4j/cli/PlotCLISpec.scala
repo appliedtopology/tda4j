@@ -308,7 +308,7 @@ class PlotCLISpec extends Specification:
         (c2 must beEqualTo(1)) and (e2 must contain(
           "unknown scale 'cubic'; expected one of linear, log, sqrt, symlog"
         )) and
-        (c3 must beEqualTo(1)) and (e3 must contain("expected one of brand, reference, print, clear")) and
+        (c3 must beEqualTo(1)) and (e3 must contain("expected one of brand, reference, print, grayscale, clear")) and
         (c8 must beEqualTo(1)) and (e8 must contain("expected one of default, slides, print, clear")) and
         (c9 must beEqualTo(1)) and (e9 must contain("--style is for --plot")) and
         (c10 must beEqualTo(1)) and (e10 must contain("'big' is not a number")) and

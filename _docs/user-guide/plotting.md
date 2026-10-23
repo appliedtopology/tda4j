@@ -262,7 +262,8 @@ Homological degree `k` always has the same color and marker shape: degree 0 teal
 `H1` looks the same in every plot whichever degrees are shown. The default palette is TDA4j's Teal & Gold, stepped for
 charts and checked for color-vision deficiencies (the first three degrees stay distinguishable side by side for every
 common deficiency). `Palette.reference` is a neutral alternative, and `Palette.print` is for a paper: black text on a
-background of exactly white, where the default's cream would print as a grey patch, and `Palette.clear` is black or white
+background of exactly white, where the default's cream would print as a grey patch (`Palette.grayscale` is that without
+color), and `Palette.clear` is black or white
 for a figure with no background (see [For a paper](#for-a-paper-and-for-a-page-of-either-color)). A
 palette recolors the whole plot, heatmaps and cocycles included, and you can make your own:
 
@@ -626,6 +627,12 @@ checked on all pairs), and its heatmap ramp darkens steadily, so it keeps its or
 look: the dark theme draws the same figure. The style names fonts that converters and publishers know
 (`Helvetica, Arial`) instead of the browser's own `system-ui`.
 
+`Palette.grayscale` is `print` with no color at all, for a paper that prints in black and white. Degrees are told apart by
+lightness (a dark, a light and a middle gray first, each dark enough to show on white) and by the marker shapes and the
+legend, which every palette keeps: past four degrees the grays run out, so rely on the shapes. A heatmap uses ColorBrewer's
+Greys, darker for larger. A diverging scale (a cocycle's values) is a dark gray against a middle gray around a light middle,
+a weaker cue for the sign than a hue; use `Palette.print` for those when color is available.
+
 `Palette.clear` and `Style.clear` are for a figure with no background, that takes the color of what is behind it. The
 style draws none. The palette has two looks, which the theme picks: pure black elements for a light page
 (`Theme.Light`, what an `.svg` file gets) and pure white ones for a dark page (`Theme.Dark`), each with degree colors
@@ -799,7 +806,7 @@ A `plot...` method of a result returns a figure (a `plot...3D` method a scene), 
 | `withXRange(min, max)`, `withYRange(min, max)` | the visible range of an axis |
 | `withXCrossesAt(y)`, `withYCrossesAt(x)` | the x axis through `y = value`, the y axis through `x = value` |
 | `withAspect(ratio)` | the length of a y unit over an x unit |
-| `withPalette(name)` (3-D) | `'brand'`, `'reference'`, `'print'` or `'clear'` |
+| `withPalette(name)` (3-D) | `'brand'`, `'reference'`, `'print'`, `'grayscale'` or `'clear'` |
 | `withStyle(name)` (3-D) | `'default'`, `'slides'`, `'print'` or `'clear'` |
 | `withDegreeColor(k, color)` (3-D), `withDegreeLabel(k, label)` | the color (`'#c2185b'`) and legend label of degree `k` |
 | `withTextScale(factor)` (3-D), `withMarkScale(factor)` (3-D) | a factor on the size of text, of marks and lines |
@@ -870,7 +877,7 @@ result.plotBarcode().withXScale('sqrt').withTextScale(1.3).save('barcode.svg');
 
 The command line has a flag for the same changes of a `--plot`: `--title`, `--x-label`, `--y-label`, `--caption`, `--tag`,
 `--description`, `--look` (`default`, `print` or `clear`: the palette and style together, which the flags after it
-override), `--width`, `--height`, `--palette` (`brand`, `reference`, `print` or `clear`), `--style` (`default`, `slides`, `print` or `clear`), `--theme`
+override), `--width`, `--height`, `--palette` (`brand`, `reference`, `print`, `grayscale` or `clear`), `--style` (`default`, `slides`, `print` or `clear`), `--theme`
 (`light`, `dark` or `auto`), `--text-scale` (applied to the `--style`), `--set` (repeated, `element.property=value`), `--x-scale` and
 `--y-scale` (`linear`, `log`, `sqrt` or `symlog`). A word that is not one, a size out of range and a flag a plot cannot
 use (an x scale for a 3-D scene) are errors, reported before anything is computed:

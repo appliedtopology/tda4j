@@ -537,6 +537,62 @@ class PlotGrammarSpec extends Specification:
     }
   }
 
+  "the grayscale look" should {
+    val gray = Palette.grayscale
+    val surface = gray.light.surface
+    def isGray(hex: String): Boolean =
+      val v = Integer.parseInt(hex.stripPrefix("#"), 16)
+      ((v >> 16) & 255) == ((v >> 8) & 255) && ((v >> 8) & 255) == (v & 255)
+    val colorsInSvg = "#[0-9a-fA-F]{6}".r
+    val diagram = Plot.diagram(circleDiagram)
+
+    "have no color anywhere in it: every red, green and blue of every slot is equal" in {
+      val all = gray.seriesLight ++ gray.seriesDark ++ gray.sequential ++
+        Seq(gray.divergingNegative, gray.divergingPositive, gray.divergingMidpoint) ++
+        Seq(gray.light, gray.dark).flatMap(c => Seq(c.surface, c.ink, c.secondary, c.muted, c.grid, c.axis))
+      all.filterNot(isGray) must beEmpty
+    }
+    "draw a plot in grays only, whatever it draws" in {
+      val image = Plot.persistenceImage(circleDiagram, 0, resolution = 6, sigma = 0.05)
+      val cocycles = Persistence(circle, maxDimension = 1, representatives = Representatives.Cocycles)
+      val cocycle =
+        import cocycles.given
+        Plot.cocycle(circle, cocycles.dim(1).bars.head.representative)
+      val plots = Seq(diagram, Plot.barcode(circleDiagram), image, cocycle)
+      plots.foreach { plot =>
+        colorsInSvg.findAllIn((plot + gray).svg(Theme.Light)).toSeq.filterNot(isGray) must beEmpty
+      }
+      // the brand's own colors are what the check would find without it
+      colorsInSvg.findAllIn(diagram.svg(Theme.Light)).toSeq.filterNot(isGray) must not(beEmpty)
+    }
+    "keep its degrees apart by lightness, each dark enough to show on white" in {
+      gray.seriesLight.map(contrast(_, surface)).min must beGreaterThanOrEqualTo(3.0)
+      // the first three, which a diagram puts side by side, all pairs; every neighbour after that
+      gray.seriesLight.take(3).combinations(2).map { case Seq(a, b) => contrast(a, b) }.min must
+        beGreaterThanOrEqualTo(2.0)
+      gray.seriesLight.sliding(2).map { case Seq(a, b) => contrast(a, b) }.min must beGreaterThanOrEqualTo(1.4)
+      gray.seriesLight.distinct.size must beEqualTo(gray.seriesLight.size)
+    }
+    "darken its heatmap ramp steadily, and make a diverging end darker than the other" in {
+      (0 to 10).map(i => luminance(gray.sequentialAt(i / 10.0))).sliding(2).forall(w => w(1) < w(0)) must beTrue
+      luminance(gray.divergingNegative) must beLessThan(luminance(gray.divergingPositive)) // the sign has a cue
+      luminance(gray.divergingMidpoint) must beGreaterThan(luminance(gray.divergingPositive))
+    }
+    "read on white, in the one look it has for both modes" in {
+      contrast(gray.light.ink, surface) must beGreaterThanOrEqualTo(7.0)
+      contrast(gray.light.muted, surface) must beGreaterThanOrEqualTo(4.5)
+      gray.dark must beEqualTo(gray.light)
+      gray.light must beEqualTo(Palette.print.light) // the surface and inks of the print look
+      sameUpToIds((diagram + gray).svg(Theme.Dark), (diagram + gray).svg(Theme.Light))
+    }
+    "be reached by name, in either spelling, from a figure and a scene" in {
+      Palette.named("Grayscale") must beEqualTo(gray)
+      Palette.named(" greyscale ") must beEqualTo(gray)
+      diagram.withPalette("grayscale") must beEqualTo(diagram + gray)
+      Plot.points3D(circle).withPalette("grayscale").palette must beEqualTo(gray)
+    }
+  }
+
   "the clear look" should {
     val fig = Plot.diagram(circleDiagram)
     val clear = Palette.clear + Style.clear
@@ -610,7 +666,9 @@ class PlotGrammarSpec extends Specification:
     }
     "refuse a name they do not have, and say which they have" in {
       Style.named("poster") must throwAn[IllegalArgumentException]("expected one of default, slides, print, clear")
-      Palette.named("poster") must throwAn[IllegalArgumentException]("expected one of brand, reference, print, clear")
+      Palette.named("poster") must throwAn[IllegalArgumentException](
+        "expected one of brand, reference, print, grayscale, clear"
+      )
     }
   }
 

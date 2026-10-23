@@ -176,7 +176,7 @@ class PlotLookSpec extends Specification:
       )
       Look.settings() must beEqualTo(Look.none)
       Look.settings("palette=neon") must throwWith[IllegalArgumentException](
-        "expected one of brand, reference, print, clear"
+        "expected one of brand, reference, print, grayscale, clear"
       )
       Look.settings("style=poster") must throwWith[IllegalArgumentException](
         "expected one of default, slides, print, clear"

@@ -176,7 +176,9 @@ class PlotCustomizationFacadeSpec extends Specification:
       fig.withXScale("cubic") must throwAn[IllegalArgumentException](
         "unknown scale 'cubic'; expected one of linear, log, sqrt, symlog"
       )
-      fig.withPalette("neon") must throwAn[IllegalArgumentException]("expected one of brand, reference, print, clear")
+      fig.withPalette("neon") must throwAn[IllegalArgumentException](
+        "expected one of brand, reference, print, grayscale, clear"
+      )
       fig.withStyle("poster") must throwAn[IllegalArgumentException]("expected one of default, slides, print, clear")
       fig.withSetting("grid.dash=wavy") must throwAn[IllegalArgumentException]("expected one of solid, dashed, dotted")
       fig.withSetting("title.size") must throwAn[IllegalArgumentException]("should be element.property=value")

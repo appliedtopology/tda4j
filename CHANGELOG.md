@@ -168,6 +168,9 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   `y-axis.crosses-at`, MATLAB `withXCrossesAt(0)`). The numbers stay beside the line, the label at the edge, and the
   margin the numbers needed goes to the plot. A value the other axis does not show leaves the axis at the edge, with a
   note under the plot (#104).
+- `Palette.grayscale` (`withPalette("grayscale")`, `--palette grayscale`): `Palette.print` with no color, for a
+  black-and-white print. Degrees differ by lightness and, as always, by marker shape; a heatmap uses ColorBrewer's Greys; a
+  diverging scale (a cocycle's values) has a darker negative end than positive one (#97).
 - `Camera(azimuth, elevation, zoom)` (`Scene.withCamera`, settings `camera.azimuth/elevation/zoom`) sets the view of a 3-D
   scene: the saved `.svg` is that view, a page's canvas starts from it; a 2-D plot refuses it, and the CLI says so before
   computing.

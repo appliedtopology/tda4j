@@ -73,3 +73,12 @@ on `claude/project-thread-uhbr7a`. Point-in-time record; the rules that came out
   sAxis (14 px at least) in place of the numbers' 30 sTick + label + marks + slant. The range block of `Svg.render` moved
   above the margins to decide this. Mutations to run: axis at the edge, numbers at the edge, margin kept, label beside the
   axis.
+- **#97 grayscale.** `Palette.grayscale` (names `grayscale`, `greyscale`): `print`'s white surface and black ink, eight
+  grays for the series (`#1a1a1a #949494 #555555 #3b3b3b #777777 #474747 #858585 #2b2b2b`: each at least 3:1 against
+  white, the first three at least 2:1 on all pairs, every neighbour at least 1.4:1), ColorBrewer Greys for the ramp, and a
+  diverging pair that is dark gray against a middle gray around a light middle (the sign shows by the darkness of the end,
+  a weaker cue than a hue; the doc says to use `print` for a cocycle when color exists). Okabe-Ito stays unshipped (it fails
+  the validator's lightness band and chroma floor on the brand surface). The dataviz validator was not available in this
+  container, and a gray palette fails its chroma floor by construction: the specs check lightness and contrast instead.
+  Mutations killed: a colored slot, neighbours too close, a slot too light, a ramp out of order, one spelling, equal
+  diverging ends. "Balls on a curved axis" and `aes` stay open in #97 as not wanted.

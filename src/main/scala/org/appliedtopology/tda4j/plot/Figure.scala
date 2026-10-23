@@ -588,7 +588,7 @@ final case class Figure(
   /** The visible range of the y axis, in data units. */
   def withYRange(min: Double, max: Double): Figure = withYScale(min = min, max = max)
 
-  /** The palette called `name`: `brand`, `reference`, `print` or `clear`. */
+  /** The palette called `name`: `brand`, `reference`, `print`, `grayscale` or `clear`. */
   def withPalette(name: String): Figure = withPalette(Palette.named(name))
 
   /** The style called `name`: `default`, `slides`, `print` or `clear`. */
