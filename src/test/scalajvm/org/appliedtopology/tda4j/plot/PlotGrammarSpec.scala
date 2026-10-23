@@ -1302,7 +1302,7 @@ class PlotGrammarSpec extends Specification:
       number(top, "y") must beLessThan(ty)
       textsOnPage(topSvg) must beTrue
       val ((lx, ly, lw, lh), left, leftSvg) = at(LegendPosition.Left)
-      lx must beCloseTo(none._1 + 49.0, 0.02) // the column: 34 + 7.5 characters
+      lx must beCloseTo(none._1 + 34.0 + TextWidth.of("H0", 12.0), 0.02) // the column: 34 and the widest label
       number(left, "x") must beEqualTo(34.0) // the column starts at 14, the text is 20 px after its key
       textsOnPage(leftSvg) must beTrue
       Seq(LegendPosition.UpperLeft, LegendPosition.UpperRight, LegendPosition.LowerLeft, LegendPosition.LowerRight)
@@ -1530,20 +1530,76 @@ class PlotGrammarSpec extends Specification:
       elements(svg, "text").find(_.getFirstChild.getTextContent.startsWith(start)).get
 
     "be cut to its limit, ending in an ellipsis, with the whole text as its tooltip" in {
-      val cut = at((fig + Text(TextRole.Title, limit = 100)).svg(Theme.Light), "Persistenc")
-      cut.getFirstChild.getTextContent must beEqualTo("Persistenc…") // 100 px of 9 px characters, one for the dots
+      val cut = at((fig + Text(TextRole.Title, limit = 100)).svg(Theme.Light), "Persistence…")
+      cut.getFirstChild.getTextContent must beEqualTo("Persistence…") // the letters that fit in 100 px with the dots
       elements((fig + Text(TextRole.Title, limit = 100)).svg(Theme.Light), "title").map(_.getTextContent) must
         contain("Persistence diagram")
       at((fig + Text(TextRole.Title, limit = 400)).svg(Theme.Light), "Persistence").getTextContent must
         beEqualTo("Persistence diagram") // fits: nothing cut, no tooltip
       val legend = Figure(marks = three.marks, legend = Vector(LegendItem("a rather long label", Paint.Series(0)))) +
         Text(TextRole.Legend, limit = 60)
-      at(legend.svg(Theme.Light), "a rathe").getFirstChild.getTextContent must beEqualTo("a rathe…")
+      at(legend.svg(Theme.Light), "a rather").getFirstChild.getTextContent must beEqualTo("a rather l…")
+    }
+    "be cut by the width of its letters, not by how many there are" in {
+      def shown(text: String, limit: Double) =
+        val f = Figure(marks = three.marks, title = text) +
+          Text(TextRole.Title, size = 15, limit = limit, weight = Weight.Normal)
+        elements(f.svg(Theme.Light), "text").map(_.getFirstChild.getTextContent).find(_.startsWith(text.take(1))).get
+      val narrow = "i" * 24
+      val wide = "W" * 24
+      shown(narrow, 120) must beEqualTo(narrow) // 24 narrow letters are 80 px: nothing cut
+      shown(wide, 120) must not(beEqualTo(wide)) // 24 wide ones are 340 px
+      shown(wide, 120) must endWith("…")
+      // and what is kept fits the limit with its dots, one letter fewer would leave room for another
+      val kept = shown(wide, 120).dropRight(1)
+      TextWidth.of(kept + "…", 15) must beLessThanOrEqualTo(120.0)
+      TextWidth.of(kept + "W…", 15) must beGreaterThan(120.0)
+      // a bold face is wider, so it is cut sooner
+      shown("n" * 10, 85) must beEqualTo("n" * 10)
+      val bold = Figure(marks = three.marks, title = "n" * 10) + Text(
+        TextRole.Title,
+        size = 15,
+        limit = 85,
+        weight = Weight.Bold
+      )
+      elements(bold.svg(Theme.Light), "text").map(_.getFirstChild.getTextContent).find(_.startsWith("n")).get must
+        not(beEqualTo("n" * 10))
+    }
+    "make a legend as wide as its widest label as drawn" in {
+      def area(label: String) =
+        plotArea(Figure(marks = three.marks, legend = Vector(LegendItem(label, Paint.Series(0)))).svg(Theme.Light))._3
+      area("W" * 20) must beLessThan(area("i" * 20)) // a legend of capitals is wider than one of narrow letters
+      area("W" * 20) must beLessThan(area("H0") - 100)
     }
     "refuse a limit that means nothing" in {
       Text(TextRole.Title, limit = 0) must throwAn[IllegalArgumentException]("limit must be a positive number")
       Settings.parse("title.limit=big") must throwAn[IllegalArgumentException]("'big' is not a number")
       (fig + Settings.parse("legend.limit=80")).elements.face(TextRole.Legend).limit must beSome(80.0)
+    }
+  }
+
+  "the estimate of a text's width" should {
+    "take a face from the first known name of a font list, and sans-serif is not serif" in {
+      import TextWidth.Family
+      Family.of(Style.DefaultFont) must beEqualTo(Family.Sans)
+      Family.of("sans-serif") must beEqualTo(Family.Sans)
+      Family.of("Georgia, serif") must beEqualTo(Family.Serif)
+      Family.of("'Courier New', monospace") must beEqualTo(Family.Mono)
+      Family.of("'Some Unknown Face', Times New Roman, monospace") must beEqualTo(Family.Serif) // the first it knows
+      Family.of("Zapfino") must beEqualTo(Family.Sans) // when none is known
+    }
+    "add up the advance widths of Helvetica, and Times for a serif face" in {
+      TextWidth.of("Hello", 10) must beCloseTo(22.78, 1e-9) // 722 + 556 + 222 + 222 + 556
+      TextWidth.of("Hello", 10, TextWidth.Family.Serif) must beCloseTo(22.22, 1e-9) // 722 + 444 + 278 + 278 + 500
+      TextWidth.of("Hello", 10, TextWidth.Family.Mono) must beCloseTo(30.0, 1e-9) // 0.6 em a character
+      TextWidth.of("", 10) must beEqualTo(0.0)
+      (' ' to '~').map(c => TextWidth.of(c.toString, 1000)).forall(_ > 0) must beTrue // the whole table is filled in
+      TextWidth.of("W" * 10, 10) must beGreaterThan(TextWidth.of("i" * 10, 10) * 4) // letter by letter
+    }
+    "make bold letters wider and leave digits and spaces" in {
+      TextWidth.of("persistence", 12, bold = true) must beGreaterThan(TextWidth.of("persistence", 12))
+      TextWidth.of("123 456", 12, bold = true) must beEqualTo(TextWidth.of("123 456", 12))
+      TextWidth.of("…∞", 10) must beCloseTo(20.0, 1e-9)
     }
   }
 

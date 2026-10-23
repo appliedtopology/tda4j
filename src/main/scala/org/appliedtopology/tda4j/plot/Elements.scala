@@ -184,14 +184,22 @@ final case class TextFace(
   paint: Paint,
   limit: Option[Double] = None
 ):
-  /** `text` as far as it fits within `limit` at the pixel size `px` (a character is taken to be 0.6 of it wide), and
-    * whether it was cut.
+  /** `text` as far as it fits within `limit` at the pixel size `px`, and whether it was cut. The width of a text is
+    * estimated letter by letter ([[TextWidth]]) for this face's font, or `font` (the style's font list) when the face
+    * names none; a cut text ends in an ellipsis, which counts toward the limit.
     */
-  def fit(text: String, px: Double): (String, Boolean) =
+  def fit(text: String, px: Double, font: String = Style.DefaultFont): (String, Boolean) =
     limit match
-      case Some(l) if text.length * 0.6 * px > l =>
-        val keep = math.max(1, (l / (0.6 * px)).toInt - 1)
-        (text.take(keep) + "…", true)
+      case Some(l) =>
+        val family = TextWidth.Family.of(this.font.getOrElse(font))
+        val bold = weight.exists(_.css >= 600)
+        def width(t: String) = TextWidth.of(t, px, family, bold)
+        if width(text) <= l then (text, false)
+        else
+          val dots = width("…")
+          val widths = text.scanLeft(0.0)((w, c) => w + width(c.toString)).tail
+          val keep = math.max(1, widths.count(_ + dots <= l))
+          (text.take(keep) + "…", true)
       case _ => (text, false)
 
 /** A line as it is drawn: every setting has a value. */

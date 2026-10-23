@@ -177,6 +177,10 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Changed
 
+- A text cut at a `limit`, and the width a legend makes room for, follow the advance widths of the letters
+  (`TextWidth.of(text, size, family, bold)`: Helvetica, Times or a fixed width by the font list) instead of 0.6 em for
+  every character, so a row of `W`s is cut sooner than a row of `i`s; a legend of two-letter entries is 0.3 pixel
+  wider than before (#108).
 - A result's `plotRepresentative(i)` draws a cocycle restricted to the complex at its bar's birth, the few edges that
   close the loop, instead of the whole cocycle across the data (#75). `plotRepresentative(i, Double.PositiveInfinity)`
   (CLI `--at Infinity`) draws it whole; `Plot.cocycle` itself is as it was.

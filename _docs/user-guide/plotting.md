@@ -518,8 +518,10 @@ val typographic = Plot.diagram(d).withNumbers(decimal = ",", minus = "−", grou
 ```
 
 A long text can be cut: `Text(TextRole.Legend, limit = 120)` ends a legend entry that would be longer than 120 pixels in
-an ellipsis, and the whole text is the tooltip of what is left. The length of a text is estimated from its size, so the
-cut can fall some characters from where a font of your own would put it.
+an ellipsis, and the whole text is the tooltip of what is left. The renderer has no font metrics, so it estimates the
+length of a text letter by letter from the advance widths of Helvetica (for `sans-serif`, `system-ui`, Arial and the
+like), Times (`serif`) or a fixed width (`monospace`); a font with other proportions is cut some characters from where
+the estimate puts it. The legend makes room for the same estimate of its widest entry (`TextWidth.of(text, size)`).
 
 ### A caption, a panel tag and a description
 

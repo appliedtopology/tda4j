@@ -67,7 +67,7 @@ object Svg:
       (if face.italic then """ font-style="italic"""" else "") + face.font.fold("")(ff =>
         s""" font-family="${escape(ff)}""""
       )
-    val (shown, cut) = face.fit(text, size)
+    val (shown, cut) = face.fit(text, size, first.style.font)
     val svg = new StringBuilder
     svg ++= s"""<svg xmlns="http://www.w3.org/2000/svg" id="$id" width="$width" height="$height" viewBox="0 0 $width $height" font-family="${escape(
         first.style.font
@@ -259,7 +259,7 @@ object Svg:
 
     // a text's content, cut to the role's limit (the whole text is then its tooltip), and a number as the plot writes them
     def body(r: TextRole, text: String): String =
-      val (shown, cut) = face(r).fit(text, px(r))
+      val (shown, cut) = face(r).fit(text, px(r), style.font)
       escape(shown) + (if cut then s"<title>${escape(text)}</title>" else "")
     def loc(text: String): String = el.numbers(text)
 
@@ -315,7 +315,22 @@ object Svg:
       (sc(TextRole.TickLabel), sc(TextRole.AxisLabel), sc(TextRole.Legend), sc(TextRole.LegendTitle))
     val sLegends = math.max(sLegend, sLegendTitle)
     val legendChars = (legend.map(_.label.length) :+ fig.legendTitle.length).max.min(24)
-    val legendColumn = (34.0 + 7.5 * legendChars) * sLegends
+    // what a legend text takes as drawn (cut at its limit), in pixels, and the most a legend makes room for: 7.5 pixels a
+    // character for 30 characters. A legend is never narrower than 7.5 pixels for each of its first 24 characters.
+    def textWidth(role: TextRole, text: String): Double =
+      val f = face(role)
+      TextWidth.of(
+        f.fit(text, px(role), style.font)._1,
+        px(role),
+        TextWidth.Family.of(f.font.getOrElse(style.font)),
+        f.weight.exists(_.css >= 600)
+      )
+    val mostText = 7.5 * 30 * sLegends
+    val legendTexts =
+      (legend
+        .map(item => textWidth(TextRole.Legend, item.label)) :+ textWidth(TextRole.LegendTitle, fig.legendTitle)).max
+        .min(mostText)
+    val legendColumn = math.max((34.0 + 7.5 * legendChars) * sLegends, 34.0 * sLegends + legendTexts)
     val legendWidth = if legendPlace == LegendPosition.Right then legendColumn else 0.0
     val legendWidthLeft = if legendPlace == LegendPosition.Left then legendColumn else 0.0
     val colorbarWidth =
@@ -352,9 +367,18 @@ object Svg:
     val right = 16.0 + rightAxisBand + legendWidth + colorbarWidth
     val w = math.max(40.0, fig.width - left - right)
 
-    def itemWidth(item: LegendItem): Double = (30.0 + 7.5 * item.label.length.min(24)) * sLegend
+    def itemWidth(item: LegendItem): Double =
+      math.max(
+        (30.0 + 7.5 * item.label.length.min(24)) * sLegend,
+        30.0 * sLegend + math.min(textWidth(TextRole.Legend, item.label), mostText)
+      )
     val titleWidth =
-      if fig.legendTitle.isEmpty then 0.0 else (14.0 + 7.5 * fig.legendTitle.length.min(24)) * sLegendTitle
+      if fig.legendTitle.isEmpty then 0.0
+      else
+        math.max(
+          (14.0 + 7.5 * fig.legendTitle.length.min(24)) * sLegendTitle,
+          14.0 * sLegendTitle + math.min(textWidth(TextRole.LegendTitle, fig.legendTitle), mostText)
+        )
     val legendRows: Vector[Vector[LegendItem]] =
       if legendPlace != LegendPosition.Bottom && legendPlace != LegendPosition.Top then Vector.empty
       else
