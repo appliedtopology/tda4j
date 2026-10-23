@@ -262,32 +262,37 @@
 </span><span line-number="13" class=""><span class="tooltip-container"></span>    class StratifiedCellStream {
 </span><span line-number="14" class=""><span class="tooltip-container"></span>        iterateDimension: PartialFunction~Int, Iterator~
 </span><span line-number="15" class=""><span class="tooltip-container"></span>    }
-</span><span line-number="16" class=""><span class="tooltip-container"></span>    Filtration &lt;|-- CellStream
-</span><span line-number="17" class=""><span class="tooltip-container"></span>    CellStream &lt;|-- SimplexStream
-</span><span line-number="18" class=""><span class="tooltip-container"></span>    CellStream &lt;|-- StratifiedCellStream
-</span><span line-number="19" class=""><span class="tooltip-container"></span>    SimplexStream &lt;|-- LevelwiseSimplexStream
-</span><span line-number="20" class=""><span class="tooltip-container"></span>    StratifiedCellStream &lt;|-- LevelwiseSimplexStream
-</span><span line-number="21" class=""><span class="tooltip-container"></span>    LevelwiseSimplexStream &lt;|-- CofaceSimplexStream
-</span><span line-number="22" class=""><span class="tooltip-container"></span>    CofaceSimplexStream &lt;|-- EnumeratingCofaceSimplexStream
-</span><span line-number="23" class=""><span class="tooltip-container"></span>    EnumeratingCofaceSimplexStream &lt;|-- RipserCofaceSimplexStream
-</span><span line-number="24" class=""><span class="tooltip-container"></span>    RipserCofaceSimplexStream &lt;|-- CechCofaceSimplexStream
-</span><span line-number="25" class=""><span class="tooltip-container"></span>    RipserCofaceSimplexStream &lt;|-- LazyWitnessSimplexStream
-</span><span line-number="26" class=""><span class="tooltip-container"></span>    RipserCofaceSimplexStream &lt;|-- WitnessCofaceSimplexStream
-</span><span line-number="27" class=""><span class="tooltip-container"></span>    RipserCofaceSimplexStream &lt;|-- SheehyRipsSimplexStream
-</span><span line-number="28" class=""><span class="tooltip-container"></span>    RipserCofaceSimplexStream &lt;|-- DowkerCofaceSimplexStream
-</span><span line-number="29" class=""><span class="tooltip-container"></span>    EnumeratingCofaceSimplexStream &lt;|-- InorderCofaceSimplexStream
-</span><span line-number="30" class=""><span class="tooltip-container"></span>    SimplexStream &lt;|-- ExplicitStream
-</span><span line-number="31" class=""><span class="tooltip-container"></span>    LevelwiseSimplexStream &lt;|-- RecursiveStackVietorisRipsSimplexStream
-</span><span line-number="32" class=""><span class="tooltip-container"></span>    LevelwiseSimplexStream &lt;|-- IncrementalVietorisRipsSimplexStream
-</span><span line-number="33" class=""><span class="tooltip-container"></span>    LevelwiseSimplexStream &lt;|-- AlphaShapes
-</span><span line-number="34" class=""><span class="tooltip-container"></span>    AlphaShapes &lt;|-- DelaunayAlphaShapes
-</span><span line-number="35" class=""><span class="tooltip-container"></span>    DelaunayAlphaShapes &lt;|-- BowyerWatsonDelaunay
-</span><span line-number="36" class=""><span class="tooltip-container"></span>    DelaunayAlphaShapes &lt;|-- HelixDelaunay
-</span><span line-number="37" class=""><span class="tooltip-container"></span>    AlphaShapes &lt;|-- AlphaShapeDQP
-</span><span line-number="38" class=""><span class="tooltip-container"></span>    StratifiedCellStream &lt;|-- CubicalGridStream
-</span><span line-number="39" class=""><span class="tooltip-container"></span>    StratifiedCellStream &lt;|-- ExplicitCubicalStream
-</span><span line-number="40" class=""><span class="tooltip-container"></span>    CellStream &lt;|-- SimplicialSetStream
-</span><span line-number="41" class=""><span class="tooltip-container"></span>    StratifiedCellStream &lt;|-- FilteredSimplicialSetStream
+</span><span line-number="16" class=""><span class="tooltip-container"></span>    class FlatLayerStream {
+</span><span line-number="17" class=""><span class="tooltip-container"></span>        &lt;&lt;trait: dimensions as vertex and value arrays&gt;&gt;
+</span><span line-number="18" class=""><span class="tooltip-container"></span>        flatLayers: Option of Iterator of Layer
+</span><span line-number="19" class=""><span class="tooltip-container"></span>    }
+</span><span line-number="20" class=""><span class="tooltip-container"></span>    Filtration &lt;|-- CellStream
+</span><span line-number="21" class=""><span class="tooltip-container"></span>    CellStream &lt;|-- SimplexStream
+</span><span line-number="22" class=""><span class="tooltip-container"></span>    CellStream &lt;|-- StratifiedCellStream
+</span><span line-number="23" class=""><span class="tooltip-container"></span>    SimplexStream &lt;|-- LevelwiseSimplexStream
+</span><span line-number="24" class=""><span class="tooltip-container"></span>    StratifiedCellStream &lt;|-- LevelwiseSimplexStream
+</span><span line-number="25" class=""><span class="tooltip-container"></span>    LevelwiseSimplexStream &lt;|-- CofaceSimplexStream
+</span><span line-number="26" class=""><span class="tooltip-container"></span>    CofaceSimplexStream &lt;|-- EnumeratingCofaceSimplexStream
+</span><span line-number="27" class=""><span class="tooltip-container"></span>    EnumeratingCofaceSimplexStream &lt;|-- RipserCofaceSimplexStream
+</span><span line-number="28" class=""><span class="tooltip-container"></span>    FlatLayerStream &lt;|.. RipserCofaceSimplexStream
+</span><span line-number="29" class=""><span class="tooltip-container"></span>    RipserCofaceSimplexStream &lt;|-- CechCofaceSimplexStream
+</span><span line-number="30" class=""><span class="tooltip-container"></span>    RipserCofaceSimplexStream &lt;|-- LazyWitnessSimplexStream
+</span><span line-number="31" class=""><span class="tooltip-container"></span>    RipserCofaceSimplexStream &lt;|-- WitnessCofaceSimplexStream
+</span><span line-number="32" class=""><span class="tooltip-container"></span>    RipserCofaceSimplexStream &lt;|-- SheehyRipsSimplexStream
+</span><span line-number="33" class=""><span class="tooltip-container"></span>    RipserCofaceSimplexStream &lt;|-- DowkerCofaceSimplexStream
+</span><span line-number="34" class=""><span class="tooltip-container"></span>    EnumeratingCofaceSimplexStream &lt;|-- LayeredInorderSimplexStream
+</span><span line-number="35" class=""><span class="tooltip-container"></span>    SimplexStream &lt;|-- ExplicitStream
+</span><span line-number="36" class=""><span class="tooltip-container"></span>    LevelwiseSimplexStream &lt;|-- RecursiveStackVietorisRipsSimplexStream
+</span><span line-number="37" class=""><span class="tooltip-container"></span>    LevelwiseSimplexStream &lt;|-- IncrementalVietorisRipsSimplexStream
+</span><span line-number="38" class=""><span class="tooltip-container"></span>    LevelwiseSimplexStream &lt;|-- AlphaShapes
+</span><span line-number="39" class=""><span class="tooltip-container"></span>    AlphaShapes &lt;|-- DelaunayAlphaShapes
+</span><span line-number="40" class=""><span class="tooltip-container"></span>    DelaunayAlphaShapes &lt;|-- BowyerWatsonDelaunay
+</span><span line-number="41" class=""><span class="tooltip-container"></span>    DelaunayAlphaShapes &lt;|-- HelixDelaunay
+</span><span line-number="42" class=""><span class="tooltip-container"></span>    AlphaShapes &lt;|-- AlphaShapeDQP
+</span><span line-number="43" class=""><span class="tooltip-container"></span>    StratifiedCellStream &lt;|-- CubicalGridStream
+</span><span line-number="44" class=""><span class="tooltip-container"></span>    StratifiedCellStream &lt;|-- ExplicitCubicalStream
+</span><span line-number="45" class=""><span class="tooltip-container"></span>    CellStream &lt;|-- SimplicialSetStream
+</span><span line-number="46" class=""><span class="tooltip-container"></span>    StratifiedCellStream &lt;|-- FilteredSimplicialSetStream
 </span></code></pre>
    <div class="buttons"></div>
   </div>
