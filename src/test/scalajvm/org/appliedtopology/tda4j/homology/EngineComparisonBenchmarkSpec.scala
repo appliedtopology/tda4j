@@ -130,7 +130,7 @@ class EngineComparisonBenchmarkSpec(args: Arguments) extends mutable.Specificati
     val constructions: Seq[(String, (Array[Array[Double]], Int) => LevelwiseSimplexStream[Int, Double])] = Seq(
       "VR-Enumerating" -> ((pts, maxDim) => bounded(EnumeratingCofaceSimplexStream(EuclideanMetricSpace(pts)), maxDim)),
       "VR-RipserCoface" -> ((pts, maxDim) => bounded(RipserCofaceSimplexStream(EuclideanMetricSpace(pts)), maxDim)),
-      "VR-Inorder" -> ((pts, maxDim) => bounded(InorderCofaceSimplexStream(EuclideanMetricSpace(pts)), maxDim)),
+      "VR-Inorder" -> ((pts, maxDim) => bounded(LayeredInorderSimplexStream(EuclideanMetricSpace(pts)), maxDim)),
       "VR-RecStack" -> ((pts, maxDim) =>
         bounded(RecursiveStackVietorisRipsSimplexStream(EuclideanMetricSpace(pts)), maxDim)
       ),

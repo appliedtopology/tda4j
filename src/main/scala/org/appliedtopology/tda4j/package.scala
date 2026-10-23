@@ -116,7 +116,6 @@ abstract class Lab(characteristic: Int, precision: Double = 1e-9):
     Hypersphere,
     Image,
     IncrementalVietorisRipsSimplexStream,
-    InorderCofaceSimplexStream,
     IntMetricSpace,
     Involution,
     Kruskal,

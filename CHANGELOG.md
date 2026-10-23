@@ -9,6 +9,9 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Breaking
 
+- `InorderCofaceSimplexStream` is removed. It listed ties out of the stream's order and, on tied distances, some simplices
+  twice (#182). `VietorisRips(..., implementation = Inorder)` builds `LayeredInorderSimplexStream` now and
+  needs no change; replace a direct use with `LayeredInorderSimplexStream(metricSpace)`.
 - `PackedRipserCohomologyEngine#DiameterIndex` is a plain class, not a case class (no `copy`, no pattern
   `DiameterIndex(d, i)`; `DiameterIndex(d, i)` still makes one). It has a method `high`, 0 for every cell whose index fits
   in a `Long`; a cell past that is a `WideDiameterIndex`, which holds the second word. A one-word run stores no second

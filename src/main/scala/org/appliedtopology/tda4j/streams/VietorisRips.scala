@@ -197,8 +197,8 @@ object VietorisRips extends PointCloudComplex:
           topSimplexDimension
         )
       case Implementation.Inorder =>
-        // Not InorderCofaceSimplexStream: it lists ties out of the stream's order and, on tied distances, some
-        // simplices twice (.claude/WORKLOG-layered-inorder.md).
+        // Replaced the earlier InorderCofaceSimplexStream, which listed ties out of the stream's order and, on tied
+        // distances, some simplices twice (#182, .claude/WORKLOG-layered-inorder.md); that class is deleted.
         LimitedCofaceSimplexStream(
           LayeredInorderSimplexStream(metricSpace, maxFiltrationValue = maxFiltrationValue.toOption),
           topSimplexDimension

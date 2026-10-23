@@ -160,7 +160,7 @@ classDiagram
     RipserCofaceSimplexStream <|-- WitnessCofaceSimplexStream
     RipserCofaceSimplexStream <|-- SheehyRipsSimplexStream
     RipserCofaceSimplexStream <|-- DowkerCofaceSimplexStream
-    EnumeratingCofaceSimplexStream <|-- InorderCofaceSimplexStream
+    EnumeratingCofaceSimplexStream <|-- LayeredInorderSimplexStream
     SimplexStream <|-- ExplicitStream
     LevelwiseSimplexStream <|-- RecursiveStackVietorisRipsSimplexStream
     LevelwiseSimplexStream <|-- IncrementalVietorisRipsSimplexStream
