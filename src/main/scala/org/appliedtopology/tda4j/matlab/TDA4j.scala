@@ -107,6 +107,40 @@ object TDA4j:
   // is a method, so the session's look is read when a plot is made, not once when a result is created.
   private[matlab] given sessionLook: DummyImplicit => plot.Look = plotLook.get
 
+  // Boards. A figure a result returns (`result.plotBarcode()`) can be put beside others in a board, which has the same
+  // `save(path)` and the plain-argument methods `place`, `tagged`, `shared`, `sharedColumns`, `sharedRows`, `withTitle`,
+  // `withPalette`, `withStyle`, `withTextScale` and `withSetting`. MATLAB cannot build a Scala `Seq`, so a board is
+  // made here.
+
+  /** The figures in one row, as one plot: `board = TDA4j.side(result.plotBarcode(), result.plotDiagram())`. */
+  def side(first: plot.Figure, second: plot.Figure): plot.Board = plot.Plot.side(first, second)
+
+  /** Three figures in one row. */
+  def side(first: plot.Figure, second: plot.Figure, third: plot.Figure): plot.Board =
+    plot.Plot.side(first, second, third)
+
+  /** The figures of a Java array in one row. */
+  def side(figures: Array[plot.Figure]): plot.Board = plot.Plot.side(figures.toSeq*)
+
+  /** An empty board of `rows` by `cols` cells, 960 by 600 pixels, to fill with `place(figure, row, col)`. */
+  def layout(rows: Int, cols: Int): plot.Board = plot.Plot.layout(rows, cols)
+
+  /** An empty board of `rows` by `cols` cells in a drawing `width` by `height` pixels. */
+  def layout(rows: Int, cols: Int, width: Int, height: Int): plot.Board = plot.Plot.layout(rows, cols, width, height)
+
+  /** An empty board with `gap` pixels between cells; the columns share the width in proportion to `widths`, the rows
+    * the height in proportion to `heights` (an empty array for equal ones).
+    */
+  def layout(
+    rows: Int,
+    cols: Int,
+    width: Int,
+    height: Int,
+    gap: Int,
+    widths: Array[Double],
+    heights: Array[Double]
+  ): plot.Board = plot.Plot.layout(rows, cols, width, height, gap, widths.toSeq, heights.toSeq)
+
   def computeFromPoints(points: Array[Array[Double]]): PersistenceResult =
     computeFromPoints(points, Array.empty[String])
 

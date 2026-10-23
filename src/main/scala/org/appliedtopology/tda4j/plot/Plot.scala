@@ -98,6 +98,37 @@ final case class Board(
     }
     copy(plots = plots :+ (if fill then figure.withAspect(free = true) else figure), slots = slots :+ slot)
 
+  // The same with plain arguments only (strings, ints, doubles) and no defaults, for Java and MATLAB, which can neither
+  // build a `Tweak` nor call a method with defaults: `Plot.layout(2, 2).place(a, 0, 0).place(b, 0, 1, 2, 1).tagged()`.
+
+  /** `figure` in cell (`row`, `col`), one cell large. */
+  def place(figure: Figure, row: Int, col: Int): Board = place(figure, row, col, 1, 1, false)
+
+  /** `figure` from cell (`row`, `col`) over `rowSpan` rows and `colSpan` columns. */
+  def place(figure: Figure, row: Int, col: Int, rowSpan: Int, colSpan: Int): Board =
+    place(figure, row, col, rowSpan, colSpan, false)
+
+  /** The panels lettered `(a)`, `(b)`, ... */
+  def tagged(): Board = tagged("(%s)", "a")
+
+  /** Every panel on one scale, on both axes. */
+  def shared(): Board = shared(true, true)
+
+  /** The title of the board, above the panels and as the page's title. */
+  def withTitle(text: String): Board = this + Labels(title = text)
+
+  /** Every panel in the palette called `name`: `brand`, `reference`, `print` or `clear`. */
+  def withPalette(name: String): Board = this + Palette.named(name)
+
+  /** Every panel in the style called `name`: `default`, `slides`, `print` or `clear`. */
+  def withStyle(name: String): Board = this + Style.named(name)
+
+  /** A factor on every text size of every panel. */
+  def withTextScale(factor: Double): Board = copy(plots = plots.map(_.withTextScale(factor)))
+
+  /** One change written as text, `element.property=value`, to every panel. See [[Settings]]. */
+  def withSetting(spec: String): Board = this + Settings.parse(spec)
+
   /** The panels lettered, as a paper does: `tagged()` is `(a)`, `(b)`, ...; `tagged("%s.", "A")` is `A.`, `B.`;
     * `tagged("%s)", "1")` is `1)`, `2)`. `format` takes the letter at its `%s`, and `sequence` is where the letters
     * start: `a`, `A` or `1`. Panels are lettered in the order they were added.

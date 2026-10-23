@@ -167,7 +167,9 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   (`withTitle`, `withSize`, `withXScale('log')`, `withPalette`, `withDegreeColor`, `withTextScale`, `withLegend`, ...,
   and `save(path, 'dark')`); command line: `--title`, `--x-label`, `--y-label`, `--width`, `--height`, `--palette`,
   `--theme`, `--text-scale`, `--x-scale` and `--y-scale` for a `--plot`; also `--caption`, `--tag`, `--description` and
-  `--look` (`default`, `print` or `clear`, the palette and style together) (#106).
+  `--look` (`default`, `print` or `clear`, the palette and style together) (#106). Boards from MATLAB and Java:
+  `TDA4j.side(a, b)`, `TDA4j.layout(rows, cols, ...)`, and plain-argument `place`, `tagged`, `shared`, `withTitle`,
+  `withPalette`, `withStyle`, `withTextScale` and `withSetting` on a `Board` (#105).
 - `VantagePointTree(elements, distance)`: a vantage-point tree over any metric, with `withinDistance(query, radius)` (the
   boundary included) and `nearest(query, k)` (the first `k` of the stable sort by distance); and
   `MinimumEnclosingBall(points)`, the smallest ball around points in any dimension, with `center`, `squaredRadius` and

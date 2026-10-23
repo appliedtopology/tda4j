@@ -767,7 +767,29 @@ A `plot...` method of a result returns a figure (a `plot...3D` method a scene), 
 | `withCamera(azimuth, elevation, zoom)` (3-D only) | the view of a 3-D scene |
 
 A word that is not one of those listed, or a change a plot cannot have, throws an `IllegalArgumentException` that says what to write
-instead. The boards and layout grids of the Scala API have no MATLAB or command-line counterpart.
+instead.
+
+Boards too (see [Comparing plots](#comparing-plots) and [Panels on a grid](#panels-on-a-grid)). MATLAB cannot build a Scala
+`Seq`, so the boards are made in `TDA4j`, and the board has the methods that take plain arguments:
+
+| call | meaning |
+|---|---|
+| `TDA4j.side(a, b)`, `TDA4j.side(a, b, c)`, `TDA4j.side(array)` | the figures in one row, as one plot (`array` is a Java array of figures) |
+| `TDA4j.layout(rows, cols)`, `TDA4j.layout(rows, cols, width, height)` | an empty board on a grid of cells |
+| `TDA4j.layout(rows, cols, width, height, gap, widths, heights)` | the same with the gap between cells and the relative sizes of columns and rows (an empty array for equal ones) |
+| `board.place(fig, row, col)`, `board.place(fig, row, col, rowSpan, colSpan)` | a panel in a cell, or spanning cells; cells count from 0 |
+| `board.place(fig, row, col, rowSpan, colSpan, fill)` | with `fill` true, a diagram fills a wide cell instead of keeping equal units |
+| `board.tagged()`, `board.tagged(format, sequence)` | letters the panels `(a)`, `(b)`, ... |
+| `board.shared()`, `board.sharedColumns()`, `board.sharedRows()` | panels on one scale, by column, by row |
+| `board.withTitle(text)`, `withPalette(name)`, `withStyle(name)`, `withTextScale(factor)`, `withSetting(spec)` | the board's heading, and the change in every panel |
+| `board.save(path)`, `board.save(path, theme)` | writes an `.svg` file or an `.html` page |
+
+```matlab
+grid = TDA4j.layout(2, 2, 960, 600).place(result.plotDiagram(), 0, 0, 1, 2, true).place(result.plotBarcode(), 1, 0, 1, 2);
+grid.tagged().withTitle('A noisy circle').save('grid.svg');
+```
+
+The command line draws one plot per call; it has no board.
 
 <div class="tabset">
 <div class="tab" data-lang="Scala">
