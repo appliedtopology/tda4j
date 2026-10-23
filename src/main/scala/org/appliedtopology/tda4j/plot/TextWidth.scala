@@ -3,8 +3,8 @@ package org.appliedtopology.tda4j.plot
 /** How wide a text is, estimated. The renderer writes SVG for whatever font the reader's browser or tool picks and has
   * no font metrics, so a width is the advance widths of the stock face of a generic family: Helvetica (the faces
   * `sans-serif`, `system-ui`, Arial and Liberation Sans stand for), Times (`serif`) or a fixed width (`monospace`),
-  * letter by letter, so that a row of `W`s is wider than a row of `i`s. Close for those faces and for the faces
-  * that resemble them; a font with other proportions is further off.
+  * letter by letter, so that a row of `W`s is wider than a row of `i`s. Close for those faces and for the faces that
+  * resemble them; a font with other proportions is further off.
   *
   * Used to cut a long text at a `limit` ([[TextFace]]) and to size a legend.
   */
@@ -88,14 +88,11 @@ object TextWidth:
     334, 260, 334, 584
   )
   private val times: Array[Int] = Array(
-    250, 333, 408, 500, 500, 833, 778, 180, 333, 333, 500, 564, 250, 333, 250, 278,
-    500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 278, 278, 564, 564, 564, 444, 921,
-    722, 667, 667, 722, 611, 556, 722, 722, 333, 389, 722, 611, 889, 722, 722, 556, 722, 667, 556, 611, 722, 722, 944,
-    722, 722, 611,
-    333, 278, 333, 469, 500, 333,
-    444, 500, 444, 500, 444, 333, 500, 500, 278, 278, 500, 278, 778, 500, 500, 500, 500, 333, 389, 278, 500, 500, 722,
-    500, 500, 444,
-    480, 200, 480, 541
+    250, 333, 408, 500, 500, 833, 778, 180, 333, 333, 500, 564, 250, 333, 250, 278, 500, 500, 500, 500, 500, 500, 500,
+    500, 500, 500, 278, 278, 564, 564, 564, 444, 921, 722, 667, 667, 722, 611, 556, 722, 722, 333, 389, 722, 611, 889,
+    722, 722, 556, 722, 667, 556, 611, 722, 722, 944, 722, 722, 611, 333, 278, 333, 469, 500, 333, 444, 500, 444, 500,
+    444, 333, 500, 500, 278, 278, 500, 278, 778, 500, 500, 500, 500, 333, 389, 278, 500, 500, 722, 500, 500, 444, 480,
+    200, 480, 541
   )
 
   // thousandths of an em of the characters outside the table: the ellipsis and the infinity sign a plot writes, accented
@@ -117,7 +114,7 @@ object TextWidth:
       case Family.Mono => text.length * 600.0
       case _           =>
         val table = if family == Family.Serif then times else helvetica
-        val factor = if bold then (if family == Family.Serif then 1.08 else 1.06) else 1.0
+        val factor = if bold then if family == Family.Serif then 1.08 else 1.06 else 1.0
         text.iterator.map { c =>
           val w = if c >= ' ' && c <= '~' then table(c - ' ') else other(c, family)
           if c.isDigit || c == ' ' then w.toDouble else w * factor
