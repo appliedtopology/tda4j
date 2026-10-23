@@ -885,20 +885,7 @@ object RipserCofaceSimplexStream:
   private def ordered(dim: Int, vertices: Array[Int], values: Array[Double]): FlatLayerStream.Layer =
     val n = values.length
     val width = dim + 1
-    val order: Array[Integer] = Array.tabulate(n)(Integer.valueOf(_))
-    java.util.Arrays.sort(
-      order,
-      (a: Integer, b: Integer) =>
-        val byValue = java.lang.Double.compare(values(a), values(b))
-        if byValue != 0 then byValue
-        else
-          var k = width - 1
-          var c = 0
-          while c == 0 && k >= 0 do
-            c = Integer.compare(vertices(a * width + k), vertices(b * width + k))
-            k -= 1
-          c
-    )
+    val order = new LayerSorter(width, values, vertices).sorted()
     val sortedVertices = new Array[Int](vertices.length)
     val sortedValues = new Array[Double](n)
     var i = 0
@@ -907,6 +894,70 @@ object RipserCofaceSimplexStream:
       sortedValues(i) = values(order(i))
       i += 1
     FlatLayerStream.Layer(dim, sortedVertices, sortedValues)
+
+  /** A merge sort of the numbers `0 until values.length` by the cell they stand for, on primitives: a boxed sort with a
+    * comparator took a third of the time of a large Cech complex.
+    */
+  private final class LayerSorter(width: Int, values: Array[Double], vertices: Array[Int]):
+    private val n = values.length
+    // The bits of a value in an order that is the signed order of the longs, which is `Double.compare`'s (-0.0 before
+    // 0.0, NaN last).
+    private val keys = new Array[Long](n)
+    private val order = new Array[Int](n)
+    private val scratch = new Array[Int](n)
+    locally {
+      var i = 0
+      while i < n do
+        val bits = java.lang.Double.doubleToLongBits(values(i))
+        keys(i) = bits ^ ((bits >> 63) & Long.MaxValue)
+        order(i) = i
+        i += 1
+    }
+
+    private def less(a: Int, b: Int): Boolean =
+      val (ka, kb) = (keys(a), keys(b))
+      if ka != kb then ka < kb
+      else
+        var k = width - 1
+        var c = 0
+        while c == 0 && k >= 0 do
+          c = Integer.compare(vertices(a * width + k), vertices(b * width + k))
+          k -= 1
+        c < 0
+
+    private def sort(lo: Int, hi: Int): Unit =
+      if hi - lo <= 16 then
+        var i = lo + 1
+        while i < hi do
+          val x = order(i)
+          var j = i - 1
+          while j >= lo && less(x, order(j)) do
+            order(j + 1) = order(j)
+            j -= 1
+          order(j + 1) = x
+          i += 1
+      else
+        val mid = (lo + hi) >>> 1
+        sort(lo, mid)
+        sort(mid, hi)
+        // Already in order when the largest of the left half is not above the smallest of the right.
+        if less(order(mid), order(mid - 1)) then
+          System.arraycopy(order, lo, scratch, lo, mid - lo)
+          var l = lo
+          var r = mid
+          var out = lo
+          while l < mid do
+            if r < hi && less(order(r), scratch(l)) then
+              order(out) = order(r)
+              r += 1
+            else
+              order(out) = scratch(l)
+              l += 1
+            out += 1
+
+    def sorted(): Array[Int] =
+      sort(0, n)
+      order
 
 /** A reference Vietoris-Rips construction following Rieser's New-VR algorithm ("A New Construction of the Vietoris-Rips
   * Complex", arXiv:2301.07191v3, Algorithms 1-4), kept close to the paper as a baseline for the faster constructions.
