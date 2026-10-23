@@ -82,3 +82,14 @@ on `claude/project-thread-uhbr7a`. Point-in-time record; the rules that came out
   container, and a gray palette fails its chroma floor by construction: the specs check lightness and contrast instead.
   Mutations killed: a colored slot, neighbours too close, a slot too light, a ramp out of order, one spelling, equal
   diverging ends. "Balls on a curved axis" and `aes` stay open in #97 as not wanted.
+- **#98/#107 checked in Chromium (the only browser here; no Firefox or Safari).** Text widths: `TextWidth` against the
+  rendered width of the same strings in Liberation Sans (regular and bold), Liberation Serif, Liberation Mono and Inter:
+  Liberation Sans 1.000 (0.999..1.001), Liberation Serif 0.999..1.006, Liberation Mono 1.000, DejaVu Sans Mono 0.996;
+  Inter, which `sans-serif` and `system-ui` resolve to in this container, is about 6% wider than the estimate (mean
+  0.940, range 0.762..1.110). Two things the measurement found and fixed: `∞` is 713 thousandths, not the width of an
+  `n`, and the bold approximation (regular width times a factor) was off letter by letter (a bold `i` is 278, a regular
+  one 222, a bold `e` is the width of a regular one); `TextWidth` now has measured Helvetica-Bold and Times-Bold tables, and `−`, accented letters and wide
+  scripts are told apart. The board page: the grid cells fill their areas; the `<svg>` has the accessible name
+  "Persistence diagram" and the `<desc>` as its description in the accessibility tree; dragging and the wheel change the
+  3-D canvas (the page script starts at `az=0.698…, el=0.349…, zoom=1.5`). Not checkable here: MATLAB, `view()` in a
+  desktop browser, R's composite `pch` shapes, other browsers.

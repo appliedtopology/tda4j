@@ -1960,7 +1960,20 @@ class PlotGrammarSpec extends Specification:
     "make bold letters wider and leave digits and spaces" in {
       TextWidth.of("persistence", 12, bold = true) must beGreaterThan(TextWidth.of("persistence", 12))
       TextWidth.of("123 456", 12, bold = true) must beEqualTo(TextWidth.of("123 456", 12))
-      TextWidth.of("…∞", 10) must beCloseTo(20.0, 1e-9)
+      // the bold faces have widths of their own, not the regular ones made wider: a bold `e` is as wide as a regular one
+      TextWidth.of("Hello", 10, bold = true) must beCloseTo(24.45, 1e-9) // 722 + 556 + 278 + 278 + 611
+      TextWidth.of("Hello", 10, TextWidth.Family.Serif, bold = true) must beCloseTo(
+        22.78,
+        1e-9
+      ) // 778 + 444 + 278 + 278 + 500
+      TextWidth.of("e", 10, bold = true) must beEqualTo(TextWidth.of("e", 10))
+      TextWidth.of("i", 10, bold = true) must beCloseTo(2.78, 1e-9) // 278, where a regular `i` is 222
+    }
+    "know the signs a plot writes: the ellipsis a whole em, the infinity sign 0.713, the minus sign as wide as a plus" in {
+      TextWidth.of("…", 10) must beCloseTo(10.0, 1e-9)
+      TextWidth.of("∞", 10) must beCloseTo(7.13, 1e-9)
+      TextWidth.of("−", 10) must beEqualTo(TextWidth.of("+", 10))
+      TextWidth.of("−", 10, TextWidth.Family.Serif) must beEqualTo(TextWidth.of("+", 10, TextWidth.Family.Serif))
     }
   }
 
