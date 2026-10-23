@@ -72,3 +72,33 @@ Second profile (after fix 1): the filtration function is still 55-65 % of the ti
 - `Persistence` iterated the stream a second time after the engine to find the largest filtration value, which built
   the complex twice (12-18 % of a row). `CellularCohomologyEngine.largestFiltrationValue` is recorded from the values the
   run reads anyway.
+
+## Fix 3 and the result
+
+Third profile (Cech, after fix 2): `cohomologyOrder`'s consistency check of the stream's tie order made one
+`filtrationOrdering` comparison per cell, each calling `isDefinedAt` and `apply` on both cells: 31 % of Cech's time,
+while the ball (`computeRadius`) was 6 %. `FiltrationOrdering.canonical` now calls `applyOrElse` once per cell
+(`Undefined` marks a cell outside the domain; the semantics are the same: such a cell is ordered by dimension and
+tie-break alone).
+
+Final table, one cold JVM per row, alone on 4 cores, p = 2, `PaperBenchmarkDriver` (`out=` bars files md5-identical to the
+pre-change build for all four, and for the Dowker dual, which has the same bars as the primal):
+
+| row | before | after | warm (1 warm-up, median of 2) after |
+|---|---|---|---|
+| Cech, 80 pts in R^3, dim 2 | 101 s | 16.2 s | 15 s |
+| Dowker 300x100, dim 1 | 23.8 s | 3.9 s | 3.0 s |
+| Dowker dual | 1.35 s | 0.71 s | |
+| DTM-Rips, 600 pts, dim 1, 0.6 | 31.7 s | 3.3 s | 2.2 s |
+| Sparse Rips, 96 pts, dim 2, eps 0.3 | 38.1 s | 4.9 s | 3.8-5.7 s |
+
+`tda4j/testFull`: 1653 specs, 0 failures. Scala.js: the changed shared code compiles and the stream specs pass there
+(the JS `FiltrationCache` is unchanged: a `HashMap`).
+
+## What the profiles say is left (filed as #206)
+
+About ten `TrieMap` lookups per cell, each keyed by a `TreeSet` (hash plus a cache miss into a table of millions); the
+`Simplex` allocation per candidate; `SimplexIndexing.apply` per cell for the sort's tie-break (3-12 %). The remaining gap to
+GUDHI is 5-15x for Dowker, DTM-Rips and sparse Rips and, for Cech, the construction (every `dim + 2`-subset against the
+Delaunay triangulation's few cells). Only generating layers on arrays, as `LayeredInorderSimplexStream` does, removes
+it. Not measured: the witness complexes (same loop), Scala.js timings, the 60x200 Dowker case.
