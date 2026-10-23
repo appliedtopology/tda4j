@@ -435,6 +435,7 @@ heading.
 ```scala
 import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
 
 val d = Persistence(Array.tabulate(16)(i => Array(math.cos(2 * math.Pi * i / 16), math.sin(2 * math.Pi * i / 16))))
 Plot.barcode(d).withLegend("upper-right").withLegendBox(box = true)
@@ -563,7 +564,11 @@ gridlines still run across the plot. The axis label stays at the edge, where the
 needed is given back to the plot. `reverse` is followed, so is any scale.
 
 ```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.plot.*
+
 // a ring of points drawn round the origin, as a mathematician draws it
+val points = Array.tabulate(40)(i => Array(math.cos(i * 0.157), math.sin(i * 0.157)))
 val ring = Plot.points(points).withXScale(crossesAt = 0).withYScale(crossesAt = 0)
 ```
 
