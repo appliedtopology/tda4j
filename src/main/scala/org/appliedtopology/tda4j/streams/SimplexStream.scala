@@ -57,17 +57,27 @@ object FiltrationOrdering:
     * last two keys alone. `fv` stays a `PartialFunction`: this is on the hottest path of every engine.
     */
   def canonical[C](fv: PartialFunction[C, Double], dim: C => Int, tieBreak: Ordering[C]): Ordering[C] =
+    // One `applyOrElse` per cell, not `isDefinedAt` and then `apply`: a memoized `fv` answers from its cache without
+    // checking the cell's domain, and each check or lookup of a simplex walks its vertices.
+    val undefined: C => Any = _ => Undefined
     new Ordering[C]:
+      private def byDimensionThenTieBreak(x: C, y: C): Int =
+        Ordering.Int.compare(dim(x), dim(y)) match
+          case 0  => tieBreak.compare(x, y)
+          case dc => dc
       def compare(x: C, y: C): Int =
-        lazy val tb: Int =
-          Ordering.Int.compare(dim(x), dim(y)) match
-            case 0  => tieBreak.compare(x, y)
-            case dc => dc
-        if fv.isDefinedAt(x) && fv.isDefinedAt(y) then
-          java.lang.Double.compare(fv(y), fv(x)) match
-            case 0  => tb
-            case fc => fc
-        else tb
+        val fx = fv.applyOrElse[C, Any](x, undefined)
+        if fx.asInstanceOf[AnyRef] eq Undefined then byDimensionThenTieBreak(x, y)
+        else
+          val fy = fv.applyOrElse[C, Any](y, undefined)
+          if fy.asInstanceOf[AnyRef] eq Undefined then byDimensionThenTieBreak(x, y)
+          else
+            java.lang.Double.compare(fy.asInstanceOf[Double], fx.asInstanceOf[Double]) match
+              case 0  => byDimensionThenTieBreak(x, y)
+              case fc => fc
+
+  /** Marks a cell outside a filtration function's domain. */
+  private object Undefined
 
 /** Abstract trait for representing a sequence of simplices.
   *
@@ -490,7 +500,8 @@ open class EnumeratingCofaceSimplexStream(
 
 /** Vietoris-Rips, or any filtration monotone along faces given as `filtrationValueOverride`, built dimension by
   * dimension from the cofaces of the simplices kept in the dimension below (the loop [[Cech]], [[Witness]], [[Dowker]],
-  * [[DtmRips]] and [[SparseRips]] reuse). `keepCriterion` and `maxFiltrationValue` decide what is kept.
+  * [[DtmRips]] and [[SparseRips]] reuse). `keepCriterion` and `maxFiltrationValue` decide what is kept; a simplex is
+  * only offered once all its edges are kept, so `keepCriterion` must keep the edges of every simplex it keeps.
   */
 open class RipserCofaceSimplexStream(
   metricSpace: FiniteMetricSpace[Int],

@@ -14,6 +14,25 @@ paths:
 
 Loads when you work on one of these complexes. Project-wide rules are in `.claude/CLAUDE.md`; the stream ordering contract they all satisfy is in `streams.md`.
 
+## The coface loop they share (`RipserCofaceSimplexStream`; `WORKLOG-rare-complex-performance.md`, #181)
+
+Cech, witness, Dowker, DTM and sparse Rips all generate cells in `RipserCofaceSimplexStream`, and **generating the cells,
+not reducing them, was about 90 % of their time** (the reduction ~10 %; Cech's ball only 6 % of Cech's). Invariants:
+
+- Candidates of dimension `d >= 2` are `spx + i` for `i` below `spx.min` and adjacent, in the table of KEPT edges
+  (`keptEdgeNeighbours`, bitset rows, built from dimension 1 or on first use), to every vertex of `spx`. A `keepCriterion`
+  or filtration that keeps a simplex but not one of its edges is outside the stream contract (and now yields fewer cells).
+- Keep per-cell work to ONE hash lookup of the `Simplex` (a `TreeSet`, whose own `hashCode`/`equals` allocate):
+  `FiltrationCache` (JVM) hashes by traversal; `MemoizedFiltration` answers a cache hit before it checks the domain;
+  `FiltrationOrdering.canonical` calls `applyOrElse` once per cell; `sortedByFiltration` sorts on arrays. Do not add
+  `isDefinedAt`-then-`apply` pairs or `Simplex`-keyed `HashMap`s back on the per-cell path.
+- A hash of a `Simplex` that is linear in its vertices collides for every equal vertex sum (a sum of `x * c` made sparse
+  Rips run 7+ minutes); mix each element (MurmurHash3's finalizer).
+- `Persistence` takes the stream's largest value from `CellularCohomologyEngine.largestFiltrationValue`; iterating the
+  stream again builds the complex a second time.
+- Against GUDHI's Delaunay-Cech, Cech stays orders of magnitude slower by construction (every `dim + 2`-subset is a cell);
+  `AlphaShapes` gives the same barcode of a Euclidean point cloud.
+
 ## Cech complexes
 
 `streams/CechStream.scala`, `WORKLOG-cech-complex.md`. Over `Simplex[Int]`, built on the VR coface machinery via

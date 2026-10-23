@@ -183,6 +183,15 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   their values (`Paint.Value`) and a `ColorScale` colors them when drawn.
 - The `∞` line of a persistence diagram and its diagonal run across the whole plot.
 
+- Čech, DTM-Rips, sparse Rips and Dowker generate their cells several times faster, with the same cells and barcodes
+  (the witness complexes share the loop and were not timed). The reduction was under a tenth of the time. The rest was
+  the candidate list of the coface loop (every smaller vertex for every simplex; now the vertices adjacent to the whole
+  simplex), lookups keyed by `Simplex` in the filtration caches and the ordering, and a second pass `Persistence` made
+  over the complex to find its largest value (`CellularCohomologyEngine.largestFiltrationValue` gives it now). One cold
+  JVM each, 4 cores: Čech of 80 points in R³ to degree 2 101 s to 16 s, Dowker 300 x 100 to degree 1 24 s to 3.9 s,
+  DTM-Rips of 600 points to degree 1 32 s to 3.3 s, sparse Rips of 96 points to degree 2 38 s to 4.9 s. A
+  `keepCriterion` must keep the edges of every simplex it keeps.
+
 ### Fixed
 
 - The packed Ripser engine, which `Persistence` uses for point clouds and metric spaces (also in MATLAB and the CLI), no
