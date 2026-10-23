@@ -49,6 +49,9 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Added
 
+- `--plot barcode,diagram` draws a comma list of 2-D plots on one board, in a row or on `--layout RxC` (row by row; `--width`
+  and `--height` size the drawing); `--tagged` letters the panels and `--title` titles the board, the other look flags apply
+  to every panel (#105). A 3-D plot stays on its own.
 - `FlatLayerStream`: a stream that hands over its dimensions as vertex and value arrays (`FlatLayerStream.Layer`);
   `CellularCohomologyEngine` reduces one without making a `Simplex` per cell. The coface streams behind `Cech`,
   `Witness`, `Dowker`, `DtmRips`, `SparseRips` and `VietorisRips(implementation = RipserCoface)` are one, and `Truncated`

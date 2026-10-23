@@ -126,6 +126,66 @@ class PlotCLISpec extends Specification:
     }
   }
 
+  "--plot with a list of kinds" should {
+    def panels(kinds: String*): Seq[plot.Figure] = kinds.map {
+      case "barcode"   => direct.plotBarcode()
+      case "diagram"   => direct.plotDiagram()
+      case "landscape" => direct.plotLandscape(1)
+    }
+    def drawn(args: String*): String =
+      val out = tempPath(".svg")
+      run(("--max-dimension" +: "1" +: "--output" +: out +: args :+ circleFile)*)._1 must beEqualTo(0)
+      normalized(read(out))
+    def expected(board: plot.Board): String = normalized(board.svgFile(plot.Theme.Light))
+    def failure(args: String*): String =
+      var code = -1
+      val err = stderrOf { code = run(args :+ circleFile*)._1 }
+      code must beEqualTo(1)
+      err
+
+    "draw the panels in one row, as the facade's side does" >> {
+      drawn("--plot", "barcode,diagram") must beEqualTo(expected(plot.Plot.side(panels("barcode", "diagram")*)))
+    }
+    "fill a grid row by row, the first plot in the top left cell" >> {
+      // three panels in 2 by 2: row by row leaves the bottom right cell empty, column by column would leave the top right
+      val rowByRow = panels("barcode", "diagram", "landscape").zipWithIndex
+        .foldLeft(plot.Plot.layout(2, 2))((board, panel) => board.place(panel._1, panel._2 / 2, panel._2 % 2))
+      drawn("--plot", "barcode,diagram,landscape", "--layout", "2x2") must beEqualTo(expected(rowByRow))
+    }
+    "take the size of the drawing from --width and --height, and a title and letters for the panels" >> {
+      val board = panels("barcode", "diagram").zipWithIndex
+        .foldLeft(plot.Plot.layout(1, 2, 1200, 400))((b, panel) => b.place(panel._1, 0, panel._2))
+      val titled = (board + plot.Labels(title = "A circle")).tagged()
+      drawn(
+        "--plot",
+        "barcode,diagram",
+        "--layout",
+        "1x2",
+        "--width",
+        "1200",
+        "--height",
+        "400",
+        "--title",
+        "A circle",
+        "--tagged"
+      ) must beEqualTo(expected(titled))
+    }
+    "apply the look flags to every panel" >> {
+      val styled = plot.Plot.side(panels("barcode", "diagram")*) + plot.Palette.named("print")
+      drawn("--plot", "barcode,diagram", "--palette", "print") must beEqualTo(expected(styled))
+    }
+    "be refused where it cannot be drawn, with what to do" >> {
+      failure("--plot", "barcode,diagram", "--layout", "1x1") must contain("2 plots do not fit a 1x1 layout")
+      failure("--plot", "barcode,diagram", "--layout", "2by2") must contain("--layout is rows x columns, such as 2x2")
+      failure("--plot", "barcode", "--layout", "1x2") must contain("--layout is for a list of plots")
+      failure("--plot", "barcode,input-3d") must contain("a 3-D plot cannot go on a board: input-3d")
+      failure("--plot", "barcode,sphere") must contain("unrecognized --plot 'sphere'")
+      failure("--plot", "barcode,diagram", "--tag", "(a)") must contain("--tag labels one plot")
+      failure("--plot", "barcode", "--tagged") must contain("--tagged is for a list of plots")
+      failure("--plot", "barcode,diagram", "--bar", "0") must contain("--bar is not used by --plot barcode,diagram")
+    }
+  }
+
   "a misused plot flag" should {
     def fails(args: String*): Int = run(args :+ circleFile*)._1
     "be an error, never ignored" >> {

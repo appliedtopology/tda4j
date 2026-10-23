@@ -112,3 +112,12 @@ on `claude/project-thread-uhbr7a`. Point-in-time record; the rules that came out
   `--export-text-to-path`) and the `rsvg-convert` lines (`-f`, `-z`) are written from those tools' manuals. Whether a given
   converter resolves `Helvetica, Arial, 'Liberation Sans'` the same way was seen only for cairosvg and Chromium (both reach
   Liberation Sans here).
+- **#105 command-line board.** `--plot barcode,diagram[,...]` (comma list of 2-D kinds), `--layout RxC` (digits, `x` or `X`,
+  at most 3 digits each; the grid itself refuses what it cannot draw, and the check runs before any computation),
+  `--tagged`. Decisions (reversible): panels fill the grid row by row (`i / cols`, `i % cols`), more cells than panels is
+  fine, more panels than cells is an error; without `--layout` the board is `Plot.side` (a row, each panel its own
+  size); `--width`/`--height` size the whole drawing for a layout (default 960 × 600) and each panel for a row; the look
+  flags go through `Board + tweak` as in Scala, so `--title` titles the board and `--x-label` etc. reach every panel;
+  `--tag` is refused for a list (one text on every panel is never wanted, `--tagged` letters them); a 3-D kind in a list is
+  refused, 3-D stays alone. Specs (PlotCLISpec, "a list of kinds") compare the SVG with the board the facade builds.
+  Mutations killed: column-by-column fill, `--tagged` ignored. The single-plot paths are unchanged (the old examples pass).

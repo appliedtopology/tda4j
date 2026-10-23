@@ -216,7 +216,20 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     descr = "instead of writing the diagram, draw: barcode, diagram, representative (a bar's cycle or cocycle over " +
       "the points or image), input, complex (at --at), landscape, persistence-image, or input-3d, complex-3d, " +
       "representative-3d. Into --output (.svg in plain light colors, .html a page that follows the reader's light " +
-      "or dark setting), or without --output into a page opened in the browser"
+      "or dark setting), or without --output into a page opened in the browser. A comma list of 2-D kinds " +
+      "(barcode,diagram) draws them on one board, in a row or on --layout"
+  )
+  val layout: ScallopOption[String] = opt[String](
+    name = "layout",
+    noshort = true,
+    descr = "for --plot with a list of kinds: the grid of the board as rows x columns (2x2), filled row by row; " +
+      "--width and --height are the size of the whole drawing (default: one row)"
+  )
+  val tagged: ScallopOption[Boolean] = opt[Boolean](
+    name = "tagged",
+    noshort = true,
+    default = Some(false),
+    descr = "for --plot with a list of kinds: letter the panels (a), (b), ..., as a paper does"
   )
   val bar: ScallopOption[Int] = opt[Int](
     name = "bar",

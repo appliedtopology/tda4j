@@ -145,11 +145,13 @@ and persistence images, and says so for the rest. The command line draws the sam
 java -jar tda4j-VERSION-assembly.jar --max-dimension 1 --save-result circle.json noisy-circle.csv
 java -jar tda4j-assembly.jar --plot diagram --output diagram.svg circle.json
 java -jar tda4j-assembly.jar --plot representative circle.json
+java -jar tda4j-assembly.jar --plot barcode,diagram --layout 1x2 --tagged circle.json
 ```
 
 The first line computes and prints the bars, and saves the whole result; the others plot it without computing again.
 `--plot representative` draws the most persistent bar of `--dimension` (default 1), or `--bar N` (its line number in
-the listing, counting from 0); `--at` gives the scale. Without `--output` the plot opens in the browser. See the
+the listing, counting from 0); `--at` gives the scale. A comma list of kinds is one board, in a row or on `--layout`.
+Without `--output` the plot opens in the browser. See the
 [command-line page](cli.md).
 
 ### Saved results
@@ -908,7 +910,7 @@ result.plotBarcode().withXScale('sqrt').withTextScale(1.3).save('barcode.svg');
 </div>
 
 The command line has a flag for the same changes of a `--plot`: `--title`, `--x-label`, `--y-label`, `--caption`, `--tag`,
-`--description`, `--look` (`default`, `print` or `clear`: the palette and style together, which the flags after it
+`--description`, `--layout` and `--tagged` (for a list of kinds on a board), `--look` (`default`, `print` or `clear`: the palette and style together, which the flags after it
 override), `--width`, `--height`, `--palette` (`brand`, `reference`, `print`, `grayscale` or `clear`), `--style` (`default`, `slides`, `print` or `clear`), `--theme`
 (`light`, `dark` or `auto`), `--text-scale` (applied to the `--style`), `--set` (repeated, `element.property=value`), `--x-scale` and
 `--y-scale` (`linear`, `log`, `sqrt` or `symlog`). A word that is not one, a size out of range and a flag a plot cannot

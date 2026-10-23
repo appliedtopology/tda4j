@@ -4,6 +4,7 @@ package cli
 import org.appliedtopology.tda4j.*
 import org.appliedtopology.tda4j.matlab.{LandmarkSelectionResult, PersistenceResult, TDA4j}
 import org.appliedtopology.tda4j.plot.{
+  Board,
   Figure,
   Labels,
   Look,
@@ -524,6 +525,17 @@ object TDA4jCLI:
     "representative-3d"
   )
 
+  /** The kinds of a `--plot` value: one, or a comma list that is drawn as a board. */
+  private def plotKindsOf(spec: String): Seq[String] = spec.split(",", -1).toSeq.map(_.trim)
+
+  private val layoutText = """(\d{1,3})\s*[xX]\s*(\d{1,3})""".r
+
+  /** The rows and columns of a `--layout`: `2x3`. */
+  private def parseLayout(text: String): (Int, Int) =
+    text.trim match
+      case layoutText(rows, cols) => (rows.toInt, cols.toInt)
+      case _ => throw new IllegalArgumentException(s"--layout is rows x columns, such as 2x2, not '$text'")
+
   /** The plot flags, checked before anything is read or computed: a typo should not cost a long computation, and a flag
     * is never silently ignored.
     */
@@ -566,27 +578,57 @@ object TDA4jCLI:
             throw new IllegalArgumentException(s"$flag is for --plot ${kinds.toSeq.sorted.mkString(" or ")}")
         }
         if looks.nonEmpty then throw new IllegalArgumentException(s"${looks.head} is for --plot")
-      case Some(kind) =>
-        if !plotKinds.contains(kind) then
-          throw new IllegalArgumentException(
-            s"unrecognized --plot '$kind'; expected one of ${plotKinds.mkString(", ")}"
-          )
-        usedBy.foreach { case (flag, (supplied, kinds)) =>
-          if supplied && !kinds.contains(kind) then
+        Seq("--layout" -> conf.layout.isSupplied, "--tagged" -> conf.tagged())
+          .collect { case (flag, true) => flag }
+          .foreach(flag => throw new IllegalArgumentException(s"$flag is for --plot"))
+      case Some(spec) =>
+        val listed = plotKindsOf(spec)
+        listed.foreach { kind =>
+          if !plotKinds.contains(kind) then
             throw new IllegalArgumentException(
-              s"$flag is not used by --plot $kind, only by --plot ${kinds.toSeq.sorted.mkString(" or ")}"
+              s"unrecognized --plot '$kind'; expected one of ${plotKinds.mkString(", ")}"
             )
         }
+        usedBy.foreach { case (flag, (supplied, kinds)) =>
+          if supplied && !listed.exists(kinds.contains) then
+            throw new IllegalArgumentException(
+              s"$flag is not used by --plot $spec, only by --plot ${kinds.toSeq.sorted.mkString(" or ")}"
+            )
+        }
+        if listed.size > 1 then
+          listed.filter(_.endsWith("-3d")).headOption.foreach { kind =>
+            throw new IllegalArgumentException(s"a 3-D plot cannot go on a board: $kind (draw it with its own --plot)")
+          }
+          if conf.tag.isSupplied then
+            throw new IllegalArgumentException("--tag labels one plot; --tagged letters the panels of a board")
+          conf.layout.toOption.foreach { text =>
+            val (rows, cols) = parseLayout(text)
+            // the grid itself refuses a size it cannot draw, now and not after the computation
+            Plot.layout(rows, cols, conf.width.getOrElse(960), conf.height.getOrElse(600))
+            if listed.size > rows * cols then
+              throw new IllegalArgumentException(
+                s"${listed.size} plots do not fit a ${rows}x$cols layout; give --layout with at least ${listed.size} cells"
+              )
+          }
+        else
+          Seq("--layout" -> conf.layout.isSupplied, "--tagged" -> conf.tagged())
+            .collect { case (flag, true) => flag }
+            .foreach(flag =>
+              throw new IllegalArgumentException(s"$flag is for a list of plots, as --plot barcode,diagram")
+            )
         if conf.bar.isSupplied && conf.dimension.isSupplied then
           throw new IllegalArgumentException(
             "give --bar (one bar) or --dimension (its most persistent bar), not both"
           )
-        if (kind == "complex" || kind == "complex-3d") && !conf.at.isSupplied then
-          throw new IllegalArgumentException(s"--plot $kind needs --at, the scale of the complex to draw")
+        listed.find(kind => kind == "complex" || kind == "complex-3d").foreach { kind =>
+          if !conf.at.isSupplied then
+            throw new IllegalArgumentException(s"--plot $kind needs --at, the scale of the complex to draw")
+        }
         // a typo or a number out of range should not cost a long computation: build the changes now
         appearance(conf)
         conf.theme.foreach(Theme.named)
-        if kind.endsWith("-3d") then
+        if listed.size == 1 && listed.head.endsWith("-3d") then
+          val kind = listed.head
           Seq("--x-label", "--y-label", "--x-scale", "--y-scale", "--caption", "--tag", "--description").foreach { flag =>
             if looks.contains(flag) then
               throw new IllegalArgumentException(s"$flag is for 2-D plots, and --plot $kind draws a 3-D scene")
@@ -662,8 +704,7 @@ object TDA4jCLI:
       if i >= 0 && i < result.size() then err.println(s"tda4j: drawing bar $i: ${toBars(result)(i)}")
       i
     def dimension = conf.dimension.toOption.getOrElse(1)
-    val kind = conf.plot()
-    val figure: Plot = kind match
+    def figureOf(kind: String): Plot = kind match
       case "barcode"        => result.plotBarcode()
       case "diagram"        => result.plotDiagram()
       case "representative" =>
@@ -677,18 +718,38 @@ object TDA4jCLI:
       case "complex-3d"        => result.plotComplex3D(conf.at())
       case "representative-3d" => result.plotRepresentative3D(chosenBar())
       case other               => throw new IllegalStateException(s"unreachable: --plot $other was checked")
-    if kind == "barcode" || kind == "diagram" then noteHiddenBars(result, loaded, err)
-    val drawn: Plot = appearance(conf).fold(figure) { tweak =>
+    val listed = plotKindsOf(conf.plot())
+    val kind = listed.mkString(",")
+    // one plot, or a board: a row, or the panels in row-major order on the grid --layout asks for
+    val figure: Plot = listed.map(figureOf) match
+      case Seq(single) => single
+      case several     =>
+        val panels = several.map {
+          case f: Figure => f
+          case other     => throw new IllegalStateException(s"unreachable: --plot $kind drew a $other on a board")
+        }
+        conf.layout.toOption.fold[Board](Plot.side(panels*)) { text =>
+          val (rows, cols) = parseLayout(text)
+          panels.zipWithIndex.foldLeft(Plot.layout(rows, cols, conf.width.getOrElse(960), conf.height.getOrElse(600))) {
+            case (board, (panel, i)) => board.place(panel, i / cols, i % cols)
+          }
+        }
+    if listed.exists(k => k == "barcode" || k == "diagram") then noteHiddenBars(result, loaded, err)
+    val tweaked: Plot = appearance(conf).fold(figure) { tweak =>
       figure match
-        case f: plot.Figure => f + tweak
-        case s: plot.Scene  => s + tweak
-        case other          => throw new IllegalStateException(s"unreachable: --plot $kind drew a $other")
+        case f: Figure => f + tweak
+        case s: Scene  => s + tweak
+        case b: Board  => b + tweak
+        case other     => throw new IllegalStateException(s"unreachable: --plot $kind drew a $other")
     }
+    val drawn: Plot = tweaked match
+      case b: Board if conf.tagged() => b.tagged()
+      case other                     => other
     val theme = conf.theme.toOption.map(Theme.named)
     conf.output.toOption match
       case Some(path) => drawn.save(path, theme)
       case None       =>
-        val page = FileAccess.tempFile(s"tda4j-$kind-", ".html")
+        val page = FileAccess.tempFile(s"tda4j-${listed.mkString("-")}-", ".html")
         FileAccess.writeText(page, drawn.html(theme.getOrElse(Theme.Auto)))
         val opened = Viewer.browse(FileAccess.fileUri(page))
         err.println(

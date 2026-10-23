@@ -153,11 +153,17 @@ follows the reader's light or dark setting) or, without `--output`, a page opene
 | `input`, `complex` | the points or image; the complex at `--at` |
 | `input-3d`, `complex-3d`, `representative-3d` | the same in 3-D, as a page you can turn |
 
+A comma list of 2-D kinds draws them on one board, left to right: `--plot barcode,diagram`. `--layout RxC` puts them on a
+grid instead, row by row (`--plot barcode,diagram,landscape --layout 2x2`), with `--width` and `--height` the size of the
+whole drawing (default 960 by 600); `--tagged` letters the panels `(a)`, `(b)`, ...; `--title` is the title of the board,
+and the other look flags apply to every panel. A 3-D plot is drawn on its own.
+
 | flag | meaning |
 |---|---|
 | `--bar N` | for `representative`: the bar, by its 0-based line number in the text output; default the most persistent bar of `--dimension` |
 | `--dimension D` | for `representative` (without `--bar`), `landscape` and `persistence-image`; default `1` |
 | `--at X` | the scale: required for `complex`; for `representative`, a cycle is drawn over the complex at `X` and a cocycle restricted to it (a cocycle is restricted to its bar's birth unless you say; `--at Infinity` draws it whole) |
+| `--layout RxC`, `--tagged` | for a list of kinds: the grid of the board, `2x2` or `1x3`, and lettered panels |
 | `--title`, `--x-label`, `--y-label` | the words |
 | `--caption`, `--tag`, `--description` | a line under the plot, a letter in its corner for one panel of a figure (`(a)`), and what a screen reader says of it; 2-D plots only |
 | `--look` | a whole look at once: `default`, `print` (`--palette print --style print`) or `clear`; the flags below, after it, win |
