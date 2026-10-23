@@ -37,6 +37,12 @@ import scala.jdk.CollectionConverters.ListHasAsScala
   *     landmarks given as a file of point indices, one per line (the same for every tool), or chosen by maxmin.
   *   - `task=dowker [dual=true]`: a relation matrix (one row per vertex, one column per witness) in `input`, as `vr`'s
   *     `format=distance` file; `dual=true` builds the complex on the other side.
+  *   - `task=helix-validity d=5 n=40 [shape=interior|surface] [draws=1000] [seed0=0]`: no input file. For each of
+  *     `draws` random clouds of the unit cube (the generator of `bench/sweep_alpha.py`, but Java's `SplittableRandom`,
+  *     so the clouds are not the sweep's) build `HelixDelaunay` as `Persistence` does and count the clouds whose
+  *     triangulation fails the checks the fast alpha engine relies on (a facet with other than one or two top cofaces,
+  *     an interior void, `looksValid`), those for which `requireValidTriangulation = true` throws, and those where the
+  *     walk fell back to its slow candidate search; one JSON line (`bench/sweep_alpha.py --validity`).
   *   - `count=true` (tasks `vr`, `alpha`, `cech`, `sparse`, `dtm`, `witness`, `dowker`): build the complex the task
   *     would reduce, count its cells by dimension (up to `dim + 1`, all a barcode up to degree `dim` needs) and print
   *     one JSON line with `cells`; no engine runs (`bench/count_cells.py`).
@@ -55,6 +61,9 @@ object PaperBenchmarkDriver:
       a.take(i) -> a.drop(i + 1)
     }.toMap
     val task = opts("task")
+    if task == "helix-validity" then
+      helixValidity(opts)
+      return
     val input = opts("input")
     val dim = opts("dim").toInt
     val p = opts.getOrElse("p", "17").toInt
@@ -257,6 +266,37 @@ object PaperBenchmarkDriver:
       println(s"""{"held":${held != null}}""")
 
   private def fmt(x: Double): String = if x.isPosInfinity then "inf" else x.toString
+
+  /** The failure rate of `HelixDelaunay` over `draws` random clouds: see `task=helix-validity` above. */
+  private def helixValidity(opts: Map[String, String]): Unit =
+    val d = opts("d").toInt
+    val n = opts("n").toInt
+    val shape = opts.getOrElse("shape", "interior")
+    require(shape == "interior" || shape == "surface", s"shape=$shape (interior|surface)")
+    val draws = opts.getOrElse("draws", "1000").toInt
+    val seed0 = opts.getOrElse("seed0", "0").toLong
+    var invalid, repairThrew, fallbacks = 0
+    val start = System.nanoTime()
+    for k <- 0 until draws do
+      val rng = java.util.SplittableRandom(seed0 + k)
+      val pts = Array.fill(n, d)(rng.nextDouble())
+      if shape == "surface" then
+        for row <- pts do
+          val facet = rng.nextInt(2 * d)
+          row(facet / 2) = (facet % 2).toDouble
+      val helix = HelixDelaunay(pts, seed = seed0 + k)
+      val tops = helix.validated
+      val bad = HelixDelaunay.badFacetsOf(tops).nonEmpty ||
+        HelixDelaunay.interiorVoidVertices(tops, helix.ambientDimension).exists(_.nonEmpty) ||
+        !HelixDelaunay.looksValid(tops, helix.points)
+      if bad then invalid += 1
+      if helix.sphereScanFallbacks > 0 then fallbacks += 1
+      try HelixDelaunay(pts, seed = seed0 + k, requireValidTriangulation = true)
+      catch case _: RuntimeException => repairThrew += 1
+    println(
+      s"""{"tool":"tda4j","task":"helix-validity","shape":"$shape","d":$d,"n":$n,"draws":$draws,"invalid":$invalid,""" +
+        s""""repair_threw":$repairThrew,"fallback_draws":$fallbacks,"seconds":${(System.nanoTime() - start) / 1e9}}"""
+    )
 
   /** The cells of the complex a task reduces, by dimension: the stream is built as `Persistence` builds it and only
     * iterated, never reduced, so the count is the size of the problem and not of what an engine touches.
