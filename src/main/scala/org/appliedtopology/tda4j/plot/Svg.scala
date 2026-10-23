@@ -48,6 +48,39 @@ object Svg:
     val r = math.round(v * 100) / 100.0
     if r == r.toLong then r.toLong.toString else r.toString
 
+  /** The title of a board, as an `<svg>` of `width` pixels to put above its panels, and its height: the text is set as
+    * the title of `first`, the board's first panel (its font, size, weight, color and alignment, in its palette).
+    */
+  private[plot] def heading(first: Figure, text: String, width: Int, theme: Theme): (String, Int) =
+    val id = s"tda4j${counter.incrementAndGet()}"
+    val ts = first.style.textScale
+    val face = first.elements.face(TextRole.Title)
+    val size = face.size * ts
+    val height = math.ceil(16.0 + 22.0 * ts * (face.size / TextRole.defaultSize(TextRole.Title))).toInt
+    val pal = first.palette.withDegrees(first.degrees)
+    def ink(p: Paint): String = if theme == Theme.Auto then pal.css(p) else pal.hex(p, theme)
+    val (x, anchor) = face.align match
+      case Anchor.Start  => (16.0, "")
+      case Anchor.Middle => (width / 2.0, """ text-anchor="middle"""")
+      case Anchor.End    => (width - 16.0, """ text-anchor="end"""")
+    val extra = face.weight.fold("")(wt => s""" font-weight="${wt.css}"""") +
+      (if face.italic then """ font-style="italic"""" else "") + face.font.fold("")(ff =>
+        s""" font-family="${escape(ff)}""""
+      )
+    val (shown, cut) = face.fit(text, size)
+    val svg = new StringBuilder
+    svg ++= s"""<svg xmlns="http://www.w3.org/2000/svg" id="$id" width="$width" height="$height" viewBox="0 0 $width $height" font-family="${escape(
+        first.style.font
+      )}" role="img">"""
+    if theme == Theme.Auto then svg ++= s"<style>${pal.cssVariables(s"#$id")}</style>"
+    svg ++= s"<title>${escape(text)}</title>"
+    if !first.style.transparent then
+      svg ++= s"""<rect width="$width" height="$height" style="fill:${ink(Paint.Surface)}"/>"""
+    svg ++= s"""<text x="${fmt(x)}" y="${fmt(9.0 + size)}"$anchor style="fill:${ink(face.paint)}" font-size="${fmt(
+        size
+      )}"$extra>${escape(shown)}${if cut then s"<title>${escape(text)}</title>" else ""}</text></svg>"""
+    (svg.toString, height)
+
   /** The plot area on the page, and the range it shows. `x0..x1` and `y0..y1` are positions in the axes' transformed
     * space, which is data space on a linear axis.
     */
@@ -858,6 +891,17 @@ object Svg:
       sb ++= s"""<text x="${fmt(bx + 16 * ts)}" y="${fmt(top + bh + 4 * sTick)}" $numberStyle>${escape(
           loc(number(cb.lo))
         )}</text>"""
+      // the numbers between the ends of a transformed bar, top down, each clear of the one above and of the end below
+      val gap = 1.5 * px(TextRole.TickLabel)
+      cb.barTicks.sortBy(-_._2).foldLeft(top) { case (above, (v, t)) =>
+        val at = top + bh * (1 - t)
+        if at - above >= gap && top + bh - at >= gap then
+          sb ++= s"""<text x="${fmt(bx + 16 * ts)}" y="${fmt(at + 4 * sTick)}" $numberStyle>${escape(
+              loc(cb.transform.tickLabel(v))
+            )}</text>"""
+          at
+        else above
+      }
       if cb.label.nonEmpty then
         sb ++= s"""<text x="${fmt(bx)}" y="${fmt(top + bh + 22 * sc(TextRole.ColorTitle))}" font-size="${fmt(
             px(TextRole.ColorTitle)

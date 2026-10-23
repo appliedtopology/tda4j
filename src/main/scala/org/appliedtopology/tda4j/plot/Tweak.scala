@@ -113,9 +113,13 @@ final case class Labels(
       )
     s.copy(title = title.getOrElse(s.title), subtitle = subtitle.getOrElse(s.subtitle))
 
-  // A board's title is its page title; every panel keeps its own, and takes the other labels.
+  // A board's title is its page title and is drawn above the panels; every panel keeps its own, and takes the other labels.
   override def onBoard(b: Board): Board =
-    b.copy(title = title.getOrElse(b.title), plots = b.plots.map(copy(title = Optional.empty).onFigure))
+    b.copy(
+      title = title.getOrElse(b.title),
+      heading = title.getOrElse(b.heading),
+      plots = b.plots.map(copy(title = Optional.empty).onFigure)
+    )
 
 /** The size of a plot in pixels, width by height. Only what is given changes (`Size(width = 900)`); the plot area takes
   * what the margins leave. The plots choose a height that suits what they draw (a barcode grows with its bars), so give

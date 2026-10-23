@@ -327,6 +327,21 @@ class PlotGrammarSpec extends Specification:
       half.hex(1.0, Palette.brand) must beEqualTo(Palette.along(Palette.brand.sequential, 0.5)) // sqrt(1)/sqrt(4)
       count((image + Scale.color(guide = false)).svg(), "rect") must beLessThan(count(image.svg(), "rect"))
     }
+    "label the middle of a transformed bar where the transform puts each number, and a linear bar by its ends" in {
+      val sqrt = ColorScale(Ramp.Sequential, 0.0, 4.0, "v", Transform.Sqrt)
+      sqrt.barTicks.map(_._1) must contain(1.0) // a round number between the ends
+      sqrt.barTicks.toMap.apply(1.0) must beCloseTo(0.5, 1e-12) // half way up, as sqrt(1)/sqrt(4): not a quarter
+      sqrt.barTicks.map(_._1).filter(v => v <= 0.0 || v >= 4.0) must beEmpty // the ends say their own numbers
+      val log = ColorScale(Ramp.Sequential, 0.01, 100.0, "v", Transform.Log10)
+      log.barTicks.toMap.apply(1.0) must beCloseTo(0.5, 1e-12) // a decade is a quarter of four
+      ColorScale(Ramp.Sequential, 0.0, 4.0).barTicks must beEmpty
+      ColorScale(Ramp.Diverging, -4.0, 4.0, transform = Transform.Sqrt).barTicks must beEmpty // always linear
+      val plain = image + Scale.color(max = 4)
+      val squared = image + Scale.color(max = 4, transform = Transform.Sqrt)
+      words(squared.svg()).count(_ == "1") must beGreaterThan(words(plain.svg()).count(_ == "1"))
+      words(squared.svg()) must contain("4") // and the ends are still there
+      sameUpToIds(plain.svg(), (plain + Scale.color(transform = Transform.Identity)).svg())
+    }
     "refuse changes that mean nothing to its kind of ramp" in {
       val cyc = Plot.circularCoordinates(circle, circle.indices.map(i => i -> i / 16.0).toMap)
       (cyc + Scale.color(max = 2)) must throwAn[IllegalArgumentException]("one turn")

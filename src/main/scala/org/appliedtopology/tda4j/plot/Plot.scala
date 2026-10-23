@@ -51,12 +51,16 @@ trait Plot:
   *   the grid the panels are placed on; none for a row
   * @param slots
   *   where each of `plots` sits on `layout`, in the same order
+  * @param heading
+  *   a title drawn above the panels, set with `Labels(title = ...)`; `title` is the page's own and is drawn only as
+  *   this
   */
 final case class Board(
   plots: Seq[Figure],
   title: String = "",
   layout: Option[Layout] = None,
-  slots: Seq[Slot] = Seq.empty
+  slots: Seq[Slot] = Seq.empty,
+  heading: String = ""
 ) extends Plot:
   require(
     layout.isEmpty && slots.isEmpty || slots.size == plots.size,
@@ -73,8 +77,11 @@ final case class Board(
     * columns: `Plot.layout(2, 3).place(a, 0, 0, colSpan = 2).place(b, 0, 2).place(c, 1, 0, colSpan = 3)`. A panel is as
     * large as the cells it spans, and its axes run across them. A board that is a row has no cells: start from
     * [[Plot.layout]].
+    *
+    * A persistence diagram keeps equal units on its axes, so in a wide cell its data take a square in the middle.
+    * `fill = true` gives that up for this panel (`withAspect(free = true)`), and the plot fills the cell.
     */
-  def place(figure: Figure, row: Int, col: Int, rowSpan: Int = 1, colSpan: Int = 1): Board =
+  def place(figure: Figure, row: Int, col: Int, rowSpan: Int = 1, colSpan: Int = 1, fill: Boolean = false): Board =
     val grid = layout.getOrElse(
       throw IllegalArgumentException(
         "Board.place: this board is a row of panels; start from Plot.layout(rows, cols) to place panels on a grid"
@@ -89,7 +96,7 @@ final case class Board(
           } at $taken"
       )
     }
-    copy(plots = plots :+ figure, slots = slots :+ slot)
+    copy(plots = plots :+ (if fill then figure.withAspect(free = true) else figure), slots = slots :+ slot)
 
   /** The panels lettered, as a paper does: `tagged()` is `(a)`, `(b)`, ...; `tagged("%s.", "A")` is `A.`, `B.`;
     * `tagged("%s)", "1")` is `1)`, `2)`. `format` takes the letter at its `%s`, and `sequence` is where the letters
@@ -137,7 +144,18 @@ final case class Board(
         (f.copy(width = w, height = h), x, y)
       }
 
-  def fragment(theme: Theme = Theme.Auto): String = layout match
+  // the width of the drawing, which a heading spans
+  private def drawingWidth: Int = layout.fold(plots.map(_.width).sum)(_.width)
+
+  // the heading above the panels as an `<svg>` and its height, none without one
+  private def headingAbove(theme: Theme): Option[(String, Int)] =
+    plots.headOption.filter(_ => heading.nonEmpty).map(Svg.heading(_, heading, drawingWidth, theme))
+
+  def fragment(theme: Theme = Theme.Auto): String =
+    val panels = panelsFragment(theme)
+    headingAbove(theme).fold(panels)((svg, _) => s"<div>$svg$panels</div>")
+
+  private def panelsFragment(theme: Theme): String = layout match
     case None =>
       plots.map(_.svg(theme)).mkString("""<div style="display:flex;flex-wrap:wrap;gap:12px">""", "", "</div>")
     case Some(grid) =>
@@ -158,10 +176,15 @@ final case class Board(
     Html.page(title, fragment(theme), plots.headOption.fold(Palette.default)(_.palette))
 
   def svgFile(theme: Theme = Theme.Light): String =
-    val (w, h) = layout match
+    val (w, panelsHeight) = layout match
       case Some(grid) => (grid.width, grid.height)
       case None       => (plots.map(_.width).sum, plots.map(_.height).maxOption.getOrElse(0))
-    val inner = drawn.map((f, x, y) => f.svg(theme).replaceFirst("<svg ", s"""<svg x="$x" y="$y" """))
+    val head = headingAbove(theme)
+    val band = head.fold(0)(_._2)
+    val h = panelsHeight + band
+    val inner = head.fold("")((svg, _) => svg) +: drawn.map((f, x, y) =>
+      f.svg(theme).replaceFirst("<svg ", s"""<svg x="$x" y="${y + band}" """)
+    )
     val surface = plots.headOption.fold(Palette.default)(_.palette).hex(Paint.Surface, theme)
     // a board of panels with no background of their own has none either
     val background =

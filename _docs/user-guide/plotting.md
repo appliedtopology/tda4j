@@ -301,8 +301,8 @@ Heatmaps (persistence images, images, cubical grids), cocycles and circular coor
 the values to colors: heatmaps and cocycles through the palette's sequential and diverging ramps, circular coordinates
 through a cyclic one. `withColorScale` sets its limits, so that two plots are read on one scale, and the colors of a
 sequential ramp (`ColorScale.viridis`, `ColorScale.greys`, or any list of colors, light to dark) and how values are
-spread along it (`Transform.Sqrt` for a heavy-tailed image). A cocycle's scale is symmetric about zero, so it takes only
-a `max`.
+spread along it (`Transform.Sqrt` for a heavy-tailed image; the color bar then labels round numbers between its ends,
+each where the transform puts it). A cocycle's scale is symmetric about zero, so it takes only a `max`.
 
 ```scala
 import scala.language.experimental.modularity
@@ -660,7 +660,8 @@ TDA4j.clearPlotDefaults();
 
 Plots drawn side by side mean something only on the same scale. `shared()` gives every panel of a board the union of
 the panels' ranges, on both axes or on `shared(y = false)` the x axis only; a tweak added to a board with `+` changes
-every panel (`Labels(title = ...)` titles the board, the page it is saved as):
+every panel (`Labels(title = ...)` titles the board: the heading above the panels, and the title of the page it is saved
+as):
 
 ```scala
 import scala.language.experimental.modularity
@@ -691,16 +692,17 @@ import org.appliedtopology.tda4j.plot.*
 val d = Persistence(CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv"), maxDimension = 1)
 
 val board = Plot.layout(2, 3, widths = Seq(2.0, 2.0, 1.0))
-  .place(Plot.diagram(d).withAspect(free = true), row = 0, col = 0, colSpan = 2)
+  .place(Plot.diagram(d), row = 0, col = 0, colSpan = 2, fill = true)
   .place(Plot.barcode(d), row = 0, col = 2)
   .place(Plot.barcode(d).withXScale(Transform.Sqrt), row = 1, col = 0, colSpan = 3)
   .tagged()
 board.save("grid.svg")
 ```
 
-A persistence diagram keeps equal units, so in a wide cell it would leave room beside the data; `withAspect(free = true)`
-lets it fill the cell, as above. A panel that would cover a cell another one covers, or that runs off the grid, is refused when it is placed, naming the
-panel in the way. `tagged()` letters the panels in the order they were placed.
+A persistence diagram keeps equal units, so in a wide cell the data take a square and the rest is empty axis;
+`fill = true` (the same as `withAspect(free = true)` on that panel) lets it fill the cell, as above. A panel that would
+cover a cell another one covers, or that runs off the grid, is refused when it is placed, naming the panel in the way.
+`tagged()` letters the panels in the order they were placed.
 
 On a grid, `sharedColumns()` puts the panels over the same columns on one x scale and `sharedRows()` the panels across
 the same rows on one y scale, each column and row its own (`shared()` still takes all panels together). A panel that

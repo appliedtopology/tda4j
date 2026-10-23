@@ -154,6 +154,10 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   and `place(figure, row, col, rowSpan, colSpan)` puts a panel in it, spanning cells, so that one plot can run across a
   whole row or column. `Board.sharedColumns()` and `sharedRows()` put the panels over the same columns, or rows, on one
   scale. A board is saved as an SVG with each panel at the size of its cells, and on a page as a CSS grid.
+  `place(..., fill = true)` lets a persistence diagram, which keeps equal units, fill a wide cell (#110).
+- `Labels(title = ...)` on a board draws the title above the panels (`Board.heading`); it was only the page's title. The
+  color bar of a transformed scale (`Scale.color(transform = Transform.Sqrt)`) labels round numbers between its ends,
+  each where the transform puts it (#97).
 - `Camera(azimuth, elevation, zoom)` (`Scene.withCamera`, settings `camera.azimuth/elevation/zoom`) sets the view of a 3-D
   scene: the saved `.svg` is that view, a page's canvas starts from it; a 2-D plot refuses it, and the CLI says so before
   computing.
