@@ -73,7 +73,12 @@ class AlphaComplexSpec extends org.specs2.mutable.Specification with ScalaCheck:
     dispatch: String
   ): Seq[Seq[Simplex[Int]]] =
     val alpha = AlphaShapes(points.toIndexedSeq, AlphaBackend.parse(dispatch))
-    (0 to points.head.length).map(d => alpha.iterateDimension(d).toSeq)
+    (0 to points.head.length).map(d => layerOf(alpha, d))
+
+  // A cloud of lower affine rank than its declared dimension (collinear points in R^3, or a generated column of equal
+  // values) has no simplices above its rank: `iterateDimension` is a partial function and is undefined there.
+  private def layerOf(alpha: AlphaShapes, d: Int): Seq[Simplex[Int]] =
+    alpha.iterateDimension.lift(d).fold(Seq.empty[Simplex[Int]])(_.toSeq)
 
   private def everySimplexHasExpectedFaces(
     layerByDimension: Seq[Seq[Simplex[Int]]]
@@ -90,7 +95,7 @@ class AlphaComplexSpec extends org.specs2.mutable.Specification with ScalaCheck:
 
   private def alphaProperties(points: Array[Array[Double]], dispatch: String): Prop =
     val alpha = AlphaShapes(points.toIndexedSeq, AlphaBackend.parse(dispatch))
-    val layerByDimension = (0 to points.head.length).map(d => alpha.iterateDimension(d).toSeq)
+    val layerByDimension = (0 to points.head.length).map(d => layerOf(alpha, d))
     val allSimplices: IndexedSeq[Simplex[Int]] = layerByDimension.flatten
     val simplicesByDimension = layerByDimension.map(_.toSet)
 
@@ -133,6 +138,13 @@ class AlphaComplexSpec extends org.specs2.mutable.Specification with ScalaCheck:
         forAll(pointsGen) { points =>
           alphaProperties(points, dispatch)
         }
+    }
+
+  for dispatch <- dispatches do
+    s"$dispatch: collinear points in R^3 have no simplices above dimension 1" in {
+      val line = (0 until 6).map(i => Array(i.toDouble, 0.0, 0.0)).toArray
+      val sizes = layers(line, dispatch).map(_.size)
+      (sizes.take(2) must be_==(Seq(6, 5))) and (sizes.drop(2).forall(_ == 0) must beTrue)
     }
 
 /** Regression coverage for `AlphaDQPSettings.parallel`: this flag used to be defined and documented ("run the
