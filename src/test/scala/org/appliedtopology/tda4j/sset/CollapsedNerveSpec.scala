@@ -155,7 +155,9 @@ class CollapsedNerveSpec extends Specification:
 
   "persistent homology on the collapsed nerve" should {
     "equal the bar complex's barcode" in {
-      val cases = Seq(("Z/8", 2, 3), ("S_3", 2, 4), ("S_3", 3, 4), ("D_8", 2, 3), ("S_4", 2, 2), ("S_4", 3, 2))
+      // The bar complex of S_4 is the expensive side (23^3 cells in degree 2); Scala.js compares the smaller groups.
+      val cases = Seq(("Z/8", 2, 3), ("S_3", 2, 4), ("S_3", 3, 4), ("D_8", 2, 3)) ++
+        TestPlatform.perPlatform(jvm = Seq(("S_4", 2, 2), ("S_4", 3, 2)), js = Seq.empty)
       cases.map { (name, p, degree) =>
         val (_, rw, chain) = systems.find(_._1 == name).get
         val collapsed = CollapsedNerve(rw).persistentHomology(chain, degree, p).triples.sorted
@@ -174,7 +176,9 @@ class CollapsedNerveSpec extends Specification:
         .and(BigInt(collapsed.redundantCellsVisited) * 100 must beLessThan(barCellsToDimension6))
     }
     "lift every representative to a cycle of the bar complex present at the bar's birth" in {
-      Seq(("S_4", 2), ("S_4", 3), ("Z/8", 2), ("D_8", 2)).forall { (name, p) =>
+      val cases =
+        TestPlatform.perPlatform(jvm = Seq(("S_4", 2), ("S_4", 3)), js = Seq.empty) ++ Seq(("Z/8", 2), ("D_8", 2))
+      cases.forall { (name, p) =>
         val (_, rw, chain) = systems.find(_._1 == name).get
         val diagram: PersistenceDiagram[NerveSimplex] = CollapsedNerve(rw).persistentHomology(chain, 3, p)
         val bar = Nerve(rw.monoid).skeleton(4)

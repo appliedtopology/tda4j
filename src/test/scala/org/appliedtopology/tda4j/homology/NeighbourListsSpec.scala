@@ -55,8 +55,9 @@ class NeighbourListsSpec extends mutable.Specification:
     lists.apparentPairCount == scan.apparentPairCount
 
   "Neighbour lists give the all-vertex scan's bars, cocycles and cycles, term for term" >> {
+    // Seeds search for rare inputs; the JVM run does that, Scala.js only has to show any platform difference.
     val failures = for
-      seed <- 0L until 10L
+      seed <- 0L until TestPlatform.perPlatform(jvm = 10L, js = 3L)
       (space, k) <- clouds(seed).zipWithIndex
       threshold <- Seq(Some(0.25), Some(0.5), None)
       field <- Seq(FiniteField(3), FiniteField(17))

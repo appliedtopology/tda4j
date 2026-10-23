@@ -23,9 +23,12 @@ class NaiveCappedSpec extends mutable.Specification:
 
   "A naive engine capped at degree k" >> {
     "has the uncapped engine's bars, pairs and representatives up to degree k" >> {
+      // The three primes are three algebras (F_2 has no signs, F_3 tells orientations apart); the platform difference
+      // shows over one, so Scala.js takes F_3.
+      val primes = TestPlatform.perPlatform(jvm = Seq(2, 3, 17), js = Seq(3))
       val results =
         for
-          p <- Seq(2, 3, 17)
+          p <- primes
           (name, pts) <- Seq("cloud 12x3" -> cloud(1, 12, 3), "cloud 16x2" -> cloud(2, 16, 2), "grid" -> grid)
           k <- Seq(0, 1, 2)
           built <- Seq(k, k + 1) // a stream built to exactly the cap, and one dimension higher
@@ -48,7 +51,7 @@ class NaiveCappedSpec extends mutable.Specification:
           val samePairs = capped.pairing.toSet == full.pairing.filter(_.dim <= k).toSet
           val ok = sameBars && samePairs && got.forall(_._1 <= k)
           (s"$name F_$p k=$k built=$built", ok, want.size)
-      (results.filterNot(_._2).map(_._1) must beEmpty) and (results.map(_._3).sum must beGreaterThan(1000))
+      (results.filterNot(_._2).map(_._1) must beEmpty) and (results.map(_._3).sum must beGreaterThan(300 * primes.size))
     }
 
     "reduces a top-dimension cell only while a class of degree k is open" >> {

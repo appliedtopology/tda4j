@@ -22,7 +22,7 @@ import org.specs2.scalacheck.Parameters
   */
 class CohomologySpec extends mutable.Specification with ScalaCheck:
   given Double is Field = Field.DoubleApproximated(1e-9)
-  given Parameters = Parameters(minTestsOk = 100)
+  given Parameters = Parameters(minTestsOk = TestPlatform.propertyCases(100))
 
   private def endpointValue(e: BarcodeEndpoint[Double]): Double = e match
     case NegativeInfinity() => Double.NegativeInfinity

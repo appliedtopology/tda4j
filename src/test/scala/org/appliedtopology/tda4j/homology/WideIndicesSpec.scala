@@ -67,8 +67,9 @@ class WideIndicesSpec extends mutable.Specification:
     two.totalSimplexCount == one.totalSimplexCount
 
   "Two-word indices give the one-word engine's bars, cocycles and cycles, term for term" >> {
+    // Seeds search for rare inputs; the JVM run does that, Scala.js only has to show any platform difference.
     val failures = for
-      seed <- 0L until 8L
+      seed <- 0L until TestPlatform.perPlatform(jvm = 8L, js = 2L)
       (space, k) <- clouds(seed).zipWithIndex
       threshold <- Seq(Some(0.25), Some(0.5), None)
       field <- Seq(FiniteField(3), FiniteField(17))

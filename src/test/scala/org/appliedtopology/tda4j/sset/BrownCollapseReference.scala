@@ -299,8 +299,11 @@ class BrownCollapseReferenceSpec extends Specification:
 
   "the Morse complex filtered by its critical cells' levels" should {
     "have the bar complex's barcode, with representatives that lift to cycles present at birth" in {
-      val cases =
-        Seq((z4pc, z4chain, 2), (z4pc, z4chain, 3), (z8pc, z8chain, 2), (s3pc, s3chain, 2), (s3pc, s3chain, 3))
+      // Scala.js: a cyclic group over F_2 and S_3 over F_3, one torsion each; the JVM runs every pair.
+      val cases = TestPlatform.perPlatform(
+        jvm = Seq((z4pc, z4chain, 2), (z4pc, z4chain, 3), (z8pc, z8chain, 2), (s3pc, s3chain, 2), (s3pc, s3chain, 3)),
+        js = Seq((z4pc, z4chain, 2), (s3pc, s3chain, 3))
+      )
       cases.map { (rw, chain, p) =>
         val morse = MorseStream(Collapse(rw), 5, levels(chain))
         val (bars, repsValid) = morse.barcode(p)

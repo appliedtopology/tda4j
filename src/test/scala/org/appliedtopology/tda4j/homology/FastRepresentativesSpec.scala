@@ -67,7 +67,7 @@ class FastRepresentativesSpec extends mutable.Specification:
   "The fast cubical engine stores every representative packed, in its order, 3-D middle degrees included" >> {
     import f3.given
     val unpacked = for
-      seed <- 0L until 3L
+      seed <- 0L until TestPlatform.perPlatform(jvm = 3L, js = 1L)
       stream <- images(seed)
       zeroLength <- Seq(false, true)
       bar <- FastCubicalHomologyEngine[f3.Fp]().persistentHomology(stream, zeroLength)
@@ -79,7 +79,7 @@ class FastRepresentativesSpec extends mutable.Specification:
 
   "The fast cubical engine's bars and representatives equal the eager reference's" >> {
     val checks = for
-      seed <- 0L until 12L
+      seed <- 0L until TestPlatform.perPlatform(jvm = 12L, js = 3L)
       stream <- images(seed)
       field <- Seq(f2, f3, f17)
       zeroLength <- Seq(false, true)
@@ -133,7 +133,7 @@ class FastRepresentativesSpec extends mutable.Specification:
 
   "The fast cubical engine equals the eager reference on degenerate shapes, 3-D and 4-D grids, and signed zeros" >> {
     val checks = for
-      stream <- (0L until 6L).flatMap(oddShapes) :+ signedZeroMerge
+      stream <- (0L until TestPlatform.perPlatform(jvm = 6L, js = 2L)).flatMap(oddShapes) :+ signedZeroMerge
       field <- Seq(f2, f3, f17)
       zeroLength <- Seq(false, true)
     yield (stream.shape, sameCubical(field)(stream, zeroLength))
@@ -147,7 +147,7 @@ class FastRepresentativesSpec extends mutable.Specification:
     given Double is Field = Field.DoubleApproximated(1e-9)
     given Ordering[Cube] = cubeOrdering
     val problems = for
-      seed <- 0L until 4L
+      seed <- 0L until TestPlatform.perPlatform(jvm = 4L, js = 1L)
       stream <- images(seed) ++ oddShapes(seed).filter(_.ambientDim >= 3)
       zeroLength <- Seq(false, true)
       problem <-
