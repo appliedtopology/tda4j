@@ -417,16 +417,53 @@ open class EnumeratingCofaceSimplexStream(
   lazy val simplexIndexing: SimplexIndexing = SimplexIndexing(metricSpace.size)
 
   /** `cells` sorted by `filtrationOrdering.reverse`, computing each cell's value and index once for the sort rather
-    * than on every comparison.
+    * than on every comparison. The keys sit in primitive arrays and the sort moves positions, so no `Simplex` is hashed
+    * (a `SortedSet` hashes by walking its tree).
     */
   protected def sortedByFiltration(cells: IterableOnce[Simplex[Int]]): Vector[Simplex[Int]] =
-    val fvCache = mutable.HashMap.empty[Simplex[Int], Option[Double]]
-    val ixCache = mutable.HashMap.empty[Simplex[Int], Long]
-    val memoFv: PartialFunction[Simplex[Int], Double] = new PartialFunction[Simplex[Int], Double]:
-      def isDefinedAt(s: Simplex[Int]): Boolean = fvCache.getOrElseUpdate(s, filtrationValue.lift(s)).isDefined
-      def apply(s: Simplex[Int]): Double = fvCache.getOrElseUpdate(s, filtrationValue.lift(s)).get
-    val memoTieBreak: Ordering[Simplex[Int]] = Ordering.by(s => ixCache.getOrElseUpdate(s, simplexIndexing(s)))
-    cells.iterator.toVector.sorted(using FiltrationOrdering.canonical(memoFv, _.size, memoTieBreak).reverse)
+    val all = mutable.ArrayBuffer.from(cells.iterator)
+    val n = all.length
+    val values = new Array[Double](n)
+    val sizes = new Array[Int](n)
+    val indices = new Array[Long](n)
+    var allDefined = true
+    var k = 0
+    while k < n do
+      val cell = all(k)
+      var defined = true
+      values(k) = filtrationValue.applyOrElse(
+        cell,
+        (_: Simplex[Int]) =>
+          defined = false
+          0.0
+      )
+      allDefined &&= defined
+      sizes(k) = cell.size
+      indices(k) = simplexIndexing(cell)
+      k += 1
+    if allDefined then
+      val order: Array[Integer] = Array.tabulate(n)(Integer.valueOf(_))
+      // The reverse of `filtrationOrdering` (value reversed, then size, then index): value ascending, then size and
+      // index descending.
+      java.util.Arrays.sort(
+        order,
+        (a: Integer, b: Integer) =>
+          val byValue = java.lang.Double.compare(values(a), values(b))
+          if byValue != 0 then byValue
+          else
+            val bySize = Integer.compare(sizes(b), sizes(a))
+            if bySize != 0 then bySize else java.lang.Long.compare(indices(b), indices(a))
+      )
+      Vector.tabulate(n)(j => all(order(j)))
+    else
+      // A cell outside the filtration function's domain is ordered by size and index alone (`FiltrationOrdering`).
+      val fvCache = mutable.HashMap.empty[Simplex[Int], Option[Double]]
+      val ixCache = mutable.HashMap.empty[Simplex[Int], Long]
+      val memoFv: PartialFunction[Simplex[Int], Double] = new PartialFunction[Simplex[Int], Double]:
+        def isDefinedAt(s: Simplex[Int]): Boolean = fvCache.getOrElseUpdate(s, filtrationValue.lift(s)).isDefined
+        def apply(s: Simplex[Int]): Double = fvCache.getOrElseUpdate(s, filtrationValue.lift(s)).get
+      val memoTieBreak: Ordering[Simplex[Int]] = Ordering.by(s => ixCache.getOrElseUpdate(s, simplexIndexing(s)))
+      all.toVector.sorted(using FiltrationOrdering.canonical(memoFv, _.size, memoTieBreak).reverse)
 
   /** A candidate is kept iff both the caller's own `keepCriterion` AND the threshold accept it -- one place deciding
     * "is this cell kept," per `sortedByFiltration`'s own note about not duplicating filtration-value lookups across
@@ -474,6 +511,72 @@ open class RipserCofaceSimplexStream(
   // lower-dimension state, and the caches this writes to concurrently are TrieMap-backed. Defaults to false.
   parallelFiltrationValue: Boolean = false
 ) extends EnumeratingCofaceSimplexStream(metricSpace, keepCriterion, maxFiltrationValue, filtrationValueOverride):
+
+  // Bit `i` of `keptEdgeNeighbours(j)` is set when the edge {i, j} is kept. A kept simplex has all its edges kept (the
+  // filtration is monotone along faces), so a coface of a simplex can only add a vertex adjacent to every vertex of
+  // it: the candidates of dimension d >= 2 are read off these rows instead of being every smaller vertex, and only
+  // those get a filtration value. Built from dimension 1 as it is computed, or on first use if dimensions are asked
+  // for out of order. Absent for a vertex set too large for the table (then every smaller vertex is a candidate).
+  private var keptEdgeNeighbours: Option[Array[Array[Long]]] = None
+  private var neighboursBuilt = false
+
+  /** The table needs `n * ceil(n / 64)` words: at most 2^25 (256 MB), about 40000 vertices. */
+  private val maxNeighbourWords = 1L << 25
+
+  private val vertexBound: Int = metricSpace.elements.foldLeft(0)((bound, v) => math.max(bound, v + 1))
+
+  private def buildNeighbours(kept: Iterable[Simplex[Int]]): Unit =
+    neighboursBuilt = true
+    val words = (vertexBound + 63) >>> 6
+    keptEdgeNeighbours =
+      if vertexBound.toLong * words > maxNeighbourWords then None
+      else
+        val table = Array.ofDim[Long](vertexBound, words)
+        kept.foreach { edge =>
+          val vertices = edge.iterator
+          val a = vertices.next()
+          val b = vertices.next()
+          table(a)(b >>> 6) |= 1L << (b & 63)
+          table(b)(a >>> 6) |= 1L << (a & 63)
+        }
+        Some(table)
+
+  /** Every simplex `spx + i` with `i` below the smallest vertex of `spx`, for `spx` in `layer`, and `i` adjacent to all
+    * of `spx` when the neighbour table is there.
+    */
+  private def cofaceCandidates(layer: IndexedSeq[Simplex[Int]]): IndexedSeq[Simplex[Int]] =
+    keptEdgeNeighbours match
+      case None =>
+        for
+          spx <- layer
+          i <- metricSpace.elements.filter(j => j < spx.min)
+        yield spx + i
+      case Some(table) =>
+        val words = (vertexBound + 63) >>> 6
+        val common = new Array[Long](words)
+        val out = Vector.newBuilder[Simplex[Int]]
+        layer.foreach { spx =>
+          val vertices = spx.iterator
+          val smallest = vertices.next()
+          System.arraycopy(table(smallest), 0, common, 0, words)
+          while vertices.hasNext do
+            val row = table(vertices.next())
+            var w = 0
+            while w < words do
+              common(w) &= row(w)
+              w += 1
+          // Only the bits below `smallest`.
+          val lastWord = smallest >>> 6
+          var w = 0
+          while w <= lastWord do
+            var bits = if w == lastWord then common(w) & ((1L << (smallest & 63)) - 1L) else common(w)
+            while bits != 0L do
+              out += spx + ((w << 6) + java.lang.Long.numberOfTrailingZeros(bits))
+              bits &= bits - 1L
+            w += 1
+        }
+        out.result()
+
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
     case 0 =>
       currentDimensionCache = metricSpace.elements.map(v => Simplex(v)).to(immutable.Queue)
@@ -491,13 +594,18 @@ open class RipserCofaceSimplexStream(
               Some(simplexIndexing(ix, d)).filter(keptByThresholdAndCriterion)
             }
         )
+        if d == 2 then buildNeighbours(lastDimensionCache)
       else lastDimensionCache = currentDimensionCache.toIndexedSeq
       // now we have a known good lastDimensionCache
-      val rawCandidates: IndexedSeq[Simplex[Int]] =
-        for
-          spx <- lastDimensionCache
-          i <- metricSpace.elements.filter(j => j < spx.min)
-        yield spx + i
+      if d >= 2 && !neighboursBuilt then
+        buildNeighbours(for
+          i <- metricSpace.elements
+          j <- metricSpace.elements
+          if i < j
+          edge = Simplex(i, j)
+          if keptByThresholdAndCriterion(edge)
+        yield edge)
+      val rawCandidates = cofaceCandidates(lastDimensionCache)
       if parallelFiltrationValue then
         // Side-effect-only: populates filtrationValueCache/CechFiltration's own cache as a side effect of
         // each applyOrElse call, in parallel; the returned values themselves are discarded, exactly the
@@ -508,6 +616,7 @@ open class RipserCofaceSimplexStream(
         rawCandidates.filter(keptByThresholdAndCriterion)
       ).to(immutable.Queue) // we _would_ want to avoid creating the entire thing and sort it
       currentDimension = d // so dimension d + 1 builds on this cache instead of enumerating every d-subset again
+      if d == 1 then buildNeighbours(currentDimensionCache)
       currentDimensionCache.iterator
   }
 
