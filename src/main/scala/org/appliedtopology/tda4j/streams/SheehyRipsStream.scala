@@ -37,7 +37,7 @@ open class SheehyRipsSimplexStream(
   val ambientMetricSpace: FiniteMetricSpace[Int],
   val permutation: GreedyPermutation,
   val epsilon: Double,
-  keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true },
+  keepCriterion: PartialFunction[Simplex[Int], Boolean] = CofaceSimplexStream.keepAll,
   maxFiltrationValue: Option[Double] = None,
   parallelFiltrationValue: Boolean = false
 ) extends RipserCofaceSimplexStream(
@@ -63,6 +63,39 @@ open class SheehyRipsSimplexStream(
     "permutation must be a full greedy permutation of every point in ambientMetricSpace"
   )
 
+  // The value of `SheehyRipsSimplexStream.filtrationValueOverride` on arrays: the edges of the smallest vertex on top of
+  // the value of the simplex without it (a kept simplex has the largest birth among its edges as its value).
+  private val flat = new RipserCofaceSimplexStream.FlatFiltration:
+    private val lambda = Array.tabulate(ambientMetricSpace.size)(permutation.insertionRadius)
+    def value(vertices: Array[Int], from: Int, width: Int, parentValue: Double): Double =
+      if width == 1 then 0.0
+      else
+        val first = vertices(from)
+        var largestBirth = if width == 2 then Double.NegativeInfinity else parentValue
+        var never = false
+        var j = from + 1
+        while j < from + width && !never do
+          val other = vertices(j)
+          val birth = SheehyRipsSimplexStream.edgeBirth(
+            lambda(first),
+            lambda(other),
+            ambientMetricSpace.distance(first, other),
+            epsilon
+          )
+          if birth.isPosInfinity then never = true else largestBirth = math.max(largestBirth, birth)
+          j += 1
+        if never then Double.PositiveInfinity
+        else
+          var earliestVanish = Double.PositiveInfinity
+          j = from
+          while j < from + width do
+            earliestVanish =
+              math.min(earliestVanish, SheehyRipsSimplexStream.vanishDoubled(lambda(vertices(j)), epsilon))
+            j += 1
+          if largestBirth > earliestVanish then Double.PositiveInfinity else largestBirth
+
+  override protected def flatFiltration: Option[RipserCofaceSimplexStream.FlatFiltration] = Some(flat)
+
 object SheehyRipsSimplexStream:
 
   /** The sparse Rips filtration of `ambientMetricSpace`, computing the greedy permutation (with `epsilon` checked
@@ -72,7 +105,7 @@ object SheehyRipsSimplexStream:
     ambientMetricSpace: FiniteMetricSpace[Int],
     epsilon: Double,
     firstPoint: Int = 0,
-    keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true },
+    keepCriterion: PartialFunction[Simplex[Int], Boolean] = CofaceSimplexStream.keepAll,
     maxFiltrationValue: Option[Double] = None,
     parallelFiltrationValue: Boolean = false
   ): SheehyRipsSimplexStream =

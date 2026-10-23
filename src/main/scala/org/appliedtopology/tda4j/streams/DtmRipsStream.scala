@@ -18,7 +18,7 @@ import scala.collection.immutable
   */
 open class DtmRipsSimplexStream(
   val reified: DtmRipsSimplexStream.DtmMetricSpace,
-  keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true },
+  keepCriterion: PartialFunction[Simplex[Int], Boolean] = CofaceSimplexStream.keepAll,
   maxFiltrationValue: Option[Double] = None,
   parallelFiltrationValue: Boolean = false
 ) extends RipserCofaceSimplexStream(
@@ -31,6 +31,31 @@ open class DtmRipsSimplexStream(
   def ambientMetricSpace: FiniteMetricSpace[Int] = reified.ambient
   def f: IndexedSeq[Double] = reified.f
   def p: Double = reified.p
+
+  // `reified.distance` and the value of a vertex on arrays: the weights as a plain array, the edges of the smallest
+  // vertex on top of the value of its simplex without it. An edge's value is its distance alone (a vertex is born at
+  // `2 f(v)`, which the distance never undercuts).
+  private val flat = new RipserCofaceSimplexStream.FlatFiltration:
+    private val weights = reified.f.toArray
+    def value(vertices: Array[Int], from: Int, width: Int, parentValue: Double): Double =
+      val first = vertices(from)
+      if width == 1 then 2.0 * weights(first)
+      else
+        var largest = if width == 2 then 0.0 else parentValue
+        var j = from + 1
+        while j < from + width do
+          val other = vertices(j)
+          val d = 2.0 * DtmRipsSimplexStream.edgeValue(
+            weights(first),
+            weights(other),
+            reified.ambient.distance(first, other),
+            reified.p
+          )
+          if d > largest then largest = d
+          j += 1
+        largest
+
+  override protected def flatFiltration: Option[RipserCofaceSimplexStream.FlatFiltration] = Some(flat)
 
   // The base class's own case 0 (inherited from EnumeratingCofaceSimplexStream/RipserCofaceSimplexStream) emits
   // metricSpace.elements unsorted and unfiltered -- see the class doc's "ordering contract" paragraph for why
@@ -52,7 +77,7 @@ object DtmRipsSimplexStream:
     ambientMetricSpace: FiniteMetricSpace[Int],
     f: IndexedSeq[Double],
     p: Double = 1.0,
-    keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true },
+    keepCriterion: PartialFunction[Simplex[Int], Boolean] = CofaceSimplexStream.keepAll,
     maxFiltrationValue: Option[Double] = None,
     parallelFiltrationValue: Boolean = false
   ): DtmRipsSimplexStream =

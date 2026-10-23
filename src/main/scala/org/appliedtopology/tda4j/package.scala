@@ -102,6 +102,7 @@ abstract class Lab(characteristic: Int, precision: Double = 1e-9):
     FiniteField,
     FiniteMetricSpace,
     FlatCubicalGridStream,
+    FlatLayerStream,
     GreedyPermutation,
     GridCellOrder,
     GridCubes,

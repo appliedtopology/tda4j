@@ -46,7 +46,7 @@ object CechFiltration:
   */
 open class CechCofaceSimplexStream(
   val euclideanMetricSpace: EuclideanMetricSpace,
-  keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true },
+  keepCriterion: PartialFunction[Simplex[Int], Boolean] = CofaceSimplexStream.keepAll,
   maxFiltrationValue: Option[Double] = None,
   // Threaded straight through to RipserCofaceSimplexStream's own parameter of the same name -- see its doc
   // there. Cech's own minimum-enclosing-ball radius computation is exactly the case this exists for: unlike a
@@ -59,4 +59,7 @@ open class CechCofaceSimplexStream(
       maxFiltrationValue,
       Some(CechFiltration(euclideanMetricSpace)),
       parallelFiltrationValue
-    )
+    ):
+  // The radius of a ball is not computed from an array; each candidate is a `Simplex` for the function.
+  override protected def flatFiltration: Option[RipserCofaceSimplexStream.FlatFiltration] =
+    Some(RipserCofaceSimplexStream.FlatFiltration.ofSimplices(filtrationValue))

@@ -311,12 +311,25 @@ trait CofaceSimplexStream[VertexT: Ordering, FiltrationT: Filterable]
 
   def keepCriterion: PartialFunction[Simplex[VertexT], Boolean]
 
+object CofaceSimplexStream:
+
+  /** The `keepCriterion` that keeps every simplex, and the default of the coface streams. A stream whose criterion is
+    * this very function builds its dimensions as arrays ([[FlatLayerStream]]); any other criterion is asked about each
+    * candidate as a [[Simplex]].
+    */
+  val keepAll: PartialFunction[Simplex[Int], Boolean] = { case _ => true }
+
 /** `stream` with simplices up to dimension `maxDim` (a simplex dimension; [[Truncated.ofCofaces]] takes the homological
   * degree instead).
   */
 open class LimitedCofaceSimplexStream(stream: CofaceSimplexStream[Int, Double], maxDim: Int)
     extends CofaceSimplexStream[Int, Double]
+    with FlatLayerStream
     with DoubleFiltration[Simplex[Int]]():
+  override def flatLayers: Option[Iterator[FlatLayerStream.Layer]] = stream match
+    case flat: FlatLayerStream => flat.flatLayers.map(_.take(maxDim + 1))
+    case _                     => None
+
   override def homologyDegreeLimit: Option[Int] =
     Some(stream.homologyDegreeLimit.fold(maxDim - 1)(math.min(_, maxDim - 1)))
   // `d <= maxDim` alone is not sufficient: the WRAPPED stream has its own natural bound (e.g.
@@ -344,7 +357,7 @@ open class LimitedCofaceSimplexStream(stream: CofaceSimplexStream[Int, Double], 
   */
 open class EnumeratingCofaceSimplexStream(
   val metricSpace: FiniteMetricSpace[Int],
-  var keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true },
+  var keepCriterion: PartialFunction[Simplex[Int], Boolean] = CofaceSimplexStream.keepAll,
   // None means "not explicitly set," resolved to metricSpace.minimumEnclosingRadius just below (a constant
   // default, since a literal `= metricSpace.minimumEnclosingRadius` can't reference the earlier `metricSpace`
   // parameter). Beyond that radius the complex is a cone from that point on and contributes no further
@@ -408,11 +421,19 @@ open class EnumeratingCofaceSimplexStream(
   // a genuine drop-in backed by a lock-free Ctrie. See .claude/WORKLOG-parallelization-survey.md item 2 (Cech).
   private val filtrationValueCache = FiltrationCache.empty[Simplex[Int], Double]
 
-  override val filtrationValue: PartialFunction[Simplex[Int], Double] =
+  private val builtFiltrationValue: PartialFunction[Simplex[Int], Double] =
     filtrationValueOverride.getOrElse {
       val base = FiniteMetricSpace.MaximumDistanceFiltrationValue[Int](metricSpace)
       MemoizedFiltration(filtrationValueCache, base.isDefinedAt)(base(_))
     }
+
+  override val filtrationValue: PartialFunction[Simplex[Int], Double] = builtFiltrationValue
+
+  /** Whether the value of a simplex is the default one, the largest distance between two of its vertices: no
+    * `filtrationValueOverride`, and no subclass that replaced `filtrationValue`.
+    */
+  protected final def filtrationIsDefault: Boolean =
+    filtrationValueOverride.isEmpty && (filtrationValue eq builtFiltrationValue)
 
   /** Filtration value reversed, then dimension, then colexicographic order of the vertex sets (their combinatorial
     * index), the refinement Ripser's apparent pairs are defined with. A total order: without a tie-break, a triangle
@@ -478,8 +499,20 @@ open class EnumeratingCofaceSimplexStream(
     * independent filters.
     */
   protected def keptByThresholdAndCriterion(spx: Simplex[Int]): Boolean =
-    keepCriterion.applyOrElse(spx, (_: Simplex[Int]) => true) &&
-      filtrationValue.applyOrElse(spx, (_: Simplex[Int]) => Double.PositiveInfinity) <= resolvedMaxFiltrationValue
+    criterionKeeps(spx) &&
+      keptValue(filtrationValue.applyOrElse(spx, (_: Simplex[Int]) => Double.PositiveInfinity))
+
+  /** Whether `keepCriterion` accepts `spx` (a simplex it is not defined at is accepted). */
+  protected final def criterionKeeps(spx: Simplex[Int]): Boolean =
+    keepCriterion.applyOrElse(spx, (_: Simplex[Int]) => true)
+
+  /** Whether `keepCriterion` is [[CofaceSimplexStream.keepAll]], so that no simplex has to be built to ask it. */
+  protected final def keepsEverything: Boolean = keepCriterion eq CofaceSimplexStream.keepAll
+
+  /** Whether a simplex of filtration value `value` is within the threshold: the half of [[keptByThresholdAndCriterion]]
+    * that depends on the value alone, for the streams that build their dimensions on arrays ([[FlatLayerStream]]).
+    */
+  protected def keptValue(value: Double): Boolean = value <= resolvedMaxFiltrationValue
 
   // Bounded at metricSpace.size (a d-simplex needs d+1 distinct vertices, and there are none beyond that): a
   // real bound, not just a defensive one -- StratifiedCellStream's default .iterator relies on isDefinedAt
@@ -505,9 +538,7 @@ open class EnumeratingCofaceSimplexStream(
   */
 open class RipserCofaceSimplexStream(
   metricSpace: FiniteMetricSpace[Int],
-  keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ =>
-    true
-  },
+  keepCriterion: PartialFunction[Simplex[Int], Boolean] = CofaceSimplexStream.keepAll,
   maxFiltrationValue: Option[Double] = None,
   // See EnumeratingCofaceSimplexStream's identical parameter -- this class's own iterateDimension override
   // touches filtrationValue only through the inherited keptByThresholdAndCriterion/sortedByFiltration, so it
@@ -519,7 +550,120 @@ open class RipserCofaceSimplexStream(
   // resolved and frozen), so each candidate's own filtration-value computation reads only already-complete
   // lower-dimension state, and the caches this writes to concurrently are TrieMap-backed. Defaults to false.
   parallelFiltrationValue: Boolean = false
-) extends EnumeratingCofaceSimplexStream(metricSpace, keepCriterion, maxFiltrationValue, filtrationValueOverride):
+) extends EnumeratingCofaceSimplexStream(metricSpace, keepCriterion, maxFiltrationValue, filtrationValueOverride)
+    with FlatLayerStream:
+  import RipserCofaceSimplexStream.FlatFiltration
+
+  /** How this stream computes a value from the vertices in an array, so that it can build its dimensions as arrays
+    * ([[FlatLayerStream]]) without a [[Simplex]] per candidate. `None` builds cells. A stream whose `filtrationValue`
+    * is not the default one overrides this to match it ''exactly'' (the same value for every simplex, bit for bit), and
+    * overrides [[keptValue]] if it keeps a different set of values than `<= maxFiltrationValue`.
+    */
+  protected def flatFiltration: Option[FlatFiltration] =
+    if filtrationIsDefault then Some(FlatFiltration.flag(metricSpace)) else None
+
+  override def flatLayers: Option[Iterator[FlatLayerStream.Layer]] =
+    flatFiltration.map(f => Iterator.range(0, metricSpace.size).map(flatLayer(f, _)).takeWhile(_.size > 0))
+
+  // The two dimensions last built: `flatPrevious` is the one below `flatCurrent`.
+  private var flatPrevious: Option[FlatLayerStream.Layer] = None
+  private var flatCurrent: Option[FlatLayerStream.Layer] = None
+
+  private lazy val vertexIds: Array[Int] = metricSpace.elements.toArray.sorted
+
+  private def flatLayer(f: FlatFiltration, d: Int): FlatLayerStream.Layer =
+    flatCurrent.filter(_.dim == d).orElse(flatPrevious.filter(_.dim == d)).getOrElse {
+      val parent = if d == 0 then None else Some(flatLayer(f, d - 1))
+      val layer = parent.fold(flatVertices(f))(flatCofaces(f, _))
+      flatPrevious = parent
+      flatCurrent = Some(layer)
+      if d == 1 then buildNeighbours(layer)
+      layer
+    }
+
+  private def flatKept(value: Double, vertices: Array[Int], from: Int, width: Int): Boolean =
+    keptValue(value) && (keepsEverything || criterionKeeps(FlatLayerStream.simplexOf(vertices, from, width)))
+
+  private def flatVertices(f: FlatFiltration): FlatLayerStream.Layer =
+    val kept = new mutable.ArrayBuilder.ofInt
+    val values = new mutable.ArrayBuilder.ofDouble
+    val tuple = new Array[Int](1)
+    vertexIds.foreach { v =>
+      tuple(0) = v
+      val value = f.value(tuple, 0, 1, Double.NaN)
+      if flatKept(value, tuple, 0, 1) then
+        kept += v
+        values += value
+    }
+    RipserCofaceSimplexStream.ordered(0, kept.result(), values.result())
+
+  /** Dimension `parent.dim + 1`: every vertex below the smallest of a simplex of `parent` (and, from dimension 2 on,
+    * adjacent to all of it) makes a candidate, whose value is asked in chunks, in parallel if
+    * `parallelFiltrationValue`.
+    */
+  private def flatCofaces(f: FlatFiltration, parent: FlatLayerStream.Layer): FlatLayerStream.Layer =
+    val width = parent.dim + 2
+    val parentWidth = width - 1
+    val table = if parent.dim >= 1 then keptEdgeNeighbours else None
+    val words = (vertexBound + 63) >>> 6
+    val common = new Array[Long](words)
+    val chunk = RipserCofaceSimplexStream.ChunkSize
+    val candidates = new Array[Int](chunk * width)
+    val parentValues = new Array[Double](chunk)
+    val values = new Array[Double](chunk)
+    var count = 0
+    val keptVertices = new mutable.ArrayBuilder.ofInt
+    val keptValues = new mutable.ArrayBuilder.ofDouble
+
+    def flush(): Unit =
+      RipserCofaceSimplexStream.evaluate(f, width, candidates, parentValues, values, count, parallelFiltrationValue)
+      var c = 0
+      while c < count do
+        if flatKept(values(c), candidates, c * width, width) then
+          keptVertices.addAll(candidates, c * width, width)
+          keptValues += values(c)
+        c += 1
+      count = 0
+
+    def add(vertex: Int, parentIndex: Int): Unit =
+      if count == chunk then flush()
+      val at = count * width
+      candidates(at) = vertex
+      System.arraycopy(parent.vertices, parentIndex * parentWidth, candidates, at + 1, parentWidth)
+      parentValues(count) = parent.values(parentIndex)
+      count += 1
+
+    var k = 0
+    while k < parent.size do
+      val smallest = parent.vertices(k * parentWidth)
+      table match
+        case None =>
+          var i = 0
+          while i < vertexIds.length && vertexIds(i) < smallest do
+            add(vertexIds(i), k)
+            i += 1
+        case Some(rows) =>
+          // Only the words up to the one holding `smallest` can have a bit below it.
+          val lastWord = smallest >>> 6
+          System.arraycopy(rows(smallest), 0, common, 0, lastWord + 1)
+          var j = 1
+          while j < parentWidth do
+            val row = rows(parent.vertices(k * parentWidth + j))
+            var w = 0
+            while w <= lastWord do
+              common(w) &= row(w)
+              w += 1
+            j += 1
+          var w = 0
+          while w <= lastWord do
+            var bits = if w == lastWord then common(w) & ((1L << (smallest & 63)) - 1L) else common(w)
+            while bits != 0L do
+              add((w << 6) + java.lang.Long.numberOfTrailingZeros(bits), k)
+              bits &= bits - 1L
+            w += 1
+      k += 1
+    flush()
+    RipserCofaceSimplexStream.ordered(parent.dim + 1, keptVertices.result(), keptValues.result())
 
   // Bit `i` of `keptEdgeNeighbours(j)` is set when the edge {i, j} is kept. A kept simplex has all its edges kept (the
   // filtration is monotone along faces), so a coface of a simplex can only add a vertex adjacent to every vertex of
@@ -548,6 +692,22 @@ open class RipserCofaceSimplexStream(
           table(a)(b >>> 6) |= 1L << (b & 63)
           table(b)(a >>> 6) |= 1L << (a & 63)
         }
+        Some(table)
+
+  private def buildNeighbours(edges: FlatLayerStream.Layer): Unit =
+    neighboursBuilt = true
+    val words = (vertexBound + 63) >>> 6
+    keptEdgeNeighbours =
+      if vertexBound.toLong * words > maxNeighbourWords then None
+      else
+        val table = Array.ofDim[Long](vertexBound, words)
+        var k = 0
+        while k < edges.size do
+          val a = edges.vertices(2 * k)
+          val b = edges.vertices(2 * k + 1)
+          table(a)(b >>> 6) |= 1L << (b & 63)
+          table(b)(a >>> 6) |= 1L << (a & 63)
+          k += 1
         Some(table)
 
   /** Every simplex `spx + i` with `i` below the smallest vertex of `spx`, for `spx` in `layer`, and `i` adjacent to all
@@ -586,12 +746,29 @@ open class RipserCofaceSimplexStream(
         }
         out.result()
 
-  override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
-    case 0 =>
+  override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] =
+    val vertices: PartialFunction[Int, Iterator[Simplex[Int]]] = { case 0 =>
       currentDimensionCache = metricSpace.elements.map(v => Simplex(v)).to(immutable.Queue)
       currentDimension = 0
       lastDimensionCache = IndexedSeq.empty[Simplex[Int]]
       currentDimensionCache.iterator
+    }
+    vertices.orElse(flatFiltration.fold(cofacesOfSimplices)(cofacesOfLayers))
+
+  // Dimension d >= 1 from the layers (`flatLayers`), as simplices in the stream's listing order.
+  private def cofacesOfLayers(f: FlatFiltration): PartialFunction[Int, Iterator[Simplex[Int]]] = {
+    case d if d >= 1 && d < metricSpace.size =>
+      val previousIsCached = currentDimension == d - 1
+      val cells = flatLayer(f, d).simplicesInStreamOrder
+      lastDimensionCache =
+        if previousIsCached then currentDimensionCache.toIndexedSeq else flatLayer(f, d - 1).simplicesInStreamOrder
+      currentDimensionCache = cells.to(immutable.Queue)
+      currentDimension = d
+      currentDimensionCache.iterator
+  }
+
+  // Dimension d >= 1 from cells: the candidates are Simplex values, looked up in the filtration function.
+  private def cofacesOfSimplices: PartialFunction[Int, Iterator[Simplex[Int]]] = {
     // Bounded at metricSpace.size, same reasoning as EnumeratingCofaceSimplexStream's own iterateDimension --
     // see that class's comment and StratifiedCellStream's doc.
     case d if d >= 1 && d < metricSpace.size =>
@@ -628,6 +805,108 @@ open class RipserCofaceSimplexStream(
       if d == 1 then buildNeighbours(currentDimensionCache)
       currentDimensionCache.iterator
   }
+
+object RipserCofaceSimplexStream:
+
+  /** Candidates are valued, and kept or dropped, this many at a time. */
+  private val ChunkSize = 1 << 15
+
+  /** Candidates per task when the values are computed in parallel. */
+  private val ParallelPart = 1 << 11
+
+  /** The filtration value of a simplex computed from its vertices, which lie in an array: what lets a coface stream
+    * build its dimensions on arrays ([[FlatLayerStream]]) instead of asking a function of [[Simplex]] values.
+    *
+    * It must give the value of the simplex's own `filtrationValue`, bit for bit; the stream's tests compare the two.
+    * `value` is called from several threads at once when `parallelFiltrationValue` is set.
+    */
+  trait FlatFiltration:
+
+    /** The value of the simplex with the ascending vertices `vertices(from until from + width)`. `parentValue` is the
+      * value of the simplex without its smallest vertex (not a number for a vertex): a value that is the largest over
+      * the edges of a simplex needs only the edges of the smallest vertex on top of it.
+      */
+    def value(vertices: Array[Int], from: Int, width: Int, parentValue: Double): Double
+
+  object FlatFiltration:
+
+    /** `function` asked about a `Simplex` built for each candidate (`+Infinity` where it is not defined): no faster
+      * than the function, but the dimensions are still built on arrays.
+      */
+    def ofSimplices(function: PartialFunction[Simplex[Int], Double]): FlatFiltration =
+      new FlatFiltration:
+        def value(vertices: Array[Int], from: Int, width: Int, parentValue: Double): Double =
+          function.applyOrElse(
+            FlatLayerStream.simplexOf(vertices, from, width),
+            (_: Simplex[Int]) => Double.PositiveInfinity
+          )
+
+    /** The Vietoris-Rips value: `0` for a vertex, otherwise the largest `distance` between two vertices. */
+    def flag(metricSpace: FiniteMetricSpace[Int]): FlatFiltration =
+      new FlatFiltration:
+        def value(vertices: Array[Int], from: Int, width: Int, parentValue: Double): Double =
+          if width == 1 then 0.0
+          else
+            // An edge has the vertex below it as its parent, whose value is not its own largest distance.
+            var largest = if width == 2 then 0.0 else parentValue
+            val first = vertices(from)
+            var j = from + 1
+            while j < from + width do
+              val d = metricSpace.distance(first, vertices(j))
+              if d > largest then largest = d
+              j += 1
+            largest
+
+  /** `values(c)` for the `count` candidates `c`, with `width` vertices from `candidates(c * width)`. */
+  private def evaluate(
+    f: FlatFiltration,
+    width: Int,
+    candidates: Array[Int],
+    parentValues: Array[Double],
+    values: Array[Double],
+    count: Int,
+    parallel: Boolean
+  ): Unit =
+    def run(from: Int, until: Int): Unit =
+      var c = from
+      while c < until do
+        values(c) = f.value(candidates, c * width, width, parentValues(c))
+        c += 1
+    if parallel && count >= 4 * ParallelPart then
+      Parallel.foreach((0 until count by ParallelPart).map(from => (from, math.min(count, from + ParallelPart)))) {
+        (from, until) => run(from, until)
+      }
+    else run(0, count)
+
+  /** The layer of the cells with these vertices (`dim + 1` ascending ones each) and values, in the order of
+    * [[FlatLayerStream.Layer]]: ascending value, equal values in ascending colexicographic order (the largest vertex
+    * decides first).
+    */
+  private def ordered(dim: Int, vertices: Array[Int], values: Array[Double]): FlatLayerStream.Layer =
+    val n = values.length
+    val width = dim + 1
+    val order: Array[Integer] = Array.tabulate(n)(Integer.valueOf(_))
+    java.util.Arrays.sort(
+      order,
+      (a: Integer, b: Integer) =>
+        val byValue = java.lang.Double.compare(values(a), values(b))
+        if byValue != 0 then byValue
+        else
+          var k = width - 1
+          var c = 0
+          while c == 0 && k >= 0 do
+            c = Integer.compare(vertices(a * width + k), vertices(b * width + k))
+            k -= 1
+          c
+    )
+    val sortedVertices = new Array[Int](vertices.length)
+    val sortedValues = new Array[Double](n)
+    var i = 0
+    while i < n do
+      System.arraycopy(vertices, order(i) * width, sortedVertices, i * width, width)
+      sortedValues(i) = values(order(i))
+      i += 1
+    FlatLayerStream.Layer(dim, sortedVertices, sortedValues)
 
 /** A reference Vietoris-Rips construction following Rieser's New-VR algorithm ("A New Construction of the Vietoris-Rips
   * Complex", arXiv:2301.07191v3, Algorithms 1-4), kept close to the paper as a baseline for the faster constructions.

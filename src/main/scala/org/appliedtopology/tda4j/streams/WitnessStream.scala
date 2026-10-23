@@ -163,7 +163,7 @@ open class LazyWitnessSimplexStream(
   ambientMetricSpace: FiniteMetricSpace[Int],
   val landmarks: IndexedSeq[Int],
   nu: Int = 2,
-  keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true },
+  keepCriterion: PartialFunction[Simplex[Int], Boolean] = CofaceSimplexStream.keepAll,
   maxFiltrationValue: Option[Double] = None,
   parallelFiltrationValue: Boolean = false
 ) extends RipserCofaceSimplexStream(
@@ -186,7 +186,7 @@ open class LazyWitnessSimplexStream(
 open class WitnessCofaceSimplexStream(
   val geometry: WitnessGeometry,
   maxFiltrationValue: Double = Double.PositiveInfinity,
-  keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true }
+  keepCriterion: PartialFunction[Simplex[Int], Boolean] = CofaceSimplexStream.keepAll
 ) extends RipserCofaceSimplexStream(
       WitnessMetricSpace(geometry, nu = 2),
       keepCriterion,
@@ -195,12 +195,16 @@ open class WitnessCofaceSimplexStream(
     ):
   def landmarks: IndexedSeq[Int] = geometry.landmarks
 
+  // The recursion over facets is a function of `Simplex` values; each candidate is one for it.
+  override protected def flatFiltration: Option[RipserCofaceSimplexStream.FlatFiltration] =
+    Some(RipserCofaceSimplexStream.FlatFiltration.ofSimplices(filtrationValue))
+
 object WitnessCofaceSimplexStream:
   def apply(
     ambientMetricSpace: FiniteMetricSpace[Int],
     landmarks: IndexedSeq[Int],
     maxFiltrationValue: Double = Double.PositiveInfinity,
-    keepCriterion: PartialFunction[Simplex[Int], Boolean] = { case _ => true }
+    keepCriterion: PartialFunction[Simplex[Int], Boolean] = CofaceSimplexStream.keepAll
   ): WitnessCofaceSimplexStream =
     new WitnessCofaceSimplexStream(WitnessGeometry(ambientMetricSpace, landmarks), maxFiltrationValue, keepCriterion)
 
@@ -210,10 +214,10 @@ object WitnessCofaceSimplexStream:
     * defaults (`Double.PositiveInfinity` / accept-everything) by hand instead of sharing them.
     */
   def apply(geometry: WitnessGeometry): WitnessCofaceSimplexStream =
-    new WitnessCofaceSimplexStream(geometry, Double.PositiveInfinity, { case _ => true })
+    new WitnessCofaceSimplexStream(geometry, Double.PositiveInfinity, CofaceSimplexStream.keepAll)
 
   def apply(geometry: WitnessGeometry, maxFiltrationValue: Double): WitnessCofaceSimplexStream =
-    new WitnessCofaceSimplexStream(geometry, maxFiltrationValue, { case _ => true })
+    new WitnessCofaceSimplexStream(geometry, maxFiltrationValue, CofaceSimplexStream.keepAll)
 
   def apply(
     geometry: WitnessGeometry,

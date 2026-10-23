@@ -57,7 +57,7 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
     includeZeroLength: Boolean = false
   ): List[PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]]] =
     val theStream = stream
-    val cells = readCells(theStream)
+    lazy val cells = readCells(theStream)
     packed(theStream, cells) match
       case Some(p) => p.cocycleBars(includeZeroLength)
       case None    =>
@@ -86,7 +86,7 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
     val limit = theStream match
       case s: StratifiedCellStream[?, ?] => s.homologyDegreeLimit.getOrElse(Int.MaxValue)
       case _                             => Int.MaxValue
-    val cells = readCells(theStream)
+    lazy val cells = readCells(theStream)
     packed(theStream, cells)
       .map(_.cycleBars(limit, includeZeroLength))
       .getOrElse:
@@ -127,7 +127,7 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
     stream: => CellStream[CellT, FiltrationT]
   ): (List[(PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]], Involution.Pair[CellT])], Ordering[CellT]) =
     val theStream = stream
-    val cells = readCells(theStream)
+    lazy val cells = readCells(theStream)
     packed(theStream, cells).map(_.pairs).getOrElse(paired(theStream, cells))
 
   private def paired(
@@ -265,11 +265,14 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
     */
   private final class PackedCells(
     val dim: Int,
-    val cells: Array[AnyRef],
-    val values: Array[AnyRef],
-    val vertices: Array[Int]
+    val size: Int,
+    val vertices: Array[Int],
+    // The cells and their values, or `null` for a level read from a stream's flat layers: then a cell is built from its
+    // vertices when a representative asks for it, and a value is read from `doubles`.
+    cells: Array[AnyRef],
+    values: Array[AnyRef],
+    doubles: Array[Double]
   ):
-    val size: Int = cells.length
     private val width = dim + 1
     // Open addressing: a slot holds a cell's number + 1, or 0 when empty; built at the first lookup (nothing looks up
     // the top dimension's cells). A cell listed twice keeps its last number, as `numberCells` does.
@@ -317,8 +320,12 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
       if slots == null then index()
       slots(slotOf(src, from, width + 1, skip)) - 1
 
-    def cell(i: Int): CellT = cells(i).asInstanceOf[CellT]
-    def value(i: Int): FiltrationT = values(i).asInstanceOf[FiltrationT]
+    def cell(i: Int): CellT =
+      if cells != null then cells(i).asInstanceOf[CellT]
+      else FlatLayerStream.simplexOf(vertices, i * width, width).asInstanceOf[CellT]
+    def value(i: Int): FiltrationT =
+      if values != null then values(i).asInstanceOf[FiltrationT]
+      else java.lang.Double.valueOf(doubles(i)).asInstanceOf[FiltrationT]
 
   // The order `reduction` puts each dimension in: ascending value, then the stream's tie-break, a stable sort of the
   // stream's own listing. A stream lists each dimension oldest first, so each run of equal values comes reversed, and
@@ -371,9 +378,35 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
     */
   private def packedLevels(
     theStream: CellStream[CellT, FiltrationT],
+    cells: => Vector[CellT]
+  ): Option[Array[PackedCells]] =
+    if !packSimplices || !summon[CellT is OrderedCell].isInstanceOf[StandardSimplexBoundary] then None
+    else flatLevels(theStream).orElse(levelsOfCells(theStream, cells))
+
+  // The levels of a stream that holds its dimensions as flat arrays (`FlatLayerStream`), already in the order the
+  // reduction takes them: no cell is built, and the stream is not read again to find its largest value. Only for
+  // `Double` values under their natural order, which is what such a stream has.
+  private def flatLevels(theStream: CellStream[CellT, FiltrationT]): Option[Array[PackedCells]] =
+    val ordering = summon[Ordering[FiltrationT]].asInstanceOf[Ordering[Any]]
+    val natural = ordering.compare(1.0, 2.0) < 0 && ordering.compare(2.0, 1.0) > 0 && ordering.compare(1.0, 1.0) == 0
+    theStream match
+      case flat: FlatLayerStream if natural =>
+        flat.flatLayers.flatMap { layers =>
+          val levels = layers.map(l => new PackedCells(l.dim, l.size, l.vertices, null, null, l.values)).toArray
+          // A gap is for the cell reduction to report.
+          if levels.isEmpty || levels.exists(_.size == 0) then None
+          else
+            // A layer ends in its largest value, the layers being ascending.
+            largest = levels.iterator.map(l => l.value(l.size - 1)).reduceOption(summon[Ordering[FiltrationT]].max)
+            Some(levels)
+        }
+      case _ => None
+
+  private def levelsOfCells(
+    theStream: CellStream[CellT, FiltrationT],
     cells: Vector[CellT]
   ): Option[Array[PackedCells]] =
-    if !packSimplices || !summon[CellT is OrderedCell].isInstanceOf[StandardSimplexBoundary] || cells.isEmpty then None
+    if cells.isEmpty then None
     else
       val fv: PartialFunction[CellT, FiltrationT] = theStream.filtrationValue
       val cellsByDim = mutable.ArrayBuffer.empty[mutable.ArrayBuffer[AnyRef]]
@@ -422,10 +455,10 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
           while i < order.length do
             System.arraycopy(ts, order(i) * width, tuples, i * width, width)
             i += 1
-          new PackedCells(d, order.map(cs(_)), order.map(vs(_)), tuples)
+          new PackedCells(d, order.length, tuples, order.map(cs(_)), order.map(vs(_)), null)
         })
 
-  private def packed(theStream: CellStream[CellT, FiltrationT], cells: Vector[CellT]): Option[PackedReduction] =
+  private def packed(theStream: CellStream[CellT, FiltrationT], cells: => Vector[CellT]): Option[PackedReduction] =
     packedLevels(theStream, cells).map(new PackedReduction(theStream, _))
 
   /** The reduction on levels. Bars are numbered in the order they are found (degree ascending, youngest birth first),
