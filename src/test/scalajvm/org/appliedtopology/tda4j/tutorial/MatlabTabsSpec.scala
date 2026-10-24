@@ -53,7 +53,7 @@ class MatlabTabsSpec extends Specification:
       val settings = List(
         ("vr", Array[String](), 24711, (0.595, 1.707)),
         ("cech", Array[String](), 36050, (0.297, 0.935)),
-        ("alpha", Array[String](), 325, (0.297, 0.935)),
+        ("alpha", Array[String](), 313, (0.297, 0.935)),
         ("sparse-rips", Array("sparseEpsilon", "0.5"), 1730, (0.708, 1.789)),
         ("witness", Array("numLandmarks", "15"), 441, (0.278, 0.742))
       )
@@ -63,6 +63,15 @@ class MatlabTabsSpec extends Specification:
         (r.numCells(), (r3(loop(1)), r3(loop(2))))
       }
       got must beEqualTo(settings.map((_, _, cells, loop) => (cells, loop)))
+    }
+    "run alpha to the minimum enclosing radius, and on the whole complex for maxFiltrationValue Infinity, with the same bars" in {
+      def alpha(extra: String*) =
+        TDA4j.computeFromPoints(points, Array("maxDimension", "1", "complex", "alpha") ++ extra)
+      val byDefault = alpha()
+      val whole = alpha("maxFiltrationValue", "Infinity")
+      (byDefault.numCells() must beEqualTo(313))
+        .and(whole.numCells() must beEqualTo(325))
+        .and(rows(byDefault.toArray()) must beEqualTo(rows(whole.toArray())))
     }
   }
 

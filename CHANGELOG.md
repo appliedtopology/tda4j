@@ -204,6 +204,19 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   allocates a third to a half as much and runs 7 to 18 % faster, with the same bars and representatives term for term (#56).
   With a heap that follows the live data, random noise of 96 x 96 x 96 now needs 0.54 GB of RSS (was 0.94; CubicalRipser
   0.43, GUDHI 0.51) and runs in a 300 MB heap, and of 2048 x 2048 1.25 GB (was 1.36; CubicalRipser 1.0, GUDHI 1.4).
+- `Persistence(points, complex = AlphaShapes)` builds the alpha complex only up to the points' minimum enclosing radius
+  when no `maxFiltrationValue` is given, as the Vietoris-Rips and Čech complexes already did. The diagram is the same
+  (past that radius the union of balls is contractible); the long thin simplices along the hull of the triangulation
+  are not built.
+  `AlphaShapes.upToEnclosingRadius(points)` is that stream; `AlphaShapes(points)` is still the whole complex. The
+  MATLAB and CLI `complex=alpha` do the same (`engine=fast-alpha` still takes the whole triangulation): the bars are
+  unchanged, `numCells` is smaller (313 instead of 325 on the tutorial's noisy circle). Pass `maxFiltrationValue =
+  Double.PositiveInfinity` (MATLAB and CLI: `Infinity`) for the whole complex (#215).
+- `FiniteMetricSpace.minimumEnclosingRadius` (the default radius of every point-cloud computation, and the scale of
+  `significant()`) is found without allocating, giving up on a point as soon as it cannot beat the best so far: 2.8 s
+  to 2 ms for 10,000 points in 3-space (#209). A `EuclideanMetricSpace` works on squared distances and no longer fills
+  its distance cache for it. A space with a faster way overrides the protected `scanEnclosingRadius`. The value is the
+  same; the empty space raises `UnsupportedOperationException` with a message.
 - `VietorisRips(...)` builds `Implementation.RipserCoface` by default (was `Enumerating`, which tests every vertex set of
   a dimension and is now the slowest choice). The complex is the same, cell for cell and in order; it is built as
   arrays, which the cohomology engine reduces without a `Simplex` per cell. `keepCriterion` and `filtrationValueOverride`

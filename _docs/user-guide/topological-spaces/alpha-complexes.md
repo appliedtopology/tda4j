@@ -21,8 +21,13 @@ val stream = AlphaShapes(points, AlphaBackend.Helix)     // the complex itself
 val upTo = Persistence(points, complex = AlphaShapes, maxFiltrationValue = 0.4)  // only radii up to 0.4
 ```
 
-Filtration values are radii. Without `maxFiltrationValue` the whole complex is built; with it, only the simplices of
-radius at most that value (also `AlphaShapes(points, maxRadius = r)`), and for a small radius that is much cheaper.
+Filtration values are radii. Unless you give it a `maxFiltrationValue`, `Persistence` stops at the points' *minimum
+enclosing radius* (the smallest `r` at which some point is within `r` of all others). Past it the union of the balls is
+contractible and nothing new is born, so the diagram is the same, and the long thin simplices along the hull of the
+triangulation are never built. `AlphaShapes(points)` is the whole complex, and `AlphaShapes.upToEnclosingRadius(points)`
+the one `Persistence` builds. A smaller `maxFiltrationValue` keeps only the simplices of radius at most that value (also
+`AlphaShapes(points, maxRadius = r)`), and for a small radius that is much cheaper; pass `Double.PositiveInfinity` for
+the whole complex.
 
 ### Backends
 

@@ -69,7 +69,7 @@ for data where a `NaN` can only be a bug.
 | `engine` | `ripser`, `chunks`, `naive`, `cohomology`, `fast-cubical`, `fast-alpha` | `ripser` for `vr` and the lazy witness complex, `fast-cubical` for images of dimension 2 and up, `cohomology` otherwise |
 | `representativeType` | `cycles`, `cocycles` | `cycles` (every engine gives both except `fast-cubical` and `fast-alpha`, which give cycles; `ripser` and `cohomology` compute cocycles natively and cycles a little more slowly, the others the other way round) |
 | `maxDimension` | integer | `2`: the top homological degree (for an image: its dimension) |
-| `maxFiltrationValue` | number | the minimum enclosing radius (`Infinity` for the general witness complex and for `alpha`, which then builds the whole complex) |
+| `maxFiltrationValue` | number | the minimum enclosing radius (`Infinity` for the general witness complex, which is not a flag complex; `Infinity` for any complex gives the whole complex, and `engine=fast-alpha` takes the whole triangulation and no radius) |
 | `field` | `Z` (a prime field), `R` (floating point) | `Z` |
 | `prime` | prime | `17` |
 | `epsilon` | number | `1e-9`: the tolerance of `field=R` |

@@ -52,7 +52,7 @@ The [file formats page](input-output.md) describes the formats.
 | `--complex` | `vr`, `alpha`, `cech`, `witness`, `dtm-rips`, `dtm-alpha`, `sparse-rips` | `vr` (a cubical complex for an image, the Dowker complex for a relation) |
 | `--engine` | `ripser`, `chunks`, `naive`, `cohomology`, `fast-cubical`, `fast-alpha` | `ripser` for `vr` and the lazy witness complex, `fast-cubical` for images of dimension 2 and up, `cohomology` otherwise; see [which engine](homology-computation/choosing-engine.md) |
 | `--max-dimension` | integer | `2`; for an image, its dimension |
-| `--max-filtration-value` | number | the minimum enclosing radius; in the units of the complex (a diameter for `vr`, a radius for `cech`) |
+| `--max-filtration-value` | number | the minimum enclosing radius; in the units of the complex (a diameter for `vr`, a radius for `cech` and `alpha`) |
 | `--field` | `Z` (a prime field), `R` (floating point) | `Z` |
 | `--prime` | prime | `17`, for `--field Z` |
 | `--epsilon` | number | `1e-9`, the tolerance of `--field R` |

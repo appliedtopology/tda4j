@@ -316,7 +316,8 @@ These are **alternative implementations with the same output contract, not layer
 not `Double.PositiveInfinity` — past that radius every vertex is within range of a common apex, so the
 complex is a cone from there on and provably contributes no further homology (real `ripser.cpp` uses the
 same default). Pass `maxFiltrationValue = Some(Double.PositiveInfinity)` for the whole complex. `RecursiveStackVietorisRipsSimplexStream` and the alpha-complex backends keep their own,
-always-untruncated default (see [Alpha complex](alpha-complex.md)).
+always-untruncated default; `AlphaShapes.fromPoints`, which `Persistence` calls, cuts the alpha complex at the same
+radius (see [Alpha complex](alpha-complex.md)).
 
 `SimplexIndexing` (inside `SimplexIndexing.scala`) is the piece every Ripser-flavored part of this codebase
 depends on: it encodes/decodes a `d`-subset of `{0, ..., vertexCount-1}` to/from a single integer index via
