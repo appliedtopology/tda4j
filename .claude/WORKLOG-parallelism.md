@@ -56,7 +56,7 @@ The Helix walk alone (5,000 points in R^5, the walk 314 s, faces 29 s, sort 11 s
 - **Seam**: `Parallel.threads/ranges/both/sort/sequentially`; `sequentially` is a thread-local, read on the calling thread,
   where every step decides to fork. Pool size: the JVM's common pool property.
 
-## Not done, and why
+## Not done, and why (issues #219 Bowyer-Watson insertion, #220 reduction and the bars-only engine, #221 Helix apply side)
 
 - Bowyer-Watson insertion: each insertion changes the triangulation the next walks in; a parallel version needs spatial
   partitioning with merge (research). Issue.
