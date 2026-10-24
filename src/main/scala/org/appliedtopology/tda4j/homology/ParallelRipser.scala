@@ -13,12 +13,12 @@ private[tda4j] object ParallelRipser:
   private val UnitsPerThread = 8
 
   /** Whether `run` can take a cloud of `points` points to degree `maxDimension` over Z/`characteristic`: a prime the
-    * engine's Int arithmetic holds, an `n x n` table of edge ranks that fits an array, simplex indices that fit a
-    * `Long`, and, for cycles, keys that are one word (the cycles are found on keys; two-word keys give cocycles only).
+    * engine's Int arithmetic holds, simplex indices that fit a `Long`, and, for cycles, keys that are one word (the
+    * cycles are found on keys; two-word keys give cocycles only).
     */
   def supports(points: Int, maxDimension: Int, characteristic: Int, cycles: Boolean): Boolean =
     characteristic >= 2 && characteristic <= ParallelPackedCohomology.MaxPrime &&
-      points.toLong * points <= Int.MaxValue && {
+      {
         def choose(q: Int): BigInt = (1 to q).foldLeft(BigInt(1))((acc, i) => acc * (points - q + i) / i)
         val bits = (1 to math.min(maxDimension + 2, points)).map(q => choose(q).bitLength).max
         val edges = points.toLong * (points - 1) / 2
@@ -35,10 +35,6 @@ private[tda4j] object ParallelRipser:
     withPairs: Boolean
   ): ParallelRipserRun =
     val n = metricSpace.size
-    require(
-      n.toLong * n <= Int.MaxValue,
-      s"Persistence: engine = ParallelRipser keeps an n x n table, so $n points are too many; use Engine.Ripser"
-    )
     val space = ParallelPackedCohomology.Space(n, metricSpace.distance(_, _), threshold, maxDimension, characteristic)
     val threads = Parallel.threads
     val result =

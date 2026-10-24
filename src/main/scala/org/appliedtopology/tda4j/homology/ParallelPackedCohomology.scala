@@ -26,6 +26,15 @@ object ParallelPackedCohomology:
   /** The largest prime a run can use: coefficients are `Int`s, and `(p - 1)^2 + p` must not overflow. */
   val MaxPrime: Int = 46000
 
+  /** Up to this many points the rank of an edge is looked up in a dense `n x n` table (at most 64 MB); above it, in the
+    * sorted neighbour list of one end (memory proportional to the edges, and no `n x n` array). The table is about a
+    * quarter faster where nearly every pair is an edge; the lists need a fifth of the memory on sparse graphs.
+    */
+  val DenseRankLimit: Int = 4096
+
+  /** The most edges a `Space` takes: they are indexed by `Int` ranks in arrays. */
+  val MaxEdges: Int = Int.MaxValue - 16
+
   /** The edges within the threshold ranked, and the key encoding. */
   open class Space(
     val n: Int,
@@ -36,9 +45,12 @@ object ParallelPackedCohomology:
     // Find apparent pairs Ripser's way (every facet's block from its pairs) instead of from the block's edge.
     val ripserApparent: Boolean = false,
     // Two-word keys even where one Long would do: for tests of the wide layout.
-    forceWide: Boolean = false
+    forceWide: Boolean = false,
+    // Neighbour lists even where the dense table would do: for tests of the large-n layout.
+    forceSparseRanks: Boolean = false
   ):
-    val rank: Array[Int] = Array.fill(n * n)(-1)
+    val sparseRanks: Boolean = forceSparseRanks || n > DenseRankLimit
+    val rank: Array[Int] = if sparseRanks then new Array[Int](0) else Array.fill(n * n)(-1)
     private val (ea, eb, el) =
       val as = mutable.ArrayBuilder.ofInt()
       val bs = mutable.ArrayBuilder.ofInt()
@@ -46,6 +58,10 @@ object ParallelPackedCohomology:
       for b <- 0 until n; a <- 0 until b do
         val l = distance(a, b)
         if l <= threshold then
+          require(
+            as.length < MaxEdges,
+            s"ParallelPackedCohomology: more than $MaxEdges edges within the threshold; lower the filtration value"
+          )
           as += a; bs += b; ls += l
       val (a0, b0, l0) = (as.result(), bs.result(), ls.result())
       val order = SortIndices.sort(
@@ -58,9 +74,75 @@ object ParallelPackedCohomology:
     val edgeA: Array[Int] = ea
     val edgeB: Array[Int] = eb
     val edgeLength: Array[Double] = el
-    for r <- edgeA.indices do
-      rank(edgeA(r) * n + edgeB(r)) = r
-      rank(edgeB(r) * n + edgeA(r)) = r
+    // neighbours(a): the vertices joined to `a` by an edge within the threshold, ascending; neighbourRank(a)(i): that edge's rank.
+    private val lists: (Array[Array[Int]], Array[Array[Int]]) =
+      if !sparseRanks then
+        for r <- edgeA.indices do
+          rank(edgeA(r) * n + edgeB(r)) = r
+          rank(edgeB(r) * n + edgeA(r)) = r
+        (null, null)
+      else
+        val degree = new Array[Int](n)
+        for r <- edgeA.indices do
+          degree(edgeA(r)) += 1
+          degree(edgeB(r)) += 1
+        val nb = Array.tabulate(n)(a => new Array[Int](degree(a)))
+        val nr = Array.tabulate(n)(a => new Array[Int](degree(a)))
+        // Fill by increasing neighbour: visit the edges ordered by (smaller end, larger end).
+        val at = new Array[Int](n)
+        val byEnds = SortIndices.sort(
+          edgeA.length,
+          (x, y) => edgeA(x) < edgeA(y) || edgeA(x) == edgeA(y) && edgeB(x) < edgeB(y)
+        )
+        // Lower neighbours of b are the a < b of the edges (a, b), in ascending a; upper neighbours of a come after.
+        // Two passes keep every list ascending: first (a < b) as b's lower neighbours, then as a's upper neighbours.
+        for r <- byEnds do
+          val (a, b) = (edgeA(r), edgeB(r))
+          nb(b)(at(b)) = a; nr(b)(at(b)) = r; at(b) += 1
+        for r <- byEnds do
+          val (a, b) = (edgeA(r), edgeB(r))
+          nb(a)(at(a)) = b; nr(a)(at(a)) = r; at(a) += 1
+        (nb, nr)
+
+    val neighbours: Array[Array[Int]] = lists._1
+    val neighbourRank: Array[Array[Int]] = lists._2
+
+    /** Points the cursors `cur(0 until k)` at the end of the neighbour lists of `vs(0 until k)`, before a scan down. */
+    def startDown(cur: Array[Int], vs: Array[Int], k: Int): Unit =
+      if sparseRanks then
+        var i = 0
+        while i < k do
+          cur(i) = neighbours(vs(i)).length - 1
+          i += 1
+
+    /** The rank of `{a, v}` for the `u`-th vertex `a` of a column, in a scan where `v` only decreases (after
+      * `startDown`).
+      */
+    def rankDown(cur: Array[Int], u: Int, a: Int, v: Int): Int =
+      if !sparseRanks then rank(a * n + v)
+      else
+        val list = neighbours(a)
+        var c = cur(u)
+        while c >= 0 && list(c) > v do c -= 1
+        cur(u) = c
+        if c >= 0 && list(c) == v then neighbourRank(a)(c) else -1
+
+    /** The rank of the edge `{a, b}`, or -1 when it is longer than the threshold. */
+    def rankOf(a: Int, b: Int): Int =
+      if !sparseRanks then rank(a * n + b)
+      else
+        val list = neighbours(a)
+        var lo = 0
+        var hi = list.length - 1
+        var result = -1
+        while lo <= hi do
+          val mid = (lo + hi) >>> 1
+          val x = list(mid)
+          if x < b then lo = mid + 1
+          else if x > b then hi = mid - 1
+          else
+            result = neighbourRank(a)(mid); lo = hi + 1
+        result
 
     /** `binom(q)(v)` = C(v, q), for simplices of up to `maxDim + 2` vertices. */
     val binom: Array[Array[Long]] = Array.tabulate(maxDim + 3, n + 1)((q, v) => SimplexIndexing.binomial(v, q))
@@ -245,6 +327,8 @@ object ParallelPackedCohomology:
 
   private class Scratch(space: Space):
     val vs = new Array[Int](space.maxDim + 3)
+    // Cursors into the sparse rank lists of the vertices in vs, for a scan over v downwards (Space.rankDown).
+    val cur = new Array[Int](space.maxDim + 3)
     val ws = new Array[Int](space.maxDim + 3)
     val cofKey = new Array[Long](space.n)
     val cofBlock = new Array[Int](space.n)
@@ -309,6 +393,7 @@ object ParallelPackedCohomology:
     var iA = 0L
     var pp = k
     var count = 0
+    startDown(s.cur, s.vs, k)
     var v = n - 1
     while v >= 0 do
       if pp > 0 && s.vs(pp - 1) == v then
@@ -320,7 +405,7 @@ object ParallelPackedCohomology:
         var blk = sigmaBlock
         var u = 0
         while ok && u < k do
-          val q = rank(s.vs(u) * n + v)
+          val q = rankDown(s.cur, u, s.vs(u), v)
           if q < 0 then ok = false else if q + 1 > blk then blk = q + 1
           u += 1
         if ok then
@@ -348,6 +433,7 @@ object ParallelPackedCohomology:
       var iB = sigmaIndex
       var iA = 0L
       var pp = k
+      startDown(s.cur, s.vs, k)
       var v = n - 1
       var found = -1L
       while found < 0 && v > c do
@@ -359,7 +445,7 @@ object ParallelPackedCohomology:
           var ok = true
           var u = 0
           while ok && u < k do
-            val q = rank(s.vs(u) * n + v)
+            val q = rankDown(s.cur, u, s.vs(u), v)
             if q < 0 || q > r then ok = false
             u += 1
           if ok then found = key(sigmaBlock, iB + binom(pp + 1)(v) + iA)
@@ -388,13 +474,14 @@ object ParallelPackedCohomology:
             t += 1
           i += 1
         var older = false
+        startDown(s.cur, s.vs, k)
         var v = n - 1
         while !older && v > w do
           if v != a && v != b then
             var ok = true
             var u = 0
             while ok && u < k do
-              val q = rank(s.vs(u) * n + v)
+              val q = rankDown(s.cur, u, s.vs(u), v)
               if q < 0 || q > r then ok = false
               u += 1
             older = ok
@@ -408,7 +495,7 @@ object ParallelPackedCohomology:
     while i < k do
       var j = i + 1
       while j < k do
-        val q = space.rank(vs(i) * space.n + vs(j))
+        val q = space.rankOf(vs(i), vs(j))
         if q > top then top = q
         j += 1
       i += 1
@@ -437,6 +524,7 @@ object ParallelPackedCohomology:
   private def oldestCofacetVertexByScan(space: Space, s: Scratch, k: Int, target: Int): Int =
     import space.*
     var found = -1
+    startDown(s.cur, s.vs, k)
     var v = n - 1
     while found < 0 && v >= 0 do
       var member = false
@@ -446,7 +534,7 @@ object ParallelPackedCohomology:
       while ok && u < k do
         if s.vs(u) == v then member = true
         else
-          val q = rank(s.vs(u) * n + v)
+          val q = rankDown(s.cur, u, s.vs(u), v)
           if q < 0 then ok = false else if q + 1 > blk then blk = q + 1
         u += 1
       if !member && ok && blk == target then found = v
@@ -816,13 +904,14 @@ object ParallelPackedCohomology:
             val idx = index(column)
             decode(idx, k, s.vs)
             val top = s.vs(k - 1)
+            startDown(s.cur, s.vs, k)
             var v = n - 1
             while v > top do
               var ok = true
               var blk = columnBlock
               var u = 0
               while ok && u < k do
-                val q = rank(s.vs(u) * n + v)
+                val q = rankDown(s.cur, u, s.vs(u), v)
                 if q < 0 then ok = false else if q + 1 > blk then blk = q + 1
                 u += 1
               if ok then

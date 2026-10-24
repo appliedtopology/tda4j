@@ -56,6 +56,8 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   about 3x (the cycle pass shares its work between the threads too). Its bars are `Ripser`'s; the representatives need not be, since ties between simplices of equal diameter
   are broken differently, so a diagram's representatives can depend on the number of threads. Zero-length bars and real
   coefficients are refused (`Auto` falls back to `Ripser` for them). On Scala.js the engine by name runs on its one thread, with the same bars.
+  Edge ranks are a dense table up to 4,096 points and sorted neighbour lists above, so memory follows the edges within the
+  threshold and the old 46,340-point limit is gone (about a quarter slower on small dense clouds is the price of the lists, which are not used there).
   `Persistence(..., computeAllRepresentatives = false)` builds each bar's representative when it is first read (#220).
 - `Persistence(..., threads = n)` limits one call to `n` threads (`1` is the sequential computation, and makes `Auto` pick
   `Ripser`), the representatives built later included. The MATLAB and Java option `threads` and the CLI flag `--threads`

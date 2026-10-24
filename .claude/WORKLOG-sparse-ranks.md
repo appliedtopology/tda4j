@@ -1,7 +1,7 @@
 # Sparse edge ranks for ParallelRipser (2026-10-24)
 
 Question (Mikael): the engine's `Space.rank` is a dense `Array[Int](n * n)`, which caps n at 46,340 and costs 4 n^2 bytes.
-Measure it against sorted per-vertex neighbour lists. Prototype: `WORKLOG-sparse-ranks.patch` (apply with `git apply`; it is a
+Measure it against sorted per-vertex neighbour lists. Prototype (the patch file was removed once shipped; it was a
 `-Dtda4j.sparseRanks=true` switch in `ParallelPackedCohomology.Space`, not shipped). Two lookups: a binary search per
 `(a, b)` (first try), and a per-column-vertex cursor into each list, since every hot loop scans the candidate vertex `v`
 downwards (`startDown`/`rankDown`). Only the cursor variant is in the patch.
@@ -30,3 +30,15 @@ Not measured: the binary-search variant everywhere (only on the torus), n > 46,3
 
 Recommendation: keep the dense table up to a moderate n (say 8,192, 268 MB) and switch to neighbour lists above it or whenever
 n^2 > Int.MaxValue; that keeps small-n speed and lifts the 46k limit. Not done: waiting for Mikael.
+
+## Shipped (same day): the hybrid
+
+Mikael: "Yes, build the hybrid approach. Small slowdowns that save dramatically on memory requirements will increase what
+computations can be done far more than the other way around." `Space` uses the dense table up to `DenseRankLimit` = 4,096
+points (64 MB) and the neighbour lists (cursor variant) above; `forceSparseRanks` forces the lists for specs. The
+`n * n <= Int.MaxValue` limit is gone from `ParallelRipser.run`/`supports`; `Space` refuses more than `MaxEdges` edges with a
+message naming the threshold. Specs: `ParallelRipserSpec` (both layouts equal on pairs, cocycle logs and bars, including a
+tie-heavy grid; 4,200 points on a line, past the limit, equal to `Ripser`'s bars).
+60,000 points in a uniform box (threshold 1.2, H1, cocycles, one thread): 113 s, 2.4 GB peak heap, 84,084 bars; the dense table
+would have needed 14.4 GB and cannot be allocated (n^2 > Int.MaxValue).
+The switch by edge density and dimension (rather than by point count) is #225, with what to measure and how.

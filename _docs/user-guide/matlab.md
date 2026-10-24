@@ -105,7 +105,7 @@ bars are the same either way. For `vr` over a prime field, with `includeZeroLeng
 more than one thread, and `ripser` otherwise. Both give the bars of `ripser`. Their representatives are valid but need
 not be the same chains where simplices tie in diameter, so a script that must reproduce a run exactly, on any machine,
 sets `engine` to `ripser`. `engine=parallel-ripser` by name refuses what it cannot do (the reals, zero-length bars,
-`edgeCollapse`, a prime above 46,000, more than 46,340 points) with an error naming it. `parallel-ripser` builds a bar's
+`edgeCollapse`, a prime above 46,000) with an error naming it. `parallel-ripser` builds a bar's
 representative when you first read it, so a script that only reads `toArray()` never pays for them.
 
 ### Which bars are reported

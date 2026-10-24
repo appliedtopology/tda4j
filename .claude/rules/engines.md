@@ -50,7 +50,7 @@ coface streams have none; use `VietorisRips` (`DESIGN-stream-naming.md`, `WORKLO
    are read as `d(max, min)` (else an asymmetric one grows the column until OOM); Euclidean/Explicit are read as given
    (canonicalizing breaks the distance cache's row-wise walk). Edge-block units on threads are exact (#192, #194);
    `Engine.ParallelRipser` runs them from the verb: `Auto` picks it over `Ripser` when
-   `Parallel.threads > 1` and it applies (prime <= 46,000, no `includeZeroLength`, < 46,341 points); the MATLAB facade and CLI do
+   `Parallel.threads > 1` and it applies (prime <= 46,000, no `includeZeroLength`; edge ranks are a dense table up to `DenseRankLimit` = 4,096 points, sorted neighbour lists above: `WORKLOG-sparse-ranks.md`); the MATLAB facade and CLI do
    the same for an unset `engine` (`engine=ripser` stays Ripser, `parallel-ripser` asks); `Persistence(threads = n)`/`threads`/
    `--threads` run under `Parallel.withThreads`. Its representatives are `LazyChain`s (cocycles from the logs; cycles from one
    parallel `Involution` pass), so they may differ from `Ripser`'s in ties; shared code (one thread on Scala.js). Check pivots/orders with `Ordering.Long`

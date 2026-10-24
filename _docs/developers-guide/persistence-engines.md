@@ -220,8 +220,9 @@ reductions then run in order, one death dimension to a thread). Keys of one dime
 ascend with age, which is the order `Involution` is given, reversed. Cycles need one-word keys; two-word keys give
 cocycles only. `computeAllRepresentatives` forces the chains before returning (cocycles on all threads).
 `Engine.Auto` chooses the engine when `Parallel.threads > 1`, the input is a Vietoris-Rips metric space, there is no
-`includeZeroLength`, and `ParallelRipser.supports` (a prime up to 46,000, fewer than 46,341 points, indices that fit 63
-bits). `Persistence`'s `threads` option runs the call in `Parallel.withThreads(n)` (a fork-join pool of that size on the
+`includeZeroLength`, and `ParallelRipser.supports` (a prime up to 46,000, indices that fit 63
+bits). Edge ranks are a dense `n x n` table up to `DenseRankLimit` (4,096) points and sorted neighbour lists above it, so memory
+follows the edges within the threshold; the one `n`-squared cost left is the distance pass that builds the edge list. `Persistence`'s `threads` option runs the call in `Parallel.withThreads(n)` (a fork-join pool of that size on the
 JVM, none in JavaScript), and the lazy chains keep the count they were made under (`Parallel.limit`, `Parallel.limited`).
 The MATLAB facade and the CLI do the same through `threads`, and send an unset `engine` for the Vietoris-Rips complex over
 `Z/p` (no `includeZeroLength`, no `edgeCollapse`) to this engine when `Parallel.threads > 1` (`parallelVR`); `engine=ripser`

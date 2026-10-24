@@ -100,10 +100,10 @@ object Persistence:
     *     complex of points or a metric space with `Z/p` coefficients (p a prime up to 46,000), and bars of positive
     *     length only. `Auto` chooses it instead of `Ripser` when there is more than one thread and it applies. Cocycles
     *     are native; cycles cost one more (sequential) reduction. Its representatives are computed when first read
-    *     unless `computeAllRepresentatives` is true (the default). On JavaScript it runs on its one thread. It keeps an
-    *     `n x n` table of edge ranks, so it is for thousands of points, not hundreds of thousands. Ties between
-    *     simplices of equal diameter are broken differently from `Ripser`'s, so the bars are the same and the
-    *     representatives need not be.
+    *     unless `computeAllRepresentatives` is true (the default). On JavaScript it runs on its one thread. It ranks
+    *     the edges within the threshold, so its memory grows with their number (and its construction with the square of
+    *     the number of points). Ties between simplices of equal diameter are broken differently from `Ripser`'s, so the
+    *     bars are the same and the representatives need not be.
     *
     * Each engine computes one kind natively and derives the other from its pairing ([[Involution]]), which costs one
     * more reduction: cocycles are native to `Ripser` and `Cohomology`, cycles to the others.
@@ -265,8 +265,8 @@ object Persistence:
           require(
             ParallelRipser.supports(ms.size, maxDimension, characteristic, cycles),
             s"Persistence: engine = ParallelRipser cannot take ${ms.size} points to degree $maxDimension over " +
-              s"Z/$characteristic${if cycles then " with cycles" else ""} (a prime up to 46,000, fewer than 46,341 " +
-              "points, and simplex indices that fit 63 bits); use Engine.Ripser"
+              s"Z/$characteristic${if cycles then " with cycles" else ""} (a prime up to 46,000 and simplex " +
+              "indices that fit 63 bits); use Engine.Ripser"
           )
           import coefficients.given
           val threshold = maxFiltrationValue.getOrElse(ms.minimumEnclosingRadius)

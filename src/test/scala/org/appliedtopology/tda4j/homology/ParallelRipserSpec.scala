@@ -2,6 +2,7 @@ package org.appliedtopology.tda4j
 
 import Persistence.Engine
 import SpecThrows.throwWith
+import ParallelPackedCohomology.{persistence, Result, Space}
 import org.specs2.mutable.Specification
 
 /** `Engine.ParallelRipser` on the platform that runs this spec (one thread on JavaScript, the same answer): the bars of
@@ -24,7 +25,36 @@ class ParallelRipserSpec extends Specification:
 
   private def sortedTriples(d: PersistenceDiagram[?]): List[(Int, Double, Double)] = d.triples.sorted
 
+  private def reduce(points: Array[Array[Double]], threshold: Double, maxDim: Int, sparse: Boolean): Result =
+    val metricSpace = EuclideanMetricSpace(points)
+    val space = Space(points.length, metricSpace.distance(_, _), threshold, maxDim, 17, forceSparseRanks = sparse)
+    persistence(space, 1, 1, cocycles = true, keepPairs = true)
+
+  private def pairsAndLogs(r: Result) =
+    r.degrees.map { d =>
+      (d.pairs.sorted.toSeq, d.logs.toSeq.map((c, log) => (c, log.columns.toSeq, log.multipliers.toSeq)).sortBy(_._1))
+    }
+
   "the parallel Ripser engine" should {
+    "look edge ranks up the same way in a table and in sorted neighbour lists" >> {
+      // A cloud, a circle, and a grid of integer points (many edges of equal length).
+      val grid = Array.tabulate(27)(i => Array((i % 3).toDouble, (i / 3 % 3).toDouble, (i / 9).toDouble))
+      for (points, threshold, maxDim) <- List((cloud(20, 3, 9L), 0.7, 2), (circle(30, 5L), 10.0, 2), (grid, 1.5, 3)) do
+        val table = reduce(points, threshold, maxDim, sparse = false)
+        val lists = reduce(points, threshold, maxDim, sparse = true)
+        (table.space.sparseRanks, lists.space.sparseRanks) === (false, true)
+        (pairsAndLogs(lists) == pairsAndLogs(table)).aka("pairs and cocycle logs") must beTrue
+        (lists.bars == table.bars).aka("bars") must beTrue
+      ok
+    }
+    "switch to neighbour lists above the table's limit, with the bars of Ripser" >> {
+      // Points on a line, one apart: a path, so H0 only. 4,200 points are past the 4,096 of the table.
+      val line = Array.tabulate(4200)(i => Array(i.toDouble, 0.0))
+      val actual = Persistence(line, maxDimension = 1, maxFiltrationValue = 1.5, engine = parallel)
+      val expected = Persistence(line, maxDimension = 1, maxFiltrationValue = 1.5, engine = Engine.Ripser)
+      (sortedTriples(actual) == sortedTriples(expected)).aka("the bars") must beTrue
+      actual.dim(0).bars.size === 4200
+    }
     "find the loop of a square" >> {
       val square = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0))
       // The four edges close a loop at 1; the diagonals and triangles fill it at the square root of 2.

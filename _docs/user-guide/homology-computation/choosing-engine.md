@@ -58,6 +58,7 @@ the command line `--threads` and `--engine parallel-ripser`, and an unset engine
   you first read it (`bar.representative.terms`), and the ones you never read cost nothing. Cycles are found all at once
   by the first one read.
 * It works over `Z/p` for a prime `p` up to 46,000, drops zero-length bars (`includeZeroLength = true` is an error with
-  the engine by name, and `Auto` uses `Ripser` for it), and keeps a table of edge ranks with one entry per pair of
-  points, so it suits thousands of points, not hundreds of thousands. `Auto` uses `Ripser` where it does not apply.
+  the engine by name, and `Auto` uses `Ripser` for it), and its memory follows the number of edges within the
+  threshold, not the square of the number of points. The distance of every pair is still computed once to find those
+  edges, so a very large cloud wants a small `maxFiltrationValue`. `Auto` uses `Ripser` where it does not apply.
 * JavaScript has one thread: `Auto` never chooses it there, and the engine by name runs on that one thread with the same bars.
