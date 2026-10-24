@@ -71,9 +71,72 @@ Cubical specs (`FastRepresentativesSpec`, `PackedCubicalCohomologySpec`, `FastCu
 term for term, apparent pairs on and off. Seven mutations of the new code each fail them: the facet / cofacet coefficient
 fixed at one (13 errors), the drain slot offset (13), the cycles' chain in the wrong order (2 failures), the seed sentinel
 (5 errors), the apparent check dropped (13), the sort direction of `cubeChain` (failures). Digest checks of bars with
-representatives between the original and the final classes on both inputs: see the numbers on #56.
+representatives between the original and the final classes: see "Results".
 
-RESULTS_TABLES
+## Results: `sweep-cubical` against CubicalRipser and GUDHI (this machine, 4 cores, one run per row of the CSV)
+
+`bench/sweep_cubical.py --dims 2,3 --images random --max-pixels 4200000 --engines fastcubical,cripser,gudhi --no-js
+--trials 2 --jvm-compact`; "before" is the original classes with the fixed driver, "after" the final ones. RSS is the
+sweep's `max(cold, warm)`, where warm is a warm-up and two trials in one process, so the references' numbers are above
+what one cold run needs (CubicalRipser on 96³: 290 MB in one run, 432 MB here).
+
+| image | CubicalRipser MB | GUDHI MB | tda4j before MB | tda4j after MB | after ÷ CubicalRipser | after ÷ GUDHI |
+|---|---|---|---|---|---|---|
+| 128x128 | 49 | 46 | 116 | 103 | 2.10 | 2.24 |
+| 256x256 | 65 | 62 | 169 | 165 | 2.54 | 2.66 |
+| 512x512 | 123 | 128 | 279 | 245 | 1.99 | 1.91 |
+| 1024x1024 | 329 | 395 | 457 | 404 | 1.23 | 1.02 |
+| 2048x2048 | 1009 | 1426 | 1356 | 1252 | 1.24 | 0.88 |
+| 16x16x16 | 45 | 42 | 133 | 104 | 2.31 | 2.48 |
+| 24x24x24 | 48 | 48 | 159 | 158 | 3.29 | 3.29 |
+| 32x32x32 | 55 | 57 | 196 | 185 | 3.36 | 3.25 |
+| 48x48x48 | 90 | 99 | 331 | 222 | 2.47 | 2.24 |
+| 64x64x64 | 155 | 178 | 348 | 314 | 2.03 | 1.76 |
+| 96x96x96 | 432 | 514 | 943 | 536 | 1.24 | 1.04 |
+| 128x128x128 | 945 | 1121 | 2233 | 1211 | 1.28 | 1.08 |
+
+At the issue's two sizes and at 128³ (2048², 96³, 128³): 1.24x, 1.24x, 1.28x CubicalRipser and 0.88x, 1.04x, 1.08x GUDHI. Below about 64³ and 512² the JVM's own ~100 MB is most of the number (2-3x), which is not what the issue is about.
+
+With the default policy (the pinned 16g heap) the same sweep gives, median warm seconds and RSS:
+
+| image | before s (median) | after s (median) | after ÷ before | before RSS MB (pinned 16g) | after RSS MB (pinned 16g) |
+|---|---|---|---|---|---|
+| 128x128 | 0.028 | 0.022 | 0.80 | 161 | 155 |
+| 256x256 | 0.083 | 0.068 | 0.82 | 271 | 222 |
+| 512x512 | 0.425 | 0.380 | 0.89 | 639 | 405 |
+| 1024x1024 | 1.910 | 1.236 | 0.65 | 1968 | 1105 |
+| 2048x2048 | 10.472 | 10.629 | 1.01 | 4790 | 3591 |
+| 16x16x16 | 0.053 | 0.042 | 0.80 | 179 | 159 |
+| 24x24x24 | 0.159 | 0.105 | 0.66 | 309 | 209 |
+| 32x32x32 | 0.381 | 0.240 | 0.63 | 505 | 258 |
+| 48x48x48 | 1.467 | 0.964 | 0.66 | 1267 | 439 |
+| 64x64x64 | 6.348 | 2.626 | 0.41 | 2713 | 784 |
+| 96x96x96 | 15.612 | 12.953 | 0.83 | 4882 | 2240 |
+| 128x128x128 | 37.622 | 39.287 | 1.04 | 5884 | 4635 |
+
+
+That RSS is eden: it cannot reach the references' however little a run needs, and 2048² is as high after as before relative
+to its size because one run's allocation is still ~1.5 GB and the warm run is three of them. (The timing columns of that
+sweep scatter by +-20 % between identical runs here; the A/B below is the time result.)
+
+Time, interleaved A/B, one JVM per variant, warm-up then trials, original vs final classes, same driver (medians of the
+trials after the first collection had run; the first young collection of a 16g heap lands in whichever run is
+allocating at the time, which moved it into the timed trials of the lighter variant in a first, shorter A/B):
+
+| input, heap | before | after |
+|---|---|---|
+| 3-D 96³, `-Xmx4g -Xms4g`, 5 trials, two JVMs each | 13.8 s | 11.3 s (−18 %) |
+| 3-D 96³, `-Xmx16g -Xms16g`, 6 warm-ups then 4 trials, two rounds | 12.8 s | 11.3 s (−12 %) |
+| 2-D 2048², `-Xmx4g -Xms4g`, 5 trials, two JVMs each | 7.7-8.1 s | 7.2-7.4 s (−7 %) |
+| 3-D 128³, serial collector (the compact sweep), 2 trials | 44.3 s | 37.8 s (−15 %) |
+| 2-D 2048², serial collector (the compact sweep), 2 trials | 9.1 s | 8.0 s (−12 %) |
+
+Equality: `PaperBenchmarkDriver ... digest=true` (SHA-256 over every bar's dimension, endpoints and its representative's
+keys and coefficients, in list order) is the same for the original and the final classes on six images with `engine=auto
+reps=cycles` over F₃: noise 2048² and 96³, a 40³ image with 6 values (ties everywhere), a 48³ image with 8 % masked
+pixels, a 600² image with ties and masks, a 10⁴ image; and with `engine=cohomology` for cocycles and for cycles over F₂ and
+F₅ on the 40³, 48³, 96³ and 600² images (16 pairs, all identical).
+
 
 ## Limits, not done
 
