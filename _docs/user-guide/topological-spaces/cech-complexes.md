@@ -20,9 +20,11 @@ val stream = Cech(EuclideanMetricSpace(points), maxDimension = 1, maxFiltrationV
 ```
 
 Filtration values are radii, not diameters: a loop born at diameter `d` in Vietoris-Rips is born near radius `d / 2`
-here. The Čech complex is larger than the Vietoris-Rips complex at the same scale; the [alpha complex](alpha-complexes.md)
-has the same diagram at a fraction of the size, for points in low dimension. `parallelFiltrationValue = true` computes
-the radii on several threads (the output is the same).
+here. `maxFiltrationValue` defaults to the points' minimum enclosing radius, as for [Vietoris-Rips](vietoris-rips.md):
+past it the balls have a point in common and nothing new is born. The Čech complex is larger than the Vietoris-Rips
+complex at the same scale; the [alpha complex](alpha-complexes.md) has the same diagram at a fraction of the size, for
+points in low dimension. `parallelFiltrationValue = true` computes the radii on several threads (the output is the
+same).
 
 The Čech complex is not a flag complex, so the Ripser engine does not apply; the cohomology (the default here), chunks
 and naive engines do. It is expensive: each simplex needs its own smallest enclosing ball, and it has many more

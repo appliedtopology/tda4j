@@ -63,8 +63,32 @@ abstract class AlphaShapes extends LevelwiseSimplexStream[Int, Double]() with Do
 
 /** Alpha complexes of point clouds: `AlphaShapes(points)`, or `Persistence(points, complex = AlphaShapes)`. */
 object AlphaShapes extends PointCloudComplex:
+  /** The alpha complex up to the alpha value `maxFiltrationValue`. Without one, up to the points' minimum enclosing
+    * radius (see [[upToEnclosingRadius]]).
+    */
   def fromPoints(points: PointCloud, maxDimension: Int, maxFiltrationValue: Option[Double]) =
-    Truncated(apply(points, maxRadius = maxFiltrationValue, maxDimension = maxDimension), maxDimension)
+    Truncated(upToEnclosingRadius(points, maxRadius = maxFiltrationValue, maxDimension = maxDimension), maxDimension)
+
+  /** [[apply]], except that without a `maxRadius` the complex is cut at the points' minimum enclosing radius
+    * (`FiniteMetricSpace.minimumEnclosingRadius`) rather than left whole: past it the union of balls is contractible,
+    * so the barcode is the same, and the simplices of large circumradius that a triangulation has along its hull are
+    * never built. This is what `Persistence(points, complex = AlphaShapes)` runs on.
+    *
+    * `AlphaBackend.Default` stays on the triangulation `apply` builds without a radius (it would prefer DQP for any
+    * radius in 6 or more dimensions, where this radius leaves every point in every neighbourhood).
+    */
+  def upToEnclosingRadius(
+    points: PointCloud,
+    backend: AlphaBackend = AlphaBackend.Default,
+    requireValidTriangulation: Boolean = false,
+    maxRadius: Optional[Double] = Optional.empty,
+    maxDimension: Optional[Int] = Optional.empty
+  )(using factor: EpsilonFactor): AlphaShapes =
+    if maxRadius.toOption.isDefined || points.size == 0 then
+      apply(points, backend, requireValidTriangulation, maxRadius, maxDimension)
+    else
+      val chosen = if backend == AlphaBackend.Default then triangulation(points) else backend
+      apply(points, chosen, requireValidTriangulation, points.metricSpace.minimumEnclosingRadius, maxDimension)
 
   /** The alpha complex of `points`, built by `backend` (see [[AlphaBackend]]).
     *
@@ -106,8 +130,7 @@ object AlphaShapes extends PointCloudComplex:
         val chosen =
           if points.size > 0 && radius.exists(r => !requireValidTriangulation && prefersDQP(points, r))
           then AlphaBackend.DQP
-          else if points.points.headOption.forall(_.length <= 4) then AlphaBackend.BowyerWatson
-          else AlphaBackend.Helix
+          else triangulation(points)
         apply(points, chosen, requireValidTriangulation, maxRadius, maxDimension)
       case AlphaBackend.Helix =>
         val helix = HelixDelaunay(points.points, requireValidTriangulation = requireValidTriangulation)
@@ -135,6 +158,10 @@ object AlphaShapes extends PointCloudComplex:
               )
           case Some(r) =>
             AlphaComplexDQPStream(points.points, AlphaComplexDQP.euclidean(points.points, r, topDimension))
+
+  /** The backend that triangulates all the points: BowyerWatson up to 4 dimensions, Helix above. */
+  def triangulation(points: PointCloud): AlphaBackend =
+    if points.points.headOption.forall(_.length <= 4) then AlphaBackend.BowyerWatson else AlphaBackend.Helix
 
   /** Whether `DQP` is expected to build the alpha complex truncated at radius `r` faster than a triangulation
     * (`BowyerWatson` up to 4 dimensions, `Helix` above) builds the whole one. DQP's cost grows with the number of

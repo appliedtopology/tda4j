@@ -196,6 +196,27 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Changed
 
+- `PackedRipserCohomologyEngine` pairs a column with its oldest cofacet of the same diameter without reducing it when no
+  earlier column has that cofacet as its pivot (Bauer's emergent pairs, #57). The bars, pairs and representatives are
+  those of the run without it (`useEmergentPairs = false`, a new last constructor parameter). On the Ripser paper's
+  data sets it saves up to 4 % of the time and, where many columns are stored (`o3_4096`), 22 % of the live heap.
+- Persistence of images (`Persistence(Image(...))`, `FastCubicalHomologyEngine`, `PackedCubicalCohomologyEngine`)
+  allocates a third to a half as much and runs 7 to 18 % faster, with the same bars and representatives term for term (#56).
+  With a heap that follows the live data, random noise of 96 x 96 x 96 now needs 0.54 GB of RSS (was 0.94; CubicalRipser
+  0.43, GUDHI 0.51) and runs in a 300 MB heap, and of 2048 x 2048 1.25 GB (was 1.36; CubicalRipser 1.0, GUDHI 1.4).
+- `Persistence(points, complex = AlphaShapes)` builds the alpha complex only up to the points' minimum enclosing radius
+  when no `maxFiltrationValue` is given, as the Vietoris-Rips and Čech complexes already did. The diagram is the same
+  (past that radius the union of balls is contractible); the long thin simplices along the hull of the triangulation
+  are not built.
+  `AlphaShapes.upToEnclosingRadius(points)` is that stream; `AlphaShapes(points)` is still the whole complex. The
+  MATLAB and CLI `complex=alpha` do the same (`engine=fast-alpha` still takes the whole triangulation): the bars are
+  unchanged, `numCells` is smaller (313 instead of 325 on the tutorial's noisy circle). Pass `maxFiltrationValue =
+  Double.PositiveInfinity` (MATLAB and CLI: `Infinity`) for the whole complex (#215).
+- `FiniteMetricSpace.minimumEnclosingRadius` (the default radius of every point-cloud computation, and the scale of
+  `significant()`) is found without allocating, giving up on a point as soon as it cannot beat the best so far: 2.8 s
+  to 2 ms for 10,000 points in 3-space (#209). A `EuclideanMetricSpace` works on squared distances and no longer fills
+  its distance cache for it. A space with a faster way overrides the protected `scanEnclosingRadius`. The value is the
+  same; the empty space raises `UnsupportedOperationException` with a message.
 - `VietorisRips(...)` builds `Implementation.RipserCoface` by default (was `Enumerating`, which tests every vertex set of
   a dimension and is now the slowest choice). The complex is the same, cell for cell and in order; it is built as
   arrays, which the cohomology engine reduces without a `Simplex` per cell. `keepCriterion` and `filtrationValueOverride`
@@ -288,6 +309,12 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Build, CI and Documentation
 
+- The benchmark harness's JVMs run the serial collector with a heap that follows the live data (up to `--jvm-heap`)
+  instead of a pinned heap with the parallel collector, so peak RSS says what a computation needs and compares with the
+  native tools (with a pinned heap a JVM's RSS is what it allocated until its first collection). `--jvm-fixed-heap`
+  restores the pinned heap; `sweep-threads` keeps it for its multithreaded tools. `PaperBenchmarkDriver` takes
+  `digest=true` for a term-for-term comparison of two builds on an image, and no longer keeps the previous run's results
+  alive during the next (#56).
 - The plotting guide has a section on PNG and PDF: the commands for `cairosvg`, Chromium, Inkscape (text as outlines) and
   `rsvg-convert` that turn a saved `.svg` into either, with the resolution and the font caveats (#101).
 - The logo, favicons, header icons and docs theme colors are teal and gold. The docs site has a dark-mode favicon

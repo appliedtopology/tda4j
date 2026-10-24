@@ -24,3 +24,7 @@ by the cohomology engine on the complex without its top cells. It needs an image
 It is the default for images: `Persistence(Image(pixels))`, MATLAB's `computeFromImage` and `computeFromCubicalImage`, and
 the command line with a cubical `--input-format` use it unless you choose another engine (`engine=fast-cubical` names
 it explicitly). The [images tutorial](../../tutorials/images.md) uses it.
+
+Every bar comes with its cycle, so memory grows with the number of bars as well as with the pixels, and an image of
+noise, which has the most bars, is the worst case. Random noise of 2048 x 2048 pixels runs in a heap of about 900 MB
+(`-Xmx900m`), and of 96 x 96 x 96 in about 300 MB; a smooth image needs less.

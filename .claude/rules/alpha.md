@@ -81,6 +81,10 @@ d = 2..4, Helix 5-D `150 (n/1000)^0.4`, d >= 6 always DQP). Triangulations are f
 results must be identical in general position (`AlphaDispatchSpec`; cospherical: DQP keeps the spanned simplex, Helix
 triangulates). The facade passes no `Epsilon`: alpha uses `AlphaShapes`' default `1e-5` (the `epsilon` option is `field=R`). Untruncated DQP is ~100x slower than Helix. fast-alpha refuses a
 radius and takes either triangulation. Measurements: `WORKLOG-helix-construction-speed.md`.
+**Without a radius** the verb (`AlphaShapes.fromPoints` -> `upToEnclosingRadius`) cuts the triangulation (BowyerWatson/Helix, NEVER
+`Default`, which picks DQP for any radius at d >= 6) at `minimumEnclosingRadius`: the union of balls is contractible past it, so the barcode is
+unchanged (`PersistenceVerbSpec`); the facade's `complex=alpha` does the same except `engine=fast-alpha` (tutorial count 313; `Infinity` gives the 325 of `AlphaShapes(points)`, `MatlabTabsSpec`). #215.
+`WORKLOG-enclosing-radius.md`.
 
 **One root mechanism (near-cospherical clusters, order-dependent facet-pivot choices) produces two DIFFERENT
 outcomes — don't conflate, a naive set-diff can't tell them apart**:

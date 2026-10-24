@@ -23,10 +23,16 @@ describes how to measure, and the tools in the repository for doing it.
 - **Say when an effect is within the noise.** A difference smaller than the
   spread between processes is not a result.
 
-For memory, compare peak RSS or a heap histogram
-(`jcmd <pid> GC.class_histogram`), or find the smallest `-Xmx` at which each
-variant still finishes. An `OutOfMemoryError` at a heap size where the other
-variant runs is a clearer result than a timing.
+For memory, compare a heap histogram (`jcmd <pid> GC.class_histogram`, which
+collects first, so it shows what is live), or find the smallest `-Xmx` at which
+each variant still finishes at its speed. An `OutOfMemoryError` at a heap size
+where the other variant runs is a clearer result than a timing. Peak RSS of a
+JVM is a measure of its collector's policy before it is one of the computation:
+with a large pinned heap (`--jvm-fixed-heap`) it is what the run allocated until
+the first collection, and several computations in one process fill the whole
+young generation whatever one of them needs. The benchmark's default is the
+serial collector with a heap that follows the live data, so its RSS is close to
+what a computation needs and comparable with the native tools.
 
 ## Benchmark specs
 
@@ -102,7 +108,8 @@ It reports both:
   long-running process sees.
 
 It records peak RSS for each. `bench/run.sh sweep-cubical` times the image
-engines across sizes; it is how the `Auto` default for images is chosen.
+engines across sizes, with CubicalRipser and GUDHI beside them, and is how the
+`Auto` default for images is chosen; its RSS column is the memory comparison.
 `bench/run.sh sweep-threads` times the multithreaded Vietoris-Rips tools,
 the two block-parallel experiments among them, at 1, 2, 4, ... threads, each
 run pinned to as many CPUs, and checks that the barcode does not change with

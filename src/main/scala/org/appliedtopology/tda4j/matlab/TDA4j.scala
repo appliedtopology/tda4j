@@ -1106,8 +1106,19 @@ object TDA4j:
           )
         // With maxFiltrationValue, alphaBackend=default builds the complex up to that radius with whichever of a
         // triangulation and DQP is expected to be faster (AlphaShapes.prefersDQP); the same complex in general position.
+        // Without one: up to the minimum enclosing radius, past which nothing is born, as the Persistence verb does
+        // (Infinity gives the whole complex). engine=fast-alpha takes the whole triangulation.
+        val alphaPoints = pts.toIndexedSeq
         val alphaStream =
-          AlphaShapes(pts.toIndexedSeq, AlphaBackend.parse(alphaBackend), requireValidTriangulation, maxFiltrationValue)
+          if engine == EngineKind.FastAlpha then
+            AlphaShapes(alphaPoints, AlphaBackend.parse(alphaBackend), requireValidTriangulation, maxFiltrationValue)
+          else
+            AlphaShapes.upToEnclosingRadius(
+              alphaPoints,
+              AlphaBackend.parse(alphaBackend),
+              requireValidTriangulation,
+              maxFiltrationValue
+            )
         val alphaCellVertices: (Int, Simplex[Int]) => Array[Int] = (_, cell) => cell.underlying.toArray
         val alphaBoundaryMatrixOf =
           () =>

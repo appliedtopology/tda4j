@@ -14,7 +14,7 @@ class ChoosingAComplexSpec extends Specification:
   private val loops = page.loops.map(b => (b.birth, b.death))
 
   "choosing-a-complex.md" should {
-    "report the simplex counts it quotes" in (page.sizes must beEqualTo(List(24711, 36050, 325, 1730, 441)))
+    "report the simplex counts it quotes" in (page.sizes must beEqualTo(List(24711, 36050, 313, 1730, 441)))
     "find exactly one connected component in all five" in
       (page.diagrams.map(_.bettiNumbers(0)) must beEqualTo(List.fill(5)(1)))
     "find the loop in every complex" in (loops.forall((b, d) => d - b > 0.4) must beTrue)

@@ -96,3 +96,8 @@ symmetric by construction as `d(max, min)`. A non-symmetric file (fractal-r) the
 **`EuclideanMetricSpace` caches all n^2 distances only up to `MaxCachedPoints = 8192` (512 MB)**; above that, and with
 `cacheDistances = false`, distances are computed on demand. Before the cap, n^2 overflowed `Int` at 46,341 points
 (clifford50000 died at startup). Never collect all pairwise distances into a collection (the verb's scale is a loop).
+
+**`FiniteMetricSpace.minimumEnclosingRadius`** (default radius of the verb and the streams; the scale of `significant()`): an allocation-free
+scan that stops on a point once its farthest distance reaches the best so far; `EuclideanMetricSpace` overrides the hook `scanEnclosingRadius`
+on squared distances (exact: sqrt is monotone) so the n^2 distance cache is not filled. `MetricSpaceSpec` pins the value against the
+definition (cached or not, as a matrix, with infinite distances) and the distance count. `WORKLOG-enclosing-radius.md`.

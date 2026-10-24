@@ -126,6 +126,38 @@ class PersistenceVerbSpec extends Specification:
     }
   }
 
+  "Persistence(points) with no maxFiltrationValue" should {
+    val rnd = new scala.util.Random(11)
+    val twoClusters =
+      Array.tabulate(14)(i => Array((if i < 7 then 0.0 else 5.0) + 0.3 * rnd.nextGaussian(), 0.3 * rnd.nextGaussian()))
+    val grid = Array.tabulate(16)(i => Array((i % 4).toDouble, (i / 4).toDouble))
+    val ball = Array.tabulate(25)(_ => Array.fill(3)(rnd.nextGaussian()))
+    val clouds = Seq(
+      "a noisy circle" -> circle(14, noise = 0.05, seed = 3),
+      "two clusters" -> twoClusters,
+      "a grid" -> grid,
+      "a 3-d cloud" -> ball
+    )
+    "run Vietoris-Rips, Cech and alpha complexes to the minimum enclosing radius, which changes no bar" in {
+      val problems = for
+        (name, pts) <- clouds
+        complex <- Seq[PointCloudComplex](VietorisRips, Cech, AlphaShapes)
+        byDefault = norm(Persistence(pts, complex = complex).triples)
+        unbounded = norm(Persistence(pts, complex = complex, maxFiltrationValue = Double.PositiveInfinity).triples)
+        if byDefault != unbounded
+      yield s"$name, $complex: ${byDefault.size} bars by default, ${unbounded.size} without a radius"
+      problems must beEmpty
+    }
+    "build the alpha complex only up to that radius: a sliver triangle on three nearly collinear points is left out" in {
+      val sliver = PointCloud(Array(Array(0.0, 0.0), Array(1.0, 0.01), Array(2.0, 0.0)))
+      val radius = sliver.metricSpace.minimumEnclosingRadius
+      def values(stream: LevelwiseSimplexStream[Int, Double]) = stream.iterator.map(stream.filtrationValue).toList
+      val byDefault = values(AlphaShapes.fromPoints(sliver, 2, None))
+      val unbounded = values(AlphaShapes.fromPoints(sliver, 2, Some(Double.PositiveInfinity)))
+      (byDefault.max must beLessThanOrEqualTo(radius)) and (unbounded.max must beGreaterThan(radius))
+    }
+  }
+
   "Persistence(stream)" should {
     "compute the degrees a truncated stream was built for, and refuse a higher one" in {
       val ms = EuclideanMetricSpace(circle(8))

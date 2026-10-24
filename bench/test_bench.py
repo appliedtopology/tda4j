@@ -184,9 +184,15 @@ class CaseTests(unittest.TestCase):
         for pytool in ("dionysus", "oat"):
             self.assertIsInstance(bench.available("py", {"pytool": pytool}, sys.executable), bool)
 
-    def test_jvm_flags_are_one_policy(self):
-        self.assertEqual(bench.jvm_flags("16g"), ["-Xmx16g", "-Xms16g", "-XX:+UseParallelGC"])
+    def test_the_default_policy_follows_the_live_data(self):
+        flags = bench.jvm_flags("16g", "-Xss8m")
+        self.assertEqual(flags[:2], ["-Xmx16g", "-XX:+UseSerialGC"])
+        self.assertFalse([f for f in flags if f.startswith("-Xms")], "no pinned heap: RSS would be allocation")
+        self.assertEqual(flags[-1], "-Xss8m")
         self.assertEqual(bench.jvm_flags("4g", "-Xss8m -ea")[-2:], ["-Xss8m", "-ea"])
+
+    def test_the_fixed_heap_policy_is_pinned_with_the_parallel_collector(self):
+        self.assertEqual(bench.jvm_flags("16g", fixed_heap=True), ["-Xmx16g", "-Xms16g", "-XX:+UseParallelGC"])
 
 
 class AgreementTests(unittest.TestCase):
