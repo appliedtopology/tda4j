@@ -365,14 +365,9 @@ final class PersistenceResult private[matlab] (
       org.appliedtopology.tda4j.Image(values.toIndexedSeq, shape.toIndexedSeq)
     case _ => throw new IllegalStateException("not an image")
 
-  private def complexKind(what: String): PointCloudComplex = src.complex match
-    case "vr"    => VietorisRips
-    case "cech"  => Cech
-    case "alpha" => AlphaShapes
-    case other   =>
-      throw new UnsupportedOperationException(
-        s"$what is drawn for the vr, cech and alpha complexes, and this result's complex is $other"
-      )
+  // The result's own complex over its points at the scale `at`, rebuilt from the options that computed it.
+  private def drawn(what: String, at: Double): TDA4j.DrawnComplex =
+    TDA4j.drawnComplex(src.options, src.complex, points(what), src.landmarks, at)
 
   /** The input: the points (their first two coordinates) or the 2-D image. */
   def plotInput(): Figure = src.input match
@@ -380,8 +375,18 @@ final class PersistenceResult private[matlab] (
     case ResultInput.Image(_, _) => Plot.image(image2D("the input"))
     case ResultInput.Abstract(_) => noCoordinates("the input")
 
-  /** The complex at scale `at` over the points (`vr`, `cech` or `alpha`), with the balls whose overlaps it records. */
-  def plotComplex(at: Double): Figure = Plot.complex(points("the complex"), at, complexKind("the complex"))
+  /** The complex at scale `at` over the points, whichever complex the result was computed from (a witness complex over
+    * its landmarks): with the balls whose overlaps a `vr`, `cech` or `alpha` complex records. It is the complex the
+    * computation built, with the alpha backend, the landmarks and the DTM and sparse parameters it used; past the
+    * result's `maxFiltrationValue` it stops there and says so.
+    */
+  def plotComplex(at: Double): Figure =
+    val d = drawn("the complex", at)
+    val figure =
+      Plot.complex(points("the complex"), d.stream, d.scale, d.ball, s"${d.name} complex at ${Svg.number(d.scale)}")
+    d.stoppedAt.fold(figure)(m =>
+      figure.copy(subtitle = s"${figure.subtitle}; the computation stopped at ${Svg.number(m)}")
+    )
 
   // The facade's own cells and coefficients, as `Plot` takes them: for `Z/p` the coefficients are already the balanced
   // integers `Plot.number` gives for a typed chain, so the plot is the same either way, and no field is invented.
@@ -408,17 +413,18 @@ final class PersistenceResult private[matlab] (
     */
   def plotRepresentative(i: Int): Figure = representativeFigure(i, None)
 
-  /** [[plotRepresentative]] at scale `at`, in the result's own complex (`vr`, `cech` or `alpha`, in its units): a cycle
-    * drawn over the complex at `at`; a cocycle restricted to its cells in the complex at `at` (at `birth(i)`, the cells
-    * that cut a loop as it closes: a bar's cocycle lives on the complex where the bar dies, across the data).
+  /** [[plotRepresentative]] at scale `at`, in the result's own complex (in its units): a cycle drawn over the complex
+    * at `at`; a cocycle restricted to its cells in the complex at `at`. `at = Infinity` draws a cocycle whole.
     */
   def plotRepresentative(i: Int, at: Double): Figure = representativeFigure(i, Some(at))
 
-  /** The cells of the result's complex with value at most `at`, up to dimension `dim`. */
-  private def complexAt(ps: Array[Array[Double]], at: Double, dim: Int, plot: String): Set[Simplex[Int]] =
-    val kind = complexKind(plot)
-    val stream = if kind eq AlphaShapes then kind.fromPoints(ps, dim, None) else kind.fromPoints(ps, dim, Some(at))
-    stream.iterator.filter(c => c.dim <= dim && stream.filtrationValue(c) <= at).toSet
+  /** The cells of the result's complex with value at most `at`, up to dimension `dim`, numbered as the input's points.
+    */
+  private def complexAt(at: Double, dim: Int, plot: String): Set[Simplex[Int]] =
+    val d = drawn(plot, at)
+    d.stream.iterator
+      .filter(c => c.dim <= dim && d.stream.filtrationValue(c) <= d.scale)
+      .toSet
 
   private def representativeFigure(i: Int, at: Option[Double]): Figure =
     requireBar(i)
@@ -427,16 +433,17 @@ final class PersistenceResult private[matlab] (
         val terms = simplicialTerms(i)
         val title = representativeTitle(i)
         (src.cocycles, at) match
-          case (true, None)    => Plot.cocycle(ps, terms, Optional.empty, title)
-          case (true, Some(r)) =>
-            val cells = complexAt(ps, r, dimension(i), "a representative at a scale")
+          case (true, Some(r)) if r.isPosInfinity => Plot.cocycle(ps, terms, Optional.empty, title)
+          case (true, Some(r))                    =>
+            val cells = complexAt(r, dimension(i), "a representative at a scale")
             val kept = terms.filter((s, _) => cells.contains(s))
             Plot
               .cocycle(ps, kept, Optional.empty, title)
               .copy(subtitle = s"${kept.size} of its ${terms.size} cells: those in the complex at ${Svg.number(r)}")
+          case (true, None)     => representativeFigure(i, Some(birth(i)))
           case (false, None)    => Plot.cycle(ps, terms, title)
           case (false, Some(r)) =>
-            Plot.cycle(ps, terms, title).over(Plot.complex(ps, r, complexKind("a representative at a scale")))
+            Plot.cycle(ps, terms, title).over(plotComplex(r))
       case ResultInput.Image(_, _) =>
         if at.isDefined then
           throw new UnsupportedOperationException(
@@ -448,8 +455,10 @@ final class PersistenceResult private[matlab] (
   /** The points in 3-D (their first three coordinates), to turn and zoom. */
   def plotInput3D(): Scene = Plot.points3D(points("a 3-D view"))
 
-  /** The complex at scale `at` in 3-D (`vr`, `cech` or `alpha`). */
-  def plotComplex3D(at: Double): Scene = Plot.complex3D(points("a 3-D view"), at, complexKind("the complex"))
+  /** The complex at scale `at` in 3-D, whichever complex the result was computed from. */
+  def plotComplex3D(at: Double): Scene =
+    val d = drawn("a 3-D view", at)
+    Plot.complex3D(points("a 3-D view"), d.stream, d.scale, s"${d.name} complex at ${Svg.number(d.scale)}")
 
   /** Bar `i`'s cycle in 3-D over the points: its edges and triangles in its dimension's color. */
   def plotRepresentative3D(i: Int): Scene =

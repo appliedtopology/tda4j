@@ -216,7 +216,20 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     descr = "instead of writing the diagram, draw: barcode, diagram, representative (a bar's cycle or cocycle over " +
       "the points or image), input, complex (at --at), landscape, persistence-image, or input-3d, complex-3d, " +
       "representative-3d. Into --output (.svg in plain light colors, .html a page that follows the reader's light " +
-      "or dark setting), or without --output into a page opened in the browser"
+      "or dark setting), or without --output into a page opened in the browser. A comma list of 2-D kinds " +
+      "(barcode,diagram) draws them on one board, in a row or on --layout"
+  )
+  val layout: ScallopOption[String] = opt[String](
+    name = "layout",
+    noshort = true,
+    descr = "for --plot with a list of kinds: the grid of the board as rows x columns (2x2), filled row by row; " +
+      "--width and --height are the size of the whole drawing (default: one row)"
+  )
+  val tagged: ScallopOption[Boolean] = opt[Boolean](
+    name = "tagged",
+    noshort = true,
+    default = Some(false),
+    descr = "for --plot with a list of kinds: letter the panels (a), (b), ..., as a paper does"
   )
   val bar: ScallopOption[Int] = opt[Int](
     name = "bar",
@@ -234,7 +247,8 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     name = "at",
     noshort = true,
     descr = "the scale, in the units of the complex: required for --plot complex; for --plot representative, a " +
-      "cycle is drawn over the complex at this scale and a cocycle restricted to it"
+      "cycle is drawn over the complex at this scale and a cocycle restricted to it (default for a cocycle: its " +
+      "bar's birth; Infinity draws it whole)"
   )
   val saveResult: ScallopOption[String] = opt[String](
     name = "save-result",
@@ -249,6 +263,28 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     opt[String](name = "x-label", noshort = true, descr = "for --plot: the x axis label")
   val yLabel: ScallopOption[String] =
     opt[String](name = "y-label", noshort = true, descr = "for --plot: the y axis label")
+  val caption: ScallopOption[String] = opt[String](
+    name = "caption",
+    noshort = true,
+    descr = "for 2-D --plot kinds: a line of text under the plot (a figure number and what it shows)"
+  )
+  val tag: ScallopOption[String] = opt[String](
+    name = "tag",
+    noshort = true,
+    descr =
+      "for 2-D --plot kinds: a short label in the plot's corner, such as (a), when it will be one panel of a figure"
+  )
+  val description: ScallopOption[String] = opt[String](
+    name = "description",
+    noshort = true,
+    descr = "for 2-D --plot kinds: what a screen reader says of the plot, the <desc> of the SVG"
+  )
+  val look: ScallopOption[String] = opt[String](
+    name = "look",
+    noshort = true,
+    descr = "for --plot: a whole look at once, default, print (--palette print and --style print) or clear " +
+      "(--palette clear and --style clear); --palette, --style and --set after it win"
+  )
   val width: ScallopOption[Int] =
     opt[Int](name = "width", noshort = true, descr = "for --plot: the width in pixels (100 to 20000)")
   val height: ScallopOption[Int] =
@@ -257,7 +293,8 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     name = "palette",
     noshort = true,
     descr = "for --plot: the color palette, brand (default), reference, print (black on pure white, for a paper), " +
-      "or clear (black for a light page, white for a dark one, with --theme; for --style clear)"
+      "grayscale (print in grays only), okabe-ito (the eight colors of Okabe and Ito on white), or clear (black for a light page, white for a dark one, with --theme; for " +
+      "--style clear)"
   )
   val style: ScallopOption[String] = opt[String](
     name = "style",

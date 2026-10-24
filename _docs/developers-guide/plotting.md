@@ -45,7 +45,11 @@ Every plot is an immutable value.
   them in a `val`.
 - Text that carries numbers goes through `Elements.numbers` (`NumberStyle`) at the point it is drawn: write a number into
   a label with `Svg.number` and let the renderer localize it, never format it with a symbol of your own. A text longer than
-  its `TextStyle.limit` is cut by `TextFace.fit`, which estimates a character at 0.6 em.
+  its `TextStyle.limit` is cut by `TextFace.fit`, and a legend is sized, by `TextWidth`: the advance widths of Helvetica or
+  Times (regular and bold) letter by letter, or 0.6 em in a monospace face, as no font is known when the SVG is written.
+- The legend can have a box (`Elements.legendBox`: fill, frame, padding) and columns, and an axis can cross the other at a
+  value (`Axis.crossesAt`, in the units of the other axis) instead of sitting at the edge; `Svg.render` decides both before
+  it fixes the margins, since the room an axis takes depends on where it is drawn.
 - `over` stacks one figure on another, such as a cycle on its complex.
 - A figure is changed with a `Tweak` (`Tweak.scala`): `fig + tweak`. `Labels`,
   `Size`, `Style`, `Palette` and the `Scale` constructors are tweaks; see the

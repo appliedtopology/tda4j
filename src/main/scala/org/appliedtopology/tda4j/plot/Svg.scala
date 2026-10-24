@@ -48,6 +48,39 @@ object Svg:
     val r = math.round(v * 100) / 100.0
     if r == r.toLong then r.toLong.toString else r.toString
 
+  /** The title of a board, as an `<svg>` of `width` pixels to put above its panels, and its height: the text is set as
+    * the title of `first`, the board's first panel (its font, size, weight, color and alignment, in its palette).
+    */
+  private[plot] def heading(first: Figure, text: String, width: Int, theme: Theme): (String, Int) =
+    val id = s"tda4j${counter.incrementAndGet()}"
+    val ts = first.style.textScale
+    val face = first.elements.face(TextRole.Title)
+    val size = face.size * ts
+    val height = math.ceil(16.0 + 22.0 * ts * (face.size / TextRole.defaultSize(TextRole.Title))).toInt
+    val pal = first.palette.withDegrees(first.degrees)
+    def ink(p: Paint): String = if theme == Theme.Auto then pal.css(p) else pal.hex(p, theme)
+    val (x, anchor) = face.align match
+      case Anchor.Start  => (16.0, "")
+      case Anchor.Middle => (width / 2.0, """ text-anchor="middle"""")
+      case Anchor.End    => (width - 16.0, """ text-anchor="end"""")
+    val extra = face.weight.fold("")(wt => s""" font-weight="${wt.css}"""") +
+      (if face.italic then """ font-style="italic"""" else "") + face.font.fold("")(ff =>
+        s""" font-family="${escape(ff)}""""
+      )
+    val (shown, cut) = face.fit(text, size, first.style.font)
+    val svg = new StringBuilder
+    svg ++= s"""<svg xmlns="http://www.w3.org/2000/svg" id="$id" width="$width" height="$height" viewBox="0 0 $width $height" font-family="${escape(
+        first.style.font
+      )}" role="img">"""
+    if theme == Theme.Auto then svg ++= s"<style>${pal.cssVariables(s"#$id")}</style>"
+    svg ++= s"<title>${escape(text)}</title>"
+    if !first.style.transparent then
+      svg ++= s"""<rect width="$width" height="$height" style="fill:${ink(Paint.Surface)}"/>"""
+    svg ++= s"""<text x="${fmt(x)}" y="${fmt(9.0 + size)}"$anchor style="fill:${ink(face.paint)}" font-size="${fmt(
+        size
+      )}"$extra>${escape(shown)}${if cut then s"<title>${escape(text)}</title>" else ""}</text></svg>"""
+    (svg.toString, height)
+
   /** The plot area on the page, and the range it shows. `x0..x1` and `y0..y1` are positions in the axes' transformed
     * space, which is data space on a linear axis.
     */
@@ -226,7 +259,7 @@ object Svg:
 
     // a text's content, cut to the role's limit (the whole text is then its tooltip), and a number as the plot writes them
     def body(r: TextRole, text: String): String =
-      val (shown, cut) = face(r).fit(text, px(r))
+      val (shown, cut) = face(r).fit(text, px(r), style.font)
       escape(shown) + (if cut then s"<title>${escape(text)}</title>" else "")
     def loc(text: String): String = el.numbers(text)
 
@@ -275,6 +308,21 @@ object Svg:
       case _: Mark.Diagonal | _: Mark.Rule => 0
     }.sum
 
+    // the range shown
+    val ext = extent(fig.marks, xt, yt, zeroOkX, zeroOkY)
+    val (rangeX, rangeY) = (spaceRange(fig.x, xt, ext.x), spaceRange(fig.y, yt, ext.y))
+    var (x0, x1) = rangeX
+    var (y0, y1) = rangeY
+    checkRange("x", xt, x0, x1)
+    checkRange("y", yt, y0, y1)
+    // where an axis crosses the other: at the value asked for when the other axis shows it (the range before an equal
+    // aspect widens it, so that the margins do not depend on the plot area), else at the edge
+    def shows(tr: Transform, range: (Double, Double))(v: Double): Boolean =
+      val u = tr(v)
+      u.isFinite && u >= math.min(range._1, range._2) && u <= math.max(range._1, range._2)
+    val xAxisAt = fig.x.crossesAt.filter(shows(yt, rangeY)) // a value of y
+    val yAxisAt = fig.y.crossesAt.filter(shows(xt, rangeX)) // a value of x
+
     // layout: the margins make room for the title, the axes, the legend and the color bar
     val legendPlace =
       if legend.isEmpty then LegendPosition.Hidden else style.legend.toOption.getOrElse(fig.legendPlace)
@@ -282,7 +330,61 @@ object Svg:
       (sc(TextRole.TickLabel), sc(TextRole.AxisLabel), sc(TextRole.Legend), sc(TextRole.LegendTitle))
     val sLegends = math.max(sLegend, sLegendTitle)
     val legendChars = (legend.map(_.label.length) :+ fig.legendTitle.length).max.min(24)
-    val legendColumn = (34.0 + 7.5 * legendChars) * sLegends
+    // what a legend text takes as drawn (cut at its limit), in pixels, and the most a legend makes room for: 7.5 pixels a
+    // character for 30 characters. A legend is never narrower than 7.5 pixels for each of its first 24 characters.
+    def textWidth(role: TextRole, text: String): Double =
+      val f = face(role)
+      TextWidth.of(
+        f.fit(text, px(role), style.font)._1,
+        px(role),
+        TextWidth.Family.of(f.font.getOrElse(style.font)),
+        f.weight.exists(_.css >= 600)
+      )
+    val mostText = 7.5 * 30 * sLegends
+    val legendTexts =
+      (legend
+        .map(item => textWidth(TextRole.Legend, item.label)) :+ textWidth(TextRole.LegendTitle, fig.legendTitle)).max
+        .min(mostText)
+    def itemWidth(item: LegendItem): Double =
+      math.max(
+        (30.0 + 7.5 * item.label.length.min(24)) * sLegend,
+        30.0 * sLegend + math.min(textWidth(TextRole.Legend, item.label), mostText)
+      )
+    val titleWidth =
+      if fig.legendTitle.isEmpty then 0.0
+      else
+        math.max(
+          (14.0 + 7.5 * fig.legendTitle.length.min(24)) * sLegendTitle,
+          14.0 * sLegendTitle + math.min(textWidth(TextRole.LegendTitle, fig.legendTitle), mostText)
+        )
+    // a box behind the legend (room inside it grows with the text), and the entries in the columns asked for, a column
+    // filled before the next: the first column is the tallest
+    val boxed = legendPlace != LegendPosition.Hidden && el.legendBoxDrawn
+    val boxPad = if boxed then el.legendPadding * sLegends else 0.0
+    val columnsAsked = el.legendBox.columns.getOrElse(1)
+    def inColumns(n: Int): Vector[Vector[LegendItem]] =
+      if n <= 1 || legend.size <= 1 then Vector(legend.toVector)
+      else legend.toVector.grouped(math.ceil(legend.size.toDouble / n).toInt).toVector
+    def pitch(column: Vector[LegendItem]): Double = column.map(itemWidth).maxOption.getOrElse(0.0)
+    // as many of the columns asked for as fit in `room` pixels; one always does
+    def columnsIn(room: Double): Vector[Vector[LegendItem]] =
+      (columnsAsked to 2 by -1).iterator
+        .map(inColumns)
+        .find(columns => columns.map(pitch).sum - 10 * sLegend <= room)
+        .getOrElse(inColumns(1))
+    // beside the plot, a legend takes at most two fifths of the figure's width
+    val sideColumns = if columnsAsked > 1 then columnsIn(0.4 * fig.width) else inColumns(1)
+    // the width of the entries in `columns`, a key and its text at a time, and the title
+    def legendBlock(columns: Vector[Vector[LegendItem]]): Double =
+      math.max(columns.map(pitch).sum, titleWidth) - 10 * sLegend
+    val legendColumn =
+      if boxed then 18.0 + legendBlock(sideColumns) + 2 * boxPad
+      else if columnsAsked <= 1 then math.max((34.0 + 7.5 * legendChars) * sLegends, 34.0 * sLegends + legendTexts)
+      else
+        math.max(
+          sideColumns.map(pitch).sum + 4.0 * sLegends,
+          34.0 * sLegends + math.min(textWidth(TextRole.LegendTitle, fig.legendTitle), mostText)
+        )
     val legendWidth = if legendPlace == LegendPosition.Right then legendColumn else 0.0
     val legendWidthLeft = if legendPlace == LegendPosition.Left then legendColumn else 0.0
     val colorbarWidth =
@@ -305,31 +407,41 @@ object Svg:
         case _                     => 6
       if angle == 0.0 then 0.0
       else math.max(0.0, px(TextRole.TickLabel) * (chars * 0.6 * math.sin(angle) + 0.9 * math.cos(angle) - 0.9))
+    // an axis through the middle of the plot has its numbers there, and needs the margin for its label alone
     val xAxisBand =
-      if fig.x.visible then 30.0 * sTick + (if fig.x.label.nonEmpty then 16.0 * sAxis else 0.0) + markOut + slant
-      else 0.0
-    val yAxisBand = if fig.y.visible then 16.0 * sAxis + 42.0 * sTick + markOut else 0.0
+      if !fig.x.visible then 0.0
+      else if xAxisAt.isDefined then if fig.x.label.nonEmpty then 16.0 * sAxis else 0.0
+      else 30.0 * sTick + (if fig.x.label.nonEmpty then 16.0 * sAxis else 0.0) + markOut + slant
+    val yAxisBand =
+      if !fig.y.visible then 0.0
+      else if yAxisAt.isDefined then if fig.y.label.nonEmpty then 16.0 * sAxis else 0.0
+      else 16.0 * sAxis + 42.0 * sTick + markOut
     val head =
       16.0 + (if fig.title.nonEmpty then 22.0 * sc(TextRole.Title) else 0.0) +
         (if fig.subtitle.nonEmpty then 16.0 * sc(TextRole.Subtitle) else 0.0)
-    val left = legendWidthLeft + (if fig.y.visible && !yRight then yAxisBand else 14.0)
+    val left = legendWidthLeft +
+      (if fig.y.visible && !yRight then if yAxisAt.isDefined then math.max(14.0, yAxisBand) else yAxisBand
+       else 14.0)
     val rightAxisBand = if fig.y.visible && yRight then yAxisBand else 0.0
     // what is below the plot: the axis (or a margin, when it is above or not drawn)
-    val axisBand = if fig.x.visible && !xTop then xAxisBand else 14.0
+    val axisBand =
+      if fig.x.visible && !xTop then if xAxisAt.isDefined then math.max(14.0, xAxisBand) else xAxisBand else 14.0
     val right = 16.0 + rightAxisBand + legendWidth + colorbarWidth
     val w = math.max(40.0, fig.width - left - right)
 
-    def itemWidth(item: LegendItem): Double = (30.0 + 7.5 * item.label.length.min(24)) * sLegend
-    val titleWidth =
-      if fig.legendTitle.isEmpty then 0.0 else (14.0 + 7.5 * fig.legendTitle.length.min(24)) * sLegendTitle
+    val aboveOrBelow = legendPlace == LegendPosition.Bottom || legendPlace == LegendPosition.Top
+    // a legend above or below the plot with columns asked for is a grid beside its title; without, entries fill a row
+    // as far as the plot is wide
+    val gridColumns = if aboveOrBelow && columnsAsked > 1 then columnsIn(w - 2 * boxPad - titleWidth) else Vector.empty
     val legendRows: Vector[Vector[LegendItem]] =
-      if legendPlace != LegendPosition.Bottom && legendPlace != LegendPosition.Top then Vector.empty
+      if !aboveOrBelow then Vector.empty
+      else if gridColumns.nonEmpty then Vector.tabulate(gridColumns.head.size)(r => gridColumns.flatMap(_.lift(r)))
       else
         val rows = Vector.newBuilder[Vector[LegendItem]]
         var row = Vector.empty[LegendItem]
         var used = titleWidth
         legend.foreach { item =>
-          if row.nonEmpty && used + itemWidth(item) > w then
+          if row.nonEmpty && used + itemWidth(item) > w - 2 * boxPad then
             rows += row
             row = Vector.empty
             used = 0.0
@@ -338,7 +450,7 @@ object Svg:
         }
         rows += row
         rows.result()
-    val legendBand = if legendRows.isEmpty then 0.0 else (10.0 + 20.0 * legendRows.size) * sLegends
+    val legendBand = if legendRows.isEmpty then 0.0 else (10.0 + 20.0 * legendRows.size) * sLegends + 2 * boxPad
     // the plot area starts below the head, the legend when it is above, and the x axis when it is
     val top = head + (if legendPlace == LegendPosition.Top then legendBand else 0.0) + (if xTop then xAxisBand else 0.0)
     // small print under the plot: what an axis did instead of what was asked, and what could not be drawn
@@ -359,6 +471,9 @@ object Svg:
         val why =
           if withoutLine then "at 0 on a log axis drawn without a -∞ line" else "a position that is not a number"
         s"$notShown ${if notShown == 1 then "mark" else "marks"} not shown: $why"
+      } ++ Seq(("x", fig.x.crossesAt, xAxisAt, "y"), ("y", fig.y.crossesAt, yAxisAt, "x")).collect {
+        case (name, Some(v), None, other) =>
+          s"the $name axis cannot cross at ${number(v)}: the $other axis does not show it, so it stays at the edge"
       }
     val noteBand = 14.0 * sc(TextRole.Note) * notes.size
     val captionBand = if fig.caption.isEmpty then 0.0 else 16.0 * sc(TextRole.Caption)
@@ -366,12 +481,6 @@ object Svg:
       axisBand + (if legendPlace == LegendPosition.Bottom then legendBand else 0.0) + noteBand + captionBand
     val h = math.max(40.0, fig.height - top - bottom)
 
-    // the range shown
-    val ext = extent(fig.marks, xt, yt, zeroOkX, zeroOkY)
-    var (x0, x1) = spaceRange(fig.x, xt, ext.x)
-    var (y0, y1) = spaceRange(fig.y, yt, ext.y)
-    checkRange("x", xt, x0, x1)
-    checkRange("y", yt, y0, y1)
     // What is at 0 on a log axis goes on a `-∞` line below the lowest number; the numbers keep the pixels the line and
     // the room for a marker under it leave (`reserveX`, `reserveY`), which is also the length equal units are measured on.
     val bandOnX = zeroOkX && (ext.zeroX || fig.x.minusInfinity.contains(true))
@@ -496,8 +605,11 @@ object Svg:
     val minorX = minorOf(fig.x, xt, mainX, startX, x1)
     val minorY = minorOf(fig.y, yt, mainY, startY, y1)
     val (gridStroke, minorGridStroke, axisStroke) = (el.gridStroke, el.minorGridStroke, el.axisStroke)
-    val xAxisY = if xTop then top else top + h
-    val yAxisX = if yRight then left + w else left
+    // the axis lines: at the edge of the plot area, or through the value asked for
+    val xEdgeY = if xTop then top else top + h
+    val yEdgeX = if yRight then left + w else left
+    val xAxisY = xAxisAt.fold(xEdgeY)(f.py)
+    val yAxisX = yAxisAt.fold(yEdgeX)(f.px)
     // a tick mark of `length` pixels on an axis, pointing out of the plot or into it
     def markEnd(axisAt: Double, outSign: Double, m: TickMarks): Double =
       axisAt + outSign * m.length * (if m.direction == TickDirection.Out then 1.0 else -1.0)
@@ -546,7 +658,8 @@ object Svg:
           case Anchor.Middle => (left + w / 2, "middle")
           case Anchor.End    => (left + w, "end")
         val labelBase =
-          if xTop then xAxisY - markOut - 30.0 * sTick - slant + 0.7 * sAxis
+          if xAxisAt.isDefined then if xTop then xEdgeY - 4.0 * sAxis else xEdgeY + 12.0 * sAxis
+          else if xTop then xAxisY - markOut - 30.0 * sTick - slant + 0.7 * sAxis
           else xAxisY + markOut + 30.0 * sTick + 6.0 * sAxis + slant
         sb ++= s"""<text x="${fmt(lx)}" y="${fmt(labelBase)}" text-anchor="$anchor" font-size="${fmt(
             px(TextRole.AxisLabel)
@@ -579,7 +692,8 @@ object Svg:
           case Anchor.Middle => (top + h / 2, "middle")
           case Anchor.End    => (top, "end")
         val lx =
-          if yRight then yAxisX + markOut + 42.0 * sTick + 2.0 * sAxis
+          if yAxisAt.isDefined then if yRight then yEdgeX + 12.0 * sAxis else yEdgeX - 4.0 * sAxis
+          else if yRight then yAxisX + markOut + 42.0 * sTick + 2.0 * sAxis
           else yAxisX - markOut - (42.0 * sTick + 2.0 * sAxis)
         sb ++= s"""<text x="${fmt(lx)}" y="${fmt(cy)}" transform="rotate(-90 ${fmt(lx)} ${fmt(
             cy
@@ -796,48 +910,92 @@ object Svg:
           role
         )} style="fill:${paint(face(role).paint)}">${body(role, text)}</text>"""
     var lx = left + w + rightAxisBand + 18
-    // the entries in a column from `x`, the title's line (if there is a title) centred at `firstCy`
-    def legendList(x: Double, firstCy: Double): Unit =
+    // the box behind the entries, if there is one: its fill, then its frame
+    def legendBackdrop(x: Double, y: Double, width: Double, height: Double): Unit =
+      if boxed then
+        val rect = s"""x="${fmt(x)}" y="${fmt(y)}" width="${fmt(width)}" height="${fmt(height)}" rx="3""""
+        el.legendBox.fill.foreach { (fill, opacity) =>
+          sb ++= s"""<rect $rect style="fill:${paint(fill)};fill-opacity:$opacity"/>"""
+        }
+        val frame = el.legendFrameStroke
+        if frame.visible then sb ++= s"""<rect $rect fill="none" ${stroke(frame)}/>"""
+    // the entries in columns from `x`, the title's line (if there is a title) centred at `firstCy` over them
+    def legendList(columns: Vector[Vector[LegendItem]], x: Double, firstCy: Double): Unit =
       val titleRows = if fig.legendTitle.isEmpty then 0 else 1
       if titleRows == 1 then sb ++= legendText(fig.legendTitle, x, firstCy, TextRole.LegendTitle)
-      legend.zipWithIndex.foreach { (entry, k) =>
-        val cy = firstCy + 20 * sLegends * (k + titleRows)
-        sb ++= legendKey(entry, x, cy)
-        sb ++= legendText(entry.label, x + 20 * sLegend, cy, TextRole.Legend)
+      var cx = x
+      columns.foreach { column =>
+        column.zipWithIndex.foreach { (entry, k) =>
+          val cy = firstCy + 20 * sLegends * (k + titleRows)
+          sb ++= legendKey(entry, cx, cy)
+          sb ++= legendText(entry.label, cx + 20 * sLegend, cy, TextRole.Legend)
+        }
+        cx += pitch(column)
       }
+    // the entries in a box (if any) with its top left corner at `boxX`, `boxY`
+    def legendBoxedList(columns: Vector[Vector[LegendItem]], boxX: Double, boxY: Double): Unit =
+      val rows = columns.head.size + (if fig.legendTitle.isEmpty then 0 else 1)
+      legendBackdrop(boxX, boxY, legendBlock(columns) + 2 * boxPad, 20 * sLegends * rows + 2 * boxPad)
+      legendList(columns, boxX + boxPad, boxY + boxPad + 10 * sLegends)
     // the entries in rows, from `x` along `y0`
     def legendRowsAt(y0: Double): Unit =
+      val step: (Int, LegendItem) => Double =
+        if gridColumns.nonEmpty then (c, _) => pitch(gridColumns(c)) else (_, entry) => itemWidth(entry)
+      // in a grid the rows after the first keep clear of the title's column
+      val titleShift = if gridColumns.nonEmpty then titleWidth else 0.0
+      def extent(row: Vector[LegendItem], r: Int): Double =
+        (if r == 0 then titleWidth else titleShift) + row.zipWithIndex.map((entry, c) => step(c, entry)).sum -
+          10 * sLegend
+      legendBackdrop(
+        left,
+        y0,
+        legendRows.zipWithIndex.map(extent).maxOption.getOrElse(0.0) + 2 * boxPad,
+        20 * sLegends * legendRows.size + 2 * boxPad
+      )
       legendRows.zipWithIndex.foreach { (row, r) =>
-        val cy = y0 + 10 * sLegends + 20 * sLegends * r
-        var x = left
+        val cy = y0 + boxPad + 10 * sLegends + 20 * sLegends * r
+        var x = left + boxPad
         if r == 0 && fig.legendTitle.nonEmpty then
           sb ++= legendText(fig.legendTitle, x, cy, TextRole.LegendTitle)
           x += titleWidth
-        row.foreach { entry =>
+        else x += titleShift
+        row.zipWithIndex.foreach { (entry, c) =>
           sb ++= legendKey(entry, x, cy)
           sb ++= legendText(entry.label, x + 20 * sLegend, cy, TextRole.Legend)
-          x += itemWidth(entry)
+          x += step(c, entry)
         }
       }
     legendPlace match
       case LegendPosition.Right =>
-        legendList(lx, top + 8 * sLegends)
+        if boxed then legendBoxedList(sideColumns, lx, top)
+        else legendList(sideColumns, lx, top + 8 * sLegends)
         lx += legendWidth
-      case LegendPosition.Left   => legendList(14.0, top + 8 * sLegends)
+      case LegendPosition.Left =>
+        if boxed then legendBoxedList(sideColumns, 14.0, top) else legendList(sideColumns, 14.0, top + 8 * sLegends)
       case LegendPosition.Bottom => legendRowsAt(top + h + axisBand)
       case LegendPosition.Top    => legendRowsAt(head)
       case LegendPosition.Hidden => ()
       case corner                =>
         // inside the plot area, at a corner, clear of its edges
-        val rowCount = legend.size + (if fig.legendTitle.isEmpty then 0 else 1)
-        val blockWidth = (legend.map(itemWidth) :+ titleWidth).max - 10 * sLegend
         val pad = 8 * sLegends
+        val columns = if columnsAsked > 1 then columnsIn(w - 2 * pad - 2 * boxPad) else inColumns(1)
+        val rowCount = columns.head.size + (if fig.legendTitle.isEmpty then 0 else 1)
+        val blockWidth = legendBlock(columns)
         val onRight = corner == LegendPosition.UpperRight || corner == LegendPosition.LowerRight
         val onTop = corner == LegendPosition.UpperLeft || corner == LegendPosition.UpperRight
-        val x = if onRight then left + w - pad - blockWidth else left + pad
-        val firstCy =
-          if onTop then top + pad + 8 * sLegends else top + h - pad - 8 * sLegends - 20 * sLegends * (rowCount - 1)
-        legendList(x, firstCy)
+        if boxed then
+          val boxWidth = blockWidth + 2 * boxPad
+          val boxHeight = 20 * sLegends * rowCount + 2 * boxPad
+          legendBoxedList(
+            columns,
+            if onRight then left + w - pad - boxWidth else left + pad,
+            if onTop then top + pad else top + h - pad - boxHeight
+          )
+        else
+          val x = if onRight then left + w - pad - blockWidth else left + pad
+          val firstCy =
+            if onTop then top + pad + 8 * sLegends else top + h - pad - 8 * sLegends - 20 * sLegends * (rowCount - 1)
+          legendList(columns, x, firstCy)
 
     // color bar
     fig.colorScale.filter(_.guide).foreach { cb =>
@@ -858,6 +1016,17 @@ object Svg:
       sb ++= s"""<text x="${fmt(bx + 16 * ts)}" y="${fmt(top + bh + 4 * sTick)}" $numberStyle>${escape(
           loc(number(cb.lo))
         )}</text>"""
+      // the numbers between the ends of a transformed bar, top down, each clear of the one above and of the end below
+      val gap = 1.5 * px(TextRole.TickLabel)
+      cb.barTicks.sortBy(-_._2).foldLeft(top) { case (above, (v, t)) =>
+        val at = top + bh * (1 - t)
+        if at - above >= gap && top + bh - at >= gap then
+          sb ++= s"""<text x="${fmt(bx + 16 * ts)}" y="${fmt(at + 4 * sTick)}" $numberStyle>${escape(
+              loc(cb.transform.tickLabel(v))
+            )}</text>"""
+          at
+        else above
+      }
       if cb.label.nonEmpty then
         sb ++= s"""<text x="${fmt(bx)}" y="${fmt(top + bh + 22 * sc(TextRole.ColorTitle))}" font-size="${fmt(
             px(TextRole.ColorTitle)

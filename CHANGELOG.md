@@ -49,6 +49,9 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Added
 
+- `--plot barcode,diagram` draws a comma list of 2-D plots on one board, in a row or on `--layout RxC` (row by row; `--width`
+  and `--height` size the drawing); `--tagged` letters the panels and `--title` titles the board, the other look flags apply
+  to every panel (#105). A 3-D plot stays on its own.
 - `FlatLayerStream`: a stream that hands over its dimensions as vertex and value arrays (`FlatLayerStream.Layer`);
   `CellularCohomologyEngine` reduces one without making a `Simplex` per cell. The coface streams behind `Cech`,
   `Witness`, `Dowker`, `DtmRips`, `SparseRips` and `VietorisRips(implementation = RipserCoface)` are one, and `Truncated`
@@ -154,6 +157,26 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   and `place(figure, row, col, rowSpan, colSpan)` puts a panel in it, spanning cells, so that one plot can run across a
   whole row or column. `Board.sharedColumns()` and `sharedRows()` put the panels over the same columns, or rows, on one
   scale. A board is saved as an SVG with each panel at the size of its cells, and on a page as a CSS grid.
+  `place(..., fill = true)` lets a persistence diagram, which keeps equal units, fill a wide cell (#110).
+- `Labels(title = ...)` on a board draws the title above the panels (`Board.heading`); it was only the page's title. The
+  color bar of a transformed scale (`Scale.color(transform = Transform.Sqrt)`) labels round numbers between its ends,
+  each where the transform puts it (#97).
+- A legend can have a box and columns: `Guide.legend(box = true, background = ..., opacity = ..., frame = ..., padding = ...,
+  columns = 2)` (`withLegendBox(...)`, the settings `legend-box.background/opacity/frame/frame-width/padding/columns`,
+  MATLAB `withLegendBox('white')` and `withLegendColumns(2)`). Without it a legend is drawn as before. The room inside
+  a box grows with the legend's text, and columns that would run a legend off the figure or over the plot are given up
+  (#103).
+- An axis can cross the other at a value: `Scale.x(crossesAt = 0)` draws the x axis through `y = 0`, `Scale.y(crossesAt =
+  0)` the y axis through `x = 0` (`Axis.crossesAt`, `withXScale(crossesAt = ...)`, the settings `x-axis.crosses-at` and
+  `y-axis.crosses-at`, MATLAB `withXCrossesAt(0)`). The numbers stay beside the line, the label at the edge, and the
+  margin the numbers needed goes to the plot. A value the other axis does not show leaves the axis at the edge, with a
+  note under the plot (#104).
+- `Palette.grayscale` (`withPalette("grayscale")`, `--palette grayscale`): `Palette.print` with no color, for a
+  black-and-white print. Degrees differ by lightness and, as always, by marker shape; a heatmap uses ColorBrewer's Greys; a
+  diverging scale (a cocycle's values) has a darker negative end than positive one (#97).
+- `Palette.okabeIto` (`withPalette("okabe-ito")`, `--palette okabe-ito`): the eight colors of Okabe and Ito on `print`'s white
+  surface, blue, vermillion and bluish green first (they stay apart side by side for every common color vision), with
+  `print`'s heatmap ramp and blue-against-vermillion diverging scale; one look for both themes (#97).
 - `Camera(azimuth, elevation, zoom)` (`Scene.withCamera`, settings `camera.azimuth/elevation/zoom`) sets the view of a 3-D
   scene: the saved `.svg` is that view, a page's canvas starts from it; a 2-D plot refuses it, and the CLI says so before
   computing.
@@ -162,13 +185,28 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 - MATLAB: the figures returned by the `plot...` methods have the common tweaks as methods that take strings and numbers
   (`withTitle`, `withSize`, `withXScale('log')`, `withPalette`, `withDegreeColor`, `withTextScale`, `withLegend`, ...,
   and `save(path, 'dark')`); command line: `--title`, `--x-label`, `--y-label`, `--width`, `--height`, `--palette`,
-  `--theme`, `--text-scale`, `--x-scale` and `--y-scale` for a `--plot`.
+  `--theme`, `--text-scale`, `--x-scale` and `--y-scale` for a `--plot`; also `--caption`, `--tag`, `--description` and
+  `--look` (`default`, `print` or `clear`, the palette and style together) (#106). Boards from MATLAB and Java:
+  `TDA4j.side(a, b)`, `TDA4j.layout(rows, cols, ...)`, and plain-argument `place`, `tagged`, `shared`, `withTitle`,
+  `withPalette`, `withStyle`, `withTextScale` and `withSetting` on a `Board` (#105).
 - `VantagePointTree(elements, distance)`: a vantage-point tree over any metric, with `withinDistance(query, radius)` (the
   boundary included) and `nearest(query, k)` (the first `k` of the stable sort by distance); and
   `MinimumEnclosingBall(points)`, the smallest ball around points in any dimension, with `center`, `squaredRadius` and
   `radius`. `SimplexIndexing.binomialInt` is `binomial` as an `Int`, for enumerating indices.
 
 ### Changed
+
+- A text cut at a `limit`, and the width a legend makes room for, follow the advance widths of the letters
+  (`TextWidth.of(text, size, family, bold)`: Helvetica, Times, their bold faces, or a fixed width by the font list)
+  instead of 0.6 em for every character, so a row of `W`s is cut sooner than a row of `i`s; a legend of two-letter
+  entries is 0.3 pixel wider than before (#108).
+- A result's `plotRepresentative(i)` draws a cocycle restricted to the complex at its bar's birth, the few edges that
+  close the loop, instead of the whole cocycle across the data (#75). `plotRepresentative(i, Double.PositiveInfinity)`
+  (CLI `--at Infinity`) draws it whole; `Plot.cocycle` itself is as it was.
+- A result's `plotComplex(at)`, `plotComplex3D(at)` and `plotRepresentative(i, at)` draw the complex the computation
+  built, for every point-cloud complex: witness (on its landmarks), `dtm-rips`, `dtm-alpha` and `sparse-rips` as well as
+  `vr`, `cech` and `alpha`, with the alpha backend and parameters the result used. Past the result's
+  `maxFiltrationValue` the plot stops there and says so (#76).
 
 - The brand is Teal & Gold (was Slate & Gold): the teal is `#1a729b` (`#81bde0` in dark mode). The default plot palette
   (`Palette.brand`) and the live viewer follow: degree 0 is `#1a729b` in light mode and the secondary ink is teal; the
@@ -208,6 +246,10 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Fixed
 
+- `Numbers.locale("ar")`, `"fa"` and the other locales that write their own digits (Burmese, Bengali, Nepali,
+  Marathi, ...) take their separators for the digits 0 to 9 the plot writes; `ar` gave the Arabic decimal separator `٫`
+  between Latin digits. On Scala.js the invisible direction mark that `Intl.NumberFormat` puts before a minus sign is
+  left out (#107).
 - The packed Ripser engine, which `Persistence` uses for point clouds and metric spaces (also in MATLAB and the CLI), no
   longer fails with `binomial(n, k) overflows Long` once C(n + d + 2, d + 2) passes 2^63 for `maxDimension = d`
   (about 16,000 points to degree 3, 122,000 to degree 2). It numbers the simplices with two words from there on, and
@@ -243,6 +285,8 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Build, CI and Documentation
 
+- The plotting guide has a section on PNG and PDF: the commands for `cairosvg`, Chromium, Inkscape (text as outlines) and
+  `rsvg-convert` that turn a saved `.svg` into either, with the resolution and the font caveats (#101).
 - The logo, favicons, header icons and docs theme colors are teal and gold. The docs site has a dark-mode favicon
   (`favicon-dark-N.png`, which the dark `prefers-color-scheme` links in the page head use in place of the light ones) and a
   dark-mode front-page logo; the dark icon PNGs and the dark web manifest sit on the dark surface instead of white.

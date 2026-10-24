@@ -61,6 +61,9 @@ class PlotCustomizationFacadeSpec extends Specification:
       fig.withSetting("marker.shape=pch:1") must beEqualTo(fig + Geom.points(shape = Shape.Circle, fill = false))
       fig.withSetting("degree-1.size=8") must beEqualTo(fig + Scale.degree(1, marker = MarkerStyle(size = Some(8))))
       fig.withLegend("lower-right") must beEqualTo(fig + Style(legend = LegendPosition.LowerRight))
+      fig.withLegendBox("white") must beEqualTo(fig + Guide.legend(box = true, background = "white"))
+      fig.withLegendColumns(2) must beEqualTo(fig + Guide.legend(columns = 2))
+      fig.withSetting("legend-box.padding=10") must beEqualTo(fig + Guide.legend(padding = 10))
       fig.withSetting("title.size=18").withSetting("x-axis=top") must
         beEqualTo(fig + Text(TextRole.Title, size = 18) + Scale.x(position = Side.Top))
       fig.withDegreeColor(1, "#d62728") must beEqualTo(fig + Scale.degree(1, color = "#d62728"))
@@ -92,6 +95,8 @@ class PlotCustomizationFacadeSpec extends Specification:
         "withYScale",
         "withXRange",
         "withYRange",
+        "withXCrossesAt",
+        "withYCrossesAt",
         "withPalette",
         "withStyle",
         "withSetting",
@@ -100,6 +105,8 @@ class PlotCustomizationFacadeSpec extends Specification:
         "withTextScale",
         "withMarkScale",
         "withLegend",
+        "withLegendBox",
+        "withLegendColumns",
         "withoutGrid",
         "withTransparentBackground"
       )
@@ -169,7 +176,9 @@ class PlotCustomizationFacadeSpec extends Specification:
       fig.withXScale("cubic") must throwAn[IllegalArgumentException](
         "unknown scale 'cubic'; expected one of linear, log, sqrt, symlog"
       )
-      fig.withPalette("neon") must throwAn[IllegalArgumentException]("expected one of brand, reference, print, clear")
+      fig.withPalette("neon") must throwAn[IllegalArgumentException](
+        "expected one of brand, reference, print, grayscale, okabe-ito, clear"
+      )
       fig.withStyle("poster") must throwAn[IllegalArgumentException]("expected one of default, slides, print, clear")
       fig.withSetting("grid.dash=wavy") must throwAn[IllegalArgumentException]("expected one of solid, dashed, dotted")
       fig.withSetting("title.size") must throwAn[IllegalArgumentException]("should be element.property=value")
@@ -188,6 +197,79 @@ class PlotCustomizationFacadeSpec extends Specification:
       fig.save(path.getAbsolutePath, "sepia") must throwAn[IllegalArgumentException](
         "expected one of auto, light, dark"
       )
+    }
+  }
+
+  "the boards MATLAB builds" should {
+    val (barcode, diagram) = (result.plotBarcode(), result.plotDiagram())
+
+    "be the boards Scala builds, from figures a result returns" in {
+      TDA4j.side(barcode, diagram) must beEqualTo(Plot.side(barcode, diagram))
+      TDA4j.side(Array(barcode, diagram, barcode)) must beEqualTo(Plot.side(barcode, diagram, barcode))
+      TDA4j.side(barcode, diagram, barcode) must beEqualTo(Plot.side(barcode, diagram, barcode))
+      TDA4j.layout(2, 3) must beEqualTo(Plot.layout(2, 3))
+      TDA4j.layout(2, 3, 900, 500) must beEqualTo(Plot.layout(2, 3, width = 900, height = 500))
+      TDA4j.layout(2, 3, 900, 500, 8, Array(1.0, 2.0, 1.0), Array.empty[Double]) must
+        beEqualTo(Plot.layout(2, 3, 900, 500, 8, Seq(1.0, 2.0, 1.0), Seq.empty[Double]))
+    }
+    "place panels, letter them and share their scales, as the Scala methods do" in {
+      val grid = TDA4j.layout(2, 2)
+      grid.place(diagram, 0, 0) must beEqualTo(grid.place(diagram, 0, 0, rowSpan = 1, colSpan = 1))
+      grid.place(diagram, 0, 0, 1, 2) must beEqualTo(grid.place(diagram, 0, 0, colSpan = 2))
+      grid.place(diagram, 0, 0, 1, 2, true) must beEqualTo(grid.place(diagram, 0, 0, colSpan = 2, fill = true))
+      grid.place(diagram, 0, 0, 1, 2, true) must not(beEqualTo(grid.place(diagram, 0, 0, 1, 2)))
+      val two = TDA4j.side(barcode, diagram)
+      two.tagged() must beEqualTo(two.tagged("(%s)", "a"))
+      two.tagged().plots.map(_.tag) must beEqualTo(Seq("(a)", "(b)"))
+      two.shared() must beEqualTo(two.shared(true, true))
+      two.shared().plots.map(_.x.min).distinct.size must beEqualTo(1)
+      two.shared() must not(beEqualTo(two))
+    }
+    "take the common tweaks as plain words, for every panel" in {
+      val two = TDA4j.side(barcode, diagram)
+      two.withTitle("T") must beEqualTo(two + Labels(title = "T"))
+      two.withTitle("T").heading must beEqualTo("T")
+      two.withPalette("print") must beEqualTo(two + Palette.print)
+      two.withStyle("slides") must beEqualTo(two + Style.slides)
+      two.withTextScale(1.5).plots.map(_.style.textScale) must beEqualTo(Seq(1.5, 1.5))
+      two.withSetting("title.size=18") must beEqualTo(two + Settings.parse("title.size=18"))
+      two.withPalette("neon") must throwAn[IllegalArgumentException]("expected one of brand")
+    }
+    "save from MATLAB's call, which has the path alone" in {
+      val path = File.createTempFile("facade-board", ".svg")
+      path.deleteOnExit()
+      val board = TDA4j.layout(1, 2, 900, 400).place(barcode, 0, 0).place(diagram, 0, 1).withTitle("Two views")
+      board.save(path.getAbsolutePath)
+      val written = Files.readString(path.toPath)
+      texts(written) must contain("Two views")
+      normalized(written) must beEqualTo(normalized(board.svgFile(Theme.Light)))
+    }
+    "have, for each name, an overload that takes only what MATLAB can pass" in {
+      val passable = Set[Class[?]](
+        classOf[String],
+        classOf[Int],
+        classOf[Double],
+        classOf[Boolean],
+        classOf[Figure],
+        classOf[Array[Figure]],
+        classOf[Array[Double]]
+      )
+      def callable(c: Class[?], name: String) =
+        c.getMethods.exists(m => m.getName == name && m.getParameterTypes.forall(passable))
+      Seq(
+        "place",
+        "tagged",
+        "shared",
+        "sharedColumns",
+        "sharedRows",
+        "withTitle",
+        "withPalette",
+        "withStyle",
+        "withTextScale",
+        "withSetting",
+        "save"
+      ).filterNot(callable(classOf[Board], _)) must beEmpty
+      Seq("side", "layout").filterNot(callable(TDA4j.getClass, _)) must beEmpty
     }
   }
 

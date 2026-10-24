@@ -153,14 +153,22 @@ follows the reader's light or dark setting) or, without `--output`, a page opene
 | `input`, `complex` | the points or image; the complex at `--at` |
 | `input-3d`, `complex-3d`, `representative-3d` | the same in 3-D, as a page you can turn |
 
+A comma list of 2-D kinds draws them on one board, left to right: `--plot barcode,diagram`. `--layout RxC` puts them on a
+grid instead, row by row (`--plot barcode,diagram,landscape --layout 2x2`), with `--width` and `--height` the size of the
+whole drawing (default 960 by 600); `--tagged` letters the panels `(a)`, `(b)`, ...; `--title` is the title of the board,
+and the other look flags apply to every panel. A 3-D plot is drawn on its own.
+
 | flag | meaning |
 |---|---|
 | `--bar N` | for `representative`: the bar, by its 0-based line number in the text output; default the most persistent bar of `--dimension` |
 | `--dimension D` | for `representative` (without `--bar`), `landscape` and `persistence-image`; default `1` |
-| `--at X` | the scale: required for `complex`; for `representative`, a cycle is drawn over the complex at `X` and a cocycle restricted to it |
+| `--at X` | the scale: required for `complex`; for `representative`, a cycle is drawn over the complex at `X` and a cocycle restricted to it (a cocycle is restricted to its bar's birth unless you say; `--at Infinity` draws it whole) |
+| `--layout RxC`, `--tagged` | for a list of kinds: the grid of the board, `2x2` or `1x3`, and lettered panels |
 | `--title`, `--x-label`, `--y-label` | the words |
+| `--caption`, `--tag`, `--description` | a line under the plot, a letter in its corner for one panel of a figure (`(a)`), and what a screen reader says of it; 2-D plots only |
+| `--look` | a whole look at once: `default`, `print` (`--palette print --style print`) or `clear`; the flags below, after it, win |
 | `--width`, `--height` | the size in pixels, 100 to 20000 |
-| `--palette` | `brand` (default), `reference`, `print` (black on pure white, for a paper), `clear` (black for a light page, white for a dark one) |
+| `--palette` | `brand` (default), `reference`, `print` (black on pure white, for a paper), `grayscale` (that in grays only, for a black-and-white print), `okabe-ito` (the eight colors of Okabe and Ito on white), `clear` (black for a light page, white for a dark one) |
 | `--style` | `default`, `slides` (larger text and marks), `print`, `clear` (portable fonts, no background) |
 | `--theme` | `light`, `dark`, `auto`; default `light` for `.svg`, `auto` for `.html` |
 | `--text-scale F` | a factor on every text size (1.3 suits a slide) |
@@ -169,7 +177,7 @@ follows the reader's light or dark setting) or, without `--output`, a page opene
 
 The settings `--set` takes are listed under [finer control](plotting.md#finer-control-text-lines-the-plot-area-the-sides-of-the-axes)
 on the plotting page, with the other plot flags in [From MATLAB and the command line](plotting.md#from-matlab-and-the-command-line).
-`--palette print --style print` makes a figure for a paper; `--palette clear --style clear` one with no background.
+`--look print` (or `--palette print --style print`) makes a figure for a paper; `--look clear` one with no background.
 A flag a plot cannot use (an x scale for a 3-D scene) is an error, reported before anything is computed.
 
 ## Exit status

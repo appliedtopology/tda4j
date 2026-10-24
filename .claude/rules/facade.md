@@ -63,7 +63,9 @@ every 0.5.0 short flag (`WORKLOG-nan-mask.md`).
 **`--plot`/`--save-result`/`--input-format result`** (`WORKLOG-facade-plots.md`): a saved result (sniffed when the
 file starts with `{` and `--input-format` is not given) refuses every flag `buildOptions` passes, so a new computation
 flag is refused automatically; plot flags are checked in `run`, never with Scallop `choices`/`validate` (they exit the
-JVM); a plot flag a kind does not use is an error. `--plot` without `--output` writes a temporary page and
+JVM); a plot flag a kind does not use is an error. `--plot a,b` (2-D kinds) is a `Board`: `Plot.side`, or `Plot.layout` filled
+row by row with `--layout RxC`; look flags go through `Board + tweak` (`--title` titles the board), `--tag` is refused for it
+(`--tagged` letters the panels), 3-D kinds stay alone (`WORKLOG-plot-issues-sweep.md`). `--plot` without `--output` writes a temporary page and
 `Viewer.browse`s it: specs set `tda4j.plot.browser=none` (`PlotCLISpec`). `CliFull` prepends `--min-persistence 0`,
 which a saved result refuses: call `TDA4jCLI.run` directly there.
 

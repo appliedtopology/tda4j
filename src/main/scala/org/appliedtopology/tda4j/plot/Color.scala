@@ -224,6 +224,63 @@ object Palette:
       divergingMidpoint = "#f7f7f7"
     )
 
+  /** For a paper that prints in black and white, or a reader who sees no color: every color is a gray on [[print]]'s
+    * white surface and black ink. Degrees are told apart by lightness (a dark, a light and a middle gray first, each at
+    * least 3:1 against the white so that a mark shows) and, as in every palette, by the marker shape and the legend:
+    * past four degrees the grays repeat in spirit, so rely on the shapes. The sequential ramp is ColorBrewer's Greys
+    * (darker for larger). A diverging scale is a dark gray for the negative end against a middle gray for the positive
+    * one around a light middle: the sign shows by how dark the end is, which is a weaker cue than a hue, so use
+    * [[print]] for a cocycle's values when color is available.
+    *
+    * A gray palette has no chroma, so the dataviz validator's chroma floor, which asks for colorful series, fails it by
+    * construction; its lightness steps are what is checked. Like [[print]] it has one look for both modes.
+    */
+  val grayscale: Palette =
+    val chrome = print.light
+    val series = IndexedSeq("#1a1a1a", "#949494", "#555555", "#3b3b3b", "#777777", "#474747", "#858585", "#2b2b2b")
+    Palette(
+      seriesLight = series,
+      seriesDark = series,
+      light = chrome,
+      dark = chrome,
+      sequential = IndexedSeq(
+        "#f7f7f7",
+        "#f0f0f0",
+        "#d9d9d9",
+        "#bdbdbd",
+        "#969696",
+        "#737373",
+        "#525252",
+        "#252525",
+        "#000000"
+      ),
+      divergingNegative = "#252525",
+      divergingPositive = "#8c8c8c",
+      divergingMidpoint = "#f0f0f0"
+    )
+
+  /** The eight colors of Okabe and Ito's color-blind-safe palette, on [[print]]'s white surface and black ink: blue,
+    * vermillion and bluish green for degrees 0 to 2, then orange, sky blue, reddish purple, yellow and black. The first
+    * three pass every check of the dataviz validator on ALL pairs, which a persistence diagram needs; orange and sky
+    * blue are lighter than the 3:1 a mark wants against white, and yellow and black fall outside the validator's
+    * lightness band (black has no chroma), so they come last and the marker shape and the legend carry the degrees past
+    * the third. Okabe and Ito defined their colors for a light background, so there is one look for both modes, as for
+    * [[print]], whose scales it shares: a ColorBrewer Blues ramp, and blue against vermillion for a diverging scale. It
+    * is validated as accessible on white only: on another background the checks no longer hold.
+    */
+  val okabeIto: Palette =
+    val series = IndexedSeq("#0072b2", "#d55e00", "#009e73", "#e69f00", "#56b4e9", "#cc79a7", "#f0e442", "#000000")
+    Palette(
+      seriesLight = series,
+      seriesDark = series,
+      light = print.light,
+      dark = print.dark,
+      sequential = print.sequential,
+      divergingNegative = print.divergingNegative,
+      divergingPositive = print.divergingPositive,
+      divergingMidpoint = print.divergingMidpoint
+    )
+
   /** For a figure with no background of its own ([[Style.clear]]) that goes onto a page of either color: pure black
     * elements for a light page (`Theme.Light`) and pure white ones for a dark page (`Theme.Dark`, or `Theme.Auto`,
     * which follows the reader's setting, so use it only where the page does too). The degree colors are [[print]]'s on
@@ -248,14 +305,20 @@ object Palette:
   /** The palette figures use unless given another. */
   val default: Palette = brand
 
-  /** The palette called `name`, in any case: `brand` (the default), `reference`, `print` or `clear`. */
+  /** The palette called `name`, in any case: `brand` (the default), `reference`, `print`, `grayscale`, `okabe-ito` or
+    * `clear`.
+    */
   def named(name: String): Palette = name.trim.lowerRoot match
-    case "brand"     => brand
-    case "reference" => reference
-    case "print"     => print
-    case "clear"     => clear
-    case other       =>
-      throw IllegalArgumentException(s"unknown palette '$other'; expected one of brand, reference, print, clear")
+    case "brand"                                => brand
+    case "reference"                            => reference
+    case "print"                                => print
+    case "grayscale" | "greyscale"              => grayscale
+    case "okabe-ito" | "okabeito" | "okabe_ito" => okabeIto
+    case "clear"                                => clear
+    case other                                  =>
+      throw IllegalArgumentException(
+        s"unknown palette '$other'; expected one of brand, reference, print, grayscale, okabe-ito, clear"
+      )
 
   // ----- color arithmetic in OKLab (Björn Ottosson's matrices), so ramps interpolate perceptually
 

@@ -50,6 +50,37 @@ Plot.side(Plot.barcode(diagram), Plot.diagram(diagram)).save("both.svg")
 
 `figure.svg()` is the SVG as a string: a notebook cell that displays HTML, or any web page, shows it as it is.
 
+### PNG and PDF
+
+`save` writes SVG and HTML; a PNG or a PDF is one command on the saved `.svg`, with a tool that is already on most
+machines. The SVG is 96 pixels to the inch, so a scale of 2 is 192 dpi and 3.125 is 300 dpi.
+
+```shell sc:nocompile
+# cairosvg (pip install cairosvg): PNG at 300 dpi, and a PDF that has the fonts it used inside
+cairosvg diagram.svg -o diagram.png --scale 3.125
+cairosvg diagram.svg -o diagram.pdf
+
+# Chromium or Chrome: PNG at twice the size (the window is the figure's width and height), PDF on a page
+chromium --headless --hide-scrollbars --force-device-scale-factor=2 --window-size=560,520 \
+  --screenshot=diagram.png file:///path/to/diagram.svg
+chromium --headless --no-pdf-header-footer --print-to-pdf=diagram.pdf file:///path/to/diagram.svg
+
+# Inkscape 1.x: PNG, and a PDF with the text turned into outlines, for a publisher who wants no fonts
+inkscape diagram.svg --export-type=png --export-dpi=300 --export-filename=diagram.png
+inkscape diagram.svg --export-type=pdf --export-text-to-path --export-filename=diagram.pdf
+
+# librsvg
+rsvg-convert -f png -z 3.125 diagram.svg -o diagram.png
+rsvg-convert -f pdf diagram.svg -o diagram.pdf
+```
+
+The figure names its fonts in a list, `system-ui, ...` by default and `Helvetica, Arial, 'Liberation Sans', sans-serif`
+in the print look (`Style(font = ...)` sets another), and a converter takes the first one it has installed: the letters of a
+PNG are those of that machine. For a figure that must look the same wherever it is opened, use a PDF, which holds the
+font, or Inkscape's outlines. Chromium's command line puts the figure in the corner of a letter-size page. A page that
+follows the reader's dark setting (`.html`) is not what a converter should be given: save the `.svg` in the theme you
+want (`save("d.svg", Some(Theme.Dark))`).
+
 ## From MATLAB, Java and the command line
 
 A result of the [MATLAB interface](matlab.md) draws itself: each `plot...` method returns a figure, to `view()` or
@@ -99,9 +130,9 @@ functions. MATLAB itself is not run by the test suite; the same calls are made f
 | method | draws |
 |---|---|
 | `plotBarcode()`, `plotBarcode(longest)`, `plotDiagram()` | the reported bars; the subtitle says how many the threshold hid |
-| `plotRepresentative(i)` | bar `i`'s cycle or cocycle over the points, or its cubical chain over a 2-D image |
-| `plotRepresentative(i, at)` | a cycle over the complex at scale `at`, or a cocycle restricted to the complex at `at` (at the bar's birth: the edges that close the loop) |
-| `plotInput()`, `plotComplex(at)` | the points or the image; the `vr`, `cech` or `alpha` complex at `at` |
+| `plotRepresentative(i)` | bar `i`'s cycle over the points, its cubical chain over a 2-D image, or its cocycle restricted to the complex at the bar's birth: the edges that close the loop |
+| `plotRepresentative(i, at)` | a cycle over the complex at scale `at`, or a cocycle restricted to the complex at `at` (`Inf` draws the whole cocycle) |
+| `plotInput()`, `plotComplex(at)` | the points or the image; the complex the result was computed from at `at` (a witness complex on its landmarks) |
 | `plotLandscape(dimension)`, `plotPersistenceImage(dimension)` | the vectorizations, of every bar (as `landscape` and `persistenceImage` compute them) |
 | `plotInput3D()`, `plotComplex3D(at)`, `plotRepresentative3D(i)` | the same in 3-D (cycles only) |
 | `mostPersistentBar(dimension)` | not a plot: the index of the most persistent reported bar of that dimension |
@@ -114,11 +145,13 @@ and persistence images, and says so for the rest. The command line draws the sam
 java -jar tda4j-VERSION-assembly.jar --max-dimension 1 --save-result circle.json noisy-circle.csv
 java -jar tda4j-assembly.jar --plot diagram --output diagram.svg circle.json
 java -jar tda4j-assembly.jar --plot representative circle.json
+java -jar tda4j-assembly.jar --plot barcode,diagram --layout 1x2 --tagged circle.json
 ```
 
 The first line computes and prints the bars, and saves the whole result; the others plot it without computing again.
 `--plot representative` draws the most persistent bar of `--dimension` (default 1), or `--bar N` (its line number in
-the listing, counting from 0); `--at` gives the scale. Without `--output` the plot opens in the browser. See the
+the listing, counting from 0); `--at` gives the scale. A comma list of kinds is one board, in a row or on `--layout`.
+Without `--output` the plot opens in the browser. See the
 [command-line page](cli.md).
 
 ### Saved results
@@ -172,7 +205,8 @@ Plot.cycle(points, loop.representative).over(Plot.complex(points, loop.birth)).v
 ```
 
 A cocycle of a bar lives on the complex where the bar dies, so it has edges right across the data; restricted to the
-complex at the bar's birth (`at = loop.birth`) it shows the edges that cut the loop as it closes.
+complex at the bar's birth (`at = loop.birth`) it shows the edges that cut the loop as it closes. A result's
+`plotRepresentative(i)` draws a cocycle that way, and `plotRepresentative(i, Inf)` draws it whole.
 
 ## Customizing a plot
 
@@ -208,6 +242,7 @@ one (`.withLabels(title = "A").withLabels(title = "B")` titles the plot `B`).
 | the color, legend label and marker of a homological degree | `withDegree(1, color = "#c2185b", label = "loops", shape = Shape.Diamond)` | `Scale.degree(...)` |
 | the color scheme | `withPalette(Palette.reference)` | the `Palette` itself |
 | fonts, size of text and marks, gridlines, the legend's place, the background | `withStyle(Style.slides)` | the `Style` itself |
+| a box round the legend, and its entries in columns | `withLegendBox(box = true, background = "white", columns = 2)` | `Guide.legend(...)` |
 | the markers of points: shape, size, opacity, open or filled, the edge | `withPoints(shape = Shape.Star, size = 6, fill = false, edgeWidth = 0)` | `Geom.points(...)` |
 | a barcode's bars, a complex's edges, triangles and balls | `withSegments(width = 3)`, `withPolygons(opacity = 0.3)`, `withDiscs(...)`, `withLines(width = 3)` | `Geom.segments(...)`, `Geom.polygons(...)`, `Geom.discs(...)`, `Geom.lines(...)` |
 | each kind of text: size, weight, slant, alignment, font, color | `withText(TextRole.Title, size = 18, align = Anchor.Middle)` | `Text(TextRole.Title, ...)` |
@@ -260,7 +295,8 @@ Homological degree `k` always has the same color and marker shape: degree 0 teal
 `H1` looks the same in every plot whichever degrees are shown. The default palette is TDA4j's Teal & Gold, stepped for
 charts and checked for color-vision deficiencies (the first three degrees stay distinguishable side by side for every
 common deficiency). `Palette.reference` is a neutral alternative, and `Palette.print` is for a paper: black text on a
-background of exactly white, where the default's cream would print as a grey patch, and `Palette.clear` is black or white
+background of exactly white, where the default's cream would print as a grey patch (`Palette.grayscale` is that without
+color, `Palette.okabeIto` is the eight colors of Okabe and Ito on the same white), and `Palette.clear` is black or white
 for a figure with no background (see [For a paper](#for-a-paper-and-for-a-page-of-either-color)). A
 palette recolors the whole plot, heatmaps and cocycles included, and you can make your own:
 
@@ -301,8 +337,8 @@ Heatmaps (persistence images, images, cubical grids), cocycles and circular coor
 the values to colors: heatmaps and cocycles through the palette's sequential and diverging ramps, circular coordinates
 through a cyclic one. `withColorScale` sets its limits, so that two plots are read on one scale, and the colors of a
 sequential ramp (`ColorScale.viridis`, `ColorScale.greys`, or any list of colors, light to dark) and how values are
-spread along it (`Transform.Sqrt` for a heavy-tailed image). A cocycle's scale is symmetric about zero, so it takes only
-a `max`.
+spread along it (`Transform.Sqrt` for a heavy-tailed image; the color bar then labels round numbers between its ends,
+each where the transform puts it). A cocycle's scale is symmetric about zero, so it takes only a `max`.
 
 ```scala
 import scala.language.experimental.modularity
@@ -386,7 +422,28 @@ that wrap), or inside the plot area at a corner (`UpperLeft`, `UpperRight`, `Low
 nowhere (`Hidden`). A persistence diagram puts it at the lower right by itself, below the diagonal where no point can be, in
 the shaded half plane. `withLegend("right")` or `Style(legend = LegendPosition.Right)` puts it beside the plot again; a style
 that does not name a place leaves each plot's own. A corner of a barcode over its bars covers some of them: choose the place
-for the plot.
+for the plot, or give the legend a box.
+
+A legend has no box unless you ask for one. `withLegendBox(box = true)` gives it the page's own color, a little
+see-through (`opacity` 0.9), and a thin frame, which keeps it readable over data wherever it is; `background = "white"`
+(or `backgroundPaint`) and `opacity` set the fill, `frame = true`, `frameColor` and `frameWidth` the line round it, and
+`padding` the room inside (6 pixels, growing with the legend's text size). A fill or a frame alone is a box of that
+kind, `box = false` takes it away. `columns` puts the entries in that many columns, a column filled before the next
+(seven entries in three columns are 3, 3 and 1); above or below the plot the columns line up as a grid beside the
+heading.
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val d = Persistence(Array.tabulate(16)(i => Array(math.cos(2 * math.Pi * i / 16), math.sin(2 * math.Pi * i / 16))))
+Plot.barcode(d).withLegend("upper-right").withLegendBox(box = true)
+Plot.diagram(d).withLegend("bottom").withLegendBox(background = "white", columns = 3)
+```
+
+A legend takes at most two fifths of the figure's width beside the plot and at most the plot's width above, below or
+inside it: the columns that would take more are given up, so a legend never runs off the figure or over the plot.
 
 ### The bars of a barcode
 
@@ -450,11 +507,12 @@ earlier ones set, and tweaks of different elements come in any order, a `Style` 
 | `grid`, `minor-grid`, `axis-line`, `frame` | `visible`, `width`, `color`, `dash` (`solid`, `dashed`, `dotted`), `opacity` |
 | `ticks`, `minor-ticks` | `length`, `direction` (`out`, `in`), `visible`, `width`, `color`, `opacity` |
 | `panel` | `color`, `opacity`, `visible` |
+| `legend-box` | `background` (a color, or `none` for no box), `opacity`, `frame` (a color, or `none`), `frame-width`, `padding` (pixels), `columns` |
 | `diagonal` | `shade` (`none` or a color), `shade-opacity`, `color`, `width`, `dashed` |
 | `marker` | `shape` (a name, a matplotlib code, `pch:N`, `glyph:text`), `size`, `opacity`, `fill`, `edge-width` (0 for none), `edge-color`, `edge-opacity`, `edge-dash`, `edge-visible` |
 | `degree-0`, `degree-1`, ... | `color`, `dark-color`, `label` and the `marker` properties |
 | `segments`, `polygons`, `discs`, `lines` | `width`, `opacity` for segments; `opacity` for polygons and discs; `width` for lines |
-| `x-axis`, `y-axis` | the side alone (`x-axis=top`, `y-axis=right`), or `side`, `reverse` (`true` runs the axis backwards), `padding` (the room around the data, as a fraction of their extent), `min`, `max`, `format` |
+| `x-axis`, `y-axis` | the side alone (`x-axis=top`, `y-axis=right`), or `side`, `reverse` (`true` runs the axis backwards), `padding` (the room around the data, as a fraction of their extent), `min`, `max`, `format`, `crosses-at` (the value of the other axis it goes through) |
 | `aspect` | the length of a y unit over an x unit (`aspect=1` for equal units), or `free` |
 | `numbers` | `locale` (`de`, `fr`, `sv`, ...), `decimal`, `grouping`, `minus` (`space` is a space) |
 | `size` | `width`, `height`: pixels, or a number with a unit, `3.4in`, `8.6cm`, `86mm`, `245pt` |
@@ -497,11 +555,34 @@ A scale of your own gives a name (the one messages use), the map to the line and
 the ticks are round numbers of the data, as on a square-root axis. Keep the functions in a `val`: two axes are on one
 scale (for `Board.shared()`) when they hold the same functions.
 
+**An axis through a value.** An axis is drawn at the bottom (or the top) of the plot and at its left (or right). For data
+that go negative, `crossesAt` draws it through a value of the other axis instead: `Scale.x(crossesAt = 0)` is the x axis
+through `y = 0`, `Scale.y(crossesAt = 0)` the y axis through `x = 0`, each value in the units of the axis it crosses
+(a log axis takes the data's own number, not its logarithm). The numbers stay beside the line, below it or to the left of
+it, or above it and to the right when the axis is given the other `position`; the tick marks start on it and the
+gridlines still run across the plot. The axis label stays at the edge, where the data are not, and the margin the numbers
+needed is given back to the plot. `reverse` is followed, so is any scale.
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.plot.*
+
+// a ring of points drawn round the origin, as a mathematician draws it
+val points = Array.tabulate(40)(i => Array(math.cos(i * 0.157), math.sin(i * 0.157)))
+val ring = Plot.points(points).withXScale(crossesAt = 0).withYScale(crossesAt = 0)
+```
+
+A value the other axis does not show (a plot of positive numbers asked to cross at 0) or cannot place (0 on a log axis)
+leaves the axis at the edge, and a line of small print under the plot says so, so one house style with `crossesAt` fits
+every plot. `x-axis.crosses-at=0` and `y-axis.crosses-at=0` are the same as settings, `withXCrossesAt(0)` and
+`withYCrossesAt(0)` from MATLAB.
+
 ### Numbers
 
 `Numbers` sets how the numbers of the tick labels and the color bar are written: the decimal separator, a mark between
 groups of three digits, and the minus sign. `Numbers.locale("de")` takes what a locale writes (a comma and a hyphen for
-German, a comma and a true minus sign `−` for Swedish); the symbols can also be given one by one. Anything that is not a
+German, a comma and a true minus sign `−` for Swedish; the digits stay `0` to `9`, so Arabic has a point, not its
+own decimal separator); the symbols can also be given one by one. Anything that is not a
 number, such as an `H0` in a legend, is left alone.
 
 ```scala
@@ -517,8 +598,10 @@ val typographic = Plot.diagram(d).withNumbers(decimal = ",", minus = "−", grou
 ```
 
 A long text can be cut: `Text(TextRole.Legend, limit = 120)` ends a legend entry that would be longer than 120 pixels in
-an ellipsis, and the whole text is the tooltip of what is left. The length of a text is estimated from its size, so the
-cut can fall some characters from where a font of your own would put it.
+an ellipsis, and the whole text is the tooltip of what is left. The renderer has no font metrics, so it estimates the
+length of a text letter by letter from the advance widths of Helvetica (for `sans-serif`, `system-ui`, Arial and the
+like), Times (`serif`) or a fixed width (`monospace`); a font with other proportions is cut some characters from where
+the estimate puts it. The legend makes room for the same estimate of its widest entry (`TextWidth.of(text, size)`).
 
 ### A caption, a panel tag and a description
 
@@ -582,6 +665,20 @@ stay apart for every common color vision and read on white (blue, vermillion and
 checked on all pairs), and its heatmap ramp darkens steadily, so it keeps its order on a grayscale printer. It has one
 look: the dark theme draws the same figure. The style names fonts that converters and publishers know
 (`Helvetica, Arial`) instead of the browser's own `system-ui`.
+
+`Palette.grayscale` is `print` with no color at all, for a paper that prints in black and white. Degrees are told apart by
+lightness (a dark, a light and a middle gray first, each dark enough to show on white) and by the marker shapes and the
+legend, which every palette keeps: past four degrees the grays run out, so rely on the shapes. A heatmap uses ColorBrewer's
+Greys, darker for larger. A diverging scale (a cocycle's values) is a dark gray against a middle gray around a light middle,
+a weaker cue for the sign than a hue; use `Palette.print` for those when color is available.
+
+`Palette.okabeIto` is the color-blind-safe palette of Okabe and Ito on `print`'s white surface and black ink, with the same
+heatmap ramp and the same blue against vermillion for a diverging scale. Degrees 0 to 2 are its blue, vermillion and bluish
+green, which stay apart side by side for every common color vision; the next colors are orange, sky blue and reddish purple,
+then yellow and black. Orange and sky blue are lighter than a thin mark wants against white, and yellow barely shows on it, so
+they come last: past the third degree, rely on the marker shapes and the legend. Like `print` it has one look for both
+themes, as Okabe and Ito defined their colors for a light background. The palette is validated as accessible on white only;
+on any other background the checks no longer hold.
 
 `Palette.clear` and `Style.clear` are for a figure with no background, that takes the color of what is behind it. The
 style draws none. The palette has two looks, which the theme picks: pure black elements for a light page
@@ -660,7 +757,8 @@ TDA4j.clearPlotDefaults();
 
 Plots drawn side by side mean something only on the same scale. `shared()` gives every panel of a board the union of
 the panels' ranges, on both axes or on `shared(y = false)` the x axis only; a tweak added to a board with `+` changes
-every panel (`Labels(title = ...)` titles the board, the page it is saved as):
+every panel (`Labels(title = ...)` titles the board: the heading above the panels, and the title of the page it is saved
+as):
 
 ```scala
 import scala.language.experimental.modularity
@@ -691,16 +789,17 @@ import org.appliedtopology.tda4j.plot.*
 val d = Persistence(CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv"), maxDimension = 1)
 
 val board = Plot.layout(2, 3, widths = Seq(2.0, 2.0, 1.0))
-  .place(Plot.diagram(d).withAspect(free = true), row = 0, col = 0, colSpan = 2)
+  .place(Plot.diagram(d), row = 0, col = 0, colSpan = 2, fill = true)
   .place(Plot.barcode(d), row = 0, col = 2)
   .place(Plot.barcode(d).withXScale(Transform.Sqrt), row = 1, col = 0, colSpan = 3)
   .tagged()
 board.save("grid.svg")
 ```
 
-A persistence diagram keeps equal units, so in a wide cell it would leave room beside the data; `withAspect(free = true)`
-lets it fill the cell, as above. A panel that would cover a cell another one covers, or that runs off the grid, is refused when it is placed, naming the
-panel in the way. `tagged()` letters the panels in the order they were placed.
+A persistence diagram keeps equal units, so in a wide cell the data take a square and the rest is empty axis;
+`fill = true` (the same as `withAspect(free = true)` on that panel) lets it fill the cell, as above. A panel that would
+cover a cell another one covers, or that runs off the grid, is refused when it is placed, naming the panel in the way.
+`tagged()` letters the panels in the order they were placed.
 
 On a grid, `sharedColumns()` puts the panels over the same columns on one x scale and `sharedRows()` the panels across
 the same rows on one y scale, each column and row its own (`shared()` still takes all panels together). A panel that
@@ -752,12 +851,14 @@ A `plot...` method of a result returns a figure (a `plot...3D` method a scene), 
 | `withSize(width, height)` (3-D) | the size in pixels |
 | `withXScale(name)`, `withYScale(name)` | `'linear'`, `'log'`, `'sqrt'` or `'symlog'` |
 | `withXRange(min, max)`, `withYRange(min, max)` | the visible range of an axis |
+| `withXCrossesAt(y)`, `withYCrossesAt(x)` | the x axis through `y = value`, the y axis through `x = value` |
 | `withAspect(ratio)` | the length of a y unit over an x unit |
-| `withPalette(name)` (3-D) | `'brand'`, `'reference'`, `'print'` or `'clear'` |
+| `withPalette(name)` (3-D) | `'brand'`, `'reference'`, `'print'`, `'grayscale'`, `'okabe-ito'` or `'clear'` |
 | `withStyle(name)` (3-D) | `'default'`, `'slides'`, `'print'` or `'clear'` |
 | `withDegreeColor(k, color)` (3-D), `withDegreeLabel(k, label)` | the color (`'#c2185b'`) and legend label of degree `k` |
 | `withTextScale(factor)` (3-D), `withMarkScale(factor)` (3-D) | a factor on the size of text, of marks and lines |
 | `withLegend(position)` | `'right'`, `'left'`, `'top'`, `'bottom'`, `'upper-left'`, `'upper-right'`, `'lower-left'`, `'lower-right'` or `'none'` |
+| `withLegendBox(color)`, `withLegendColumns(n)` | a box round the legend, filled with `color` and framed; the entries in `n` columns (`withSetting('legend-box.padding=10')` and its siblings reach the rest) |
 | `withoutGrid()` | removes the gridlines |
 | `withTransparentBackground()` (3-D) | draws no background |
 | `withLocale(tag)` | writes numbers as a locale does (`'de'`, `'sv'`, ...) |
@@ -765,7 +866,29 @@ A `plot...` method of a result returns a figure (a `plot...3D` method a scene), 
 | `withCamera(azimuth, elevation, zoom)` (3-D only) | the view of a 3-D scene |
 
 A word that is not one of those listed, or a change a plot cannot have, throws an `IllegalArgumentException` that says what to write
-instead. The boards and layout grids of the Scala API have no MATLAB or command-line counterpart.
+instead.
+
+Boards too (see [Comparing plots](#comparing-plots) and [Panels on a grid](#panels-on-a-grid)). MATLAB cannot build a Scala
+`Seq`, so the boards are made in `TDA4j`, and the board has the methods that take plain arguments:
+
+| call | meaning |
+|---|---|
+| `TDA4j.side(a, b)`, `TDA4j.side(a, b, c)`, `TDA4j.side(array)` | the figures in one row, as one plot (`array` is a Java array of figures) |
+| `TDA4j.layout(rows, cols)`, `TDA4j.layout(rows, cols, width, height)` | an empty board on a grid of cells |
+| `TDA4j.layout(rows, cols, width, height, gap, widths, heights)` | the same with the gap between cells and the relative sizes of columns and rows (an empty array for equal ones) |
+| `board.place(fig, row, col)`, `board.place(fig, row, col, rowSpan, colSpan)` | a panel in a cell, or spanning cells; cells count from 0 |
+| `board.place(fig, row, col, rowSpan, colSpan, fill)` | with `fill` true, a diagram fills a wide cell instead of keeping equal units |
+| `board.tagged()`, `board.tagged(format, sequence)` | letters the panels `(a)`, `(b)`, ... |
+| `board.shared()`, `board.sharedColumns()`, `board.sharedRows()` | panels on one scale, by column, by row |
+| `board.withTitle(text)`, `withPalette(name)`, `withStyle(name)`, `withTextScale(factor)`, `withSetting(spec)` | the board's heading, and the change in every panel |
+| `board.save(path)`, `board.save(path, theme)` | writes an `.svg` file or an `.html` page |
+
+```matlab
+grid = TDA4j.layout(2, 2, 960, 600).place(result.plotDiagram(), 0, 0, 1, 2, true).place(result.plotBarcode(), 1, 0, 1, 2);
+grid.tagged().withTitle('A noisy circle').save('grid.svg');
+```
+
+The command line draws one plot per call; it has no board.
 
 <div class="tabset">
 <div class="tab" data-lang="Scala">
@@ -799,8 +922,9 @@ result.plotBarcode().withXScale('sqrt').withTextScale(1.3).save('barcode.svg');
 </div>
 </div>
 
-The command line has a flag for the same changes of a `--plot`: `--title`, `--x-label`, `--y-label`, `--width`,
-`--height`, `--palette` (`brand`, `reference`, `print` or `clear`), `--style` (`default`, `slides`, `print` or `clear`), `--theme`
+The command line has a flag for the same changes of a `--plot`: `--title`, `--x-label`, `--y-label`, `--caption`, `--tag`,
+`--description`, `--layout` and `--tagged` (for a list of kinds on a board), `--look` (`default`, `print` or `clear`: the palette and style together, which the flags after it
+override), `--width`, `--height`, `--palette` (`brand`, `reference`, `print`, `grayscale`, `okabe-ito` or `clear`), `--style` (`default`, `slides`, `print` or `clear`), `--theme`
 (`light`, `dark` or `auto`), `--text-scale` (applied to the `--style`), `--set` (repeated, `element.property=value`), `--x-scale` and
 `--y-scale` (`linear`, `log`, `sqrt` or `symlog`). A word that is not one, a size out of range and a flag a plot cannot
 use (an x scale for a 3-D scene) are errors, reported before anything is computed:
