@@ -36,7 +36,8 @@ open class PackedCubicalCohomologyEngine[C: Field](
     * `masked` when they are all masked.
     */
   private val cellRank: Array[Int] =
-    val r = Array.fill(totalCells)(Int.MaxValue)
+    val r = new Array[Int](totalCells)
+    java.util.Arrays.fill(r, Int.MaxValue)
     var p = 0
     while p < ranks.size do
       var rem = p
@@ -194,6 +195,8 @@ open class PackedCubicalCohomologyEngine[C: Field](
     def leadingCoefficient: C = coefficients(0).asInstanceOf[C]
     def isEmpty: Boolean = cells.isEmpty
 
+  private val emptyColumn = Column(Array.empty[Long], Array.empty[Any])
+
   /** The column being reduced: a binary heap of (packed cell, coefficient), oldest on top for the cohomology reduction,
     * youngest on top for the cycles. Equal cells are combined when they reach the top.
     */
@@ -272,11 +275,11 @@ open class PackedCubicalCohomologyEngine[C: Field](
     // Combining here keeps repeats and cancelling pairs out of the stored columns, which are added again and again:
     // left in, they made the 3-D reductions superlinear (64³ noise: 40 s; .claude/WORKLOG-cubical-performance.md).
     /** Empties the column into a reduced column: every cell once, with its non-zero combined coefficient, in heap order
-      * (the pivot first); empty if the column is zero.
+      * (the pivot first); empty if the column is zero. The cells are popped in order, so the column comes out sorted:
+      * ascending for the cohomology reduction, descending for the cycles.
       */
     def drain(): Column =
-      val outCells = new Array[Long](size)
-      val outCoefficients = new Array[Any](size)
+      val end = size
       var n = 0
       while size > 0 do
         val cell = cells(0)
@@ -286,15 +289,21 @@ open class PackedCubicalCohomologyEngine[C: Field](
           sum = fr.plus(sum, coef(0).asInstanceOf[C])
           popTop()
         if !fr.isEqual(sum, fr.zero) then
-          outCells(n) = cell
-          outCoefficients(n) = sum
+          // Each result takes at least one pop, so the slots the heap has given up (the end of its arrays, last slot
+          // first) hold the output until it is copied out at its exact size.
+          cells(end - 1 - n) = cell
+          coef(end - 1 - n) = sum
           n += 1
-      if n == outCells.length then Column(outCells, outCoefficients)
+      if n == 0 then emptyColumn
       else
-        Column(
-          java.util.Arrays.copyOf(outCells, n),
-          java.util.Arrays.copyOf(outCoefficients.asInstanceOf[Array[AnyRef]], n).asInstanceOf[Array[Any]]
-        )
+        val outCells = new Array[Long](n)
+        val outCoefficients = new Array[Any](n)
+        var i = 0
+        while i < n do
+          outCells(i) = cells(end - 1 - i)
+          outCoefficients(i) = coef(end - 1 - i)
+          i += 1
+        Column(outCells, outCoefficients)
 
   /** The pairing in report order (degree ascending, then the birth cell youngest first), one row per pair, zero-length
     * ones included.
@@ -330,7 +339,38 @@ open class PackedCubicalCohomologyEngine[C: Field](
         Some(representative)
       )
 
-  private val noLog: Array[(Int, C)] = Array.empty
+  /** The steps of one reduction in order: the pivot cell reduced by, and the multiple of its column subtracted. */
+  private final class Log(val pivots: Array[Int], val coefficients: Array[Any]):
+    def isEmpty: Boolean = pivots.isEmpty
+    def nonEmpty: Boolean = pivots.nonEmpty
+
+  private val noLog = Log(Array.empty[Int], Array.empty[Any])
+
+  /** Collects the steps of one reduction at a time; reused. */
+  private final class LogBuilder:
+    private var pivots = new Array[Int](16)
+    private var coefficients = new Array[Any](16)
+    private var count = 0
+
+    def add(pivot: Int, c: C): Unit =
+      if count == pivots.length then
+        pivots = java.util.Arrays.copyOf(pivots, 2 * count)
+        coefficients =
+          java.util.Arrays.copyOf(coefficients.asInstanceOf[Array[AnyRef]], 2 * count).asInstanceOf[Array[Any]]
+      pivots(count) = pivot
+      coefficients(count) = c
+      count += 1
+
+    /** The steps so far, and the builder emptied. */
+    def drain(): Log =
+      if count == 0 then noLog
+      else
+        val out = Log(
+          java.util.Arrays.copyOf(pivots, count),
+          java.util.Arrays.copyOf(coefficients.asInstanceOf[Array[AnyRef]], count).asInstanceOf[Array[Any]]
+        )
+        count = 0
+        out
 
   private def orderBug(pivot: Int): Nothing =
     throw new IllegalStateException(
@@ -338,8 +378,7 @@ open class PackedCubicalCohomologyEngine[C: Field](
     )
 
   /** A V-column: each cell once, with its non-zero coefficient. */
-  private final class SparseColumn(val cells: Array[Int], val coefficients: Array[Any]):
-    def iterator: Iterator[(Int, C)] = cells.indices.iterator.map(k => (cells(k), coefficients(k).asInstanceOf[C]))
+  private final class SparseColumn(val cells: Array[Int], val coefficients: Array[Any])
 
   /** Coefficients keyed by cell, for one V-column at a time: open addressing over primitive keys, reused. */
   private final class CellSums:
@@ -413,62 +452,84 @@ open class PackedCubicalCohomologyEngine[C: Field](
     */
   private def expandV(
     seed: Int,
-    log: Array[(Int, C)],
+    log: Log,
     seedOf: Int => Int,
-    logOf: Int => Array[(Int, C)],
+    logOf: Int => Log,
     memo: mutable.LongMap[SparseColumn]
   ): SparseColumn =
-    def fold(seed: Int, log: Array[(Int, C)]): SparseColumn =
+    def fold(seed: Int, log: Log): SparseColumn =
       if log.isEmpty then SparseColumn(Array(seed), Array(fr.one))
       else
         vSums.set(seed, fr.one)
-        for (pivot, coeff) <- log do
-          val v = memo(pivot.toLong)
+        var i = 0
+        while i < log.pivots.length do
+          val v = memo(log.pivots(i).toLong)
+          val coeff = log.coefficients(i).asInstanceOf[C]
           var k = 0
           while k < v.cells.length do
             vSums.subtract(v.cells(k), fr.times(coeff, v.coefficients(k).asInstanceOf[C]))
             k += 1
+          i += 1
         vSums.drain()
-    val stack = mutable.Stack.empty[Int]
-    log.foreach((pivot, _) => stack.push(pivot))
-    while stack.nonEmpty do
-      val s = stack.top
-      if memo.contains(s.toLong) then stack.pop()
+    var stack = new Array[Int](64)
+    var top = 0
+    def push(pivot: Int): Unit =
+      if top == stack.length then stack = java.util.Arrays.copyOf(stack, 2 * top)
+      stack(top) = pivot
+      top += 1
+    var j = 0
+    while j < log.pivots.length do
+      push(log.pivots(j))
+      j += 1
+    while top > 0 do
+      val s = stack(top - 1)
+      if memo.contains(s.toLong) then top -= 1
       else
         val sLog = logOf(s)
-        val missing = sLog.iterator.map(_._1).filterNot(p => memo.contains(p.toLong)).toList
-        if missing.nonEmpty then missing.foreach(stack.push)
-        else
+        var missing = false
+        var i = 0
+        while i < sLog.pivots.length do
+          if !memo.contains(sLog.pivots(i).toLong) then
+            push(sLog.pivots(i))
+            missing = true
+          i += 1
+        if !missing then
           memo(s.toLong) = fold(seedOf(s), sLog)
-          stack.pop()
+          top -= 1
     fold(seed, log)
 
-  /** `terms` (cells by index, possibly repeated) combined, without zeros, as a packed chain of cubes: oldest first
-    * (`olderFirst`, cocycles) or youngest first (its reverse, cycles).
+  /** The chain of a reduced column of the cycles' reduction: its cells already pop in the chain's order (youngest
+    * first), so the keys are read off and the coefficients shared with the column, which is never changed.
     */
-  private def cubeChain(terms: Iterator[(Int, C)], youngestFirst: Boolean): Chain[Cube, C] =
-    val sums = mutable.LongMap.empty[C]
-    for (key, c) <- terms do
-      sums.updateWith(key.toLong) {
-        case Some(x) => Some(fr.plus(x, c))
-        case None    => Some(c)
-      }
-    // The packed cells (rank, then index) sort as `olderFirst` orders the cubes.
-    val order = new Array[Long](sums.size)
-    var n = 0
-    sums.foreachEntry { (key, c) =>
-      if !fr.isEqual(c, fr.zero) then
-        order(n) = packed(key.toInt)
-        n += 1
-    }
-    java.util.Arrays.sort(order, 0, n)
+  private def cycleChain(column: Column): Chain[Cube, C] =
+    val n = column.cells.length
     val keys = new Array[Int](n)
-    val coefficients = new Array[AnyRef](n)
     var i = 0
     while i < n do
-      val key = keyOf(order(if youngestFirst then n - 1 - i else i))
-      keys(i) = key
-      coefficients(i) = sums(key.toLong).asInstanceOf[AnyRef]
+      keys(i) = keyOf(column.cells(i))
+      i += 1
+    Chain.packed[Cube, C](keys, column.coefficients.asInstanceOf[Array[AnyRef]], cubes)(using youngestFirstOrder, fr)
+
+  /** `v`'s terms (each cell once, non-zero) as a packed chain of cubes: oldest first (`olderFirst`, cocycles) or
+    * youngest first (its reverse, cycles).
+    */
+  private def cubeChain(v: SparseColumn, youngestFirst: Boolean): Chain[Cube, C] =
+    val n = v.cells.length
+    val order = new Array[Long](n)
+    var i = 0
+    while i < n do
+      order(i) = packed(v.cells(i))
+      i += 1
+    // The packed cells (rank, then index) sort as `olderFirst` orders the cubes.
+    val sorted =
+      if youngestFirst then SortIndices.sort(n, (a, b) => order(a) > order(b))
+      else SortIndices.sort(n, (a, b) => order(a) < order(b))
+    val keys = new Array[Int](n)
+    val coefficients = new Array[AnyRef](n)
+    i = 0
+    while i < n do
+      keys(i) = v.cells(sorted(i))
+      coefficients(i) = v.coefficients(sorted(i)).asInstanceOf[AnyRef]
       i += 1
     Chain.packed[Cube, C](keys, coefficients, cubes)(using if youngestFirst then youngestFirstOrder else olderFirst, fr)
 
@@ -493,10 +554,11 @@ open class PackedCubicalCohomologyEngine[C: Field](
       // V-columns: a pivot's seed is the birth of the row it closes (an apparent row's is found again from the grid),
       // its log kept only when not empty; essential rows' logs by row.
       val seedOfDeath = if cocycles then LongIntMap(cells.length / 4) else LongIntMap()
-      val logs = mutable.LongMap.empty[Array[(Int, C)]]
-      val pending = mutable.ArrayBuffer.empty[(Int, Array[(Int, C)])]
+      val logs = mutable.LongMap.empty[Log]
+      val pending = mutable.ArrayBuffer.empty[(Int, Log)]
+      val steps = LogBuilder()
 
-      def report(sigma: Int, death: Int, log: Array[(Int, C)], isApparent: Boolean): Unit =
+      def report(sigma: Int, death: Int, log: Log, isApparent: Boolean): Unit =
         val row = rows.add(k, sigma, death, isApparent)
         if cocycles then
           if death >= 0 && !isApparent then
@@ -504,14 +566,15 @@ open class PackedCubicalCohomologyEngine[C: Field](
             if log.nonEmpty then logs(death.toLong) = log
           if wanted(k, sigma, death) then pending += ((row, log))
 
-      def fallback(tau: Int): Option[Column] =
-        if !useApparentPairs then None
+      // The column of an apparent pair's pivot, rebuilt from its birth cell; null if `tau` is not one.
+      def fallback(tau: Int): Column =
+        if !useApparentPairs then null
         else
           val sigma = zeroApparentFacet(tau)
-          if sigma < 0 then None
+          if sigma < 0 then null
           else
             foreachCofacet(sigma)((cell, c) => fallbackColumn.push(packed(cell), c))
-            Some(fallbackColumn.drain())
+            fallbackColumn.drain()
 
       var i = cells.length - 1
       while i >= 0 do // youngest first
@@ -525,23 +588,23 @@ open class PackedCubicalCohomologyEngine[C: Field](
               report(sigma, tau, noLog, isApparent = true)
             else
               foreachCofacet(sigma)((cell, c) => working.push(packed(cell), c))
-              val log = mutable.ArrayBuffer.empty[(Int, C)]
               var reducing = working.pivot()
               while reducing do
                 val pivotCell = working.pivotCell
                 val pivotKey = keyOf(pivotCell)
-                basis.get(pivotKey.toLong).orElse(fallback(pivotKey)) match
-                  case None         => reducing = false
-                  case Some(column) =>
-                    val redCoeff = fr.divide(working.pivotCoefficient, column.leadingCoefficient)
-                    working.addScaled(column, fr.negate(redCoeff))
-                    if cocycles then log += ((pivotKey, redCoeff))
-                    reducing = working.pivot()
-                    // Each step must move the pivot on (younger): otherwise a column and the order disagree, and the
-                    // loop would never end.
-                    if reducing && working.pivotCell <= pivotCell then orderBug(pivotKey)
+                var column = basis.getOrNull(pivotKey.toLong)
+                if column == null then column = fallback(pivotKey)
+                if column == null then reducing = false
+                else
+                  val redCoeff = fr.divide(working.pivotCoefficient, column.leadingCoefficient)
+                  working.addScaled(column, fr.negate(redCoeff))
+                  if cocycles then steps.add(pivotKey, redCoeff)
+                  reducing = working.pivot()
+                  // Each step must move the pivot on (younger): otherwise a column and the order disagree, and the
+                  // loop would never end.
+                  if reducing && working.pivotCell <= pivotCell then orderBug(pivotKey)
               val reduced = working.drain()
-              val reductionLog = if log.isEmpty then noLog else log.toArray
+              val reductionLog = steps.drain()
               if reduced.isEmpty then report(sigma, -1, reductionLog, isApparent = false)
               else
                 val pivotKey = keyOf(reduced.cells(0))
@@ -558,19 +621,22 @@ open class PackedCubicalCohomologyEngine[C: Field](
             val sigma = zeroApparentFacet(pivot)
             if sigma < 0 then throw new IllegalStateException(s"pivot $pivot has a basis entry but no V-column")
             sigma
-        def logOf(pivot: Int): Array[(Int, C)] = logs.getOrElse(pivot.toLong, noLog)
+        def logOf(pivot: Int): Log = logs.getOrElse(pivot.toLong, noLog)
         for (row, log) <- pending do
           val v = expandV(rows.births(row), log, seedOf, logOf, memo)
-          cocycleOf(row.toLong) = cubeChain(v.iterator, youngestFirst = false)
+          cocycleOf(row.toLong) = cubeChain(v, youngestFirst = false)
     (rows, cocycleOf)
 
   /** Every bar with its cocycle, as `CellularCohomologyEngine.persistentCohomology` gives it on the stream. */
   def persistentCohomology(includeZeroLength: Boolean = false): List[PersistenceBar[Double, Chain[Cube, C]]] =
     val keep = (_: Int, birth: Int, death: Int) => includeZeroLength || death < 0 || cellRank(birth) != cellRank(death)
     val (rows, cocycleOf) = pairing(topDim, cocycles = true, keep)
-    List.tabulate(rows.size)(identity).collect {
-      case row if includeZeroLength || !rows.isZeroLength(row) => rows.bar(row, cocycleOf(row.toLong))
-    }
+    var bars: List[PersistenceBar[Double, Chain[Cube, C]]] = Nil
+    var row = rows.size - 1
+    while row >= 0 do
+      if includeZeroLength || !rows.isZeroLength(row) then bars = rows.bar(row, cocycleOf(row.toLong)) :: bars
+      row -= 1
+    bars
 
   /** Every bar with its cycle, as `CellularCohomologyEngine.persistentHomology` gives it on the stream: degrees up to
     * `topDim - 1` for a truncated grid (its declared `homologyDegreeLimit`), all of them for the whole grid.
@@ -580,9 +646,12 @@ open class PackedCubicalCohomologyEngine[C: Field](
     val (rows, _) = pairing(limit, cocycles = false, (_, _, _) => false)
     val reported = (row: Int) => includeZeroLength || !rows.isZeroLength(row)
     val cycles = involutedCycles(rows, reported)
-    List.tabulate(rows.size)(identity).collect {
-      case row if reported(row) => rows.bar(row, cycles(row.toLong))
-    }
+    var bars: List[PersistenceBar[Double, Chain[Cube, C]]] = Nil
+    var row = rows.size - 1
+    while row >= 0 do
+      if reported(row) then bars = rows.bar(row, cycles(row.toLong)) :: bars
+      row -= 1
+    bars
 
   /** Pushes the boundary of `tau` onto `working`. */
   private def pushBoundary(tau: Int, working: WorkingColumn): Unit =
@@ -600,33 +669,34 @@ open class PackedCubicalCohomologyEngine[C: Field](
     // Keyed by the birth (pivot) cell, which is unique across dimensions: the reduced column unless the row is an
     // apparent pair, the reduction log when it is not empty, the row.
     val basis = mutable.LongMap.empty[Column]
-    val logs = mutable.LongMap.empty[Array[(Int, C)]]
+    val logs = mutable.LongMap.empty[Log]
     val rowOfBirth = LongIntMap()
 
-    def columnOf(pivot: Int): Option[Column] =
-      basis.get(pivot.toLong).orElse {
-        Option.when(rowOfBirth.contains(pivot.toLong) && rows.apparent(rowOfBirth(pivot.toLong))) {
-          pushBoundary(rows.deaths(rowOfBirth(pivot.toLong)), rebuilt)
-          rebuilt.drain()
-        }
-      }
+    // The reduced column whose pivot is `pivot`, rebuilt from its death cell if it is an apparent pair's; null if none.
+    def columnOf(pivot: Int): Column =
+      val stored = basis.getOrNull(pivot.toLong)
+      if stored != null then stored
+      else if rowOfBirth.contains(pivot.toLong) && rows.apparent(rowOfBirth(pivot.toLong)) then
+        pushBoundary(rows.deaths(rowOfBirth(pivot.toLong)), rebuilt)
+        rebuilt.drain()
+      else null
 
-    def reduce(seed: Int): Array[(Int, C)] =
+    val steps = LogBuilder()
+    def reduce(seed: Int): Log =
       pushBoundary(seed, working)
-      val log = mutable.ArrayBuffer.empty[(Int, C)]
       var reducing = working.pivot()
       while reducing do
         val pivotCell = working.pivotCell
         val pivotKey = keyOf(pivotCell)
-        columnOf(pivotKey) match
-          case None         => reducing = false
-          case Some(column) =>
-            val redCoeff = fr.divide(working.pivotCoefficient, column.leadingCoefficient)
-            working.addScaled(column, fr.negate(redCoeff))
-            log += ((pivotKey, redCoeff))
-            reducing = working.pivot()
-            if reducing && working.pivotCell >= pivotCell then orderBug(pivotKey)
-      if log.isEmpty then noLog else log.toArray
+        val column = columnOf(pivotKey)
+        if column == null then reducing = false
+        else
+          val redCoeff = fr.divide(working.pivotCoefficient, column.leadingCoefficient)
+          working.addScaled(column, fr.negate(redCoeff))
+          steps.add(pivotKey, redCoeff)
+          reducing = working.pivot()
+          if reducing && working.pivotCell >= pivotCell then orderBug(pivotKey)
+      steps.drain()
 
     // Finite rows by death dimension, each dimension's oldest death first: the death cells' packed values sorted, the row
     // found again from its death cell.
@@ -648,7 +718,10 @@ open class PackedCubicalCohomologyEngine[C: Field](
           n += 1
         row += 1
       java.util.Arrays.sort(deathOrder)
-      for death <- deathOrder do
+      var di = 0
+      while di < deathOrder.length do
+        val death = deathOrder(di)
+        di += 1
         val row = rowOfDeath(keyOf(death).toLong)
         val sigma = rows.births(row)
         rowOfBirth(sigma.toLong) = row
@@ -657,11 +730,7 @@ open class PackedCubicalCohomologyEngine[C: Field](
           // which has no column yet (each cell is born once), so the reduction would stop at once with an empty log.
           if reported(row) then
             pushBoundary(keyOf(death), working)
-            val column = working.drain()
-            result(row.toLong) = cubeChain(
-              column.cells.indices.iterator.map(k => (keyOf(column.cells(k)), column.coefficients(k).asInstanceOf[C])),
-              youngestFirst = true
-            )
+            result(row.toLong) = cycleChain(working.drain())
         else
           val log = reduce(keyOf(death))
           if !working.pivot() || keyOf(working.pivotCell) != sigma then
@@ -672,11 +741,7 @@ open class PackedCubicalCohomologyEngine[C: Field](
           if log.nonEmpty then logs(sigma.toLong) = log
           val column = working.drain()
           basis(sigma.toLong) = column
-          if reported(row) then
-            result(row.toLong) = cubeChain(
-              column.cells.indices.iterator.map(k => (keyOf(column.cells(k)), column.coefficients(k).asInstanceOf[C])),
-              youngestFirst = true
-            )
+          if reported(row) then result(row.toLong) = cycleChain(column)
       deathDim += 1
 
     // Essential rows: the boundary of the birth cell reduces to zero against the death columns of its dimension; the
@@ -685,7 +750,7 @@ open class PackedCubicalCohomologyEngine[C: Field](
     for row <- 0 until rows.size if rows.deaths(row) < 0 && reported(row) do
       val sigma = rows.births(row)
       result(row.toLong) =
-        if rows.dims(row) == 0 then cubeChain(Iterator.single((sigma, fr.one)), youngestFirst = true)
+        if rows.dims(row) == 0 then cubeChain(SparseColumn(Array(sigma), Array(fr.one)), youngestFirst = true)
         else
           val log = reduce(sigma)
           if working.pivot() then
@@ -703,7 +768,7 @@ open class PackedCubicalCohomologyEngine[C: Field](
             ,
             memo
           )
-          cubeChain(v.iterator, youngestFirst = true)
+          cubeChain(v, youngestFirst = true)
     result
 
 object PackedCubicalCohomologyEngine:

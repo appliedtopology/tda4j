@@ -129,7 +129,8 @@ open class FastCubicalHomologyEngine[CoefficientT: Field]:
     // its lower corner, then along each axis take the minimum with the lower neighbour -- along every axis for a
     // vertex, every axis but `axis` for an edge.
     def embedded(): Array[Int] =
-      val a = Array.fill(numVertices)(Int.MaxValue)
+      val a = new Array[Int](numVertices)
+      java.util.Arrays.fill(a, Int.MaxValue)
       val pstride = GridRanks.strides(shape)
       val rowLength = shape(d - 1)
       val rows = grid.size / rowLength
@@ -257,10 +258,12 @@ open class FastCubicalHomologyEngine[CoefficientT: Field]:
       val r0 = find(upper)
       val r1 = find(lower)
       if r0 != r1 then
-        val (youngRoot, oldRoot) =
-          if distinct(vertexRank(r0)) <= distinct(vertexRank(r1)) then (r1, r0) else (r0, r1)
+        val upperIsOlder = distinct(vertexRank(r0)) <= distinct(vertexRank(r1))
+        val youngRoot = if upperIsOlder then r1 else r0
+        val oldRoot = if upperIsOlder then r0 else r1
         parent(youngRoot) = oldRoot
-        val (birth, death) = (distinct(vertexRank(youngRoot)), distinct(rank))
+        val birth = distinct(vertexRank(youngRoot))
+        val death = distinct(rank)
         if includeZeroLength || birth != death then
           bars += new PersistenceBar(
             0,
@@ -403,6 +406,9 @@ open class FastCubicalHomologyEngine[CoefficientT: Field]:
     val coefficientBox = Array.tabulate(5)(i => if i == 2 then null else field(i - 2).asInstanceOf[AnyRef])
     val keepCoefficient = Array.tabulate(5)(i => i != 2 && !fr.isEqual(field(i - 2), fr.zero))
     val sums = FacetSums()
+    // Reused from one region to the next: a region's facets before they cancel (interior ones included), which is
+    // several times the boundary that is kept.
+    var sortedScratch = new Array[Long](1024)
     def regionBoundary(uf: UnitSignedUnionFind, root: Int, flip: Int): Chain[Cube, CoefficientT] =
       uf.foreachMember(root) { (id, sign) =>
         val c = flip * sign
@@ -423,7 +429,9 @@ open class FastCubicalHomologyEngine[CoefficientT: Field]:
         case Some(decoder) =>
           // Key in the high half, sum in the low: sorted by key, which is the cubes' order (`cubeOrdering` is the
           // doubled grid's row-major order).
-          val sorted = new Array[Long](sums.size)
+          if sortedScratch.length < sums.size then
+            sortedScratch = new Array[Long](math.max(sums.size, 2 * sortedScratch.length))
+          val sorted = sortedScratch
           var count = 0
           var j = 0
           while j < sums.size do
@@ -476,9 +484,8 @@ open class FastCubicalHomologyEngine[CoefficientT: Field]:
       val axis = (code / 3) % d
       val p = code / 3 / d
       // `a` and `b` as the facet lists them: the lower pixel first, `∞` last.
-      val (a, b) = side match
-        case 0 => (p - pstride(axis), p)
-        case _ => (p, infinityId)
+      val a = if side == 0 then p - pstride(axis) else p
+      val b = if side == 0 then p else infinityId
       val v = if rank == masked then Double.NaN else distinct(rank)
       val ra = uf.find(a)
       val rb = uf.find(b)
@@ -486,13 +493,16 @@ open class FastCubicalHomologyEngine[CoefficientT: Field]:
         // `infinityId` is the unconditional elder of any merge it takes part in, and a masked component of any merge
         // with a real one: a real top cell can also have the value +Infinity and tie against either, so they are
         // special-cased rather than left to the birth comparison.
-        val (sa, sb) = (seniority(ra), seniority(rb))
-        val (youngRoot, oldRoot) =
-          if sa != sb then if sa < sb then (ra, rb) else (rb, ra)
-          else if sa == 1 then (ra, rb) // two masked regions, both there from the start: the facet's lower side dies
-          else if birthOf(ra) <= birthOf(rb) then (ra, rb)
-          else (rb, ra)
-        val (youngTopId, oldTopId) = if youngRoot == ra then (a, b) else (b, a)
+        val sa = seniority(ra)
+        val sb = seniority(rb)
+        val aIsYounger =
+          if sa != sb then sa < sb
+          else if sa == 1 then true // two masked regions, both there from the start: the facet's lower side dies
+          else birthOf(ra) <= birthOf(rb)
+        val youngRoot = if aIsYounger then ra else rb
+        val oldRoot = if aIsYounger then rb else ra
+        val youngTopId = if aIsYounger then a else b
+        val oldTopId = if aIsYounger then b else a
         require(youngTopId != infinityId, "an engine bug: the infinity dual vertex was treated as the younger side")
         // The coefficient of the facet in `top`'s boundary: the facet is `top`'s upper face if `top` lies below it.
         def coeffToward(top: Int): Int =
