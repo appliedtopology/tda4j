@@ -45,9 +45,9 @@ Useful options of `run`:
 | `--timeout S` | seconds per computation; a timeout is recorded, not dropped |
 | `--rerun-timeouts` | a computation that timed out at one field is not run at the next (its time does not depend on the field; `--fields 2,17` would cost the timeout twice) and is recorded as timed out; this runs it anyway |
 | `--warm-cap S` | if one cold computation takes longer than this (default 60 s), the warm run reuses it instead of repeating |
-| `--jvm-heap 32g` | `-Xmx` and `-Xms` for TDA4j and JavaPlex, with `-XX:+UseParallelGC` (one policy for this script and `sweep-cubical`). fractal-r needs about 12g; clifford50000 more |
+| `--jvm-heap 32g` | `-Xmx` for TDA4j and JavaPlex. The JVMs use the serial collector with a heap that follows the live data (10-20 % free) up to this size, so peak RSS is close to what a computation needs and comparable with the native tools (one policy for this script, `sweep-cubical`, `sweep-alpha` and `count-cells`). fractal-r needs about 12g; clifford50000 more |
 | `--jvm-opts "-Xss8m"` | more JVM options |
-| `--jvm-compact` | the memory policy, for comparing memory with the native tools: the serial collector with a heap that follows the live data (up to `--jvm-heap`) instead of a pinned one. With the default policy a JVM's RSS is what it allocated until the first collection (a 16g heap never collects a 3 GB run), which is not what the computation needs; its times are the serial collector's, so take times from the default policy. `sweep-cubical` takes it too |
+| `--jvm-fixed-heap` | `-Xmx` = `-Xms` with the parallel collector instead. RSS is then what a run allocated until the first collection (a 16g heap never collects a 3 GB run), not what it needs, and the trials of a warm run add up in it. `sweep-cubical`, `sweep-alpha` and `count-cells` take it too; `sweep-threads` always uses it, because its multithreaded JVM tools allocate on every thread and a serial collector would collect their garbage on one |
 | `--node-heap 32g` | `--max-old-space-size` for the `tda4j-js` tools, in the same notation (default: `--jvm-heap`). Node's own default is a few GB, far below what the large cases need |
 | `--node-opts "--stack-size=4000"` | more options for node |
 

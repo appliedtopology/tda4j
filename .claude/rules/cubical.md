@@ -100,6 +100,7 @@ coefficients ±1, so it is pushed straight from the cell's coboundary or boundar
 `seedOfDeath`) are dense `Int` arrays (a cell is the birth or the death of one row, never both), `Rows` is allocated at
 its upper bound, reduction logs are primitive arrays (`Log`). In a hot loop: no tuple, no `Array.fill(n)(v)` or
 `for x <- arrayOfLongs` (both box), no `Option` from a map (`getOrNull`); a JFR allocation profile
-(`jdk.ObjectAllocationSample`) finds each. **A JVM's RSS under the bench's pinned heap is allocation until the first
-collection, not need** (the sweep's warm run is several computations in one JVM): compare memory with
-`--jvm-compact`, and quote the heap a run needs (`-Xmx` where it still runs at its speed), not RSS alone.
+(`jdk.ObjectAllocationSample`) finds each. **A JVM's RSS under a pinned heap (`--jvm-fixed-heap`) is allocation until the first
+collection, not need** (the sweep's warm run is several computations in one JVM): the bench's default is the compact
+policy (serial collector, heap following the live data), the one to compare memory with; quote the heap a run needs
+(`-Xmx` where it still runs at its speed), not RSS alone.

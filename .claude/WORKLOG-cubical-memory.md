@@ -154,3 +154,28 @@ F₅ on the 40³, 48³, 96³ and 600² images (16 pairs, all identical).
 - Aggregating JFR by class and source line (the first tda4j frame of `--stack-depth 6`) found every item above in one
   pass; read the line, not the method.
 - A/B at one policy, baseline classes with the new driver (the driver changes alter RSS in warm runs).
+
+## Follow-up (2026-10-24, later the same day): the compact policy is the benchmarks' default
+
+Mikael's decision, on the numbers above: peak RSS under the pinned heap said nothing about need, so `bench/` now runs every
+JVM tool with the compact policy (serial collector, `MinHeapFreeRatio=10`, `MaxHeapFreeRatio=20`, no `-Xms`), and the
+flag is the other way round: **`--jvm-fixed-heap`** (the old `-Xmx = -Xms` with the parallel collector) on `bench.py run`,
+`sweep-cubical`, `sweep-alpha` and `count-cells`. `sweep-threads` sets it itself: its multithreaded tools allocate on every
+thread and a serial collector would collect that garbage on one (a reasoned exception, not measured). The README said to
+take times from the pinned policy; that needed checking before the default moved, and the check says the compact
+policy's times are not worse (4 cores, 15 GB, one JVM per row, warm-up then trials, the final classes, `-Xmx16g`):
+
+| case | policy | trial times (s) | RSS MB |
+|---|---|---|---|
+| Rips, sphere3_96, dim 2 (2.4M cells), warm-up 1, 3 trials | pinned, parallel | 0.63 0.91 1.59 / 0.69 0.93 1.60 | 813 / 816 |
+| | compact, serial | 0.72 0.53 0.56 / 0.78 0.54 0.49 | 217 / 203 |
+| Rips, random16, dim 5 (4.7M cells), 2 cold trials | pinned, parallel | 9.6 14.2 / 13.4 16.3 | 2807 / 2893 |
+| | compact, serial | 6.6 5.2 / 6.9 6.7 | 326 / 320 |
+
+(Two runs of each policy, shown after the slash.) The pinned policy's trials get slower within a JVM (a young generation
+of ~5 GB that is filled for the first time, which I suspect is first-touch page cost but did not isolate); the compact
+one's do not. So on these cases and on the cubical images above (128³ 37.8 against 39.3 s, 2048² 8.0 against 10.6 s) the
+compact policy is as fast or faster. Not measured: a live set of several GB (o3_4096, fractal-r), where the parallel
+collector's threads may pay off, and a machine with more than 4 cores; `--jvm-fixed-heap` is the way to check.
+A first attempt at this check used o3_1024 without a threshold (dimension 2 up to the enclosing radius): both JVMs were
+killed at 13.6 GB after 4 minutes, which says nothing about either policy.

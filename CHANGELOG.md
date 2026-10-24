@@ -296,10 +296,12 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Build, CI and Documentation
 
-- `bench/run.sh run` and `sweep-cubical` take `--jvm-compact`: the serial collector with a heap that follows the live
-  data, for comparing memory with the native tools (with the default pinned heap a JVM's RSS is what it allocated until
-  its first collection). `PaperBenchmarkDriver` takes `digest=true` for a term-for-term comparison of two builds on an
-  image, and no longer keeps the previous run's results alive during the next (#56).
+- The benchmark harness's JVMs run the serial collector with a heap that follows the live data (up to `--jvm-heap`)
+  instead of a pinned heap with the parallel collector, so peak RSS says what a computation needs and compares with the
+  native tools (with a pinned heap a JVM's RSS is what it allocated until its first collection). `--jvm-fixed-heap`
+  restores the pinned heap; `sweep-threads` keeps it for its multithreaded tools. `PaperBenchmarkDriver` takes
+  `digest=true` for a term-for-term comparison of two builds on an image, and no longer keeps the previous run's results
+  alive during the next (#56).
 - The plotting guide has a section on PNG and PDF: the commands for `cairosvg`, Chromium, Inkscape (text as outlines) and
   `rsvg-convert` that turn a saved `.svg` into either, with the resolution and the font caveats (#101).
 - The logo, favicons, header icons and docs theme colors are teal and gold. The docs site has a dark-mode favicon

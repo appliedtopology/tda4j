@@ -52,10 +52,9 @@ def main():
     ap.add_argument("--trials", type=int, default=3)
     ap.add_argument("--timeout", type=float, default=1800)
     ap.add_argument("--jvm-heap", default="16g")
-    ap.add_argument("--jvm-compact", action="store_true",
-                    help="the memory policy for the JVM engines: serial collector, heap following the live data up to "
-                         "--jvm-heap, so that peak RSS says what a computation needs (its times are not the default "
-                         "policy's)")
+    ap.add_argument("--jvm-fixed-heap", action="store_true",
+                    help="-Xmx = -Xms with the parallel collector instead of the default serial collector with a heap "
+                         "that follows the live data (peak RSS then shows what a run allocated, not what it needs)")
     ap.add_argument("--node-heap", default="", help="heap of the js-* engines, in the JVM's notation (default: --jvm-heap)")
     ap.add_argument("--no-js", action="store_true", help="skip the Scala.js build of TDA4j")
     ap.add_argument("--out", default="")
@@ -105,7 +104,7 @@ def main():
                                         f"warmup={warmup}", f"trials={trials}"]
                         for lab, engine, reps, dims, cap in ENGINES:
                             if lab == label:
-                                return (["java"] + bench.jvm_flags(args.jvm_heap, compact=args.jvm_compact) +
+                                return (["java"] + bench.jvm_flags(args.jvm_heap, fixed_heap=args.jvm_fixed_heap) +
                                         ["-cp", cp, "org.appliedtopology.tda4j.PaperBenchmarkDriver", "task=cubical",
                                          f"input={path}", f"dim={d - 1}", "p=2", f"engine={engine}", f"reps={reps}",
                                          f"warmup={warmup}", f"trials={trials}"])
