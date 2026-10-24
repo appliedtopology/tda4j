@@ -83,6 +83,9 @@ pixels to `persistenceFromImage`.
   default browser from Node.js; there is no viewer server.
 - **Speed.** The engines run at their usual pace on a few thousand simplices; programs that work with hundreds of
   millions of simplices belong on the JVM, where the engines were tuned and memory is not limited by the browser.
+- **Printed numbers.** A number prints the JavaScript way: `1.0` as `1`, `1.0E-7` as `1e-7`, where the JVM prints `1.0`
+  and `1.0E-7`. The command line, `Show`, the file writers and saved results are affected; every text reads back to the
+  same number on both platforms, but a file written on one is not byte-identical to the other's.
 - **Floating point.** Sums and square roots are the same IEEE operations as on the JVM, but `Math.pow` and friends are
   the JavaScript engine's own, so a value computed through them can differ in the last digit.
 

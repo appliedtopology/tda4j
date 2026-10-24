@@ -158,17 +158,21 @@ open class RecursiveStackVietorisRipsSimplexStream(val metricSpace: FiniteMetric
   * minimum enclosing radius (beyond it nothing new is born); pass `Double.PositiveInfinity` for the whole complex.
   *
   * The constructions ([[Implementation]]) give the same complex, cell for cell, at different speeds;
-  * [[Implementation.Enumerating]] is the default.
+  * [[Implementation.RipserCoface]] is the default.
   */
 object VietorisRips extends PointCloudComplex:
   def fromPoints(points: PointCloud, maxDimension: Int, maxFiltrationValue: Option[Double]) =
     apply(points.metricSpace, maxDimension, maxFiltrationValue)
 
   enum Implementation:
-    /** Breadth-first coface enumeration; the default. */
+    /** Breadth-first coface enumeration: tests every vertex set of each dimension. The slowest construction, and the
+      * reference the others are checked against.
+      */
     case Enumerating
 
-    /** Ripser's coface order, via its combinatorial number system indexing. */
+    /** Ripser's coface order, via its combinatorial number system indexing, building each dimension as arrays; the
+      * default.
+      */
     case RipserCoface
 
     /** Each dimension generated from the one below already in filtration order ([[LayeredInorderSimplexStream]]). */
@@ -181,7 +185,7 @@ object VietorisRips extends PointCloudComplex:
     metricSpace: FiniteMetricSpace[Int],
     maxDimension: Int = 2,
     maxFiltrationValue: Optional[Double] = Optional.empty,
-    implementation: Implementation = Implementation.Enumerating
+    implementation: Implementation = Implementation.RipserCoface
   ): LevelwiseSimplexStream[Int, Double] =
     require(maxDimension >= 0, s"maxDimension must be >= 0, got $maxDimension")
     val topSimplexDimension = maxDimension + 1
