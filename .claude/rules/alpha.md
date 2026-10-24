@@ -83,7 +83,7 @@ triangulates). The facade passes no `Epsilon`: alpha uses `AlphaShapes`' default
 radius and takes either triangulation. Measurements: `WORKLOG-helix-construction-speed.md`.
 **Without a radius** the verb (`AlphaShapes.fromPoints` -> `upToEnclosingRadius`) cuts the triangulation (BowyerWatson/Helix, NEVER
 `Default`, which picks DQP for any radius at d >= 6) at `minimumEnclosingRadius`: the union of balls is contractible past it, so the barcode is
-unchanged (`PersistenceVerbSpec`). `AlphaShapes(points)` and the facade's `complex=alpha` stay whole (tutorial count 325, #215).
+unchanged (`PersistenceVerbSpec`); the facade's `complex=alpha` does the same except `engine=fast-alpha` (tutorial count 313; `Infinity` gives the 325 of `AlphaShapes(points)`, `MatlabTabsSpec`). #215.
 `WORKLOG-enclosing-radius.md`.
 
 **One root mechanism (near-cospherical clusters, order-dependent facet-pivot choices) produces two DIFFERENT

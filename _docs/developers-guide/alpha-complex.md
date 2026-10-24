@@ -31,8 +31,8 @@ BowyerWatson about `b_d (n/1000)^0.2`, Helix in 5-D about `150 (n/1000)^0.4`; in
 whenever a radius is given). `AlphaShapes.fromPoints` (the `Persistence` verb) and the MATLAB/CLI `maxFiltrationValue`
 pass the radius through. Without one the verb calls `AlphaShapes.upToEnclosingRadius`: the triangulation (`BowyerWatson`
 or `Helix`; `Default` would pick DQP for any radius in 6 or more dimensions) cut at `metricSpace.minimumEnclosingRadius`,
-past which the union of balls is contractible. The MATLAB/CLI `complex=alpha` without a radius still builds the whole
-complex, and `engine=fast-alpha` needs a whole triangulation and refuses a radius. The facade's `alphaBackend`
+past which the union of balls is contractible; the MATLAB/CLI `complex=alpha` does the same. `maxFiltrationValue =
+Infinity` gives the whole complex, and `engine=fast-alpha` needs a whole triangulation and refuses a radius. The facade's `alphaBackend`
 string goes through `AlphaBackend.parse` (default `default`). All backends extend the common `AlphaShapes` abstract
 class, so they are interchangeable for any code consuming the stream: `AlphaComplexSpec` runs identical property
 checks against both, and `AlphaDispatchSpec` checks that the radius-limited complexes and the verb's bars agree.

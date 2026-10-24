@@ -44,8 +44,10 @@ change: 4.5-4.9 s to the radius against 5.5-6.0 s with `maxFiltrationValue = Inf
 not one engine per JVM; the direction was the same in both warm trials. The old code did the 2.8 s scan on top of the
 unbounded run.
 
-## Not done
+## Afterwards
 
-- MATLAB/CLI `complex=alpha` still builds the whole complex: the tutorial table counts 325 simplices there and in the Scala tab
-  (`AlphaShapes(points)`), and 313 once cut (`MatlabTabsSpec`). #215 asks Mikael which way to go.
+- (Done after Mikael's answer on #215: change it and note it in the tutorial.) The MATLAB/CLI `complex=alpha` first stayed whole
+  because the tutorial table counted 325 simplices on both tabs (`AlphaShapes(points)`), 313 once cut. It now runs
+  `AlphaShapes.upToEnclosingRadius` for every engine but `fast-alpha`; the tutorial counts 313 on both tabs and says that
+  `Infinity` gives the 325 (`MatlabTabsSpec` pins both).
 - `Input.scale` stays an eager `Some(...)` per diagram: the scan is milliseconds now, so it is not worth a by-name parameter.

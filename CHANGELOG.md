@@ -200,9 +200,10 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   when no `maxFiltrationValue` is given, as the Vietoris-Rips and Čech complexes already did. The diagram is the same
   (past that radius the union of balls is contractible); the long thin simplices along the hull of the triangulation
   are not built.
-  `AlphaShapes.upToEnclosingRadius(points)` is that stream; `AlphaShapes(points)` and the MATLAB and CLI
-  `complex=alpha` still build the whole complex (#215). Pass `maxFiltrationValue = Double.PositiveInfinity` for the
-  whole complex.
+  `AlphaShapes.upToEnclosingRadius(points)` is that stream; `AlphaShapes(points)` is still the whole complex. The
+  MATLAB and CLI `complex=alpha` do the same (`engine=fast-alpha` still takes the whole triangulation): the bars are
+  unchanged, `numCells` is smaller (313 instead of 325 on the tutorial's noisy circle). Pass `maxFiltrationValue =
+  Double.PositiveInfinity` (MATLAB and CLI: `Infinity`) for the whole complex (#215).
 - `FiniteMetricSpace.minimumEnclosingRadius` (the default radius of every point-cloud computation, and the scale of
   `significant()`) is found without allocating, giving up on a point as soon as it cannot beat the best so far: 2.8 s
   to 2 ms for 10,000 points in 3-space (#209). A `EuclideanMetricSpace` works on squared distances and no longer fills
