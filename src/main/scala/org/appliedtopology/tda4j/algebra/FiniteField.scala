@@ -77,6 +77,8 @@ open class FiniteField(val p: Int):
       val Fp(xv) = norm(x)
       val Fp(yv) = norm(y)
       xv == yv
+    // The residue in 0 until p: `isEqual` holds exactly when two elements have the same residue, however written.
+    override def hash(x: Fp): Int = x.toUInt
     def zero: Fp = Fp(0)
     def one: Fp = Fp(1)
 

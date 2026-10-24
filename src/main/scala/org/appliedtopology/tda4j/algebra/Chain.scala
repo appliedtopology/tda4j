@@ -6,6 +6,7 @@ import cats.syntax.show.showInterpolator
 import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.compiletime.asMatchable
+import scala.util.hashing.MurmurHash3
 
 /*
 The library's own Chain storages: a HeapChain (a heap with arithmetic deferred), and a PackedChain (arrays of cell keys
@@ -75,8 +76,7 @@ abstract into class Chain[CellT: Ordering as order, CoefficientT: Field as field
 
   /** Equality as formal sums: every cell has the same coefficient in both, by the field's own equality (a field element
     * can have several representations), whatever the order or the storage. Collapses both. Assumes `obj` has the same
-    * cell and coefficient types (only `Chain` is checked at runtime). Not consistent with `hashCode`: do not use chains
-    * as keys of a hash set or map.
+    * cell and coefficient types (only `Chain` is checked at runtime). Consistent with [[hashCode]].
     */
   override def equals(obj: Any): Boolean = obj.asMatchable match
     case other: Chain[CellT, CoefficientT] @unchecked =>
@@ -87,6 +87,15 @@ abstract into class Chain[CellT: Ordering as order, CoefficientT: Field as field
         mine.forall((cell, x) => byCell.get(cell).exists(field.isEqual(x, _)))
       }
     case _ => false
+
+  /** Consistent with [[equals]], so chains can be keys of a hash set or map: it hashes each cell with a nonzero
+    * coefficient together with the field's [[Field.hash]] of that coefficient, blind to the order and the storage.
+    * Collapses the chain, as `equals` does. Over a field that compares within a tolerance
+    * ([[Field.DoubleApproximated]]) only the cells are hashed; a field of your own that keeps the default
+    * [[Field.hash]] is hashed by its cells too.
+    */
+  override def hashCode: Int =
+    MurmurHash3.unorderedHash(terms.iterator.map((cell, x) => Chain.termHash(cell.##, field.hash(x))), Chain.hashSeed)
 
   override def toString: String =
     val it = entryIterator
@@ -182,6 +191,11 @@ final class PackedChain[CellT, CoefficientT](
     else (Some(decoder(keys(0))), coefficients(0).asInstanceOf[CoefficientT])
 
 object Chain:
+  // The seed of a chain's hash, and the hash of one term from its cell's hash and its coefficient's.
+  private val hashSeed: Int = "Chain".hashCode
+  private def termHash(cellHash: Int, coefficientHash: Int): Int =
+    MurmurHash3.finalizeHash(MurmurHash3.mix(MurmurHash3.mix(hashSeed, cellHash), coefficientHash), 2)
+
   /** `c.show` for a chain whose cells have a `Show`: its terms, each cell once with its nonzero coefficient, in the
     * chain's order (`"1 ⊠ ∆(0,1) + -1 ⊠ ∆(1,2)"`; the zero chain is `"0"`). Coefficients are shown by their field.
     */

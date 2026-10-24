@@ -66,4 +66,43 @@ class ChainStorageSpec extends Specification:
         (empty == Chain.empty[Simplex[Int], f3.Fp] must beTrue) and
         (empty.leadingTerm must beEqualTo((None, f3.Fp(0))))
     }
+
+    "hash as the library's chains with the same sum, so that they collapse in a Set" in {
+      val f3 = FiniteField(3)
+      import f3.given
+      type C3 = Chain[Int, f3.Fp]
+      object IntCells extends CellDecoder[Int]:
+        def apply(key: Int): Int = key
+      val rng = Random(11)
+      val problems = (0 until 80).flatMap { trial =>
+        // The sum: distinct cells with the residue 1 or 2 as coefficient.
+        val sum = rng.shuffle((0 until 12).toList).take(1 + rng.nextInt(8)).map(cell => (cell, 1 + rng.nextInt(2)))
+        val library: C3 = Chain.from(sum.map((cell, r) => (cell, f3.Fp(r))))
+        // Written another way: the residue r as r - 3 (Fp(-2) is Fp(1)), one cell split in two entries (r = (r + 1) + 2),
+        // and a cell that cancels (1 + 2 = 0).
+        val (split, others) = (sum.head, sum.tail)
+        val entries = rng.shuffle(
+          others.map((cell, r) => (cell, f3.Fp(r - 3))) ++
+            List((split._1, f3.Fp(split._2 + 1 - 3)), (split._1, f3.Fp(2 - 3)), (12, f3.Fp(1)), (12, f3.Fp(2)))
+        )
+        val user: C3 = ListChain(entries)
+        val packed: C3 =
+          val sorted = sum.sortBy(_._1)
+          Chain.packed[Int, f3.Fp](
+            sorted.map(_._1).toArray,
+            sorted.map((_, r) => f3.Fp(r - 3).asInstanceOf[AnyRef]).toArray,
+            IntCells
+          )
+        // Not a requirement, which constrains equal chains only: the coefficients are hashed.
+        val changed: C3 = Chain.from(sum.map((cell, r) => (cell, f3.Fp(if cell == split._1 then 3 - r else r))))
+        Seq(
+          "the same sum" -> (user == library && packed == library),
+          "hash codes" -> (user.## == library.## && packed.## == library.## && library.## == library.##),
+          "one element of a Set" -> (Set(library, user, packed).size == 1),
+          "a key of a Map" -> (Map(library -> trial).get(user).contains(trial)),
+          "another coefficient" -> (changed != library && changed.## != library.##)
+        ).collect { case (name, false) => s"trial $trial: $name" }
+      }
+      problems.take(5) must beEmpty
+    }
   }

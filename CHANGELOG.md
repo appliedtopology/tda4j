@@ -49,6 +49,9 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Added
 
+- `Field.hash(x)`: a hash of a field element that agrees with `isEqual`, which `Chain.hashCode` uses. The default, `0`
+  for every element, is right for any field; override it for an exact field of your own to hash its coefficients too
+  (`Fp` hashes its residue in `0 until p`).
 - `--plot barcode,diagram` draws a comma list of 2-D plots on one board, in a row or on `--layout RxC` (row by row; `--width`
   and `--height` size the drawing); `--tagged` letters the panels and `--title` titles the board, the other look flags apply
   to every panel (#105). A 3-D plot stays on its own.
@@ -270,6 +273,10 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Fixed
 
+- `Chain.hashCode` agrees with `Chain.equals` (#58). Chains were equal as formal sums but hashed by identity, so a
+  `Set` of chains held two equal ones and a `Map` keyed by chains missed a present key. Equal chains now hash alike
+  whatever their storage, order, deferred entries or spelling of an `Fp` coefficient; over the reals, which compare within
+  a tolerance, the hash covers the cells only.
 - `Numbers.locale("ar")`, `"fa"` and the other locales that write their own digits (Burmese, Bengali, Nepali,
   Marathi, ...) take their separators for the digits 0 to 9 the plot writes; `ar` gave the Arabic decimal separator `٫`
   between Latin digits. On Scala.js the invisible direction mark that `Intl.NumberFormat` puts before a minus sign is

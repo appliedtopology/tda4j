@@ -141,13 +141,7 @@ dies with an `InvalidPathException`. `∆` is therefore a `val` alias of
 `Simplex`'s companion, not an object of its own. Unicode extension methods and
 `val`s are fine.
 
-## 11. `Chain` equality has no matching `hashCode`
-
-Two chains are equal when they are the same formal sum: the same cells, with
-coefficients equal by the field's `isEqual`, in any order. `hashCode` is not
-consistent with this. Never use a `Chain` as a key of a `Set` or `Map`.
-
-## 12. Sign errors hide: test over a signed field, and mutate signs unevenly
+## 11. Sign errors hide: test over a signed field, and mutate signs unevenly
 
 Over `F_2` every sign is `+1`, so a sign error cannot change any answer. Test
 boundaries, representatives and reductions over `F_3` or another odd prime as
