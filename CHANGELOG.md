@@ -196,6 +196,10 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Changed
 
+- `PackedRipserCohomologyEngine` pairs a column with its oldest cofacet of the same diameter without reducing it when no
+  earlier column has that cofacet as its pivot (Bauer's emergent pairs, #57). The bars, pairs and representatives are
+  those of the run without it (`useEmergentPairs = false`, a new last constructor parameter). On the Ripser paper's
+  data sets it saves up to 4 % of the time and, where many columns are stored (`o3_4096`), 22 % of the live heap.
 - `VietorisRips(...)` builds `Implementation.RipserCoface` by default (was `Enumerating`, which tests every vertex set of
   a dimension and is now the slowest choice). The complex is the same, cell for cell and in order; it is built as
   arrays, which the cohomology engine reduces without a `Simplex` per cell. `keepCriterion` and `filtrationValueOverride`

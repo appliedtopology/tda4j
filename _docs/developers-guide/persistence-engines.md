@@ -140,7 +140,11 @@ distance stored) rather than by trying every vertex; the lists give the same cof
 bookkeeping is kept in primitive arrays (each degree's simplices, the pairing, the cleared indices), and a
 `PersistenceBar` is built only for a bar that is returned; in the involution, an apparent pair's boundary column is
 rebuilt from its death simplex when needed rather than stored. A stored reduced column keeps its pivot first and the
-remaining terms uncombined. Cocycles (the V-columns) are recorded as a reduction log per column and expanded only
+remaining terms uncombined. An emergent pair (Bauer's Definition 3.11) is a column whose oldest cofacet of the same
+diameter is the pivot of no earlier column (no stored column, no emergent pair, and not the apparent partner of that
+cofacet's youngest facet): its coboundary is reduced as it stands, so the engine pairs it at once without putting its
+cofacets on the working column, and keeps only the simplex, from which the column is rebuilt in the rare case that a
+later column needs it. `useEmergentPairs = false` turns the shortcut off; no output changes. Cocycles (the V-columns) are recorded as a reduction log per column and expanded only
 for the bars that are reported, so `persistentCohomology()` builds none for zero-length bars and
 `persistentHomology()` builds none at all. Cycles come from the engine's own specialization of `Involution.cycles`
 on the same heap, which returns exactly what the generic involution returns. The heap relies on a simplex having
@@ -150,6 +154,7 @@ one diameter: a metric that is not symmetric by construction (anything but `Eucl
 **Counters.** Engines 3 and 4 report what their last run did:
 - `apparentPairCount`, the simplices paired as apparent pairs with no reduction
   of their coboundary;
+- `emergentPairCount` (engine 4 only), the simplices paired as emergent pairs;
 - `substitutionCount`, how often another column needed an apparent pair's
   column as a pivot and had it rebuilt;
 - `totalSimplexCount`, the simplices the run assembled over all dimensions.
