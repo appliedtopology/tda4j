@@ -20,26 +20,20 @@ coface streams have none; use `VietorisRips` (`DESIGN-stream-naming.md`, `WORKLO
 1. **Naive** (`CellularHomologyEngine`/`SimplicialHomologyEngine`) — single-pivot-table reduction, no clearing; the
    reference baseline. Incremental (`advanceOne`/`advanceTo`/`advanceAll`); a raw-UnionFind fast path was measured and
    rejected.
-   `persistentHomology(stream, k)` CAPS it at degree `k` (the verb does): cells above dimension `k + 1` are not read, and a
-   `k + 1` cell keeps only the pairing it makes and is not reduced while no class of degree `k` is open (its boundary
-   would reduce to zero; its faces must still have been seen). The verb and
-   `PersistenceEngine.naive`/`naiveCocycles` (MATLAB, CLI) cap at the stream's `homologyDegreeLimit`. The uncapped cursor
-   stays the reference. Cells are compared by rank (`CellRanks`, below; `WORKLOG-chunks-top-cells.md`,
-   `WORKLOG-naive-cap-review-2026-10-15.md`; `NaiveCappedSpec`).
+   `persistentHomology(stream, k)` CAPS it at degree `k` (the verb, `PersistenceEngine.naive`/`naiveCocycles` too, at the
+   stream's `homologyDegreeLimit`): cells above dimension `k + 1` are not read, and a `k + 1` cell keeps only the pairing
+   it makes and is not reduced while no class of degree `k` is open. The uncapped cursor stays the reference. Cells are
+   compared by rank (`CellRanks`, below; `WORKLOG-naive-cap-review-2026-10-15.md`; `NaiveCappedSpec`).
 2. **Chunks** (`CellularPersistenceInChunksEngine`) — clear-and-compress chunked algorithm, walks `0..maxDim+1`,
-   filters essentials to `<=maxDim`. Dims 0/1 via raw union-find (`unionFindDim01`, `DESIGN-unionfind-in-chunks.md`): an
-   edge zero in the field closes a cycle, its own representative; an edge not `c·(v-u)` (`edgeShape` Irregular) hands
-   dims 0/1 to the general reduction. Degree-1 representatives (tree paths) are built on `barcodeAt`'s first request
+   filters essentials to `<=maxDim`. Dims 0/1 via raw union-find (`unionFindDim01`, `DESIGN-unionfind-in-chunks.md`): a
+   zero edge closes a cycle; an edge not `c·(v-u)` (`edgeShape` Irregular) hands dims 0/1 to the general reduction
    (`WORKLOG-union-find-robustness.md`). `barcodeAt` via memoized `vcolOf` (a second full naive engine was **rejected by
    the project lead**, don't revive: `WORKLOG-chunks-representatives-incremental.md`). Invariants: a paired cell never
-   becomes a pivot; `compress` runs to a fixpoint; a reconciliation step resolves "in limbo" cells first
-   (`WORKLOG-benchmark-and-chunks-bug.md`, `WORKLOG-chunks-pairing-bug.md`). A parallel redesign was invalidated
-   (`WORKLOG-parallelization-survey.md`). `advanceAll` runs the reduction ONCE (`advanced`). At `maxDimension = 1` the triangles
-   go in filtration order against a count of open degree-1 classes (`reduceTrianglesInOrder`) and one entering while none
-   is open is skipped, as in the capped naive engine; from `maxDimension = 2` every top cell is still reduced (#91).
-   Cells are compared by RANK (`CellRanks`, shared with naive: the stream's cells sorted once, looked up by identity, the
-   stream's ordering for any other object); a cell fresh from `boundary` goes through `boundaryChain` (`canonical`). Ranks exist only if EVERY cell has a filtration value
-   (`ranked`; #88), else the stream keeps its own ordering. `WORKLOG-chunks-top-cells.md`.
+   becomes a pivot; `compress` runs to a fixpoint; "in limbo" cells are resolved first (`WORKLOG-chunks-pairing-bug.md`).
+   `advanceAll` runs the reduction ONCE. At `maxDimension = 1` triangles go in filtration order against a count of open
+   degree-1 classes (`reduceTrianglesInOrder`) and one entering while none is open is skipped; from 2 every top cell is
+   reduced (#91). Cells are compared by RANK (`CellRanks`, shared with naive), only if EVERY cell has a filtration value
+   (`ranked`; #88); a fresh cell from `boundary` goes through `boundaryChain`. `WORKLOG-chunks-top-cells.md`.
 3. **`RipserCohomologyEngine`** — Bauer's Ripser (arXiv:1908.02518) on `Simplex[Int]` VR, one-shot. **Test/
    reference oracle only** — production uses `PackedRipserCohomologyEngine`. Clearing required for correctness;
    apparent pairs with lazy substitution; no emergent pairs (Def 3.11, only in engine 4); `memoizeFiltrationValue`
@@ -54,16 +48,17 @@ coface streams have none; use `VietorisRips` (`DESIGN-stream-naming.md`, `WORKLO
    tree (`ChainPackedRipserReference`) term for term, essentials included (`PackedWorkingColumnSpec`): re-run it after any
    change to the reduction (`WORKLOG-vr-working-column.md`). The heap needs ONE diameter per simplex: non-trusted metrics
    are read as `d(max, min)` (else an asymmetric one grows the column until OOM); Euclidean/Explicit are read as given
-   (canonicalizing breaks the distance cache's row-wise walk). Edge-block units on threads are exact (#192, #194,
-   `WORKLOG-layered-inorder.md`); `Engine.ParallelRipser` runs them from the verb (Mikael, 2026-10-24): `Auto` picks it over
-   `Ripser` when `Parallel.threads > 1` and it applies (prime <= 46,000, no `includeZeroLength`, < 46,341 points); its
-   representatives are `LazyChain`s over the engine's reduction logs (cocycles) or one `Involution` pass (cycles), so they
-   may differ from `Ripser`'s in ties; JVM only (`ParallelRipser` seam). Check pivots/orders with `Ordering.Long`
+   (canonicalizing breaks the distance cache's row-wise walk). Edge-block units on threads are exact (#192, #194);
+   `Engine.ParallelRipser` runs them from the verb: `Auto` picks it over `Ripser` when
+   `Parallel.threads > 1` and it applies (prime <= 46,000, no `includeZeroLength`, < 46,341 points); the MATLAB facade and CLI do
+   the same for an unset `engine` (`engine=ripser` stays Ripser, `parallel-ripser` asks); `Persistence(threads = n)`/`threads`/
+   `--threads` run under `Parallel.withThreads`. Its representatives are `LazyChain`s (cocycles from the logs; cycles from one
+   parallel `Involution` pass), so they may differ from `Ripser`'s in ties; JVM only. Check pivots/orders with `Ordering.Long`
    explicitly where the chains' reversed `given` is in scope (`WORKLOG-parallelism.md`). Under a sparse threshold cofacets come from per-vertex
    NEIGHBOUR LISTS (`NeighbourLists`) in the all-vertex scan's order with bit-identical diameters (`NeighbourListsSpec`).
    A uniform sign flip of every coboundary changes no output: sign mutations must be non-uniform. Per-simplex state is
-   PRIMITIVE (`Level`, `Pairing` rows, `ClearedSet`, `LongIntMap`; `WORKLOG-packed-engine-memory.md`); apparent pairs'
-   involution columns are rebuilt, not stored. Never reintroduce a per-pair object.
+   PRIMITIVE (`Level`, `Pairing` rows, `ClearedSet`, `LongIntMap`; `WORKLOG-packed-engine-memory.md`): never reintroduce
+   a per-pair object.
    Emergent pairs (`useEmergentPairs`, Def 3.11): a column whose oldest same-diameter cofacet no earlier column holds
    (`basis`, `emergentRow`, the apparent partner of its youngest facet) is paired unreduced and rebuilt on demand;
    <= 4 % time, up to -22 % heap (`WORKLOG-emergent-pairs.md`, #57).
@@ -95,15 +90,15 @@ from the pairing itself (`PersistenceBar.dropZeroLength`). Naive and chunks `dia
 cubical/alpha drop equal-value pairs at construction (a pair at `+Inf, +Inf` looks like an essential class).
 `ZeroLengthBarsSpec`.
 
-The opt-in pairing checks (`totalBarsAccountForAllCells` with `includeZeroLength = true`) stay in the engine specs
-(project lead, 2026-10-03); nothing else counts bars against cells.
+The opt-in pairing checks (`totalBarsAccountForAllCells`, `includeZeroLength = true`) stay in the engine specs; nothing
+else counts bars against cells.
 
 `Chain.reduceBy`/`reduceByUntil` throw (`IllegalStateException`) when the pivot moves back, or stays put for 64 steps
 (a basis column whose leading cell is not its key, or an order mismatch; `WORKLOG-compact-representatives.md`).
 
-Testing lessons for every engine: F2 hides sign errors; signed-field fixtures need ≥5 vertices (`Set1..Set4` hash-order
-past 4 elements, `SignedFieldBarcodeSpec`, `WORKLOG-code-critique.md` §1.1). Two engines agreeing isn't proof if they
-share a code path: hand-derived fixtures are the real oracle.
+Testing lessons: F2 hides sign errors; signed-field fixtures need ≥5 vertices (`Set1..Set4` hash-order past 4
+elements, `SignedFieldBarcodeSpec`). Two engines agreeing isn't proof if they share a code path: hand-derived fixtures
+are the real oracle.
 
 `Barcode.scala`: `BarcodeEndpoint` (open/closed/±∞), `PersistenceBar`, persistence-module algebra.
 
@@ -131,10 +126,10 @@ H¹ classes (common `r`, same connected component of `K_r`, checked) into one to
 `EngineComparisonBenchmarkSpec` times every (construction x engine) pairing over point count, dimension and `maxDim`
 (construction and reduction apart, per-cell timeout); alpha and VR bar counts are never compared (radius vs diameter).
 
-**Benchmark specs** (`*BenchmarkSpec` and `ProfilingSpec` in `homology`) print timing tables; only an exception fails.
-All `skipAll` unless `-DrunBenchmarks=true` (a JVM property, not specs2 `--` syntax); scope with `testOnly`
-(`EngineComparisonBenchmarkSpec`: 15+ min; `RipserPaperBenchmarkSpec` also needs `-DdataDir`, optionally
-`-DripserBin=<path>`: `.claude/scripts/run-ripser-paper-benchmark.sh`). Cross-tool benchmarks live in `bench/`.
+**Benchmark specs** (`*BenchmarkSpec`, `ProfilingSpec` in `homology`) print timing tables; only an exception fails. All
+`skipAll` unless `-DrunBenchmarks=true` (a JVM property); scope with `testOnly` (`EngineComparisonBenchmarkSpec`: 15+
+min; `RipserPaperBenchmarkSpec` also needs `-DdataDir`: `.claude/scripts/run-ripser-paper-benchmark.sh`). Cross-tool
+benchmarks live in `bench/`.
 
 **`BarcodeRegressionSpec` (`HomologySpec`) runs on 25 - 30 points in 2 - 6 dimensions**: larger clouds cannot be enumerated
 by the constructions whatever the engine (`WORKLOG-chunks-top-cells.md` has the sweep).

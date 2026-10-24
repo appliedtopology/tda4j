@@ -11,6 +11,14 @@ private[tda4j] object Parallel:
 
   def sequentially[A](body: => A): A = body
 
+  def limit: Option[Int] = None
+
+  def withThreads[A](n: Int)(body: => A): A =
+    require(n >= 1, s"the number of threads must be at least 1, got $n")
+    body
+
+  def limited[A](limit: Option[Int])(body: => A): A = body
+
   def byDefault: Boolean = false
 
   def foreach[A](xs: IndexedSeq[A])(f: A => Unit): Unit = xs.foreach(f)

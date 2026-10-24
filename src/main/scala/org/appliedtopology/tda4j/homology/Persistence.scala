@@ -72,6 +72,9 @@ object Image:
   *   read only by `Engine.ParallelRipser`: `true` (default) builds every bar's representative before returning, as the
   *   other engines do; `false` builds each when it is first read (`bar.representative.terms`), which costs nothing for
   *   the bars you never look at.
+  * @param threads
+  *   how many threads the computation may use, the representatives built later included (default: all the processors).
+  *   `1` is the sequential computation, and makes `Engine.Auto` choose `Engine.Ripser`. The bars do not depend on it.
   */
 /** Which representative `Persistence` gives each bar: a '''cycle''' (a chain without boundary, born at the bar's start
   * and a boundary at its end; for a loop, a path of edges around it) or a '''cocycle''' (a cochain whose coboundary is
@@ -269,10 +272,13 @@ object Persistence:
           val threshold = maxFiltrationValue.getOrElse(ms.minimumEnclosingRadius)
           val run = ParallelRipser.run(ms, maxDimension, threshold, characteristic, withPairs = cycles)
           // The cycles of every bar come out of one pass over the pairing (Involution); the cocycles one by one.
-          lazy val allCycles = ParallelRipserCycles.cycles[coefficients.C](
-            run,
-            coefficients.fromInt(1),
-            coefficients.fromInt(characteristic - 1)
+          val threads = Parallel.limit // the representatives built later keep the caller's `threads`
+          lazy val allCycles = Parallel.limited(threads)(
+            ParallelRipserCycles.cycles[coefficients.C](
+              run,
+              coefficients.fromInt(1),
+              coefficients.fromInt(characteristic - 1)
+            )
           )
           def simplexChain(terms: Seq[(Array[Int], coefficients.C)]) =
             Chain.from(terms.map((vertices, c) => (Simplex(vertices*), c)))
@@ -339,7 +345,48 @@ object Persistence:
     engine: Engine = Engine.Auto,
     includeZeroLength: Boolean = false,
     representatives: Representatives = Representatives.Cycles,
-    computeAllRepresentatives: Boolean = true
+    computeAllRepresentatives: Boolean = true,
+    threads: Optional[Int] = Optional.empty
+  ): PersistenceDiagram[CellT] =
+    threads.toOption match
+      case Some(n) =>
+        require(n >= 1, s"Persistence: threads must be at least 1, got $n")
+        Parallel.withThreads(n)(
+          solve(
+            input,
+            maxDimension,
+            maxFiltrationValue,
+            complex,
+            characteristic,
+            engine,
+            includeZeroLength,
+            representatives,
+            computeAllRepresentatives
+          )
+        )
+      case None =>
+        solve(
+          input,
+          maxDimension,
+          maxFiltrationValue,
+          complex,
+          characteristic,
+          engine,
+          includeZeroLength,
+          representatives,
+          computeAllRepresentatives
+        )
+
+  private def solve[CellT](
+    input: Input[CellT],
+    maxDimension: Optional[Int],
+    maxFiltrationValue: Optional[Double],
+    complex: PointCloudComplex,
+    characteristic: Int,
+    engine: Engine,
+    includeZeroLength: Boolean,
+    representatives: Representatives,
+    computeAllRepresentatives: Boolean
   ): PersistenceDiagram[CellT] =
     val cycles = representatives == Representatives.Cycles
     val requested = maxDimension.toOption

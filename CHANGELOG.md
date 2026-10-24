@@ -53,10 +53,15 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   block-parallel Ripser reduction on every processor (`ParallelPackedCohomology`, so far reachable only from the benchmark
   driver), over `Z/p` for a prime `p` up to 46,000, and `Engine.Auto` chooses it instead of `Ripser` when there is more than
   one thread and it applies (otherwise `Ripser`, as before). Cocycles are 4-5x faster than `Ripser`'s on 4 cores, cycles
-  about the same. Its bars are `Ripser`'s; the representatives need not be, since ties between simplices of equal diameter
+  about 3x (the cycle pass shares its work between the threads too). Its bars are `Ripser`'s; the representatives need not be, since ties between simplices of equal diameter
   are broken differently, so a diagram's representatives can depend on the number of threads. Zero-length bars and real
   coefficients are refused (`Auto` falls back to `Ripser` for them). JVM only: JavaScript refuses and names `Engine.Ripser`.
   `Persistence(..., computeAllRepresentatives = false)` builds each bar's representative when it is first read (#220).
+- `Persistence(..., threads = n)` limits one call to `n` threads (`1` is the sequential computation, and makes `Auto` pick
+  `Ripser`), the representatives built later included. The MATLAB and Java option `threads` and the CLI flag `--threads`
+  do the same for every computation. In MATLAB, Java and the CLI an unset `engine` for `vr` over `Z/p` without
+  `includeZeroLength` or `edgeCollapse` is the parallel engine when there is more than one thread, and `engine=ripser`
+  stays `Ripser`; `engine=parallel-ripser` asks for it by name and refuses what it cannot do (#220).
 - `--plot barcode,diagram` draws a comma list of 2-D plots on one board, in a row or on `--layout RxC` (row by row; `--width`
   and `--height` size the drawing); `--tagged` letters the panels and `--title` titles the board, the other look flags apply
   to every panel (#105). A 3-D plot stays on its own.

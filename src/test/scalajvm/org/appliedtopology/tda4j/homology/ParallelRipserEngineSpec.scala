@@ -187,3 +187,43 @@ class ParallelRipserEngineSpec extends Specification:
       Persistence(stream, engine = parallel) must throwWith[IllegalArgumentException]("Vietoris-Rips complex of points")
     }
   }
+
+  "The threads option" should {
+    // 35 points in space to degree 2: thousands of tetrahedra, enough for the cycle pass to split its scan.
+    "give the same bars and the same cycles on 1, 2 and 5 threads" >> {
+      val points = cloud(35, 3, 14L)
+      val reference = Persistence(points, engine = parallel, threads = 1)
+      sortedTriples(reference) === sortedTriples(Persistence(points, engine = Engine.Ripser))
+      for n <- List(2, 5) do
+        val d = Persistence(points, engine = parallel, threads = n)
+        sortedTriples(d) === sortedTriples(reference)
+        (d.bars.map(_.representative) == reference.bars.map(_.representative))
+          .aka(s"the cycles on $n threads") must beTrue
+      ok
+    }
+    "give the same cocycles on 1 and 4 threads, also when they are built after the call returns" >> {
+      val points = circle(50, 16L)
+      val one = Persistence(points, engine = parallel, representatives = Representatives.Cocycles, threads = 1)
+      val four = Persistence(
+        points,
+        engine = parallel,
+        representatives = Representatives.Cocycles,
+        computeAllRepresentatives = false,
+        threads = 4
+      )
+      sortedTriples(four) === sortedTriples(one)
+      (four.bars.map(_.representative) == one.bars.map(_.representative)).aka("the cocycles") must beTrue
+    }
+    "make Auto choose Ripser on one thread and the parallel engine on several, whatever the machine has" >> {
+      val points = circle(40, 15L)
+      val ripser = Persistence(points, maxDimension = 1, engine = Engine.Ripser)
+      val one = Persistence(points, maxDimension = 1, threads = 1)
+      (one.bars.map(_.representative) == ripser.bars.map(_.representative)).aka("Ripser's") must beTrue
+      val three = Persistence(points, maxDimension = 1, threads = 3)
+      val direct = Persistence(points, maxDimension = 1, engine = parallel, threads = 3)
+      (three.bars.map(_.representative) == direct.bars.map(_.representative)).aka("the parallel engine's") must beTrue
+    }
+    "refuse fewer than one thread" >> {
+      Persistence(circle(10, 17L), threads = 0) must throwWith[IllegalArgumentException]("threads must be at least 1")
+    }
+  }

@@ -143,3 +143,40 @@ Addendum 1 (`ParallelRipserBarsOnlyNoRepresentatives` no longer exists; nothing 
   representatives of `Auto` against `Ripser` exactly would see it; none in the suite does (1753 specs pass on 4 cores).
 - **Not done**: MATLAB (`matlab.TDA4j`) and the CLI (`cli.TDA4jConf`) still call `PackedRipserCohomologyEngine`; wide keys
   with cycles; a parallel cycle pass.
+
+## Addendum 4 (2026-10-24): a parallel cycle pass, the `threads` option, MATLAB and the CLI (#220)
+
+Mikael: "wire in parallel when we have multiple cores into MATLAB and CLI; a flag everywhere relevant (persistence, MATLAB,
+cli) for the number of cores; and yes, parallelize the cycle pass when possible."
+
+- **Where the cycle pass spent its time** (torus1200, degrees 0..2, p = 17, 4 cores; per-phase timers, since removed): the
+  death dimension 3 had 877,167 death simplices of which 5,522 needed a reduction, and the loop over all of them called
+  `faces` and `youngestFace` sequentially (2.4-2.9 s of the 3-4 s pass); the two `LongMap[Long]` tables (`pairedBirth`,
+  `deathOf`, boxed, 1.85M inserts) cost 0.6-1.1 s more.
+- **Now**: `Dimension.scan()` classifies every death in parallel (`Parallel.ranges`, grain 4096; `faces` and `youngestFace`
+  are pure), keeps the 5.5k that need a reduction, and `reduceDeaths()` reduces only those, in order, one death dimension per
+  thread as before. The tables are `LongIntMap`s of pair indices (primitive), built while the scan runs (`Parallel.both`).
+  `processed` now advances only at reduced deaths, which gives the same answer: `trivialDeath` asks for deaths below
+  `processed`, and a trivial one between two reduced ones is below the later one. The cycle pass went from 3.5 s to 0.6-0.7 s.
+- **Whole verb** (cold JVM per row, 9 rounds, the last 7 sorted): `Ripser` cycles 3.33-3.85 s; `ParallelRipser` on 4 threads
+  1.02-1.35 s (two of seven rounds 2.9-3.1 s, unexplained, probably GC with `-Xmx6g`); `ParallelRipser` with representatives
+  left lazy 0.44-0.54 s. On 1 thread `ParallelRipser` cycles took 1.6-2.8 s, cocycles 0.83-0.85 s against `Ripser`'s 2.07: the
+  engine is faster than `Ripser` on one thread too, which this session did not look into (an unconfirmed lead: it keeps the
+  edge ranks in a table, `Ripser` computes them per cofacet).
+- **`threads`**: `Parallel.withThreads(n)(body)` (JVM: a `ForkJoinPool(n)`, the caller waits, `n = 1` is `sequentially`, a body
+  already on a pool of `n` just runs; the body's exception comes back itself, since `ForkJoinTask.get` hands the waiting thread
+  a copy wrapped around it), `Parallel.limit` and `Parallel.limited` to carry the count into work that outlives the call (the
+  `LazyChain`s of `ParallelRipser`), and `Parallel.threads` reads the pool it runs on. `Parallel.foreach` and `map` are on
+  `IntStream.parallel()` now, not `.par` (scala-parallel-collections runs on the common pool whatever pool called it, so a
+  custom pool would have been ignored); the dependency is gone from `build.sbt`. `Persistence(..., threads = n)` wraps its
+  body in `withThreads`; MATLAB and Java option `threads` and CLI `--threads` wrap `dispatch`, `dispatchWitnessFromLandmarks`,
+  `dispatchDowker` and `dispatchCubical`, with the value checked before anything runs.
+- **MATLAB and CLI**: `dispatchFull` sends the Vietoris-Rips complex over `Z/p` to `Persistence(Engine.ParallelRipser,
+  computeAllRepresentatives = false)` (`parallelVR`, then the same `fromBars` as the other engines) when `engine` is unset,
+  `Parallel.threads > 1`, no `includeZeroLength`, no `edgeCollapse`, and `ParallelRipser.supports`; `engine=parallel-ripser`
+  asks for it and refuses with a message naming what failed; `engine=ripser` is always `PackedRipserCohomologyEngine` (as
+  `Engine.Ripser` is for the verb). Other complexes and the witness/Dowker/cubical paths are untouched; `EngineKind` has no new
+  case (the one spelling is mapped to `ripser` plus a flag at the top of `dispatchFull`).
+- **Not done**: wide keys with cycles; the apply side of the cycle reductions (the 5.5k hard deaths are still reduced in order);
+  `BlockParallelReduction` stays unreachable from the verb. The weekly MATLAB-in-browser checks (#215 family) have not run on
+  this wiring: the facade is checked through `TDA4jParallelSpec` from Scala, not through MATLAB's Java bridge.

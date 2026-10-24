@@ -2,24 +2,58 @@ package org.appliedtopology.tda4j
 
 import java.util.concurrent.{ForkJoinPool, ForkJoinTask}
 import java.util.stream.IntStream
-import scala.collection.parallel.CollectionConverters.*
 
 /** Runs independent work items on the common fork-join pool. The Scala.js build has the same object and runs them one
   * after the other (`src/main/scalajs`): JavaScript has no threads to share the work between.
   *
   * The pool is the JVM's common pool, so `-Djava.util.concurrent.ForkJoinPool.common.parallelism=N` limits every
-  * parallel step of the library at once (`1` runs them all on the calling thread). Every user of this object computes
-  * the same result however the work is split: a step may be faster in parallel, never different.
+  * parallel step of the library at once (`1` runs them all on the calling thread); [[withThreads]] runs a body on a
+  * pool of its own size instead, and a body already running on a fork-join pool of yours uses that pool. Every user of
+  * this object computes the same result however the work is split: a step may be faster in parallel, never different.
   */
 // Restricted: a public top-level `Parallel` would join every user's `import org.appliedtopology.tda4j.*`.
 private[tda4j] object Parallel:
   // Set by `sequentially` on the calling thread, which is where every step decides whether to fork.
   private val forcedSequential = new ThreadLocal[java.lang.Boolean]
 
-  /** The number of threads a step can use here: 1 inside `sequentially`, else the common pool's workers and the caller.
+  // The fork-join pool this thread works for, unless it is the common pool or none.
+  private def ownPool: Option[ForkJoinPool] =
+    Option(ForkJoinTask.getPool()).filter(_ ne ForkJoinPool.commonPool())
+
+  /** The number of threads a step can use here: 1 inside `sequentially`; the size of the pool inside `withThreads` (or
+    * of a fork-join pool the caller runs on); else the common pool's workers and the caller.
     */
   def threads: Int =
-    if forcedSequential.get() eq java.lang.Boolean.TRUE then 1 else ForkJoinPool.commonPool().getParallelism + 1
+    if forcedSequential.get() eq java.lang.Boolean.TRUE then 1
+    else ownPool.fold(ForkJoinPool.commonPool().getParallelism + 1)(_.getParallelism)
+
+  /** The thread count a surrounding `withThreads` or `sequentially` fixed, to carry into work that runs later (a
+    * representative built when it is first read); `None` when nothing was fixed.
+    */
+  def limit: Option[Int] =
+    if forcedSequential.get() eq java.lang.Boolean.TRUE then Some(1) else ownPool.map(_.getParallelism)
+
+  /** `body` on a fork-join pool of `n` threads (the calling thread waits), or on this thread for `n` = 1: the steps of
+    * the library inside it share `n` threads. Where `n` is already the number of threads here, `body` just runs.
+    */
+  def withThreads[A](n: Int)(body: => A): A =
+    require(n >= 1, s"the number of threads must be at least 1, got $n")
+    if n == 1 then sequentially(body)
+    else if (forcedSequential.get() ne java.lang.Boolean.TRUE) && ownPool.exists(_.getParallelism == n) then body
+    else
+      val pool = new ForkJoinPool(n)
+      // The body's own exception, not the copy a fork-join task makes of it for the thread that waits.
+      var outcome: Either[Throwable, A] = null
+      try
+        val task: Runnable = () =>
+          outcome = try Right(body)
+          catch case t: Throwable => Left(t)
+        pool.submit(task).get()
+        outcome.fold(throw _, identity)
+      finally pool.shutdown()
+
+  /** `body` under the thread count `limit` (from [[Parallel.limit]]) if there is one. */
+  def limited[A](limit: Option[Int])(body: => A): A = limit.fold(body)(withThreads(_)(body))
 
   /** Runs `body` with every parallel step called from this thread run on this thread: a reference run to compare a
     * parallel one against.
@@ -35,11 +69,16 @@ private[tda4j] object Parallel:
 
   /** `f` on every element, in no particular order and possibly at the same time. */
   def foreach[A](xs: IndexedSeq[A])(f: A => Unit): Unit =
-    if threads == 1 then xs.foreach(f) else xs.par.foreach(f)
+    if threads == 1 || xs.length < 2 then xs.foreach(f)
+    else IntStream.range(0, xs.length).parallel().forEach(i => f(xs(i)))
 
   /** `f` on every element, possibly at the same time; the results are in the order of `xs`. */
   def map[A, B](xs: IndexedSeq[A])(f: A => B): IndexedSeq[B] =
-    if threads == 1 then xs.map(f) else xs.par.map(f).toIndexedSeq
+    if threads == 1 || xs.length < 2 then xs.map(f)
+    else
+      val out = new Array[AnyRef](xs.length)
+      IntStream.range(0, xs.length).parallel().forEach(i => out(i) = f(xs(i)).asInstanceOf[AnyRef])
+      scala.collection.immutable.ArraySeq.unsafeWrapArray(out).asInstanceOf[IndexedSeq[B]]
 
   /** `left` and `right`, possibly at the same time (a divide and conquer step: call it on the halves while they are
     * big).

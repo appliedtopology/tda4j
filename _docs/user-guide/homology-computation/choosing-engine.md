@@ -44,14 +44,16 @@ hole is. The [scaling up](../../tutorials/scaling-up.md) tutorial compares the f
 ### Parallel Ripser
 
 `Engine.ParallelRipser` cuts Ripser's reduction into blocks that run on every processor. `Engine.Auto` chooses it
-instead of `Ripser` for the Vietoris-Rips complex of points or a metric space whenever there is more than one thread
-(`-Djava.util.concurrent.ForkJoinPool.common.parallelism=N` sets the number; `0` is one thread, which is plain
-`Ripser`), and ask for it by name to use it on one thread too.
+instead of `Ripser` for the Vietoris-Rips complex of points or a metric space whenever there is more than one thread,
+and ask for it by name to use it on one thread too. `Persistence(points, threads = 4)` limits one call to four threads
+(`threads = 1` is plain `Ripser` under `Auto`); `-Djava.util.concurrent.ForkJoinPool.common.parallelism=N` sets the
+default for the whole program (`0` is one thread). MATLAB and Java take the option `threads` and `engine=parallel-ripser`,
+the command line `--threads` and `--engine parallel-ripser`, and an unset engine goes parallel there too ([MATLAB](../matlab.md#threads)).
 
 * The bars are those of `Engine.Ripser`. The representatives are valid but need not be the same chains: simplices of
   equal diameter are ordered differently, so a cycle can differ from one machine to the next.
-* Cocycles are what it computes natively and are much faster than `Ripser`'s; cycles take one more reduction and cost
-  about what `Ripser`'s do.
+* Cocycles are what it computes natively and are much faster than `Ripser`'s; cycles take one more pass over the
+  pairing, which also shares its work between the threads.
 * Each representative is built before `Persistence` returns. With `computeAllRepresentatives = false` each is built when
   you first read it (`bar.representative.terms`), and the ones you never read cost nothing. Cycles are found all at once
   by the first one read.

@@ -214,12 +214,18 @@ the pairing. `Persistence.Engine.ParallelRipser` runs it: `Persistence.Input.par
 refuses; `Auto` only asks with several threads, which JavaScript never has) and gets a `ParallelRipserRun`, the engine's keys and logs without its types, which is
 all the shared `Persistence` code sees. Each bar's chain is a `LazyChain`: a cocycle is built from the logs when read, a
 cycle comes out of one pass of `Involution.cycles` over the keys (`ParallelRipserCycles`, with the shortcut of
-`CellularCohomologyEngine`: a death simplex whose youngest face is its birth needs no reduction). Keys of one dimension
+`CellularCohomologyEngine`: a death simplex whose youngest face is its birth needs no reduction; the death simplices
+that do need one are found by a parallel scan of `faces` over every death, which is most of the pass, and their
+reductions then run in order, one death dimension to a thread). Keys of one dimension
 ascend with age, which is the order `Involution` is given, reversed. Cycles need one-word keys; two-word keys give
 cocycles only. `computeAllRepresentatives` forces the chains before returning (cocycles on all threads).
 `Engine.Auto` chooses the engine when `Parallel.threads > 1`, the input is a Vietoris-Rips metric space, there is no
 `includeZeroLength`, and `ParallelRipser.supports` (a prime up to 46,000, fewer than 46,341 points, indices that fit 63
-bits). The benchmark harness runs the engine directly as `engine=parallel` (`tda4j-parallel-1t/-mt`, with `threads` and
+bits). `Persistence`'s `threads` option runs the call in `Parallel.withThreads(n)` (a fork-join pool of that size on the
+JVM, none in JavaScript), and the lazy chains keep the count they were made under (`Parallel.limit`, `Parallel.limited`).
+The MATLAB facade and the CLI do the same through `threads`, and send an unset `engine` for the Vietoris-Rips complex over
+`Z/p` (no `includeZeroLength`, no `edgeCollapse`) to this engine when `Parallel.threads > 1` (`parallelVR`); `engine=ripser`
+stays `PackedRipserCohomologyEngine`. The benchmark harness runs the engine directly as `engine=parallel` (`tda4j-parallel-1t/-mt`, with `threads` and
 `wide`) and through `Persistence` as `engine=parallelverb`.
 
 ## 6. `FastCubicalHomologyEngine` — dual-graph union-find

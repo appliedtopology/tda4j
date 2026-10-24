@@ -86,6 +86,12 @@ once into a private `ComplexKind`/`EngineKind`/`CoefficientKind` enum before any
   `sparseEpsilon` (strictly `(0,1)`); those two alone also work from `computeFromDistanceMatrix`. A sixth
   `engine`, `fast-alpha`, is valid ONLY for `complex=alpha`+`alphaBackend=helix`. `computeFromCubicalImage`/
   `computeFromImage` — same four base engines plus `fast-cubical`.
+- **`threads` and `parallel-ripser`** (#220): every `computeFrom...` takes `threads` (checked before anything runs; the
+  `dispatch*` wrappers call `Parallel.withThreads`). For `vr` over `Z/p` an UNSET `engine` goes to `Persistence`'s
+  `ParallelRipser` (`parallelVR`) when `Parallel.threads > 1`, no `includeZeroLength`, no `edgeCollapse`, and
+  `ParallelRipser.supports`; `engine=ripser` is always `PackedRipserCohomologyEngine`; `engine=parallel-ripser` is mapped to
+  `ripser` plus a flag at the top of `dispatchFull` (no `EngineKind` case) and refuses what it cannot do. The CLI mirrors
+  both (`--threads`, `--engine parallel-ripser`). Specs: `TDA4jParallelSpec` (JVM; Scala.js has one thread).
 - **Two-step witness recipe**: `selectLandmarksFrom{Points,DistanceMatrix}` → `LandmarkSelectionResult`, then
   `computeFrom{Points,DistanceMatrix}AndLandmarks` (takes that `int[]` directly, never re-selects);
   `coveringRadiusFrom{Points,DistanceMatrix}` queries R for a hand-picked set. CLI: `--select-landmarks`/
