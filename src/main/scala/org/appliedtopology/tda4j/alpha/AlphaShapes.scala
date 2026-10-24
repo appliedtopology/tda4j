@@ -295,11 +295,16 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
 
   private object FrontierCase:
     def apply(cofacet: DelaunaySimplex, complement: Int): FrontierCase =
+      apply(cofacet, complement, planeThrough(cofacet.simplex - complement))
+
+    /** The case for the facet `cofacet` minus `complement`, with `hyperplane` from `planeThrough` for that facet. */
+    def apply(cofacet: DelaunaySimplex, complement: Int, hyperplane: Hyperplane): FrontierCase =
       val facet = cofacet.simplex - complement
-      val hyperplane = Hyperplane.from(facet.toSeq.toSeq.map(points(_)))
       if hyperplane.isLight(points(complement)) then
         FrontierCase(facet, hyperplane.reverse, complement, cofacet.circumsphere)
       else FrontierCase(facet, hyperplane, complement, cofacet.circumsphere)
+
+  private def planeThrough(facet: Simplex[Int]): Hyperplane = Hyperplane.from(facet.toSeq.toSeq.map(points(_)))
 
   private val frontierCases: mutable.ArrayDeque[FrontierCase] = mutable.ArrayDeque.empty
   private val visitedFacets: mutable.Set[Simplex[Int]] = mutable.Set.empty
@@ -346,20 +351,90 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
   /** Frontier cases whose cofacet came from `bySphereScan` because `byMinimalCentre` failed its own emptiness check. */
   private[tda4j] var sphereScanFallbacks: Int = 0
 
+  /** What the walk learns about a frontier case from the points alone: the Delaunay simplex on the light side of the
+    * facet (none for a hull facet), the points on its circumsphere (sorted), and whether the sphere scan had to replace
+    * `byMinimalCentre`. It depends on no walk state, so several cases can be evaluated at the same time.
+    */
+  private case class Step(
+    cofacet: Option[DelaunaySimplex],
+    onCircumsphere: Array[Int],
+    fellBack: Boolean,
+    planes: Array[Hyperplane]
+  )
+
   /** The Delaunay simplex on the light side of a frontier facet, if any: `byMinimalCentre`, checked to have an empty
     * circumsphere; `bySphereScan` if that check fails (floating-point trouble near a degenerate facet).
     */
-  private def delaunayCofacet(fc: FrontierCase): Option[DelaunaySimplex] =
-    def fallback() =
-      sphereScanFallbacks += 1
-      bySphereScan(fc)
-    facetCentre(fc.facet) match
-      case None         => fallback()
+  private def evaluate(fc: FrontierCase): Step =
+    val (cofacet, fellBack) = facetCentre(fc.facet) match
+      case None         => (bySphereScan(fc), true)
       case Some(centre) =>
         byMinimalCentre(fc.facet, fc.hyperplane, centre) match
-          case None                                                                => None // a hull facet
-          case Some(ds) if !pts.exists(sphereStrictlyContains(ds.circumsphere, _)) => Some(ds)
-          case Some(_)                                                             => fallback()
+          case None                                                                => (None, false) // a hull facet
+          case Some(ds) if !pts.exists(sphereStrictlyContains(ds.circumsphere, _)) => (Some(ds), false)
+          case Some(_)                                                             => (bySphereScan(fc), true)
+    val onSphere = cofacet.fold(Array.emptyIntArray)(ds => pointsOn(ds.circumsphere))
+    // The hyperplanes of the new cofacet's other facets, which the walk needs next unless a cospherical cluster is
+    // tiled instead (then there are none): an SVD each, which is most of what the walk does outside this method.
+    val planes = cofacet match
+      case Some(ds) if onSphere.length <= ambientDimension + 1 =>
+        fc.facet.toSeq.toArray.map(
+          vi => // a plane that cannot be made is left for the walk to meet (and fail on) in its turn
+            try planeThrough(ds.simplex - vi)
+            catch case scala.util.control.NonFatal(_) => null
+        )
+      case _ => Array.empty[Hyperplane]
+    Step(cofacet, onSphere, fellBack, planes)
+
+  /** The indices of the points on `sphere`, within `onSphere`'s tolerance, ascending. */
+  private def pointsOn(sphere: Hypersphere): Array[Int] =
+    val c = sphere.center.toArray
+    val found = mutable.ArrayBuilder.ofInt()
+    var q = 0
+    while q < pts.length do
+      val p = pts(q)
+      var sq = 0.0
+      var i = 0
+      while i < p.length do
+        val d = p(i) - c(i)
+        sq += d * d
+        i += 1
+      if onSphere(math.sqrt(sq), sphere.radius) then found += q
+      q += 1
+    found.result()
+
+  // The cases evaluated ahead of the walk, by identity. A case's `Step` depends on the points only, and the walk takes
+  // its cases in queue order whatever it has computed, so evaluating the next few queued cases at the same time changes
+  // nothing but the time: a case that is cancelled or visited before its turn is evaluated for nothing.
+  private val prepared = new java.util.IdentityHashMap[FrontierCase, Step]()
+  // Enough points that a case costs more than handing it to another thread (about 500 coordinates to scan, three times).
+  private val batchSize: Int =
+    if Parallel.threads > 1 && pts.length.toLong * ambientDimension >= 500 then Parallel.threads * 8 else 1
+
+  private def stepOf(fc: FrontierCase): Step =
+    var step = prepared.remove(fc)
+    if step == null then
+      if batchSize > 1 then
+        prepared.clear()
+        val facets = mutable.HashSet(fc.facet)
+        val batch = mutable.ArrayBuffer(fc)
+        val queued = frontierCases.iterator
+        var scanned = 0
+        while batch.size < batchSize && scanned < 4 * batchSize && queued.hasNext do
+          val next = queued.next()
+          scanned += 1
+          if !cancelled.contains(next) && !visitedFacets.contains(next.facet) && facets.add(next.facet) then
+            batch += next
+        // A case whose evaluation fails is left for the walk to evaluate, and fail on, if it ever reaches it.
+        val steps = Parallel.map(batch.toVector)(c =>
+          try evaluate(c)
+          catch case scala.util.control.NonFatal(_) => null
+        )
+        batch.indices.foreach(i => if steps(i) != null then prepared.put(batch(i), steps(i)))
+        step = prepared.remove(fc)
+      if step == null then step = evaluate(fc)
+    if step.fellBack then sphereScanFallbacks += 1
+    step
 
   // Every sphere through the facet has its centre on the line c0 + t n (c0 the facet's circumcentre in its own
   // hyperplane, n the normal towards the light side), and passes through a light point p at
@@ -377,6 +452,10 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
     locally {
       val n = hyperplane.normal.toArray
       val facetVertices = facet.toSeq.toArray
+      def isVertex(q: Int): Boolean =
+        var i = 0
+        while i < facetVertices.length && facetVertices(i) != q do i += 1
+        i < facetVertices.length
       var best = -1
       var bestT = Double.PositiveInfinity
       var q = 0
@@ -391,7 +470,7 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
           sq += d * d
           i += 1
         // c0 lies on the facet's hyperplane, so s is q's signed distance from it.
-        if s > epsilon.epsilon && !facetVertices.contains(q) then
+        if s > epsilon.epsilon && !isVertex(q) then
           val tq = (sq - r0sq) / (2 * s)
           if tq < bestT then
             bestT = tq
@@ -447,6 +526,10 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
 
   private def addFrontierCase(simplex: DelaunaySimplex, complement: Int): Unit =
     if !cancel(simplex.simplex - complement) then enqueue(FrontierCase(simplex, complement))
+
+  // `plane` is `planeThrough` the facet, made ahead of time by `evaluate`.
+  private def addFrontierCase(simplex: DelaunaySimplex, complement: Int, plane: Hyperplane): Unit =
+    if !cancel(simplex.simplex - complement) then enqueue(FrontierCase(simplex, complement, plane))
 
   private def handleCosphericalPoints(
     cosphericalPoints: Seq[Int],
@@ -717,22 +800,22 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
       val frontierCase = pending.get
       if !visitedFacets.contains(frontierCase.facet) then
         visitedFacets.add(frontierCase.facet)
-        delaunayCofacet(frontierCase) match
+        val step = stepOf(frontierCase)
+        step.cofacet match
           case Some(newDelaunaySimplex) if !validatedSimplices.contains(newDelaunaySimplex.simplex) =>
             // check whether we have "too many" cospherical points; in that case we have to tile them on our own
-            val spherepoints: mutable.SortedSet[Int] = points.indices
-              .map(i => (i, newDelaunaySimplex.circumsphere.center.distance(points(i))))
-              .filter((i, d) => onSphere(d, newDelaunaySimplex.circumsphere.radius))
-              .map(_._1)
-              .to(mutable.SortedSet)
+            val spherepoints: mutable.SortedSet[Int] = step.onCircumsphere.to(mutable.SortedSet)
             if spherepoints.size > ambientDimension + 1 then
               if !cospherical.contains(spherepoints.toSet) then
                 accept(newDelaunaySimplex)
                 handleCosphericalPoints(spherepoints.toSeq, frontierCase, newDelaunaySimplex)
             else
               accept(newDelaunaySimplex)
-              frontierCase.facet.toSeq.toSeq
-                .foreach(vi => addFrontierCase(newDelaunaySimplex, vi))
+              frontierCase.facet.toSeq.toSeq.zipWithIndex
+                .foreach((vi, at) =>
+                  if step.planes(at) == null then addFrontierCase(newDelaunaySimplex, vi)
+                  else addFrontierCase(newDelaunaySimplex, vi, step.planes(at))
+                )
           case Some(newDelaunaySimplex) => ()
           case None                     => ()
 
@@ -786,52 +869,69 @@ abstract class DelaunayAlphaShapes(using epsilon: Epsilon) extends AlphaShapes:
         }
     }
     values(top) = new Array[Double](levels(top).size)
-    topIndex.foreach((i, s) => values(top)(i) = topValue(s))
+    val topRows = topIndex.toArray
+    // The values are independent of each other (`topValue` reads tables made before this point).
+    Parallel.ranges(topRows.length, DelaunayAlphaShapes.ParallelGrain) { (from, until) =>
+      var t = from
+      while t < until do
+        values(top)(topRows(t)._1) = topValue(topRows(t)._2)
+        t += 1
+    }
     // Each lower level: its faces with the cofaces' values and the Gabriel test against their opposite vertices.
     for k <- (top - 1) to 0 by -1 do
       val upper = levels(k + 1)
-      val faces = DelaunayAlphaShapes.FaceTable(k + 1, upper.size * 2)
-      val face = new Array[Int](k + 1)
-      // (face, coface) pairs as indices, with the coface's vertex opposite the face.
-      val pairFace = mutable.ArrayBuilder.make[Int]
-      val pairCoface = mutable.ArrayBuilder.make[Int]
-      val pairVertex = mutable.ArrayBuilder.make[Int]
-      for t <- 0 until upper.size; drop <- 0 to k + 1 do
-        var j = 0
-        for i <- 0 to k + 1 if i != drop do
-          face(j) = upper.vertex(t, i)
-          j += 1
-        pairFace += faces.add(face)._1
-        pairCoface += t
-        pairVertex += upper.vertex(t, drop)
-      val (pf, pc, pv) = (pairFace.result(), pairCoface.result(), pairVertex.result())
+      // The faces of dimension `k` with `pf(p)` the row of pair `p` = (coface row `p / (k + 2)`, its vertex `p % (k + 2)`
+      // dropped); the vertex dropped is the coface's one opposite the face.
+      val (faces, pf) = DelaunayAlphaShapes.FaceTable.facesOf(upper)
+      val cofaceWidth = k + 2
       val m = faces.size
       val vals = new Array[Double](m)
       if k == 0 then java.util.Arrays.fill(vals, 0.0)
       else
-        val center = new Array[Double](m * coords.head.length)
-        val radius = new Array[Double](m)
-        val vs = new Array[Int](k + 1)
-        for f <- 0 until m do
-          for i <- 0 to k do vs(i) = faces.vertex(f, i)
-          radius(f) = DelaunayAlphaShapes.circumsphere(coords, vs, center, f * coords.head.length)
-        val cofaceMin = Array.fill(m)(Double.PositiveInfinity)
-        val gabriel = Array.fill(m)(true)
         val dim = coords.head.length
+        val center = new Array[Double](m * dim)
+        val radius = new Array[Double](m)
+        Parallel.ranges(m, DelaunayAlphaShapes.ParallelGrain) { (from, until) =>
+          val vs = new Array[Int](k + 1)
+          var f = from
+          while f < until do
+            for i <- 0 to k do vs(i) = faces.vertex(f, i)
+            radius(f) = DelaunayAlphaShapes.circumsphere(coords, vs, center, f * dim)
+            f += 1
+        }
+        // The pairs grouped by face (a counting sort), so that the faces can be judged independently of each other.
+        val first = new Array[Int](m + 1)
+        for p <- pf.indices do first(pf(p) + 1) += 1
+        for f <- 0 until m do first(f + 1) += first(f)
+        val byFace = new Array[Int](pf.length)
+        val filled = first.clone()
         for p <- pf.indices do
-          val f = pf(p)
-          cofaceMin(f) = math.min(cofaceMin(f), values(k + 1)(pc(p)))
-          val q = coords(pv(p))
-          var d2 = 0.0
-          for r <- 0 until dim do
-            val x = q(r) - center(f * dim + r)
-            d2 += x * x
-          if math.sqrt(d2) < radius(f) - epsilon.epsilon then gabriel(f) = false
+          byFace(filled(pf(p))) = p
+          filled(pf(p)) += 1
+        val upperValues = values(k + 1)
         // A Gabriel simplex with a coface vertex exactly on its sphere has exactly that coface's value (the same
         // sphere); computed separately the two differ in the last bits and would leave a bar of length ~1e-16.
-        for f <- 0 until m do
-          vals(f) =
-            if gabriel(f) && radius(f) < cofaceMin(f) * (1 - 1e-12) then radius(f) else cofaceMin(f)
+        Parallel.ranges(m, DelaunayAlphaShapes.ParallelGrain) { (from, until) =>
+          var f = from
+          while f < until do
+            var cofaceMin = Double.PositiveInfinity
+            var gabriel = true
+            var e = first(f)
+            while e < first(f + 1) do
+              val p = byFace(e)
+              cofaceMin = math.min(cofaceMin, upperValues(p / cofaceWidth))
+              val q = coords(upper.vertex(p / cofaceWidth, p % cofaceWidth))
+              var d2 = 0.0
+              var r = 0
+              while r < dim do
+                val x = q(r) - center(f * dim + r)
+                d2 += x * x
+                r += 1
+              if math.sqrt(d2) < radius(f) - epsilon.epsilon then gabriel = false
+              e += 1
+            vals(f) = if gabriel && radius(f) < cofaceMin * (1 - 1e-12) then radius(f) else cofaceMin
+            f += 1
+        }
       levels(k) = faces
       values(k) = vals
     (levels, values)
@@ -845,7 +945,13 @@ abstract class DelaunayAlphaShapes(using epsilon: Epsilon) extends AlphaShapes:
     unsorted.getOrElseUpdate(
       k, {
         val level = if k <= ambientDimension then built._1(k) else DelaunayAlphaShapes.FaceTable(k + 1, 0)
-        val simplices = Array.tabulate(level.size)(f => Simplex.from(Seq.tabulate(k + 1)(i => level.vertex(f, i))))
+        val simplices = new Array[Simplex[Int]](level.size)
+        Parallel.ranges(simplices.length, DelaunayAlphaShapes.ParallelGrain) { (from, until) =>
+          var f = from
+          while f < until do
+            simplices(f) = Simplex.from(Seq.tabulate(k + 1)(i => level.vertex(f, i)))
+            f += 1
+        }
         val extra: Seq[Simplex[Int]] = k match
           case 0 => duplicates.keys.toSeq.map(Simplex(_))
           case 1 => duplicates.toSeq.map((dup, kept) => Simplex(dup, kept))
@@ -909,7 +1015,7 @@ abstract class DelaunayAlphaShapes(using epsilon: Epsilon) extends AlphaShapes:
         val keyed = simplicesOfDimension(k).iterator.zipWithIndex
           .map((s, i) => (if i < tableValues.length then tableValues(i) else 0.0, s))
           .toArray
-        java.util.Arrays.sort(
+        Parallel.sort(
           keyed,
           (a: (Double, Simplex[Int]), b: (Double, Simplex[Int])) =>
             java.lang.Double.compare(a._1, b._1) match
@@ -1065,9 +1171,6 @@ object HelixDelaunay:
     * side of it). One pass over the points per boundary facet. A torn or partial walk fails the last.
     */
   def looksValid(simps: Set[DelaunaySimplex], points: Seq[Point])(using epsilon: Epsilon): Boolean =
-    val tops = simps.map(_.simplex)
-    val vertices = tops.flatMap(_.toSeq)
-    lazy val facetCounts = tops.toSeq.flatMap(t => t.toSeq.map(v => t - v)).groupMapReduce(identity)(_ => 1)(_ + _)
     def onHull(facet: Simplex[Int]): Boolean =
       val plane = Hyperplane.from(facet.toSeq.map(points))
       var above = false
@@ -1078,9 +1181,38 @@ object HelixDelaunay:
         if s > epsilon.epsilon then above = true
         if s < -epsilon.epsilon then below = true
       !(above && below)
-    vertices.size == points.size &&
-    facetCounts.values.forall(_ <= 2) &&
-    facetCounts.iterator.filter(_._2 == 1).forall((f, _) => onHull(f))
+    // The simplices with exactly `dimension + 1` vertices (all but the tiled cospherical clusters) are counted on flat
+    // tables; a facet of a larger cell has more vertices than theirs, so the two kinds never share a facet.
+    val dimension = points.headOption.fold(0)(_.size)
+    val regular = DelaunayAlphaShapes.FaceTable(dimension + 1, simps.size)
+    val clusters = mutable.ArrayBuffer.empty[Simplex[Int]]
+    val seen = new Array[Boolean](points.size)
+    var seenCount = 0
+    simps.foreach { ds =>
+      val vs = ds.simplex.toArray
+      vs.foreach { v =>
+        if !seen(v) then
+          seen(v) = true
+          seenCount += 1
+      }
+      if vs.length == dimension + 1 then regular.add(vs) else clusters += ds.simplex
+    }
+    lazy val regularFacets: Boolean =
+      regular.size == 0 || {
+        val (facets, facetOf) = DelaunayAlphaShapes.FaceTable.facesOf(regular)
+        val counts = new Array[Int](facets.size)
+        facetOf.foreach(f => counts(f) += 1)
+        counts.forall(_ <= 2) &&
+        counts.indices.forall(f =>
+          counts(f) != 1 || onHull(Simplex.from(Seq.tabulate(dimension)(i => facets.vertex(f, i))))
+        )
+      }
+    lazy val clusterFacets: Boolean =
+      clusters.isEmpty || {
+        val counts = clusters.toSeq.flatMap(t => t.toSeq.map(v => t - v)).groupMapReduce(identity)(_ => 1)(_ + _)
+        counts.values.forall(_ <= 2) && counts.iterator.filter(_._2 == 1).forall((f, _) => onHull(f))
+      }
+    seenCount == points.size && regularFacets && clusterFacets
 
   /** The facets that more than two top simplices claim (a torn triangulation), with their claimants. */
   def badFacetsOf(simps: Set[DelaunaySimplex]): Map[Simplex[Int], Vector[DelaunaySimplex]] =
@@ -1211,18 +1343,34 @@ open class LimitedAlphaShapesStream(helix: DelaunayAlphaShapes, maxDim: Int)
   override def homologyDegreeLimit: Option[Int] = Some(maxDim - 1)
 
 object DelaunayAlphaShapes:
+  /** Faces handled by one task when the flat tables are filled in parallel (about 100 microseconds of work). */
+  private[tda4j] val ParallelGrain = 512
+
   /** The simplices of one dimension, each a row of `width` sorted vertex indices, numbered as first added. */
   class FaceTable(val width: Int, expected: Int):
     private var rows = new Array[Int](math.max(expected, 4) * width)
     var size = 0
-    private var slots = Array.fill(Integer.highestOneBit(math.max(expected, 4) * 2) * 2)(-1)
+    // The slots of an open-addressing table: -1 or a row. One table, grown as rows are added, unless the table was made
+    // by `facesOf`: then `1 << partitionBits` tables of a fixed size, a face in the one its hash's top bits select.
+    private var tables = Array(Array.fill(Integer.highestOneBit(math.max(expected, 4) * 2) * 2)(-1))
+    private var partitionBits = 0
 
     def vertex(row: Int, i: Int): Int = rows(row * width + i)
+
+    // The rows and tables that `facesOf` made, in place of the empty ones.
+    private def install(newRows: Array[Int], newSize: Int, newTables: Array[Array[Int]], bits: Int): Unit =
+      rows = newRows
+      size = newSize
+      tables = newTables
+      partitionBits = bits
 
     private def hash(vs: Array[Int], at: Int): Int =
       var h = 0x9e3779b9
       for i <- 0 until width do h = (h ^ vs(at + i)) * 0x01000193 + (h >>> 15)
       h ^ (h >>> 16)
+
+    private def tableOf(h: Int): Array[Int] =
+      if partitionBits == 0 then tables(0) else tables(h >>> (32 - partitionBits))
 
     private def sameRow(row: Int, vs: Array[Int]): Boolean =
       var i = 0
@@ -1233,14 +1381,18 @@ object DelaunayAlphaShapes:
     def indexOf(vs: Array[Int]): Int =
       if vs.length != width then -1
       else
+        val h = hash(vs, 0)
+        val slots = tableOf(h)
         val mask = slots.length - 1
-        var s = hash(vs, 0) & mask
+        var s = h & mask
         while slots(s) >= 0 && !sameRow(slots(s), vs) do s = (s + 1) & mask
         slots(s)
 
-    /** The row of the sorted vertices `vs`, and whether it is new. */
+    /** The row of the sorted vertices `vs`, and whether it is new. Only for a table that was not made by `facesOf`. */
     def add(vs: Array[Int]): (Int, Boolean) =
-      if size * 2 >= slots.length then grow()
+      require(partitionBits == 0, "FaceTable.add: a table made by facesOf is complete")
+      if size * 2 >= tables(0).length then grow()
+      val slots = tables(0)
       val mask = slots.length - 1
       var s = hash(vs, 0) & mask
       while slots(s) >= 0 && !sameRow(slots(s), vs) do s = (s + 1) & mask
@@ -1253,12 +1405,141 @@ object DelaunayAlphaShapes:
         (size - 1, true)
 
     private def grow(): Unit =
-      slots = Array.fill(slots.length * 2)(-1)
+      val slots = Array.fill(tables(0).length * 2)(-1)
       val mask = slots.length - 1
       for row <- 0 until size do
         var s = hash(rows, row * width) & mask
         while slots(s) >= 0 do s = (s + 1) & mask
         slots(s) = row
+      tables = Array(slots)
+
+  object FaceTable:
+    /** Below this many (face, coface) pairs `facesOf` adds them one at a time: sharing the work costs more than it
+      * saves.
+      */
+    private val ParallelPairs = 1 << 16
+
+    /** The faces of the rows of `upper` (each a sorted `width`-subset), numbered in the order in which they first occur
+      * when the rows are taken in order and, in each row, the vertex omitted runs from the first to the last; and for
+      * each of the `upper.size * upper.width` (row, omitted vertex) pairs, in that order, the row of its face. The
+      * result is the same however many threads share the work: the faces are sorted into the partitions of a hash by
+      * the thread that owns the partition, which finds the first occurrence of each of its faces, and the numbers are
+      * the ranks of those first occurrences.
+      */
+    def facesOf(upper: FaceTable): (FaceTable, Array[Int]) =
+      val w = upper.width
+      val width = w - 1
+      val pairs = upper.size * w
+      val rowOf = new Array[Int](pairs)
+      val threads = Parallel.threads
+      if threads == 1 || pairs < ParallelPairs then
+        val faces = FaceTable(width, upper.size * 2)
+        val face = new Array[Int](width)
+        var p = 0
+        while p < pairs do
+          val t = p / w
+          val drop = p % w
+          var j = 0
+          for i <- 0 until w if i != drop do
+            face(j) = upper.vertex(t, i)
+            j += 1
+          rowOf(p) = faces.add(face)._1
+          p += 1
+        (faces, rowOf)
+      else
+        val rows = upper.rows
+        // The hash `hash` gives to the face of a pair, without making the face.
+        val hashes = new Array[Int](pairs)
+        Parallel.ranges(upper.size, 512) { (from, until) =>
+          var t = from
+          while t < until do
+            var drop = 0
+            while drop < w do
+              var h = 0x9e3779b9
+              var i = 0
+              while i < w do
+                if i != drop then h = (h ^ rows(t * w + i)) * 0x01000193 + (h >>> 15)
+                i += 1
+              hashes(t * w + drop) = h ^ (h >>> 16)
+              drop += 1
+            t += 1
+        }
+        def sameFace(p: Int, q: Int): Boolean =
+          val (tp, dp, tq, dq) = (p / w, p % w, q / w, q % w)
+          var i = 0
+          var j = 0
+          var same = true
+          while same && i < w do
+            if i == dp then i += 1
+            else if j == dq then j += 1
+            else
+              same = rows(tp * w + i) == rows(tq * w + j)
+              i += 1
+              j += 1
+          same
+        val bits = math.max(1, 32 - Integer.numberOfLeadingZeros(threads - 1))
+        val partitions = 1 << bits
+        val firstOf = rowOf // reused: first the first occurrence of each pair's face, then the row
+        val tables = new Array[Array[Int]](partitions)
+        Parallel.foreach((0 until partitions).toVector) { part =>
+          val slots = Array.fill(Integer.highestOneBit(math.max(pairs / partitions, 4)) * 4)(-1)
+          val mask = slots.length - 1
+          var used = 0
+          var p = 0
+          while p < pairs do
+            val h = hashes(p)
+            if (h >>> (32 - bits)) == part then
+              var s = h & mask
+              while slots(s) >= 0 && !sameFace(slots(s), p) do s = (s + 1) & mask
+              if slots(s) < 0 then
+                slots(s) = p
+                used += 1
+                // Far more faces in one partition than a hash gives: the table would fill and the probe never end.
+                if used > slots.length / 4 * 3 then throw new IllegalStateException("FaceTable.facesOf: partition full")
+              firstOf(p) = slots(s)
+            p += 1
+          tables(part) = slots
+        }
+        // The rank of each first occurrence among the first occurrences: the row of its face.
+        val rank = new Array[Int](pairs)
+        var count = 0
+        var p = 0
+        while p < pairs do
+          if firstOf(p) == p then
+            rank(p) = count
+            count += 1
+          p += 1
+        val faceRows = new Array[Int](count * width)
+        Parallel.ranges(pairs, 4096) { (from, until) =>
+          var p = from
+          while p < until do
+            val first = firstOf(p)
+            if first == p then
+              val (t, drop) = (p / w, p % w)
+              var j = 0
+              var i = 0
+              while i < w do
+                if i != drop then
+                  faceRows(rank(p) * width + j) = rows(t * w + i)
+                  j += 1
+                i += 1
+            p += 1
+        }
+        Parallel.ranges(pairs, 4096) { (from, until) =>
+          var p = from
+          while p < until do
+            firstOf(p) = rank(firstOf(p))
+            p += 1
+        }
+        Parallel.foreach(tables.toVector) { slots =>
+          var s = 0
+          while s < slots.length do
+            if slots(s) >= 0 then slots(s) = rank(slots(s))
+            s += 1
+        }
+        val faces = FaceTable(width, 0)
+        faces.install(faceRows, count, tables, bits)
+        (faces, rowOf)
 
   /** The smallest sphere through the points `vs` (indices into `coords`): its centre, in their affine hull, is written
     * to `center` from `at`, and its radius returned. With `D` the matrix whose columns are the edge vectors `p_i - p0`
