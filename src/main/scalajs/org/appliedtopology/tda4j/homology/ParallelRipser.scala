@@ -1,11 +1,12 @@
 package org.appliedtopology.tda4j
 
-/** The JVM build runs the block-parallel Ripser engine here; a JavaScript program has one thread, so `supports` is
-  * never true and `run` refuses (`Persistence.Engine.ParallelRipser`).
+/** The JVM build runs the block-parallel Ripser engine here; a JavaScript program has one thread, so `run` refuses
+  * (`Persistence.Engine.ParallelRipser`) and `Engine.Auto`, which only asks with several threads, never gets here.
   */
 // Restricted: see the JVM twin in `src/main/scalajvm`.
 private[tda4j] object ParallelRipser:
-  def supports(points: Int, maxDimension: Int, characteristic: Int, cycles: Boolean): Boolean = false
+  // True so that asking for the engine by name reaches `run` and its message, not a size or prime it never looked at.
+  def supports(points: Int, maxDimension: Int, characteristic: Int, cycles: Boolean): Boolean = true
 
   def run(
     metricSpace: FiniteMetricSpace[Int],

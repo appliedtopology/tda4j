@@ -211,7 +211,7 @@ itself is still one `Long`). Both give exactly the pairs of a sequential reducti
 factors; an apparent pair has none), from which `cocycle(degree, p, column)` builds a bar's cocycle, and with `keepPairs`
 the pairing. `Persistence.Engine.ParallelRipser` runs it: `Persistence.Input.parallelRipser` calls the seam
 `ParallelRipser.run` (a pool of `Parallel.threads` daemon threads on the JVM, 8 units per thread; the Scala.js twin
-refuses and `supports` is false) and gets a `ParallelRipserRun`, the engine's keys and logs without its types, which is
+refuses; `Auto` only asks with several threads, which JavaScript never has) and gets a `ParallelRipserRun`, the engine's keys and logs without its types, which is
 all the shared `Persistence` code sees. Each bar's chain is a `LazyChain`: a cocycle is built from the logs when read, a
 cycle comes out of one pass of `Involution.cycles` over the keys (`ParallelRipserCycles`, with the shortcut of
 `CellularCohomologyEngine`: a death simplex whose youngest face is its birth needs no reduction). Keys of one dimension
