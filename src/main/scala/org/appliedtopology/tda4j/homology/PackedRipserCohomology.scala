@@ -21,13 +21,16 @@ def insertionDiameter(
 
 /** Persistent cohomology of the Vietoris-Rips complex of a metric space by Bauer's Ripser algorithm (arXiv:1908.02518):
   * the fast engine for Vietoris-Rips, and the MATLAB/CLI default there. Cells are packed as (diameter, combinatorial
-  * index) pairs ([[DiameterIndex]], Ripser's `diameter_index_t`); clearing, apparent pairs and the enclosing-radius
-  * cutoff as in Ripser.
+  * index) pairs ([[DiameterIndex]], Ripser's `diameter_index_t`); clearing, apparent pairs, emergent pairs and the
+  * enclosing-radius cutoff as in Ripser.
   *
   * Reports degrees `0 .. maxDimension`, each bar with its representative cocycle over `DiameterIndex` cells: decode a
   * cell of a degree-`k` bar with `vertices(cell, k + 1)`. `maxFiltrationValue` defaults to the minimum enclosing
-  * radius, past which nothing new is born. `useApparentPairs = false` turns off the apparent-pair shortcut, which
-  * changes no output (for benchmarking).
+  * radius, past which nothing new is born. `useApparentPairs = false` and `useEmergentPairs = false` turn off the
+  * apparent-pair and the emergent-pair shortcut, which change no output (for benchmarking). An emergent pair is a
+  * column whose oldest cofacet of the same diameter is the pivot of no earlier column: it is paired with that cofacet
+  * without being reduced, and kept only as the simplex that makes it (rebuilt if a later column needs it), which saves
+  * the memory of its stored column.
   *
   * Under a threshold that keeps few of the pairs (a large point cloud with a small `maxFiltrationValue`), cofacets are
   * found from each vertex's list of neighbours within the threshold instead of by trying every vertex, as Ripser does
@@ -422,13 +425,6 @@ open class PackedRipserCohomologyEngine[CoefficientT: Field](
         cur.advance()
     None
 
-  private def zeroApparentCofacet(sigma: DiameterIndex, size: Int): Option[DiameterIndex] =
-    for
-      tau <- zeroPivotCofacet(sigma, size)
-      partner <- zeroPivotFacet(tau, size + 1)
-      if partner == sigma
-    yield tau
-
   private def zeroApparentFacet(tau: DiameterIndex, size: Int): Option[DiameterIndex] =
     for
       sigma <- zeroPivotFacet(tau, size)
@@ -455,13 +451,6 @@ open class PackedRipserCohomologyEngine[CoefficientT: Field](
     * column's pivot, so the coboundary was already reduced and was never put on the working column.
     */
   def emergentPairCount: Int = _emergentPairCount
-
-  private var _reducedColumnCount: Int = 0
-  private var _additionCount: Int = 0
-  private var _emergentRebuilds: Int = 0
-  def reducedColumnCount: Int = _reducedColumnCount
-  def additionCount: Int = _additionCount
-  def emergentRebuilds: Int = _emergentRebuilds
 
   /** Every bar of degree `0 .. maxDimension`, each with its representative cocycle (over [[DiameterIndex]] cells;
     * decode with `si`); zero-length bars only if `includeZeroLength`.
@@ -791,9 +780,6 @@ open class PackedRipserCohomologyEngine[CoefficientT: Field](
     _totalSimplexCount = 0
     _apparentPairCount = 0
     _emergentPairCount = 0
-    _reducedColumnCount = 0
-    _additionCount = 0
-    _emergentRebuilds = 0
     val rows = Pairing()
     val noLog: Array[(DiameterIndex, CoefficientT)] = Array.empty
 
@@ -886,7 +872,6 @@ open class PackedRipserCohomologyEngine[CoefficientT: Field](
           (tau: DiameterIndex) =>
             val key = keyOf(nextKeys, tau.index, tau.high)
             if emergentRow.contains(key) then
-              _emergentRebuilds += 1
               forEachCofacet(rows.birth(emergentRow(key)), size)(fallbackColumn.push)
               Some(fallbackColumn.drain())
             else if useApparentPairs then
@@ -901,7 +886,6 @@ open class PackedRipserCohomologyEngine[CoefficientT: Field](
 
       // Reduces the coboundary of `sigma` against the columns before it and records the bar it opens.
       def reduce(sigma: DiameterIndex): Unit =
-        _reducedColumnCount += 1
         forEachCofacet(sigma, size)(working.push)
         // Reduce: while the pivot is some earlier column's pivot (or an apparent pair's), subtract that column.
         val log = mutable.ArrayBuffer.empty[(DiameterIndex, CoefficientT)]
@@ -913,7 +897,6 @@ open class PackedRipserCohomologyEngine[CoefficientT: Field](
             case Some(column) =>
               val redCoeff = fr.divide(working.pivotCoefficient, column.leadingCoefficient)
               working.addScaled(column, fr.negate(redCoeff))
-              _additionCount += 1
               if cocycles then log += ((pivotCell, redCoeff))
               reducing = working.pivot()
         val reduced = working.drain()

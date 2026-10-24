@@ -43,10 +43,12 @@ object SingleEngineProfileDriver:
     // `packed` only: whether emergent pairs (#57) are used, and the apparent-pair shortcut.
     val emergent = if args.length > 6 then args(6).toBoolean else true
     val apparent = if args.length > 7 then args(7).toBoolean else true
+    // The coefficient field's characteristic (default 2).
+    val prime = if args.length > 8 then args(8).toInt else 2
 
     val threshold: Option[Double] = if thresholdArg == "none" then None else Some(thresholdArg.toDouble)
 
-    val IntMod2 = new FiniteField(2)
+    val IntMod2 = new FiniteField(prime)
     import IntMod2.Fp
     import IntMod2.given
 
@@ -93,8 +95,7 @@ object SingleEngineProfileDriver:
                 val terms = b.representative.terms.map((c, k) => s"${c.index}:${c.high}:$k").sorted.mkString(",")
                 s"${b.dim}\t${b.lower}\t${b.upper}\t$terms"
               })}"
-          packedCounts = s"emergentPairCount=${ctx.emergentPairCount} reducedColumnCount=${ctx.reducedColumnCount} " +
-            s"additionCount=${ctx.additionCount} emergentRebuilds=${ctx.emergentRebuilds}"
+          packedCounts = s"emergentPairCount=${ctx.emergentPairCount}"
           (
             ctx.totalSimplexCount,
             ctx.substitutionCount,
