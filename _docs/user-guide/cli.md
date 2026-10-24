@@ -50,7 +50,8 @@ The [file formats page](input-output.md) describes the formats.
 | flag | values | default |
 |---|---|---|
 | `--complex` | `vr`, `alpha`, `cech`, `witness`, `dtm-rips`, `dtm-alpha`, `sparse-rips` | `vr` (a cubical complex for an image, the Dowker complex for a relation) |
-| `--engine` | `ripser`, `chunks`, `naive`, `cohomology`, `fast-cubical`, `fast-alpha` | `ripser` for `vr` and the lazy witness complex, `fast-cubical` for images of dimension 2 and up, `cohomology` otherwise; see [which engine](homology-computation/choosing-engine.md) |
+| `--engine` | `ripser`, `parallel-ripser`, `chunks`, `naive`, `cohomology`, `fast-cubical`, `fast-alpha` | `ripser` for `vr` and the lazy witness complex (`parallel-ripser` instead for `vr` when there are several threads and it applies), `fast-cubical` for images of dimension 2 and up, `cohomology` otherwise; see [which engine](homology-computation/choosing-engine.md) |
+| `--threads` | integer, at least 1 | all the processors; `1` is the sequential computation. The bars do not depend on it; where tied simplices give a choice, the representatives can |
 | `--max-dimension` | integer | `2`; for an image, its dimension |
 | `--max-filtration-value` | number | the minimum enclosing radius; in the units of the complex (a diameter for `vr`, a radius for `cech` and `alpha`) |
 | `--field` | `Z` (a prime field), `R` (floating point) | `Z` |

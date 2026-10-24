@@ -218,7 +218,8 @@ end PowerDistance
   *   make each value at least the largest of its facets', and equal to it within solver accuracy (see `clampMonotone`):
   *   the values are monotone mathematically, and the persistence algorithms need it exactly.
   * @param parallel
-  *   run the per-vertex loop on the common ForkJoinPool. Output is deterministic.
+  *   run the per-vertex loop on the common ForkJoinPool. Output is deterministic. Default: on, where there are threads
+  *   to share the work (the JVM; a Scala.js program has one).
   * @param verbose
   *   print a line to stderr whenever a candidate is left out because its QP did not converge.
   */
@@ -230,7 +231,7 @@ final case class AlphaDQPSettings(
   maxIterationsPerQP: Int = 0,
   workingSetCapacity: Int = 0,
   enforceMonotonicity: Boolean = true,
-  parallel: Boolean = false,
+  parallel: Boolean = Parallel.byDefault,
   verbose: Boolean = false
 )
 

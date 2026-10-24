@@ -47,7 +47,7 @@ object Cech extends PointCloudComplex:
     metricSpace: EuclideanMetricSpace,
     maxDimension: Int = 2,
     maxFiltrationValue: Optional[Double] = Optional.empty,
-    parallelFiltrationValue: Boolean = false
+    parallelFiltrationValue: Boolean = Parallel.byDefault
   ): LevelwiseSimplexStream[Int, Double] =
     Truncated.ofCofaces(
       CechCofaceSimplexStream(

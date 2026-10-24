@@ -6,8 +6,8 @@ title: Which persistence engine?
 ## Which persistence engine?
 
 All engines compute the same bars; they differ in speed, in what they accept, and in their representatives.
-`Persistence` picks one for you (`Engine.Auto`): Ripser for the Vietoris-Rips complex of points or a metric space, the
-fast cubical engine for images of two or more dimensions, and the cohomology engine for everything else. Ripser and the
+`Persistence` picks one for you (`Engine.Auto`): Ripser for the Vietoris-Rips complex of points or a metric space (its
+[parallel version](#parallel-ripser) where there is more than one thread), the fast cubical engine for images of two or more dimensions, and the cohomology engine for everything else. Ripser and the
 cohomology engine compute cohomology, which is much faster than homology in degree 2 (most cells of the top dimension
 are cleared without work).
 
@@ -25,6 +25,7 @@ an alpha complex, `Persistence` uses the cohomology engine.
 | Ripser (`PackedRipserCohomologyEngine`) | `Ripser` / `ripser` | a metric space | cycles, **cocycles** | Vietoris-Rips: the fastest there, and the default |
 | fast cubical (`FastCubicalHomologyEngine`) | `FastCubical` / `fast-cubical` | a cubical grid, 2-D and up | cycles | large images ([details](fast-cubical.md)) |
 | fast alpha (`FastAlphaHomologyEngine`) | MATLAB `fast-alpha` | a Helix alpha complex | cycles | large planar point clouds ([details](fast-alpha-complexes.md)) |
+| parallel Ripser | `ParallelRipser` (JVM only) | a metric space, `Z/p` | **cocycles**, cycles | Vietoris-Rips on several threads; what `Auto` picks there ([below](#parallel-ripser)) |
 
 What each complex allows:
 
@@ -39,3 +40,24 @@ engine also advances step by step (`advanceTo`, `advanceFor`). The cohomology an
 call. Over a field, homology and cohomology have the same bars, so the choice between cycles and cocycles is only about
 the representatives you need (`representatives`, or MATLAB's `representativeType`): cocycles for [circular coordinates](../circular-coordinates.md), cycles to see where a
 hole is. The [scaling up](../../tutorials/scaling-up.md) tutorial compares the four general engines on one data set.
+
+### Parallel Ripser
+
+`Engine.ParallelRipser` cuts Ripser's reduction into blocks that run on every processor. `Engine.Auto` chooses it
+instead of `Ripser` for the Vietoris-Rips complex of points or a metric space whenever there is more than one thread,
+and ask for it by name to use it on one thread too. `Persistence(points, threads = 4)` limits one call to four threads
+(`threads = 1` is plain `Ripser` under `Auto`); `-Djava.util.concurrent.ForkJoinPool.common.parallelism=N` sets the
+default for the whole program (`0` is one thread). MATLAB and Java take the option `threads` and `engine=parallel-ripser`,
+the command line `--threads` and `--engine parallel-ripser`, and an unset engine goes parallel there too ([MATLAB](../matlab.md#threads)).
+
+* The bars are those of `Engine.Ripser`. The representatives are valid but need not be the same chains: simplices of
+  equal diameter are ordered differently, so a cycle can differ from one machine to the next.
+* Cocycles are what it computes natively and are much faster than `Ripser`'s; cycles take one more pass over the
+  pairing, which also shares its work between the threads.
+* Each representative is built before `Persistence` returns. With `computeAllRepresentatives = false` each is built when
+  you first read it (`bar.representative.terms`), and the ones you never read cost nothing. Cycles are found all at once
+  by the first one read.
+* It works over `Z/p` for a prime `p` up to 46,000, drops zero-length bars (`includeZeroLength = true` is an error with
+  the engine by name, and `Auto` uses `Ripser` for it), and keeps a table of edge ranks with one entry per pair of
+  points, so it suits thousands of points, not hundreds of thousands. `Auto` uses `Ripser` where it does not apply.
+* JavaScript has one thread: `Auto` never chooses it there and the engine by name refuses.

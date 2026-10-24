@@ -165,7 +165,7 @@ open class LazyWitnessSimplexStream(
   nu: Int = 2,
   keepCriterion: PartialFunction[Simplex[Int], Boolean] = CofaceSimplexStream.keepAll,
   maxFiltrationValue: Option[Double] = None,
-  parallelFiltrationValue: Boolean = false
+  parallelFiltrationValue: Boolean = Parallel.byDefault
 ) extends RipserCofaceSimplexStream(
       WitnessMetricSpace(WitnessGeometry(ambientMetricSpace, landmarks), nu),
       keepCriterion,

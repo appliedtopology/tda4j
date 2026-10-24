@@ -27,6 +27,9 @@ import scala.util.Random
   */
 object ParallelPackedCohomology:
 
+  /** The largest prime a run can use: coefficients are `Int`s, and `(p - 1)^2 + p` must not overflow. */
+  val MaxPrime: Int = 46000
+
   /** The edges within the threshold ranked, and the key encoding. */
   open class Space(
     val n: Int,
@@ -72,7 +75,18 @@ object ParallelPackedCohomology:
     /** Whether keys are two words: the block and the index need more than 63 bits together. */
     val wide: Boolean = forceWide || bits + (32 - Integer.numberOfLeadingZeros(edgeA.length + 1)) > 63
     val mask: Long = if bits == 63 then Long.MaxValue else (1L << bits) - 1
-    val inverse: Array[Int] = Array.tabulate(p)(a => if a == 0 then 0 else (1 until p).find(b => a * b % p == 1).get)
+    // Fermat: a^(p-2); products of two residues and sums of residues and such products must fit an Int (p <= MaxPrime).
+    require(p <= MaxPrime, s"ParallelPackedCohomology: coefficients are Ints, so p <= $MaxPrime, got $p")
+    val inverse: Array[Int] = Array.tabulate(p) { a =>
+      var result = 1L
+      var base = a.toLong
+      var e = p - 2
+      while e > 0 do
+        if (e & 1) == 1 then result = result * base % p
+        base = base * base % p
+        e >>= 1
+      if a == 0 then 0 else result.toInt
+    }
 
     /** A one-word key's block; a two-word key carries its block beside it. */
     def block(key: Long): Int =
@@ -222,6 +236,17 @@ object ParallelPackedCohomology:
       factors += factor
       length += 1
 
+    // An ArrayBuilder's `result()` hands its array over and empties the builder when the array is exactly full, so a
+    // second call throws: the entries are read once here, after the reduction has finished.
+    private var addedColumns: Array[Long] | Null = null
+    private var addedFactors: Array[Int] | Null = null
+    def columns: Array[Long] =
+      if addedColumns == null then addedColumns = added.result()
+      addedColumns.nn
+    def multipliers: Array[Int] =
+      if addedFactors == null then addedFactors = factors.result()
+      addedFactors.nn
+
   private class Scratch(space: Space):
     val vs = new Array[Int](space.maxDim + 3)
     val ws = new Array[Int](space.maxDim + 3)
@@ -258,6 +283,8 @@ object ParallelPackedCohomology:
   open class Degree(val degree: Int, val stats: Stats):
     val pairs = mutable.ArrayBuffer.empty[(Long, Long)]
     val bars = mutable.ArrayBuffer.empty[(Int, Double, Double)]
+    // The column (birth key) of each bar of `bars`, for `cocycle` and for finding its pair.
+    val barColumns = mutable.ArrayBuffer.empty[Long]
     val reduced = mutable.LongMap.empty[Owner] // by column, for the columns with additions
     val logs = mutable.LongMap.empty[Log]
     val essential = mutable.ArrayBuffer.empty[Long]
@@ -379,7 +406,7 @@ object ParallelPackedCohomology:
         if older then -1L else key(rowBlock, indexOf(s.vs, k))
 
   // The block of the simplex in `vs` (size k): 1 + the largest rank of its edges, as Ripser computes a diameter.
-  private def blockOf(space: Space, vs: Array[Int], k: Int): Int =
+  def blockOf(space: Space, vs: Array[Int], k: Int): Int =
     var top = -1
     var i = 0
     while i < k do
@@ -764,13 +791,15 @@ object ParallelPackedCohomology:
         degree.essential ++= unit.essential
         degree.essentialBlocks ++= unit.essentialBlocks
       // Bars of positive length: the owners' pairs, and the essential columns (death block -1).
-      def bar(columnBlock: Int, rowBlock: Int): Unit =
+      def bar(column: Long, columnBlock: Int, rowBlock: Int): Unit =
         val birth = value(columnBlock)
         val death = if rowBlock < 0 then Double.PositiveInfinity else value(rowBlock)
-        if death > birth then degree.bars += ((d, birth, death))
-      for unit <- units do unit.owners.foreach((_, o) => bar(o.columnBlock, o.pivotBlock))
-      late.foreach((_, o) => bar(o.columnBlock, o.pivotBlock))
-      degree.essentialBlocks.foreach(b => bar(b, -1))
+        if death > birth then
+          degree.bars += ((d, birth, death))
+          degree.barColumns += column
+      for unit <- units do unit.owners.foreach((_, o) => bar(o.column, o.columnBlock, o.pivotBlock))
+      late.foreach((_, o) => bar(o.column, o.columnBlock, o.pivotBlock))
+      degree.essential.indices.foreach(i => bar(degree.essential(i), degree.essentialBlocks(i), -1))
 
       // Clearing for the next degree, and its simplices: every canonical cofacet within the threshold.
       val pivotChunks = units.map(_.pivots.result()) :+ latePivots.result()
@@ -823,7 +852,12 @@ object ParallelPackedCohomology:
         if wide then sortWide(level, levelBlocks, edgeA.length + 1, threads) else sort(level, threads)
         assembleNanos = System.nanoTime() - t4
       degrees += degree
-    Result(space, degrees.result())
+    val result = degrees.result()
+    // Read each log's entries once, here on one thread, so that cocycles can be built from several threads.
+    for degree <- result; log <- degree.logs.values do
+      log.columns
+      log.multipliers
+    Result(space, result)
 
   /** The coboundary of a cochain of keys of size `k`, as a map key -> coefficient (zeros dropped). */
   def coboundaryOf(space: Space, k: Int, cochain: collection.Map[Long, Int]): Map[Long, Int] =
@@ -845,7 +879,7 @@ object ParallelPackedCohomology:
           case None      => Map(c -> 1)
           case Some(log) =>
             val acc = mutable.LongMap(c -> 1)
-            val (added, factors) = (log.added.result(), log.factors.result())
+            val (added, factors) = (log.columns, log.multipliers)
             for i <- added.indices; (e, x) <- v(added(i)) do acc(e) = (acc.getOrElse(e, 0) + factors(i) * x) % p
             acc.filter(_._2 != 0).toMap
         memo(c) = result

@@ -49,6 +49,19 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Added
 
+- `Persistence.Engine.ParallelRipser` computes the Vietoris-Rips persistence of points or a metric space with the
+  block-parallel Ripser reduction on every processor (`ParallelPackedCohomology`, so far reachable only from the benchmark
+  driver), over `Z/p` for a prime `p` up to 46,000, and `Engine.Auto` chooses it instead of `Ripser` when there is more than
+  one thread and it applies (otherwise `Ripser`, as before). Cocycles are 4-5x faster than `Ripser`'s on 4 cores, cycles
+  about 3x (the cycle pass shares its work between the threads too). Its bars are `Ripser`'s; the representatives need not be, since ties between simplices of equal diameter
+  are broken differently, so a diagram's representatives can depend on the number of threads. Zero-length bars and real
+  coefficients are refused (`Auto` falls back to `Ripser` for them). JVM only: JavaScript refuses and names `Engine.Ripser`.
+  `Persistence(..., computeAllRepresentatives = false)` builds each bar's representative when it is first read (#220).
+- `Persistence(..., threads = n)` limits one call to `n` threads (`1` is the sequential computation, and makes `Auto` pick
+  `Ripser`), the representatives built later included. The MATLAB and Java option `threads` and the CLI flag `--threads`
+  do the same for every computation. In MATLAB, Java and the CLI an unset `engine` for `vr` over `Z/p` without
+  `includeZeroLength` or `edgeCollapse` is the parallel engine when there is more than one thread, and `engine=ripser`
+  stays `Ripser`; `engine=parallel-ripser` asks for it by name and refuses what it cannot do (#220).
 - `--plot barcode,diagram` draws a comma list of 2-D plots on one board, in a row or on `--layout RxC` (row by row; `--width`
   and `--height` size the drawing); `--tagged` letters the panels and `--title` titles the board, the other look flags apply
   to every panel (#105). A 3-D plot stays on its own.
@@ -68,7 +81,8 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   (`Perseus.readUniformToplex`, `readNonUniformToplex`, `toplexStream`).
 - Two JVM-only experiments that reduce Vietoris-Rips cohomology with each degree split into units of whole edge blocks
   on a thread pool: `BlockParallelReduction` (explicit coboundaries) and `ParallelPackedCohomology` (implicit
-  coboundaries). Bars only, with no representatives; `Persistence` does not use them. `ParallelPackedCohomology` packs
+  coboundaries). `BlockParallelReduction` gives bars only and `Persistence` does not use it; `ParallelPackedCohomology` (now
+  `Persistence.Engine.ParallelRipser`) keeps reduction logs for representatives. It packs
   a simplex into one `Long` key where that fits and keeps the edge block beside the index where it does not (o3_4096
   to degree 3 on 4 threads in 31 s, ripser.cpp 36 s).
 - `WideSimplexIndexing`: the combinatorial number system with two-word indices of up to 126 bits (`SimplexIndexing`
@@ -196,6 +210,17 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Changed
 
+- `Persistence` with `Engine.Ripser` (and the MATLAB and CLI `engine=ripser`) is about 15-20 % faster on large Vietoris-Rips
+  computations: a simplex is decoded from its index with a narrowed search and no sort (#220).
+- The JVM build shares more of its work between threads, with the same answers: the Helix triangulation (the walk evaluates
+  the next queued facets together), the face tables, alpha values and sort of `HelixDelaunay` and `BowyerWatsonDelaunay`, the
+  sort of each dimension and the coboundary blocks of the cohomology engine, and the cycle representatives of each death
+  dimension. `AlphaDQPSettings.parallel` and `parallelFiltrationValue` (Cech, DTM-Rips, sparse Rips, witness) are on by
+  default. On 4 cores: Helix in R^5 and R^6 about 2x, DQP without a radius 3x, Cech 2x, sparse Rips 1.7x, the verb on 30,000
+  points in R^3 1.5x. `-Djava.util.concurrent.ForkJoinPool.common.parallelism=0` runs everything on one thread; Scala.js
+  always does.
+- The alpha complexes of `HelixDelaunay` and `BowyerWatsonDelaunay` are `FlatLayerStream`s: the verb reduces them from
+  arrays, without a `Simplex` per cell.
 - `PackedRipserCohomologyEngine` pairs a column with its oldest cofacet of the same diameter without reducing it when no
   earlier column has that cofacet as its pivot (Bauer's emergent pairs, #57). The bars, pairs and representatives are
   those of the run without it (`useEmergentPairs = false`, a new last constructor parameter). On the Ripser paper's

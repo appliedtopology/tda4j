@@ -41,9 +41,8 @@ class ParallelPackedCohomologySpec extends Specification with ScalaCheck:
       s"sizes ${a.size} and ${b.size}, first difference at $i: ${a.lift(i)} vs ${b.lift(i)}"
     }
 
-  private def logs(r: Result) = r.degrees.map(d =>
-    d.logs.toSeq.map((c, log) => (c, log.added.result().toSeq, log.factors.result().toSeq)).sortBy(_._1)
-  )
+  private def logs(r: Result) =
+    r.degrees.map(d => d.logs.toSeq.map((c, log) => (c, log.columns.toSeq, log.multipliers.toSeq)).sortBy(_._1))
 
   private def agrees(
     metricSpace: FiniteMetricSpace[Int],
@@ -78,7 +77,7 @@ class ParallelPackedCohomologySpec extends Specification with ScalaCheck:
     (
       r.degrees.map(_.pairs.map((a, b) => (i(a), i(b))).sorted.toSeq),
       r.degrees.map(d =>
-        d.logs.toSeq.map((c, log) => (i(c), log.added.result().toSeq.map(i), log.factors.result().toSeq)).sortBy(_._1)
+        d.logs.toSeq.map((c, log) => (i(c), log.columns.toSeq.map(i), log.multipliers.toSeq)).sortBy(_._1)
       ),
       r.bars
     )

@@ -164,8 +164,7 @@ val commonSettings: Seq[Setting[?]] = Seq(
 val jvmSettings: Seq[Setting[?]] = Seq(
   assembly / assemblyJarName := s"${name.value}-${version.value}-assembly.jar",
   libraryDependencies ++= Seq(
-    "org.scala-lang.modules" %% "scala-parallel-collections" % "1.2.0",
-    "com.lihaoyi"            %% "cask"                       % "0.11.3",
+    "com.lihaoyi" %% "cask" % "0.11.3",
     // The libraries the pure-Scala replacements stand in for (they have no Scala.js build): oracles of the specs in
     // `src/test/scalajvm`, nothing else.
     "org.apache.commons" % "commons-numbers-combinatorics" % "1.3"   % Test,

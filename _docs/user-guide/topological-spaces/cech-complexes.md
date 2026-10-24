@@ -23,8 +23,8 @@ Filtration values are radii, not diameters: a loop born at diameter `d` in Vieto
 here. `maxFiltrationValue` defaults to the points' minimum enclosing radius, as for [Vietoris-Rips](vietoris-rips.md):
 past it the balls have a point in common and nothing new is born. The Čech complex is larger than the Vietoris-Rips
 complex at the same scale; the [alpha complex](alpha-complexes.md) has the same diagram at a fraction of the size, for
-points in low dimension. `parallelFiltrationValue = true` computes the radii on several threads (the output is the
-same).
+points in low dimension. The radii are computed on several threads where there are some (`parallelFiltrationValue =
+false` keeps them on one; the output is the same).
 
 The Čech complex is not a flag complex, so the Ripser engine does not apply; the cohomology (the default here), chunks
 and naive engines do. It is expensive: each simplex needs its own smallest enclosing ball, and it has many more

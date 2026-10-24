@@ -18,6 +18,19 @@ open class SimplexIndexing(val vertexCount: Int):
     if row(s) == -1L then row(s) = SimplexIndexing.binomial(d + s, s)
     row(s)
 
+  // Row `d` of the memo, made if need be: one lookup per row for a search that probes it many times.
+  private def binomialRow(d: Int): Array[Long] =
+    if d >= binomialRows.length then
+      val grown = Array.ofDim[Array[Long]](d + 1)
+      Array.copy(binomialRows, 0, grown, 0, binomialRows.length)
+      binomialRows = grown
+    if binomialRows(d) == null then binomialRows(d) = Array.fill(vertexCount + 1)(-1L)
+    binomialRows(d)
+
+  private inline def rowEntry(row: Array[Long], d: Int, s: Int): Long =
+    if row(s) == -1L then row(s) = SimplexIndexing.binomial(d + s, s)
+    row(s)
+
   /** Memoized `binomial(n, k)` with the small `k` (at most the size of a simplex) as the row and `n` (a vertex) as the
     * column, for [[CofacetCursor]], [[FacetCursor]] and `apply`.
     */
@@ -74,35 +87,30 @@ open class SimplexIndexing(val vertexCount: Int):
     */
   def decodeToArray(n0: Long, size: Int): Array[Int] =
     val result = new Array[Int](size)
-    var cursor = 0
     var n = n0
     var d = size
-    var continue = true
-    while continue do
-      if d < 0 then
-        // Unreachable in practice (mirrors `apply`'s own dead `d < 0` guard -- `d == 0` always short-circuits
-        // below before `d` could ever go negative), kept only for exact parity with `apply`'s branch structure.
-        continue = false
-      else if n <= 0 then
+    // The vertices come out in descending order and each search can stop at the previous answer, so the result is
+    // filled from the back (already sorted) and every row is looked up once.
+    var hi = vertexCount
+    while d > 0 do
+      if n <= 0 then
         // Remaining `d` vertices are exactly {0, ..., d-1} -- `apply`'s `upperAccum ++ (0 until d).toSet`.
         var v = 0
         while v < d do
-          result(cursor) = v
-          cursor += 1
+          result(v) = v
           v += 1
-        continue = false
-      else if d == 0 then
-        // `apply`'s `upperAccum + n.toInt` base case.
-        result(cursor) = n.toInt
-        cursor += 1
-        continue = false
+        d = 0
       else
-        val id: Int = searchRow(d, n)
-        result(cursor) = id + d
-        cursor += 1
-        n -= binomialEntry(d, id)
+        val row = binomialRow(d)
+        var lo = 0
+        var h = hi
+        while lo < h do
+          val mid = lo + (h - lo + 1) / 2
+          if rowEntry(row, d, mid) <= n then lo = mid else h = mid - 1
+        result(d - 1) = lo + d
+        n -= rowEntry(row, d, lo)
+        hi = lo
         d -= 1
-    java.util.Arrays.sort(result)
     result
 
   def cofacetIterator(simplex: Simplex[Int]): Iterator[Long] =

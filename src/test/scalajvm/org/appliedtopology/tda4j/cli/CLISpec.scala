@@ -64,6 +64,12 @@ class CLISpec extends mutable.Specification:
         ))
     }
 
+    "pass --threads through as threads, and --engine=parallel-ripser as an engine" >> {
+      TDA4jCLI
+        .buildOptions(new TDA4jConf(Seq("--threads", "3", "--engine", "parallel-ripser", "some-input-file")))
+        .toSeq must beEqualTo(Seq("engine", "parallel-ripser", "threads", "3"))
+    }
+
     "pass --nan-mask through as nanMask" >> {
       TDA4jCLI.buildOptions(new TDA4jConf(Seq("--nan-mask", "false", "some-input-file"))).toSeq must beEqualTo(
         Seq("nanMask", "false")

@@ -895,10 +895,20 @@ object RipserCofaceSimplexStream:
       i += 1
     FlatLayerStream.Layer(dim, sortedVertices, sortedValues)
 
+  /** The numbers `0 until values.length` in the order of the cells they stand for (cell `i` has the `width` vertices
+    * from `vertices(i * width)`): ascending value, equal values in ascending colexicographic order of the vertices (the
+    * largest vertex decides first), or, with `colex = false`, in ascending lexicographic order.
+    */
+  private[tda4j] def layerOrder(width: Int, values: Array[Double], vertices: Array[Int], colex: Boolean): Array[Int] =
+    new LayerSorter(width, values, vertices, colex).sorted()
+
+  // Ranges of at least this many cells are sorted by two tasks, one for each half.
+  private val ParallelSortRun = 1 << 15
+
   /** A merge sort of the numbers `0 until values.length` by the cell they stand for, on primitives: a boxed sort with a
     * comparator took a third of the time of a large Cech complex.
     */
-  private final class LayerSorter(width: Int, values: Array[Double], vertices: Array[Int]):
+  private final class LayerSorter(width: Int, values: Array[Double], vertices: Array[Int], colex: Boolean = true):
     private val n = values.length
     // The bits of a value in an order that is the signed order of the longs, which is `Double.compare`'s (-0.0 before
     // 0.0, NaN last).
@@ -918,11 +928,17 @@ object RipserCofaceSimplexStream:
       val (ka, kb) = (keys(a), keys(b))
       if ka != kb then ka < kb
       else
-        var k = width - 1
         var c = 0
-        while c == 0 && k >= 0 do
-          c = Integer.compare(vertices(a * width + k), vertices(b * width + k))
-          k -= 1
+        if colex then
+          var k = width - 1
+          while c == 0 && k >= 0 do
+            c = Integer.compare(vertices(a * width + k), vertices(b * width + k))
+            k -= 1
+        else
+          var k = 0
+          while c == 0 && k < width do
+            c = Integer.compare(vertices(a * width + k), vertices(b * width + k))
+            k += 1
         c < 0
 
     private def sort(lo: Int, hi: Int): Unit =
@@ -938,8 +954,11 @@ object RipserCofaceSimplexStream:
           i += 1
       else
         val mid = (lo + hi) >>> 1
-        sort(lo, mid)
-        sort(mid, hi)
+        // The halves touch `order` and `scratch` only inside their own ranges.
+        if hi - lo >= ParallelSortRun then Parallel.both(sort(lo, mid), sort(mid, hi))
+        else
+          sort(lo, mid)
+          sort(mid, hi)
         // Already in order when the largest of the left half is not above the smallest of the right.
         if less(order(mid), order(mid - 1)) then
           System.arraycopy(order, lo, scratch, lo, mid - lo)
