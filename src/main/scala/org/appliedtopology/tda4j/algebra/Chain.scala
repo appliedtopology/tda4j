@@ -76,7 +76,7 @@ abstract into class Chain[CellT: Ordering as order, CoefficientT: Field as field
 
   /** Equality as formal sums: every cell has the same coefficient in both, by the field's own equality (a field element
     * can have several representations), whatever the order or the storage. Collapses both. Assumes `obj` has the same
-    * cell and coefficient types (only `Chain` is checked at runtime). Consistent with [[hashCode]].
+    * cell and coefficient types (only `Chain` is checked at runtime). Consistent with `hashCode`.
     */
   override def equals(obj: Any): Boolean = obj.asMatchable match
     case other: Chain[CellT, CoefficientT] @unchecked =>
@@ -88,7 +88,7 @@ abstract into class Chain[CellT: Ordering as order, CoefficientT: Field as field
       }
     case _ => false
 
-  /** Consistent with [[equals]], so chains can be keys of a hash set or map: it hashes each cell with a nonzero
+  /** Consistent with `equals`, so chains can be keys of a hash set or map: it hashes each cell with a nonzero
     * coefficient together with the field's [[Field.hash]] of that coefficient, blind to the order and the storage.
     * Collapses the chain, as `equals` does. Over a field that compares within a tolerance
     * ([[Field.DoubleApproximated]]) only the cells are hashed; a field of your own that keeps the default
