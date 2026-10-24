@@ -179,7 +179,7 @@
     </tr>
     <tr>
      <td>alpha</td>
-     <td>325</td>
+     <td>313</td>
      <td>(0.297, 0.935)</td>
     </tr>
     <tr>
@@ -207,7 +207,8 @@
  </section>
  <section id="alpha-čech-without-the-bulk">
   <h3 class="h400"><a href="#alpha-čech-without-the-bulk" class="anchor"></a>Alpha: Čech without the bulk</h3>
-  <p>The alpha complex is a subcomplex of the Delaunay triangulation of the points, chosen so that at each scale it has the same shape as the union of balls, which is to say the same shape as the Čech complex. So the two give <strong>identical bars</strong>, the same loop to six digits, from 325 simplices instead of 36,050. When you can use it, that is a hundredfold saving for nothing.</p>
+  <p>The alpha complex is a subcomplex of the Delaunay triangulation of the points, chosen so that at each scale it has the same shape as the union of balls, which is to say the same shape as the Čech complex. So the two give <strong>identical bars</strong>, the same loop to six digits, from 313 simplices instead of 36,050. When you can use it, that is a hundredfold saving for nothing.</p>
+  <p>Like the other complexes, <code>Persistence</code> runs alpha only up to the points' minimum enclosing radius, past which nothing is born, so the 313 leave out the long thin triangles along the hull of the triangulation. <code>AlphaShapes(points)</code>, the whole complex, has 325 simplices; pass <code>maxFiltrationValue = Double.PositiveInfinity</code> to <code>Persistence</code> (or <code>'maxFiltrationValue', 'Infinity'</code> in MATLAB, <code>--max-filtration-value Infinity</code> in the CLI) to run on all of them. The bars are the same.</p>
   <p>You can use it when your points have coordinates in a low-dimensional space (the Delaunay triangulation is what limits it: fine in two or three dimensions, rapidly harder beyond). The <code>fast-alpha</code> engine, described in the <a href="../user-guide/user-guide/homology-computation/fast-alpha-complexes.html">user guide</a>, goes further by skipping the generic reduction.</p>
  </section>
  <section id="sparse-rips-rips-for-many-points">
@@ -250,7 +251,7 @@
 </span><span line-number="16" class=""><span class="tooltip-container"></span>val sizes = List(
 </span><span line-number="17" class=""><span class="tooltip-container"></span>  VietorisRips(metricSpace, maxDimension = 1),
 </span><span line-number="18" class=""><span class="tooltip-container"></span>  Cech(metricSpace, maxDimension = 1),
-</span><span line-number="19" class=""><span class="tooltip-container"></span>  AlphaShapes(points),
+</span><span line-number="19" class=""><span class="tooltip-container"></span>  AlphaShapes.upToEnclosingRadius(points),
 </span><span line-number="20" class=""><span class="tooltip-container"></span>  SparseRips(metricSpace, epsilon = 0.5, maxDimension = 1),
 </span><span line-number="21" class=""><span class="tooltip-container"></span>  Witness(metricSpace, landmarks, maxDimension = 1)
 </span><span line-number="22" class=""><span class="tooltip-container"></span>).map(_.iterator.size)

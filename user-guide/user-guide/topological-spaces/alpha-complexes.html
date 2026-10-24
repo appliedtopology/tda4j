@@ -143,7 +143,7 @@
 </span></code></pre>
    <div class="buttons"></div>
   </div>
-  <p>Filtration values are radii. Without <code>maxFiltrationValue</code> the whole complex is built; with it, only the simplices of radius at most that value (also <code>AlphaShapes(points, maxRadius = r)</code>), and for a small radius that is much cheaper.</p>
+  <p>Filtration values are radii. Unless you give it a <code>maxFiltrationValue</code>, <code>Persistence</code> stops at the points' <em>minimum enclosing radius</em> (the smallest <code>r</code> at which some point is within <code>r</code> of all others). Past it the union of the balls is contractible and nothing new is born, so the diagram is the same, and the long thin simplices along the hull of the triangulation are never built. <code>AlphaShapes(points)</code> is the whole complex, and <code>AlphaShapes.upToEnclosingRadius(points)</code> the one <code>Persistence</code> builds. A smaller <code>maxFiltrationValue</code> keeps only the simplices of radius at most that value (also <code>AlphaShapes(points, maxRadius = r)</code>), and for a small radius that is much cheaper; pass <code>Double.PositiveInfinity</code> for the whole complex.</p>
  </section>
  <section id="backends">
   <h3 class="h400"><a href="#backends" class="anchor"></a>Backends</h3>

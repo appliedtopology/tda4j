@@ -27,7 +27,7 @@
     Source
    </dt>
    <dd class="body-medium">
-    <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L252" target="_blank">FiniteMetricSpace.scala</a>
+    <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L299" target="_blank">FiniteMetricSpace.scala</a>
    </dd>
    <dt class="body-small">
     Graph
@@ -131,7 +131,7 @@ node4 -> node1;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L265" target="_blank">FiniteMetricSpace.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L312" target="_blank">FiniteMetricSpace.scala</a>
               </dd>
              </dl>
             </div>
@@ -195,7 +195,7 @@ node4 -> node1;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L269" target="_blank">FiniteMetricSpace.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L316" target="_blank">FiniteMetricSpace.scala</a>
               </dd>
              </dl>
             </div>
@@ -244,7 +244,7 @@ node4 -> node1;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L266" target="_blank">FiniteMetricSpace.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L313" target="_blank">FiniteMetricSpace.scala</a>
               </dd>
              </dl>
             </div>
@@ -287,7 +287,7 @@ node4 -> node1;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L267" target="_blank">FiniteMetricSpace.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L314" target="_blank">FiniteMetricSpace.scala</a>
               </dd>
              </dl>
             </div>
@@ -325,7 +325,7 @@ node4 -> node1;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L256" target="_blank">FiniteMetricSpace.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L303" target="_blank">FiniteMetricSpace.scala</a>
               </dd>
              </dl>
             </div>
@@ -355,7 +355,7 @@ node4 -> node1;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L254" target="_blank">FiniteMetricSpace.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L301" target="_blank">FiniteMetricSpace.scala</a>
               </dd>
              </dl>
             </div>
@@ -386,11 +386,12 @@ node4 -> node1;
            <div class="originInfo"></div>
            <div class="memberDocumentation">
             <div class="documentableBrief doc">
-             <p>Beyond this radius, the Vietoris-Rips complex is a cone and will have no further homological structure. See e.g. the Ripser paper, page 412. A space with infinite distances (a sparse distance matrix: a pair that is not listed has no edge) has no such cone; its radius is then the largest finite distance, past which nothing enters.</p>
+             <p>Beyond this radius, the Vietoris-Rips complex is a cone and will have no further homological structure. See e.g. the Ripser paper, page 412. The same holds for the Cech and alpha complexes, whose union of balls is then contractible, so no barcode changes past it: it is the radius that <code>Persistence</code> runs to when it is not told another. A space with infinite distances (a sparse distance matrix: a pair that is not listed has no edge) has no such cone; its radius is then the largest finite distance, past which nothing enters.</p>
             </div>
             <div class="cover">
              <div class="doc">
-              <p>Beyond this radius, the Vietoris-Rips complex is a cone and will have no further homological structure. See e.g. the Ripser paper, page 412. A space with infinite distances (a sparse distance matrix: a pair that is not listed has no edge) has no such cone; its radius is then the largest finite distance, past which nothing enters.</p>
+              <p>Beyond this radius, the Vietoris-Rips complex is a cone and will have no further homological structure. See e.g. the Ripser paper, page 412. The same holds for the Cech and alpha complexes, whose union of balls is then contractible, so no barcode changes past it: it is the radius that <code>Persistence</code> runs to when it is not told another. A space with infinite distances (a sparse distance matrix: a pair that is not listed has no edge) has no such cone; its radius is then the largest finite distance, past which nothing enters.</p>
+              <p>Found by looking for the point whose farthest point is nearest, with no allocation, and giving up on a point as soon as a point at least as far as the best so far turns up: on spread-out points that takes a handful of distances per point, not all of them.</p>
              </div>
              <h2 class="h200">Attributes</h2>
              <dl class="attributes attributes-small">
@@ -404,7 +405,7 @@ node4 -> node1;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L43" target="_blank">FiniteMetricSpace.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L49" target="_blank">FiniteMetricSpace.scala</a>
               </dd>
              </dl>
             </div>
