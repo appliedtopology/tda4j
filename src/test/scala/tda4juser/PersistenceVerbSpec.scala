@@ -244,9 +244,9 @@ class PersistenceEnginesSpec extends org.specs2.mutable.Specification:
       val points = Array.fill(15)(Array(rnd.nextDouble(), rnd.nextDouble()))
       def rounded(d: PersistenceDiagram[Simplex[Int]]) =
         d.triples.map((k, b, e) => (k, math.rint(b * 1e9), if e.isInfinite then e else math.rint(e * 1e9))).sorted
-      // The bars-only parallel engine has no representatives and refuses on JavaScript: `ParallelRipserEngineSpec`.
+      // The parallel engine refuses on JavaScript: `ParallelRipserEngineSpec`, `ParallelRipserRefusalSpec`.
       val forPoints = Persistence.Engine.values.toList.filterNot(e =>
-        e == Persistence.Engine.FastCubical || e == Persistence.Engine.ParallelRipserBarsOnlyNoRepresentatives
+        e == Persistence.Engine.FastCubical || e == Persistence.Engine.ParallelRipser
       )
       val diagrams = forPoints.map(e => Persistence(points, engine = e))
       val ripser = Persistence(points, engine = Persistence.Engine.Ripser)

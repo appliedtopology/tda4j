@@ -1,17 +1,19 @@
 package org.appliedtopology.tda4j
 
-/** The JVM build runs the block-parallel Ripser engine here; a JavaScript program has one thread, so it refuses
-  * (`Persistence.Engine.ParallelRipserBarsOnlyNoRepresentatives`).
+/** The JVM build runs the block-parallel Ripser engine here; a JavaScript program has one thread, so `supports` is
+  * never true and `run` refuses (`Persistence.Engine.ParallelRipser`).
   */
 // Restricted: see the JVM twin in `src/main/scalajvm`.
 private[tda4j] object ParallelRipser:
-  def bars(
+  def supports(points: Int, maxDimension: Int, characteristic: Int, cycles: Boolean): Boolean = false
+
+  def run(
     metricSpace: FiniteMetricSpace[Int],
     maxDimension: Int,
     threshold: Double,
-    characteristic: Int
-  ): List[(Int, Double, Double)] =
+    characteristic: Int,
+    withPairs: Boolean
+  ): ParallelRipserRun =
     throw new UnsupportedOperationException(
-      "Persistence: engine = ParallelRipserBarsOnlyNoRepresentatives needs threads, which JavaScript does not have; " +
-        "use Engine.Ripser"
+      "Persistence: engine = ParallelRipser needs threads, which JavaScript does not have; use Engine.Ripser"
     )

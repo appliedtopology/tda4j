@@ -205,15 +205,22 @@ instance of your own fall back to the cells.
 each degree cut into units of whole edge blocks (a simplex's block is its first longest edge):
 `BlockParallelReduction` on explicit coboundary matrices, `ParallelPackedCohomology` on implicit ones, as engine 4
 computes them (its key is one `Long` where the block and the index fit, else the block beside the index; the index
-itself is still one `Long`). Both give exactly the pairs of a sequential reduction. They return bars only, no representatives.
-`BlockParallelReduction` builds its matrices in full and `Persistence` does not call it. `ParallelPackedCohomology` is
-reachable as `Persistence.Engine.ParallelRipserBarsOnlyNoRepresentatives`, which `Auto` never chooses: the name says that
-the bars have no representatives (`annotation = None`), against the library's principle that every engine records them,
-so a caller has to ask for that by name. `Persistence.Input.parallelRipserBarsOnly` builds the diagram for a metric
-space, through the seam `ParallelRipser.bars` (a pool of `Parallel.threads` daemon threads on the JVM, 8 units per thread;
-the Scala.js twin throws `UnsupportedOperationException`). Characteristic `0`, `includeZeroLength` and any complex but
-`VietorisRips` are refused with an error that names the alternative. The benchmark harness runs the engine directly as
-`engine=parallel` (`tda4j-parallel-1t/-mt`, with `threads` and `wide`) and through `Persistence` as `engine=barsonly`.
+itself is still one `Long`). Both give exactly the pairs of a sequential reduction.
+`BlockParallelReduction` builds its matrices in full, returns bars only and `Persistence` does not call it.
+`ParallelPackedCohomology` with `cocycles = true` keeps a `Log` per reduced column (the columns added to it and their
+factors; an apparent pair has none), from which `cocycle(degree, p, column)` builds a bar's cocycle, and with `keepPairs`
+the pairing. `Persistence.Engine.ParallelRipser` runs it: `Persistence.Input.parallelRipser` calls the seam
+`ParallelRipser.run` (a pool of `Parallel.threads` daemon threads on the JVM, 8 units per thread; the Scala.js twin
+refuses and `supports` is false) and gets a `ParallelRipserRun`, the engine's keys and logs without its types, which is
+all the shared `Persistence` code sees. Each bar's chain is a `LazyChain`: a cocycle is built from the logs when read, a
+cycle comes out of one pass of `Involution.cycles` over the keys (`ParallelRipserCycles`, with the shortcut of
+`CellularCohomologyEngine`: a death simplex whose youngest face is its birth needs no reduction). Keys of one dimension
+ascend with age, which is the order `Involution` is given, reversed. Cycles need one-word keys; two-word keys give
+cocycles only. `computeAllRepresentatives` forces the chains before returning (cocycles on all threads).
+`Engine.Auto` chooses the engine when `Parallel.threads > 1`, the input is a Vietoris-Rips metric space, there is no
+`includeZeroLength`, and `ParallelRipser.supports` (a prime up to 46,000, fewer than 46,341 points, indices that fit 63
+bits). The benchmark harness runs the engine directly as `engine=parallel` (`tda4j-parallel-1t/-mt`, with `threads` and
+`wide`) and through `Persistence` as `engine=parallelverb`.
 
 ## 6. `FastCubicalHomologyEngine` — dual-graph union-find
 

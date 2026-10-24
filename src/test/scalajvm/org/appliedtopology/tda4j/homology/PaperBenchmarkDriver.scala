@@ -28,9 +28,9 @@ import scala.jdk.CollectionConverters.ListHasAsScala
   *     processor). Without a threshold it stops at the enclosing radius, as `Persistence` does; the edge table and the
   *     complex are built inside the timed region. `engine=parallel wide=true` uses two-word keys even where one Long
   *     would do (what they cost).
-  *   - `task=vr engine=barsonly`: the same engine through `Persistence`
-  *     (`Engine.ParallelRipserBarsOnlyNoRepresentatives`), on `Parallel.threads` threads (`sequential=true`: one); the
-  *     pool is made inside the timed region.
+  *   - `task=vr engine=parallelverb`: the same engine through `Persistence` (`Engine.ParallelRipser`, cocycles or
+  *     cycles as `reps` says), on `Parallel.threads` threads (`sequential=true`: one); the pool is made inside the
+  *     timed region.
   *   - `task=vr collapse=true`: Vietoris-Rips after `EdgeCollapse.collapse` (the collapse is inside the timed region);
   *     the cross-tool twin of GUDHI's edge collapse.
   *   - `task=sparse eps=0.3`: Sheehy's sparse Rips (`SparseRips`, Cavanna-Jahanseir-Sheehy); points or a distance
@@ -99,14 +99,14 @@ object PaperBenchmarkDriver:
     var held: AnyRef = null
 
     def engine: Persistence.Engine = engineName match
-      case "auto"        => Persistence.Engine.Auto
-      case "ripser"      => Persistence.Engine.Ripser
-      case "cohomology"  => Persistence.Engine.Cohomology
-      case "chunks"      => Persistence.Engine.Chunks
-      case "naive"       => Persistence.Engine.Naive
-      case "fastcubical" => Persistence.Engine.FastCubical
-      case "barsonly"    => Persistence.Engine.ParallelRipserBarsOnlyNoRepresentatives
-      case other         => throw IllegalArgumentException(s"engine=$other not valid for task=$task")
+      case "auto"         => Persistence.Engine.Auto
+      case "ripser"       => Persistence.Engine.Ripser
+      case "cohomology"   => Persistence.Engine.Cohomology
+      case "chunks"       => Persistence.Engine.Chunks
+      case "naive"        => Persistence.Engine.Naive
+      case "fastcubical"  => Persistence.Engine.FastCubical
+      case "parallelverb" => Persistence.Engine.ParallelRipser
+      case other          => throw IllegalArgumentException(s"engine=$other not valid for task=$task")
 
     val threads = opts.get("threads").fold(Runtime.getRuntime.availableProcessors)(_.toInt)
 

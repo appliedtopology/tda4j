@@ -14,9 +14,8 @@ trait PersistenceDiagram[CellT]:
   given coefficientField: (Coefficient is Field) = compiletime.deferred
 
   /** The bars of degree `0 .. maxDimension`, each with its representative (a cycle at birth). Zero-length bars are
-    * absent unless the diagram was computed with `includeZeroLength = true`. The one exception to the representatives
-    * is `Persistence.Engine.ParallelRipserBarsOnlyNoRepresentatives`, whose bars have none: `bar.annotation` is `None`
-    * and `bar.representative` throws.
+    * absent unless the diagram was computed with `includeZeroLength = true`. Reading a representative can be where it
+    * is computed (`Persistence.Engine.ParallelRipser` with `computeAllRepresentatives = false`).
     */
   def bars: List[PersistenceBar[Double, Chain[CellT, Coefficient]]]
 

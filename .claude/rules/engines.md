@@ -55,9 +55,11 @@ coface streams have none; use `VietorisRips` (`DESIGN-stream-naming.md`, `WORKLO
    change to the reduction (`WORKLOG-vr-working-column.md`). The heap needs ONE diameter per simplex: non-trusted metrics
    are read as `d(max, min)` (else an asymmetric one grows the column until OOM); Euclidean/Explicit are read as given
    (canonicalizing breaks the distance cache's row-wise walk). Edge-block units on threads are exact (#192, #194,
-   `WORKLOG-layered-inorder.md`); `Engine.ParallelRipserBarsOnlyNoRepresentatives` runs them from the verb: bars only by
-   design (Mikael, 2026-10-24: allowed, but loudly named), never chosen by `Auto`, JVM only (`ParallelRipser` seam),
-   refuses zero-length bars and characteristic 0 (`WORKLOG-parallelism.md`). Under a sparse threshold cofacets come from per-vertex
+   `WORKLOG-layered-inorder.md`); `Engine.ParallelRipser` runs them from the verb (Mikael, 2026-10-24): `Auto` picks it over
+   `Ripser` when `Parallel.threads > 1` and it applies (prime <= 46,000, no `includeZeroLength`, < 46,341 points); its
+   representatives are `LazyChain`s over the engine's reduction logs (cocycles) or one `Involution` pass (cycles), so they
+   may differ from `Ripser`'s in ties; JVM only (`ParallelRipser` seam). Check pivots/orders with `Ordering.Long`
+   explicitly where the chains' reversed `given` is in scope (`WORKLOG-parallelism.md`). Under a sparse threshold cofacets come from per-vertex
    NEIGHBOUR LISTS (`NeighbourLists`) in the all-vertex scan's order with bit-identical diameters (`NeighbourListsSpec`).
    A uniform sign flip of every coboundary changes no output: sign mutations must be non-uniform. Per-simplex state is
    PRIMITIVE (`Level`, `Pairing` rows, `ClearedSet`, `LongIntMap`; `WORKLOG-packed-engine-memory.md`); apparent pairs'

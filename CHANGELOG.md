@@ -49,11 +49,14 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Added
 
-- `Persistence.Engine.ParallelRipserBarsOnlyNoRepresentatives` computes the Vietoris-Rips bars of points or a metric space
-  with the block-parallel Ripser reduction on every processor (`ParallelPackedCohomology`, so far reachable only from the
-  benchmark driver). **Its bars carry no representatives**, cycles or cocycles (`bar.representative` throws), and zero-length
-  bars and real coefficients are refused; `Auto` never chooses it. JVM only: JavaScript refuses and names `Engine.Ripser`
-  (#220).
+- `Persistence.Engine.ParallelRipser` computes the Vietoris-Rips persistence of points or a metric space with the
+  block-parallel Ripser reduction on every processor (`ParallelPackedCohomology`, so far reachable only from the benchmark
+  driver), over `Z/p` for a prime `p` up to 46,000, and `Engine.Auto` chooses it instead of `Ripser` when there is more than
+  one thread and it applies (otherwise `Ripser`, as before). Cocycles are 4-5x faster than `Ripser`'s on 4 cores, cycles
+  about the same. Its bars are `Ripser`'s; the representatives need not be, since ties between simplices of equal diameter
+  are broken differently, so a diagram's representatives can depend on the number of threads. Zero-length bars and real
+  coefficients are refused (`Auto` falls back to `Ripser` for them). JVM only: JavaScript refuses and names `Engine.Ripser`.
+  `Persistence(..., computeAllRepresentatives = false)` builds each bar's representative when it is first read (#220).
 - `--plot barcode,diagram` draws a comma list of 2-D plots on one board, in a row or on `--layout RxC` (row by row; `--width`
   and `--height` size the drawing); `--tagged` letters the panels and `--title` titles the board, the other look flags apply
   to every panel (#105). A 3-D plot stays on its own.
@@ -73,7 +76,8 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   (`Perseus.readUniformToplex`, `readNonUniformToplex`, `toplexStream`).
 - Two JVM-only experiments that reduce Vietoris-Rips cohomology with each degree split into units of whole edge blocks
   on a thread pool: `BlockParallelReduction` (explicit coboundaries) and `ParallelPackedCohomology` (implicit
-  coboundaries). Bars only, with no representatives; `Persistence` does not use them. `ParallelPackedCohomology` packs
+  coboundaries). `BlockParallelReduction` gives bars only and `Persistence` does not use it; `ParallelPackedCohomology` (now
+  `Persistence.Engine.ParallelRipser`) keeps reduction logs for representatives. It packs
   a simplex into one `Long` key where that fits and keeps the edge block beside the index where it does not (o3_4096
   to degree 3 on 4 threads in 31 s, ripser.cpp 36 s).
 - `WideSimplexIndexing`: the combinatorial number system with two-word indices of up to 126 bits (`SimplexIndexing`

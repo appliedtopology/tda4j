@@ -112,3 +112,34 @@ Yes: it already keeps what is needed, nothing is discarded.
   superset of the reported bars: it includes zero-length and apparent pairs); `Engine.Ripser` with cocycles 2.1 s. So the
   logs themselves are free at this size and cocycles for all bars would keep roughly a 3x lead over Ripser. Memory of the logs and
   the cost on larger inputs are unmeasured.
+
+## Addendum 3 (2026-10-24): `Engine.ParallelRipser` with representatives; Auto picks it with threads (#220)
+
+Mikael: "for this one engine let's make cocycles on demand; a flag to compute all of them can be the default; can the dispatch
+discover whether it is multi threaded and go to the current default if single?" This replaces the loud bars-only engine of
+Addendum 1 (`ParallelRipserBarsOnlyNoRepresentatives` no longer exists; nothing was released with it).
+
+- **Shape**: `Persistence.Engine.ParallelRipser`; `Persistence(..., computeAllRepresentatives = true)` (read only by this
+  engine: `false` builds each representative when first read). The shared `Persistence` code sees the engine through
+  `ParallelRipserRun` (keys, logs, pairs) from the seam `ParallelRipser.run` (JVM: `ParallelPackedCohomology` with
+  `cocycles = true`, the pairing kept for cycles; Scala.js: refuses, `supports` false). Bars carry `LazyChain`s.
+- **Cocycles**: built from the reduction logs of the bar's column when read. **Cycles**: `ParallelRipserCycles`, one pass of
+  `Involution.cycles` on the `Long` keys with the shortcut of `CellularCohomologyEngine.cycleBars` (a death simplex whose
+  youngest face is its birth is not reduced), one death dimension per thread; the first cycle read computes all of them.
+- **Auto**: `ParallelRipser` instead of `Ripser` when `Parallel.threads > 1`, the input is a Vietoris-Rips metric space, no
+  `includeZeroLength`, and `ParallelRipser.supports` (prime <= 46,000 since the engine's coefficients are Ints, < 46,341
+  points for the `n x n` rank table, indices within 63 bits, and for cycles also one-word keys). Else `Ripser`.
+- **Measured** (4 cores, 1,200-point torus in R^3, degrees 0..2, threshold 1.2, p = 17, 3 trials after 1 warm-up, through the
+  driver): `Ripser` cocycles 2.3-2.5 s, `ParallelRipser` cocycles 0.44-0.65 s; `Ripser` cycles 3.5-3.8 s, `ParallelRipser`
+  cycles 3.5-4.0 s (the generic involution without the shortcut was 7-13 s). So cocycles are 4-5x, cycles (the default) break
+  even: the cycle pass is sequential per dimension.
+- **Bugs met on the way**: (1) `Log` read its `ArrayBuilder`s twice (fixed earlier, Addendum 2). (2) Inside `cycles`, the
+  `given Ordering[Long]` (reversed, for the chains) also drove `.max` and `.sorted` on arrays of keys: the youngest face came
+  out as the oldest and the deaths were visited newest first, which showed as "the pairing and the order disagree". Those
+  two calls say `Ordering.Long`. (3) The engine's inverse table was a quadratic search (46,000 steps squared at the largest
+  prime); it is Fermat now, and `ParallelPackedCohomology.MaxPrime` = 46,000 guards the Int arithmetic.
+- **Caveat for users**: ties between simplices of equal diameter are ordered differently from `Ripser`, so the bars are equal
+  but the representatives can differ, and with `Auto` they now depend on the number of threads. Tests that compare
+  representatives of `Auto` against `Ripser` exactly would see it; none in the suite does (1753 specs pass on 4 cores).
+- **Not done**: MATLAB (`matlab.TDA4j`) and the CLI (`cli.TDA4jConf`) still call `PackedRipserCohomologyEngine`; wide keys
+  with cycles; a parallel cycle pass.

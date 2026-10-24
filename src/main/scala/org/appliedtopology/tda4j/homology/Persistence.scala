@@ -68,6 +68,10 @@ object Image:
   *   also report zero-length bars `[v, v)` (cells paired with cells entering at the same value). Default `false`.
   * @param representatives
   *   `Representatives.Cycles` (default) or `Representatives.Cocycles`.
+  * @param computeAllRepresentatives
+  *   read only by `Engine.ParallelRipser`: `true` (default) builds every bar's representative before returning, as the
+  *   other engines do; `false` builds each when it is first read (`bar.representative.terms`), which costs nothing for
+  *   the bars you never look at.
   */
 /** Which representative `Persistence` gives each bar: a '''cycle''' (a chain without boundary, born at the bar's start
   * and a boundary at its end; for a loop, a path of edges around it) or a '''cocycle''' (a cochain whose coboundary is
@@ -79,8 +83,9 @@ enum Representatives:
 object Persistence:
   /** Which algorithm computes the diagram. All give the same bars; they differ in cost and in the representatives.
     *
-    *   - `Auto` (default): `Ripser` for the Vietoris-Rips complex of points or a metric space, `FastCubical` for an
-    *     image (or cubical grid) of dimension 2 and up when cycles are asked for, `Cohomology` for everything else.
+    *   - `Auto` (default): `Ripser` for the Vietoris-Rips complex of points or a metric space (`ParallelRipser` instead
+    *     when there is more than one thread and it applies), `FastCubical` for an image (or cubical grid) of dimension
+    *     2 and up when cycles are asked for, `Cohomology` for everything else.
     *   - `Ripser`: Bauer's Ripser, for the Vietoris-Rips complex of points or a metric space only; the fastest there.
     *     Cycles or cocycles.
     *   - `Cohomology`: persistent cohomology of any complex. Cycles or cocycles.
@@ -88,20 +93,20 @@ object Persistence:
     *   - `Chunks`: homology by clearing and compression, with union-find in degrees 0 and 1. Cycles or cocycles. Slow
     *     in degree 2 and up on Vietoris-Rips and Čech complexes, which have many cells of the top dimension.
     *   - `Naive`: the reference algorithm, one cell at a time. Cycles or cocycles.
-    *   - `ParallelRipserBarsOnlyNoRepresentatives`: Ripser's reduction cut into blocks that run on every processor, for
-    *     the Vietoris-Rips complex of points or a metric space. '''The bars carry no representatives at all''' (neither
-    *     cycles nor cocycles: `bar.representative` throws, and so does everything built on them, such as circular
-    *     coordinates), `representatives` is ignored, and zero-length bars cannot be reported. Never chosen by `Auto`; a
-    *     prime `characteristic` only; JVM only (JavaScript refuses). The same bars as `Ripser`, faster because it
-    *     records nothing about where a class lives and shares the reduction between threads; it keeps an `n x n` table
-    *     of edge ranks, so it is not for huge point sets. Choose it only when you do not need to see where a class
-    *     lives.
+    *   - `ParallelRipser`: Ripser's reduction cut into blocks that run on every processor, for the Vietoris-Rips
+    *     complex of points or a metric space with `Z/p` coefficients (p a prime up to 46,000), and bars of positive
+    *     length only. `Auto` chooses it instead of `Ripser` when there is more than one thread and it applies. Cocycles
+    *     are native; cycles cost one more (sequential) reduction. Its representatives are computed when first read
+    *     unless `computeAllRepresentatives` is true (the default). JVM only: JavaScript refuses. It keeps an `n x n`
+    *     table of edge ranks, so it is for thousands of points, not hundreds of thousands. Ties between simplices of
+    *     equal diameter are broken differently from `Ripser`'s, so the bars are the same and the representatives need
+    *     not be.
     *
     * Each engine computes one kind natively and derives the other from its pairing ([[Involution]]), which costs one
     * more reduction: cocycles are native to `Ripser` and `Cohomology`, cycles to the others.
     */
   enum Engine:
-    case Auto, Chunks, Naive, Cohomology, Ripser, FastCubical, ParallelRipserBarsOnlyNoRepresentatives
+    case Auto, Chunks, Naive, Cohomology, Ripser, FastCubical, ParallelRipser
 
   /** What `Persistence` can take. Points, metric spaces, images and streams convert to one where it's expected; to
     * teach `Persistence` a new kind of input, give a `Conversion[YourInput, Persistence.Input[CellT]]` that implements
@@ -143,19 +148,30 @@ object Persistence:
           "for this input use Engine.Chunks, Engine.Naive or Engine.Cohomology"
       )
 
-    /** The diagram by the block-parallel Ripser engine, with no representatives; only called for
-      * `Engine.ParallelRipserBarsOnlyNoRepresentatives`.
+    /** Whether the block-parallel Ripser engine computes the same bars as `ripser` for this `complex`, with the
+      * representatives asked for (`Engine.Auto` chooses it over `ripser` when it does and there are several threads).
       */
-    def parallelRipserBarsOnly(
+    def parallelRipserApplies(
+      complex: PointCloudComplex,
+      maxDimension: Int,
+      characteristic: Int,
+      includeZeroLength: Boolean,
+      cycles: Boolean
+    ): Boolean = false
+
+    /** The diagram by the block-parallel Ripser engine; only called for `Engine.ParallelRipser`. */
+    def parallelRipser(
       maxDimension: Int,
       maxFiltrationValue: Option[Double],
       complex: PointCloudComplex,
       characteristic: Int,
-      includeZeroLength: Boolean
+      includeZeroLength: Boolean,
+      cycles: Boolean,
+      computeAllRepresentatives: Boolean
     ): PersistenceDiagram[CellT] =
       throw new IllegalArgumentException(
-        "Persistence: engine = ParallelRipserBarsOnlyNoRepresentatives computes the Vietoris-Rips complex of points " +
-          "or a metric space; for this input use Engine.Chunks, Engine.Naive or Engine.Cohomology"
+        "Persistence: engine = ParallelRipser computes the Vietoris-Rips complex of points or a metric space; " +
+          "for this input use Engine.Chunks, Engine.Naive or Engine.Cohomology"
       )
 
   object Input:
@@ -214,37 +230,76 @@ object Persistence:
             longestEdge,
             scale
           )
-        override def parallelRipserBarsOnly(
+        override def parallelRipserApplies(
+          complex: PointCloudComplex,
+          maxDimension: Int,
+          characteristic: Int,
+          includeZeroLength: Boolean,
+          cycles: Boolean
+        ) =
+          (complex eq VietorisRips) && !includeZeroLength &&
+            ParallelRipser.supports(ms.size, maxDimension, characteristic, cycles)
+        override def parallelRipser(
           maxDimension: Int,
           maxFiltrationValue: Option[Double],
           complex: PointCloudComplex,
           characteristic: Int,
-          includeZeroLength: Boolean
+          includeZeroLength: Boolean,
+          cycles: Boolean,
+          computeAllRepresentatives: Boolean
         ) =
-          require(
-            complex eq VietorisRips,
-            "Persistence: engine = ParallelRipserBarsOnlyNoRepresentatives needs complex = VietorisRips"
-          )
+          require(complex eq VietorisRips, "Persistence: engine = ParallelRipser needs complex = VietorisRips")
           require(
             !includeZeroLength,
-            "Persistence: engine = ParallelRipserBarsOnlyNoRepresentatives cannot report zero-length bars; " +
-              "use Engine.Ripser with includeZeroLength = true"
+            "Persistence: engine = ParallelRipser cannot report zero-length bars; use Engine.Ripser with " +
+              "includeZeroLength = true"
           )
           require(
             characteristic != 0,
-            "Persistence: engine = ParallelRipserBarsOnlyNoRepresentatives works over Z/p for a prime p, not the reals"
+            "Persistence: engine = ParallelRipser works over Z/p for a prime p, not the reals; use Engine.Ripser"
           )
           val coefficients = Coefficients(characteristic) // checks that the characteristic is a prime
+          require(
+            ParallelRipser.supports(ms.size, maxDimension, characteristic, cycles),
+            s"Persistence: engine = ParallelRipser cannot take ${ms.size} points to degree $maxDimension over " +
+              s"Z/$characteristic${if cycles then " with cycles" else ""} (a prime up to 46,000, fewer than 46,341 " +
+              "points, and simplex indices that fit 63 bits); use Engine.Ripser"
+          )
           import coefficients.given
           val threshold = maxFiltrationValue.getOrElse(ms.minimumEnclosingRadius)
-          val bars = ParallelRipser.bars(ms, maxDimension, threshold, characteristic).map { (dim, birth, death) =>
-            PersistenceBar[Double, Chain[Simplex[Int], coefficients.C]](
+          val run = ParallelRipser.run(ms, maxDimension, threshold, characteristic, withPairs = cycles)
+          // The cycles of every bar come out of one pass over the pairing (Involution); the cocycles one by one.
+          lazy val allCycles = ParallelRipserCycles.cycles[coefficients.C](
+            run,
+            coefficients.fromInt(1),
+            coefficients.fromInt(characteristic - 1)
+          )
+          def simplexChain(terms: Seq[(Array[Int], coefficients.C)]) =
+            Chain.from(terms.map((vertices, c) => (Simplex(vertices*), c)))
+          val made = run.bars.indices.map { i =>
+            val (dim, birth, death) = run.bars(i)
+            val representative = new LazyChain[Simplex[Int], coefficients.C](
+              if cycles then () => simplexChain(allCycles(i).map((key, c) => (run.vertices(key, dim), c)))
+              else () => simplexChain(run.cocycle(i).map((vertices, c) => (vertices, coefficients.fromInt(c))))
+            )(summon[Ordering[Simplex[Int]]], summon[coefficients.C is Field])
+            val bar = PersistenceBar[Double, Chain[Simplex[Int], coefficients.C]](
               dim,
               ClosedEndpoint(birth),
-              if death.isPosInfinity then PositiveInfinity() else OpenEndpoint(death)
+              if death.isPosInfinity then PositiveInfinity() else OpenEndpoint(death),
+              Some(representative)
             )
+            (bar, representative)
           }
-          PersistenceDiagram[Simplex[Int], coefficients.C](bars, maxDimension, longestEdgeWithin(ms, threshold), scale)
+          // Cocycles are independent of each other, so they are built on all threads; the cycles come from one pass.
+          if computeAllRepresentatives then
+            if cycles then made.headOption.foreach(_._2.force())
+            Parallel.foreach(made)(_._2.force())
+          PersistenceDiagram[Simplex[Int], coefficients.C](
+            made.map(_._1).toList,
+            maxDimension,
+            longestEdgeWithin(ms, threshold),
+            scale
+          )
 
     given fromPointCloud: Conversion[PointCloud, Input[Simplex[Int]]] = pc => ofMetricSpace(pc.metricSpace, Some(pc))
     given fromArrays: Conversion[Array[Array[Double]], Input[Simplex[Int]]] = a => fromPointCloud(PointCloud(a))
@@ -283,12 +338,24 @@ object Persistence:
     characteristic: Int = FiniteField.DefaultPrime,
     engine: Engine = Engine.Auto,
     includeZeroLength: Boolean = false,
-    representatives: Representatives = Representatives.Cycles
+    representatives: Representatives = Representatives.Cycles,
+    computeAllRepresentatives: Boolean = true
   ): PersistenceDiagram[CellT] =
     val cycles = representatives == Representatives.Cycles
+    val requested = maxDimension.toOption
+    requested.foreach(k => require(k >= 0, s"Persistence: maxDimension must be >= 0, got $k"))
     val chosen = engine match
       case Engine.Auto =>
-        if input.ripserApplies(complex) then Engine.Ripser
+        if input.ripserApplies(complex) then
+          if Parallel.threads > 1 && input.parallelRipserApplies(
+              complex,
+              requested.getOrElse(DefaultMaxDimension),
+              characteristic,
+              includeZeroLength,
+              cycles
+            )
+          then Engine.ParallelRipser
+          else Engine.Ripser
         else if cycles && input.cubicalGrid.exists(_.ambientDim >= 2) then Engine.FastCubical
         else Engine.Cohomology
       case other => other
@@ -297,16 +364,16 @@ object Persistence:
         "Persistence: engine = FastCubical gives cycles only; for cocycles use Engine.Auto or Engine.Cohomology"
       )
     maxFiltrationValue.toOption.foreach(v => require(!v.isNaN, "Persistence: maxFiltrationValue is NaN"))
-    val requested = maxDimension.toOption
-    requested.foreach(k => require(k >= 0, s"Persistence: maxDimension must be >= 0, got $k"))
     given (CellT is OrderedCell) = input.cells
-    if chosen == Engine.ParallelRipserBarsOnlyNoRepresentatives then
-      input.parallelRipserBarsOnly(
+    if chosen == Engine.ParallelRipser then
+      input.parallelRipser(
         requested.getOrElse(DefaultMaxDimension),
         maxFiltrationValue.toOption,
         complex,
         characteristic,
-        includeZeroLength
+        includeZeroLength,
+        cycles,
+        computeAllRepresentatives
       )
     else if chosen == Engine.Ripser then
       input.ripser(
@@ -407,6 +474,6 @@ object Persistence:
               else engine.persistentCohomology(stream, includeZeroLength)
             // The engine read every cell once; iterating the stream again would build the complex a second time.
             (bars, engine.largestFiltrationValue.getOrElse(0.0))
-      case Engine.Ripser | Engine.Auto | Engine.FastCubical | Engine.ParallelRipserBarsOnlyNoRepresentatives =>
+      case Engine.Ripser | Engine.Auto | Engine.FastCubical | Engine.ParallelRipser =>
         throw new IllegalStateException("unreachable: resolved before compute")
     PersistenceDiagram[CellT, coefficients.C](bars.filter(_.dim <= maxDimension), maxDimension, last, scale)
