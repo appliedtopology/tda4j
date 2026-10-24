@@ -234,6 +234,7 @@
    <li><strong>Files need Node.js.</strong> In a browser there is no file system: <code>save</code>, and the readers of the <a href="input-output.html">file formats</a>, throw an error that says so. Pass the data in memory.</li>
    <li><strong>The live viewer is the page.</strong> <code>plot.show()</code> appends the plot to the page in a browser, and opens it in the default browser from Node.js; there is no viewer server.</li>
    <li><strong>Speed.</strong> The engines run at their usual pace on a few thousand simplices; programs that work with hundreds of millions of simplices belong on the JVM, where the engines were tuned and memory is not limited by the browser.</li>
+   <li><strong>Printed numbers.</strong> A number prints the JavaScript way: <code>1.0</code> as <code>1</code>, <code>1.0E-7</code> as <code>1e-7</code>, where the JVM prints <code>1.0</code> and <code>1.0E-7</code>. The command line, <code>Show</code>, the file writers and saved results are affected; every text reads back to the same number on both platforms, but a file written on one is not byte-identical to the other's.</li>
    <li><strong>Floating point.</strong> Sums and square roots are the same IEEE operations as on the JVM, but <code>Math.pow</code> and friends are the JavaScript engine's own, so a value computed through them can differ in the last digit.</li>
   </ul>
  </section>
