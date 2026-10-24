@@ -25,14 +25,30 @@ class EmergentPairsSpec extends mutable.Specification:
     case x: PackedRipserCohomologyEngine[?]#DiameterIndex => (x.diameter, x.index, x.high)
     case _                                                => (Double.NaN, -1L, -1L)
 
+  /** Points with coordinates in `0 until values` (some coincide): diameters tie almost everywhere. */
+  def tieGrid(seed: Long): EuclideanMetricSpace =
+    val rng = new scala.util.Random(seed)
+    val n = 8 + rng.nextInt(24)
+    val dim = 2 + rng.nextInt(3)
+    val values = 2 + rng.nextInt(3)
+    EuclideanMetricSpace(Array.fill(n)(Array.fill(dim)(rng.nextInt(values).toDouble)))
+
+  // Seeds of `tieGrid` where a column's oldest same-diameter cofacet is the pivot of an earlier column that was
+  // reduced and stored (so a missing check pairs two columns with one cofacet), found by searching 300 seeds.
+  val collisionSeeds: Seq[Long] = Seq(9L, 36L, 58L, 83L, 115L)
+
   def clouds(seed: Long): Seq[FiniteMetricSpace[Int]] =
     val rng = new scala.util.Random(seed)
     val n = 10 + rng.nextInt(20)
     val dim = 2 + rng.nextInt(3)
     Seq(
       EuclideanMetricSpace(Array.fill(n)(Array.fill(dim)(rng.nextDouble()))),
-      EuclideanMetricSpace(Array.fill(n)(Array.fill(dim)(rng.nextInt(3).toDouble)))
+      EuclideanMetricSpace(Array.fill(n)(Array.fill(dim)(rng.nextInt(3).toDouble))),
+      tieGrid(seed)
     )
+
+  /** The seeds of a run: a few of each kind, and the collisions. */
+  def seeds(jvm: Long, js: Long): Seq[Long] = (0L until TestPlatform.perPlatform(jvm, js)) ++ collisionSeeds
 
   /** The runs with and without the shortcut agree; the number of emergent pairs of the run with it (0 if it is off). */
   def emergentPairs(field: FiniteField)(
@@ -71,7 +87,7 @@ class EmergentPairsSpec extends mutable.Specification:
 
   "Emergent pairs change no bar, pair, cocycle or cycle, term for term" >> {
     val runs = for
-      seed <- 0L until TestPlatform.perPlatform(jvm = 10L, js = 2L)
+      seed <- seeds(jvm = 10L, js = 2L)
       space <- clouds(seed)
       threshold <- Seq(Some(0.3), None)
       field <- Seq(FiniteField(2), FiniteField(3), FiniteField(17))
@@ -85,7 +101,7 @@ class EmergentPairsSpec extends mutable.Specification:
       lists,
       wide
     )
-    (runs.collect { case (run, None) => run } must beEmpty) and
+    (runs.collect { case (run, None) => run }.take(3) must beEmpty) and
       // The shortcut has to be taken for this to say anything, with and without apparent pairs.
       (runs.collect { case ((_, _, _, true, _, _), Some(n)) => n }.sum must beGreaterThan(0)) and
       (runs.collect { case ((_, _, _, false, _, _), Some(n)) => n }.sum must beGreaterThan(0))
@@ -105,13 +121,13 @@ class EmergentPairsSpec extends mutable.Specification:
 
   "The shortcut finds the same bars as the reference engine, bar for bar, over F_2 and F_17" >> {
     val failures = for
-      seed <- 0L until TestPlatform.perPlatform(jvm = 12L, js = 3L)
+      seed <- seeds(jvm = 12L, js = 3L)
       space <- clouds(seed)
       field <- Seq(FiniteField(2), FiniteField(17))
       (packed, reference) = barsOfBoth(field)(space)
       if packed != reference
     yield (seed, field.p)
-    failures must beEmpty
+    failures.take(3) must beEmpty
   }
 
   /** Whether the simplices of dimension at most 2 are the bars (zero-length ones included) plus the finite bars of
@@ -127,10 +143,10 @@ class EmergentPairsSpec extends mutable.Specification:
 
   "The bars account for every simplex of dimension at most 2, with and without the shortcut" >> {
     val failures = for
-      seed <- 0L until TestPlatform.perPlatform(jvm = 10L, js = 2L)
+      seed <- seeds(jvm = 10L, js = 2L)
       space <- clouds(seed)
       emergent <- Seq(true, false)
       if !accountsForEverySimplex(space, emergent)
     yield (seed, emergent)
-    failures must beEmpty
+    failures.take(3) must beEmpty
   }
