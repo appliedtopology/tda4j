@@ -118,7 +118,7 @@ final case class Scene(
     */
   def withSetting(spec: String): Scene = this + Settings.parse(spec)
 
-  /** The palette called `name`: `brand`, `reference`, `print`, `grayscale` or `clear`. */
+  /** The palette called `name`: `brand`, `reference`, `print`, `grayscale`, `okabe-ito` or `clear`. */
   def withPalette(name: String): Scene = withPalette(Palette.named(name))
 
   /** The style called `name`: `default`, `slides`, `print` or `clear`. */

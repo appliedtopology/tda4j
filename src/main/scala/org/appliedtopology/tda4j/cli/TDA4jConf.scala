@@ -293,7 +293,7 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     name = "palette",
     noshort = true,
     descr = "for --plot: the color palette, brand (default), reference, print (black on pure white, for a paper), " +
-      "grayscale (print in grays only), or clear (black for a light page, white for a dark one, with --theme; for " +
+      "grayscale (print in grays only), okabe-ito (the eight colors of Okabe and Ito on white), or clear (black for a light page, white for a dark one, with --theme; for " +
       "--style clear)"
   )
   val style: ScallopOption[String] = opt[String](

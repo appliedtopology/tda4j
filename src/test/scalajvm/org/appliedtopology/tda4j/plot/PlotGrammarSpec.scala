@@ -593,6 +593,44 @@ class PlotGrammarSpec extends Specification:
     }
   }
 
+  "the Okabe-Ito look" should {
+    val oi = Palette.okabeIto
+    val surface = oi.light.surface
+    val diagram = Plot.diagram(circleDiagram)
+
+    "be the eight colors of Okabe and Ito, the three that tell a diagram's degrees apart first" in {
+      oi.seriesLight must beEqualTo(
+        IndexedSeq("#0072b2", "#d55e00", "#009e73", "#e69f00", "#56b4e9", "#cc79a7", "#f0e442", "#000000")
+      )
+      oi.seriesDark must beEqualTo(oi.seriesLight)
+    }
+    "keep those three, which a diagram puts side by side, readable on its own white surface" in {
+      surface must beEqualTo("#ffffff")
+      oi.seriesLight.take(3).map(contrast(_, surface)).min must beGreaterThanOrEqualTo(3.0)
+      // the yellow cannot be: it is the last but one, a degree past the sixth, and the marker shape and the legend tell it
+      contrast(oi.seriesLight(6), surface) must beLessThan(1.5)
+    }
+    "draw degree 0 in blue and degree 1 in vermillion" in {
+      val svg = (diagram + oi).svg(Theme.Light)
+      svg must contain("#0072b2")
+      svg must contain("#d55e00")
+      svg must not(contain(Palette.brand.seriesLight.head)) // the brand's teal is gone
+    }
+    "have one look for both modes, with the inks of the print look, and the blue and vermillion of its scales" in {
+      oi.dark must beEqualTo(oi.light)
+      oi.light must beEqualTo(Palette.print.light)
+      sameUpToIds((diagram + oi).svg(Theme.Dark), (diagram + oi).svg(Theme.Light))
+      Seq(oi.divergingNegative, oi.divergingPositive) must beEqualTo(Seq("#0072b2", "#d55e00"))
+      (0 to 10).map(i => luminance(oi.sequentialAt(i / 10.0))).sliding(2).forall(w => w(1) < w(0)) must beTrue
+    }
+    "be reached by name, however it is spelled, from a figure and a scene" in {
+      Seq("okabe-ito", "Okabe-Ito", " okabeito ", "okabe_ito").map(Palette.named) must
+        beEqualTo(Seq.fill(4)(oi))
+      diagram.withPalette("okabe-ito") must beEqualTo(diagram + oi)
+      Plot.points3D(circle).withPalette("okabe-ito").palette must beEqualTo(oi)
+    }
+  }
+
   "the clear look" should {
     val fig = Plot.diagram(circleDiagram)
     val clear = Palette.clear + Style.clear
@@ -667,7 +705,7 @@ class PlotGrammarSpec extends Specification:
     "refuse a name they do not have, and say which they have" in {
       Style.named("poster") must throwAn[IllegalArgumentException]("expected one of default, slides, print, clear")
       Palette.named("poster") must throwAn[IllegalArgumentException](
-        "expected one of brand, reference, print, grayscale, clear"
+        "expected one of brand, reference, print, grayscale, okabe-ito, clear"
       )
     }
   }

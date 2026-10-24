@@ -174,6 +174,9 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 - `Palette.grayscale` (`withPalette("grayscale")`, `--palette grayscale`): `Palette.print` with no color, for a
   black-and-white print. Degrees differ by lightness and, as always, by marker shape; a heatmap uses ColorBrewer's Greys; a
   diverging scale (a cocycle's values) has a darker negative end than positive one (#97).
+- `Palette.okabeIto` (`withPalette("okabe-ito")`, `--palette okabe-ito`): the eight colors of Okabe and Ito on `print`'s white
+  surface, blue, vermillion and bluish green first (they stay apart side by side for every common color vision), with
+  `print`'s heatmap ramp and blue-against-vermillion diverging scale; one look for both themes (#97).
 - `Camera(azimuth, elevation, zoom)` (`Scene.withCamera`, settings `camera.azimuth/elevation/zoom`) sets the view of a 3-D
   scene: the saved `.svg` is that view, a page's canvas starts from it; a 2-D plot refuses it, and the CLI says so before
   computing.

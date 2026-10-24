@@ -259,6 +259,27 @@ object Palette:
       divergingMidpoint = "#f0f0f0"
     )
 
+  /** The eight colors of Okabe and Ito's color-blind-safe palette, on [[print]]'s white surface and black ink: blue,
+    * vermillion and bluish green for degrees 0 to 2, then orange, sky blue, reddish purple, yellow and black. The first
+    * three pass every check of the dataviz validator on ALL pairs, which a persistence diagram needs; orange and sky
+    * blue are lighter than the 3:1 a mark wants against white, and yellow and black fall outside the validator's
+    * lightness band (black has no chroma), so they come last and the marker shape and the legend carry the degrees past
+    * the third. Okabe and Ito defined their colors for a light background, so there is one look for both modes, as for
+    * [[print]], whose scales it shares: a ColorBrewer Blues ramp, and blue against vermillion for a diverging scale.
+    */
+  val okabeIto: Palette =
+    val series = IndexedSeq("#0072b2", "#d55e00", "#009e73", "#e69f00", "#56b4e9", "#cc79a7", "#f0e442", "#000000")
+    Palette(
+      seriesLight = series,
+      seriesDark = series,
+      light = print.light,
+      dark = print.dark,
+      sequential = print.sequential,
+      divergingNegative = print.divergingNegative,
+      divergingPositive = print.divergingPositive,
+      divergingMidpoint = print.divergingMidpoint
+    )
+
   /** For a figure with no background of its own ([[Style.clear]]) that goes onto a page of either color: pure black
     * elements for a light page (`Theme.Light`) and pure white ones for a dark page (`Theme.Dark`, or `Theme.Auto`,
     * which follows the reader's setting, so use it only where the page does too). The degree colors are [[print]]'s on
@@ -283,16 +304,19 @@ object Palette:
   /** The palette figures use unless given another. */
   val default: Palette = brand
 
-  /** The palette called `name`, in any case: `brand` (the default), `reference`, `print`, `grayscale` or `clear`. */
+  /** The palette called `name`, in any case: `brand` (the default), `reference`, `print`, `grayscale`, `okabe-ito` or
+    * `clear`.
+    */
   def named(name: String): Palette = name.trim.lowerRoot match
-    case "brand"                   => brand
-    case "reference"               => reference
-    case "print"                   => print
-    case "grayscale" | "greyscale" => grayscale
-    case "clear"                   => clear
-    case other                     =>
+    case "brand"                                => brand
+    case "reference"                            => reference
+    case "print"                                => print
+    case "grayscale" | "greyscale"              => grayscale
+    case "okabe-ito" | "okabeito" | "okabe_ito" => okabeIto
+    case "clear"                                => clear
+    case other                                  =>
       throw IllegalArgumentException(
-        s"unknown palette '$other'; expected one of brand, reference, print, grayscale, clear"
+        s"unknown palette '$other'; expected one of brand, reference, print, grayscale, okabe-ito, clear"
       )
 
   // ----- color arithmetic in OKLab (Björn Ottosson's matrices), so ramps interpolate perceptually

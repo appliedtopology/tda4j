@@ -19,8 +19,8 @@ feature that needs a library goes in a new module**; `view()`'s cask is the stan
 re-exported by the labs. `matlab.PersistenceResult`'s `plot...` methods (hence the CLI's `--plot`) draw through it
 (`WORKLOG-facade-plots.md`).
 
-**Public core API only.** The subpackage could see `private[tda4j]` members; it must not -- what it
-needs, a user's own plotting code needs too (it needed `CubicalGridStream.topValues`, which the openness audit added).
+**Public core API only.** The subpackage could see `private[tda4j]` members; it must not: what it needs, a user's own
+plotting code needs too (`CubicalGridStream.topValues` was added for it).
 
 **Scene model, two renderers.** `Figure` = marks in data coordinates (`Mark.Points/Segments/Polygons/Discs/Boxes/Line/
 Text`, one paint or one per item, optional tooltip per item = SVG `<title>`), axes, legend, colorbar; `Svg.render` draws it.
@@ -108,7 +108,8 @@ API). Rules:
   `Axis.crossesAt` is in the units of the OTHER axis (`Scale.x(crossesAt = 0)` is the x axis through `y = 0`), kept only when
   that axis's range BEFORE the equal-aspect widening shows the value (else the axis stays at the edge, a note says why);
   the axis label stays at the edge. `Palette.grayscale` is checked by lightness and contrast in specs (the validator's chroma
-  floor fails any gray by construction). A diagram's `Board.heading` and a color bar's `barTicks` are drawn in the
+  floor fails any gray by construction); `Palette.okabeIto` is the canonical eight on white, first three validated on all pairs,
+  yellow and black outside the lightness band and so last. A diagram's `Board.heading` and a color bar's `barTicks` are drawn in the
   renderer, not the constructors; `plotRepresentative(i)` draws a cocycle at its bar's birth.
 - PNG and PDF are documented external conversion only (project lead, #101): no rasterizer module; interactivity (#102) is not
   wanted. A command in that section is run before it is written down (`cairosvg` and Chromium were; Inkscape and `rsvg-convert` come from their manuals).

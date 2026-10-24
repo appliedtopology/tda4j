@@ -121,3 +121,17 @@ on `claude/project-thread-uhbr7a`. Point-in-time record; the rules that came out
   `--tag` is refused for a list (one text on every panel is never wanted, `--tagged` letters them); a 3-D kind in a list is
   refused, 3-D stays alone. Specs (PlotCLISpec, "a list of kinds") compare the SVG with the board the facade builds.
   Mutations killed: column-by-column fill, `--tagged` ignored. The single-plot paths are unchanged (the old examples pass).
+- **#97 Okabe-Ito (Mikael, 2026-10-24: do not drop it only because of the cream surface).** `Palette.okabeIto` (`okabe-ito`,
+  `okabeito`, `okabe_ito`): the canonical eight in the order blue `#0072b2`, vermillion `#d55e00`, bluish green `#009e73`, orange
+  `#e69f00`, sky blue `#56b4e9`, reddish purple `#cc79a7`, yellow `#f0e442`, black `#000000`, on `print`'s white surface and
+  black ink, one look for both modes, `print`'s Blues ramp and blue-vermillion diverging pair. What the dataviz validator
+  (`validate_palette.js`, found in the skill's bundled scripts) says, on white: the first three pass every check on ALL pairs
+  (worst CVD ΔE 11.0 deutan, normal-vision 18.7, contrast at least 3:1) and also on the brand cream `#f8f7f4`, so the
+  surface was never what stopped them; all eight fail the lightness band (yellow L 0.90, black 0) and the chroma floor
+  (black), and contrast is a WARN for orange (2.25), sky blue (2.31) and yellow (1.32). So it is the colors, not the cream,
+  that keep slots 4 to 8 from the validator's standard, and my note under the grayscale entry ("fails on the brand surface")
+  was wrong about the cause. Decision: ship the canonical eight anyway, the weak ones last, the doc says so; markers and the
+  legend carry degrees past the third. A dark variant is not made (Okabe-Ito is defined for light backgrounds); `clear`
+  remains the choice for a dark page. Specs: the exact eight in order, the first three at least 3:1 on white, yellow under
+  1.5:1 (stated, not hidden), one look for both modes, three spellings. Mutations killed: first two swapped, cream surface,
+  brand dark mode. Looked at in Chromium: diagram H0 blue circle, H1 vermillion triangle, H2 bluish green square.

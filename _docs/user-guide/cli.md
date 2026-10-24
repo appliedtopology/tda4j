@@ -168,7 +168,7 @@ and the other look flags apply to every panel. A 3-D plot is drawn on its own.
 | `--caption`, `--tag`, `--description` | a line under the plot, a letter in its corner for one panel of a figure (`(a)`), and what a screen reader says of it; 2-D plots only |
 | `--look` | a whole look at once: `default`, `print` (`--palette print --style print`) or `clear`; the flags below, after it, win |
 | `--width`, `--height` | the size in pixels, 100 to 20000 |
-| `--palette` | `brand` (default), `reference`, `print` (black on pure white, for a paper), `grayscale` (that in grays only, for a black-and-white print), `clear` (black for a light page, white for a dark one) |
+| `--palette` | `brand` (default), `reference`, `print` (black on pure white, for a paper), `grayscale` (that in grays only, for a black-and-white print), `okabe-ito` (the eight colors of Okabe and Ito on white), `clear` (black for a light page, white for a dark one) |
 | `--style` | `default`, `slides` (larger text and marks), `print`, `clear` (portable fonts, no background) |
 | `--theme` | `light`, `dark`, `auto`; default `light` for `.svg`, `auto` for `.html` |
 | `--text-scale F` | a factor on every text size (1.3 suits a slide) |

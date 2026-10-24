@@ -117,7 +117,7 @@ final case class Board(
   /** The title of the board, above the panels and as the page's title. */
   def withTitle(text: String): Board = this + Labels(title = text)
 
-  /** Every panel in the palette called `name`: `brand`, `reference`, `print`, `grayscale` or `clear`. */
+  /** Every panel in the palette called `name`: `brand`, `reference`, `print`, `grayscale`, `okabe-ito` or `clear`. */
   def withPalette(name: String): Board = this + Palette.named(name)
 
   /** Every panel in the style called `name`: `default`, `slides`, `print` or `clear`. */
