@@ -210,6 +210,8 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Changed
 
+- `Persistence` with `Engine.Ripser` (and the MATLAB and CLI `engine=ripser`) is about 15-20 % faster on large Vietoris-Rips
+  computations: a simplex is decoded from its index with a narrowed search and no sort (#220).
 - The JVM build shares more of its work between threads, with the same answers: the Helix triangulation (the walk evaluates
   the next queued facets together), the face tables, alpha values and sort of `HelixDelaunay` and `BowyerWatsonDelaunay`, the
   sort of each dimension and the coboundary blocks of the cohomology engine, and the cycle representatives of each death

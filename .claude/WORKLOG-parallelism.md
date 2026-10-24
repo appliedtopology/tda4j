@@ -180,3 +180,51 @@ cli) for the number of cores; and yes, parallelize the cycle pass when possible.
 - **Not done**: wide keys with cycles; the apply side of the cycle reductions (the 5.5k hard deaths are still reduced in order);
   `BlockParallelReduction` stays unreachable from the verb. The weekly MATLAB-in-browser checks (#215 family) have not run on
   this wiring: the facade is checked through `TDA4jParallelSpec` from Scala, not through MATLAB's Java bridge.
+
+## Addendum 5 (2026-10-24): why `ParallelRipser` is faster than `Ripser` on ONE thread (Mikael's question on #222)
+
+Setup: scratch driver, one engine per JVM, 7-9 rounds, median, both engines on the same `EuclideanMetricSpace` (distances
+cached), p = 17, degrees 0..2, cocycles with representatives left lazy. Torus 1,200 points in R^3, threshold 1.2: `Ripser`
+(`PackedRipserCohomologyEngine`) 2.05-2.15 s, `ParallelPackedCohomology` on one thread (`threads = 1`, one unit) 0.83-0.85 s
+(Space 0.03-0.1 s included). Random 600 points in R^4, threshold 0.55: 1.91 s vs 0.66 s. Same bars.
+
+**Not the algorithm's work.** Both resolve almost every column without reduction: `Ripser` 920,373 apparent + 4,279 emergent
+of 977,731 simplices; the parallel engine 871,645 apparent + 5,522 claimed (degree 2: 926,249 columns). Neither reduces more
+than the other, so this is constant factors per column. Toggles (torus): the parallel engine's apparent-pair method
+(`ripserApparent`, Ripser's way instead of from the block's edge) 0.83 -> 0.85 s, no difference; `Ripser` with
+`useApparentPairs = false` 2.15 -> 1.73 s (faster: its apparent test costs more than it saves here), without emergent pairs
+2.39 s (8.5 s with neither), without neighbour lists 4.25 s (lists on: 1.97).
+
+**Where the time goes** (JFR execution samples, innermost matching frame, scaled to the median run; sampling and inlining make
+each row +-50 ms). `Ripser` / `Ripser` after the decode patch below / parallel engine, in ms:
+
+| | Ripser | patched | parallel |
+|---|---|---|---|
+| decoding a simplex from its index | 647 | 384 | 135 |
+| cofacet enumeration | 523 | 450 | 75 (+55 apparent test) |
+| diameters (`maxPairwiseDistance`, `diameterWithout`) | 142 | 145 | 0 (a rank lookup, in "other") |
+| index sort (comparator over an index permutation) | 204 | 312 | 108 (primitive `Long` keys) |
+| hash maps and sets (`LongIntMap`, `ClearedSet`) | 177 | 190 | 7 |
+| working column / heap | 97 | 89 | 128 |
+| rest | 357 | 197 | 332 |
+
+Why each differs:
+1. **Edge ranks.** The parallel engine ranks the edges once (length, then ends) and puts the rank of a simplex's first
+   longest edge, its block, in the high bits of its key. Diameter of a cofacet or facet is a max of ranks (no pairwise
+   distance scan), "same diameter" is an integer comparison, the sort is on `Long` keys, and sets of columns are sorted arrays.
+   `Ripser` keeps `(diameter, index)` pairs: each cofacet's diameter is computed, each facet's by `maxPairwiseDistance`, the
+   order is a comparator sort of an index array, and cleared columns, pairs and emergent rows are hash maps probed per column.
+2. **Decoding.** `Ripser`'s apparent test decodes the same simplex three times per column (`zeroPivotCofacet`, `zeroPivotFacet`'s
+   `vertices`, the facet cursor), each with a binary search over the whole vertex range and a final sort; the parallel engine
+   decodes once, searching below the previous vertex, and its table is dense.
+3. **Cofacet enumeration** in `Ripser` visits every cofacet of every column (through neighbour lists) to find the oldest tie.
+
+**Causal check on the decode.** `SimplexIndexing.decodeToArray` now looks each row up once, narrows each search to below the
+previous vertex and fills the array from the back (no sort): 306 -> ~180 ns per call (random indices, n = 1,200, size 3), and
+`Ripser` 2.15 -> 1.75-1.79 s on the torus, 1.91 -> 1.57 s on the cloud, bars identical (`SimplexIndexingSpec`, full suite).
+That removes about 0.35 s of the 1.3 s gap and confirms the sampling attribution for this row; the other rows are NOT yet tested
+by a change.
+
+**What is left** (about 2.4x on one thread): cofacet enumeration and the per-column apparent test, diameters, the comparator
+sort and the hash maps, all of which edge-rank blocks make cheap. Moving `Ripser` onto blocks would change its tie-breaking
+(its representatives would then equal the parallel engine's, not today's), so it is a decision, not a patch: filed as #223.
