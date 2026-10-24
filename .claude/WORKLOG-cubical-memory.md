@@ -143,7 +143,7 @@ F₅ on the 40³, 48³, 96³ and 600² images (16 pairs, all identical).
 - A noise image is the worst case for bars (a bar for every few pixels); smooth images need far less. The bars themselves
   cost ~330 B each (`PersistenceBar`, two endpoints with their boxed `Double`s and `Ordering` field, `Some`, the chain);
   the 2048² diagram is ~0.5 GB of its ~0.6 GB live set. Shrinking that is an API question (`BarcodeEndpoint[Double]` boxes;
-  `PersistenceBar` carries an `Ordering`), not an engine one, and was left alone.
+  `PersistenceBar` carries an `Ordering`), not an engine one, and was left alone: #218.
 - The Scala.js build is not measured; the shared code changed only in primitive-array idioms available there.
 - The two block-parallel experiments are untouched.
 
