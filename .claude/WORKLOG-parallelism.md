@@ -251,3 +251,9 @@ numbers to #223 before any change to `Auto`.
 
 Real JS multi-core parallelism: #224 (workers + `SharedArrayBuffer`, `Long` not a typed-array element, shared pivot
 ownership needs a redesign).
+
+**JS numbers (CI `test-js`, d536286; the timing example was removed afterwards).** 110 points in R^3, degree 2, cocycles, median of 5 after a warm-up:
+Scala.js (Node on the CI runner): `Ripser` 995 ms, `ParallelRipser` 624 ms (1.6x). JVM on the same runner: 239 ms vs 68 ms (3.5x).
+The first CI link also failed once, on `ThreadLocal.withInitial` (not in Scala.js's `java.lang`); the shared engine now uses an
+`initialValue` subclass. `tda4jJS/Test/compile` does not link, so it cannot catch missing JDK methods: only `fullLinkJS` (CI
+`npm-package`) does. Whether `Auto` should pick `ParallelRipser` on JS is for #223.

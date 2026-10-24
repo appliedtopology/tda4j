@@ -67,20 +67,4 @@ class ParallelRipserSpec extends Specification:
       Persistence(points, engine = parallel, characteristic = 0) must throwWith[IllegalArgumentException]("prime p")
       Persistence(points, engine = parallel, complex = Cech) must throwWith[IllegalArgumentException]("VietorisRips")
     }
-
-    // Temporary: one line of timing in the log of each platform (the first JS run of this engine; #223).
-    "time both engines on this platform" >> {
-      val points = cloud(110, 3, 7L)
-      def ms(engine: Engine): Double =
-        val t0 = System.nanoTime()
-        Persistence(points, maxDimension = 2, representatives = Representatives.Cocycles, engine = engine)
-        (System.nanoTime() - t0) / 1e6
-      for engine <- List(Engine.Ripser, parallel) do ms(engine)
-      for engine <- List(Engine.Ripser, parallel) do
-        val times = (1 to 5).map(_ => ms(engine)).sorted
-        println(
-          f"TIMING ${TestPlatform.perPlatform(jvm = "jvm", js = "js")} $engine: median ${times(2)}%.0f ms, runs ${times.map(t => f"$t%.0f").mkString(" ")}"
-        )
-      ok
-    }
   }
