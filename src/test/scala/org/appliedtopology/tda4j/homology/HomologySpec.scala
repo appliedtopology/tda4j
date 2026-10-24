@@ -189,9 +189,8 @@ class HomologySpec extends mutable.Specification with PlatformScalaCheck:
       // disagreement between barcodeAt's delegate and diagramAt's own chunked computation would hide.
       val noneMissing = chunksBars.forall(_.annotation.isDefined)
       // (2) exact representative match against the naive engine, at every dimension -- multiset equality via
-      // Chain's own overridden `equals` (item order inside a Chain isn't significant, and Chain has no
-      // matching `hashCode` override, so plain `.toSet`/`.toMap` equality on tuples containing a Chain is NOT
-      // reliable here: two `equals`-equal Chains can land in different hash buckets). Bipartite-match instead.
+      // Chain's own `equals` (item order inside a Chain isn't significant). Bipartite-match, not `.toSet`: a Set
+      // would merge two bars that have the same representative, and the counts must agree too.
       val matchesNaive =
         val remaining = scala.collection.mutable.ArrayBuffer.from(naiveReps)
         chunksReps.forall { case (dim, lower, upper, chain) =>

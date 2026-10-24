@@ -20,8 +20,10 @@ only for this subsystem (never test the runtime class of a generic coefficient, 
   (`rules/cubical.md`). No nulls. Equality: formal sums by `field.isEqual` (an `Fp` has several `Int` forms), order-blind.
   Defines `reduceBy`/`reduceByUntil` (with an optional `fallback` for pivots needing on-the-fly substitution) and
   a `RingModule` instance. `reduceLoop` uses a `mutable.TreeMap` accumulator (use `z.head`, not `headOption`, which
-  allocates an iterator on `mutable.TreeMap`). `Chain` has `equals` without a matching `hashCode`
-  (#58): never a `Set`/`Map` key.
+  allocates an iterator on `mutable.TreeMap`). `hashCode` agrees with `equals` (#58): it hashes each nonzero term's
+  cell with `Field.hash` of its coefficient, blind to order and storage, so a chain is a fine `Set`/`Map` key.
+  `Field.hash` defaults to `0` (right for any field); `Fp` hashes its residue; `DoubleApproximated` stays `0`, since
+  tolerance admits no finer hash (`WORKLOG-chain-hashcode.md`). A new `Field` with exact equality overrides `hash`.
 - `Cell`/`OrderedCell`/`OrderedBasis`: anything with a `boundary` and a total order plugs into homology. Concrete
   instances: `Simplex`, `Cube`, `FiniteSimplicialSet` generators.
 - `DenseVector`, `DenseMatrix`, `ConjugateGradient`, `Erf`: small dense `Double` linear algebra in pure Scala (no

@@ -158,6 +158,11 @@ survives a reduction step. `FiniteField.scala` gives exact, non-approximate coef
 distinct, incompatible types), with exact arithmetic via a precomputed inverse table and products in `Long`,
 so large primes stay exact.
 
+`Field.hash(x)` is the one member with a default: a hash of an element that agrees with `isEqual`, which `Chain.hashCode`
+combines with the cell's hash. The default, `0` for every element, is right for any field (a chain is then hashed by its
+cells alone, as over `DoubleApproximated`, whose tolerance admits no finer hash). `Fp` hashes its residue in `0 until p`;
+an exact field of your own should override it with a hash of its canonical form.
+
 ### `Cell`, `OrderedCell`, and what `boundary` returns
 
 ```scala sc:nocompile
@@ -202,7 +207,8 @@ nothing else. The library has two storages (both `final`: the reductions match o
   arithmetic on it returns a `HeapChain`.
 
 - Equality compares formal sums: the same cells, each with coefficients equal by the field's own `isEqual` (a
-  field element can have several representations), whatever the order or the storage.
+  field element can have several representations), whatever the order or the storage. `hashCode` agrees with it
+  (each nonzero term's cell with `Field.hash` of its coefficient), so chains can be keys of a `Set` or `Map`.
 - `collapseHead()`/`collapseAll()` merge duplicate-cell entries, dropping exact zeros. Naive `+`/`-`/`⊠`
   only lazily collapse the head, so a hand-rolled reduction loop built out of raw `Chain` arithmetic
   accumulates an ever-growing backlog of uncollapsed duplicates — see

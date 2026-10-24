@@ -214,7 +214,7 @@ anything may). `WORKLOG-openness-audit.md`.
 Everything downstream is generic over `Field` (`Fp` is an opaque type per prime). **Never test the runtime class of a
 generic coefficient** (`case d: Double`): on Scala.js every boxed number is a `Double`, so an `Fp` matches. Ask the field
 (`Field.toDouble`, #80; `WORKLOG-release-prep-2026-10-14.md`). `Chain` is abstract and OPEN (a place for the community to
-experiment) and has `equals` without a matching `hashCode` (#58): never a `Set`/`Map` key. `Cocell`/`OrderedCocell` were
+experiment); its `equals` and `hashCode` are those of the formal sum (`Field.hash` for the coefficients, #58). `Cocell`/`OrderedCocell` were
 **removed on purpose**: don't reintroduce (`DESIGN-generic-cohomology.md`).
 **Generic-`given` capture gotcha**: a `given` like `chainRM` fixes its `Ordering[CellT]` where it is summoned; at
 class scope (before the stream's ordering exists) it silently pivots on the cell's intrinsic order. Summon it where

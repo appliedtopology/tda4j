@@ -113,7 +113,7 @@ class NaiveCappedSpec extends mutable.Specification:
     def one = base.one
     def showForSelf = base.showForSelf
 
-  // Both lists hold the same elements, as multisets (a Chain has equals but no matching hashCode: no Set).
+  // Both lists hold the same elements, as multisets (a Set would merge equal chains, and the counts must agree too).
   def sameMultiset[A](want: Seq[A], got: Seq[A]): Boolean =
     var rest = got
     want.size == got.size && want.forall { a =>
