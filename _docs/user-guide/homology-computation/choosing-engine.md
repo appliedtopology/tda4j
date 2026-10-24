@@ -25,7 +25,7 @@ an alpha complex, `Persistence` uses the cohomology engine.
 | Ripser (`PackedRipserCohomologyEngine`) | `Ripser` / `ripser` | a metric space | cycles, **cocycles** | Vietoris-Rips: the fastest there, and the default |
 | fast cubical (`FastCubicalHomologyEngine`) | `FastCubical` / `fast-cubical` | a cubical grid, 2-D and up | cycles | large images ([details](fast-cubical.md)) |
 | fast alpha (`FastAlphaHomologyEngine`) | MATLAB `fast-alpha` | a Helix alpha complex | cycles | large planar point clouds ([details](fast-alpha-complexes.md)) |
-| parallel Ripser | `ParallelRipser` (JVM only) | a metric space, `Z/p` | **cocycles**, cycles | Vietoris-Rips on several threads; what `Auto` picks there ([below](#parallel-ripser)) |
+| parallel Ripser | `ParallelRipser` | a metric space, `Z/p` | **cocycles**, cycles | Vietoris-Rips on several threads; what `Auto` picks there ([below](#parallel-ripser)) |
 
 What each complex allows:
 
@@ -60,4 +60,4 @@ the command line `--threads` and `--engine parallel-ripser`, and an unset engine
 * It works over `Z/p` for a prime `p` up to 46,000, drops zero-length bars (`includeZeroLength = true` is an error with
   the engine by name, and `Auto` uses `Ripser` for it), and keeps a table of edge ranks with one entry per pair of
   points, so it suits thousands of points, not hundreds of thousands. `Auto` uses `Ripser` where it does not apply.
-* JavaScript has one thread: `Auto` never chooses it there and the engine by name refuses.
+* JavaScript has one thread: `Auto` never chooses it there, and the engine by name runs on that one thread with the same bars.

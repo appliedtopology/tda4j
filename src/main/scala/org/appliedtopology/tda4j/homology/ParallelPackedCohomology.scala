@@ -1,16 +1,13 @@
 package org.appliedtopology.tda4j
 
-import java.util.concurrent.{Callable, ExecutorService, Executors}
-import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.mutable
-import scala.util.Random
 
-/** An experiment (JVM only; #192, #194): Vietoris-Rips persistent cohomology over F_p on implicit coboundaries, as the
-  * packed Ripser engine computes it (clearing, apparent pairs, a heap working column, cofacets enumerated on the fly),
-  * with each degree's columns cut into units of whole edge blocks and the units reduced in parallel. A column whose
-  * pivot leaves its unit is deferred: the deferred columns go on in parallel while their pivots are owned by the units'
-  * pairs (phase 2a), then one by one in the sequential order (phase 2b). The pairs, and the reduction log of every
-  * column, are those of one sequential reduction in the same order.
+/** The engine behind `Persistence.Engine.ParallelRipser` (#192, #194, #220): Vietoris-Rips persistent cohomology over
+  * F_p on implicit coboundaries, as the packed Ripser engine computes it (clearing, apparent pairs, a heap working
+  * column, cofacets enumerated on the fly), with each degree's columns cut into units of whole edge blocks and the
+  * units reduced in parallel. A column whose pivot leaves its unit is deferred: the deferred columns go on in parallel
+  * while their pivots are owned by the units' pairs (phase 2a), then one by one in the sequential order (phase 2b). The
+  * pairs, and the reduction log of every column, are those of one sequential reduction in the same order.
   *
   * A simplex is one `Long` key: its block (1 + the rank of its first longest edge, edges ranked by (length, smaller
   * end, larger end); 0 for a vertex) above `mask - index` (`index` its combinatorial index; a larger index is older, as
@@ -19,11 +16,10 @@ import scala.util.Random
   * names the simplex within its dimension, and the block beside it in every array, heap and column that orders keys;
   * the order is then by block, then key. Coefficients are `Int`s mod `p`.
   *
-  * {{{
-  * java -cp $CP org.appliedtopology.tda4j.ParallelPackedCohomology <dataset> <n> <maxDim> <threshold|mer> <threads> [units per thread] [trials] [seed] [p]
-  * }}}
-  * `threads` 1 with 1 unit per thread is the sequential reduction; set the JVM's
-  * `-Djava.util.concurrent.ForkJoinPool.common.parallelism` to `threads`, which the sorts use.
+  * `persistence(space, threads, unitsPerThread, ...)` cuts each degree into `threads * unitsPerThread` units; they run
+  * on the threads `Parallel` has where the call is (`Parallel.withThreads(n)`, else the common pool), one after the
+  * other when `threads` is 1 and on JavaScript. `threads` 1 with 1 unit per thread is the sequential reduction. The
+  * command-line driver is `ParallelPackedCohomologyDriver` (JVM, in the test tree).
   */
 object ParallelPackedCohomology:
 
@@ -562,22 +558,12 @@ object ParallelPackedCohomology:
           if log != null then log.add(owner.column, f)
     result
 
-  private def parallel(pool: ExecutorService | Null, threads: Int, tasks: Int)(body: Int => Unit): Unit =
-    if pool == null || threads == 1 then (0 until tasks).foreach(body)
-    else
-      val next = AtomicInteger(0)
-      val workers = java.util.ArrayList[Callable[Unit]]()
-      for _ <- 0 until threads do
-        workers.add(() =>
-          var t = next.getAndIncrement()
-          while t < tasks do
-            body(t)
-            t = next.getAndIncrement()
-        )
-      pool.invokeAll(workers).forEach(_.get())
+  // The tasks run one after the other when `threads` is 1, else on the threads `Parallel` has here.
+  private def parallel(threads: Int, tasks: Int)(body: Int => Unit): Unit =
+    if threads == 1 then (0 until tasks).foreach(body) else Parallel.tasks(tasks)(body)
 
   private def sort(keys: Array[Long], threads: Int): Unit =
-    if threads > 1 then java.util.Arrays.parallelSort(keys) else java.util.Arrays.sort(keys)
+    if threads > 1 then Parallel.sortLongs(keys) else java.util.Arrays.sort(keys)
 
   // Two-word keys into order: by block (a counting sort, blocks being 0 .. blockCount - 1), then by key within each
   // block. `blocks` ends up sorted with `keys`.
@@ -603,9 +589,12 @@ object ParallelPackedCohomology:
     while b < blockCount do
       java.util.Arrays.fill(blocks, start(b), start(b + 1), b)
       b += 1
-    val within: java.util.function.IntConsumer = b => java.util.Arrays.sort(keys, start(b), start(b + 1))
-    val range = java.util.stream.IntStream.range(0, blockCount)
-    (if threads > 1 then range.parallel() else range).forEach(within)
+    def within(from: Int, until: Int): Unit =
+      var b = from
+      while b < until do
+        java.util.Arrays.sort(keys, start(b), start(b + 1))
+        b += 1
+    if threads > 1 then Parallel.ranges(blockCount, 16)(within) else within(0, blockCount)
 
   /** Every bar of degrees `0 .. maxDim`; `unitsPerThread` 1 with `threads` 1 is the sequential reduction. */
   def persistence(
@@ -613,7 +602,6 @@ object ParallelPackedCohomology:
     threads: Int,
     unitsPerThread: Int,
     cocycles: Boolean,
-    pool: ExecutorService | Null,
     keepPairs: Boolean = false
   ): Result =
     import space.*
@@ -654,7 +642,7 @@ object ParallelPackedCohomology:
 
       // Phase 1: each unit youngest first, against its own owners.
       val t1 = System.nanoTime()
-      parallel(pool, threads, units.length) { u =>
+      parallel(threads, units.length) { u =>
         val unit = units(u)
         val s = scratch.get()
         val lookup: (Long, Int) => Owner | Null = (row, _) => unit.owners.getOrNull(row)
@@ -724,7 +712,7 @@ object ParallelPackedCohomology:
       val emptied = new Array[Boolean](deferred.length)
       val adds2a = new Array[Long](deferred.length)
       val slice = math.max(1, math.min(32, deferred.length / math.max(1, threads * 8)))
-      parallel(pool, threads, (deferred.length + slice - 1) / slice) { c =>
+      parallel(threads, (deferred.length + slice - 1) / slice) { c =>
         val s = scratch.get()
         for i <- c * slice until math.min(deferred.length, (c + 1) * slice) do
           val df = deferred(i)
@@ -815,7 +803,7 @@ object ParallelPackedCohomology:
         val parts = new Array[Array[Long]](chunks)
         val blockParts = new Array[Array[Int]](chunks)
         val current = level
-        parallel(pool, threads, chunks) { c =>
+        parallel(threads, chunks) { c =>
           val s = scratch.get()
           val out = mutable.ArrayBuilder.ofLong()
           val outBlocks = if wide then mutable.ArrayBuilder.ofInt() else null
@@ -885,43 +873,3 @@ object ParallelPackedCohomology:
         memo(c) = result
         result
     v(column)
-
-  def main(arguments: Array[String]): Unit =
-    val check = arguments.contains("check")
-    val ripserApparent = arguments.contains("ripser-apparent")
-    val args = arguments.filterNot(a => a == "check" || a == "ripser-apparent")
-    val dataset = args(0)
-    val n = args(1).toInt
-    val maxDim = args(2).toInt
-    val threads = args(4).toInt
-    val unitsPerThread = if args.length > 5 then args(5).toInt else 8
-    val trials = if args.length > 6 then args(6).toInt else 5
-    val seed = if args.length > 7 then args(7).toLong else 42L
-    val p = if args.length > 8 then args(8).toInt else 17
-    val pts = BlockParallelReduction.points(dataset, n, Random(seed))
-    val metricSpace = EuclideanMetricSpace(pts)
-    val threshold = if args(3) == "mer" then metricSpace.minimumEnclosingRadius else args(3).toDouble
-    val common = java.util.concurrent.ForkJoinPool.getCommonPoolParallelism
-    println(
-      s"$dataset n=$n maxDim=$maxDim threshold=$threshold p=$p threads=$threads units/thread=$unitsPerThread " +
-        s"(common pool parallelism $common)${if ripserApparent then ", apparent pairs Ripser's way" else ""}"
-    )
-    val pool = if threads > 1 then Executors.newFixedThreadPool(threads) else null
-    def once(): (Long, Result) =
-      val t0 = System.nanoTime()
-      val dist = new Array[Double](n * n)
-      for i <- 0 until n; j <- 0 until n do dist(i * n + j) = metricSpace.distance(i, j)
-      val space = Space(n, (i, j) => dist(i * n + j), threshold, maxDim, p, ripserApparent)
-      val r = persistence(space, threads, unitsPerThread, cocycles = true, pool)
-      (System.nanoTime() - t0, r)
-    val runs = (1 to trials).map(_ => once())
-    val times = runs.map(_._1).sorted
-    val last = runs.last._2
-    println(
-      f"  bars ${last.bars.size}, total median ${times(times.size / 2) / 1e6}%.1f ms, min ${times.head / 1e6}%.1f ms"
-    )
-    last.degrees.foreach(d => println("  " + d.stats))
-    if check then
-      val packed = BlockParallelReduction.packedBars(metricSpace, maxDim, threshold, p)
-      println(s"  same bars as the packed Ripser engine: ${last.bars == packed}")
-    if pool != null then pool.shutdown()

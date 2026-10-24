@@ -228,3 +228,26 @@ by a change.
 **What is left** (about 2.4x on one thread): cofacet enumeration and the per-column apparent test, diameters, the comparator
 sort and the hash maps, all of which edge-rank blocks make cheap. Moving `Ripser` onto blocks would change its tie-breaking
 (its representatives would then equal the parallel engine's, not today's), so it is a decision, not a patch: filed as #223.
+
+## Addendum 6 (2026-10-24): ParallelRipser in shared code, one thread on Scala.js
+
+Mikael: "Do A, write up an issue for more serious js parallelism." Done: `ParallelPackedCohomology` and `ParallelRipser`
+moved from `src/main/scalajvm` to `src/main/scala`, so both platforms compile them; the JS refusal stub is gone.
+
+What had to change to make that compile and keep the JVM identical:
+- the engine no longer takes a `ForkJoinPool`: it uses the `Parallel` seam (`Parallel.tasks(count)(f)` pulls tasks off an
+  atomic counter on at most `threads` workers; `Parallel.sortLongs` is `Arrays.sort` / `parallelSort`; block-wise sorts use
+  `Parallel.ranges`). Callers that want a thread count wrap the call in `Parallel.withThreads(n)` (the spec, the benchmark
+  driver and the former `main`, now `ParallelPackedCohomologyDriver` in `src/test/scalajvm`).
+- on Scala.js `Parallel.tasks` is a plain loop, `sortLongs` is `Arrays.sort`, so the result is the one-thread result of the
+  JVM engine: bars equal `Ripser`'s (`ParallelRipserSpec`, shared, replaces `ParallelRipserRefusalSpec`).
+- `Auto` still picks it only when `Parallel.threads > 1`, which never holds on JS: JS users get it only by naming it.
+
+Not measured: the JS speed. JS cannot be linked in this container (Maven Central 429 for the linker's dependencies), so the
+first real JS run of the engine is CI's `test-js`. `ParallelRipserSpec` has a temporary timing example that prints
+`TIMING <platform> <engine>` lines (110 points in R^3, degree 2, cocycles) for both engines on both platforms; JVM here:
+Ripser median 129 ms, ParallelRipser 70 ms. Remove the example once the JS line is read off the CI log, and take the
+numbers to #223 before any change to `Auto`.
+
+Real JS multi-core parallelism: #224 (workers + `SharedArrayBuffer`, `Long` not a typed-array element, shared pivot
+ownership needs a redesign).

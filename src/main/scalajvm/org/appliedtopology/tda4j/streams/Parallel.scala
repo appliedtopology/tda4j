@@ -1,6 +1,7 @@
 package org.appliedtopology.tda4j
 
 import java.util.concurrent.{ForkJoinPool, ForkJoinTask}
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.stream.IntStream
 
 /** Runs independent work items on the common fork-join pool. The Scala.js build has the same object and runs them one
@@ -103,6 +104,28 @@ private[tda4j] object Parallel:
     else
       val size = (count + parts - 1) / parts
       IntStream.range(0, parts).parallel().forEach(p => f(p * size, math.min(count, (p + 1) * size)))
+
+  /** `f(0)` .. `f(count - 1)`, possibly at the same time, each task started by whichever thread is free first: for
+    * tasks of uneven size, cut finer than the threads.
+    */
+  def tasks(count: Int)(f: Int => Unit): Unit =
+    if threads == 1 || count < 2 then (0 until count).foreach(f)
+    else
+      val next = AtomicInteger(0)
+      val workers = math.min(threads, count)
+      IntStream
+        .range(0, workers)
+        .parallel()
+        .forEach { _ =>
+          var t = next.getAndIncrement()
+          while t < count do
+            f(t)
+            t = next.getAndIncrement()
+        }
+
+  /** Sorts `xs` ascending. */
+  def sortLongs(xs: Array[Long]): Unit =
+    if threads == 1 then java.util.Arrays.sort(xs) else java.util.Arrays.parallelSort(xs)
 
   /** Sorts `xs` with `order`; equal elements may be in either order, so `order` must be total on what is sorted. */
   def sort[A <: AnyRef](xs: Array[A], order: java.util.Comparator[A]): Unit =

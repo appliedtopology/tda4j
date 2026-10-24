@@ -119,18 +119,13 @@ object PaperBenchmarkDriver:
         val table = Array.tabulate(n * n)(k => ms.distance(k / n, k % n))
         val distance: (Int, Int) => Double = (i, j) => table(i * n + j)
         val t = threshold.getOrElse(ms.minimumEnclosingRadius)
-        // Daemon threads: the pool must not keep the JVM alive after the trials.
-        val pool = java.util.concurrent.Executors.newFixedThreadPool(
-          threads,
-          (r: Runnable) =>
-            val thread = Thread(r)
-            thread.setDaemon(true)
-            thread
-        )
         () =>
           val space =
             ParallelPackedCohomology.Space(n, distance, t, dim, p, forceWide = opts.get("wide").contains("true"))
-          ParallelPackedCohomology.persistence(space, threads, 8, cocycles = false, pool).bars.toList
+          Parallel
+            .withThreads(threads)(ParallelPackedCohomology.persistence(space, threads, 8, cocycles = false))
+            .bars
+            .toList
       case "vr" if opts.get("collapse").contains("true") =>
         val ms = metricSpaceOf(opts)
         () =>

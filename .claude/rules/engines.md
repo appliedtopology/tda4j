@@ -53,7 +53,7 @@ coface streams have none; use `VietorisRips` (`DESIGN-stream-naming.md`, `WORKLO
    `Parallel.threads > 1` and it applies (prime <= 46,000, no `includeZeroLength`, < 46,341 points); the MATLAB facade and CLI do
    the same for an unset `engine` (`engine=ripser` stays Ripser, `parallel-ripser` asks); `Persistence(threads = n)`/`threads`/
    `--threads` run under `Parallel.withThreads`. Its representatives are `LazyChain`s (cocycles from the logs; cycles from one
-   parallel `Involution` pass), so they may differ from `Ripser`'s in ties; JVM only. Check pivots/orders with `Ordering.Long`
+   parallel `Involution` pass), so they may differ from `Ripser`'s in ties; shared code (one thread on Scala.js). Check pivots/orders with `Ordering.Long`
    explicitly where the chains' reversed `given` is in scope (`WORKLOG-parallelism.md`). Under a sparse threshold cofacets come from per-vertex
    NEIGHBOUR LISTS (`NeighbourLists`) in the all-vertex scan's order with bit-identical diameters (`NeighbourListsSpec`).
    A uniform sign flip of every coboundary changes no output: sign mutations must be non-uniform. Per-simplex state is

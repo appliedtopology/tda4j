@@ -31,4 +31,8 @@ private[tda4j] object Parallel:
 
   def ranges(count: Int, grain: Int)(f: (Int, Int) => Unit): Unit = f(0, count)
 
+  def tasks(count: Int)(f: Int => Unit): Unit = (0 until count).foreach(f)
+
+  def sortLongs(xs: Array[Long]): Unit = java.util.Arrays.sort(xs)
+
   def sort[A <: AnyRef](xs: Array[A], order: java.util.Comparator[A]): Unit = java.util.Arrays.sort(xs, order)

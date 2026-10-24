@@ -1,11 +1,10 @@
 package org.appliedtopology.tda4j
 
-import java.util.concurrent.Executors
 import scala.collection.mutable
 
-/** Vietoris-Rips persistent cohomology of a metric space by [[ParallelPackedCohomology]], on every processor (JVM). The
-  * JavaScript build has the same object and refuses (`src/main/scalajs`). The run keeps each reduced column's log, so a
-  * bar's cocycle is built when it is asked for ([[ParallelRipserRun]]).
+/** Vietoris-Rips persistent cohomology of a metric space by [[ParallelPackedCohomology]], on every processor (one
+  * thread on JavaScript, the same answer). The run keeps each reduced column's log, so a bar's cocycle is built when it
+  * is asked for ([[ParallelRipserRun]]).
   */
 // Restricted: a public top-level `ParallelRipser` would join every user's `import org.appliedtopology.tda4j.*`; the
 // engine itself is public.
@@ -43,18 +42,8 @@ private[tda4j] object ParallelRipser:
     val space = ParallelPackedCohomology.Space(n, metricSpace.distance(_, _), threshold, maxDimension, characteristic)
     val threads = Parallel.threads
     val result =
-      if threads == 1 then ParallelPackedCohomology.persistence(space, 1, 1, true, null, withPairs)
-      else
-        // Daemon threads: a pool of non-daemon threads would keep the JVM alive if the shutdown below is skipped.
-        val pool = Executors.newFixedThreadPool(
-          threads,
-          (r: Runnable) =>
-            val thread = Thread(r)
-            thread.setDaemon(true)
-            thread
-        )
-        try ParallelPackedCohomology.persistence(space, threads, UnitsPerThread, true, pool, withPairs)
-        finally pool.shutdown()
+      if threads == 1 then ParallelPackedCohomology.persistence(space, 1, 1, true, withPairs)
+      else ParallelPackedCohomology.persistence(space, threads, UnitsPerThread, true, withPairs)
     Run(result, withPairs)
 
   private final class Run(result: ParallelPackedCohomology.Result, withPairs: Boolean) extends ParallelRipserRun:
