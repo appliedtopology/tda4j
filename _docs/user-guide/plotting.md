@@ -677,7 +677,8 @@ heatmap ramp and the same blue against vermillion for a diverging scale. Degrees
 green, which stay apart side by side for every common color vision; the next colors are orange, sky blue and reddish purple,
 then yellow and black. Orange and sky blue are lighter than a thin mark wants against white, and yellow barely shows on it, so
 they come last: past the third degree, rely on the marker shapes and the legend. Like `print` it has one look for both
-themes, as Okabe and Ito defined their colors for a light background.
+themes, as Okabe and Ito defined their colors for a light background. The palette is validated as accessible on white only;
+on any other background the checks no longer hold.
 
 `Palette.clear` and `Style.clear` are for a figure with no background, that takes the color of what is behind it. The
 style draws none. The palette has two looks, which the theme picks: pure black elements for a light page

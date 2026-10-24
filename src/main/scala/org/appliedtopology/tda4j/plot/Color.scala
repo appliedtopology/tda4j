@@ -265,7 +265,8 @@ object Palette:
     * blue are lighter than the 3:1 a mark wants against white, and yellow and black fall outside the validator's
     * lightness band (black has no chroma), so they come last and the marker shape and the legend carry the degrees past
     * the third. Okabe and Ito defined their colors for a light background, so there is one look for both modes, as for
-    * [[print]], whose scales it shares: a ColorBrewer Blues ramp, and blue against vermillion for a diverging scale.
+    * [[print]], whose scales it shares: a ColorBrewer Blues ramp, and blue against vermillion for a diverging scale. It is
+    * validated as accessible on white only: on another background the checks no longer hold.
     */
   val okabeIto: Palette =
     val series = IndexedSeq("#0072b2", "#d55e00", "#009e73", "#e69f00", "#56b4e9", "#cc79a7", "#f0e442", "#000000")
