@@ -66,7 +66,8 @@ for data where a `NaN` can only be a bug.
 | option | values | default |
 |---|---|---|
 | `complex` | `vr`, `alpha`, `cech`, `witness`, `dtm-rips`, `dtm-alpha`, `sparse-rips` | `vr` |
-| `engine` | `ripser`, `chunks`, `naive`, `cohomology`, `fast-cubical`, `fast-alpha` | `ripser` for `vr` and the lazy witness complex, `fast-cubical` for images of dimension 2 and up, `cohomology` otherwise |
+| `engine` | `ripser`, `parallel-ripser`, `chunks`, `naive`, `cohomology`, `fast-cubical`, `fast-alpha` | `ripser` for `vr` and the lazy witness complex (`parallel-ripser` instead for `vr` when there are several threads and it applies, see [Threads](#threads)), `fast-cubical` for images of dimension 2 and up, `cohomology` otherwise |
+| `threads` | integer, at least 1 | all the processors; `1` is the sequential computation |
 | `representativeType` | `cycles`, `cocycles` | `cycles` (every engine gives both except `fast-cubical` and `fast-alpha`, which give cycles; `ripser` and `cohomology` compute cocycles natively and cycles a little more slowly, the others the other way round) |
 | `maxDimension` | integer | `2`: the top homological degree (for an image: its dimension) |
 | `maxFiltrationValue` | number | the minimum enclosing radius (`Infinity` for the general witness complex, which is not a flag complex; `Infinity` for any complex gives the whole complex, and `engine=fast-alpha` takes the whole triangulation and no radius) |
@@ -90,10 +91,22 @@ for data where a `NaN` can only be a bug.
 | `nu` | `0`, `1`, `2` | `2` (lazy witness) |
 | `edgeCollapse` | `true`, `false` | `false` (`vr` only; the same result from a smaller complex) |
 
-Which engine goes with which complex: `ripser` needs `vr` or the lazy witness complex; `chunks` works with every
+Which engine goes with which complex: `ripser` needs `vr` or the lazy witness complex; `parallel-ripser` needs `vr`; `chunks` works with every
 complex except `alpha`, `dtm-alpha`, the general witness complex and relations; `naive` and `cohomology` work with all;
 `fast-cubical` is for images of dimension 2 and up, `fast-alpha` for `alpha` with the `bowyer-watson` or `helix` backend. A mismatch, an
 unknown option or an unknown value throws an `IllegalArgumentException` that names it.
+
+### Threads
+
+Computations share the work between the processors where they can (the Vietoris-Rips, Cech and alpha complexes and
+the block-parallel Ripser engine). `threads` caps the number of threads for one call, and `1` runs it on one; the
+bars are the same either way. For `vr` over a prime field, with `includeZeroLength`
+`false` and no `edgeCollapse`, an unset `engine` is the block-parallel Ripser engine (`parallel-ripser`) when there is
+more than one thread, and `ripser` otherwise. Both give the bars of `ripser`. Their representatives are valid but need
+not be the same chains where simplices tie in diameter, so a script that must reproduce a run exactly, on any machine,
+sets `engine` to `ripser`. `engine=parallel-ripser` by name refuses what it cannot do (the reals, zero-length bars,
+`edgeCollapse`, a prime above 46,000) with an error naming it. `parallel-ripser` builds a bar's
+representative when you first read it, so a script that only reads `toArray()` never pays for them.
 
 ### Which bars are reported
 

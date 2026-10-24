@@ -52,7 +52,7 @@ open class CechCofaceSimplexStream(
   // there. Cech's own minimum-enclosing-ball radius computation is exactly the case this exists for: unlike a
   // cheap arithmetic filtration value, a real per-candidate ball solve is worth parallelizing once a
   // complex is large enough. See .claude/WORKLOG-parallelization-survey.md item 2.
-  parallelFiltrationValue: Boolean = false
+  parallelFiltrationValue: Boolean = Parallel.byDefault
 ) extends RipserCofaceSimplexStream(
       euclideanMetricSpace,
       keepCriterion,

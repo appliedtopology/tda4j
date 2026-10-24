@@ -167,10 +167,25 @@ maxRadius, maxDimension, settings)` directly.
 - Vertex filtration values must use `space.weight(x)`; hard-coding `0.0`
   breaks weighted alpha filtrations.
 
-## Opt-in parallelism
+## Parallelism
 
-`AlphaDQPSettings.parallel` runs the per-vertex QP solves on the common
-`ForkJoinPool`. It is disabled by default and preserves deterministic output.
+The alpha complex shares its work between the threads of the JVM's common `ForkJoinPool`, and gives the same answer
+whatever the number of threads: the same simplices, values to the last bit, and stream order.
+
+- `AlphaDQPSettings.parallel` (on by default) solves the QPs of different vertices at the same time.
+- The Helix walk evaluates the next queued frontier facets together: for each, the Delaunay cofacet, the points on its
+  circumsphere and the hyperplanes of its other facets depend on the points alone. The walk then takes the facets in
+  queue order, as it always did, and uses what was computed; a facet that is cancelled or visited before its turn was
+  evaluated for nothing. The batch is eight facets per thread, and only for clouds with at least 500 coordinates.
+- The face tables of each dimension are numbered in the order the faces first occur, as a sequential pass would, but the
+  faces are found by one thread per partition of their hash, and the numbers are the ranks of the first occurrences.
+- Circumspheres, the Gabriel test, alpha values, the `Simplex` objects and the sort of each dimension run on ranges of
+  the faces.
+- The Bowyer-Watson insertion is sequential: each insertion changes the triangulation the next one walks in. Its time is
+  the triangulation and no more than a few seconds for 100,000 points in R^3; the rest of the pipeline is shared.
+
+`-Djava.util.concurrent.ForkJoinPool.common.parallelism=0` runs everything on the calling thread. On Scala.js there is
+one thread and the same code runs in order.
 
 ## Backend tradeoffs
 

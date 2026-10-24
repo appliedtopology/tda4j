@@ -66,8 +66,8 @@ needed, see "Givens"). The core's source directories are **file organization onl
 - **two platforms**: sbt 2's project matrix builds the JVM (`tda4j`) and Scala.js (`tda4jJS`); JS-only code is in
   `src/*/scalajs`, JVM-only in `src/*/scalajvm`, and `src/{main,test}/scala` compiles for BOTH (no JVM-only library, no
   `java.nio.file`/`java.io.File`/threads there). Seams, limits: `rules/scalajs.md`.
-- `demo/` (not a package): a SEPARATE sbt build for a talk's REPL jar with the library inside (`demo/README.md`,
-  `WORKLOG-demo-jar.md`, `WORKLOG-demo-release.md`); the root build neither builds nor sees it, `release.yml` attaches it.
+- `demo/` (not a package): a SEPARATE sbt build for a talk's REPL jar (`demo/README.md`, `WORKLOG-demo-jar.md`,
+  `WORKLOG-demo-release.md`); the root build neither builds nor sees it, `release.yml` attaches it.
 - Tests mirror this. `src/test/scala/tda4juser/` is deliberately OUTSIDE the package: it checks what a user's code
   sees (`UserImportsSpec`, `TDAlabAloneSpec`); the `tutorial` specs and generated page scripts are INSIDE it, so only
   `sbt doc` checks that doc fences resolve from outside.
@@ -75,9 +75,9 @@ needed, see "Givens"). The core's source directories are **file organization onl
 Every file in a subpackage (`sset`, `matlab`, `cli`, `tutorial`) starts with an explicit `import
 org.appliedtopology.tda4j.*`, not just the chained `package` clause. **Flat-package name-binding hazard**: a wildcard
 import of an external library (`import cats.syntax.all.*`) silently BEATS a same-named definition from another file of
-this package (no error, no warning). Import external libraries by name in core files; when adding a top-level name to
-the core, re-run the audit (inject `import org.appliedtopology.tda4j.*` next to each file-level external wildcard and
-compile: ambiguity errors are the hits; `WORKLOG-package-flatten.md`).
+this package. Import external libraries by name in core files; after adding a top-level name, re-run the audit (inject
+`import org.appliedtopology.tda4j.*` next to each file-level external wildcard and compile: ambiguity errors are the
+hits; `WORKLOG-package-flatten.md`).
 
 ### Givens: the rule the flat layout depends on
 
@@ -185,26 +185,26 @@ every homology implementation should (a) be generic over `Field` coefficients an
 real chain witnessing each bar). An optimization that abandons representatives is probably not worth it. Every
 public interface (MATLAB facade included) should expose representatives; anywhere that doesn't is incomplete.
 **Current gaps**: every engine records a representative for every bar (`PackedRipserCohomologyEngine`'s apparent pairs
-too), and so does `ClassifyingSpace.persistentGroupHomology`. The two block-parallel experiments (`BlockParallelReduction`,
-`ParallelPackedCohomology`: JVM only, not reachable from `Persistence`) give bars only (#192, #194).
+too), and so does `ClassifyingSpace.persistentGroupHomology`. `BlockParallelReduction` (JVM only, not reachable from `Persistence`) gives bars only (#192);
+`ParallelPackedCohomology` is `Engine.ParallelRipser`, picked by `Auto` (and the facade/CLI, unset `engine`) with more
+than one thread; `threads` caps it everywhere (#220, `WORKLOG-parallelism.md`).
 
 **Openness principle (project lead, foundational: the library is a platform for experiments and research)**: public
 and extensible by default. Access modifiers are not documentation: "not the entry point" is said in scaladoc ("what
 `VietorisRips` builds"), never by hiding the class. A restriction (`private[tda4j]`, `sealed`, `final` on a class)
 carries a `//` comment naming one of these reasons:
 1. Invariant-bearing mutable state or an unchecked constructor: restrict it, and expose a read-only view or a checked
-   factory (`CubicalGridStream.topValues` over `protected[tda4j] topCellValues`; `EdgeCollapsedMetricSpace.edges`).
+   factory (`CubicalGridStream.topValues`).
 2. A library-wide guarantee: nothing public drops representatives (`barsWithoutTopRepresentatives`).
 3. The flat namespace: a public top-level name joins every user's wildcard import and silently shadows their own
-   same-named definition, so generic helpers (`Level`, `LongIntMap`, top-level defs) stay restricted or move into a
-   companion object first.
+   same-named definition, so generic helpers (`Level`, `LongIntMap`, `Parallel`) stay restricted or move into a companion.
 4. Facade leaves (`matlab`, `cli`): their contract is strings and Java arrays; what they dispatch to is public.
 5. Public another way (`sset.Constructions` behind `FiniteSimplicialSet`'s methods).
-Plain `private` is for an algorithm's own scratch types, state and helpers (no comment); promote a member to `protected`
-when a subclass needs it as a hook, to public when it computes something a caller wants (a pairing, a validity check).
+Plain `private` is for an algorithm's own scratch types, state and helpers (no comment); `protected` when a subclass
+needs it as a hook, public when it computes something a caller wants (a pairing, a validity check).
 `sealed` only for a closed mathematical classification matched exhaustively (`BarcodeEndpoint`). `final` only on value
 types (case classes: subclassing breaks equality), where library fast paths match on the concrete class (`HeapChain`,
-`PackedChain`), and on `@tailrec` defs; not for speed without an A/B (devirtualization is expected, not measured).
+`PackedChain`), and on `@tailrec` defs; not for speed without an A/B.
 Concrete public classes are `open`: users lack `-language:adhocExtensions`, so extending a non-`open` class warns under
 `-source:future -feature`. Not reasons: a small API surface, "users should not need it", "it might change" (pre-1.0,
 anything may). `WORKLOG-openness-audit.md`.
