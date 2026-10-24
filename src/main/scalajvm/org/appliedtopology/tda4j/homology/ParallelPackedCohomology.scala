@@ -222,6 +222,17 @@ object ParallelPackedCohomology:
       factors += factor
       length += 1
 
+    // An ArrayBuilder's `result()` hands its array over and empties the builder when the array is exactly full, so a
+    // second call throws: the entries are read once here, after the reduction has finished.
+    private var addedColumns: Array[Long] | Null = null
+    private var addedFactors: Array[Int] | Null = null
+    def columns: Array[Long] =
+      if addedColumns == null then addedColumns = added.result()
+      addedColumns.nn
+    def multipliers: Array[Int] =
+      if addedFactors == null then addedFactors = factors.result()
+      addedFactors.nn
+
   private class Scratch(space: Space):
     val vs = new Array[Int](space.maxDim + 3)
     val ws = new Array[Int](space.maxDim + 3)
@@ -845,7 +856,7 @@ object ParallelPackedCohomology:
           case None      => Map(c -> 1)
           case Some(log) =>
             val acc = mutable.LongMap(c -> 1)
-            val (added, factors) = (log.added.result(), log.factors.result())
+            val (added, factors) = (log.columns, log.multipliers)
             for i <- added.indices; (e, x) <- v(added(i)) do acc(e) = (acc.getOrElse(e, 0) + factors(i) * x) % p
             acc.filter(_._2 != 0).toMap
         memo(c) = result

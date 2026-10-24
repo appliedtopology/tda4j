@@ -91,3 +91,24 @@ Mikael's decision on #220: "allow access to faster without representatives, but 
 - **Not done**: MATLAB (`matlab.TDA4j`) and the CLI (`cli.TDA4jConf`) do not offer it: their results are representative-first
   and a loud option there is a separate decision (listed on #220). Giving the engine representatives (the involuted cycles of
   its pairing) is still the better long-term answer.
+
+## Addendum 2 (2026-10-24): can the bars-only engine give representatives afterwards? (Mikael's question on #222)
+
+Yes: it already keeps what is needed, nothing is discarded.
+
+- With `cocycles = true` every reduced column records a `Log` (the columns added to it and the factors, V = column + sum of
+  factor * V(added)); apparent pairs have V = the column itself. `ParallelPackedCohomology.cocycle(degree, p, column)` builds a
+  cocycle from the logs, and `ParallelPackedCohomologySpec` checks its coboundary is zero over F_17 and F_3. A key decodes to a
+  simplex (`space.index`, `space.decode`). Cycles would come from the pairing (`keepPairs = true`) by `Involution`, one more
+  (sequential) reduction, as for the other engines.
+- Not wired: `Result.bars` forgets which column each bar came from (it keeps `(dim, birth, death)`), so the bars need to carry
+  their column; the cocycles should be built lazily for the bars returned, as the packed engine does.
+- **Bug found and fixed on the way**: `Log` kept its entries in two `ArrayBuilder`s and `cocycle` called `result()` on them each
+  time a column was visited. `result()` on a builder whose array is exactly full hands the array over and empties the builder,
+  so the next call threw a `NullPointerException` ("tried to cast away nullability"). One cocycle at a time worked; a second
+  cocycle through a shared column failed. `Log.columns` / `Log.multipliers` read each once.
+- **Cost** (4 cores, the 1,200-point torus above, threshold 1.2, degrees 0..2, p = 17; medians of rounds 2-4 of one JVM,
+  noisy): bars only 0.4 s, with logs 0.4 s, with logs and the cocycle of every pair extracted 0.6-0.7 s (941,233 terms in all, a
+  superset of the reported bars: it includes zero-length and apparent pairs); `Engine.Ripser` with cocycles 2.1 s. So the
+  logs themselves are free at this size and cocycles for all bars would keep roughly a 3x lead over Ripser. Memory of the logs and
+  the cost on larger inputs are unmeasured.
