@@ -166,6 +166,31 @@
   </div>
   <p><code>figure.svg()</code> is the SVG as a string: a notebook cell that displays HTML, or any web page, shows it as it is.</p>
  </section>
+ <section id="png-and-pdf">
+  <h3 class="h400"><a href="#png-and-pdf" class="anchor"></a>PNG and PDF</h3>
+  <p><code>save</code> writes SVG and HTML; a PNG or a PDF is one command on the saved <code>.svg</code>, with a tool that is already on most machines. The SVG is 96 pixels to the inch, so a scale of 2 is 192 dpi and 3.125 is 300 dpi.</p>
+  <div class="snippet mono-small-block">
+   <pre><code class="language-shell"><span line-number="1" class=""><span class="tooltip-container"></span># cairosvg (pip install cairosvg): PNG at 300 dpi, and a PDF that has the fonts it used inside
+</span><span line-number="2" class=""><span class="tooltip-container"></span>cairosvg diagram.svg -o diagram.png --scale 3.125
+</span><span line-number="3" class=""><span class="tooltip-container"></span>cairosvg diagram.svg -o diagram.pdf
+</span><span line-number="4" class=""><span class="tooltip-container"></span>
+</span><span line-number="5" class=""><span class="tooltip-container"></span># Chromium or Chrome: PNG at twice the size (the window is the figure's width and height), PDF on a page
+</span><span line-number="6" class=""><span class="tooltip-container"></span>chromium --headless --hide-scrollbars --force-device-scale-factor=2 --window-size=560,520 \
+</span><span line-number="7" class=""><span class="tooltip-container"></span>  --screenshot=diagram.png file:///path/to/diagram.svg
+</span><span line-number="8" class=""><span class="tooltip-container"></span>chromium --headless --no-pdf-header-footer --print-to-pdf=diagram.pdf file:///path/to/diagram.svg
+</span><span line-number="9" class=""><span class="tooltip-container"></span>
+</span><span line-number="10" class=""><span class="tooltip-container"></span># Inkscape 1.x: PNG, and a PDF with the text turned into outlines, for a publisher who wants no fonts
+</span><span line-number="11" class=""><span class="tooltip-container"></span>inkscape diagram.svg --export-type=png --export-dpi=300 --export-filename=diagram.png
+</span><span line-number="12" class=""><span class="tooltip-container"></span>inkscape diagram.svg --export-type=pdf --export-text-to-path --export-filename=diagram.pdf
+</span><span line-number="13" class=""><span class="tooltip-container"></span>
+</span><span line-number="14" class=""><span class="tooltip-container"></span># librsvg
+</span><span line-number="15" class=""><span class="tooltip-container"></span>rsvg-convert -f png -z 3.125 diagram.svg -o diagram.png
+</span><span line-number="16" class=""><span class="tooltip-container"></span>rsvg-convert -f pdf diagram.svg -o diagram.pdf
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+  <p>The figure names its fonts in a list, <code>system-ui, ...</code> by default and <code>Helvetica, Arial, 'Liberation Sans', sans-serif</code> in the print look (<code>Style(font = ...)</code> sets another), and a converter takes the first one it has installed: the letters of a PNG are those of that machine. For a figure that must look the same wherever it is opened, use a PDF, which holds the font, or Inkscape's outlines. Chromium's command line puts the figure in the corner of a letter-size page. A page that follows the reader's dark setting (<code>.html</code>) is not what a converter should be given: save the <code>.svg</code> in the theme you want (<code>save("d.svg", Some(Theme.Dark))</code>).</p>
+ </section>
  <section id="from-matlab-java-and-the-command-line">
   <h2 class="h500"><a href="#from-matlab-java-and-the-command-line" class="anchor"></a>From MATLAB, Java and the command line</h2>
   <p>A result of the <a href="matlab.html">MATLAB interface</a> draws itself: each <code>plot...</code> method returns a figure, to <code>view()</code> or <code>save</code> as above. Here, the loop of a noisy circle and its cycle, drawn over the complex at the scale where the loop is born:</p>
@@ -220,15 +245,15 @@
     </tr>
     <tr>
      <td><code>plotRepresentative(i)</code></td>
-     <td>bar <code>i</code>'s cycle or cocycle over the points, or its cubical chain over a 2-D image</td>
+     <td>bar <code>i</code>'s cycle over the points, its cubical chain over a 2-D image, or its cocycle restricted to the complex at the bar's birth: the edges that close the loop</td>
     </tr>
     <tr>
      <td><code>plotRepresentative(i, at)</code></td>
-     <td>a cycle over the complex at scale <code>at</code>, or a cocycle restricted to the complex at <code>at</code> (at the bar's birth: the edges that close the loop)</td>
+     <td>a cycle over the complex at scale <code>at</code>, or a cocycle restricted to the complex at <code>at</code> (<code>Inf</code> draws the whole cocycle)</td>
     </tr>
     <tr>
      <td><code>plotInput()</code>, <code>plotComplex(at)</code></td>
-     <td>the points or the image; the <code>vr</code>, <code>cech</code> or <code>alpha</code> complex at <code>at</code></td>
+     <td>the points or the image; the complex the result was computed from at <code>at</code> (a witness complex on its landmarks)</td>
     </tr>
     <tr>
      <td><code>plotLandscape(dimension)</code>, <code>plotPersistenceImage(dimension)</code></td>
@@ -253,10 +278,11 @@
    <pre><code class="language-"><span line-number="1" class=""><span class="tooltip-container"></span>java -jar tda4j-VERSION-assembly.jar --max-dimension 1 --save-result circle.json noisy-circle.csv
 </span><span line-number="2" class=""><span class="tooltip-container"></span>java -jar tda4j-assembly.jar --plot diagram --output diagram.svg circle.json
 </span><span line-number="3" class=""><span class="tooltip-container"></span>java -jar tda4j-assembly.jar --plot representative circle.json
+</span><span line-number="4" class=""><span class="tooltip-container"></span>java -jar tda4j-assembly.jar --plot barcode,diagram --layout 1x2 --tagged circle.json
 </span></code></pre>
    <div class="buttons"></div>
   </div>
-  <p>The first line computes and prints the bars, and saves the whole result; the others plot it without computing again. <code>--plot representative</code> draws the most persistent bar of <code>--dimension</code> (default 1), or <code>--bar N</code> (its line number in the listing, counting from 0); <code>--at</code> gives the scale. Without <code>--output</code> the plot opens in the browser. See the <a href="cli.html">command-line page</a>.</p>
+  <p>The first line computes and prints the bars, and saves the whole result; the others plot it without computing again. <code>--plot representative</code> draws the most persistent bar of <code>--dimension</code> (default 1), or <code>--bar N</code> (its line number in the listing, counting from 0); <code>--at</code> gives the scale. A comma list of kinds is one board, in a row or on <code>--layout</code>. Without <code>--output</code> the plot opens in the browser. See the <a href="cli.html">command-line page</a>.</p>
  </section>
  <section id="saved-results">
   <h3 class="h400"><a href="#saved-results" class="anchor"></a>Saved results</h3>
@@ -344,7 +370,7 @@
 </span></code></pre>
    <div class="buttons"></div>
   </div>
-  <p>A cocycle of a bar lives on the complex where the bar dies, so it has edges right across the data; restricted to the complex at the bar's birth (<code>at = loop.birth</code>) it shows the edges that cut the loop as it closes.</p>
+  <p>A cocycle of a bar lives on the complex where the bar dies, so it has edges right across the data; restricted to the complex at the bar's birth (<code>at = loop.birth</code>) it shows the edges that cut the loop as it closes. A result's <code>plotRepresentative(i)</code> draws a cocycle that way, and <code>plotRepresentative(i, Inf)</code> draws it whole.</p>
  </section>
  <section id="customizing-a-plot">
   <h2 class="h500"><a href="#customizing-a-plot" class="anchor"></a>Customizing a plot</h2>
@@ -411,6 +437,11 @@
      <td>the <code>Style</code> itself</td>
     </tr>
     <tr>
+     <td>a box round the legend, and its entries in columns</td>
+     <td><code>withLegendBox(box = true, background = "white", columns = 2)</code></td>
+     <td><code>Guide.legend(...)</code></td>
+    </tr>
+    <tr>
      <td>the markers of points: shape, size, opacity, open or filled, the edge</td>
      <td><code>withPoints(shape = Shape.Star, size = 6, fill = false, edgeWidth = 0)</code></td>
      <td><code>Geom.points(...)</code></td>
@@ -472,7 +503,7 @@
  </section>
  <section id="colors">
   <h3 class="h400"><a href="#colors" class="anchor"></a>Colors</h3>
-  <p>Homological degree <code>k</code> always has the same color and marker shape: degree 0 teal, degree 1 gold, degree 2 brick, so <code>H1</code> looks the same in every plot whichever degrees are shown. The default palette is TDA4j's Teal &amp; Gold, stepped for charts and checked for color-vision deficiencies (the first three degrees stay distinguishable side by side for every common deficiency). <code>Palette.reference</code> is a neutral alternative, and <code>Palette.print</code> is for a paper: black text on a background of exactly white, where the default's cream would print as a grey patch, and <code>Palette.clear</code> is black or white for a figure with no background (see <a href="#for-a-paper-and-for-a-page-of-either-color">For a paper</a>). A palette recolors the whole plot, heatmaps and cocycles included, and you can make your own:</p>
+  <p>Homological degree <code>k</code> always has the same color and marker shape: degree 0 teal, degree 1 gold, degree 2 brick, so <code>H1</code> looks the same in every plot whichever degrees are shown. The default palette is TDA4j's Teal &amp; Gold, stepped for charts and checked for color-vision deficiencies (the first three degrees stay distinguishable side by side for every common deficiency). <code>Palette.reference</code> is a neutral alternative, and <code>Palette.print</code> is for a paper: black text on a background of exactly white, where the default's cream would print as a grey patch (<code>Palette.grayscale</code> is that without color, <code>Palette.okabeIto</code> is the eight colors of Okabe and Ito on the same white), and <code>Palette.clear</code> is black or white for a figure with no background (see <a href="#for-a-paper-and-for-a-page-of-either-color">For a paper</a>). A palette recolors the whole plot, heatmaps and cocycles included, and you can make your own:</p>
   <div class="snippet mono-small-block" scala-snippet="" runnable="">
    <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import scala.language.experimental.modularity
 </span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.*
@@ -506,7 +537,7 @@
 </span></code></pre>
    <div class="buttons"></div>
   </div>
-  <p>Heatmaps (persistence images, images, cubical grids), cocycles and circular coordinates have a <em>color scale</em>, which maps the values to colors: heatmaps and cocycles through the palette's sequential and diverging ramps, circular coordinates through a cyclic one. <code>withColorScale</code> sets its limits, so that two plots are read on one scale, and the colors of a sequential ramp (<code>ColorScale.viridis</code>, <code>ColorScale.greys</code>, or any list of colors, light to dark) and how values are spread along it (<code>Transform.Sqrt</code> for a heavy-tailed image). A cocycle's scale is symmetric about zero, so it takes only a <code>max</code>.</p>
+  <p>Heatmaps (persistence images, images, cubical grids), cocycles and circular coordinates have a <em>color scale</em>, which maps the values to colors: heatmaps and cocycles through the palette's sequential and diverging ramps, circular coordinates through a cyclic one. <code>withColorScale</code> sets its limits, so that two plots are read on one scale, and the colors of a sequential ramp (<code>ColorScale.viridis</code>, <code>ColorScale.greys</code>, or any list of colors, light to dark) and how values are spread along it (<code>Transform.Sqrt</code> for a heavy-tailed image; the color bar then labels round numbers between its ends, each where the transform puts it). A cocycle's scale is symmetric about zero, so it takes only a <code>max</code>.</p>
   <div class="snippet mono-small-block" scala-snippet="" runnable="">
    <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import scala.language.experimental.modularity
 </span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.*
@@ -565,7 +596,20 @@
  </section>
  <section id="the-legend">
   <h3 class="h400"><a href="#the-legend" class="anchor"></a>The legend</h3>
-  <p>The legend goes beside the plot (<code>LegendPosition.Right</code>, the default, or <code>Left</code>), above or below it (<code>Top</code>, <code>Bottom</code>, in rows that wrap), or inside the plot area at a corner (<code>UpperLeft</code>, <code>UpperRight</code>, <code>LowerLeft</code>, <code>LowerRight</code>), taking no room; or nowhere (<code>Hidden</code>). A persistence diagram puts it at the lower right by itself, below the diagonal where no point can be, in the shaded half plane. <code>withLegend("right")</code> or <code>Style(legend = LegendPosition.Right)</code> puts it beside the plot again; a style that does not name a place leaves each plot's own. A corner of a barcode over its bars covers some of them: choose the place for the plot.</p>
+  <p>The legend goes beside the plot (<code>LegendPosition.Right</code>, the default, or <code>Left</code>), above or below it (<code>Top</code>, <code>Bottom</code>, in rows that wrap), or inside the plot area at a corner (<code>UpperLeft</code>, <code>UpperRight</code>, <code>LowerLeft</code>, <code>LowerRight</code>), taking no room; or nowhere (<code>Hidden</code>). A persistence diagram puts it at the lower right by itself, below the diagonal where no point can be, in the shaded half plane. <code>withLegend("right")</code> or <code>Style(legend = LegendPosition.Right)</code> puts it beside the plot again; a style that does not name a place leaves each plot's own. A corner of a barcode over its bars covers some of them: choose the place for the plot, or give the legend a box.</p>
+  <p>A legend has no box unless you ask for one. <code>withLegendBox(box = true)</code> gives it the page's own color, a little see-through (<code>opacity</code> 0.9), and a thin frame, which keeps it readable over data wherever it is; <code>background = "white"</code> (or <code>backgroundPaint</code>) and <code>opacity</code> set the fill, <code>frame = true</code>, <code>frameColor</code> and <code>frameWidth</code> the line round it, and <code>padding</code> the room inside (6 pixels, growing with the legend's text size). A fill or a frame alone is a box of that kind, <code>box = false</code> takes it away. <code>columns</code> puts the entries in that many columns, a column filled before the next (seven entries in three columns are 3, 3 and 1); above or below the plot the columns line up as a grid beside the heading.</p>
+  <div class="snippet mono-small-block" scala-snippet="" runnable="">
+   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import scala.language.experimental.modularity
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.*
+</span><span line-number="3" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.plot.*
+</span><span line-number="4" class=""><span class="tooltip-container"></span>
+</span><span line-number="5" class=""><span class="tooltip-container"></span>val d = Persistence(Array.tabulate(16)(i =&gt; Array(math.cos(2 * math.Pi * i / 16), math.sin(2 * math.Pi * i / 16))))
+</span><span line-number="6" class=""><span class="tooltip-container"></span>Plot.barcode(d).withLegend("upper-right").withLegendBox(box = true)
+</span><span line-number="7" class=""><span class="tooltip-container"></span>Plot.diagram(d).withLegend("bottom").withLegendBox(background = "white", columns = 3)
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+  <p>A legend takes at most two fifths of the figure's width beside the plot and at most the plot's width above, below or inside it: the columns that would take more are given up, so a legend never runs off the figure or over the plot.</p>
  </section>
  <section id="the-bars-of-a-barcode">
   <h3 class="h400"><a href="#the-bars-of-a-barcode" class="anchor"></a>The bars of a barcode</h3>
@@ -627,6 +671,10 @@
      <td><code>color</code>, <code>opacity</code>, <code>visible</code></td>
     </tr>
     <tr>
+     <td><code>legend-box</code></td>
+     <td><code>background</code> (a color, or <code>none</code> for no box), <code>opacity</code>, <code>frame</code> (a color, or <code>none</code>), <code>frame-width</code>, <code>padding</code> (pixels), <code>columns</code></td>
+    </tr>
+    <tr>
      <td><code>diagonal</code></td>
      <td><code>shade</code> (<code>none</code> or a color), <code>shade-opacity</code>, <code>color</code>, <code>width</code>, <code>dashed</code></td>
     </tr>
@@ -644,7 +692,7 @@
     </tr>
     <tr>
      <td><code>x-axis</code>, <code>y-axis</code></td>
-     <td>the side alone (<code>x-axis=top</code>, <code>y-axis=right</code>), or <code>side</code>, <code>reverse</code> (<code>true</code> runs the axis backwards), <code>padding</code> (the room around the data, as a fraction of their extent), <code>min</code>, <code>max</code>, <code>format</code></td>
+     <td>the side alone (<code>x-axis=top</code>, <code>y-axis=right</code>), or <code>side</code>, <code>reverse</code> (<code>true</code> runs the axis backwards), <code>padding</code> (the room around the data, as a fraction of their extent), <code>min</code>, <code>max</code>, <code>format</code>, <code>crosses-at</code> (the value of the other axis it goes through)</td>
     </tr>
     <tr>
      <td><code>aspect</code></td>
@@ -690,10 +738,22 @@
    <div class="buttons"></div>
   </div>
   <p>A scale of your own gives a name (the one messages use), the map to the line and the map back, which must undo each other; the ticks are round numbers of the data, as on a square-root axis. Keep the functions in a <code>val</code>: two axes are on one scale (for <code>Board.shared()</code>) when they hold the same functions.</p>
+  <p><strong>An axis through a value.</strong> An axis is drawn at the bottom (or the top) of the plot and at its left (or right). For data that go negative, <code>crossesAt</code> draws it through a value of the other axis instead: <code>Scale.x(crossesAt = 0)</code> is the x axis through <code>y = 0</code>, <code>Scale.y(crossesAt = 0)</code> the y axis through <code>x = 0</code>, each value in the units of the axis it crosses (a log axis takes the data's own number, not its logarithm). The numbers stay beside the line, below it or to the left of it, or above it and to the right when the axis is given the other <code>position</code>; the tick marks start on it and the gridlines still run across the plot. The axis label stays at the edge, where the data are not, and the margin the numbers needed is given back to the plot. <code>reverse</code> is followed, so is any scale.</p>
+  <div class="snippet mono-small-block" scala-snippet="" runnable="">
+   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import scala.language.experimental.modularity
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.plot.*
+</span><span line-number="3" class=""><span class="tooltip-container"></span>
+</span><span line-number="4" class=""><span class="tooltip-container"></span>// a ring of points drawn round the origin, as a mathematician draws it
+</span><span line-number="5" class=""><span class="tooltip-container"></span>val points = Array.tabulate(40)(i =&gt; Array(math.cos(i * 0.157), math.sin(i * 0.157)))
+</span><span line-number="6" class=""><span class="tooltip-container"></span>val ring = Plot.points(points).withXScale(crossesAt = 0).withYScale(crossesAt = 0)
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+  <p>A value the other axis does not show (a plot of positive numbers asked to cross at 0) or cannot place (0 on a log axis) leaves the axis at the edge, and a line of small print under the plot says so, so one house style with <code>crossesAt</code> fits every plot. <code>x-axis.crosses-at=0</code> and <code>y-axis.crosses-at=0</code> are the same as settings, <code>withXCrossesAt(0)</code> and <code>withYCrossesAt(0)</code> from MATLAB.</p>
  </section>
  <section id="numbers">
   <h3 class="h400"><a href="#numbers" class="anchor"></a>Numbers</h3>
-  <p><code>Numbers</code> sets how the numbers of the tick labels and the color bar are written: the decimal separator, a mark between groups of three digits, and the minus sign. <code>Numbers.locale("de")</code> takes what a locale writes (a comma and a hyphen for German, a comma and a true minus sign <code>−</code> for Swedish); the symbols can also be given one by one. Anything that is not a number, such as an <code>H0</code> in a legend, is left alone.</p>
+  <p><code>Numbers</code> sets how the numbers of the tick labels and the color bar are written: the decimal separator, a mark between groups of three digits, and the minus sign. <code>Numbers.locale("de")</code> takes what a locale writes (a comma and a hyphen for German, a comma and a true minus sign <code>−</code> for Swedish; the digits stay <code>0</code> to <code>9</code>, so Arabic has a point, not its own decimal separator); the symbols can also be given one by one. Anything that is not a number, such as an <code>H0</code> in a legend, is left alone.</p>
   <div class="snippet mono-small-block" scala-snippet="" runnable="">
    <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import scala.language.experimental.modularity
 </span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.*
@@ -707,7 +767,7 @@
 </span></code></pre>
    <div class="buttons"></div>
   </div>
-  <p>A long text can be cut: <code>Text(TextRole.Legend, limit = 120)</code> ends a legend entry that would be longer than 120 pixels in an ellipsis, and the whole text is the tooltip of what is left. The length of a text is estimated from its size, so the cut can fall some characters from where a font of your own would put it.</p>
+  <p>A long text can be cut: <code>Text(TextRole.Legend, limit = 120)</code> ends a legend entry that would be longer than 120 pixels in an ellipsis, and the whole text is the tooltip of what is left. The renderer has no font metrics, so it estimates the length of a text letter by letter from the advance widths of Helvetica (for <code>sans-serif</code>, <code>system-ui</code>, Arial and the like), Times (<code>serif</code>) or a fixed width (<code>monospace</code>); a font with other proportions is cut some characters from where the estimate puts it. The legend makes room for the same estimate of its widest entry (<code>TextWidth.of(text, size)</code>).</p>
  </section>
  <section id="a-caption-a-panel-tag-and-a-description">
   <h3 class="h400"><a href="#a-caption-a-panel-tag-and-a-description" class="anchor"></a>A caption, a panel tag and a description</h3>
@@ -753,6 +813,8 @@
   <h3 class="h400"><a href="#for-a-paper-and-for-a-page-of-either-color" class="anchor"></a>For a paper, and for a page of either color</h3>
   <p>Two looks are ready-made, each a palette and a style, and they differ in what is behind the figure.</p>
   <p><code>Palette.print</code> and <code>Style.print</code> are for a figure that has a white background of its own, as in a paper. The palette is black text and axes on a surface of exactly white (the default's cream would print as a grey patch); its degree colors stay apart for every common color vision and read on white (blue, vermillion and bluish green for degrees 0 to 2, checked on all pairs), and its heatmap ramp darkens steadily, so it keeps its order on a grayscale printer. It has one look: the dark theme draws the same figure. The style names fonts that converters and publishers know (<code>Helvetica, Arial</code>) instead of the browser's own <code>system-ui</code>.</p>
+  <p><code>Palette.grayscale</code> is <code>print</code> with no color at all, for a paper that prints in black and white. Degrees are told apart by lightness (a dark, a light and a middle gray first, each dark enough to show on white) and by the marker shapes and the legend, which every palette keeps: past four degrees the grays run out, so rely on the shapes. A heatmap uses ColorBrewer's Greys, darker for larger. A diverging scale (a cocycle's values) is a dark gray against a middle gray around a light middle, a weaker cue for the sign than a hue; use <code>Palette.print</code> for those when color is available.</p>
+  <p><code>Palette.okabeIto</code> is the color-blind-safe palette of Okabe and Ito on <code>print</code>'s white surface and black ink, with the same heatmap ramp and the same blue against vermillion for a diverging scale. Degrees 0 to 2 are its blue, vermillion and bluish green, which stay apart side by side for every common color vision; the next colors are orange, sky blue and reddish purple, then yellow and black. Orange and sky blue are lighter than a thin mark wants against white, and yellow barely shows on it, so they come last: past the third degree, rely on the marker shapes and the legend. Like <code>print</code> it has one look for both themes, as Okabe and Ito defined their colors for a light background. The palette is validated as accessible on white only; on any other background the checks no longer hold.</p>
   <p><code>Palette.clear</code> and <code>Style.clear</code> are for a figure with no background, that takes the color of what is behind it. The style draws none. The palette has two looks, which the theme picks: pure black elements for a light page (<code>Theme.Light</code>, what an <code>.svg</code> file gets) and pure white ones for a dark page (<code>Theme.Dark</code>), each with degree colors chosen to read on its own page color. <code>Theme.Auto</code> follows the reader's setting, which is right only where the page does too. Without the style the figure keeps the white or the black background of its mode.</p>
   <p>A size is in pixels of 1/96 inch, and text is 11 to 15 pixels. Give the figure the size it has on the page and place it at that size, and its text comes out at the size the journal asks for: a 3.4-inch column is 326 pixels, in which tick labels are 8.25 pt. For a serif face to match the text of the paper, copy the style:</p>
   <div class="snippet mono-small-block" scala-snippet="" runnable="">
@@ -809,7 +871,7 @@
  </section>
  <section id="comparing-plots">
   <h3 class="h400"><a href="#comparing-plots" class="anchor"></a>Comparing plots</h3>
-  <p>Plots drawn side by side mean something only on the same scale. <code>shared()</code> gives every panel of a board the union of the panels' ranges, on both axes or on <code>shared(y = false)</code> the x axis only; a tweak added to a board with <code>+</code> changes every panel (<code>Labels(title = ...)</code> titles the board, the page it is saved as):</p>
+  <p>Plots drawn side by side mean something only on the same scale. <code>shared()</code> gives every panel of a board the union of the panels' ranges, on both axes or on <code>shared(y = false)</code> the x axis only; a tweak added to a board with <code>+</code> changes every panel (<code>Labels(title = ...)</code> titles the board: the heading above the panels, and the title of the page it is saved as):</p>
   <div class="snippet mono-small-block" scala-snippet="" runnable="">
    <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import scala.language.experimental.modularity
 </span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.*
@@ -835,7 +897,7 @@
 </span><span line-number="5" class=""><span class="tooltip-container"></span>val d = Persistence(CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv"), maxDimension = 1)
 </span><span line-number="6" class=""><span class="tooltip-container"></span>
 </span><span line-number="7" class=""><span class="tooltip-container"></span>val board = Plot.layout(2, 3, widths = Seq(2.0, 2.0, 1.0))
-</span><span line-number="8" class=""><span class="tooltip-container"></span>  .place(Plot.diagram(d).withAspect(free = true), row = 0, col = 0, colSpan = 2)
+</span><span line-number="8" class=""><span class="tooltip-container"></span>  .place(Plot.diagram(d), row = 0, col = 0, colSpan = 2, fill = true)
 </span><span line-number="9" class=""><span class="tooltip-container"></span>  .place(Plot.barcode(d), row = 0, col = 2)
 </span><span line-number="10" class=""><span class="tooltip-container"></span>  .place(Plot.barcode(d).withXScale(Transform.Sqrt), row = 1, col = 0, colSpan = 3)
 </span><span line-number="11" class=""><span class="tooltip-container"></span>  .tagged()
@@ -843,7 +905,7 @@
 </span></code></pre>
    <div class="buttons"></div>
   </div>
-  <p>A persistence diagram keeps equal units, so in a wide cell it would leave room beside the data; <code>withAspect(free = true)</code> lets it fill the cell, as above. A panel that would cover a cell another one covers, or that runs off the grid, is refused when it is placed, naming the panel in the way. <code>tagged()</code> letters the panels in the order they were placed.</p>
+  <p>A persistence diagram keeps equal units, so in a wide cell the data take a square and the rest is empty axis; <code>fill = true</code> (the same as <code>withAspect(free = true)</code> on that panel) lets it fill the cell, as above. A panel that would cover a cell another one covers, or that runs off the grid, is refused when it is placed, naming the panel in the way. <code>tagged()</code> letters the panels in the order they were placed.</p>
   <p>On a grid, <code>sharedColumns()</code> puts the panels over the same columns on one x scale and <code>sharedRows()</code> the panels across the same rows on one y scale, each column and row its own (<code>shared()</code> still takes all panels together). A panel that spans columns is a kind of its own: it shares with no panel over one column. A panel alone in its group keeps its own axes as they are. The same two methods on a row of panels share nothing along columns (each is in its own) and everything along the row.</p>
  </section>
  <section id="reference-lines-and-marks-of-your-own">
@@ -925,12 +987,16 @@
      <td>the visible range of an axis</td>
     </tr>
     <tr>
+     <td><code>withXCrossesAt(y)</code>, <code>withYCrossesAt(x)</code></td>
+     <td>the x axis through <code>y = value</code>, the y axis through <code>x = value</code></td>
+    </tr>
+    <tr>
      <td><code>withAspect(ratio)</code></td>
      <td>the length of a y unit over an x unit</td>
     </tr>
     <tr>
      <td><code>withPalette(name)</code> (3-D)</td>
-     <td><code>'brand'</code>, <code>'reference'</code>, <code>'print'</code> or <code>'clear'</code></td>
+     <td><code>'brand'</code>, <code>'reference'</code>, <code>'print'</code>, <code>'grayscale'</code>, <code>'okabe-ito'</code> or <code>'clear'</code></td>
     </tr>
     <tr>
      <td><code>withStyle(name)</code> (3-D)</td>
@@ -947,6 +1013,10 @@
     <tr>
      <td><code>withLegend(position)</code></td>
      <td><code>'right'</code>, <code>'left'</code>, <code>'top'</code>, <code>'bottom'</code>, <code>'upper-left'</code>, <code>'upper-right'</code>, <code>'lower-left'</code>, <code>'lower-right'</code> or <code>'none'</code></td>
+    </tr>
+    <tr>
+     <td><code>withLegendBox(color)</code>, <code>withLegendColumns(n)</code></td>
+     <td>a box round the legend, filled with <code>color</code> and framed; the entries in <code>n</code> columns (<code>withSetting('legend-box.padding=10')</code> and its siblings reach the rest)</td>
     </tr>
     <tr>
      <td><code>withoutGrid()</code></td>
@@ -970,7 +1040,61 @@
     </tr>
    </tbody>
   </table>
-  <p>A word that is not one of those listed, or a change a plot cannot have, throws an <code>IllegalArgumentException</code> that says what to write instead. The boards and layout grids of the Scala API have no MATLAB or command-line counterpart.</p>
+  <p>A word that is not one of those listed, or a change a plot cannot have, throws an <code>IllegalArgumentException</code> that says what to write instead.</p>
+  <p>Boards too (see <a href="#comparing-plots">Comparing plots</a> and <a href="#panels-on-a-grid">Panels on a grid</a>). MATLAB cannot build a Scala <code>Seq</code>, so the boards are made in <code>TDA4j</code>, and the board has the methods that take plain arguments:</p>
+  <table>
+   <thead>
+    <tr>
+     <th>call</th>
+     <th>meaning</th>
+    </tr>
+   </thead>
+   <tbody>
+    <tr>
+     <td><code>TDA4j.side(a, b)</code>, <code>TDA4j.side(a, b, c)</code>, <code>TDA4j.side(array)</code></td>
+     <td>the figures in one row, as one plot (<code>array</code> is a Java array of figures)</td>
+    </tr>
+    <tr>
+     <td><code>TDA4j.layout(rows, cols)</code>, <code>TDA4j.layout(rows, cols, width, height)</code></td>
+     <td>an empty board on a grid of cells</td>
+    </tr>
+    <tr>
+     <td><code>TDA4j.layout(rows, cols, width, height, gap, widths, heights)</code></td>
+     <td>the same with the gap between cells and the relative sizes of columns and rows (an empty array for equal ones)</td>
+    </tr>
+    <tr>
+     <td><code>board.place(fig, row, col)</code>, <code>board.place(fig, row, col, rowSpan, colSpan)</code></td>
+     <td>a panel in a cell, or spanning cells; cells count from 0</td>
+    </tr>
+    <tr>
+     <td><code>board.place(fig, row, col, rowSpan, colSpan, fill)</code></td>
+     <td>with <code>fill</code> true, a diagram fills a wide cell instead of keeping equal units</td>
+    </tr>
+    <tr>
+     <td><code>board.tagged()</code>, <code>board.tagged(format, sequence)</code></td>
+     <td>letters the panels <code>(a)</code>, <code>(b)</code>, ...</td>
+    </tr>
+    <tr>
+     <td><code>board.shared()</code>, <code>board.sharedColumns()</code>, <code>board.sharedRows()</code></td>
+     <td>panels on one scale, by column, by row</td>
+    </tr>
+    <tr>
+     <td><code>board.withTitle(text)</code>, <code>withPalette(name)</code>, <code>withStyle(name)</code>, <code>withTextScale(factor)</code>, <code>withSetting(spec)</code></td>
+     <td>the board's heading, and the change in every panel</td>
+    </tr>
+    <tr>
+     <td><code>board.save(path)</code>, <code>board.save(path, theme)</code></td>
+     <td>writes an <code>.svg</code> file or an <code>.html</code> page</td>
+    </tr>
+   </tbody>
+  </table>
+  <div class="snippet mono-small-block">
+   <pre><code class="language-matlab"><span line-number="1" class=""><span class="tooltip-container"></span>grid = TDA4j.layout(2, 2, 960, 600).place(result.plotDiagram(), 0, 0, 1, 2, true).place(result.plotBarcode(), 1, 0, 1, 2);
+</span><span line-number="2" class=""><span class="tooltip-container"></span>grid.tagged().withTitle('A noisy circle').save('grid.svg');
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+  <p>The command line draws one plot per call; it has no board.</p>
   <div class="tabset">
    <div class="tab" data-lang="Scala">
     <div class="snippet mono-small-block" scala-snippet="" runnable="">
@@ -1002,7 +1126,7 @@
     </div>
    </div>
   </div>
-  <p>The command line has a flag for the same changes of a <code>--plot</code>: <code>--title</code>, <code>--x-label</code>, <code>--y-label</code>, <code>--width</code>, <code>--height</code>, <code>--palette</code> (<code>brand</code>, <code>reference</code>, <code>print</code> or <code>clear</code>), <code>--style</code> (<code>default</code>, <code>slides</code>, <code>print</code> or <code>clear</code>), <code>--theme</code> (<code>light</code>, <code>dark</code> or <code>auto</code>), <code>--text-scale</code> (applied to the <code>--style</code>), <code>--set</code> (repeated, <code>element.property=value</code>), <code>--x-scale</code> and <code>--y-scale</code> (<code>linear</code>, <code>log</code>, <code>sqrt</code> or <code>symlog</code>). A word that is not one, a size out of range and a flag a plot cannot use (an x scale for a 3-D scene) are errors, reported before anything is computed:</p>
+  <p>The command line has a flag for the same changes of a <code>--plot</code>: <code>--title</code>, <code>--x-label</code>, <code>--y-label</code>, <code>--caption</code>, <code>--tag</code>, <code>--description</code>, <code>--layout</code> and <code>--tagged</code> (for a list of kinds on a board), <code>--look</code> (<code>default</code>, <code>print</code> or <code>clear</code>: the palette and style together, which the flags after it override), <code>--width</code>, <code>--height</code>, <code>--palette</code> (<code>brand</code>, <code>reference</code>, <code>print</code>, <code>grayscale</code>, <code>okabe-ito</code> or <code>clear</code>), <code>--style</code> (<code>default</code>, <code>slides</code>, <code>print</code> or <code>clear</code>), <code>--theme</code> (<code>light</code>, <code>dark</code> or <code>auto</code>), <code>--text-scale</code> (applied to the <code>--style</code>), <code>--set</code> (repeated, <code>element.property=value</code>), <code>--x-scale</code> and <code>--y-scale</code> (<code>linear</code>, <code>log</code>, <code>sqrt</code> or <code>symlog</code>). A word that is not one, a size out of range and a flag a plot cannot use (an x scale for a 3-D scene) are errors, reported before anything is computed:</p>
   <div class="snippet mono-small-block">
    <pre><code class="language-"><span line-number="1" class=""><span class="tooltip-container"></span>java -jar tda4j-assembly.jar --plot diagram --title "A noisy circle" --x-scale sqrt --width 800 --output diagram.svg circle.json
 </span></code></pre>
@@ -1010,4 +1134,4 @@
   </div>
   <p>Every plot is an immutable value, and <code>Figure</code>, <code>Mark</code> and <code>Scene</code> are there to build plots of your own: <code>copy(...)</code> changes any part directly, <code>Tweak(f)</code> makes a tweak of your own from a function on figures, and <code>over</code> draws one figure on another.</p>
  </section>
-</main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#in-a-repl-view">In a REPL: view()</a></li><li><a href="#into-files-save">Into files: save</a></li><li><a href="#from-matlab-java-and-the-command-line">From MATLAB, Java and the command line</a><ul><li><a href="#saved-results">Saved results</a></li></ul></li><li><a href="#what-there-is">What there is</a></li><li><a href="#customizing-a-plot">Customizing a plot</a><ul><li><a href="#labels-size-and-scales">Labels, size and scales</a></li><li><a href="#colors">Colors</a></li><li><a href="#the-look">The look</a></li><li><a href="#markers">Markers</a></li><li><a href="#the-legend">The legend</a></li><li><a href="#the-bars-of-a-barcode">The bars of a barcode</a></li><li><a href="#finer-control-text-lines-the-plot-area-the-sides-of-the-axes">Finer control: text, lines, the plot area, the sides of the axes</a></li><li><a href="#the-axes-direction-room-shape-and-scales-of-your-own">The axes: direction, room, shape and scales of your own</a></li><li><a href="#numbers">Numbers</a></li><li><a href="#a-caption-a-panel-tag-and-a-description">A caption, a panel tag and a description</a></li><li><a href="#sizes-in-the-units-of-a-paper">Sizes in the units of a paper</a></li><li><a href="#the-camera-of-a-3-d-scene">The camera of a 3-D scene</a></li><li><a href="#for-a-paper-and-for-a-page-of-either-color">For a paper, and for a page of either color</a></li><li><a href="#defaults-for-every-plot-a-given-look">Defaults for every plot: a given Look</a></li><li><a href="#comparing-plots">Comparing plots</a></li><li><a href="#panels-on-a-grid">Panels on a grid</a></li><li><a href="#reference-lines-and-marks-of-your-own">Reference lines and marks of your own</a></li><li><a href="#from-matlab-and-the-command-line">From MATLAB and the command line</a></li></ul></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>
+</main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#in-a-repl-view">In a REPL: view()</a></li><li><a href="#into-files-save">Into files: save</a><ul><li><a href="#png-and-pdf">PNG and PDF</a></li></ul></li><li><a href="#from-matlab-java-and-the-command-line">From MATLAB, Java and the command line</a><ul><li><a href="#saved-results">Saved results</a></li></ul></li><li><a href="#what-there-is">What there is</a></li><li><a href="#customizing-a-plot">Customizing a plot</a><ul><li><a href="#labels-size-and-scales">Labels, size and scales</a></li><li><a href="#colors">Colors</a></li><li><a href="#the-look">The look</a></li><li><a href="#markers">Markers</a></li><li><a href="#the-legend">The legend</a></li><li><a href="#the-bars-of-a-barcode">The bars of a barcode</a></li><li><a href="#finer-control-text-lines-the-plot-area-the-sides-of-the-axes">Finer control: text, lines, the plot area, the sides of the axes</a></li><li><a href="#the-axes-direction-room-shape-and-scales-of-your-own">The axes: direction, room, shape and scales of your own</a></li><li><a href="#numbers">Numbers</a></li><li><a href="#a-caption-a-panel-tag-and-a-description">A caption, a panel tag and a description</a></li><li><a href="#sizes-in-the-units-of-a-paper">Sizes in the units of a paper</a></li><li><a href="#the-camera-of-a-3-d-scene">The camera of a 3-D scene</a></li><li><a href="#for-a-paper-and-for-a-page-of-either-color">For a paper, and for a page of either color</a></li><li><a href="#defaults-for-every-plot-a-given-look">Defaults for every plot: a given Look</a></li><li><a href="#comparing-plots">Comparing plots</a></li><li><a href="#panels-on-a-grid">Panels on a grid</a></li><li><a href="#reference-lines-and-marks-of-your-own">Reference lines and marks of your own</a></li><li><a href="#from-matlab-and-the-command-line">From MATLAB and the command line</a></li></ul></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>

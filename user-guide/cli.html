@@ -494,6 +494,7 @@
     </tr>
    </tbody>
   </table>
+  <p>A comma list of 2-D kinds draws them on one board, left to right: <code>--plot barcode,diagram</code>. <code>--layout RxC</code> puts them on a grid instead, row by row (<code>--plot barcode,diagram,landscape --layout 2x2</code>), with <code>--width</code> and <code>--height</code> the size of the whole drawing (default 960 by 600); <code>--tagged</code> letters the panels <code>(a)</code>, <code>(b)</code>, ...; <code>--title</code> is the title of the board, and the other look flags apply to every panel. A 3-D plot is drawn on its own.</p>
   <table>
    <thead>
     <tr>
@@ -512,11 +513,23 @@
     </tr>
     <tr>
      <td><code>--at X</code></td>
-     <td>the scale: required for <code>complex</code>; for <code>representative</code>, a cycle is drawn over the complex at <code>X</code> and a cocycle restricted to it</td>
+     <td>the scale: required for <code>complex</code>; for <code>representative</code>, a cycle is drawn over the complex at <code>X</code> and a cocycle restricted to it (a cocycle is restricted to its bar's birth unless you say; <code>--at Infinity</code> draws it whole)</td>
+    </tr>
+    <tr>
+     <td><code>--layout RxC</code>, <code>--tagged</code></td>
+     <td>for a list of kinds: the grid of the board, <code>2x2</code> or <code>1x3</code>, and lettered panels</td>
     </tr>
     <tr>
      <td><code>--title</code>, <code>--x-label</code>, <code>--y-label</code></td>
      <td>the words</td>
+    </tr>
+    <tr>
+     <td><code>--caption</code>, <code>--tag</code>, <code>--description</code></td>
+     <td>a line under the plot, a letter in its corner for one panel of a figure (<code>(a)</code>), and what a screen reader says of it; 2-D plots only</td>
+    </tr>
+    <tr>
+     <td><code>--look</code></td>
+     <td>a whole look at once: <code>default</code>, <code>print</code> (<code>--palette print --style print</code>) or <code>clear</code>; the flags below, after it, win</td>
     </tr>
     <tr>
      <td><code>--width</code>, <code>--height</code></td>
@@ -524,7 +537,7 @@
     </tr>
     <tr>
      <td><code>--palette</code></td>
-     <td><code>brand</code> (default), <code>reference</code>, <code>print</code> (black on pure white, for a paper), <code>clear</code> (black for a light page, white for a dark one)</td>
+     <td><code>brand</code> (default), <code>reference</code>, <code>print</code> (black on pure white, for a paper), <code>grayscale</code> (that in grays only, for a black-and-white print), <code>okabe-ito</code> (the eight colors of Okabe and Ito on white), <code>clear</code> (black for a light page, white for a dark one)</td>
     </tr>
     <tr>
      <td><code>--style</code></td>
@@ -548,7 +561,7 @@
     </tr>
    </tbody>
   </table>
-  <p>The settings <code>--set</code> takes are listed under <a href="plotting.html#finer-control-text-lines-the-plot-area-the-sides-of-the-axes">finer control</a> on the plotting page, with the other plot flags in <a href="plotting.html#from-matlab-and-the-command-line">From MATLAB and the command line</a>. <code>--palette print --style print</code> makes a figure for a paper; <code>--palette clear --style clear</code> one with no background. A flag a plot cannot use (an x scale for a 3-D scene) is an error, reported before anything is computed.</p>
+  <p>The settings <code>--set</code> takes are listed under <a href="plotting.html#finer-control-text-lines-the-plot-area-the-sides-of-the-axes">finer control</a> on the plotting page, with the other plot flags in <a href="plotting.html#from-matlab-and-the-command-line">From MATLAB and the command line</a>. <code>--look print</code> (or <code>--palette print --style print</code>) makes a figure for a paper; <code>--look clear</code> one with no background. A flag a plot cannot use (an x scale for a 3-D scene) is an error, reported before anything is computed.</p>
  </section>
  <section id="exit-status">
   <h2 class="h500"><a href="#exit-status" class="anchor"></a>Exit status</h2>
