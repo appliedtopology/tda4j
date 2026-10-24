@@ -288,9 +288,12 @@ These are **alternative implementations with the same output contract, not layer
 `iterateDimension`/`iterator` implementation is in play before reasoning about a bug:
 
 - `EnumeratingCofaceSimplexStream` — generates each dimension explicitly via `SimplexIndexing`'s
-  combinatorial-number-system enumeration, filtered by an optional `keepCriterion`.
-- `RipserCofaceSimplexStream` — a coface-generation variant that only expands cofaces reachable from the
-  previous dimension's survivors rather than re-enumerating a whole dimension from scratch. `CechStream`'s
+  combinatorial-number-system enumeration, filtered by an optional `keepCriterion`. The slowest construction, and the
+  reference the others are checked against. It declares the exclusion hooks (`keepCriterion`, `filtrationValueOverride`)
+  that its subclasses inherit; `LayeredInorderSimplexStream` does not forward them yet.
+- `RipserCofaceSimplexStream` — what `VietorisRips(...)` builds by default. A coface-generation variant that only
+  expands cofaces reachable from the previous dimension's survivors rather than re-enumerating a whole dimension from
+  scratch. `CechStream`'s
   `CechCofaceSimplexStream` is built directly on top of this class (see below). When the stream has a
   `RipserCofaceSimplexStream.FlatFiltration` (the Vietoris-Rips value, DTM-Rips, Dowker, sparse Rips and the Cech and
   witness functions through an adapter) it builds each dimension on arrays, as a `FlatLayerStream.Layer`: the candidate

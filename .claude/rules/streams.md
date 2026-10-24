@@ -37,8 +37,10 @@ tie-heavy fixtures; `totalBarsAccountForAllCells` alone is weaker. Filtration va
 comparisons must be cheap: `EnumeratingCofaceSimplexStream`/`CubicalGridStream` memoize them
 (`WORKLOG-autonomous-session-2026-09-19.md`).
 
-**VR constructions** (same output contract, alternate engines): `EnumeratingCofaceSimplexStream`,
-`RipserCofaceSimplexStream` (+ `SimplexIndexing`),
+**VR constructions** (same output contract, alternate engines): `RipserCofaceSimplexStream` (+ `SimplexIndexing`), what
+`VietorisRips(...)` builds by default (project lead: Enumerating is a last resort; the exclusion hooks `keepCriterion` and
+`filtrationValueOverride` come with it, from the base class; `LayeredInorderSimplexStream` does not forward them yet, #184),
+`EnumeratingCofaceSimplexStream` (the reference the others are checked against),
 `RecursiveStackVietorisRipsSimplexStream`, `IncrementalVietorisRipsSimplexStream` (Rieser's New-VR, arXiv:2301.07191
 — cross-validation baseline, not a fast engine); `CofacetIterator` for lazy coboundaries. `LayeredInorderSimplexStream` (what
 `Implementation.Inorder` builds; arXiv:2411.05495 mirrored, smallest vertex first): each simplex carries only its
