@@ -11,9 +11,15 @@ private[tda4j] object Parallel:
 
   def sequentially[A](body: => A): A = body
 
+  def byDefault: Boolean = false
+
   def foreach[A](xs: IndexedSeq[A])(f: A => Unit): Unit = xs.foreach(f)
 
   def map[A, B](xs: IndexedSeq[A])(f: A => B): IndexedSeq[B] = xs.map(f)
+
+  def both(left: => Unit, right: => Unit): Unit =
+    left
+    right
 
   def ranges(count: Int, grain: Int)(f: (Int, Int) => Unit): Unit = f(0, count)
 

@@ -313,6 +313,9 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
         slots(slotOf(vertices, i * width, width, -1)) = i + 1
         i += 1
 
+    /** Builds the index `face` reads, which it would build at its first call: call it before lookups from several threads. */
+    def prepare(): Unit = if slots == null then index()
+
     /** The number of the cell whose vertices are `src(from until from + dim + 2)` without the one at `from + skip`, or
       * -1 if there is none.
       */
@@ -500,18 +503,26 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
       val faces = new Array[Int](upper.size * width)
       val offsets = new Array[Int](lower.size + 1)
       val youngest = new Array[Int](upper.size)
-      var j = 0
-      while j < upper.size do
-        var y = -1
-        var r = 0
-        while r < width do
-          val f = lower.face(upper.vertices, j * width, r)
-          faces(j * width + r) = f
-          if f >= 0 then
-            if !cleared(f) then offsets(f + 1) += 1
+      lower.prepare() // before the lookups below share it
+      // The faces of every cell above, found independently of each other (the lookups only read the index) ...
+      Parallel.ranges(upper.size, 2048) { (from, until) =>
+        var j = from
+        while j < until do
+          var y = -1
+          var r = 0
+          while r < width do
+            val f = lower.face(upper.vertices, j * width, r)
+            faces(j * width + r) = f
             if f > y then y = f
-          r += 1
-        youngest(j) = y
+            r += 1
+          youngest(j) = y
+          j += 1
+      }
+      // ... and counted per column.
+      var j = 0
+      while j < upper.size * width do
+        val f = faces(j)
+        if f >= 0 && !cleared(f) then offsets(f + 1) += 1
         j += 1
       youngestFacet(d + 1) = youngest
       var i = 0
@@ -682,7 +693,13 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
         reduced.collapseAll()
         (reduced, vcol)
 
+      // Each death dimension reads and writes its own tables only (`basisByDim(d)`, `generatorsByDim(d)`, `processed(d)`),
+      // so the dimensions are reduced at the same time; the maps and the face indexes are made first, here.
       for d <- 1 to topDim do
+        basisByDim.getOrElseUpdate(d, mutable.Map.empty)
+        generatorsByDim.getOrElseUpdate(d, mutable.Map.empty)
+        levels(d - 1).prepare()
+      Parallel.foreach((1 to topDim).toVector) { d =>
         var tau = 0
         while tau < levels(d).size do
           val sigma = pairedBirth(d)(tau)
@@ -700,6 +717,7 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
                 )
           tau += 1
         processed(d) = Int.MaxValue
+      }
 
       val youngestCellFirst = olderFirst.reverse
       kept.iterator

@@ -1,6 +1,6 @@
 package org.appliedtopology.tda4j
 
-import java.util.concurrent.ForkJoinPool
+import java.util.concurrent.{ForkJoinPool, ForkJoinTask}
 import java.util.stream.IntStream
 import scala.collection.parallel.CollectionConverters.*
 
@@ -30,6 +30,9 @@ private[tda4j] object Parallel:
     try body
     finally forcedSequential.set(before)
 
+  /** The default of the `parallelFiltrationValue` flags: share the per-cell work when there are threads to share it. */
+  def byDefault: Boolean = threads > 1
+
   /** `f` on every element, in no particular order and possibly at the same time. */
   def foreach[A](xs: IndexedSeq[A])(f: A => Unit): Unit =
     if threads == 1 then xs.foreach(f) else xs.par.foreach(f)
@@ -37,6 +40,17 @@ private[tda4j] object Parallel:
   /** `f` on every element, possibly at the same time; the results are in the order of `xs`. */
   def map[A, B](xs: IndexedSeq[A])(f: A => B): IndexedSeq[B] =
     if threads == 1 then xs.map(f) else xs.par.map(f).toIndexedSeq
+
+  /** `left` and `right`, possibly at the same time (a divide and conquer step: call it on the halves while they are big). */
+  def both(left: => Unit, right: => Unit): Unit =
+    if threads == 1 then
+      left
+      right
+    else
+      val other = ForkJoinTask.adapt(new Runnable { def run(): Unit = right })
+      other.fork()
+      try left
+      finally other.join()
 
   /** `f(from, until)` on consecutive ranges of at least `grain` indices that together cover `0 until count`, possibly
     * at the same time; one call when the work is too small to share.

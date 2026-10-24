@@ -826,7 +826,7 @@ private class HelixDelaunayBuilder(pts: Array[Array[Double]], seed: Long)(using 
   * the value of each top simplex (`topValue`, its circumradius); [[HelixDelaunay]] is one. [[FastAlphaHomologyEngine]]
   * works on any of them.
   */
-abstract class DelaunayAlphaShapes(using epsilon: Epsilon) extends AlphaShapes:
+abstract class DelaunayAlphaShapes(using epsilon: Epsilon) extends AlphaShapes with FlatLayerStream:
   /** The dimension of the triangulation (of the points' affine span). */
   def ambientDimension: Int
 
@@ -1028,6 +1028,31 @@ abstract class DelaunayAlphaShapes(using epsilon: Epsilon) extends AlphaShapes:
   }
 
   lazy val simplicesSortedMap: Map[Int, Seq[Simplex[Int]]] = (0 to highest).map(k => k -> sortedDimension(k)).toMap
+
+  /** The dimensions straight from the face tables, without a [[Simplex]] per cell: each in the order the cohomology
+    * engines take it in, ascending value and, among equal values, ascending lexicographic order (the reverse of the
+    * stream's own listing of them). `None` when points are repeated: their extra cells are not in the tables.
+    */
+  override def flatLayers: Option[Iterator[FlatLayerStream.Layer]] =
+    Option.when(duplicates.isEmpty && (0 to highest).forall(built._1(_).size > 0)) {
+      (0 to highest).iterator.map { k =>
+        val level = built._1(k)
+        val width = k + 1
+        val vertices = level.allVertices
+        val values = built._2(k)
+        val order = RipserCofaceSimplexStream.layerOrder(width, values, vertices, colex = false)
+        val sortedVertices = new Array[Int](vertices.length)
+        val sortedValues = new Array[Double](values.length)
+        Parallel.ranges(order.length, DelaunayAlphaShapes.ParallelGrain) { (from, until) =>
+          var i = from
+          while i < until do
+            System.arraycopy(vertices, order(i) * width, sortedVertices, i * width, width)
+            sortedValues(i) = values(order(i))
+            i += 1
+        }
+        FlatLayerStream.Layer(k, sortedVertices, sortedValues)
+      }
+    }
 
   def simplicesInDimension(d: Int): Iterator[Simplex[Int]] =
     if d < 0 || d > highest then throw new NoSuchElementException(s"key not found: $d") else sortedDimension(d).iterator
@@ -1319,8 +1344,24 @@ object HelixDelaunay:
 /** The simplices of `full` with alpha value at most `maxRadius`, in `full`'s order and with its values. Alpha values do
   * not decrease from a face to a coface, so this is a subcomplex.
   */
-open class RadiusLimitedAlphaShapes(full: AlphaShapes, maxRadius: Double) extends AlphaShapes:
+open class RadiusLimitedAlphaShapes(full: AlphaShapes, maxRadius: Double) extends AlphaShapes with FlatLayerStream:
   override val metricSpace: FiniteMetricSpace[Int] = full.metricSpace
+
+  // The layers of `full` cut after the last cell of value at most `maxRadius` (a layer is ascending in value).
+  override def flatLayers: Option[Iterator[FlatLayerStream.Layer]] = full match
+    case flat: FlatLayerStream =>
+      flat.flatLayers.map(_.map { layer =>
+        var (low, high) = (0, layer.size)
+        while low < high do
+          val mid = (low + high) >>> 1
+          if layer.values(mid) <= maxRadius then low = mid + 1 else high = mid
+        FlatLayerStream.Layer(
+          layer.dim,
+          java.util.Arrays.copyOf(layer.vertices, low * (layer.dim + 1)),
+          java.util.Arrays.copyOf(layer.values, low)
+        )
+      }.takeWhile(_.size > 0))
+    case _ => None
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
     case d if full.iterateDimension.isDefinedAt(d) =>
       full.iterateDimension(d).filter(full.filtrationValue(_) <= maxRadius)
@@ -1356,6 +1397,9 @@ object DelaunayAlphaShapes:
     private var partitionBits = 0
 
     def vertex(row: Int, i: Int): Int = rows(row * width + i)
+
+    /** The vertices of rows `0 until size`, `width` of each, in row order. */
+    def allVertices: Array[Int] = java.util.Arrays.copyOf(rows, size * width)
 
     // The rows and tables that `facesOf` made, in place of the empty ones.
     private def install(newRows: Array[Int], newSize: Int, newTables: Array[Array[Int]], bits: Int): Unit =

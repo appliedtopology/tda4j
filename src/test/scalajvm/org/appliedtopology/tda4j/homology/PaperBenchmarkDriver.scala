@@ -55,6 +55,10 @@ object PaperBenchmarkDriver:
   given Epsilon = Epsilon(1e-5)
 
   def main(args: Array[String]): Unit =
+    // `sequential=true` runs every parallel step of the library on the main thread (the single-threaded reference).
+    if args.contains("sequential=true") then Parallel.sequentially(run(args)) else run(args)
+
+  private def run(args: Array[String]): Unit =
     val opts: Map[String, String] = args.map { a =>
       val i = a.indexOf('=')
       require(i > 0, s"arguments are key=value, got '$a'")

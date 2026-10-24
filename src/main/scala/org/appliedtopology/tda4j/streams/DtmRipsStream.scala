@@ -20,7 +20,7 @@ open class DtmRipsSimplexStream(
   val reified: DtmRipsSimplexStream.DtmMetricSpace,
   keepCriterion: PartialFunction[Simplex[Int], Boolean] = CofaceSimplexStream.keepAll,
   maxFiltrationValue: Option[Double] = None,
-  parallelFiltrationValue: Boolean = false
+  parallelFiltrationValue: Boolean = Parallel.byDefault
 ) extends RipserCofaceSimplexStream(
       reified,
       keepCriterion,
@@ -79,7 +79,7 @@ object DtmRipsSimplexStream:
     p: Double = 1.0,
     keepCriterion: PartialFunction[Simplex[Int], Boolean] = CofaceSimplexStream.keepAll,
     maxFiltrationValue: Option[Double] = None,
-    parallelFiltrationValue: Boolean = false
+    parallelFiltrationValue: Boolean = Parallel.byDefault
   ): DtmRipsSimplexStream =
     new DtmRipsSimplexStream(
       DtmMetricSpace(ambientMetricSpace, f, p),
