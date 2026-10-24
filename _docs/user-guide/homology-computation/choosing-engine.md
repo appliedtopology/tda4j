@@ -25,6 +25,7 @@ an alpha complex, `Persistence` uses the cohomology engine.
 | Ripser (`PackedRipserCohomologyEngine`) | `Ripser` / `ripser` | a metric space | cycles, **cocycles** | Vietoris-Rips: the fastest there, and the default |
 | fast cubical (`FastCubicalHomologyEngine`) | `FastCubical` / `fast-cubical` | a cubical grid, 2-D and up | cycles | large images ([details](fast-cubical.md)) |
 | fast alpha (`FastAlphaHomologyEngine`) | MATLAB `fast-alpha` | a Helix alpha complex | cycles | large planar point clouds ([details](fast-alpha-complexes.md)) |
+| parallel Ripser | `ParallelRipserBarsOnlyNoRepresentatives` (Scala on the JVM only) | a metric space | **none** | Vietoris-Rips bars when you never look at representatives ([below](#bars-only-and-parallel)) |
 
 What each complex allows:
 
@@ -39,3 +40,21 @@ engine also advances step by step (`advanceTo`, `advanceFor`). The cohomology an
 call. Over a field, homology and cohomology have the same bars, so the choice between cycles and cocycles is only about
 the representatives you need (`representatives`, or MATLAB's `representativeType`): cocycles for [circular coordinates](../circular-coordinates.md), cycles to see where a
 hole is. The [scaling up](../../tutorials/scaling-up.md) tutorial compares the four general engines on one data set.
+
+### Bars only, and parallel
+
+`Persistence(points, engine = Persistence.Engine.ParallelRipserBarsOnlyNoRepresentatives)` gives the bars of the
+Vietoris-Rips complex without a representative for any of them, and cuts Ripser's reduction into blocks that run on every
+processor. The name is long on purpose: `bar.representative` throws on its bars, and so does everything that needs a
+cycle or cocycle (circular coordinates, for one). Use it for a barcode alone, for example a statistic over many large
+clouds.
+
+* The bars are those of `Engine.Ripser`, whatever the number of threads.
+* `Engine.Auto` never picks it, `representatives` is ignored, zero-length bars cannot be reported
+  (`includeZeroLength = true` is an error), and the coefficients must be `Z/p` for a prime `p` (`characteristic = 0`
+  is an error).
+* It keeps a table of edge ranks with one entry per pair of points, so it suits thousands of points, not hundreds of
+  thousands.
+* JavaScript has one thread: the engine refuses there and names `Engine.Ripser`.
+* The number of threads is the common pool's (`-Djava.util.concurrent.ForkJoinPool.common.parallelism=N`; `0` is one
+  thread).

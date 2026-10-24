@@ -205,9 +205,15 @@ instance of your own fall back to the cells.
 each degree cut into units of whole edge blocks (a simplex's block is its first longest edge):
 `BlockParallelReduction` on explicit coboundary matrices, `ParallelPackedCohomology` on implicit ones, as engine 4
 computes them (its key is one `Long` where the block and the index fit, else the block beside the index; the index
-itself is still one `Long`). Both give exactly the pairs of a sequential reduction. They return bars only, no representatives, and
-`Persistence` does not call them. The benchmark harness runs `ParallelPackedCohomology` as `tda4j-parallel-1t/-mt`;
-`BlockParallelReduction` builds its matrices in full and is not run there.
+itself is still one `Long`). Both give exactly the pairs of a sequential reduction. They return bars only, no representatives.
+`BlockParallelReduction` builds its matrices in full and `Persistence` does not call it. `ParallelPackedCohomology` is
+reachable as `Persistence.Engine.ParallelRipserBarsOnlyNoRepresentatives`, which `Auto` never chooses: the name says that
+the bars have no representatives (`annotation = None`), against the library's principle that every engine records them,
+so a caller has to ask for that by name. `Persistence.Input.parallelRipserBarsOnly` builds the diagram for a metric
+space, through the seam `ParallelRipser.bars` (a pool of `Parallel.threads` daemon threads on the JVM, 8 units per thread;
+the Scala.js twin throws `UnsupportedOperationException`). Characteristic `0`, `includeZeroLength` and any complex but
+`VietorisRips` are refused with an error that names the alternative. The benchmark harness runs the engine directly as
+`engine=parallel` (`tda4j-parallel-1t/-mt`, with `threads` and `wide`) and through `Persistence` as `engine=barsonly`.
 
 ## 6. `FastCubicalHomologyEngine` — dual-graph union-find
 

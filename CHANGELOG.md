@@ -49,6 +49,11 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Added
 
+- `Persistence.Engine.ParallelRipserBarsOnlyNoRepresentatives` computes the Vietoris-Rips bars of points or a metric space
+  with the block-parallel Ripser reduction on every processor (`ParallelPackedCohomology`, so far reachable only from the
+  benchmark driver). **Its bars carry no representatives**, cycles or cocycles (`bar.representative` throws), and zero-length
+  bars and real coefficients are refused; `Auto` never chooses it. JVM only: JavaScript refuses and names `Engine.Ripser`
+  (#220).
 - `--plot barcode,diagram` draws a comma list of 2-D plots on one board, in a row or on `--layout RxC` (row by row; `--width`
   and `--height` size the drawing); `--tagged` letters the panels and `--title` titles the board, the other look flags apply
   to every panel (#105). A 3-D plot stays on its own.

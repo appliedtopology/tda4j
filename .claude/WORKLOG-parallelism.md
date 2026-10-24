@@ -66,3 +66,28 @@ The Helix walk alone (5,000 points in R^5, the walk 314 s, faces 29 s, sort 11 s
 - The sequential apply side of the Helix walk (`Simplex` sets, `FrontierCase`): moving it to int arrays would raise the thread
   scaling in 5-6 dimensions. Issue.
 - Enclosing radius scan: already 2-5 ms after #216; Dowker's value per parent (#206) not touched.
+
+## Addendum (2026-10-24): the bars-only parallel Ripser engine in the verb (#220)
+
+Mikael's decision on #220: "allow access to faster without representatives, but make the option obnoxious". Done as
+`Persistence.Engine.ParallelRipserBarsOnlyNoRepresentatives` (an enum case with the long name, never chosen by `Auto`).
+
+- **Wiring**: `Input.parallelRipserBarsOnly` (default throws, the metric-space input overrides) calls the seam
+  `ParallelRipser.bars` (`scalajvm`: `ParallelPackedCohomology.persistence` on a pool of `Parallel.threads` daemon threads,
+  8 units per thread, one thread and no pool inside `Parallel.sequentially`; `scalajs`: `UnsupportedOperationException` naming
+  `Engine.Ripser`). The diagram's bars have `annotation = None`; `bar.representative` throws "carries no representative".
+  `lastFiltrationValue` is the longest edge within the threshold, as for `Ripser` (the scan is now one helper).
+- **Refusals** (each says what to use): `includeZeroLength` (the engine drops bars with death == birth), `characteristic = 0`
+  and a composite characteristic, any `complex` but `VietorisRips`, inputs that are not points or a metric space, more than
+  46,340 points (`n x n` rank table). `representatives` is ignored (cannot tell it from the default).
+- **Tests**: `ParallelRipserEngineSpec` (JVM: bars equal `Engine.Ripser`'s on a 3-D cloud over F_17/F_2/F_3, a noisy circle
+  with and without a threshold, tie-heavy metrics; same bars with `Parallel.sequentially`; no representatives; refusals) and
+  `ParallelRipserRefusalSpec` (both platforms: the JVM answers, JavaScript refuses).
+- **Measured** (4 cores, 1,200-point noisy torus in R^3, degrees 0..2, threshold 1.2, p = 17, median of 3 after 1 warm-up,
+  through `PaperBenchmarkDriver`): `Engine.Ripser` with cycles (the verb's default) 3.9 s, with cocycles 2.1 s; the bars-only
+  engine 0.8 s on one thread and 0.5 s on four. Same bar counts (1200 / 355 / 5). So most of the win over the default is not
+  recording representatives (cycles cost a second reduction); threads add about 1.7x on this size. Peak heap 247 MB against
+  564-614 MB.
+- **Not done**: MATLAB (`matlab.TDA4j`) and the CLI (`cli.TDA4jConf`) do not offer it: their results are representative-first
+  and a loud option there is a separate decision (listed on #220). Giving the engine representatives (the involuted cycles of
+  its pairing) is still the better long-term answer.
