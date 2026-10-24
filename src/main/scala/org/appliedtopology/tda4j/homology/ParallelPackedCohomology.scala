@@ -605,7 +605,9 @@ object ParallelPackedCohomology:
     keepPairs: Boolean = false
   ): Result =
     import space.*
-    val scratch = ThreadLocal.withInitial[Scratch](() => Scratch(space))
+    // `initialValue`, not `ThreadLocal.withInitial`: the latter is not in Scala.js's java.lang.
+    val scratch = new ThreadLocal[Scratch]:
+      override def initialValue(): Scratch = Scratch(space)
     var level: Array[Long] = Array.tabulate(n)(v => key(0, v.toLong))
     // The blocks of `level`, for two-word keys only.
     var levelBlocks: Array[Int] = if wide then new Array[Int](n) else null
