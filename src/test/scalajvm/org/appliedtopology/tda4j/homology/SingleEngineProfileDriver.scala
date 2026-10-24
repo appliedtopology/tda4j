@@ -40,6 +40,9 @@ object SingleEngineProfileDriver:
     val maxDim = args(3).toInt
     val thresholdArg = if args.length > 4 then args(4) else "none"
     val trials = if args.length > 5 then args(5).toInt else 1
+    // `packed` only: whether emergent pairs (#57) are used, and the apparent-pair shortcut.
+    val emergent = if args.length > 6 then args(6).toBoolean else true
+    val apparent = if args.length > 7 then args(7).toBoolean else true
 
     val threshold: Option[Double] = if thresholdArg == "none" then None else Some(thresholdArg.toDouble)
 
@@ -52,6 +55,8 @@ object SingleEngineProfileDriver:
       case "distance"    => ExplicitMetricSpace(CSV.readFullDistanceMatrix(dataFile).map(_.toIndexedSeq).toIndexedSeq)
       case other         => throw new IllegalArgumentException(s"unknown format $other -- use point-cloud or distance")
 
+    var packedCounts = ""
+    var packedDigests = ""
     val times = (1 to trials).map { _ =>
       val ms = buildMetricSpace()
       val t0 = System.nanoTime()
@@ -66,8 +71,30 @@ object SingleEngineProfileDriver:
             bars.groupBy(_.dim).view.mapValues(_.size).toMap
           )
         case "packed" =>
-          val ctx = PackedRipserCohomologyEngine[Fp](ms, maxDim, maxFiltrationValue = threshold)
+          val ctx = PackedRipserCohomologyEngine[Fp](
+            ms,
+            maxDim,
+            useApparentPairs = apparent,
+            maxFiltrationValue = threshold,
+            useEmergentPairs = emergent
+          )
           val bars = ctx.persistentCohomology()
+          // Digests of the bars alone and of the bars with their cocycles' terms (cell index, high word, coefficient),
+          // to compare runs of different builds or flags without printing the barcode.
+          def digest(lines: Seq[String]): String =
+            java.security.MessageDigest
+              .getInstance("SHA-256")
+              .digest(lines.sorted.mkString("\n").getBytes("UTF-8"))
+              .take(8)
+              .map(b => f"$b%02x")
+              .mkString
+          packedDigests = s"barsDigest=${digest(bars.map(b => s"${b.dim}\t${b.lower}\t${b.upper}"))} " +
+            s"cocyclesDigest=${digest(bars.map { b =>
+                val terms = b.representative.terms.map((c, k) => s"${c.index}:${c.high}:$k").sorted.mkString(",")
+                s"${b.dim}\t${b.lower}\t${b.upper}\t$terms"
+              })}"
+          packedCounts = s"emergentPairCount=${ctx.emergentPairCount} reducedColumnCount=${ctx.reducedColumnCount} " +
+            s"additionCount=${ctx.additionCount} emergentRebuilds=${ctx.emergentRebuilds}"
           (
             ctx.totalSimplexCount,
             ctx.substitutionCount,
@@ -87,3 +114,5 @@ object SingleEngineProfileDriver:
     println(
       s"totalSimplexCount=$totalSimplices substitutionCount=$substCount apparentPairCount=$apparentCount bars=$barCounts"
     )
+    if packedCounts.nonEmpty then println(packedCounts)
+    if packedDigests.nonEmpty then println(packedDigests)
