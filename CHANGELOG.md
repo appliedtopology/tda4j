@@ -196,6 +196,18 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Changed
 
+- `Persistence(points, complex = AlphaShapes)` builds the alpha complex only up to the points' minimum enclosing radius
+  when no `maxFiltrationValue` is given, as the Vietoris-Rips and Čech complexes already did. The diagram is the same
+  (past that radius the union of balls is contractible); the long thin simplices along the hull of the triangulation
+  are not built.
+  `AlphaShapes.upToEnclosingRadius(points)` is that stream; `AlphaShapes(points)` and the MATLAB and CLI
+  `complex=alpha` still build the whole complex (#215). Pass `maxFiltrationValue = Double.PositiveInfinity` for the
+  whole complex.
+- `FiniteMetricSpace.minimumEnclosingRadius` (the default radius of every point-cloud computation, and the scale of
+  `significant()`) is found without allocating, giving up on a point as soon as it cannot beat the best so far: 2.8 s
+  to 2 ms for 10,000 points in 3-space (#209). A `EuclideanMetricSpace` works on squared distances and no longer fills
+  its distance cache for it. A space with a faster way overrides the protected `scanEnclosingRadius`. The value is the
+  same; the empty space raises `UnsupportedOperationException` with a message.
 - `VietorisRips(...)` builds `Implementation.RipserCoface` by default (was `Enumerating`, which tests every vertex set of
   a dimension and is now the slowest choice). The complex is the same, cell for cell and in order; it is built as
   arrays, which the cohomology engine reduces without a `Simplex` per cell. `keepCriterion` and `filtrationValueOverride`
