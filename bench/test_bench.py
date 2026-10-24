@@ -188,6 +188,12 @@ class CaseTests(unittest.TestCase):
         self.assertEqual(bench.jvm_flags("16g"), ["-Xmx16g", "-Xms16g", "-XX:+UseParallelGC"])
         self.assertEqual(bench.jvm_flags("4g", "-Xss8m -ea")[-2:], ["-Xss8m", "-ea"])
 
+    def test_compact_policy_has_no_pinned_heap(self):
+        flags = bench.jvm_flags("16g", "-Xss8m", compact=True)
+        self.assertEqual(flags[:2], ["-Xmx16g", "-XX:+UseSerialGC"])
+        self.assertNotIn("-Xms16g", flags)
+        self.assertEqual(flags[-1], "-Xss8m")
+
 
 class AgreementTests(unittest.TestCase):
     def test_equal_barcodes_agree_exactly(self):

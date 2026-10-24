@@ -292,10 +292,16 @@ def node_heap_mb(spec):
     return int(float(spec[:-1] if scale else spec) * (scale or 1))
 
 
-def jvm_flags(heap, extra=""):
+def jvm_flags(heap, extra="", compact=False):
     """The options of every JVM process of the benchmark, here and in sweep_cubical.py: one collector and a fixed heap.
     A JVM's RSS follows the collector's policy (a parallel collector shows its total allocation until the first
-    collection), so the two drivers must agree; the drivers also report the heap pools' peak use."""
+    collection), so the two drivers must agree; the drivers also report the heap pools' peak use.
+
+    `compact` is the policy for comparing memory with native tools: the serial collector, a heap that follows the live
+    data (grown and shrunk to leave 10-20% free) up to `heap`, so that RSS is close to what the computation needs and not
+    to what it allocated. The times of such a run are the serial collector's: take times from the default policy."""
+    if compact:
+        return [f"-Xmx{heap}", "-XX:+UseSerialGC", "-XX:MinHeapFreeRatio=10", "-XX:MaxHeapFreeRatio=20"] + extra.split()
     return [f"-Xmx{heap}", f"-Xms{heap}", "-XX:+UseParallelGC"] + extra.split()
 
 
@@ -606,7 +612,7 @@ def command(kind, name, opts, case, data, p, threshold, warmup, trials, out, arg
         threads = [] if "threads" not in opts else [os.cpu_count() if opts["threads"] == "ALL" else int(opts["threads"])]
         # The parallel experiment's sorts run on the common fork-join pool: give it the same number of threads.
         pool = [f"-Djava.util.concurrent.ForkJoinPool.common.parallelism={t}" for t in threads]
-        return (["java"] + jvm_flags(args.jvm_heap, args.jvm_opts) + pool +
+        return (["java"] + jvm_flags(args.jvm_heap, args.jvm_opts, getattr(args, "jvm_compact", False)) + pool +
                 ["-cp", cp, "org.appliedtopology.tda4j.PaperBenchmarkDriver",
                  f"engine={opts['engine']}", f"reps={opts['reps']}"] +
                 ([f"backend={opts['backend']}"] if "backend" in opts else []) +
@@ -632,7 +638,8 @@ def command(kind, name, opts, case, data, p, threshold, warmup, trials, out, arg
                  str(HERE / "workers" / worker), f"variant={opts['variant']}"] + common)
     if kind == "javaplex":
         cp = os.environ["JAVAPLEX_JAR"] + os.pathsep + os.environ["JAVAPLEX_BUILD"]
-        return (["java"] + jvm_flags(args.jvm_heap, args.jvm_opts) + ["-cp", cp, "JavaPlexWorker",
+        return (["java"] + jvm_flags(args.jvm_heap, args.jvm_opts, getattr(args, "jvm_compact", False)) +
+                ["-cp", cp, "JavaPlexWorker",
                 f"divisions={args.javaplex_divisions}"] + common)
     if kind == "dipha":
         if threshold is None:
@@ -1095,7 +1102,7 @@ def write_env(out, args):
         "julia": cmd_out([os.environ["JULIA"], "--version"]) if os.environ.get("JULIA") else "",
         "ripser_git": cmd_out(["git", "-C", str(Path(os.environ.get("RIPSER_BIN", ".")).parent), "rev-parse", "HEAD"]),
         **revision(classes_directory()),
-        "jvm_flags": jvm_flags(args.jvm_heap, args.jvm_opts),
+        "jvm_flags": jvm_flags(args.jvm_heap, args.jvm_opts, getattr(args, "jvm_compact", False)),
         "args": vars(args),
     }
     with open(out / "env.json", "w") as f:
@@ -1315,6 +1322,9 @@ def main():
                     help="if one cold computation takes longer (s), skip the warm repetitions and reuse it")
     p2.add_argument("--jvm-heap", default="16g")
     p2.add_argument("--jvm-opts", default="", help="more JVM options, after -Xmx/-Xms/-XX:+UseParallelGC")
+    p2.add_argument("--jvm-compact", action="store_true",
+                    help="the memory policy: serial collector, heap following the live data up to --jvm-heap (RSS then "
+                         "says what a computation needs; its times are not the default policy's)")
     p2.add_argument("--rerun-timeouts", action="store_true",
                     help="rerun a computation at every field even after it timed out at an earlier one")
     p2.add_argument("--node-heap", default="",

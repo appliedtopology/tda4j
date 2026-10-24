@@ -173,7 +173,7 @@ object PaperBenchmarkDriver:
               Persistence(image, maxDimension = dim, characteristic = p, engine = engine, representatives = reps)
             // read=true: every representative's terms once, inside the timed region, as a caller reading them all.
             if readReps then termsRead = diagram.bars.iterator.map(_.representative.terms.size.toLong).sum
-            held = diagram
+            if holdSeconds > 0 then held = diagram
             diagram.triples
       case "alpha" =>
         val pts = readMatrix(input)
@@ -226,13 +226,18 @@ object PaperBenchmarkDriver:
       case other => throw IllegalArgumentException(s"task=$other (vr|cubical|alpha|cech|sparse|dtm|witness|dowker)")
     val loadSeconds = (System.nanoTime() - loadStart) / 1e9
 
+    // The last run's bars are let go before the next run starts: a measured peak is one computation's, not two.
     var bars: List[(Int, Double, Double)] = Nil
-    (1 to warmup).foreach(_ => bars = compute())
+    (1 to warmup).foreach { _ =>
+      bars = Nil
+      bars = compute()
+    }
     // The peak use of each heap pool over the timed runs: the RSS of a JVM follows its collector's policy (a parallel
     // collector with a large heap shows its total allocation), the pools' peaks follow the computation.
     val heapPools = ManagementFactory.getMemoryPoolMXBeans.asScala.filter(_.getType == MemoryType.HEAP).toList
     heapPools.foreach(_.resetPeakUsage())
     val times = (1 to trials).map { _ =>
+      bars = Nil
       val t0 = System.nanoTime()
       bars = compute()
       (System.nanoTime() - t0) / 1e9

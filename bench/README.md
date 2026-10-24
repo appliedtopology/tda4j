@@ -47,6 +47,7 @@ Useful options of `run`:
 | `--warm-cap S` | if one cold computation takes longer than this (default 60 s), the warm run reuses it instead of repeating |
 | `--jvm-heap 32g` | `-Xmx` and `-Xms` for TDA4j and JavaPlex, with `-XX:+UseParallelGC` (one policy for this script and `sweep-cubical`). fractal-r needs about 12g; clifford50000 more |
 | `--jvm-opts "-Xss8m"` | more JVM options |
+| `--jvm-compact` | the memory policy, for comparing memory with the native tools: the serial collector with a heap that follows the live data (up to `--jvm-heap`) instead of a pinned one. With the default policy a JVM's RSS is what it allocated until the first collection (a 16g heap never collects a 3 GB run), which is not what the computation needs; its times are the serial collector's, so take times from the default policy. `sweep-cubical` takes it too |
 | `--node-heap 32g` | `--max-old-space-size` for the `tda4j-js` tools, in the same notation (default: `--jvm-heap`). Node's own default is a few GB, far below what the large cases need |
 | `--node-opts "--stack-size=4000"` | more options for node |
 
