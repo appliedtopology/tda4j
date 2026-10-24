@@ -13,6 +13,8 @@ others. Read this page before choosing which to build on.
 `PackedCubicalCohomologyEngine` is engine 4's algorithm (clearing, apparent pairs, a packed involution) on a cubical
 grid's own cell indices, with no `Cube` or `Chain` inside the reduction. It must equal engine 5 on any
 `CubicalGridStream`, bar for bar and term for term. `Engine.Cohomology` and engine 6's middle degrees run it on a grid.
+A reduced column is stored as its cells' keys and coefficients (the cycle of a reported bar is that column), an apparent
+pair's column is not stored at all, and the tables indexed by cell are dense `Int` arrays.
 
 `CellularHomologyEngine`, `CellularPersistenceInChunksEngine` and `CellularCohomologyEngine` also implement the
 `PersistenceEngine[CellT, C]` trait (`def barcode(stream): List[PersistenceBar[Double, Chain[CellT, C]]]`) through the

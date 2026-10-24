@@ -91,3 +91,15 @@ pairs on or off (`PackedCubicalCohomologySpec`; `FastRepresentativesSpec`'s 3-D/
 generic engine through the eager reference): re-run both after any change. Stored columns are COMBINED on drain
 (each cell once): leaving repeats in made 64³ noise take 40 s instead of 4. Each reduction step must move the pivot
 on (`orderBug` throws otherwise): a column/order mismatch would loop forever, not fail.
+
+**Memory of the grid engines** (`WORKLOG-cubical-memory.md`, #56): peak memory is the stored columns and the per-cell
+tables, so they stay primitive. A reduced `Column` is `Int` keys and coefficient references, and the cycles' chain of a
+reported bar IS that column's arrays (a heap pops in the chain's order, youngest first): never mutate a column or a
+chain's arrays. An apparent pair's column is never stored nor drained into a `Column`: its cells are distinct with
+coefficients ±1, so it is pushed straight from the cell's coboundary or boundary. Tables by cell (`rowOfCell`,
+`seedOfDeath`) are dense `Int` arrays (a cell is the birth or the death of one row, never both), `Rows` is allocated at
+its upper bound, reduction logs are primitive arrays (`Log`). In a hot loop: no tuple, no `Array.fill(n)(v)` or
+`for x <- arrayOfLongs` (both box), no `Option` from a map (`getOrNull`); a JFR allocation profile
+(`jdk.ObjectAllocationSample`) finds each. **A JVM's RSS under the bench's pinned heap is allocation until the first
+collection, not need** (the sweep's warm run is several computations in one JVM): compare memory with
+`--jvm-compact`, and quote the heap a run needs (`-Xmx` where it still runs at its speed), not RSS alone.

@@ -13,7 +13,7 @@ import scala.jdk.CollectionConverters.ListHasAsScala
   * java -cp $CP org.appliedtopology.tda4j.PaperBenchmarkDriver task=vr input=sphere.txt format=points dim=2 \
   *   [threshold=1.8] [p=2] [engine=auto|ripser|cohomology|chunks|naive|fastcubical|fastalpha|blocks|parallel] \
   *   [reps=cycles|cocycles|none] [backend=default|bowyer-watson|helix|dqp] [warmup=2] [trials=5] [out=bars.tsv]
-  *   [read=true] [hold=seconds] [count=true] [threads=N]
+  *   [read=true] [hold=seconds] [digest=true] [count=true] [threads=N]
   * }}}
   *
   *   - `task=vr`: points (`format=points`, one point per line) or a full distance matrix (`format=distance`).
@@ -49,7 +49,9 @@ import scala.jdk.CollectionConverters.ListHasAsScala
   *
   * Times cover the whole `Persistence(...)` call: building the complex, the reduction and the representatives. For
   * `task=cubical`, `read=true` also reads every representative's terms inside the timed region (the JSON line reports
-  * how many), and `hold=N` keeps the last diagram reachable for N seconds after the trials (for a heap histogram).
+  * how many), `hold=N` keeps the last diagram reachable for N seconds after the trials (for a heap histogram), and
+  * `digest=true` adds a SHA-256 of the last diagram's bars with their representatives (to compare two builds term for
+  * term).
   */
 object PaperBenchmarkDriver:
   given Epsilon = Epsilon(1e-5)
@@ -79,6 +81,10 @@ object PaperBenchmarkDriver:
     val readReps = opts.get("read").contains("true")
     // hold=N (cubical): keep the last diagram reachable for N seconds after the trials, for a heap histogram.
     val holdSeconds = opts.getOrElse("hold", "0").toInt
+    // digest=true (cubical): a SHA-256 over the last diagram's bars in list order, each with its representative's keys
+    // and coefficients, to compare two builds on one input term for term.
+    val wantDigest = opts.get("digest").contains("true")
+    var digest = ""
     if opts.get("count").contains("true") then
       countCells(task, opts, dim, threshold)
       return
@@ -174,6 +180,19 @@ object PaperBenchmarkDriver:
             // read=true: every representative's terms once, inside the timed region, as a caller reading them all.
             if readReps then termsRead = diagram.bars.iterator.map(_.representative.terms.size.toLong).sum
             if holdSeconds > 0 then held = diagram
+            if wantDigest then
+              val md = java.security.MessageDigest.getInstance("SHA-256")
+              def put(text: String): Unit = md.update(text.getBytes("UTF-8"))
+              diagram.bars.foreach { bar =>
+                put(s"${bar.dim}|${bar.lower}|${bar.upper}|")
+                (bar.representative: AnyRef) match
+                  case packed: PackedChain[?, ?] =>
+                    put(java.util.Arrays.toString(packed.keys))
+                    put(packed.coefficients.mkString(","))
+                  case other => put(bar.representative.terms.toString)
+                put("\n")
+              }
+              digest = md.digest().map(byte => f"$byte%02x").mkString
             diagram.triples
       case "alpha" =>
         val pts = readMatrix(input)
@@ -262,6 +281,7 @@ object PaperBenchmarkDriver:
         s""""heap_used_mb":${(rt.totalMemory - rt.freeMemory) / 1048576},""" +
         s""""heap_peak_mb":$heapPeakMb,"old_peak_mb":$oldPeakMb,""" +
         s""""terms_read":$termsRead,""" +
+        (if wantDigest then s""""digest":"$digest",""" else "") +
         s""""java":"${System.getProperty("java.version")}"""" +
         "}"
     )
