@@ -74,8 +74,8 @@ pixels to `persistenceFromImage`.
 
 ### What differs from the JVM build
 
-- **One thread.** JavaScript has no threads to share the work between. `parallelFiltrationValue` and the `parallel`
-  option of the DQP alpha complex give the same answer, not faster; to keep a page responsive, run the computation in a
+- **One thread.** JavaScript has no threads to share the work between. The alpha triangulation, the Cech and related
+  filtration values and the other steps the JVM build shares between threads give the same answer, not faster; to keep a page responsive, run the computation in a
   Web Worker.
 - **Files need Node.js.** In a browser there is no file system: `save`, and the readers of the
   [file formats](input-output.md), throw an error that says so. Pass the data in memory.

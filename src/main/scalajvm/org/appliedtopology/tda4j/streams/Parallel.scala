@@ -41,13 +41,16 @@ private[tda4j] object Parallel:
   def map[A, B](xs: IndexedSeq[A])(f: A => B): IndexedSeq[B] =
     if threads == 1 then xs.map(f) else xs.par.map(f).toIndexedSeq
 
-  /** `left` and `right`, possibly at the same time (a divide and conquer step: call it on the halves while they are big). */
+  /** `left` and `right`, possibly at the same time (a divide and conquer step: call it on the halves while they are
+    * big).
+    */
   def both(left: => Unit, right: => Unit): Unit =
     if threads == 1 then
       left
       right
     else
-      val other = ForkJoinTask.adapt(new Runnable { def run(): Unit = right })
+      val task: Runnable = () => right
+      val other = ForkJoinTask.adapt(task)
       other.fork()
       try left
       finally other.join()

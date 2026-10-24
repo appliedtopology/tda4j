@@ -895,9 +895,9 @@ object RipserCofaceSimplexStream:
       i += 1
     FlatLayerStream.Layer(dim, sortedVertices, sortedValues)
 
-  /** The numbers `0 until values.length` in the order of the cells they stand for (cell `i` has the `width` vertices from
-    * `vertices(i * width)`): ascending value, equal values in ascending colexicographic order of the vertices (the largest
-    * vertex decides first), or, with `colex = false`, in ascending lexicographic order.
+  /** The numbers `0 until values.length` in the order of the cells they stand for (cell `i` has the `width` vertices
+    * from `vertices(i * width)`): ascending value, equal values in ascending colexicographic order of the vertices (the
+    * largest vertex decides first), or, with `colex = false`, in ascending lexicographic order.
     */
   private[tda4j] def layerOrder(width: Int, values: Array[Double], vertices: Array[Int], colex: Boolean): Array[Int] =
     new LayerSorter(width, values, vertices, colex).sorted()

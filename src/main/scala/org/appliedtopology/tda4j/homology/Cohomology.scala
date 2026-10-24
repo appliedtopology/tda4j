@@ -313,7 +313,9 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
         slots(slotOf(vertices, i * width, width, -1)) = i + 1
         i += 1
 
-    /** Builds the index `face` reads, which it would build at its first call: call it before lookups from several threads. */
+    /** Builds the index `face` reads, which it would build at its first call: call it before lookups from several
+      * threads.
+      */
     def prepare(): Unit = if slots == null then index()
 
     /** The number of the cell whose vertices are `src(from until from + dim + 2)` without the one at `from + skip`, or

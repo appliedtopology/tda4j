@@ -68,3 +68,60 @@ class ParallelAlphaSpec extends mutable.Specification:
     found.aka("every face found by its vertices") must beTrue
     absent.aka("a face that is not there") must beTrue
   }
+
+  /** The dimensions of `alpha` as `flatLayers` gives them, each as the stream lists it: cells and values. */
+  def listing(layers: Iterator[FlatLayerStream.Layer]): Seq[(Int, Seq[Seq[Int]], Seq[Long])] =
+    layers.map { layer =>
+      val cells = layer.simplicesInStreamOrder
+      (layer.dim, cells.map(_.toSeq), layer.values.toSeq.map(java.lang.Double.doubleToLongBits))
+    }.toSeq
+
+  def streamListing(alpha: AlphaShapes, dimensions: Range): Seq[(Int, Seq[Seq[Int]], Seq[Long])] =
+    dimensions.map { d =>
+      val cells = alpha.iterateDimension(d).toVector
+      // The layer lists equal values in the stream's order too, but its values are in the layer's order: ascending.
+      (d, cells.map(_.toSeq), cells.map(c => java.lang.Double.doubleToLongBits(alpha.filtrationValue(c))))
+    }
+
+  "The flat layers of an alpha complex are its dimensions: the same cells, in the stream's order, with the same values" >> {
+    val problems = for
+      (name, alpha) <- Seq[(String, DelaunayAlphaShapes)](
+        "3-D, Bowyer-Watson" -> BowyerWatsonDelaunay(cloud(3, 150, 6)),
+        "2-D grid, Bowyer-Watson" -> BowyerWatsonDelaunay(
+          Array.tabulate(36)(k => Array((k % 6).toDouble, (k / 6).toDouble))
+        ),
+        "5-D, Helix" -> HelixDelaunay(cloud(5, 40, 7))
+      )
+      layers = alpha.flatLayers.getOrElse(sys.error(s"$name has no flat layers"))
+      flat = listing(layers)
+      if flat != streamListing(alpha, 0 to alpha.ambientDimension)
+    yield name
+    problems must beEmpty
+  }
+
+  "Repeated points leave the alpha complex without flat layers: their cells are not in the tables" >> {
+    val pts = cloud(3, 20, 8) :+ cloud(3, 20, 8).head
+    BowyerWatsonDelaunay(pts).flatLayers must beNone
+  }
+
+  "A radius-limited alpha complex cuts the flat layers where it cuts the stream" >> {
+    val full = BowyerWatsonDelaunay(cloud(3, 150, 9))
+    val limited = RadiusLimitedAlphaShapes(full, 0.12)
+    val flat = listing(limited.flatLayers.get)
+    (flat.map(_._1) == (0 until flat.size)).aka("the layers are dimensions 0, 1, ...") must beTrue
+    (flat == streamListing(limited, 0 until flat.size)).aka("the layers' cells and values") must beTrue
+    // and nothing is left out: the stream has no dimension the layers lack
+    (flat.size to full.ambientDimension)
+      .forall(d => limited.iterateDimension(d).isEmpty)
+      .aka("nothing above the layers") must beTrue
+  }
+
+  "The verb gives the same bars and representatives from flat layers as from the cells" >> {
+    val pts = cloud(4, 90, 10)
+    val alpha = HelixDelaunay(pts)
+    val flat = Persistence(Truncated(alpha, 2), characteristic = 17)
+    // a stream that does not hand over arrays: the verb reads its cells
+    val cells = Persistence(Truncated(LimitedAlphaShapesStream(alpha, 3), 2), characteristic = 17)
+    def readable(d: PersistenceDiagram[Simplex[Int]]) = d.bars.map(b => (b.toTriple, b.annotation.toString))
+    (readable(flat) == readable(cells)).aka("bars and representatives") must beTrue
+  }

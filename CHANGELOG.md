@@ -196,6 +196,15 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Changed
 
+- The JVM build shares more of its work between threads, with the same answers: the Helix triangulation (the walk evaluates
+  the next queued facets together), the face tables, alpha values and sort of `HelixDelaunay` and `BowyerWatsonDelaunay`, the
+  sort of each dimension and the coboundary blocks of the cohomology engine, and the cycle representatives of each death
+  dimension. `AlphaDQPSettings.parallel` and `parallelFiltrationValue` (Cech, DTM-Rips, sparse Rips, witness) are on by
+  default. On 4 cores: Helix in R^5 and R^6 about 2x, DQP without a radius 3x, Cech 2x, sparse Rips 1.7x, the verb on 30,000
+  points in R^3 1.5x. `-Djava.util.concurrent.ForkJoinPool.common.parallelism=0` runs everything on one thread; Scala.js
+  always does.
+- The alpha complexes of `HelixDelaunay` and `BowyerWatsonDelaunay` are `FlatLayerStream`s: the verb reduces them from
+  arrays, without a `Simplex` per cell.
 - `PackedRipserCohomologyEngine` pairs a column with its oldest cofacet of the same diameter without reducing it when no
   earlier column has that cofacet as its pivot (Bauer's emergent pairs, #57). The bars, pairs and representatives are
   those of the run without it (`useEmergentPairs = false`, a new last constructor parameter). On the Ripser paper's

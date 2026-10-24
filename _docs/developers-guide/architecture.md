@@ -493,14 +493,19 @@ is over a billion values.
 > thresholded neighbor oracle. Code that queries it expecting "unreachable" to mean "absent" will instead get
 > back a real (if unusable) `Double` value; check `.isFinite` explicitly rather than assuming exclusion.
 
-### Opt-in parallelism
+### Parallelism
 
-A few of the more expensive per-cell computations can run on the common `ForkJoinPool`, opt-in via a
-constructor flag defaulting to `false`, with output that is deterministic either way:
-`AlphaDQPSettings.parallel` (the per-vertex QP solve), `CubicalGridStream.parallelFiltrationValue`, and
-`CechCofaceSimplexStream.parallelFiltrationValue`. These are worth reaching for on large inputs where the
-per-cell cost is real (a QP solve, a minimum enclosing ball). On Scala.js the flags are accepted and the work runs on
-the one thread, giving the same answer.
+The per-cell computations that cost something run on the common `ForkJoinPool` through the internal `Parallel` object
+(`threads`, `foreach`, `map`, `ranges`, `both`, `sort`, `sequentially`; the Scala.js build has the same object and runs
+everything in order). Every use gives the same answer however many threads there are: a step may be faster, never
+different. The flags `AlphaDQPSettings.parallel` (the per-vertex QP solve) and `parallelFiltrationValue` of the Cech,
+DTM-Rips, sparse Rips and witness streams default to on where there are threads; the cubical image's pixel reads stay
+opt-in, being too cheap to share. Also shared: the alpha triangulation and face tables (see the alpha complex page),
+the sort of each dimension of a flat-array stream, the build of the cohomology engine's coboundary blocks, and the
+reduction of the death dimensions in the cycle representatives. `Parallel.sequentially { ... }` runs everything called
+from the current thread on that thread: the reference run of a test, and `sequential=true` of the benchmark drivers.
+`-Djava.util.concurrent.ForkJoinPool.common.parallelism=N` sets the number of workers for the whole library; `0` is
+sequential.
 
 ## `Barcode.scala`: representing the output
 
