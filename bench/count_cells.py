@@ -165,7 +165,7 @@ def count_gudhi(case, path, threshold, args, out):
 
 def count_tda4j(case, path, threshold, args, out):
     cp = Path(os.environ["TDA4J_CP"]).read_text().strip()
-    cmd = (["java"] + bench.jvm_flags(args.jvm_heap, args.jvm_opts) +
+    cmd = (["java"] + bench.jvm_flags(args.jvm_heap, args.jvm_opts, getattr(args, "jvm_fixed_heap", False)) +
            ["-cp", cp, "org.appliedtopology.tda4j.PaperBenchmarkDriver", f"task={case.task}", "count=true",
             f"input={path}", f"format={case.format}", f"dim={case.dim}"] +
            ([f"threshold={threshold!r}"] if threshold is not None else []) + bench.case_extra_args(case, path.parent))
@@ -371,6 +371,9 @@ def main():
                     help="the largest Vietoris-Rips count that is cross-checked (TDA4j's stream yields about 8,000 cells/s)")
     ap.add_argument("--jvm-heap", default="8g")
     ap.add_argument("--jvm-opts", default="")
+    ap.add_argument("--jvm-fixed-heap", action="store_true",
+                    help="-Xmx = -Xms with the parallel collector instead of the default serial collector with a heap "
+                         "that follows the live data")
     ap.add_argument("--reference", action="store_true",
                     help="write the counts into the checked-in reference file (bench/cells-reference.csv), which "
                          "bench.py summarize joins; a failed count never replaces a good one")

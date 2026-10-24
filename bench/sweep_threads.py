@@ -132,6 +132,8 @@ def sweep(args, out, cpus, pin):
     tools = plan(args, cpus)
     cells = {**bench.cells_reference(), **GENERATED_CELLS}
     args.javaplex_divisions = 1000  # bench.command reads it; JavaPlex is not multithreaded
+    # The multithreaded JVM tools allocate on every thread: the parallel collector, not the default serial one.
+    args.jvm_fixed_heap = True
     if pin and any(kind == "dipha" for _, kind, _, _ in tools):
         flags = pinned_mpi_flags()
         if flags is not None:

@@ -146,7 +146,7 @@ def cell_counts(name, case, path, args, out):
     """The cells of dimension 0 to dim + 1 of the complex `name` built on this draw (`count_cells.py`: TDA4j's stream
     iterated and not reduced, or GUDHI's simplex tree), as JSON; empty if the count did not finish."""
     cargs = Namespace(python=args.python, timeout=args.timeout, jvm_heap=args.jvm_heap, jvm_opts=args.jvm_opts,
-                      gudhi_python_ok=True, gudhi_mem_gb=args.py_mem_gb)
+                      jvm_fixed_heap=args.jvm_fixed_heap, gudhi_python_ok=True, gudhi_mem_gb=args.py_mem_gb)
     count = count_cells.count_gudhi if name == "gudhi" else count_cells.count_tda4j
     r = count(case, path, None, cargs, out)
     return r["cells"] if r and r["status"] == "ok" else ""
@@ -159,7 +159,7 @@ def validity_runs(args, out):
     rows = []
     for item in [t for t in args.validity.split(";") if t.strip()]:
         shape, d, n, draws = item.split(":")
-        cmd = (["java"] + bench.jvm_flags(args.jvm_heap, args.jvm_opts) +
+        cmd = (["java"] + bench.jvm_flags(args.jvm_heap, args.jvm_opts, args.jvm_fixed_heap) +
                ["-cp", cp, "org.appliedtopology.tda4j.PaperBenchmarkDriver", "task=helix-validity",
                 f"shape={shape}", f"d={d}", f"n={n}", f"draws={draws}"])
         proc = bench.run_proc(cmd, args.timeout * 4, out / "logs" / f"validity_{shape}_{d}_{n}")
@@ -208,8 +208,11 @@ def main():
     ap.add_argument("--timeout", type=float, default=1800)
     ap.add_argument("--warm-cap", type=float, default=30,
                     help="repeat a computation (warm-up + trials) only if one cold run took less than this (s)")
-    ap.add_argument("--jvm-heap", default="64g", help="-Xmx and -Xms of the JVM tools")
+    ap.add_argument("--jvm-heap", default="64g", help="-Xmx of the JVM tools")
     ap.add_argument("--jvm-opts", default="")
+    ap.add_argument("--jvm-fixed-heap", action="store_true",
+                    help="-Xmx = -Xms with the parallel collector instead of the default serial collector with a heap "
+                         "that follows the live data")
     ap.add_argument("--node-heap", default="")
     ap.add_argument("--node-opts", default="")
     ap.add_argument("--py-mem-gb", type=int, default=128, help="cap GUDHI's address space (GB); 0: no cap")
@@ -245,7 +248,8 @@ def main():
             print(f"{name} is not installed: left out", flush=True)
             continue
         tools.append((name, kind, opts))
-    bench_args = Namespace(jvm_heap=args.jvm_heap, jvm_opts=args.jvm_opts, node_heap=args.node_heap,
+    bench_args = Namespace(jvm_heap=args.jvm_heap, jvm_opts=args.jvm_opts, jvm_fixed_heap=args.jvm_fixed_heap,
+                           node_heap=args.node_heap,
                            node_opts=args.node_opts, python=args.python, javaplex_divisions=1000)
     stopped = set()  # (series, tool): timed out or ran out of memory at a smaller cell of the series
     with open(out / "sweep.csv", "w", newline="") as f:

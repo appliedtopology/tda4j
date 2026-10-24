@@ -42,7 +42,7 @@ coface streams have none; use `VietorisRips` (`DESIGN-stream-naming.md`, `WORKLO
    (`ranked`; #88), else the stream keeps its own ordering. `WORKLOG-chunks-top-cells.md`.
 3. **`RipserCohomologyEngine`** — Bauer's Ripser (arXiv:1908.02518) on `Simplex[Int]` VR, one-shot. **Test/
    reference oracle only** — production uses `PackedRipserCohomologyEngine`. Clearing required for correctness;
-   apparent pairs with lazy substitution; emergent pairs (Def 3.11) not implemented (#57); `memoizeFiltrationValue`
+   apparent pairs with lazy substitution; no emergent pairs (Def 3.11, only in engine 4); `memoizeFiltrationValue`
    defaults **false** (project lead: memory over speed) (`WORKLOG-ripser-profiling.md`,
    `WORKLOG-packed-ripser-engine.md`).
    The PACKED engine numbers simplices with one `Long` or, past 2^63 (C(n + maxDim + 2, maxDim + 2)), two words
@@ -60,6 +60,9 @@ coface streams have none; use `VietorisRips` (`DESIGN-stream-naming.md`, `WORKLO
    A uniform sign flip of every coboundary changes no output: sign mutations must be non-uniform. Per-simplex state is
    PRIMITIVE (`Level`, `Pairing` rows, `ClearedSet`, `LongIntMap`; `WORKLOG-packed-engine-memory.md`); apparent pairs'
    involution columns are rebuilt, not stored. Never reintroduce a per-pair object.
+   Emergent pairs (`useEmergentPairs`, Def 3.11): a column whose oldest same-diameter cofacet no earlier column holds
+   (`basis`, `emergentRow`, the apparent partner of its youngest facet) is paired unreduced and rebuilt on demand;
+   <= 4 % time, up to -22 % heap (`WORKLOG-emergent-pairs.md`, #57).
 4. **`CellularCohomologyEngine`** (`Cohomology.scala`) — generic over `CellT: OrderedCell`, fully-materialized streams
    only, no `maxDim`/apparent pairs. Only essential bars' V-columns are cocycles; finite bars' V-columns are their reduced
    pivot chain. Representatives don't match Ripser term-for-term (tie direction) but bar values do. Sign-tested on RP²
