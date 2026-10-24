@@ -242,8 +242,13 @@
     </tr>
     <tr>
      <td><code>engine</code></td>
-     <td><code>ripser</code>, <code>chunks</code>, <code>naive</code>, <code>cohomology</code>, <code>fast-cubical</code>, <code>fast-alpha</code></td>
-     <td><code>ripser</code> for <code>vr</code> and the lazy witness complex, <code>fast-cubical</code> for images of dimension 2 and up, <code>cohomology</code> otherwise</td>
+     <td><code>ripser</code>, <code>parallel-ripser</code>, <code>chunks</code>, <code>naive</code>, <code>cohomology</code>, <code>fast-cubical</code>, <code>fast-alpha</code></td>
+     <td><code>ripser</code> for <code>vr</code> and the lazy witness complex (<code>parallel-ripser</code> instead for <code>vr</code> when there are several threads and it applies, see <a href="#threads">Threads</a>), <code>fast-cubical</code> for images of dimension 2 and up, <code>cohomology</code> otherwise</td>
+    </tr>
+    <tr>
+     <td><code>threads</code></td>
+     <td>integer, at least 1</td>
+     <td>all the processors; <code>1</code> is the sequential computation</td>
     </tr>
     <tr>
      <td><code>representativeType</code></td>
@@ -357,7 +362,11 @@
     </tr>
    </tbody>
   </table>
-  <p>Which engine goes with which complex: <code>ripser</code> needs <code>vr</code> or the lazy witness complex; <code>chunks</code> works with every complex except <code>alpha</code>, <code>dtm-alpha</code>, the general witness complex and relations; <code>naive</code> and <code>cohomology</code> work with all; <code>fast-cubical</code> is for images of dimension 2 and up, <code>fast-alpha</code> for <code>alpha</code> with the <code>bowyer-watson</code> or <code>helix</code> backend. A mismatch, an unknown option or an unknown value throws an <code>IllegalArgumentException</code> that names it.</p>
+  <p>Which engine goes with which complex: <code>ripser</code> needs <code>vr</code> or the lazy witness complex; <code>parallel-ripser</code> needs <code>vr</code>; <code>chunks</code> works with every complex except <code>alpha</code>, <code>dtm-alpha</code>, the general witness complex and relations; <code>naive</code> and <code>cohomology</code> work with all; <code>fast-cubical</code> is for images of dimension 2 and up, <code>fast-alpha</code> for <code>alpha</code> with the <code>bowyer-watson</code> or <code>helix</code> backend. A mismatch, an unknown option or an unknown value throws an <code>IllegalArgumentException</code> that names it.</p>
+ </section>
+ <section id="threads">
+  <h3 class="h400"><a href="#threads" class="anchor"></a>Threads</h3>
+  <p>Computations share the work between the processors where they can (the Vietoris-Rips, Cech and alpha complexes and the block-parallel Ripser engine). <code>threads</code> caps the number of threads for one call, and <code>1</code> runs it on one; the bars are the same either way. For <code>vr</code> over a prime field, with <code>includeZeroLength</code> <code>false</code> and no <code>edgeCollapse</code>, an unset <code>engine</code> is the block-parallel Ripser engine (<code>parallel-ripser</code>) when there is more than one thread, and <code>ripser</code> otherwise. Both give the bars of <code>ripser</code>. Their representatives are valid but need not be the same chains where simplices tie in diameter, so a script that must reproduce a run exactly, on any machine, sets <code>engine</code> to <code>ripser</code>. <code>engine=parallel-ripser</code> by name refuses what it cannot do (the reals, zero-length bars, <code>edgeCollapse</code>, a prime above 46,000) with an error naming it. <code>parallel-ripser</code> builds a bar's representative when you first read it, so a script that only reads <code>toArray()</code> never pays for them.</p>
  </section>
  <section id="which-bars-are-reported">
   <h3 class="h400"><a href="#which-bars-are-reported" class="anchor"></a>Which bars are reported</h3>
@@ -581,4 +590,4 @@
   </table>
   <p>The MATLAB tabs in the tutorials are checked as the same Java calls made from Scala, not in MATLAB itself.</p>
  </section>
-</main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><ul><li><a href="#conventions">Conventions</a></li><li><a href="#entry-points">Entry points</a></li><li><a href="#options">Options</a></li><li><a href="#which-bars-are-reported">Which bars are reported</a></li><li><a href="#representatives">Representatives</a></li></ul></li><li><a href="#result-objects">Result objects</a><ul><li><a href="#persistenceresult">PersistenceResult</a></li><li><a href="#landmarkselectionresult">LandmarkSelectionResult</a></li><li><a href="#circularcoordinatesresult">CircularCoordinatesResult</a></li><li><a href="#toroidalcoordinatesresult">ToroidalCoordinatesResult</a></li></ul></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>
+</main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><ul><li><a href="#conventions">Conventions</a></li><li><a href="#entry-points">Entry points</a></li><li><a href="#options">Options</a></li><li><a href="#threads">Threads</a></li><li><a href="#which-bars-are-reported">Which bars are reported</a></li><li><a href="#representatives">Representatives</a></li></ul></li><li><a href="#result-objects">Result objects</a><ul><li><a href="#persistenceresult">PersistenceResult</a></li><li><a href="#landmarkselectionresult">LandmarkSelectionResult</a></li><li><a href="#circularcoordinatesresult">CircularCoordinatesResult</a></li><li><a href="#toroidalcoordinatesresult">ToroidalCoordinatesResult</a></li></ul></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>

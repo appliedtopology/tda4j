@@ -223,8 +223,13 @@
     </tr>
     <tr>
      <td><code>--engine</code></td>
-     <td><code>ripser</code>, <code>chunks</code>, <code>naive</code>, <code>cohomology</code>, <code>fast-cubical</code>, <code>fast-alpha</code></td>
-     <td><code>ripser</code> for <code>vr</code> and the lazy witness complex, <code>fast-cubical</code> for images of dimension 2 and up, <code>cohomology</code> otherwise; see <a href="user-guide/homology-computation/choosing-engine.html">which engine</a></td>
+     <td><code>ripser</code>, <code>parallel-ripser</code>, <code>chunks</code>, <code>naive</code>, <code>cohomology</code>, <code>fast-cubical</code>, <code>fast-alpha</code></td>
+     <td><code>ripser</code> for <code>vr</code> and the lazy witness complex (<code>parallel-ripser</code> instead for <code>vr</code> when there are several threads and it applies), <code>fast-cubical</code> for images of dimension 2 and up, <code>cohomology</code> otherwise; see <a href="user-guide/homology-computation/choosing-engine.html">which engine</a></td>
+    </tr>
+    <tr>
+     <td><code>--threads</code></td>
+     <td>integer, at least 1</td>
+     <td>all the processors; <code>1</code> is the sequential computation. The bars do not depend on it; where tied simplices give a choice, the representatives can</td>
     </tr>
     <tr>
      <td><code>--max-dimension</code></td>

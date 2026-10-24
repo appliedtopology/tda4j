@@ -230,7 +230,7 @@
  <section id="what-differs-from-the-jvm-build">
   <h3 class="h400"><a href="#what-differs-from-the-jvm-build" class="anchor"></a>What differs from the JVM build</h3>
   <ul>
-   <li><strong>One thread.</strong> JavaScript has no threads to share the work between. <code>parallelFiltrationValue</code> and the <code>parallel</code> option of the DQP alpha complex give the same answer, not faster; to keep a page responsive, run the computation in a Web Worker.</li>
+   <li><strong>One thread.</strong> JavaScript has no threads to share the work between. The alpha triangulation, the Cech and related filtration values and the other steps the JVM build shares between threads give the same answer, not faster; to keep a page responsive, run the computation in a Web Worker.</li>
    <li><strong>Files need Node.js.</strong> In a browser there is no file system: <code>save</code>, and the readers of the <a href="input-output.html">file formats</a>, throw an error that says so. Pass the data in memory.</li>
    <li><strong>The live viewer is the page.</strong> <code>plot.show()</code> appends the plot to the page in a browser, and opens it in the default browser from Node.js; there is no viewer server.</li>
    <li><strong>Speed.</strong> The engines run at their usual pace on a few thousand simplices; programs that work with hundreds of millions of simplices belong on the JVM, where the engines were tuned and memory is not limited by the browser.</li>
