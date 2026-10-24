@@ -327,6 +327,21 @@ class PlotGrammarSpec extends Specification:
       half.hex(1.0, Palette.brand) must beEqualTo(Palette.along(Palette.brand.sequential, 0.5)) // sqrt(1)/sqrt(4)
       count((image + Scale.color(guide = false)).svg(), "rect") must beLessThan(count(image.svg(), "rect"))
     }
+    "label the middle of a transformed bar where the transform puts each number, and a linear bar by its ends" in {
+      val sqrt = ColorScale(Ramp.Sequential, 0.0, 4.0, "v", Transform.Sqrt)
+      sqrt.barTicks.map(_._1) must contain(1.0) // a round number between the ends
+      sqrt.barTicks.toMap.apply(1.0) must beCloseTo(0.5, 1e-12) // half way up, as sqrt(1)/sqrt(4): not a quarter
+      sqrt.barTicks.map(_._1).filter(v => v <= 0.0 || v >= 4.0) must beEmpty // the ends say their own numbers
+      val log = ColorScale(Ramp.Sequential, 0.01, 100.0, "v", Transform.Log10)
+      log.barTicks.toMap.apply(1.0) must beCloseTo(0.5, 1e-12) // a decade is a quarter of four
+      ColorScale(Ramp.Sequential, 0.0, 4.0).barTicks must beEmpty
+      ColorScale(Ramp.Diverging, -4.0, 4.0, transform = Transform.Sqrt).barTicks must beEmpty // always linear
+      val plain = image + Scale.color(max = 4)
+      val squared = image + Scale.color(max = 4, transform = Transform.Sqrt)
+      words(squared.svg()).count(_ == "1") must beGreaterThan(words(plain.svg()).count(_ == "1"))
+      words(squared.svg()) must contain("4") // and the ends are still there
+      sameUpToIds(plain.svg(), (plain + Scale.color(transform = Transform.Identity)).svg())
+    }
     "refuse changes that mean nothing to its kind of ramp" in {
       val cyc = Plot.circularCoordinates(circle, circle.indices.map(i => i -> i / 16.0).toMap)
       (cyc + Scale.color(max = 2)) must throwAn[IllegalArgumentException]("one turn")
@@ -522,6 +537,100 @@ class PlotGrammarSpec extends Specification:
     }
   }
 
+  "the grayscale look" should {
+    val gray = Palette.grayscale
+    val surface = gray.light.surface
+    def isGray(hex: String): Boolean =
+      val v = Integer.parseInt(hex.stripPrefix("#"), 16)
+      ((v >> 16) & 255) == ((v >> 8) & 255) && ((v >> 8) & 255) == (v & 255)
+    val colorsInSvg = "#[0-9a-fA-F]{6}".r
+    val diagram = Plot.diagram(circleDiagram)
+
+    "have no color anywhere in it: every red, green and blue of every slot is equal" in {
+      val all = gray.seriesLight ++ gray.seriesDark ++ gray.sequential ++
+        Seq(gray.divergingNegative, gray.divergingPositive, gray.divergingMidpoint) ++
+        Seq(gray.light, gray.dark).flatMap(c => Seq(c.surface, c.ink, c.secondary, c.muted, c.grid, c.axis))
+      all.filterNot(isGray) must beEmpty
+    }
+    "draw a plot in grays only, whatever it draws" in {
+      val image = Plot.persistenceImage(circleDiagram, 0, resolution = 6, sigma = 0.05)
+      val cocycles = Persistence(circle, maxDimension = 1, representatives = Representatives.Cocycles)
+      val cocycle =
+        import cocycles.given
+        Plot.cocycle(circle, cocycles.dim(1).bars.head.representative)
+      val plots = Seq(diagram, Plot.barcode(circleDiagram), image, cocycle)
+      plots.foreach { plot =>
+        colorsInSvg.findAllIn((plot + gray).svg(Theme.Light)).toSeq.filterNot(isGray) must beEmpty
+      }
+      // the brand's own colors are what the check would find without it
+      colorsInSvg.findAllIn(diagram.svg(Theme.Light)).toSeq.filterNot(isGray) must not(beEmpty)
+    }
+    "keep its degrees apart by lightness, each dark enough to show on white" in {
+      gray.seriesLight.map(contrast(_, surface)).min must beGreaterThanOrEqualTo(3.0)
+      // the first three, which a diagram puts side by side, all pairs; every neighbour after that
+      gray.seriesLight.take(3).combinations(2).map { case Seq(a, b) => contrast(a, b) }.min must
+        beGreaterThanOrEqualTo(2.0)
+      gray.seriesLight.sliding(2).map { case Seq(a, b) => contrast(a, b) }.min must beGreaterThanOrEqualTo(1.4)
+      gray.seriesLight.distinct.size must beEqualTo(gray.seriesLight.size)
+    }
+    "darken its heatmap ramp steadily, and make a diverging end darker than the other" in {
+      (0 to 10).map(i => luminance(gray.sequentialAt(i / 10.0))).sliding(2).forall(w => w(1) < w(0)) must beTrue
+      luminance(gray.divergingNegative) must beLessThan(luminance(gray.divergingPositive)) // the sign has a cue
+      luminance(gray.divergingMidpoint) must beGreaterThan(luminance(gray.divergingPositive))
+    }
+    "read on white, in the one look it has for both modes" in {
+      contrast(gray.light.ink, surface) must beGreaterThanOrEqualTo(7.0)
+      contrast(gray.light.muted, surface) must beGreaterThanOrEqualTo(4.5)
+      gray.dark must beEqualTo(gray.light)
+      gray.light must beEqualTo(Palette.print.light) // the surface and inks of the print look
+      sameUpToIds((diagram + gray).svg(Theme.Dark), (diagram + gray).svg(Theme.Light))
+    }
+    "be reached by name, in either spelling, from a figure and a scene" in {
+      Palette.named("Grayscale") must beEqualTo(gray)
+      Palette.named(" greyscale ") must beEqualTo(gray)
+      diagram.withPalette("grayscale") must beEqualTo(diagram + gray)
+      Plot.points3D(circle).withPalette("grayscale").palette must beEqualTo(gray)
+    }
+  }
+
+  "the Okabe-Ito look" should {
+    val oi = Palette.okabeIto
+    val surface = oi.light.surface
+    val diagram = Plot.diagram(circleDiagram)
+
+    "be the eight colors of Okabe and Ito, the three that tell a diagram's degrees apart first" in {
+      oi.seriesLight must beEqualTo(
+        IndexedSeq("#0072b2", "#d55e00", "#009e73", "#e69f00", "#56b4e9", "#cc79a7", "#f0e442", "#000000")
+      )
+      oi.seriesDark must beEqualTo(oi.seriesLight)
+    }
+    "keep those three, which a diagram puts side by side, readable on its own white surface" in {
+      surface must beEqualTo("#ffffff")
+      oi.seriesLight.take(3).map(contrast(_, surface)).min must beGreaterThanOrEqualTo(3.0)
+      // the yellow cannot be: it is the last but one, a degree past the sixth, and the marker shape and the legend tell it
+      contrast(oi.seriesLight(6), surface) must beLessThan(1.5)
+    }
+    "draw degree 0 in blue and degree 1 in vermillion" in {
+      val svg = (diagram + oi).svg(Theme.Light)
+      svg must contain("#0072b2")
+      svg must contain("#d55e00")
+      svg must not(contain(Palette.brand.seriesLight.head)) // the brand's teal is gone
+    }
+    "have one look for both modes, with the inks of the print look, and the blue and vermillion of its scales" in {
+      oi.dark must beEqualTo(oi.light)
+      oi.light must beEqualTo(Palette.print.light)
+      sameUpToIds((diagram + oi).svg(Theme.Dark), (diagram + oi).svg(Theme.Light))
+      Seq(oi.divergingNegative, oi.divergingPositive) must beEqualTo(Seq("#0072b2", "#d55e00"))
+      (0 to 10).map(i => luminance(oi.sequentialAt(i / 10.0))).sliding(2).forall(w => w(1) < w(0)) must beTrue
+    }
+    "be reached by name, however it is spelled, from a figure and a scene" in {
+      Seq("okabe-ito", "Okabe-Ito", " okabeito ", "okabe_ito").map(Palette.named) must
+        beEqualTo(Seq.fill(4)(oi))
+      diagram.withPalette("okabe-ito") must beEqualTo(diagram + oi)
+      Plot.points3D(circle).withPalette("okabe-ito").palette must beEqualTo(oi)
+    }
+  }
+
   "the clear look" should {
     val fig = Plot.diagram(circleDiagram)
     val clear = Palette.clear + Style.clear
@@ -595,7 +704,9 @@ class PlotGrammarSpec extends Specification:
     }
     "refuse a name they do not have, and say which they have" in {
       Style.named("poster") must throwAn[IllegalArgumentException]("expected one of default, slides, print, clear")
-      Palette.named("poster") must throwAn[IllegalArgumentException]("expected one of brand, reference, print, clear")
+      Palette.named("poster") must throwAn[IllegalArgumentException](
+        "expected one of brand, reference, print, grayscale, okabe-ito, clear"
+      )
     }
   }
 
@@ -1287,7 +1398,7 @@ class PlotGrammarSpec extends Specification:
       number(top, "y") must beLessThan(ty)
       textsOnPage(topSvg) must beTrue
       val ((lx, ly, lw, lh), left, leftSvg) = at(LegendPosition.Left)
-      lx must beCloseTo(none._1 + 49.0, 0.02) // the column: 34 + 7.5 characters
+      lx must beCloseTo(none._1 + 34.0 + TextWidth.of("H0", 12.0), 0.02) // the column: 34 and the widest label
       number(left, "x") must beEqualTo(34.0) // the column starts at 14, the text is 20 px after its key
       textsOnPage(leftSvg) must beTrue
       Seq(LegendPosition.UpperLeft, LegendPosition.UpperRight, LegendPosition.LowerLeft, LegendPosition.LowerRight)
@@ -1314,6 +1425,177 @@ class PlotGrammarSpec extends Specification:
       LegendPosition.named("middle") must throwAn[IllegalArgumentException](
         "expected one of right, left, top, bottom, upper-left, upper-right, lower-left, lower-right, none"
       )
+    }
+  }
+
+  "the box and the columns of a legend" should {
+    val diagram = Plot.diagram(circleDiagram)
+    val (dx, dy, dw, dh) = plotArea(diagram.svg(Theme.Light))
+    val rows = diagram.legend.size
+    def boxes(svg: String) = elements(svg, "rect").filter(_.getAttribute("rx") == "3")
+    def entry(svg: String, words: String) = elements(svg, "text").filter(_.getTextContent == words).last
+    // the box of a legend: its fill and its frame, if it has both, are the same rectangle
+    def box(f: Figure): Element =
+      val all = boxes(f.svg(Theme.Light))
+      all.map(b => Seq("x", "y", "width", "height").map(b.getAttribute)).distinct.size must beEqualTo(1)
+      all.head
+    // six entries of unlike widths
+    val labels = Seq("a", "a long one", "bb", "c", "another", "dd")
+    val many = Figure(
+      marks = dots(1, 2).marks,
+      legend = labels.zipWithIndex.map((l, k) => LegendItem(l, Paint.Series(k))).toVector
+    )
+
+    "draw nothing behind a legend unless asked, and ask for nothing by asking for nothing" in {
+      boxes(diagram.svg(Theme.Light)) must beEmpty
+      sameUpToIds((diagram + Guide.legend()).svg(Theme.Light), diagram.svg(Theme.Light))
+      sameUpToIds((diagram + Guide.legend(box = false)).svg(Theme.Light), diagram.svg(Theme.Light))
+      sameUpToIds(
+        (diagram + Guide.legend(box = true) + Guide.legend(box = false)).svg(Theme.Light),
+        diagram.svg(Theme.Light)
+      )
+    }
+    "put a box round the entries of a legend in a corner, clear of the plot's edges, over the marks" in {
+      val svg = (diagram + Guide.legend(box = true)).svg(Theme.Light)
+      val b = box(diagram + Guide.legend(box = true))
+      val (bx, by, bw, bh) = (number(b, "x"), number(b, "y"), number(b, "width"), number(b, "height"))
+      bx + bw must beCloseTo(dx + dw - 8.0, 0.02) // 8 px from the plot's right edge, as the bare legend
+      by + bh must beCloseTo(dy + dh - 8.0, 0.02)
+      bh must beCloseTo(20.0 * rows + 12.0, 0.02) // a row is 20 px, and 6 px inside the box on each side
+      Seq("H0", "H1").foreach { word =>
+        val e = entry(svg, word)
+        number(e, "x") must beGreaterThan(bx + 20.0) // the text is 20 px after its key, 6 px inside the box
+        number(e, "x") + TextWidth.of(word, 12.0) must beLessThan(bx + bw)
+        number(e, "y") must beGreaterThan(by)
+        number(e, "y") must beLessThan(by + bh)
+      }
+      // the box is drawn after the marks and before the entries, so that it covers the first and the second show
+      val order = elements(svg, "*").map(e => e.getTagName + e.getTextContent)
+      order.indexWhere(_.startsWith("rect")) must beLessThan(order.indexOf("textH0"))
+      boxes(svg).size must beEqualTo(2) // the fill, then the frame
+      boxes(svg).head.getAttribute("style") must contain("fill-opacity:0.9")
+    }
+    "frame the box, fill it, or both, as told" in {
+      val b = Guide.legend(background = "#fafafa", opacity = 0.5)
+      boxes((diagram + b).svg(Theme.Light)).map(_.getAttribute("style")) must beEqualTo(
+        Seq("fill:#fafafa;fill-opacity:0.5")
+      )
+      val frame = Guide.legend(frameColor = "#336699", frameWidth = 2)
+      val framed = boxes((diagram + frame).svg(Theme.Light))
+      framed.size must beEqualTo(1) // a frame alone: no fill behind it
+      framed.head.getAttribute("fill") must beEqualTo("none")
+      framed.head.getAttribute("style") must contain("stroke:#336699")
+      framed.head.getAttribute("stroke-width") must beEqualTo("2")
+      boxes((diagram + Guide.legend(box = true)).svg(Theme.Light)).size must beEqualTo(2) // a fill and its frame
+      boxes((diagram + Guide.legend(box = true, frame = false)).svg(Theme.Light)).size must beEqualTo(1)
+      boxes((diagram + Guide.legend(background = "white") + Guide.legend(box = false)).svg(Theme.Light)) must beEmpty
+    }
+    "grow its padding with the text of the legend, and take the padding asked for" in {
+      def height(f: Figure) = number(box(f + Guide.legend(box = true)), "height")
+      height(diagram) must beCloseTo(20.0 * rows + 12.0, 0.02)
+      height(diagram + Style(textScale = 2)) must beCloseTo(2 * (20.0 * rows + 12.0), 0.02)
+      height(diagram + Guide.legend(padding = 10)) must beCloseTo(20.0 * rows + 20.0, 0.02)
+      height(diagram + Guide.legend(padding = 0)) must beCloseTo(20.0 * rows, 0.02)
+      height(diagram + Text(TextRole.Legend, size = 24)) must beCloseTo(2 * (20.0 * rows + 12.0), 0.02)
+    }
+    "take room beside the plot for the box, and add it above and below" in {
+      val beside = diagram + Style(legend = LegendPosition.Right)
+      val boxed = beside + Guide.legend(box = true)
+      val (px, _, pw, _) = plotArea(boxed.svg(Theme.Light))
+      pw must beLessThan(plotArea(beside.svg(Theme.Light))._3 + 1) // room is made, never taken from the legend
+      val b = box(boxed)
+      val (bx, bw) = (number(b, "x"), number(b, "width"))
+      bx must beGreaterThan(px + pw) // clear of the plot
+      number(entry(boxed.svg(Theme.Light), "H0"), "x") must beCloseTo(bx + 6.0 + 20.0, 0.02)
+      bx + bw must beCloseTo(560.0 - 16.0, 0.02) // the figure's right margin, as for a bare legend
+      val below = diagram + Style(legend = LegendPosition.Bottom)
+      plotArea((below + Guide.legend(box = true)).svg(Theme.Light))._4 must
+        beCloseTo(plotArea(below.svg(Theme.Light))._4 - 12.0, 0.02)
+      val above = diagram + Style(legend = LegendPosition.Top) + Guide.legend(box = true)
+      val ab = box(above)
+      number(ab, "y") + number(ab, "height") must beLessThan(plotArea(above.svg(Theme.Light))._2) // over the plot
+      number(entry(above.svg(Theme.Light), "H0"), "x") must beCloseTo(number(ab, "x") + 6.0 + 20.0, 0.02)
+    }
+    "put the entries in columns, one filled before the next" in {
+      val svg = (many + Style(legend = LegendPosition.Right) + Guide.legend(columns = 2)).svg(Theme.Light)
+      val at = labels.map(l => (number(entry(svg, l), "x"), number(entry(svg, l), "y")))
+      // three rows of two columns, a column going down: the second entry is under the first, the fourth beside the first
+      at(1)._1 must beEqualTo(at(0)._1)
+      at(1)._2 must beGreaterThan(at(0)._2)
+      at(3)._2 must beEqualTo(at(0)._2)
+      at(3)._1 must beGreaterThan(at(0)._1 + TextWidth.of(labels(1), 12.0)) // clear of the widest label of the first
+      at(4)._1 must beEqualTo(at(3)._1)
+      at(5)._2 must beEqualTo(at(2)._2)
+      at.map(_._2).distinct.size must beEqualTo(3)
+      // the plot area gives up the room
+      plotArea(svg)._3 must beLessThan(plotArea((many + Style(legend = LegendPosition.Right)).svg(Theme.Light))._3)
+    }
+    "line the columns of a legend above or below the plot up as a grid" in {
+      val titled =
+        many + Labels(legend = "degree") // its heading is a column of its own, which every row keeps clear of
+      val grid = (titled + Style(legend = LegendPosition.Bottom) + Guide.legend(columns = 2)).svg(Theme.Light)
+      val at = labels.map(l => (number(entry(grid, l), "x"), number(entry(grid, l), "y")))
+      at.map(_._2).distinct.size must beEqualTo(3)
+      Seq(0, 1, 2).map(at(_)._1).distinct.size must beEqualTo(1) // a column, whatever the width of its labels
+      Seq(3, 4, 5).map(at(_)._1).distinct.size must beEqualTo(1)
+      at(3)._1 must beGreaterThan(at(0)._1 + TextWidth.of(labels(1), 12.0))
+      at(0)._1 must beGreaterThan(number(entry(grid, "degree"), "x") + TextWidth.of("degree", 12.0, bold = true))
+      textsOnPage(grid) must beTrue
+      // without the columns the entries fill a row as far as it goes, and do not line up
+      val flow = (many + Style(legend = LegendPosition.Bottom)).svg(Theme.Light)
+      labels.map(l => number(entry(flow, l), "y")).distinct.size must beLessThan(3)
+    }
+    "give up the columns that do not fit, rather than run off the figure or over the plot" in {
+      val wide = Figure(
+        marks = dots(1, 2).marks,
+        legend = Vector.tabulate(6)(k => LegendItem(s"a rather long label $k", Paint.Series(k))),
+        width = 400
+      )
+      val side = (wide + Style(legend = LegendPosition.Right) + Guide.legend(columns = 6)).svg(Theme.Light)
+      val sideEntries = elements(side, "text").filter(_.getTextContent.startsWith("a rather"))
+      sideEntries.map(number(_, "x")).distinct.size must beEqualTo(1) // two columns of this width are over two fifths
+      plotArea(side)._3 must beGreaterThan(100.0)
+      textsOnPage(side) must beTrue
+      val below = (wide + Style(legend = LegendPosition.Bottom) + Guide.legend(columns = 6)).svg(Theme.Light)
+      val belowEntries = elements(below, "text").filter(_.getTextContent.startsWith("a rather"))
+      belowEntries.map(number(_, "x")).distinct.size must beLessThan(3) // as many as fit under 400 pixels
+      belowEntries.map(number(_, "x")).max must beLessThan(400.0 - 100.0)
+      textsOnPage(below) must beTrue
+      val corner = (wide + Style(legend = LegendPosition.UpperLeft) + Guide.legend(columns = 6)).svg(Theme.Light)
+      val cornerX = elements(corner, "text").filter(_.getTextContent.startsWith("a rather")).map(number(_, "x"))
+      val (cx, _, cw, _) = plotArea(corner)
+      cornerX.max must beLessThan(cx + cw)
+    }
+    "keep a single column when 1 is asked, and refuse what means nothing" in {
+      sameUpToIds((many + Guide.legend(columns = 1)).svg(), many.svg())
+      Guide.legend(columns = 0) must throwAn[IllegalArgumentException]("columns must be 1 or more")
+      Guide.legend(opacity = 2) must throwAn[IllegalArgumentException]("opacity must be between 0 and 1")
+      Guide.legend(padding = -1) must throwAn[IllegalArgumentException]("padding must be 0 or more")
+      Guide.legend(frameWidth = 0) must throwAn[IllegalArgumentException]("frameWidth must be a positive number")
+      Guide.legend(background = "red", backgroundPaint = Paint.Grid) must throwAn[IllegalArgumentException](
+        "give color or paint, not both"
+      )
+    }
+    "be set in words, for MATLAB and the command line" in {
+      def same(spec: String, tweak: Tweak) = diagram.withSetting(spec) must beEqualTo(diagram + tweak)
+      same("legend-box.background=#fafafa", Guide.legend(background = "#fafafa"))
+      same("legend-box.opacity=0.5", Guide.legend(opacity = 0.5))
+      same("legend-box.frame=#336699", Guide.legend(frameColor = "#336699"))
+      same("legend-box.frame=none", Guide.legend(frame = false))
+      same("legend-box.frame-width=2", Guide.legend(frameWidth = 2))
+      same("legend-box.padding=10", Guide.legend(padding = 10))
+      same("legend-box.columns=3", Guide.legend(columns = 3))
+      same("legend-box.background=none", Guide.legend(box = false))
+      diagram.withLegendBox("white") must beEqualTo(diagram + Guide.legend(box = true, background = "white"))
+      diagram.withLegendColumns(2) must beEqualTo(diagram + Guide.legend(columns = 2))
+      Settings.parse("legend-box.colour=red") must throwAn[IllegalArgumentException](
+        "unknown property 'colour' of legend-box; expected one of background, opacity, frame, frame-width, padding, columns"
+      )
+      Settings.parse("legend-box.columns=0") must throwAn[IllegalArgumentException]("columns must be a whole number")
+      Settings.parse("legend-box.columns=1.5") must throwAn[IllegalArgumentException]("columns must be a whole number")
+    }
+    "refuse a 3-D scene, which has no legend" in {
+      Plot.points3D(circle3) + Guide.legend(box = true) must throwAn[UnsupportedOperationException]("no axes, legend")
     }
   }
 
@@ -1458,6 +1740,138 @@ class PlotGrammarSpec extends Specification:
     }
   }
 
+  "an axis that crosses at a value" should {
+    // dots at (-1, -1), (0, 0), (2, 3): the one in the middle is where each axis should be drawn through
+    val data = Figure(
+      marks = Vector(Mark.Points(IndexedSeq((-1.0, -1.0), (0.0, 0.0), (2.0, 3.0)), IndexedSeq(Paint.Series(0))))
+    )
+    def middle(svg: String): (Double, Double) =
+      val d = drawnMarks(svg)(1)
+      (number(d, "cx"), number(d, "cy"))
+    val axisColor = "#c5c9c9" // Paint.Axis of the light brand palette
+    def horizontalAxis(svg: String): Element =
+      val (px, _, pw, _) = plotArea(svg)
+      lines(svg)
+        .filter(l => l.getAttribute("style").startsWith(s"stroke:$axisColor"))
+        .find { l =>
+          l.getAttribute("y1") == l.getAttribute("y2") && number(l, "x1") == px && number(l, "x2") == px + pw
+        }
+        .get
+    def verticalAxis(svg: String): Element =
+      val (_, py, _, ph) = plotArea(svg)
+      lines(svg)
+        .filter(l => l.getAttribute("style").startsWith(s"stroke:$axisColor"))
+        .find { l =>
+          l.getAttribute("x1") == l.getAttribute("x2") && number(l, "y1") == py && number(l, "y2") == py + ph
+        }
+        .get
+    def numbersOf(svg: String) = elements(svg, "text").filter(_.getAttribute("style").contains("tabular-nums"))
+
+    "draw the x axis through the value of y asked for, with its numbers beside it" in {
+      val svg = (data + Scale.x(crossesAt = 0)).svg(Theme.Light)
+      val (_, y0) = middle(svg)
+      val (_, py, _, ph) = plotArea(svg)
+      number(horizontalAxis(svg), "y1") must beCloseTo(y0, 0.02) // through the dot at y = 0, not at the bottom
+      number(horizontalAxis(svg), "y1") must beLessThan(py + ph - 5)
+      val xNumbers = numbersOf(svg).filter(t => t.getAttribute("text-anchor") == "middle")
+      xNumbers.map(number(_, "y")).distinct must beEqualTo(Seq(y0 + 16.0)) // 16 px below the line, as at the edge
+      // the y axis stays at the left, with its numbers beside it
+      number(verticalAxis(svg), "x1") must beCloseTo(plotArea(svg)._1, 0.02)
+    }
+    "draw the y axis through the value of x asked for, its numbers to the left of it" in {
+      val svg = (data + Scale.y(crossesAt = 0)).svg(Theme.Light)
+      val (x0, _) = middle(svg)
+      val (px, _, _, _) = plotArea(svg)
+      number(verticalAxis(svg), "x1") must beCloseTo(x0, 0.02)
+      number(verticalAxis(svg), "x1") must beGreaterThan(px + 5)
+      val yNumbers = numbersOf(svg).filter(t => t.getAttribute("text-anchor") == "end")
+      yNumbers.map(number(_, "x")).distinct must beEqualTo(Seq(x0 - 6.0))
+    }
+    "follow a reversed axis and a scale that is not linear" in {
+      val flipped = (data + Scale.x(crossesAt = 0) + Scale.y(reverse = true)).svg(Theme.Light)
+      number(horizontalAxis(flipped), "y1") must beCloseTo(middle(flipped)._2, 0.02)
+      val mirrored = (data + Scale.y(crossesAt = 0) + Scale.x(reverse = true)).svg(Theme.Light)
+      number(verticalAxis(mirrored), "x1") must beCloseTo(middle(mirrored)._1, 0.02)
+      val sqrt = Figure(
+        marks = Vector(Mark.Points(IndexedSeq((1.0, 1.0), (2.0, 4.0), (3.0, 9.0)), IndexedSeq(Paint.Series(0))))
+      ) + Scale.y(Transform.Sqrt) + Scale.x(crossesAt = 4)
+      val sq = sqrt.svg(Theme.Light)
+      number(horizontalAxis(sq), "y1") must beCloseTo(number(drawnMarks(sq)(1), "cy"), 0.02) // the dot at y = 4
+    }
+    "keep the axis label at the edge, and take the room the numbers no longer need" in {
+      val labelled = data + Labels(x = "born", y = "dies")
+      val at = labelled + Scale.x(crossesAt = 0) + Scale.y(crossesAt = 0)
+      val (ex, ey, ew, eh) = plotArea(labelled.svg(Theme.Light))
+      val (cx, cy, cw, ch) = plotArea(at.svg(Theme.Light))
+      val svg = at.svg(Theme.Light)
+      // the edge band is the label's 16 px, where it was the numbers' 30 and the label's 16 (the y axis: 42 and 16)
+      (ch - eh) must beCloseTo(30.0, 0.02)
+      (cw - ew) must beCloseTo(42.0 + 16.0 - 16.0, 0.02)
+      number(elements(svg, "text").find(_.getTextContent == "born").get, "y") must beCloseTo(cy + ch + 12.0, 0.02)
+      val dies = elements(svg, "text").find(_.getTextContent == "dies").get
+      number(dies, "x") must beCloseTo(cx - 4.0, 0.02)
+      textsOnPage(svg) must beTrue
+      // the room grows with the text, as the numbers' did
+      val big = (labelled + Style(textScale = 2)).svg(Theme.Light)
+      val bigAt = (at + Style(textScale = 2)).svg(Theme.Light)
+      (plotArea(bigAt)._4 - plotArea(big)._4) must beCloseTo(60.0, 0.02)
+    }
+    "leave a margin when there is no label, and the numbers move with the side asked for" in {
+      val plain = plotArea(data.svg(Theme.Light))
+      plotArea((data + Scale.x(crossesAt = 0)).svg(Theme.Light))._4 must beCloseTo(plain._4 + 16.0, 0.02) // 30 to 14
+      val top = (data + Scale.x(crossesAt = 0, position = Side.Top)).svg(Theme.Light)
+      val y0 = middle(top)._2
+      numbersOf(top).filter(_.getAttribute("text-anchor") == "middle").map(number(_, "y")).distinct must
+        beEqualTo(Seq(y0 - 8.0)) // above the line
+      val right = (data + Scale.y(crossesAt = 0, position = Side.Right)).svg(Theme.Light)
+      val x0 = middle(right)._1
+      numbersOf(right).filter(_.getAttribute("text-anchor") == "start").map(number(_, "x")).distinct must
+        beEqualTo(Seq(x0 + 6.0))
+    }
+    "start the tick marks on the axis, and leave the gridlines across the plot" in {
+      val ticked = (data + Lines.ticks(length = 4) + Scale.x(crossesAt = 0)).svg(Theme.Light)
+      val y0 = middle(ticked)._2
+      val marks = lines(ticked).filter(l =>
+        l.getAttribute("style").startsWith("stroke:#7d8a91") && l.getAttribute("x1") == l.getAttribute("x2")
+      )
+      marks.size must beGreaterThan(2)
+      marks.map(number(_, "y1")).distinct must beEqualTo(Seq(y0))
+      marks.map(number(_, "y2")).distinct must beEqualTo(Seq(y0 + 4.0))
+      val (_, gy, _, gh) = plotArea(ticked)
+      stroked(ticked, "#e4e2dc").count(l => l.getAttribute("x1") == l.getAttribute("x2")) must beGreaterThan(2)
+      stroked(ticked, "#e4e2dc")
+        .filter(l => l.getAttribute("x1") == l.getAttribute("x2"))
+        .forall(l => number(l, "y1") == gy && number(l, "y2") == gy + gh) must beTrue
+    }
+    "stay at the edge, and say so, when the other axis does not show the value" in {
+      val svg = (data + Scale.x(crossesAt = 10)).svg(Theme.Light)
+      val (_, py, _, ph) = plotArea(svg)
+      number(horizontalAxis(svg), "y1") must beCloseTo(py + ph, 0.02)
+      words(svg) must contain("the x axis cannot cross at 10: the y axis does not show it, so it stays at the edge")
+      val sameAsDefault = plotArea(svg)
+      sameAsDefault._4 must beLessThan(plotArea(data.svg(Theme.Light))._4) // room for the note, as for any
+      // 0 is nowhere on a log axis
+      val log =
+        (data.copy(marks = Vector(Mark.Points(IndexedSeq((1.0, 1.0), (2.0, 10.0)), IndexedSeq(Paint.Series(0))))) +
+          Scale.y(Transform.Log10) + Scale.x(crossesAt = 0)).svg(Theme.Light)
+      words(log) must contain("the x axis cannot cross at 0: the y axis does not show it, so it stays at the edge")
+      // a value that is shown makes no note
+      words((data + Scale.x(crossesAt = 0)).svg(Theme.Light)).exists(_.contains("cannot cross")) must beFalse
+    }
+    "draw nothing new for an axis that does not ask" in
+      sameUpToIds((data + Scale.x(position = Side.Bottom)).svg(Theme.Light), data.svg(Theme.Light))
+    "be written as settings, and refuse a value that is not a number" in {
+      data.withSetting("x-axis.crosses-at=0") must beEqualTo(data + Scale.x(crossesAt = 0))
+      data.withSetting("y-axis.crosses-at=-1.5") must beEqualTo(data + Scale.y(crossesAt = -1.5))
+      data.withXCrossesAt(0) must beEqualTo(data + Scale.x(crossesAt = 0))
+      data.withYCrossesAt(2) must beEqualTo(data + Scale.y(crossesAt = 2))
+      data.withXScale(crossesAt = 1).x.crossesAt must beSome(1.0)
+      (data + Scale.x(crossesAt = 1) + Scale.x(min = 0)).x.crossesAt must beSome(1.0) // a later tweak keeps it
+      Settings.parse("x-axis.crosses-at=zero") must throwAn[IllegalArgumentException]("'zero' is not a number")
+      Scale.x(crossesAt = Double.NaN) must throwAn[IllegalArgumentException]("crossesAt = NaN is not a number")
+    }
+  }
+
   "the numbers of a plot" should {
     val signed = Figure(marks = Vector(Mark.Points(IndexedSeq((-1.0, -1.0), (1.0, 1.0)), IndexedSeq(Paint.Series(0)))))
     def tickWords(svg: String) = elements(svg, "text").filter(_.getTextContent.exists(_.isDigit)).map(_.getTextContent)
@@ -1495,6 +1909,15 @@ class PlotGrammarSpec extends Specification:
       Numbers(decimal = "1") must throwAn[IllegalArgumentException]("not a digit")
       Numbers(minus = "toolong") must throwAn[IllegalArgumentException]("one to three characters")
     }
+    "take a locale's separators for the digits 0 to 9, whatever digits the locale writes with" in {
+      // Arabic, Persian, Burmese, Bengali, Nepali and Marathi write their own digits by default; a tick label has the
+      // digits it always has, so a separator of those digits (Arabic `٫`) would sit in a number of other ones
+      val ascii = Seq("ar", "fa", "my", "bn", "ne", "mr").map(tag => tag -> NumberStyle.locale(tag))
+      ascii.forall((_, style) => style.decimal.exists(d => d == "." || d == ",")) must beTrue
+      NumberStyle.locale("ar").decimal must beSome(".")
+      NumberStyle.locale("fa").minus must beSome("−") // Persian has a true minus even with these digits
+      tickWords((signed + Numbers.locale("ar")).svg(Theme.Light)) must contain("-0.5")
+    }
     "be written as settings" in {
       (three + Settings.parse("numbers.locale=sv")).elements.numbers.decimal must beSome(",")
       (three + Settings.parse("numbers.minus=−")).elements.numbers.minus must beSome("−")
@@ -1515,20 +1938,89 @@ class PlotGrammarSpec extends Specification:
       elements(svg, "text").find(_.getFirstChild.getTextContent.startsWith(start)).get
 
     "be cut to its limit, ending in an ellipsis, with the whole text as its tooltip" in {
-      val cut = at((fig + Text(TextRole.Title, limit = 100)).svg(Theme.Light), "Persistenc")
-      cut.getFirstChild.getTextContent must beEqualTo("Persistenc…") // 100 px of 9 px characters, one for the dots
+      val cut = at((fig + Text(TextRole.Title, limit = 100)).svg(Theme.Light), "Persistence…")
+      cut.getFirstChild.getTextContent must beEqualTo("Persistence…") // the letters that fit in 100 px with the dots
       elements((fig + Text(TextRole.Title, limit = 100)).svg(Theme.Light), "title").map(_.getTextContent) must
         contain("Persistence diagram")
       at((fig + Text(TextRole.Title, limit = 400)).svg(Theme.Light), "Persistence").getTextContent must
         beEqualTo("Persistence diagram") // fits: nothing cut, no tooltip
       val legend = Figure(marks = three.marks, legend = Vector(LegendItem("a rather long label", Paint.Series(0)))) +
         Text(TextRole.Legend, limit = 60)
-      at(legend.svg(Theme.Light), "a rathe").getFirstChild.getTextContent must beEqualTo("a rathe…")
+      at(legend.svg(Theme.Light), "a rather").getFirstChild.getTextContent must beEqualTo("a rather l…")
+    }
+    "be cut by the width of its letters, not by how many there are" in {
+      def shown(text: String, limit: Double) =
+        val f = Figure(marks = three.marks, title = text) +
+          Text(TextRole.Title, size = 15, limit = limit, weight = Weight.Normal)
+        elements(f.svg(Theme.Light), "text").map(_.getFirstChild.getTextContent).find(_.startsWith(text.take(1))).get
+      val narrow = "i" * 24
+      val wide = "W" * 24
+      shown(narrow, 120) must beEqualTo(narrow) // 24 narrow letters are 80 px: nothing cut
+      shown(wide, 120) must not(beEqualTo(wide)) // 24 wide ones are 340 px
+      shown(wide, 120) must endWith("…")
+      // and what is kept fits the limit with its dots, one letter fewer would leave room for another
+      val kept = shown(wide, 120).dropRight(1)
+      TextWidth.of(kept + "…", 15) must beLessThanOrEqualTo(120.0)
+      TextWidth.of(kept + "W…", 15) must beGreaterThan(120.0)
+      // a bold face is wider, so it is cut sooner
+      shown("n" * 10, 85) must beEqualTo("n" * 10)
+      val bold = Figure(marks = three.marks, title = "n" * 10) + Text(
+        TextRole.Title,
+        size = 15,
+        limit = 85,
+        weight = Weight.Bold
+      )
+      elements(bold.svg(Theme.Light), "text").map(_.getFirstChild.getTextContent).find(_.startsWith("n")).get must
+        not(beEqualTo("n" * 10))
+    }
+    "make a legend as wide as its widest label as drawn" in {
+      def area(label: String) =
+        plotArea(Figure(marks = three.marks, legend = Vector(LegendItem(label, Paint.Series(0)))).svg(Theme.Light))._3
+      area("W" * 20) must beLessThan(area("i" * 20)) // a legend of capitals is wider than one of narrow letters
+      area("W" * 20) must beLessThan(area("H0") - 100)
     }
     "refuse a limit that means nothing" in {
       Text(TextRole.Title, limit = 0) must throwAn[IllegalArgumentException]("limit must be a positive number")
       Settings.parse("title.limit=big") must throwAn[IllegalArgumentException]("'big' is not a number")
       (fig + Settings.parse("legend.limit=80")).elements.face(TextRole.Legend).limit must beSome(80.0)
+    }
+  }
+
+  "the estimate of a text's width" should {
+    "take a face from the first known name of a font list, and sans-serif is not serif" in {
+      import TextWidth.Family
+      Family.of(Style.DefaultFont) must beEqualTo(Family.Sans)
+      Family.of("sans-serif") must beEqualTo(Family.Sans)
+      Family.of("Georgia, serif") must beEqualTo(Family.Serif)
+      Family.of("'Courier New', monospace") must beEqualTo(Family.Mono)
+      Family.of("'Some Unknown Face', Times New Roman, monospace") must beEqualTo(Family.Serif) // the first it knows
+      Family.of("Zapfino") must beEqualTo(Family.Sans) // when none is known
+    }
+    "add up the advance widths of Helvetica, and Times for a serif face" in {
+      TextWidth.of("Hello", 10) must beCloseTo(22.78, 1e-9) // 722 + 556 + 222 + 222 + 556
+      TextWidth.of("Hello", 10, TextWidth.Family.Serif) must beCloseTo(22.22, 1e-9) // 722 + 444 + 278 + 278 + 500
+      TextWidth.of("Hello", 10, TextWidth.Family.Mono) must beCloseTo(30.0, 1e-9) // 0.6 em a character
+      TextWidth.of("", 10) must beEqualTo(0.0)
+      (' ' to '~').map(c => TextWidth.of(c.toString, 1000)).forall(_ > 0) must beTrue // the whole table is filled in
+      TextWidth.of("W" * 10, 10) must beGreaterThan(TextWidth.of("i" * 10, 10) * 4) // letter by letter
+    }
+    "make bold letters wider and leave digits and spaces" in {
+      TextWidth.of("persistence", 12, bold = true) must beGreaterThan(TextWidth.of("persistence", 12))
+      TextWidth.of("123 456", 12, bold = true) must beEqualTo(TextWidth.of("123 456", 12))
+      // the bold faces have widths of their own, not the regular ones made wider: a bold `e` is as wide as a regular one
+      TextWidth.of("Hello", 10, bold = true) must beCloseTo(24.45, 1e-9) // 722 + 556 + 278 + 278 + 611
+      TextWidth.of("Hello", 10, TextWidth.Family.Serif, bold = true) must beCloseTo(
+        22.78,
+        1e-9
+      ) // 778 + 444 + 278 + 278 + 500
+      TextWidth.of("e", 10, bold = true) must beEqualTo(TextWidth.of("e", 10))
+      TextWidth.of("i", 10, bold = true) must beCloseTo(2.78, 1e-9) // 278, where a regular `i` is 222
+    }
+    "know the signs a plot writes: the ellipsis a whole em, the infinity sign 0.713, the minus sign as wide as a plus" in {
+      TextWidth.of("…", 10) must beCloseTo(10.0, 1e-9)
+      TextWidth.of("∞", 10) must beCloseTo(7.13, 1e-9)
+      TextWidth.of("−", 10) must beEqualTo(TextWidth.of("+", 10))
+      TextWidth.of("−", 10, TextWidth.Family.Serif) must beEqualTo(TextWidth.of("+", 10, TextWidth.Family.Serif))
     }
   }
 

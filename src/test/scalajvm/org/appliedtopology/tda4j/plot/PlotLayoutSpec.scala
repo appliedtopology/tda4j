@@ -117,6 +117,38 @@ class PlotLayoutSpec extends Specification:
         )
       )
     }
+    "let a panel with equal units fill a wide cell when it is placed with fill = true, and only that panel" in {
+      def spread(b: Board): Double =
+        val cx = elements(b.svgFile(Theme.Light), "circle").map(_.getAttribute("cx").toDouble)
+        cx.max - cx.min
+      val equalUnits = panel("D").copy(equalAspect = true)
+      val wide = Plot.layout(1, 3, width = 1000, height = 300, gap = 10)
+      val kept = wide.place(equalUnits, 0, 0, colSpan = 2)
+      val filled = wide.place(equalUnits, 0, 0, colSpan = 2, fill = true)
+      kept.plots.head.equalAspect must beTrue // the default is the diagram's equal units
+      filled.plots.head.equalAspect must beFalse
+      spread(filled) must beGreaterThan(2 * spread(kept)) // the data use the width of the cell, not a square of it
+      equalUnits.equalAspect must beTrue // the figure that was placed is not changed
+      wide.place(equalUnits, 0, 0, colSpan = 2).place(panel("E"), 0, 2, fill = true).plots(1).aspect must beNone
+    }
+    "draw its title above the panels, and draw none for a board nobody titled" in {
+      val titled = grid + Labels(title = "Noisy circle")
+      val plainFile = grid.svgFile(Theme.Light)
+      val file = titled.svgFile(Theme.Light)
+      val heading = elements(file, "text").map(_.getTextContent)
+      heading must contain("Noisy circle")
+      titled.title must beEqualTo("Noisy circle") // the page's title as well
+      elements(plainFile, "text").map(_.getTextContent) must not(contain("Noisy circle"))
+      Plot.side(panel("A"), panel("B")).heading must beEmpty // the page title of a row is not drawn
+      Plot.side(panel("A"), panel("B")).svgFile(Theme.Light) must not(contain("A | B"))
+      // the drawing grows by the title's band, and the panels move down by it
+      val band = elements(file, "svg").head.getAttribute("height").toInt - 500
+      band must beGreaterThan(0)
+      boxes(titled).map(_._2) must beEqualTo(boxes(grid).map(_._2 + band))
+      elements(file, "svg").head.getAttribute("viewBox") must beEqualTo(s"0 0 1000 ${500 + band}")
+      titled.fragment(Theme.Light) must contain("Noisy circle")
+      grid.fragment(Theme.Light) must not(contain("Noisy circle"))
+    }
     "keep its background unless every panel has none" in {
       elements(grid.svgFile(Theme.Light), "rect").head.getAttribute("width") must beEqualTo("1000")
       elements((grid + Style.clear).svgFile(Theme.Light), "rect").filter(_.getAttribute("width") == "1000") must beEmpty

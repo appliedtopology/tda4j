@@ -126,6 +126,66 @@ class PlotCLISpec extends Specification:
     }
   }
 
+  "--plot with a list of kinds" should {
+    def panels(kinds: String*): Seq[plot.Figure] = kinds.map {
+      case "barcode"   => direct.plotBarcode()
+      case "diagram"   => direct.plotDiagram()
+      case "landscape" => direct.plotLandscape(1)
+    }
+    def drawn(args: String*): String =
+      val out = tempPath(".svg")
+      run(("--max-dimension" +: "1" +: "--output" +: out +: args :+ circleFile)*)._1 must beEqualTo(0)
+      normalized(read(out))
+    def expected(board: plot.Board): String = normalized(board.svgFile(plot.Theme.Light))
+    def failure(args: String*): String =
+      var code = -1
+      val err = stderrOf { code = run(args :+ circleFile*)._1 }
+      code must beEqualTo(1)
+      err
+
+    "draw the panels in one row, as the facade's side does" >> {
+      drawn("--plot", "barcode,diagram") must beEqualTo(expected(plot.Plot.side(panels("barcode", "diagram")*)))
+    }
+    "fill a grid row by row, the first plot in the top left cell" >> {
+      // three panels in 2 by 2: row by row leaves the bottom right cell empty, column by column would leave the top right
+      val rowByRow = panels("barcode", "diagram", "landscape").zipWithIndex
+        .foldLeft(plot.Plot.layout(2, 2))((board, panel) => board.place(panel._1, panel._2 / 2, panel._2 % 2))
+      drawn("--plot", "barcode,diagram,landscape", "--layout", "2x2") must beEqualTo(expected(rowByRow))
+    }
+    "take the size of the drawing from --width and --height, and a title and letters for the panels" >> {
+      val board = panels("barcode", "diagram").zipWithIndex
+        .foldLeft(plot.Plot.layout(1, 2, 1200, 400))((b, panel) => b.place(panel._1, 0, panel._2))
+      val titled = (board + plot.Labels(title = "A circle")).tagged()
+      drawn(
+        "--plot",
+        "barcode,diagram",
+        "--layout",
+        "1x2",
+        "--width",
+        "1200",
+        "--height",
+        "400",
+        "--title",
+        "A circle",
+        "--tagged"
+      ) must beEqualTo(expected(titled))
+    }
+    "apply the look flags to every panel" >> {
+      val styled = plot.Plot.side(panels("barcode", "diagram")*) + plot.Palette.named("print")
+      drawn("--plot", "barcode,diagram", "--palette", "print") must beEqualTo(expected(styled))
+    }
+    "be refused where it cannot be drawn, with what to do" >> {
+      failure("--plot", "barcode,diagram", "--layout", "1x1") must contain("2 plots do not fit a 1x1 layout")
+      failure("--plot", "barcode,diagram", "--layout", "2by2") must contain("--layout is rows x columns, such as 2x2")
+      failure("--plot", "barcode", "--layout", "1x2") must contain("--layout is for a list of plots")
+      failure("--plot", "barcode,input-3d") must contain("a 3-D plot cannot go on a board: input-3d")
+      failure("--plot", "barcode,sphere") must contain("unrecognized --plot 'sphere'")
+      failure("--plot", "barcode,diagram", "--tag", "(a)") must contain("--tag labels one plot")
+      failure("--plot", "barcode", "--tagged") must contain("--tagged is for a list of plots")
+      failure("--plot", "barcode,diagram", "--bar", "0") must contain("--bar is not used by --plot barcode,diagram")
+    }
+  }
+
   "a misused plot flag" should {
     def fails(args: String*): Int = run(args :+ circleFile*)._1
     "be an error, never ignored" >> {
@@ -166,6 +226,23 @@ class PlotCLISpec extends Specification:
       val got =
         drawn("--title", "A circle", "--x-label", "born", "--y-label", "dies", "--width", "800", "--height", "300")
       got must beEqualTo(expected(_.withTitle("A circle").withXLabel("born").withYLabel("dies").withSize(800, 300)))
+    }
+    "write a caption, a panel tag and a description, as the tweaks do" >> {
+      drawn("--caption", "Figure 1. Two loops", "--tag", "(a)", "--description", "a diagram of two loops") must
+        beEqualTo(
+          expected(_.withCaption("Figure 1. Two loops").withTag("(a)").withDescription("a diagram of two loops"))
+        )
+      drawn("--caption", "Figure 1. Two loops") must contain("Figure 1. Two loops")
+      drawn("--tag", "(a)") must not(beEqualTo(expected(identity)))
+    }
+    "take a whole look in one flag, which the more specific flags override" >> {
+      drawn("--look", "print") must beEqualTo(expected(_.withPalette("print").withStyle("print")))
+      drawn("--look", "clear") must beEqualTo(expected(_.withPalette("clear").withStyle("clear")))
+      drawn("--look", "default") must beEqualTo(expected(identity))
+      drawn("--look", "print", "--palette", "reference") must
+        beEqualTo(expected(_.withPalette("print").withStyle("print").withPalette("reference")))
+      drawn("--look", "print", "--text-scale", "1.5") must
+        beEqualTo(expected(_.withPalette("print").withStyle("print").withTextScale(1.5)))
     }
     "choose the palette, the scales and the text size" >> {
       drawn("--palette", "reference") must beEqualTo(expected(_.withPalette("reference")))
@@ -262,6 +339,12 @@ class PlotCLISpec extends Specification:
       early("--plot", "input-3d", "--set", "tick-label.size=9") must contain("a 3-D scene has a title")
       early("--plot", "input-3d", "--set", "camera.zoom=20") must contain("the zoom should be between 0.2 and 8")
       early("--plot", "diagram", "--set", "title.size=big") must contain("'big' is not a number")
+      early("--plot", "diagram", "--look", "neon") must contain("expected one of default, print, clear")
+      early("--plot", "input-3d", "--caption", "c") must contain("--caption is for 2-D plots")
+      early("--plot", "input-3d", "--tag", "(a)") must contain("--tag is for 2-D plots")
+      early("--plot", "input-3d", "--description", "d") must contain("--description is for 2-D plots")
+      early("--caption", "c") must contain("--caption is for --plot")
+      early("--look", "print") must contain("--look is for --plot")
     }
     "be an error that says what to do, never ignored" >> {
       val (c1, e1) = failure("--title", "A circle")
@@ -285,7 +368,9 @@ class PlotCLISpec extends Specification:
         (c2 must beEqualTo(1)) and (e2 must contain(
           "unknown scale 'cubic'; expected one of linear, log, sqrt, symlog"
         )) and
-        (c3 must beEqualTo(1)) and (e3 must contain("expected one of brand, reference, print, clear")) and
+        (c3 must beEqualTo(1)) and (e3 must contain(
+          "expected one of brand, reference, print, grayscale, okabe-ito, clear"
+        )) and
         (c8 must beEqualTo(1)) and (e8 must contain("expected one of default, slides, print, clear")) and
         (c9 must beEqualTo(1)) and (e9 must contain("--style is for --plot")) and
         (c10 must beEqualTo(1)) and (e10 must contain("'big' is not a number")) and
