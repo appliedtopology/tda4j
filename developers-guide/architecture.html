@@ -257,6 +257,7 @@
    <div class="buttons"></div>
   </div>
   <p><code>Field.DoubleApproximated(epsilon)</code> treats two doubles as equal within <code>epsilon</code> — necessary because exact floating-point equality is rarely what you want when an <code>isZero</code> check decides whether a chain entry survives a reduction step. <code>FiniteField.scala</code> gives exact, non-approximate coefficients instead: <code>FiniteField(p)</code>'s <code>Fp</code> is an opaque type <em>per instance</em> (so <code>Fp</code> from a mod-5 field and a mod-7 field are distinct, incompatible types), with exact arithmetic via a precomputed inverse table and products in <code>Long</code>, so large primes stay exact.</p>
+  <p><code>Field.hash(x)</code> is the one member with a default: a hash of an element that agrees with <code>isEqual</code>, which <code>Chain.hashCode</code> combines with the cell's hash. The default, <code>0</code> for every element, is right for any field (a chain is then hashed by its cells alone, as over <code>DoubleApproximated</code>, whose tolerance admits no finer hash). <code>Fp</code> hashes its residue in <code>0 until p</code>; an exact field of your own should override it with a hash of its canonical form.</p>
  </section>
  <section id="cell-orderedcell-and-what-boundary-returns">
   <h3 class="h400"><a href="#cell-orderedcell-and-what-boundary-returns" class="anchor"></a><code>Cell</code>, <code>OrderedCell</code>, and what <code>boundary</code> returns</h3>
@@ -283,7 +284,7 @@
    <li>
     <p><code>PackedChain</code>, how the grid engines (<code>FastCubicalHomologyEngine</code>, <code>PackedCubicalCohomologyEngine</code>) store their representatives: the cells as integer keys (doubled-grid indices), distinct and sorted under the chain's order, the nonzero coefficients in a parallel array, and a decoder (<code>GridCubes</code>) that turns a key into its cube. Reading it (<code>terms</code>, <code>cells</code>, <code>leadingTerm</code>, <code>boundary</code>, equality) decodes the cells afresh and never changes it; arithmetic on it returns a <code>HeapChain</code>.</p></li>
    <li>
-    <p>Equality compares formal sums: the same cells, each with coefficients equal by the field's own <code>isEqual</code> (a field element can have several representations), whatever the order or the storage.</p></li>
+    <p>Equality compares formal sums: the same cells, each with coefficients equal by the field's own <code>isEqual</code> (a field element can have several representations), whatever the order or the storage. <code>hashCode</code> agrees with it (each nonzero term's cell with <code>Field.hash</code> of its coefficient), so chains can be keys of a <code>Set</code> or <code>Map</code>.</p></li>
    <li>
     <p><code>collapseHead()</code>/<code>collapseAll()</code> merge duplicate-cell entries, dropping exact zeros. Naive <code>+</code>/<code>-</code>/<code>⊠</code> only lazily collapse the head, so a hand-rolled reduction loop built out of raw <code>Chain</code> arithmetic accumulates an ever-growing backlog of uncollapsed duplicates — see <a href="gotchas.html">Hard-won invariants</a>.</p></li>
    <li>
