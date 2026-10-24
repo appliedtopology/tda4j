@@ -37,20 +37,49 @@ trait FiniteMetricSpace[VertexT]:
   def contains(x: VertexT): Boolean
 
   /** Beyond this radius, the Vietoris-Rips complex is a cone and will have no further homological structure. See e.g.
-    * the Ripser paper, page 412. A space with infinite distances (a sparse distance matrix: a pair that is not listed
-    * has no edge) has no such cone; its radius is then the largest finite distance, past which nothing enters.
+    * the Ripser paper, page 412. The same holds for the Cech and alpha complexes, whose union of balls is then
+    * contractible, so no barcode changes past it: it is the radius that `Persistence` runs to when it is not told
+    * another. A space with infinite distances (a sparse distance matrix: a pair that is not listed has no edge) has no
+    * such cone; its radius is then the largest finite distance, past which nothing enters.
+    *
+    * Found by looking for the point whose farthest point is nearest, with no allocation, and giving up on a point as
+    * soon as a point at least as far as the best so far turns up: on spread-out points that takes a handful of
+    * distances per point, not all of them.
     */
-  lazy val minimumEnclosingRadius: Double =
-    val radius = elements.map { x =>
-      elements.map(y => distance(x, y)).max
-    }.min
-    if !radius.isInfinite then radius
+  lazy val minimumEnclosingRadius: Double = scanEnclosingRadius
+
+  /** The scan behind [[minimumEnclosingRadius]]: a space that can find it faster than by asking for distances overrides
+    * this (as [[EuclideanMetricSpace]] does) and answers the same number.
+    */
+  protected def scanEnclosingRadius: Double =
+    val points = elements.toIndexedSeq
+    val n = points.length
+    if n == 0 then throw new UnsupportedOperationException("the empty metric space has no enclosing radius")
+    var best = Double.PositiveInfinity
+    var i = 0
+    while i < n do
+      val x = points(i)
+      var farthest = 0.0
+      var j = 0
+      while j < n && farthest < best do
+        val d = distance(x, points(j))
+        if d > farthest then farthest = d
+        j += 1
+      if farthest < best then best = farthest
+      i += 1
+    if !best.isInfinite then best
     else
-      elements.iterator
-        .flatMap(x => elements.iterator.map(y => distance(x, y)))
-        .filter(!_.isInfinite)
-        .maxOption
-        .getOrElse(0.0)
+      // every point has an infinite distance: the largest finite one
+      var longest = 0.0
+      i = 0
+      while i < n do
+        var j = 0
+        while j < n do
+          val d = distance(points(i), points(j))
+          if !d.isInfinite && d > longest then longest = d
+          j += 1
+        i += 1
+      longest
 
 /** Convenience functionality for metric spaces.
   */
@@ -188,6 +217,24 @@ open class EuclideanMetricSpace(val pts: Array[Array[Double]], val cacheDistance
 
   def distance(x: Int, y: Int): Double =
     if useCache then distanceCache(x * size + y) else sqrt(pointSqDistance(pts(x), pts(y)))
+
+  // On squared distances, which gives the same radius (the square root is monotone and exactly rounded) without
+  // filling the n^2 distance cache or taking a root per pair: an alpha complex never asks for the cache.
+  override protected def scanEnclosingRadius: Double =
+    val n = size
+    var best = Double.PositiveInfinity
+    var i = 0
+    while i < n do
+      var farthest = 0.0
+      var j = 0
+      while j < n && farthest < best do
+        val d = pointSqDistance(pts(i), pts(j))
+        if d > farthest then farthest = d
+        j += 1
+      if farthest < best then best = farthest
+      i += 1
+    // no points, or coordinates whose squares overflow: let the distances decide
+    if n == 0 || best.isInfinite then super.scanEnclosingRadius else sqrt(best)
 
   /** The Euclidean distance between two points, the metric of [[vpt]]. */
   lazy val vpdf: (Array[Double], Array[Double]) => Double = (x, y) => sqrt(pointSqDistance(x, y))

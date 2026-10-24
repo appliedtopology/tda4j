@@ -31,6 +31,11 @@ object PointCloud:
   * stream.)
   */
 trait PointCloudComplex:
+  /** The complex of `points` up to homological degree `maxDimension`, with simplices up to `maxFiltrationValue` (in the
+    * complex's own unit: an edge length for `VietorisRips`, a radius for `Cech` and `AlphaShapes`). The three built-in
+    * complexes stop at the points' minimum enclosing radius (`FiniteMetricSpace.minimumEnclosingRadius`) when none is
+    * given: the barcode does not change after it.
+    */
   def fromPoints(
     points: PointCloud,
     maxDimension: Int,
