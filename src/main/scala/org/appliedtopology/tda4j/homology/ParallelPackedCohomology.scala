@@ -1,16 +1,13 @@
 package org.appliedtopology.tda4j
 
-import java.util.concurrent.{Callable, ExecutorService, Executors}
-import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.mutable
-import scala.util.Random
 
-/** An experiment (JVM only; #192, #194): Vietoris-Rips persistent cohomology over F_p on implicit coboundaries, as the
-  * packed Ripser engine computes it (clearing, apparent pairs, a heap working column, cofacets enumerated on the fly),
-  * with each degree's columns cut into units of whole edge blocks and the units reduced in parallel. A column whose
-  * pivot leaves its unit is deferred: the deferred columns go on in parallel while their pivots are owned by the units'
-  * pairs (phase 2a), then one by one in the sequential order (phase 2b). The pairs, and the reduction log of every
-  * column, are those of one sequential reduction in the same order.
+/** The engine behind `Persistence.Engine.ParallelRipser` (#192, #194, #220): Vietoris-Rips persistent cohomology over
+  * F_p on implicit coboundaries, as the packed Ripser engine computes it (clearing, apparent pairs, a heap working
+  * column, cofacets enumerated on the fly), with each degree's columns cut into units of whole edge blocks and the
+  * units reduced in parallel. A column whose pivot leaves its unit is deferred: the deferred columns go on in parallel
+  * while their pivots are owned by the units' pairs (phase 2a), then one by one in the sequential order (phase 2b). The
+  * pairs, and the reduction log of every column, are those of one sequential reduction in the same order.
   *
   * A simplex is one `Long` key: its block (1 + the rank of its first longest edge, edges ranked by (length, smaller
   * end, larger end); 0 for a vertex) above `mask - index` (`index` its combinatorial index; a larger index is older, as
@@ -19,13 +16,24 @@ import scala.util.Random
   * names the simplex within its dimension, and the block beside it in every array, heap and column that orders keys;
   * the order is then by block, then key. Coefficients are `Int`s mod `p`.
   *
-  * {{{
-  * java -cp $CP org.appliedtopology.tda4j.ParallelPackedCohomology <dataset> <n> <maxDim> <threshold|mer> <threads> [units per thread] [trials] [seed] [p]
-  * }}}
-  * `threads` 1 with 1 unit per thread is the sequential reduction; set the JVM's
-  * `-Djava.util.concurrent.ForkJoinPool.common.parallelism` to `threads`, which the sorts use.
+  * `persistence(space, threads, unitsPerThread, ...)` cuts each degree into `threads * unitsPerThread` units; they run
+  * on the threads `Parallel` has where the call is (`Parallel.withThreads(n)`, else the common pool), one after the
+  * other when `threads` is 1 and on JavaScript. `threads` 1 with 1 unit per thread is the sequential reduction. The
+  * command-line driver is `ParallelPackedCohomologyDriver` (JVM, in the test tree).
   */
 object ParallelPackedCohomology:
+
+  /** The largest prime a run can use: coefficients are `Int`s, and `(p - 1)^2 + p` must not overflow. */
+  val MaxPrime: Int = 46000
+
+  /** Up to this many points the rank of an edge is looked up in a dense `n x n` table (at most 64 MB); above it, in the
+    * sorted neighbour list of one end (memory proportional to the edges, and no `n x n` array). The table is about a
+    * quarter faster where nearly every pair is an edge; the lists need a fifth of the memory on sparse graphs.
+    */
+  val DenseRankLimit: Int = 4096
+
+  /** The most edges a `Space` takes: they are indexed by `Int` ranks in arrays. */
+  val MaxEdges: Int = Int.MaxValue - 16
 
   /** The edges within the threshold ranked, and the key encoding. */
   open class Space(
@@ -37,9 +45,12 @@ object ParallelPackedCohomology:
     // Find apparent pairs Ripser's way (every facet's block from its pairs) instead of from the block's edge.
     val ripserApparent: Boolean = false,
     // Two-word keys even where one Long would do: for tests of the wide layout.
-    forceWide: Boolean = false
+    forceWide: Boolean = false,
+    // Neighbour lists even where the dense table would do: for tests of the large-n layout.
+    forceSparseRanks: Boolean = false
   ):
-    val rank: Array[Int] = Array.fill(n * n)(-1)
+    val sparseRanks: Boolean = forceSparseRanks || n > DenseRankLimit
+    val rank: Array[Int] = if sparseRanks then new Array[Int](0) else Array.fill(n * n)(-1)
     private val (ea, eb, el) =
       val as = mutable.ArrayBuilder.ofInt()
       val bs = mutable.ArrayBuilder.ofInt()
@@ -47,6 +58,10 @@ object ParallelPackedCohomology:
       for b <- 0 until n; a <- 0 until b do
         val l = distance(a, b)
         if l <= threshold then
+          require(
+            as.length < MaxEdges,
+            s"ParallelPackedCohomology: more than $MaxEdges edges within the threshold; lower the filtration value"
+          )
           as += a; bs += b; ls += l
       val (a0, b0, l0) = (as.result(), bs.result(), ls.result())
       val order = SortIndices.sort(
@@ -59,9 +74,75 @@ object ParallelPackedCohomology:
     val edgeA: Array[Int] = ea
     val edgeB: Array[Int] = eb
     val edgeLength: Array[Double] = el
-    for r <- edgeA.indices do
-      rank(edgeA(r) * n + edgeB(r)) = r
-      rank(edgeB(r) * n + edgeA(r)) = r
+    // neighbours(a): the vertices joined to `a` by an edge within the threshold, ascending; neighbourRank(a)(i): that edge's rank.
+    private val lists: (Array[Array[Int]], Array[Array[Int]]) =
+      if !sparseRanks then
+        for r <- edgeA.indices do
+          rank(edgeA(r) * n + edgeB(r)) = r
+          rank(edgeB(r) * n + edgeA(r)) = r
+        (null, null)
+      else
+        val degree = new Array[Int](n)
+        for r <- edgeA.indices do
+          degree(edgeA(r)) += 1
+          degree(edgeB(r)) += 1
+        val nb = Array.tabulate(n)(a => new Array[Int](degree(a)))
+        val nr = Array.tabulate(n)(a => new Array[Int](degree(a)))
+        // Fill by increasing neighbour: visit the edges ordered by (smaller end, larger end).
+        val at = new Array[Int](n)
+        val byEnds = SortIndices.sort(
+          edgeA.length,
+          (x, y) => edgeA(x) < edgeA(y) || edgeA(x) == edgeA(y) && edgeB(x) < edgeB(y)
+        )
+        // Lower neighbours of b are the a < b of the edges (a, b), in ascending a; upper neighbours of a come after.
+        // Two passes keep every list ascending: first (a < b) as b's lower neighbours, then as a's upper neighbours.
+        for r <- byEnds do
+          val (a, b) = (edgeA(r), edgeB(r))
+          nb(b)(at(b)) = a; nr(b)(at(b)) = r; at(b) += 1
+        for r <- byEnds do
+          val (a, b) = (edgeA(r), edgeB(r))
+          nb(a)(at(a)) = b; nr(a)(at(a)) = r; at(a) += 1
+        (nb, nr)
+
+    val neighbours: Array[Array[Int]] = lists._1
+    val neighbourRank: Array[Array[Int]] = lists._2
+
+    /** Points the cursors `cur(0 until k)` at the end of the neighbour lists of `vs(0 until k)`, before a scan down. */
+    def startDown(cur: Array[Int], vs: Array[Int], k: Int): Unit =
+      if sparseRanks then
+        var i = 0
+        while i < k do
+          cur(i) = neighbours(vs(i)).length - 1
+          i += 1
+
+    /** The rank of `{a, v}` for the `u`-th vertex `a` of a column, in a scan where `v` only decreases (after
+      * `startDown`).
+      */
+    def rankDown(cur: Array[Int], u: Int, a: Int, v: Int): Int =
+      if !sparseRanks then rank(a * n + v)
+      else
+        val list = neighbours(a)
+        var c = cur(u)
+        while c >= 0 && list(c) > v do c -= 1
+        cur(u) = c
+        if c >= 0 && list(c) == v then neighbourRank(a)(c) else -1
+
+    /** The rank of the edge `{a, b}`, or -1 when it is longer than the threshold. */
+    def rankOf(a: Int, b: Int): Int =
+      if !sparseRanks then rank(a * n + b)
+      else
+        val list = neighbours(a)
+        var lo = 0
+        var hi = list.length - 1
+        var result = -1
+        while lo <= hi do
+          val mid = (lo + hi) >>> 1
+          val x = list(mid)
+          if x < b then lo = mid + 1
+          else if x > b then hi = mid - 1
+          else
+            result = neighbourRank(a)(mid); lo = hi + 1
+        result
 
     /** `binom(q)(v)` = C(v, q), for simplices of up to `maxDim + 2` vertices. */
     val binom: Array[Array[Long]] = Array.tabulate(maxDim + 3, n + 1)((q, v) => SimplexIndexing.binomial(v, q))
@@ -72,7 +153,18 @@ object ParallelPackedCohomology:
     /** Whether keys are two words: the block and the index need more than 63 bits together. */
     val wide: Boolean = forceWide || bits + (32 - Integer.numberOfLeadingZeros(edgeA.length + 1)) > 63
     val mask: Long = if bits == 63 then Long.MaxValue else (1L << bits) - 1
-    val inverse: Array[Int] = Array.tabulate(p)(a => if a == 0 then 0 else (1 until p).find(b => a * b % p == 1).get)
+    // Fermat: a^(p-2); products of two residues and sums of residues and such products must fit an Int (p <= MaxPrime).
+    require(p <= MaxPrime, s"ParallelPackedCohomology: coefficients are Ints, so p <= $MaxPrime, got $p")
+    val inverse: Array[Int] = Array.tabulate(p) { a =>
+      var result = 1L
+      var base = a.toLong
+      var e = p - 2
+      while e > 0 do
+        if (e & 1) == 1 then result = result * base % p
+        base = base * base % p
+        e >>= 1
+      if a == 0 then 0 else result.toInt
+    }
 
     /** A one-word key's block; a two-word key carries its block beside it. */
     def block(key: Long): Int =
@@ -222,8 +314,21 @@ object ParallelPackedCohomology:
       factors += factor
       length += 1
 
+    // An ArrayBuilder's `result()` hands its array over and empties the builder when the array is exactly full, so a
+    // second call throws: the entries are read once here, after the reduction has finished.
+    private var addedColumns: Array[Long] | Null = null
+    private var addedFactors: Array[Int] | Null = null
+    def columns: Array[Long] =
+      if addedColumns == null then addedColumns = added.result()
+      addedColumns.nn
+    def multipliers: Array[Int] =
+      if addedFactors == null then addedFactors = factors.result()
+      addedFactors.nn
+
   private class Scratch(space: Space):
     val vs = new Array[Int](space.maxDim + 3)
+    // Cursors into the sparse rank lists of the vertices in vs, for a scan over v downwards (Space.rankDown).
+    val cur = new Array[Int](space.maxDim + 3)
     val ws = new Array[Int](space.maxDim + 3)
     val cofKey = new Array[Long](space.n)
     val cofBlock = new Array[Int](space.n)
@@ -258,6 +363,8 @@ object ParallelPackedCohomology:
   open class Degree(val degree: Int, val stats: Stats):
     val pairs = mutable.ArrayBuffer.empty[(Long, Long)]
     val bars = mutable.ArrayBuffer.empty[(Int, Double, Double)]
+    // The column (birth key) of each bar of `bars`, for `cocycle` and for finding its pair.
+    val barColumns = mutable.ArrayBuffer.empty[Long]
     val reduced = mutable.LongMap.empty[Owner] // by column, for the columns with additions
     val logs = mutable.LongMap.empty[Log]
     val essential = mutable.ArrayBuffer.empty[Long]
@@ -286,6 +393,7 @@ object ParallelPackedCohomology:
     var iA = 0L
     var pp = k
     var count = 0
+    startDown(s.cur, s.vs, k)
     var v = n - 1
     while v >= 0 do
       if pp > 0 && s.vs(pp - 1) == v then
@@ -297,7 +405,7 @@ object ParallelPackedCohomology:
         var blk = sigmaBlock
         var u = 0
         while ok && u < k do
-          val q = rank(s.vs(u) * n + v)
+          val q = rankDown(s.cur, u, s.vs(u), v)
           if q < 0 then ok = false else if q + 1 > blk then blk = q + 1
           u += 1
         if ok then
@@ -325,6 +433,7 @@ object ParallelPackedCohomology:
       var iB = sigmaIndex
       var iA = 0L
       var pp = k
+      startDown(s.cur, s.vs, k)
       var v = n - 1
       var found = -1L
       while found < 0 && v > c do
@@ -336,7 +445,7 @@ object ParallelPackedCohomology:
           var ok = true
           var u = 0
           while ok && u < k do
-            val q = rank(s.vs(u) * n + v)
+            val q = rankDown(s.cur, u, s.vs(u), v)
             if q < 0 || q > r then ok = false
             u += 1
           if ok then found = key(sigmaBlock, iB + binom(pp + 1)(v) + iA)
@@ -365,13 +474,14 @@ object ParallelPackedCohomology:
             t += 1
           i += 1
         var older = false
+        startDown(s.cur, s.vs, k)
         var v = n - 1
         while !older && v > w do
           if v != a && v != b then
             var ok = true
             var u = 0
             while ok && u < k do
-              val q = rank(s.vs(u) * n + v)
+              val q = rankDown(s.cur, u, s.vs(u), v)
               if q < 0 || q > r then ok = false
               u += 1
             older = ok
@@ -379,13 +489,13 @@ object ParallelPackedCohomology:
         if older then -1L else key(rowBlock, indexOf(s.vs, k))
 
   // The block of the simplex in `vs` (size k): 1 + the largest rank of its edges, as Ripser computes a diameter.
-  private def blockOf(space: Space, vs: Array[Int], k: Int): Int =
+  def blockOf(space: Space, vs: Array[Int], k: Int): Int =
     var top = -1
     var i = 0
     while i < k do
       var j = i + 1
       while j < k do
-        val q = space.rank(vs(i) * space.n + vs(j))
+        val q = space.rankOf(vs(i), vs(j))
         if q > top then top = q
         j += 1
       i += 1
@@ -414,6 +524,7 @@ object ParallelPackedCohomology:
   private def oldestCofacetVertexByScan(space: Space, s: Scratch, k: Int, target: Int): Int =
     import space.*
     var found = -1
+    startDown(s.cur, s.vs, k)
     var v = n - 1
     while found < 0 && v >= 0 do
       var member = false
@@ -423,7 +534,7 @@ object ParallelPackedCohomology:
       while ok && u < k do
         if s.vs(u) == v then member = true
         else
-          val q = rank(s.vs(u) * n + v)
+          val q = rankDown(s.cur, u, s.vs(u), v)
           if q < 0 then ok = false else if q + 1 > blk then blk = q + 1
         u += 1
       if !member && ok && blk == target then found = v
@@ -535,22 +646,12 @@ object ParallelPackedCohomology:
           if log != null then log.add(owner.column, f)
     result
 
-  private def parallel(pool: ExecutorService | Null, threads: Int, tasks: Int)(body: Int => Unit): Unit =
-    if pool == null || threads == 1 then (0 until tasks).foreach(body)
-    else
-      val next = AtomicInteger(0)
-      val workers = java.util.ArrayList[Callable[Unit]]()
-      for _ <- 0 until threads do
-        workers.add(() =>
-          var t = next.getAndIncrement()
-          while t < tasks do
-            body(t)
-            t = next.getAndIncrement()
-        )
-      pool.invokeAll(workers).forEach(_.get())
+  // The tasks run one after the other when `threads` is 1, else on the threads `Parallel` has here.
+  private def parallel(threads: Int, tasks: Int)(body: Int => Unit): Unit =
+    if threads == 1 then (0 until tasks).foreach(body) else Parallel.tasks(tasks)(body)
 
   private def sort(keys: Array[Long], threads: Int): Unit =
-    if threads > 1 then java.util.Arrays.parallelSort(keys) else java.util.Arrays.sort(keys)
+    if threads > 1 then Parallel.sortLongs(keys) else java.util.Arrays.sort(keys)
 
   // Two-word keys into order: by block (a counting sort, blocks being 0 .. blockCount - 1), then by key within each
   // block. `blocks` ends up sorted with `keys`.
@@ -576,9 +677,12 @@ object ParallelPackedCohomology:
     while b < blockCount do
       java.util.Arrays.fill(blocks, start(b), start(b + 1), b)
       b += 1
-    val within: java.util.function.IntConsumer = b => java.util.Arrays.sort(keys, start(b), start(b + 1))
-    val range = java.util.stream.IntStream.range(0, blockCount)
-    (if threads > 1 then range.parallel() else range).forEach(within)
+    def within(from: Int, until: Int): Unit =
+      var b = from
+      while b < until do
+        java.util.Arrays.sort(keys, start(b), start(b + 1))
+        b += 1
+    if threads > 1 then Parallel.ranges(blockCount, 16)(within) else within(0, blockCount)
 
   /** Every bar of degrees `0 .. maxDim`; `unitsPerThread` 1 with `threads` 1 is the sequential reduction. */
   def persistence(
@@ -586,11 +690,12 @@ object ParallelPackedCohomology:
     threads: Int,
     unitsPerThread: Int,
     cocycles: Boolean,
-    pool: ExecutorService | Null,
     keepPairs: Boolean = false
   ): Result =
     import space.*
-    val scratch = ThreadLocal.withInitial[Scratch](() => Scratch(space))
+    // `initialValue`, not `ThreadLocal.withInitial`: the latter is not in Scala.js's java.lang.
+    val scratch = new ThreadLocal[Scratch]:
+      override def initialValue(): Scratch = Scratch(space)
     var level: Array[Long] = Array.tabulate(n)(v => key(0, v.toLong))
     // The blocks of `level`, for two-word keys only.
     var levelBlocks: Array[Int] = if wide then new Array[Int](n) else null
@@ -627,7 +732,7 @@ object ParallelPackedCohomology:
 
       // Phase 1: each unit youngest first, against its own owners.
       val t1 = System.nanoTime()
-      parallel(pool, threads, units.length) { u =>
+      parallel(threads, units.length) { u =>
         val unit = units(u)
         val s = scratch.get()
         val lookup: (Long, Int) => Owner | Null = (row, _) => unit.owners.getOrNull(row)
@@ -697,7 +802,7 @@ object ParallelPackedCohomology:
       val emptied = new Array[Boolean](deferred.length)
       val adds2a = new Array[Long](deferred.length)
       val slice = math.max(1, math.min(32, deferred.length / math.max(1, threads * 8)))
-      parallel(pool, threads, (deferred.length + slice - 1) / slice) { c =>
+      parallel(threads, (deferred.length + slice - 1) / slice) { c =>
         val s = scratch.get()
         for i <- c * slice until math.min(deferred.length, (c + 1) * slice) do
           val df = deferred(i)
@@ -764,13 +869,15 @@ object ParallelPackedCohomology:
         degree.essential ++= unit.essential
         degree.essentialBlocks ++= unit.essentialBlocks
       // Bars of positive length: the owners' pairs, and the essential columns (death block -1).
-      def bar(columnBlock: Int, rowBlock: Int): Unit =
+      def bar(column: Long, columnBlock: Int, rowBlock: Int): Unit =
         val birth = value(columnBlock)
         val death = if rowBlock < 0 then Double.PositiveInfinity else value(rowBlock)
-        if death > birth then degree.bars += ((d, birth, death))
-      for unit <- units do unit.owners.foreach((_, o) => bar(o.columnBlock, o.pivotBlock))
-      late.foreach((_, o) => bar(o.columnBlock, o.pivotBlock))
-      degree.essentialBlocks.foreach(b => bar(b, -1))
+        if death > birth then
+          degree.bars += ((d, birth, death))
+          degree.barColumns += column
+      for unit <- units do unit.owners.foreach((_, o) => bar(o.column, o.columnBlock, o.pivotBlock))
+      late.foreach((_, o) => bar(o.column, o.columnBlock, o.pivotBlock))
+      degree.essential.indices.foreach(i => bar(degree.essential(i), degree.essentialBlocks(i), -1))
 
       // Clearing for the next degree, and its simplices: every canonical cofacet within the threshold.
       val pivotChunks = units.map(_.pivots.result()) :+ latePivots.result()
@@ -786,7 +893,7 @@ object ParallelPackedCohomology:
         val parts = new Array[Array[Long]](chunks)
         val blockParts = new Array[Array[Int]](chunks)
         val current = level
-        parallel(pool, threads, chunks) { c =>
+        parallel(threads, chunks) { c =>
           val s = scratch.get()
           val out = mutable.ArrayBuilder.ofLong()
           val outBlocks = if wide then mutable.ArrayBuilder.ofInt() else null
@@ -797,13 +904,14 @@ object ParallelPackedCohomology:
             val idx = index(column)
             decode(idx, k, s.vs)
             val top = s.vs(k - 1)
+            startDown(s.cur, s.vs, k)
             var v = n - 1
             while v > top do
               var ok = true
               var blk = columnBlock
               var u = 0
               while ok && u < k do
-                val q = rank(s.vs(u) * n + v)
+                val q = rankDown(s.cur, u, s.vs(u), v)
                 if q < 0 then ok = false else if q + 1 > blk then blk = q + 1
                 u += 1
               if ok then
@@ -823,7 +931,12 @@ object ParallelPackedCohomology:
         if wide then sortWide(level, levelBlocks, edgeA.length + 1, threads) else sort(level, threads)
         assembleNanos = System.nanoTime() - t4
       degrees += degree
-    Result(space, degrees.result())
+    val result = degrees.result()
+    // Read each log's entries once, here on one thread, so that cocycles can be built from several threads.
+    for degree <- result; log <- degree.logs.values do
+      log.columns
+      log.multipliers
+    Result(space, result)
 
   /** The coboundary of a cochain of keys of size `k`, as a map key -> coefficient (zeros dropped). */
   def coboundaryOf(space: Space, k: Int, cochain: collection.Map[Long, Int]): Map[Long, Int] =
@@ -845,49 +958,9 @@ object ParallelPackedCohomology:
           case None      => Map(c -> 1)
           case Some(log) =>
             val acc = mutable.LongMap(c -> 1)
-            val (added, factors) = (log.added.result(), log.factors.result())
+            val (added, factors) = (log.columns, log.multipliers)
             for i <- added.indices; (e, x) <- v(added(i)) do acc(e) = (acc.getOrElse(e, 0) + factors(i) * x) % p
             acc.filter(_._2 != 0).toMap
         memo(c) = result
         result
     v(column)
-
-  def main(arguments: Array[String]): Unit =
-    val check = arguments.contains("check")
-    val ripserApparent = arguments.contains("ripser-apparent")
-    val args = arguments.filterNot(a => a == "check" || a == "ripser-apparent")
-    val dataset = args(0)
-    val n = args(1).toInt
-    val maxDim = args(2).toInt
-    val threads = args(4).toInt
-    val unitsPerThread = if args.length > 5 then args(5).toInt else 8
-    val trials = if args.length > 6 then args(6).toInt else 5
-    val seed = if args.length > 7 then args(7).toLong else 42L
-    val p = if args.length > 8 then args(8).toInt else 17
-    val pts = BlockParallelReduction.points(dataset, n, Random(seed))
-    val metricSpace = EuclideanMetricSpace(pts)
-    val threshold = if args(3) == "mer" then metricSpace.minimumEnclosingRadius else args(3).toDouble
-    val common = java.util.concurrent.ForkJoinPool.getCommonPoolParallelism
-    println(
-      s"$dataset n=$n maxDim=$maxDim threshold=$threshold p=$p threads=$threads units/thread=$unitsPerThread " +
-        s"(common pool parallelism $common)${if ripserApparent then ", apparent pairs Ripser's way" else ""}"
-    )
-    val pool = if threads > 1 then Executors.newFixedThreadPool(threads) else null
-    def once(): (Long, Result) =
-      val t0 = System.nanoTime()
-      val dist = new Array[Double](n * n)
-      for i <- 0 until n; j <- 0 until n do dist(i * n + j) = metricSpace.distance(i, j)
-      val space = Space(n, (i, j) => dist(i * n + j), threshold, maxDim, p, ripserApparent)
-      val r = persistence(space, threads, unitsPerThread, cocycles = true, pool)
-      (System.nanoTime() - t0, r)
-    val runs = (1 to trials).map(_ => once())
-    val times = runs.map(_._1).sorted
-    val last = runs.last._2
-    println(
-      f"  bars ${last.bars.size}, total median ${times(times.size / 2) / 1e6}%.1f ms, min ${times.head / 1e6}%.1f ms"
-    )
-    last.degrees.foreach(d => println("  " + d.stats))
-    if check then
-      val packed = BlockParallelReduction.packedBars(metricSpace, maxDim, threshold, p)
-      println(s"  same bars as the packed Ripser engine: ${last.bars == packed}")
-    if pool != null then pool.shutdown()

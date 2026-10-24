@@ -39,7 +39,7 @@ open class SheehyRipsSimplexStream(
   val epsilon: Double,
   keepCriterion: PartialFunction[Simplex[Int], Boolean] = CofaceSimplexStream.keepAll,
   maxFiltrationValue: Option[Double] = None,
-  parallelFiltrationValue: Boolean = false
+  parallelFiltrationValue: Boolean = Parallel.byDefault
 ) extends RipserCofaceSimplexStream(
       ambientMetricSpace,
       keepCriterion,
@@ -107,7 +107,7 @@ object SheehyRipsSimplexStream:
     firstPoint: Int = 0,
     keepCriterion: PartialFunction[Simplex[Int], Boolean] = CofaceSimplexStream.keepAll,
     maxFiltrationValue: Option[Double] = None,
-    parallelFiltrationValue: Boolean = false
+    parallelFiltrationValue: Boolean = Parallel.byDefault
   ): SheehyRipsSimplexStream =
     require(epsilon > 0.0 && epsilon < 1.0, s"epsilon must be in (0,1), got $epsilon")
     val selection = LandmarkSelector.maxmin(ambientMetricSpace, ambientMetricSpace.size, firstPoint)

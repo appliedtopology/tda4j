@@ -6,7 +6,7 @@ import scala.collection.mutable
   * per dimension, optionally a poor man's stack sampler on the main thread.
   *
   * {{{
-  * java -cp $CP org.appliedtopology.tda4j.AlphaProfileDriver points.txt [backend=helix|bowyer-watson|dqp] [sample=true] [dim=2] [dump=file] [verb=only]
+  * java -cp $CP org.appliedtopology.tda4j.AlphaProfileDriver points.txt [backend=helix|bowyer-watson|dqp] [sample=true] [dim=2] [dump=file] [verb=only] [sequential=true]
   * }}}
   *
   * Phases: the triangulation (`HelixDelaunay` / `BowyerWatsonDelaunay` constructor: the walk and its validity check),
@@ -46,8 +46,11 @@ object AlphaProfileDriver:
       counts.toSeq.sortBy(-_._2).take(top).foreach((k, v) => println(f"     ${100.0 * v / samples}%5.1f%%  $k"))
 
   def main(args: Array[String]): Unit =
-    val input = args(0)
     val opts = args.drop(1).map(a => a.takeWhile(_ != '=') -> a.dropWhile(_ != '=').drop(1)).toMap
+    // `sequential=true`: every parallel step of the library runs on this thread (the reference for the parallel run).
+    if opts.get("sequential").contains("true") then Parallel.sequentially(run(args(0), opts)) else run(args(0), opts)
+
+  private def run(input: String, opts: Map[String, String]): Unit =
     val dim = opts.getOrElse("dim", "2").toInt
     val pts = PaperBenchmarkDriver.readMatrix(input)
     val ambient = pts.head.length

@@ -141,6 +141,7 @@ abstract class Lab(characteristic: Int, precision: Double = 1e-9):
     PackedChain,
     PackedCubicalCohomologyEngine,
     PackedRipserCohomologyEngine,
+    ParallelPackedCohomology,
     Perseus,
     Persistence,
     PersistenceBar,

@@ -49,16 +49,21 @@ private enum EngineKind:
 
 private object EngineKind:
   def parse(raw: String): EngineKind = raw.toLowerCase match
-    case "ripser"       => Ripser
-    case "naive"        => Naive
-    case "chunks"       => Chunks
-    case "cohomology"   => Cohomology
-    case "fast-cubical" => FastCubical
-    case "fast-alpha"   => FastAlpha
-    case other          =>
+    case "ripser"          => Ripser
+    case "naive"           => Naive
+    case "chunks"          => Chunks
+    case "cohomology"      => Cohomology
+    case "fast-cubical"    => FastCubical
+    case "fast-alpha"      => FastAlpha
+    case "parallel-ripser" =>
       throw new IllegalArgumentException(
-        s"unrecognized engine '$other'; expected 'ripser', 'naive', 'chunks', 'cohomology', 'fast-cubical', or " +
-          "'fast-alpha'"
+        "engine=parallel-ripser is only offered for complex=vr, from points or a distance matrix; use " +
+          "engine=ripser, or leave engine unset, here"
+      )
+    case other =>
+      throw new IllegalArgumentException(
+        s"unrecognized engine '$other'; expected 'ripser', 'parallel-ripser', 'naive', 'chunks', 'cohomology', " +
+          "'fast-cubical', or 'fast-alpha'"
       )
 
 private enum CoefficientKind:
@@ -492,7 +497,8 @@ object TDA4j:
     "requirevalidtriangulation",
     "minpersistence",
     "minpersistencefraction",
-    "includezerolength"
+    "includezerolength",
+    "threads"
   )
 
   /** The options of landmark selection (step 1 of the two-step witness complex), and no others: a landmark option
@@ -517,7 +523,8 @@ object TDA4j:
       "epsilon",
       "minpersistence",
       "minpersistencefraction",
-      "includezerolength"
+      "includezerolength",
+      "threads"
     )
 
   /** The options of `computeFromRelation`: a relation has no `complex`, landmarks or alpha backend. */
@@ -532,7 +539,8 @@ object TDA4j:
     "epsilon",
     "minpersistence",
     "minpersistencefraction",
-    "includezerolength"
+    "includezerolength",
+    "threads"
   )
 
   private def parseOptionsWithKeys(options: Array[String], allowedKeys: Set[String]): Map[String, String] =
@@ -762,14 +770,21 @@ object TDA4j:
     points: Option[Array[Array[Double]]]
   ): PersistenceResult =
     val threshold = parseThresholdSpec(opts)
-    threshold(dispatchFull(opts, metricSpace, points), metricSpace.minimumEnclosingRadius)
+    withThreads(opts)(threshold(dispatchFull(opts, metricSpace, points), metricSpace.minimumEnclosingRadius))
 
   private def dispatchFull(
-    opts: Map[String, String],
+    userOpts: Map[String, String],
     metricSpace: FiniteMetricSpace[Int],
     points: Option[Array[Array[Double]]]
   ): PersistenceResult =
+    // `engine=parallel-ripser` is `ripser` with the block-parallel engine; the rest of this method knows `ripser`.
+    val parallelRequested = userOpts.get("engine").exists(_.equalsIgnoreCase("parallel-ripser"))
+    val opts = if parallelRequested then userOpts.updated("engine", "ripser") else userOpts
     val complex = ComplexKind.parse(opts.getOrElse("complex", "vr"))
+    if parallelRequested && complex != ComplexKind.VR then
+      throw new IllegalArgumentException(
+        s"engine=parallel-ripser is only offered for complex=vr -- got complex=${opts.getOrElse("complex", "vr")}"
+      )
 
     // Parsed BEFORE the engine default below, since complex=witness's own default depends on it (lazy behaves
     // like complex=vr -- a flag complex, defaults to ripser; general behaves like complex=alpha/cech -- not a
@@ -899,28 +914,101 @@ object TDA4j:
         )
       else 0.0 // unused for any other complex
 
-    dispatchByField(opts) { [C] => (toDouble: C => Double) =>
-      computeGeneric[C](
-        metricSpace,
-        points,
-        complex,
-        engine,
-        cycles,
-        alphaBackend,
-        requireValidTriangulation,
-        maxDimension,
-        maxFiltrationValue,
-        witnessVariant,
-        witnessLandmarks,
-        witnessNu,
-        dtmK,
-        dtmQ,
-        dtmP,
-        sparseEpsilon,
-        edgeCollapse,
-        toDouble
+    val includeZeroLength = opts.get("includezerolength").exists(v => parseBooleanOption("includeZeroLength", v))
+    val overZ = CoefficientKind.parse(opts.getOrElse("field", "z")) == CoefficientKind.Z
+    val prime = opts.get("prime").map(parseIntOption("prime", _)).getOrElse(FiniteField.DefaultPrime)
+    // The block-parallel Ripser engine computes the same bars as `ripser` where it applies; `engine` unset takes it
+    // when there are several threads, `engine=ripser` never does (as `Persistence`'s `Engine.Auto` and `Ripser`).
+    val parallelFits = complex == ComplexKind.VR && engine == EngineKind.Ripser && overZ && !includeZeroLength &&
+      !edgeCollapse && ParallelRipser.supports(metricSpace.size, maxDimension, prime, cycles)
+    if parallelRequested && !parallelFits then
+      throw new IllegalArgumentException(
+        "engine=parallel-ripser needs complex=vr, field=Z, includeZeroLength=false, edgeCollapse=false, a prime up " +
+          s"to 46000 and fewer than 46341 points whose simplex indices fit 63 bits (got ${metricSpace.size} points, " +
+          s"maxDimension $maxDimension, prime $prime); use engine=ripser"
       )
-    }
+    if parallelFits && (parallelRequested || (!userOpts.contains("engine") && Parallel.threads > 1)) then
+      parallelVR(metricSpace, maxDimension, maxFiltrationValue, prime, cycles)
+    else
+      dispatchByField(opts) { [C] => (toDouble: C => Double) =>
+        computeGeneric[C](
+          metricSpace,
+          points,
+          complex,
+          engine,
+          cycles,
+          alphaBackend,
+          requireValidTriangulation,
+          maxDimension,
+          maxFiltrationValue,
+          witnessVariant,
+          witnessLandmarks,
+          witnessNu,
+          dtmK,
+          dtmQ,
+          dtmP,
+          sparseEpsilon,
+          edgeCollapse,
+          toDouble
+        )
+      }
+
+  /** The Vietoris-Rips complex of `space` as the engines other than Ripser read it: cells to dimension
+    * `maxDimension + 1`, the scaffolding the boundary matrix and the dimension-capped engines need.
+    */
+  private def vrStream(
+    space: FiniteMetricSpace[Int],
+    maxFiltrationValue: Option[Double],
+    maxDimension: Int
+  ): LimitedCofaceSimplexStream =
+    LimitedCofaceSimplexStream(
+      EnumeratingCofaceSimplexStream(space, maxFiltrationValue = maxFiltrationValue),
+      maxDimension + 1
+    )
+
+  /** `engine=ripser` for the Vietoris-Rips complex over `Z/prime` by the block-parallel engine: the same bars, with
+    * representatives built when a bar's cycle is first read.
+    */
+  private def parallelVR(
+    metricSpace: FiniteMetricSpace[Int],
+    maxDimension: Int,
+    maxFiltrationValue: Option[Double],
+    prime: Int,
+    cycles: Boolean
+  ): PersistenceResult =
+    val diagram = Persistence(
+      metricSpace,
+      maxDimension = maxDimension,
+      maxFiltrationValue = maxFiltrationValue,
+      characteristic = prime,
+      engine = Persistence.Engine.ParallelRipser,
+      representatives = if cycles then Representatives.Cycles else Representatives.Cocycles,
+      computeAllRepresentatives = false
+    )
+    import diagram.given
+    val toDouble: diagram.Coefficient => Double = summon[diagram.Coefficient is Field].toDouble(_)
+    val stream = vrStream(metricSpace, maxFiltrationValue, maxDimension)
+    fromBars[Simplex[Int], diagram.Coefficient](
+      diagram.bars,
+      (_, cell) => cell.underlying.toArray,
+      toDouble,
+      maxDimension,
+      () =>
+        buildBoundaryMatrix[Simplex[Int], diagram.Coefficient](
+          stream.iterator.toIndexedSeq,
+          (_, cell) => cell.underlying.toArray,
+          toDouble,
+          stream.filtrationValue
+        )
+    )
+
+  /** `body` on the number of threads the `threads` option names (checked before anything runs), else on all of them.
+    */
+  private def withThreads[T](opts: Map[String, String])(body: => T): T =
+    opts.get("threads").map(parseIntOption("threads", _)) match
+      case Some(n) if n < 1 => throw new IllegalArgumentException(s"option 'threads' must be at least 1, got '$n'")
+      case Some(n)          => Parallel.withThreads(n)(body)
+      case None             => body
 
   private def parseIntOption(name: String, raw: String): Int =
     raw.toIntOption.getOrElse(throw new IllegalArgumentException(s"option '$name' must be an integer, got '$raw'"))
@@ -1004,11 +1092,7 @@ object TDA4j:
         // reduction algorithm ran over it, so it's built ONCE here (the same construction engine=Naive/Cohomology
         // already need below) and reused -- see `buildBoundaryMatrix`'s own doc.
         val vrCellVertices: (Int, Simplex[Int]) => Array[Int] = (_, cell) => cell.underlying.toArray
-        val vrStreamForBoundary =
-          LimitedCofaceSimplexStream(
-            EnumeratingCofaceSimplexStream(collapsedMetricSpace, maxFiltrationValue = maxFiltrationValue),
-            requestedMaxDimension + 1
-          )
+        val vrStreamForBoundary = vrStream(collapsedMetricSpace, maxFiltrationValue, requestedMaxDimension)
         val vrBoundaryMatrixOf =
           () =>
             buildBoundaryMatrix[Simplex[Int], C](
@@ -1525,7 +1609,9 @@ object TDA4j:
     landmarks: IndexedSeq[Int]
   ): PersistenceResult =
     val threshold = parseThresholdSpec(opts)
-    threshold(dispatchWitnessFromLandmarksFull(opts, metricSpace, landmarks), metricSpace.minimumEnclosingRadius)
+    withThreads(opts)(
+      threshold(dispatchWitnessFromLandmarksFull(opts, metricSpace, landmarks), metricSpace.minimumEnclosingRadius)
+    )
 
   private def dispatchWitnessFromLandmarksFull(
     opts: Map[String, String],
@@ -1562,7 +1648,7 @@ object TDA4j:
 
   private def dispatchDowker(opts: Map[String, String], relation: Array[Array[Double]]): PersistenceResult =
     val threshold = parseThresholdSpec(opts)
-    threshold(dispatchDowkerFull(opts, relation), valueRange(relation.iterator.flatten))
+    withThreads(opts)(threshold(dispatchDowkerFull(opts, relation), valueRange(relation.iterator.flatten)))
 
   private def dispatchDowkerFull(opts: Map[String, String], relation: Array[Array[Double]]): PersistenceResult =
     val engine = EngineKind.parse(opts.getOrElse("engine", "cohomology"))
@@ -1656,7 +1742,7 @@ object TDA4j:
     valueRangeOfImage: => Double
   ): PersistenceResult =
     val threshold = parseThresholdSpec(opts)
-    threshold(dispatchCubicalFull(opts, stream), valueRangeOfImage)
+    withThreads(opts)(threshold(dispatchCubicalFull(opts, stream), valueRangeOfImage))
 
   private def dispatchCubicalFull(opts: Map[String, String], stream: CubicalGridStream): PersistenceResult =
     val engine =

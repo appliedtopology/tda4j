@@ -51,7 +51,7 @@ generated `LibraryVersion`); no `.par` (use `Parallel`); no `Path` in a public s
 
 ## The seams
 
-`Parallel` (a loop on JS), `FiltrationCache` (`TrieMap` on the JVM, `HashMap` on JS: `TrieMap` does not link on Scala.js),
+`Parallel` (`threads`, `foreach`, `map`, `ranges`, `both`, `sort`, `sortLongs`, `tasks`, `withThreads`, `limit`, `sequentially`; in order on JS; every user must give the same result for any split, `Parallel.byDefault` is the default of the `parallelFiltrationValue` flags), `FiltrationCache` (`TrieMap` on the JVM, `HashMap` on JS: `TrieMap` does not link on Scala.js),
 `plot.RootText` (`java.util.Locale` does not exist on Scala.js: lower-case keywords with `.lowerRoot`, format with
 `RootText.format`, locale symbols from `Intl`), `cli.ProcessExit` (`System.exit` does not exist there), `FileAccess` (Node `fs` found with `process.getBuiltinModule`, so a bundle loads in a browser
 and only the file calls fail, with a message that says why; failures are `java.io.IOException`s on both platforms),

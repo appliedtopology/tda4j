@@ -126,3 +126,13 @@ mixed vs Ripser/qhull; value is high ambient dimension + exact homology + small 
 Default)`, `AlphaBackend.Default | Helix | DQP | BowyerWatson` (parse: `bowyer-watson`/`bowyerwatson`/`bw`); the facade's `alphaBackend` string goes
 through `AlphaBackend.parse`. `AlphaShapes` is also a `PointCloudComplex` (`Persistence(points, complex = AlphaShapes)`),
 which refuses `maxFiltrationValue` with a message pointing at `diagram.at(f)`.
+
+## Parallelism in the alpha pipeline (`WORKLOG-parallelism.md`)
+
+Everything shared between threads gives the same simplices, values to the bit and stream order as one thread (`ParallelAlphaSpec`
+compares each against `Parallel.sequentially`; check a change with `AlphaProfileDriver dump=` before and after, `sequential=true`
+for the reference). The Helix walk evaluates the next queued frontier cases (`evaluate`, pure in the points) in batches and takes
+them in queue order: never let `evaluate` read walk state (`validated`, `visitedFacets`, `queuedByFacet`), and keep a speculative
+failure swallowed (the walk re-evaluates the case when it reaches it). `FaceTable.facesOf` numbers faces by first occurrence, as
+the sequential pass does; a face table made by it has no `add`. `DelaunayAlphaShapes.flatLayers` orders ties lexicographically
+(not colex like the VR layers) and is `None` with repeated points. BowyerWatson insertion stays sequential.

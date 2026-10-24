@@ -52,11 +52,19 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
   val engine: ScallopOption[String] =
     opt[String](
       name = "engine",
-      descr = "ripser, chunks, naive, cohomology, fast-cubical or fast-alpha. Default: ripser for vr and the lazy " +
+      descr = "ripser, parallel-ripser, chunks, naive, cohomology, fast-cubical or fast-alpha. Default: ripser for " +
+        "vr (parallel-ripser instead when there are several threads and it applies) and ripser for the lazy " +
         "witness complex, fast-cubical for images of dimension 2 and up, cohomology otherwise. ripser needs vr or " +
-        "--witness-variant=lazy; fast-cubical is for images " +
+        "--witness-variant=lazy; parallel-ripser needs vr over --field=Z without --include-zero-length; " +
+        "fast-cubical is for images " +
         "of dimension 2 and up; fast-alpha for --complex=alpha with the bowyer-watson or helix backend"
     )
+  val threads: ScallopOption[Int] = opt[Int](
+    name = "threads",
+    noshort = true,
+    descr = "how many threads the computation may use (default: all the processors); 1 is the sequential " +
+      "computation. The bars do not depend on it"
+  )
   val alphaBackend: ScallopOption[String] =
     opt[String](
       name = "alpha-backend",
