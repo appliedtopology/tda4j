@@ -104,7 +104,8 @@ once into a private `ComplexKind`/`EngineKind`/`CoefficientKind` enum before any
   everything else** (relations, general witness included): the homology engines reduce every top cell and take minutes at degree 2
   (`WORKLOG-default-degree-2.md`); `TDA4jSpec` pins the default against an explicit `engine=cohomology`.
 - `maxDimension` (default 2) = top homological degree. `ripser`/`chunks` pass it straight through; `naive`/
-  `cohomology` wrap the stream in `LimitedCofaceSimplexStream(..., k+1)`. Alpha needs no +1.
+  `cohomology` wrap the stream in `LimitedCofaceSimplexStream(..., k+1)`. `alpha` and `dtm-alpha` are built to k+1
+  and reported to k as well (`AlphaMaxDimensionSpec`; the facade used to build the whole complex, `WORKLOG-js-scaling.md`).
 - Field: `Z` (prime, default `prime=17` = `FiniteField.DefaultPrime`, was 2) or `R` (`Field.DoubleApproximated`, internal specs' own default).
 - `PersistenceResult`: `toArray()` eager; `cycleVertices`/`cycleCoefficients` lazy, throwing
   `UnsupportedOperationException` for a bar with no representative (every engine records one — an engine

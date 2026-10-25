@@ -127,6 +127,9 @@ private[tda4j] object Parallel:
   def sortLongs(xs: Array[Long]): Unit =
     if threads == 1 then java.util.Arrays.sort(xs) else java.util.Arrays.parallelSort(xs)
 
+  /** Sorts `xs(from until to)` ascending, in place. */
+  def sortInts(xs: Array[Int], from: Int, to: Int): Unit = java.util.Arrays.sort(xs, from, to)
+
   /** Sorts `xs` with `order`; equal elements may be in either order, so `order` must be total on what is sorted. */
   def sort[A <: AnyRef](xs: Array[A], order: java.util.Comparator[A]): Unit =
     if threads == 1 then java.util.Arrays.sort(xs, order) else java.util.Arrays.parallelSort(xs, order)
