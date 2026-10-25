@@ -108,7 +108,7 @@ if (task === "vr") {
   const alpha = { ...options, complex: "alpha" };
   if (backend !== "default") alpha.alphaBackend = backend;
   // The JVM driver's DQP path truncates the stream and the others use `Persistence(.., complex = AlphaShapes)`;
-  // the API's maxDimension does both.
+  // the API's maxDimension builds the complex to maxDimension + 1 and reports to maxDimension, as both of those do.
   compute = () => tda4j.persistence(matrix, alpha);
 } else if (task === "cech") {
   const matrix = readMatrix(input);

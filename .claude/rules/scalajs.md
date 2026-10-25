@@ -47,11 +47,14 @@ be compiled by Scala.js at all; they are JVM test-scope oracles for the pure-Sca
 (use `FileAccess`); no threads, `LinkedBlockingQueue`, `java.util.Properties`, `ClassLoader` resources (the version is the
 generated `LibraryVersion`); no `.par` (use `Parallel`); no `Path` in a public signature (`Plot.save` and
 `PersistenceResult.save` return the absolute path as a `String`). Never test the runtime class of a number
-(`rules/algebra.md`). `Long` is emulated on Scala.js and slow: the packed engines run, not fast.
+(`rules/algebra.md`). `Long` is emulated on Scala.js and slow: the packed engines run, not fast. `java.util.Arrays.sort(a, from, to)` allocates a scratch
+array as long as the WHOLE `a` on every call (merge sort over boxing accessors), so a loop of range sorts is quadratic: sort a range
+with `Parallel.sortInts`, or keep the keys in `Int` (`WORKLOG-js-scaling.md`). A JS-versus-JVM benchmark compares the same
+entry point on both (facade with facade, verb with verb); the npm API is the facade.
 
 ## The seams
 
-`Parallel` (`threads`, `foreach`, `map`, `ranges`, `both`, `sort`, `sortLongs`, `tasks`, `withThreads`, `limit`, `sequentially`; in order on JS; every user must give the same result for any split, `Parallel.byDefault` is the default of the `parallelFiltrationValue` flags), `FiltrationCache` (`TrieMap` on the JVM, `HashMap` on JS: `TrieMap` does not link on Scala.js),
+`Parallel` (`threads`, `foreach`, `map`, `ranges`, `both`, `sort`, `sortLongs`, `sortInts`, `tasks`, `withThreads`, `limit`, `sequentially`; in order on JS; every user must give the same result for any split, `Parallel.byDefault` is the default of the `parallelFiltrationValue` flags), `FiltrationCache` (`TrieMap` on the JVM, `HashMap` on JS: `TrieMap` does not link on Scala.js),
 `plot.RootText` (`java.util.Locale` does not exist on Scala.js: lower-case keywords with `.lowerRoot`, format with
 `RootText.format`, locale symbols from `Intl`), `cli.ProcessExit` (`System.exit` does not exist there), `FileAccess` (Node `fs` found with `process.getBuiltinModule`, so a bundle loads in a browser
 and only the file calls fail, with a message that says why; failures are `java.io.IOException`s on both platforms),

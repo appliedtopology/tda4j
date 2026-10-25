@@ -215,6 +215,9 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Changed
 
+- `engine=fast-cubical` on Scala.js is 8 times faster on a 2048² noisy image (129 s to 15 s, 1.8 times the JVM): the sort of
+  each region's boundary no longer allocates an array as long as the whole scratch array on every call, and its keys are
+  `Int`.
 - `Persistence` with `Engine.Ripser` (and the MATLAB and CLI `engine=ripser`) is about 15-20 % faster on large Vietoris-Rips
   computations: a simplex is decoded from its index with a narrowed search and no sort (#220).
 - The JVM build shares more of its work between threads, with the same answers: the Helix triangulation (the walk evaluates
@@ -340,6 +343,13 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   fraction of the number of points (a defect of the Java library it used); it returns `k`.
 - `CofacetIterator` reported vertices that are close to only some of the simplex's vertices as cofacets, and some cofacets
   twice; it gives each cofacet of the sparse complex once, in order of its diameter.
+- `complex=alpha` and `complex=dtm-alpha` through MATLAB, the CLI and the JavaScript API honor `maxDimension` (default 2)
+  like every other complex: the complex is built to one dimension above it and no bar of a higher degree is reported.
+  They built and reduced the whole complex, so points in d dimensions gave bars up to degree d - 1 and the dual-QP backend
+  took hundreds of times longer on Scala.js than on the JVM (#228); pass `maxDimension` = d - 1 for the old output.
+- Through MATLAB, the CLI and the JavaScript API the engines no longer build representatives for zero-length bars that
+  `includeZeroLength = false` drops afterwards (about 6 times the bars of a noisy image, 3 GB against 730 MB of heap for a
+  2048² image on the JVM).
 
 ### Build, CI and Documentation
 
