@@ -41,6 +41,10 @@ class CircularCoordinatesFromDiagramSpec extends Specification:
   private def followsCircle(theta: Map[Int, Double]): Boolean =
     theta.size == n && agreement(theta, trueAngle(noisyCircle), 0 until n) > 0.99
 
+  /** The message of the `IllegalArgumentException` `thunk` throws, empty when it throws none. */
+  private def refusal(thunk: => Any): String =
+    scala.util.Try(thunk).failed.toOption.collect { case e: IllegalArgumentException => e.getMessage }.getOrElse("")
+
   private val engines = Seq(
     Persistence.Engine.Ripser,
     Persistence.Engine.ParallelRipser,
@@ -143,40 +147,38 @@ class CircularCoordinatesFromDiagramSpec extends Specification:
     "say the cocycle does not belong to the complex, for a diagram of cocycles" >> {
       val diagram =
         Persistence(noisyCircle, maxDimension = 1, characteristic = prime, representatives = Representatives.Cocycles)
-      CircularCoordinates(diagram, renumbered) must throwAn[IllegalArgumentException](message = ".*not a cocycle.*")
+      refusal(CircularCoordinates(diagram, renumbered)) must contain("not a cocycle")
     }
 
     "say that no class is born there, for a diagram of cycles" >> {
       val diagram =
         Persistence(noisyCircle, maxDimension = 1, characteristic = prime, representatives = Representatives.Cycles)
-      CircularCoordinates(diagram, larger) must throwAn[IllegalArgumentException](message = ".*born at.*")
+      refusal(CircularCoordinates(diagram, larger)) must contain("born at")
     }
   }
 
   "circular coordinates of a diagram that cannot give them" should {
     "refuse the characteristic 2, saying what to do" >> {
       val diagram = Persistence(noisyCircle, maxDimension = 1, characteristic = 2)
-      CircularCoordinates(diagram, noisyCircle) must throwAn[IllegalArgumentException](message = ".*odd prime.*")
+      refusal(CircularCoordinates(diagram, noisyCircle)) must contain("odd prime")
     }
 
     "refuse real coefficients, saying what to do" >> {
       val diagram = Persistence(noisyCircle, maxDimension = 1, characteristic = 0)
-      CircularCoordinates(diagram, noisyCircle) must throwAn[IllegalArgumentException](message = ".*Z/p.*")
+      refusal(CircularCoordinates(diagram, noisyCircle)) must contain("Z/p")
     }
 
     "refuse a diagram without degree 1" >> {
       val diagram = Persistence(noisyCircle, maxDimension = 0, characteristic = prime)
-      CircularCoordinates(diagram, noisyCircle) must throwAn[IllegalArgumentException](message = ".*maxDimension = 1.*")
+      refusal(CircularCoordinates(diagram, noisyCircle)) must contain("maxDimension = 1")
     }
 
     "refuse a bar that is not there and a scale outside the bar" >> {
       val diagram = Persistence(noisyCircle, maxDimension = 1, characteristic = prime)
       val (birth, death) = CircularCoordinates.h1Bars(diagram).head
-      (CircularCoordinates(diagram, noisyCircle, bar = 99) must throwAn[IllegalArgumentException](message =
-        ".*H\\^1 bar.*"
-      ))
-        .and(CircularCoordinates(diagram, noisyCircle, r = death + 1.0) must throwAn[IllegalArgumentException])
-        .and(CircularCoordinates(diagram, noisyCircle, r = birth / 2) must throwAn[IllegalArgumentException])
+      (refusal(CircularCoordinates(diagram, noisyCircle, bar = 99)) must contain("H^1 bar"))
+        .and(refusal(CircularCoordinates(diagram, noisyCircle, r = death + 1.0)) must contain("must lie in"))
+        .and(refusal(CircularCoordinates(diagram, noisyCircle, r = birth / 2)) must contain("must lie in"))
     }
   }
 
@@ -233,27 +235,23 @@ class CircularCoordinatesFromDiagramSpec extends Specification:
     }
 
     "find the same reduced Gram matrix as the metric-space entry point, from cycles and from cocycles" >> {
-      kinds.map { kind =>
-        val diagram = Persistence(
-          torus,
-          maxDimension = 1,
-          maxFiltrationValue = 1.8,
-          characteristic = prime,
-          representatives = kind
-        )
-        val loops = CircularCoordinates.h1Bars(diagram)
-        val r = ((loops(1)._1 +: loops.drop(2).map(_._2)).max + loops(1)._2) / 2
-        loops.count(b => b._1 <= r && r < b._2) must beEqualTo(2)
-        val result = CircularCoordinates.toroidal(diagram, torus, bars = Seq(0, 1), r = r)
-        val direct = CircularCoordinates.computeToroidal(
-          EuclideanMetricSpace(torus),
-          r,
-          Seq(0, 1),
-          prime,
-          maxFiltrationValue = 1.8
-        )
-        val ours = result.reducedGram.flatten.map(math.abs).sorted
-        val theirs = direct.reducedGram.flatten.map(math.abs).sorted
+      val diagrams = kinds.map { kind =>
+        Persistence(torus, maxDimension = 1, maxFiltrationValue = 1.8, characteristic = prime, representatives = kind)
+      }
+      val loops = CircularCoordinates.h1Bars(diagrams.head)
+      val r = ((loops(1)._1 +: loops.drop(2).map(_._2)).max + loops(1)._2) / 2
+      loops.count(b => b._1 <= r && r < b._2) must beEqualTo(2)
+      val direct = CircularCoordinates.computeToroidal(
+        EuclideanMetricSpace(torus),
+        r,
+        Seq(0, 1),
+        prime,
+        maxFiltrationValue = 1.8
+      )
+      val theirs = direct.reducedGram.flatten.map(math.abs).sorted
+      diagrams.map { diagram =>
+        val ours =
+          CircularCoordinates.toroidal(diagram, torus, bars = Seq(0, 1), r = r).reducedGram.flatten.map(math.abs).sorted
         ours.zip(theirs).map((a, b) => math.abs(a - b)).max
       } must contain(beLessThan(1e-6)).forall
     }
