@@ -49,6 +49,14 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Added
 
+- `CircularCoordinates(diagram, input, bar, r, complex)` and `CircularCoordinates.toroidal(diagram, input, bars, ...)`
+  give circular and toroidal coordinates from any `PersistenceDiagram[Simplex[Int]]`, not only from the Vietoris-Rips
+  complex of a metric space: a Cech or alpha diagram (say `complex = Cech`), a diagram of a stream or metric space, any
+  engine, over any odd prime. `h1Bars(diagram)` lists its loops. A diagram of cocycles
+  (`representatives = Representatives.Cocycles`) supplies each bar's cocycle, restricted to the complex at `r` and checked
+  exactly over the integers; a diagram of cycles has the class recovered by the cohomology of that complex. The scale
+  defaults to the middle of the bar. `PersistenceDiagram.representatives` says which kind of representative a diagram
+  carries. `compute`, `computeToroidal` and `h1Bars(metricSpace)` are as they were (#236).
 - `Field.hash(x)`: a hash of a field element that agrees with `isEqual`, which `Chain.hashCode` uses. The default, `0`
   for every element, is right for any field; override it for an exact field of your own to hash its coefficients too
   (`Fp` hashes its residue in `0 until p`).

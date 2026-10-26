@@ -1,0 +1,35 @@
+---
+paths:
+  - "src/main/scala/org/appliedtopology/tda4j/homology/CircularCoordinates.scala"
+  - "src/main/scala/org/appliedtopology/tda4j/homology/LatticeReduction.scala"
+  - "src/test/scala/org/appliedtopology/tda4j/homology/CircularCoordinates*"
+  - "src/test/scala/org/appliedtopology/tda4j/homology/ToroidalCoordinatesSpec.scala"
+  - "src/test/scala/org/appliedtopology/tda4j/homology/LatticeReductionSpec.scala"
+---
+
+# Circular and toroidal coordinates
+
+Loads when you work on `CircularCoordinates` or `LatticeReduction`. Project-wide rules are in `.claude/CLAUDE.md`; the
+engines they sit on are in `rules/engines.md`.
+
+**`CircularCoordinates`** (de Silva-Morozov-Vejdemo-Johansson 2011): `h1Bars` lists persistent H¹ `(birth,death)` by
+persistence descending (pick `r` from this first); `compute(metricSpace, r, cocycleIndex, prime=47,...)` computes
+cohomology of the *static* truncated complex `K_r` (essential there, matched to the full-filtration bar by birth value).
+Odd prime field only (p=2 can hide torsion); the integer lift is checked **exactly** per triangle
+(`NoIntegerCocycleException` otherwise). Harmonic smoothing by `ConjugateGradient` on the cocycle's connected
+component, anchored at `g=0`; `theta(v)=frac(g(v))`. MATLAB mirrors it; no CLI. `WORKLOG-circular-coordinates.md`.
+
+**From a diagram** (#236): `CircularCoordinates(diagram, input, bar, r, complex)`, `toroidal(diagram, input, bars, ...)`,
+`h1Bars(diagram)` take any `PersistenceDiagram[Simplex[Int]]` plus what `Persistence` was given (a diagram does not
+remember its complex); the field is the diagram's (odd prime only). `diagram.representatives == Some(Cocycles)` (set by
+`Persistence`, `None` for hand-built and snapshot diagrams) supplies each bar's cocycle, restricted to `K_r` and checked
+mod p then over Z; any other diagram has the class recovered by `CellularCohomologyEngine` on `K_r`, matched by birth.
+`compute(metricSpace, ...)` keeps its own VR front half. **A bar's class is defined only modulo the shorter bars nested
+in it**: with such bars alive at `r` the engines' coordinates differ (all valid), so cross-route tests need `r` where
+exactly the asked-for loops are alive. `WORKLOG-circular-from-diagram.md`.
+
+**Toroidal coordinates** (`computeToroidal`, Scoccola et al. 2022, arXiv:2212.07201): combines `k` *simultaneously*-alive
+H¹ classes (common `r`, same connected component of `K_r`, checked) into one torus-valued map: `LatticeReduction` (LLL,
+`delta=3/4`) of the classes' harmonic-cochain Gram matrix's Cholesky factor, the unimodular `U` applied to the per-class
+`theta`s. Not a port of DREiMac's `toroidalcoords.py` (its `_gram_schmidt` bug: `.claude/BUGS-IN-REFERENCES.md`). MATLAB: `toroidalCoordinates`/`ToroidalCoordinatesResult`; no CLI.
+`WORKLOG-toroidal-coordinates.md`.
