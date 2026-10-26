@@ -231,7 +231,8 @@ object Persistence:
              else engine.persistentCohomology(includeZeroLength)).map(decode),
             maxDimension,
             longestEdge,
-            scale
+            scale,
+            Some(kindOf(cycles))
           )
         override def parallelRipserApplies(
           complex: PointCloudComplex,
@@ -304,7 +305,8 @@ object Persistence:
             made.map(_._1).toList,
             maxDimension,
             longestEdgeWithin(ms, threshold),
-            scale
+            scale,
+            Some(kindOf(cycles))
           )
 
     given fromPointCloud: Conversion[PointCloud, Input[Simplex[Int]]] = pc => ofMetricSpace(pc.metricSpace, Some(pc))
@@ -335,6 +337,9 @@ object Persistence:
 
   /** The top homological degree computed when `maxDimension` is not given (and the input does not fix it). */
   val DefaultMaxDimension: Int = 2
+
+  private def kindOf(cycles: Boolean): Representatives =
+    if cycles then Representatives.Cycles else Representatives.Cocycles
 
   def apply[CellT](
     input: Input[CellT],
@@ -471,7 +476,13 @@ object Persistence:
     val coefficients = Coefficients(characteristic)
     import coefficients.given
     val bars = FastCubicalHomologyEngine[coefficients.C]().persistentHomology(grid, includeZeroLength)
-    PersistenceDiagram[Cube, coefficients.C](bars.filter(_.dim <= maxDimension), maxDimension, largestPixel(grid), None)
+    PersistenceDiagram[Cube, coefficients.C](
+      bars.filter(_.dim <= maxDimension),
+      maxDimension,
+      largestPixel(grid),
+      None,
+      Some(Representatives.Cycles)
+    )
 
   // Every cell takes the smallest value of the top cells containing it, so the largest value is a top cell's.
   private def largestPixel(grid: CubicalGridStream): Double =
@@ -523,4 +534,10 @@ object Persistence:
             (bars, engine.largestFiltrationValue.getOrElse(0.0))
       case Engine.Ripser | Engine.Auto | Engine.FastCubical | Engine.ParallelRipser =>
         throw new IllegalStateException("unreachable: resolved before compute")
-    PersistenceDiagram[CellT, coefficients.C](bars.filter(_.dim <= maxDimension), maxDimension, last, scale)
+    PersistenceDiagram[CellT, coefficients.C](
+      bars.filter(_.dim <= maxDimension),
+      maxDimension,
+      last,
+      scale,
+      Some(kindOf(cycles))
+    )
