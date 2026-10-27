@@ -11,7 +11,7 @@ import scala.jdk.CollectionConverters.ListHasAsScala
   *
   * {{{
   * java -cp $CP org.appliedtopology.tda4j.PaperBenchmarkDriver task=vr input=sphere.txt format=points dim=2 \
-  *   [threshold=1.8] [p=2] [engine=auto|ripser|cohomology|chunks|naive|fastcubical|fastalpha|blocks|parallel] \
+  *   [threshold=1.8] [p=2] [engine=auto|ripser|cohomology|chunks|naive|fastcubical|fastalpha|fastalpha-top|blocks|parallel] \
   *   [reps=cycles|cocycles|none] [backend=default|bowyer-watson|helix|dqp] [warmup=2] [trials=5] [out=bars.tsv]
   *   [read=true] [hold=seconds] [digest=true] [count=true] [threads=N]
   * }}}
@@ -21,7 +21,8 @@ import scala.jdk.CollectionConverters.ListHasAsScala
   *   - `task=alpha`: points; filtration values are circumradii. `backend=default` (Bowyer-Watson up to 4 dimensions,
   *     Helix above, DQP when `threshold` is small enough), `bowyer-watson`, `helix` or `dqp`. `threshold` is the
   *     largest radius: bars alive at it are essential, and DQP builds only what lies within it. `engine=fastalpha` runs
-  *     on the backend's triangulation and takes no threshold.
+  *     on the backend's triangulation up to degree `dim` and takes no threshold; `engine=fastalpha-top` gives only the
+  *     top degree d - 1 (one union-find pass, `dim` ignored).
   *   - `task=cech`: points; filtration values are radii (the same barcode as alpha in general position).
   *   - `task=vr engine=parallel [threads=N]`: the block-parallel experiment `ParallelPackedCohomology` (implicit
   *     coboundaries) instead of `Persistence`, bars only (no representatives), on `threads` threads (default: every
@@ -200,9 +201,9 @@ object PaperBenchmarkDriver:
       case "alpha" =>
         val pts = readMatrix(input)
         val backend = AlphaBackend.parse(opts.getOrElse("backend", "default"))
-        if engineName == "fastalpha" then
-          require(threshold.isEmpty, "engine=fastalpha takes no threshold: it needs the whole triangulation")
-          () => fastAlpha(pts, backend, dim, p)
+        if engineName == "fastalpha" || engineName == "fastalpha-top" then
+          require(threshold.isEmpty, s"engine=$engineName takes no threshold: it needs the whole triangulation")
+          () => fastAlpha(pts, backend, dim, p, topOnly = engineName == "fastalpha-top")
         else if backend != AlphaBackend.Default then
           // With a threshold the radius reaches the backend: DQP only builds the simplices within it (without one it
           // is the untruncated DQP), the triangulations are filtered.
@@ -407,17 +408,19 @@ object PaperBenchmarkDriver:
     pts: Array[Array[Double]],
     backend: AlphaBackend,
     dim: Int,
-    p: Int
+    p: Int,
+    topOnly: Boolean
   ): List[(Int, Double, Double)] =
     val ff = FiniteField(p)
     import ff.given
     val delaunay = AlphaShapes(pts, backend) match
       case d: DelaunayAlphaShapes => d
       case _                      => throw IllegalArgumentException("engine=fastalpha needs a triangulation, not DQP")
-    FastAlphaHomologyEngine[ff.Fp]()
-      .persistentHomology(delaunay)
-      .filter(_.dim <= dim)
-      .map(_.toTriple)
+    val engine = FastAlphaHomologyEngine[ff.Fp]()
+    val bars =
+      if topOnly then engine.persistentHomologyTopDegree(delaunay)
+      else engine.persistentHomology(delaunay, maxDimension = dim)
+    bars.map(_.toTriple)
 
   /** Whitespace- or comma-separated numbers, one row per line; blank lines and `#` comments skipped. */
   def readMatrix(path: String): Array[Array[Double]] =
