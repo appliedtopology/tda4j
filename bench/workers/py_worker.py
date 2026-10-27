@@ -13,7 +13,8 @@ Tools and what they support (anything else exits with status 3, "unsupported"):
   gudhi      vr, cubical, alpha,     RipsComplex (variant=collapse: edge collapse first),
              cech, dtm, witness,
              sparse, dowker
-                                     CubicalComplex(top_dimensional_cells=...) = T-construction,
+                                     CubicalComplex(top_dimensional_cells=...) = T-construction (construction=V:
+                                     vertices=...),
                                      AlphaComplex (filtration values are squared radii: we take sqrt),
                                      DelaunayCechComplex (task=cech; squared radii, sqrt), DTMRipsComplex (task=dtm
                                      k=, q=), EuclideanWitnessComplex / EuclideanStrongWitnessComplex (task=witness,
@@ -21,7 +22,10 @@ Tools and what they support (anything else exits with status 3, "unsupported"):
                                      RipsComplex(sparse=eps) (task=sparse eps=; Buchet-Chazal-Oudot-Sheehy, NOT
                                      the construction TDA4j's `SparseRips` implements), and for task=dowker a
                                      SimplexTree filled from the relation (a naive Python baseline, see dowker_baseline)
-  cripser    cubical                 tcripser = T-construction, F_2 only
+  cripser    cubical                 tcripser = T-construction (construction=V: the V-construction, CubicalRipser's
+                                     default), F_2 only
+  flashcubical cubical               flash_cubical.compute, construction=V only (the array holds vertex values), 2-D and
+                                     3-D arrays, F_2 only
   dionysus   vr                      Dionysus 2 (float32): fill_rips, then variant=cohomology (default; the fast one),
                                      homology (the clearing reduction) or cocycles (cohomology, and a representative
                                      cocycle is read for every bar)
@@ -124,8 +128,11 @@ def gudhi_tool(opts, data):
             return intervals(st)
         return run
     if task == "cubical":
+        # T: the array holds the values of the top cells; V: the values of the vertices (a cell is born at the largest).
+        vertices = opts.get("construction", "T") == "V"
+
         def run():
-            cc = gudhi.CubicalComplex(top_dimensional_cells=data)
+            cc = gudhi.CubicalComplex(vertices=data) if vertices else gudhi.CubicalComplex(top_dimensional_cells=data)
             cc.compute_persistence(homology_coeff_field=p, min_persistence=0)
             out = []
             for k in range(dim + 1):
@@ -248,19 +255,39 @@ def cripser_tool(opts, data):
         sys.exit(UNSUPPORTED)
     dim = int(opts["dim"])
     arr = np.ascontiguousarray(data, dtype=np.float64)
-    # T-construction (top cells carry the values), like TDA4j's and GUDHI's top_dimensional_cells. Recent
-    # cripser takes filtration="T"; older releases ship a separate tcripser module.
+    # T-construction (top cells carry the values), like TDA4j's and GUDHI's top_dimensional_cells, unless the case is a
+    # V-construction (vertex values). Recent cripser takes filtration="T" or "V"; older releases have computePH for the
+    # V-construction and a separate tcripser module for the T.
+    kind = opts.get("construction", "T")
     try:
         import cripser
-        cripser.computePH(np.zeros((2, 2)), maxdim=0, filtration="T")
-        compute = lambda a: cripser.computePH(a, maxdim=dim, filtration="T")
+        cripser.computePH(np.zeros((2, 2)), maxdim=0, filtration=kind)
+        compute = lambda a: cripser.computePH(a, maxdim=dim, filtration=kind)
     except (TypeError, ImportError):
-        import tcripser
-        compute = lambda a: tcripser.computePH(a, maxdim=dim)
+        if kind == "V":
+            import cripser
+            compute = lambda a: cripser.computePH(a, maxdim=dim)
+        else:
+            import tcripser
+            compute = lambda a: tcripser.computePH(a, maxdim=dim)
 
     def run():
         res = compute(arr)
         return [(int(r[0]), float(r[1]), finite_or_inf(r[2])) for r in res if int(r[0]) <= dim]
+    return run
+
+
+def flashcubical_tool(opts, data):
+    # The V-construction only: the array holds vertex values (a T case would be a different complex).
+    if opts["task"] != "cubical" or int(opts.get("p", 2)) != 2 or opts.get("construction", "T") != "V":
+        sys.exit(UNSUPPORTED)
+    import flash_cubical
+    dim = int(opts["dim"])
+    arr = np.ascontiguousarray(data, dtype=np.float64)
+
+    def run():
+        # One row per bar: birth, death (inf for the essential class), degree; zero-length bars are not reported.
+        return [(int(k), float(b), finite_or_inf(d)) for b, d, k in flash_cubical.compute(arr).values if int(k) <= dim]
     return run
 
 
@@ -354,9 +381,11 @@ def dowker_nerves_tool(opts, data):
 
 
 TOOLS = {"ripser.py": ripser_py, "giotto-ph": giotto_ph, "gudhi": gudhi_tool, "cripser": cripser_tool,
-         "dionysus": dionysus_tool, "oat": oat_tool, "dowker-nerves": dowker_nerves_tool}
+         "flashcubical": flashcubical_tool, "dionysus": dionysus_tool, "oat": oat_tool,
+         "dowker-nerves": dowker_nerves_tool}
 DISTRIBUTION = {"ripser.py": "ripser", "giotto-ph": "giotto-ph", "gudhi": "gudhi", "cripser": "cripser",
-                "dionysus": "dionysus", "oat": "oat_python", "dowker-nerves": "dowker-homology"}
+                "flashcubical": "flash-cubical", "dionysus": "dionysus", "oat": "oat_python",
+                "dowker-nerves": "dowker-homology"}
 
 
 def version_of(tool):

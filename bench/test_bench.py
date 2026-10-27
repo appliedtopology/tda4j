@@ -2060,6 +2060,34 @@ class FinalRunScriptTests(unittest.TestCase):
         self.assertEqual(merge, f"merge {self.final}/merged {self.base}:!tda4j* {self.final}/tda4j")
         self.assertNotEqual(self.script("merge", ALLOW_DRIFT="1").returncode, 0, "a merge is not overwritten")
 
+    def test_the_v_construction_stage_runs_the_external_tools_at_z2_and_the_merge_takes_its_rows(self):
+        self.script("freeze")
+        self.log.unlink()
+        r = self.script("cubicalv")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("setup flashcubical", self.calls())
+        run = next(c for c in self.calls() if c.startswith("run "))
+        for option in ("--tools gudhi,cripser,flashcubical", "--cases *_v", "--fields 2 ", "--timeout 7200.0", "--resume"):
+            self.assertIn(option, run)
+        (self.final / "tda4j").mkdir(parents=True, exist_ok=True)
+        write_results(self.final / "tda4j", [result_row("c", "tda4j")])
+        write_results(self.final / "cubicalv", [result_row("c_v", "gudhi")])
+        (self.final / "anchors.verdict").write_text("ok\n")
+        self.assertEqual(self.script("merge").returncode, 0)
+        merge = next(c for c in self.calls() if c.startswith("merge "))
+        self.assertEqual(merge, f"merge {self.final}/merged {self.base}:!tda4j* {self.final}/tda4j {self.final}/cubicalv")
+
+    def test_the_smoke_stage_checks_the_v_cases_at_z2_with_a_missing_tool_an_error(self):
+        self.script("freeze")
+        self.log.unlink()
+        self.assertEqual(self.script("smoke").returncode, 0)
+        runs = [c for c in self.calls() if c.startswith("run ")]
+        v = next(c for c in runs if "--cases random2d_512_v,random3d_32_v" in c)
+        self.assertIn("--fields 2 ", v)
+        for tool in ("tda4j*", "gudhi", "cripser", "flashcubical"):
+            self.assertIn(tool, v)
+        self.assertIn("setup flashcubical", self.calls())
+
     def test_status_names_the_commit_and_counts_rows(self):
         self.script("freeze")
         (self.final / "tda4j").mkdir(parents=True)
@@ -2071,7 +2099,7 @@ class FinalRunScriptTests(unittest.TestCase):
     def test_the_plan_lists_every_stage_and_runs_nothing(self):
         r = self.script("plan")
         self.assertEqual(r.returncode, 0, r.stderr)
-        for stage in ("freeze", "smoke", "anchors", "tda4j", "js", "merge", "sweeps"):
+        for stage in ("freeze", "smoke", "anchors", "tda4j", "js", "cubicalv", "merge", "sweeps"):
             self.assertIn(f"=== {stage}", r.stdout)
         self.assertIn("sweep-threads", r.stdout)
         self.assertEqual(self.calls(), [])
@@ -2084,16 +2112,140 @@ class FinalRunScriptTests(unittest.TestCase):
             return re.search(name + r'="\$\{' + name + r':-([^}]*)\}"', text).group(1)
 
         cases = {c.name for c in bench.CASES}
-        for name in ("JS_CASES", "SMOKE_CASES", "ANCHOR_CASES"):
+        for name in ("JS_CASES", "SMOKE_CASES", "ANCHOR_CASES", "SMOKE_V_CASES"):
             self.assertLessEqual(set(default(name).split(",")), cases, name)
         tools = {t[0] for t in bench.TOOLS}
-        for name in ("ANCHOR_TOOLS",):
+        for name in ("ANCHOR_TOOLS", "CUBICALV_TOOLS"):
             self.assertLessEqual(set(default(name).split(",")), tools, name)
+        v_cases = {c.name for c in bench.CASES if dict(c.params).get("construction") == "V"}
+        self.assertEqual({c for c in cases if bench.tool_selected(c, default("CUBICALV_CASES"))}, v_cases,
+                         "the V stage runs the V cases and nothing else")
+        self.assertTrue(set(default("SMOKE_V_CASES").split(",")) <= v_cases)
         self.assertTrue(set(default("TDA4J_TOOLS").split(",")) & tools >= {"tda4j-parallel-1t", "tda4j-parallel-mt"})
         self.assertTrue(all(bench.tool_selected(t, default("JS_TOOLS")) for t in tools if t.startswith("tda4j-js")))
         selected = {t for t in tools if bench.tool_selected(t, default("TDA4J_TOOLS"))}
         self.assertFalse({t for t in selected if t.startswith("tda4j-js")}, "the JVM stage leaves the JS twins out")
         self.assertIn("tda4j-parallelverb-mt", selected)
+
+
+def refined(vertices):
+    """The T-construction array with the barcode of the V-construction array `vertices`: (2n - 1) per axis, a cell has the
+    largest value of its vertices (the definition, not the driver's separable passes)."""
+    import itertools
+    out = np.empty(tuple(2 * n - 1 for n in vertices.shape))
+    for idx in itertools.product(*[range(2 * n - 1) for n in vertices.shape]):
+        axes = [[i // 2] if i % 2 == 0 else [i // 2, i // 2 + 1] for i in idx]
+        out[idx] = max(vertices[v] for v in itertools.product(*axes))
+    return out
+
+
+class VConstructionTests(unittest.TestCase):
+    """The `_v` cubical cases: the array read as vertex values (a cell born at the largest value of its vertices), the
+    construction FlashCubical takes. TDA4j runs them on the refined image, the T-only rows leave them out, and the
+    V-only row leaves the T cases out."""
+
+    WORKER = Path(__file__).resolve().parent / "workers" / "py_worker.py"
+
+    def case(self, name):
+        return next(c for c in bench.CASES if c.name == name)
+
+    def test_every_cubical_case_has_a_v_twin_on_the_same_array(self):
+        for t in [c for c in bench.CASES if c.task == "cubical" and not c.name.endswith("_v")]:
+            v = self.case(t.name + "_v")
+            self.assertEqual((v.task, v.file, v.format, v.dim, v.threshold), (t.task, t.file, t.format, t.dim, t.threshold))
+            self.assertEqual(dict(v.params), {"construction": "V"})
+            self.assertEqual(dict(t.params), {})
+        self.assertEqual(len({c.name for c in bench.CASES}), len(bench.CASES), "case names are unique")
+
+    def test_the_cases_option_takes_patterns_like_the_tools_option(self):
+        names = lambda spec: [c.name for c in bench.CASES if bench.tool_selected(c.name, spec) and c.task == "cubical"]
+        self.assertTrue(all(n.endswith("_v") for n in names("*_v")) and len(names("*_v")) == 10)
+        self.assertEqual(len(names("!*_v")), 10)
+        self.assertEqual(names("random3d_32,random3d_32_v"), ["random3d_32", "random3d_32_v"])
+
+    def test_flashcubical_runs_only_v_cases_at_z2_and_the_t_only_rows_only_t_cases(self):
+        flash = dict((t[0], t[3]) for t in bench.TOOLS)["flashcubical"]
+        t_case, v_case = self.case("random2d_512"), self.case("random2d_512_v")
+        self.assertIn("V-construction only", bench.skip_reason(flash, t_case, 0, None, 2))
+        self.assertIsNone(bench.skip_reason(flash, v_case, 0, None, 2))
+        self.assertIn("Z/2", bench.skip_reason(flash, v_case, 0, None, 17))
+        for name in ("tda4j-js", "tda4j-js-cohomology"):
+            opts = dict((t[0], t[3]) for t in bench.TOOLS if t[2] == "cubical")[name]
+            self.assertIsNone(bench.skip_reason(opts, t_case, 0, None, 17), name)
+            self.assertIn("T-construction only", bench.skip_reason(opts, v_case, 0, None, 17), name)
+        for name in ("tda4j", "tda4j-cohomology", "gudhi", "cripser"):
+            opts = dict((t[0], t[3]) for t in bench.TOOLS if t[2] == "cubical")[name]
+            for case in (t_case, v_case):
+                self.assertIsNone(bench.skip_reason(opts, case, 0, None, 2), f"{name} {case.name}")
+
+    def test_every_tool_is_told_the_construction_and_flashcubical_is_found_by_its_module(self):
+        self.assertEqual(bench.case_extra_args(self.case("blob3d_64_v"), Path(".")), ["construction=V"])
+        self.assertEqual(bench.case_extra_args(self.case("blob3d_64"), Path(".")), [])
+        self.assertEqual(bench.available("py", {"pytool": "flashcubical"}, sys.executable), have("flash_cubical"))
+
+    def test_the_reference_counts_a_v_case_by_its_vertices(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "a.npy"
+            np.save(path, np.zeros((4, 5)))
+            t = count_cells.count_cubical(self.case("random2d_512"), path)
+            v = count_cells.count_cubical(self.case("random2d_512_v"), path)
+        self.assertEqual(json.loads(t["cells"]), {"0": 30, "1": 49, "2": 20})  # 4 x 5 top cells
+        self.assertEqual(json.loads(v["cells"]), {"0": 20, "1": 31, "2": 12})  # 4 x 5 vertices: 3 x 4 top cells
+        reference = bench.cells_reference()
+        self.assertEqual(int(reference["random2d_1024_v"]), 1048576 + 2 * 1024 * 1023 + 1023 * 1023)
+        self.assertEqual(int(reference["random2d_1024"]), 1025 * 1025 + 2 * 1024 * 1025 + 1024 * 1024)
+
+    def run_worker(self, tool, vertices, construction, dim=1, p=2, env=None):
+        with tempfile.TemporaryDirectory() as d:
+            source, out = Path(d) / "a.npy", Path(d) / "bars.tsv"
+            np.save(source, vertices)
+            cmd = [sys.executable, str(self.WORKER), f"tool={tool}", "task=cubical", f"input={source}", f"dim={dim}",
+                   f"p={p}", "warmup=0", "trials=1", f"out={out}"] + ([f"construction={construction}"] if construction else [])
+            r = subprocess.run(cmd, capture_output=True, text=True, env={**os.environ, **(env or {})})
+            return r, (bench.read_bars(out) if r.returncode == 0 else None)
+
+    def test_flashcubical_adapter_reads_birth_death_degree_and_keeps_the_degrees_asked_for(self):
+        with tempfile.TemporaryDirectory() as d:
+            # a stand-in for the extension: the rows of a Persistence.values (birth, death, degree), one in degree 2
+            (Path(d) / "flash_cubical.py").write_text(
+                "import numpy as np\n"
+                "class _P:\n    values = np.array([[0.0, np.inf, 0], [1.0, 2.0, 0], [0.5, 4.0, 1], [3.0, 5.0, 2]])\n"
+                "def compute(x, **kw):\n    assert x.dtype == np.float64 and x.flags.c_contiguous\n    return _P()\n")
+            r, bars = self.run_worker("flashcubical", np.zeros((4, 4)), "V", env={"PYTHONPATH": d})
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertEqual(bars, {0: [(0.0, math.inf), (1.0, 2.0)], 1: [(0.5, 4.0)]})
+            r, bars = self.run_worker("flashcubical", np.zeros((4, 4, 4)), "V", dim=2, env={"PYTHONPATH": d})
+            self.assertEqual(sorted(bars), [0, 1, 2])
+            self.assertEqual(json.loads(r.stdout.strip().splitlines()[-1])["bars"], {"0": 2, "1": 1, "2": 1})
+            for construction, p in ((None, 2), ("T", 2), ("V", 17)):
+                r, _ = self.run_worker("flashcubical", np.zeros((4, 4)), construction, p=p, env={"PYTHONPATH": d})
+                self.assertEqual(r.returncode, 3, f"construction={construction} p={p}: exit 3 is 'unsupported'")
+
+    @unittest.skipUnless(have("gudhi"), "gudhi missing")
+    def test_gudhi_reads_the_vertex_array_as_the_t_construction_of_the_refined_one(self):
+        # Two low vertices on a diagonal: one component as top cells (they share a corner), two as vertices.
+        checkerboard = np.array([[0.0, 5.0], [5.0, 0.0]])
+        _, as_t = self.run_worker("gudhi", checkerboard, None)
+        _, as_v = self.run_worker("gudhi", checkerboard, "V")
+        self.assertEqual(as_t, {0: [(0.0, math.inf)]})
+        self.assertEqual(sorted(as_v[0]), [(0.0, 5.0), (0.0, math.inf)])
+        self.assertEqual(sorted(as_v), [0])
+        rng = np.random.default_rng(3)
+        for shape in ((6, 7), (4, 4, 5)):
+            vertices = rng.integers(0, 6, shape).astype(float)  # ties on purpose
+            _, direct = self.run_worker("gudhi", vertices, "V", dim=len(shape) - 1)
+            _, through_t = self.run_worker("gudhi", refined(vertices), None, dim=len(shape) - 1)
+            for k in range(len(shape)):
+                self.assertEqual(sorted(direct.get(k, [])), sorted(through_t.get(k, [])), f"{shape} degree {k}")
+
+    @unittest.skipUnless(have("gudhi") and have("cripser"), "gudhi or cripser missing")
+    def test_cripser_in_the_v_construction_has_the_barcode_of_gudhi(self):
+        vertices = np.random.default_rng(5).integers(0, 6, (6, 6, 5)).astype(float)
+        _, reference = self.run_worker("gudhi", vertices, "V", dim=2)
+        r, bars = self.run_worker("cripser", vertices, "V", dim=2)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        dist, note = bench.agreement(bars, reference, 2)
+        self.assertEqual((dist, note), (0.0, ""))
 
 
 if __name__ == "__main__":

@@ -31,6 +31,10 @@ Method (see .claude/PLAN-paper.md, section 3.0):
   - When a case has no threshold, every tool gets the enclosing radius explicitly (ripser.cpp's default). An alpha
     case without one gives every tool that takes a radius the enclosing radius too (TDA4j stops there by default and
     GUDHI does not; the barcode is the same), and the tools that take none (`no_radius`: the whole triangulation) none.
+  - Cubical cases come in two constructions. The T cases hold the values of the top cells (GUDHI `top_dimensional_cells`,
+    CubicalRipser T, TDA4j); the `_v` twins read the same array as the values of the vertices, a cell born at the largest of
+    its vertices (GUDHI `vertices=`, CubicalRipser V, FlashCubical, which has no other input). TDA4j has no vertex-valued
+    input and runs a `_v` case on the refined image of the same persistent homology (`construction=V`, built in the timed run).
   - Every TDA4j row runs on one thread (`sequential=true`), as ripser.cpp and GUDHI do, except the `multithreaded` rows
     (`tda4j-parallelverb-mt`, `tda4j-parallel-mt`), which run on every processor. The block-parallel experiment's rows
     are `experiment` rows: left out of a run that does not name them in --tools.
@@ -161,6 +165,14 @@ CASES = [
     Case("dowker_60x200", "dowker", "relation_60x200.txt", "distance", 2, threshold=0.5),
 ]
 CASES = [c if isinstance(c, Case) else Case(*c) for c in CASES]
+# The V-construction twin (`_v`) of every cubical case, right after the cubical cases: the same array read as the values of
+# the VERTICES, a cell born at the largest value of its vertices (the lower star filtration), which is what FlashCubical,
+# DIPHA and CubicalRipser's default take. The V complex of an n^d array has the persistent homology of the T complex of
+# the (2n - 1)^d array that gives every cell its birth value, so a tool with no V input (TDA4j) runs on that array, built
+# inside the timed run (PaperBenchmarkDriver construction=V).
+_after_cubical = 1 + max(i for i, c in enumerate(CASES) if c.task == "cubical")
+CASES[_after_cubical:_after_cubical] = [c._replace(name=c.name + "_v", params=(("construction", "V"),))
+                                        for c in CASES if c.task == "cubical"]
 
 # One reference count of the cells of each case's complex, made once by count_cells.py --reference and checked in: a
 # benchmark run never counts. `summarize` joins it as the `cells` column (blank for a case without a count).
@@ -233,6 +245,9 @@ TOOLS = [
     ("tda4j-cohomology", "tda4j", "cubical", {"engine": "cohomology", "reps": "cocycles"}),
     ("gudhi", "py", "cubical", {}),
     ("cripser", "py", "cubical", {}),
+    # FlashCubical (T-prog123; pybind11, C++17; Z/2 only; 2-D and 3-D arrays; V-construction only, so it is skipped on the
+    # T cases and the T-only rows are skipped on the V ones).
+    ("flashcubical", "py", "cubical", {"only_p": 2, "v_only": True}),
     ("tda4j", "tda4j", "alpha", {"engine": "auto", "reps": "cycles"}),
     # fast-alpha runs on the whole triangulation, so it takes no radius; Bowyer-Watson refuses an affine span above
     # 4; DQP is only run with a radius (untruncated it is about 100 times slower than Helix in 2-D).
@@ -283,8 +298,8 @@ TOOLS = [
 TOOLS += [
     ("tda4j-js", "tda4j-js", "vr", {"engine": "auto", "reps": "cycles"}),
     ("tda4j-js-cocycles", "tda4j-js", "vr", {"engine": "auto", "reps": "cocycles"}),
-    ("tda4j-js", "tda4j-js", "cubical", {"engine": "auto", "reps": "cycles"}),
-    ("tda4j-js-cohomology", "tda4j-js", "cubical", {"engine": "cohomology", "reps": "cocycles"}),
+    ("tda4j-js", "tda4j-js", "cubical", {"engine": "auto", "reps": "cycles", "t_only": True}),
+    ("tda4j-js-cohomology", "tda4j-js", "cubical", {"engine": "cohomology", "reps": "cocycles", "t_only": True}),
     ("tda4j-js", "tda4j-js", "alpha", {"engine": "auto", "reps": "cycles"}),
     ("tda4j-js-fastalpha", "tda4j-js", "alpha", {"engine": "fastalpha", "reps": "cycles", "no_radius": True}),
     ("tda4j-js-bw", "tda4j-js", "alpha",
@@ -613,7 +628,7 @@ def available(kind, opts, python):
         return bool(env.get("JAVAPLEX_JAR")) and bool(env.get("JAVAPLEX_BUILD"))
     if kind == "py":
         mod = {"ripser.py": "ripser", "giotto-ph": "gph", "gudhi": "gudhi", "cripser": "cripser",
-               "dionysus": "dionysus", "oat": "oat_python"}.get(opts["pytool"])
+               "dionysus": "dionysus", "oat": "oat_python", "flashcubical": "flash_cubical"}.get(opts["pytool"])
         if mod is None:  # dowker-nerves: a clone, not an installed package
             return bool(env.get("DOWKER_HOMOLOGY_PATH")) and Path(env["DOWKER_HOMOLOGY_PATH"]).exists()
         r = subprocess.run([python, "-c", f"import {mod}"], capture_output=True)
@@ -850,6 +865,11 @@ def skip_reason(opts, case, ambient, threshold, p=None):
         return "run with a radius only: untruncated it builds every pair of points (about 100 times slower than Helix)"
     if opts.get("no_radius") and case.task == "alpha" and threshold is not None:
         return "takes no radius: it needs the whole triangulation"
+    v_case = dict(case.params).get("construction") == "V"
+    if opts.get("v_only") and not v_case:
+        return "takes the V-construction only (vertex values), and this case is a T-construction (top cells carry the values)"
+    if opts.get("t_only") and v_case:
+        return "takes the T-construction only (top cells carry the values), and this case is a V-construction"
     return None
 
 
@@ -959,7 +979,7 @@ def run(args):
     (out / "bars").mkdir(parents=True, exist_ok=True)
     (out / "logs").mkdir(parents=True, exist_ok=True)
     write_env(out, args)
-    cases = [c for c in CASES if not args.cases or c.name in args.cases.split(",")]
+    cases = [c for c in CASES if tool_selected(c.name, args.cases)]
     tasks = set(args.tasks.split(",")) if args.tasks else None
     wanted_names = {t.strip() for t in (args.tools or "").split(",") if t.strip() and not t.startswith("!")}
     fields = [int(p) for p in args.fields.split(",")]
@@ -1594,7 +1614,8 @@ def main():
     p2 = sub.add_parser("run")
     p2.add_argument("--data", required=True)
     p2.add_argument("--out", required=True)
-    p2.add_argument("--cases", default="", help="comma-separated case names (default: all)")
+    p2.add_argument("--cases", default="",
+                    help="comma-separated case names or patterns (`*_v`; `!*_v` leaves cases out) (default: all)")
     p2.add_argument("--tasks", default="", help="comma-separated: vr,cubical,alpha (default: all)")
     p2.add_argument("--tools", default="",
                     help="comma-separated tool names or patterns (`tda4j*`; `!tda4j-js*` leaves tools out); default: "

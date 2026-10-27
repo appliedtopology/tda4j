@@ -17,7 +17,12 @@ import scala.jdk.CollectionConverters.ListHasAsScala
   * }}}
   *
   *   - `task=vr`: points (`format=points`, one point per line) or a full distance matrix (`format=distance`).
-  *   - `task=cubical`: a `.npy` array of float64 in C order (any dimension), sublevel filtration, T-construction.
+  *   - `task=cubical`: a `.npy` array of float64 in C order (any dimension), sublevel filtration, T-construction (the
+  *     array holds the values of the top cells). `construction=V` reads the array as the values of the VERTICES, a cell
+  *     born at the largest value of its vertices (the lower star filtration; GUDHI's `vertices=`, CubicalRipser's and
+  *     FlashCubical's input): the library has no such input, so the run builds the (2 n - 1)-per-axis T image that
+  *     gives every cell that value (`refineVertexValues`, inside the timed region), which has the same persistent
+  *     homology and 2^d times the top cells.
   *   - `task=alpha`: points; filtration values are circumradii. `backend=default` (Bowyer-Watson up to 4 dimensions,
   *     Helix above, DQP when `threshold` is small enough), `bowyer-watson`, `helix` or `dqp`. `threshold` is the
   *     largest radius: bars alive at it are essential, and DQP builds only what lies within it. `engine=fastalpha` runs
@@ -174,10 +179,15 @@ object PaperBenchmarkDriver:
           case other => throw IllegalArgumentException(s"format=$other (points|distance)")
       case "cubical" =>
         val (values, shape) = readNpy(input)
+        val vertexValues = opts.getOrElse("construction", "T") match
+          case "T"   => false
+          case "V"   => true
+          case other => throw IllegalArgumentException(s"construction=$other (T|V)")
         val image = Image(scala.collection.immutable.ArraySeq.unsafeWrapArray(values), shape)
         if repsName == "none" then
           // fastcubical only: the same bars without the top degree's representatives, to measure what they cost.
           require(engineName == "fastcubical", "reps=none is only for engine=fastcubical")
+          require(!vertexValues, "reps=none reads the array as it is (construction=T)")
           val grid = CubicalImage.fromFlatArray(shape, scala.collection.immutable.ArraySeq.unsafeWrapArray(values))
           val ff = FiniteField(p)
           import ff.given
@@ -188,8 +198,13 @@ object PaperBenchmarkDriver:
               .map(_.toTriple)
         else
           () =>
+            val input =
+              if !vertexValues then image
+              else
+                val (refined, refinedShape) = refineVertexValues(values, shape)
+                Image(scala.collection.immutable.ArraySeq.unsafeWrapArray(refined), refinedShape)
             val diagram =
-              Persistence(image, maxDimension = dim, characteristic = p, engine = engine, representatives = reps)
+              Persistence(input, maxDimension = dim, characteristic = p, engine = engine, representatives = reps)
             // read=true: every representative's terms once, inside the timed region, as a caller reading them all.
             if readReps then termsRead = diagram.bars.iterator.map(_.representative.terms.size.toLong).sum
             if holdSeconds > 0 then held = diagram
@@ -447,6 +462,38 @@ object PaperBenchmarkDriver:
         .map(_.split("[,\\s]+").filter(_.nonEmpty).map(_.toDouble))
         .toArray
     finally src.close()
+
+  /** The T-construction image with the persistent homology of an array of VERTEX values (`construction=V`): the shape
+    * `n_k` per axis becomes `2 n_k - 1`, and the cell at an index with an odd entry on some axes lies between two
+    * vertices on each of them, so it gets the largest value of its vertices (the lower star filtration). The largest
+    * value over a product of vertex sets is the largest over the axes one after the other: one pass per axis, an even
+    * index keeps the vertex and an odd one takes the larger of its two neighbours.
+    */
+  def refineVertexValues(values: Array[Double], shape: IndexedSeq[Int]): (Array[Double], IndexedSeq[Int]) =
+    var current = values
+    var currentShape = shape
+    for axis <- shape.indices do
+      val n = currentShape(axis)
+      val outer = currentShape.take(axis).product
+      val inner = currentShape.drop(axis + 1).product
+      val m = 2 * n - 1
+      val refined = new Array[Double](outer * m * inner)
+      var o = 0
+      while o < outer do
+        var i = 0
+        while i < m do
+          val from = (o * n + i / 2) * inner
+          val to = (o * m + i) * inner
+          var k = 0
+          while k < inner do
+            refined(to + k) =
+              if i % 2 == 0 then current(from + k) else math.max(current(from + k), current(from + inner + k))
+            k += 1
+          i += 1
+        o += 1
+      current = refined
+      currentShape = currentShape.updated(axis, m)
+    (current, currentShape)
 
   /** A version 1-3 `.npy` file holding little-endian float64 in C order. */
   def readNpy(path: String): (Array[Double], IndexedSeq[Int]) =

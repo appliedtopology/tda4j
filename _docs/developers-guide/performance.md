@@ -88,7 +88,8 @@ hot methods.
 same inputs on one machine:
 - for Vietoris-Rips: ripser.cpp, ripser.py, giotto-ph, GUDHI, Ripserer.jl and
   JavaPlex;
-- for cubical complexes: GUDHI and CubicalRipser;
+- for cubical complexes: GUDHI and CubicalRipser, and FlashCubical (2-D and 3-D, Z/2, which reads vertex values: the
+  benchmark's `_v` cases give TDA4j the equivalent image);
 - alpha complexes as well;
 - Čech (GUDHI's Delaunay-Čech), DTM-Rips (GUDHI), witness (GUDHI, JavaPlex),
   sparse Rips (GUDHI's sparse Rips, a different construction, and the exact

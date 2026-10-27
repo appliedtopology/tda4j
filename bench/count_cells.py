@@ -132,9 +132,16 @@ def count_cliques(case, path, threshold, counter, args, out):
 def count_cubical(case, path):
     start = time.perf_counter()
     shape = np.load(path, mmap_mode="r").shape
-    counts = grid_cells(shape, case.dim + 1)
-    return row(case, "grid", "ok", counts, time.perf_counter() - start, points="x".join(map(str, shape)),
-               note=f"a full {len(shape)}-dimensional grid of {math.prod(shape)} top cells")
+    if dict(case.params).get("construction") == "V":
+        # The array holds the values of the vertices: n vertices on an axis are n - 1 cells. (TDA4j runs on the refined
+        # image of the (2 n - 1) cells per axis that has the same barcode, with more cells than this.)
+        grid = tuple(n - 1 for n in shape)
+        note = f"a full {len(shape)}-dimensional grid of {math.prod(grid)} top cells, the array being its {math.prod(shape)} vertices"
+    else:
+        grid = shape
+        note = f"a full {len(shape)}-dimensional grid of {math.prod(shape)} top cells"
+    counts = grid_cells(grid, case.dim + 1)
+    return row(case, "grid", "ok", counts, time.perf_counter() - start, points="x".join(map(str, shape)), note=note)
 
 
 def gudhi_alpha_worker(path, dim, threshold):

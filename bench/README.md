@@ -16,14 +16,14 @@ export JAVAPLEX_JAR=/path/to/javaplex.jar  # optional: TDA4j's predecessor
 # an MPI implementation with mpicxx (apt install libopenmpi-dev openmpi-bin) and cmake add DIPHA and PHAT
 # node 20.16 or newer on PATH (or NODE=/path/to/node) adds the Scala.js build of TDA4j
 
-bench/run.sh setup        # venv + pip tools, TDA4j (JVM), TDA4j (npm package), ripser.cpp (Z/2 and coefficient builds), Ripserer.jl, JavaPlex, DIPHA, PHAT, Eirene.jl
+bench/run.sh setup        # venv + pip tools, FlashCubical, TDA4j (JVM), TDA4j (npm package), ripser.cpp (Z/2 and coefficient builds), Ripserer.jl, JavaPlex, DIPHA, PHAT, Eirene.jl
 bench/run.sh prepare      # downloads the Ripser-paper data, generates the synthetic sets (seeded)
 bench/run.sh run --fields 2,17 --timeout 3600 --jvm-heap 32g
 ```
 
 Re-running is safe: `setup` and `prepare` skip what exists, and every `run` writes a new results directory (`RESULTS_DIR=...
 bench/run.sh run` names it, so that `--resume` can find it again).
-`bench/run.sh setup tda4j-js` redoes one component (`python tda4j tda4j-js ripser julia javaplex dipha phat eirene`), for example after
+`bench/run.sh setup tda4j-js` redoes one component (`python flashcubical tda4j tda4j-js ripser julia javaplex dipha phat eirene`), for example after
 changing the library: the JVM tool uses the compiled classes, the JavaScript one the npm package, and both are rebuilt
 by their own `setup` step. Run the steps one after the other: they use sbt, and two sbt processes on one checkout
 corrupt each other's builds.
@@ -39,7 +39,7 @@ Useful options of `run`:
 | option | meaning |
 |---|---|
 | `--tasks vr,cubical,alpha` | which families of cases |
-| `--cases a,b` | named cases only (see `CASES` in `bench.py`) |
+| `--cases a,b` | named cases only (see `CASES` in `bench.py`); names or patterns as for `--tools` (`*_v` the V-construction cubical cases, `!*_v` all others) |
 | `--tools tda4j,ripser.cpp` | named tools only (see `TOOLS` in `bench.py`); patterns work (`'tda4j*'`) and `!pattern` leaves tools out (`'tda4j*,!tda4j-js*'` is every JVM row of TDA4j). A row the harness lists as an `experiment` (the bars-only `tda4j-parallel-1t` and `-mt`) runs only when its own name is here |
 | `--resume` | continue an interrupted run in `--out`: the (case, field, tool) groups already finished there are skipped, and a timeout among them still stops the later fields. Run it with the same options |
 | `--fields 2,17` | coefficient primes; tools that only do Z/2 report `unsupported` at 17 |
@@ -69,7 +69,7 @@ from. Without `--reference` the counts go to `$WORKDIR/results/cells-<timestamp>
 | task | counted by | check |
 |---|---|---|
 | Vietoris–Rips | `workers/count_cliques.cpp` (compiled with `g++`, OpenMP if there is any): every clique of the threshold graph, by degeneracy ordering and bitsets; exact | TDA4j's own stream iterated (`PaperBenchmarkDriver count=true`), when the count is under `--cross-check-max` (3e5; the stream yields about 8,000 cells per second) |
-| cubical | the images are full grids: the product over the axes of `(n + 1) + n x` | the unit tests enumerate small grids cell by cell |
+| cubical | the images are full grids: the product over the axes of `(n + 1) + n x` (a `_v` case counts the grid of `n - 1` top cells per axis: its array holds the vertices) | the unit tests enumerate small grids cell by cell |
 | alpha | GUDHI's alpha complex up to `--gudhi-max-ambient` (5), and TDA4j's stream; the second is the only count for the cases CGAL cannot reach (`unif10d_1000`, `o3_1024_alpha`, `cyclooctane_alpha`) | where both ran they are compared; a case with one source says "single source" |
 
 A count that needs more than `--timeout` seconds (3600) is a row that says so, with the vertices, the edges and the bound
@@ -219,11 +219,12 @@ bench/final_run.sh status                                        # while it runs
 | stage | what it does |
 |---|---|
 | `freeze` | requires a clean checkout, records its commit in `$FINAL/commit`, builds the JVM classes and the npm package. Every later stage refuses to run at another commit |
-| `smoke` | `sphere3_192`, `o3_1024`, `dragon2000` at p = 17: every TDA4j row against ripser.cpp. Stops the run on an error or a barcode that disagrees |
+| `smoke` | `sphere3_192`, `o3_1024`, `dragon2000` at p = 17: every TDA4j row against ripser.cpp; then `random2d_512_v` and `random3d_32_v` at p = 2: TDA4j, CubicalRipser and FlashCubical against GUDHI (`vertices=`), installing FlashCubical first. Stops the run on an error, a barcode that disagrees or a tool that is not installed |
 | `anchors` | reruns `ripser.cpp`, `gudhi` and `giotto-ph-1t` on three cases and compares the times with `BASE`'s (`bench.py anchors`). A row more than 20 % away from the earlier run's means this is not the machine, or not the load, that measured it |
 | `tda4j` | every TDA4j JVM row on every task, including the shipped parallel engine and the bars-only experiment (`clifford50000` too: the experiment takes up to 60,000 points). Resumable |
 | `js` | the Scala.js twins on a subset of the cases at one field. Resumable |
-| `merge` | `BASE` without its TDA4j rows (they are from the older commit), then `$FINAL/tda4j` and `$FINAL/js`: `bench.py merge`. Refuses when the anchors drifted (`ALLOW_DRIFT=1` overrides). Runs `bench.py check` on the result |
+| `cubicalv` | GUDHI, CubicalRipser and FlashCubical on the `_v` cubical cases at p = 2 (`BASE` has no rows for them; TDA4j's own `_v` rows are in the `tda4j` stage). Resumable |
+| `merge` | `BASE` without its TDA4j rows (they are from the older commit), then `$FINAL/tda4j`, `$FINAL/js` and `$FINAL/cubicalv`: `bench.py merge`. Refuses when the anchors drifted (`ALLOW_DRIFT=1` overrides). Runs `bench.py check` on the result |
 | `sweeps` | the threads, cubical and alpha sweeps. A sweep directory has its own tables and does not merge, so each sweep reruns its external tools too |
 
 The measurement protocol (fields, timeout, warm-up, trials, heap) is `BASE`'s own, read from its `env.json`, unless the
@@ -295,7 +296,16 @@ JVM classes' commit.
 - **Cubical:**
   - sublevel filtrations, in the T-construction (top cells carry the values);
   - uniform noise, and a bright Gaussian blob on a dark background, in 2-D up to 2048² and 3-D up to 128³;
-  - GUDHI with `top_dimensional_cells`, and CubicalRipser with `filtration="T"`.
+  - GUDHI with `top_dimensional_cells`, and CubicalRipser with `filtration="T"` (the `tcripser` module in older releases).
+  - **V-construction twins (`_v`)** of every case, on the same arrays: the array holds the values of the *vertices* and a
+    cell is born at the largest value among its vertices (the lower star filtration). FlashCubical, DIPHA and
+    CubicalRipser's default take this construction, so it is the one on which FlashCubical can be compared; a T case and a
+    `_v` case are different complexes with different barcodes, and each tool runs only the cases it can read
+    (`flashcubical` the `_v` ones, the `tda4j-js` rows the T ones). GUDHI reads a `_v` case with `vertices=`, CubicalRipser
+    with its V default, and **TDA4j has no vertex-valued input** (#245): it runs on the T image of `(2n - 1)` cells per axis
+    that gives every cell its birth value, which has the same persistent homology and 4 (2-D) or 8 (3-D) times the top
+    cells, and building it is inside the timed run. The reference for a `_v` case is GUDHI as for the others; a `_v` row of
+    TDA4j therefore costs what a user of today's API pays, not what a native input would.
 - **Alpha:** filtration values are circumradii (GUDHI reports squared radii, so we take square roots).
   - Uniform points in 2-D and 3-D.
   - The Stanford dragon (2000 points) and sphere3 (192 points on S³ in R⁴) are **degenerate**: the sphere's points are
@@ -333,13 +343,14 @@ JVM classes' commit.
 | `tda4j-parallel-1t`, `tda4j-parallel-mt` | `PaperBenchmarkDriver engine=parallel threads=N` | the block-parallel experiment `ParallelPackedCohomology` (JVM only): implicit coboundaries, bars only, on 1 thread or every CPU. A simplex is one `Long` key where it fits and a block and an index beyond (o3_4096); it fails on a case whose n × n tables do not fit (clifford50000) |
 | `ripser.cpp` | vanilla build for p = 2, `ripser-coeff` for other primes | the reference for Vietoris–Rips |
 | `ripser.py`, `giotto-ph-1t`, `giotto-ph-mt` | pip | giotto-ph multithreaded is reported, never the baseline |
-| `gudhi`, `gudhi-collapse` | pip | edge collapse first in the second variant |
-| `cripser` | pip | CubicalRipser, Z/2 only |
+| `gudhi`, `gudhi-collapse` | pip | edge collapse first in the second variant; on the cubical cases `top_dimensional_cells` (T) or `vertices` (the `_v` cases) |
+| `cripser` | pip | CubicalRipser, Z/2 only; `filtration="T"` (or `tcripser`) on the T cases, the V default on the `_v` ones |
+| `flashcubical` | pip, built from a pinned commit (`setup flashcubical`: a C++17 compiler and CMake 3.20) | FlashCubical (T-prog123, pybind11; commit `eaff91f`), **Z/2 only, 2-D and 3-D arrays, the V-construction only**, so it runs the `_v` cases and is `unsupported` on the others. `flash_cubical.compute(array).values` is one row per bar (birth, death, degree; an essential class has death inf); zero-persistence pairs are not reported. The package's version is 0.1.0 whatever the commit, so the pinned commit is in `run.sh` |
 | `dionysus`, `dionysus-homology`, `dionysus-cocycles` | pip (`dionysus`) | Dionysus 2 on Vietoris–Rips only: `fill_rips`, then its cohomology algorithm (the fast one, so the main row), the clearing homology reduction, or cohomology with a representative cocycle read for every bar. float32. No alpha complex in the wheel (that needs CGAL), and `fill_freudenthal` is a lower-star filtration of the Freudenthal triangulation, not the T-construction of the cubical cases |
 | `oat`, `oat-cycles` | pip (`oat_python`) | OpenAppliedTopology (Rust), Vietoris–Rips only: a U-match decomposition of the boundary matrix; the second returns a cycle representative for every bar. It computes **over the rationals** whatever `p` is (no modulus), so a row at `p = 2` or `17` can differ from the reference where there is `p`-torsion; `summary.md` says so under "Agreement notes" |
 | `ripserer`, `ripserer-involuted` | Julia | the second asks for cycles (involuted), like TDA4j's default |
 | `eirene`, `eirene-cycles` | Julia (`setup eirene`) | Eirene.jl 1.4.0 (GitHub master at a pinned commit: the registered 1.0.0 to 1.3.6 cannot be resolved on Julia 1.10, their CSV and DataFrames bounds exclude each other), Vietoris–Rips, **Z/2 only**. `eirene` is `record="none"`, the barcode, as the Ripser paper's Dockerfile runs it; `eirene-cycles` is `record="cyclerep"` and reads a representative cycle for every bar |
-| `dipha`, `dipha-mt` | CMake + MPI (`setup dipha`) | DIPHA at a pinned commit, Vietoris–Rips, **Z/2 only**, always `--dual` as in the Ripser paper's Dockerfile, `--upper_dim dim + 1`. Its input is a sparse distance matrix with the threshold in it (`dipha_io.py`, written once into `data/dipha/` and not timed); its values are radii (half a distance), so the bars are doubled; the second row is `mpiexec -n <cores>`, reported but never the baseline, and its memory is the sum over the ranks. DIPHA's cubical input is the V-construction, not the T-construction of the cubical cases, so it runs only Vietoris–Rips |
+| `dipha`, `dipha-mt` | CMake + MPI (`setup dipha`) | DIPHA at a pinned commit, Vietoris–Rips, **Z/2 only**, always `--dual` as in the Ripser paper's Dockerfile, `--upper_dim dim + 1`. Its input is a sparse distance matrix with the threshold in it (`dipha_io.py`, written once into `data/dipha/` and not timed); its values are radii (half a distance), so the bars are doubled; the second row is `mpiexec -n <cores>`, reported but never the baseline, and its memory is the sum over the ranks. DIPHA's cubical input is the V-construction, which the `_v` cubical cases are; there is no DIPHA row for them yet (#139), so it runs only Vietoris–Rips |
 | `phat`, `phat-dual` | CMake (`setup phat`) | PHAT at a pinned commit reduces a prebuilt filtered boundary matrix over Z/2 (twist, bit-tree pivot columns; the second on the dual). It builds no complex: `make_phat` writes DIPHA's Vietoris–Rips complex as a boundary matrix beforehand (`data/phat/`, not timed), so these `kernel` rows time the reduction alone (reading the matrix, reducing, writing the pairs) and are never the baseline. A case above `--explicit-max-cells` (1e8, by `cells-reference.csv`) is not written out |
 | `javaplex` | `workers/JavaPlexWorker.java` | written against JavaPlex 4.x's API but **not yet compiled against a real jar** |
 
