@@ -226,8 +226,9 @@ follows the edges within the threshold; the one `n`-squared cost left is the dis
 JVM, none in JavaScript), and the lazy chains keep the count they were made under (`Parallel.limit`, `Parallel.limited`).
 The MATLAB facade and the CLI do the same through `threads`, and send an unset `engine` for the Vietoris-Rips complex over
 `Z/p` (no `includeZeroLength`, no `edgeCollapse`) to this engine when `Parallel.threads > 1` (`parallelVR`); `engine=ripser`
-stays `PackedRipserCohomologyEngine`. The benchmark harness runs the engine directly as `engine=parallel` (`tda4j-parallel-1t/-mt`, with `threads` and
-`wide`) and through `Persistence` as `engine=parallelverb`.
+stays `PackedRipserCohomologyEngine`. The benchmark harness runs the engine directly as `engine=parallel` (`tda4j-parallel-1t/-mt`, bars only, with `threads`
+and `wide`; it tabulates the distances, so it takes up to 60,000 points) and through `Persistence` as `engine=parallelverb`
+(`tda4j-parallelverb-1t/-mt`, with representatives).
 
 ## 6. `FastCubicalHomologyEngine` — dual-graph union-find
 
