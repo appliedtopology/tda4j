@@ -21,7 +21,8 @@ bench/run.sh prepare      # downloads the Ripser-paper data, generates the synth
 bench/run.sh run --fields 2,17 --timeout 3600 --jvm-heap 32g
 ```
 
-Re-running is safe: `setup` and `prepare` skip what exists, and every `run` writes a new results directory.
+Re-running is safe: `setup` and `prepare` skip what exists, and every `run` writes a new results directory (`RESULTS_DIR=...
+bench/run.sh run` names it, so that `--resume` can find it again).
 `bench/run.sh setup tda4j-js` redoes one component (`python tda4j tda4j-js ripser julia javaplex dipha phat eirene`), for example after
 changing the library: the JVM tool uses the compiled classes, the JavaScript one the npm package, and both are rebuilt
 by their own `setup` step. Run the steps one after the other: they use sbt, and two sbt processes on one checkout
@@ -39,7 +40,8 @@ Useful options of `run`:
 |---|---|
 | `--tasks vr,cubical,alpha` | which families of cases |
 | `--cases a,b` | named cases only (see `CASES` in `bench.py`) |
-| `--tools tda4j,ripser.cpp` | named tools only (see `TOOLS` in `bench.py`) |
+| `--tools tda4j,ripser.cpp` | named tools only (see `TOOLS` in `bench.py`); patterns work (`'tda4j*'`) and `!pattern` leaves tools out (`'tda4j*,!tda4j-js*'` is every JVM row of TDA4j). A row the harness lists as an `experiment` (the bars-only `tda4j-parallel-1t` and `-mt`) runs only when its own name is here |
+| `--resume` | continue an interrupted run in `--out`: the (case, field, tool) groups already finished there are skipped, and a timeout among them still stops the later fields. Run it with the same options |
 | `--fields 2,17` | coefficient primes; tools that only do Z/2 report `unsupported` at 17 |
 | `--warmup N --trials N` | warm runs: untimed and timed computations per process |
 | `--timeout S` | seconds per computation; a timeout is recorded, not dropped |
@@ -143,12 +145,14 @@ position (marked †).
 
 ## The thread-scaling sweep
 
-`bench/run.sh sweep-threads` runs every multithreaded Vietoris–Rips tool (`tda4j-parallel-mt`,
+`bench/run.sh sweep-threads` runs every multithreaded Vietoris–Rips tool (`tda4j-parallelverb-mt`, the engine `Engine.Auto`
+picks with several threads, with its representatives; `tda4j-parallel-mt`, the bars-only block-parallel experiment;
 `giotto-ph-mt`, and `dipha-mt`, whose threads are MPI ranks) at 1, 2, 4, ... threads up to the machine's logical CPUs
 (`--threads 1,8,32` picks others), with `ripser.cpp` once per case for scale (`--baselines`). The default cases are
 fractal-r (2.2 billion cells to H2) and `cube10_40`, which the sweep generates: 40 points uniform in [0,1]^10 to H10
-at t = 1.6 (235 million cells), high degrees where the work splits by edge block. `--cases o3_4096` is the heaviest case
-of the main run that `tda4j-parallel-mt` can run.
+at t = 1.6 (235 million cells), high degrees where the work splits by edge block. `--cases o3_4096` is a heavy case whose
+keys are two words; `--cases clifford50000` is the largest point set (the bars-only experiment tabulates its distances, 20 GB of
+heap; it takes up to 60,000 points).
 
 A run at t threads is pinned to the CPUs 0 to t - 1 with `taskset`, so the JVM's garbage collector and compiler and the
 MPI ranks get those t CPUs too (with Open MPI the sweep adds `--bind-to none`, so the ranks stay inside the set). Use
@@ -163,7 +167,7 @@ checks: the barcode is the same at every count, and its distance to ripser.cpp's
 
 ```sh
 bench/run.sh sweep-threads --jvm-heap 32g
-bench/run.sh sweep-threads --cases o3_1024 --tools tda4j-parallel-mt,giotto-ph-mt --threads 1,4,16,32
+bench/run.sh sweep-threads --cases o3_1024 --tools tda4j-parallelverb-mt,giotto-ph-mt --threads 1,4,16,32
 ```
 
 ## The rarer complexes
@@ -183,6 +187,61 @@ A case's `params` (`eps`, `k`, `L`) reach every tool as `key=value`. A witness c
 written to `data/landmarks/` so that every tool uses the same ones. `bench/run.sh setup dowker` clones the two Dowker
 packages at pinned commits (neither is pip-installable with current tools; the Python one runs with three small shims in
 `py_worker.dowker_nerves_tool`, the Julia one wants Julia 1.7.2 and is skipped if its dependencies do not resolve).
+
+## One thread, or all of them
+
+The main tables are single-threaded, as ripser.cpp and GUDHI are: every TDA4j row runs with `sequential=true`, so the
+library's parallel steps (the Čech, DTM, sparse Rips and witness builders, alpha, `ParallelRipser`) run on the main thread.
+The rows that run on every processor say so in their name and are `multithreaded` in `runs.csv`: `tda4j-parallelverb-mt`
+(`Engine.ParallelRipser` through `Persistence`, with cocycles), `tda4j-parallel-mt` (the bars-only experiment),
+`giotto-ph-mt` and `dipha-mt`. Their single-thread twins are `tda4j-parallelverb-1t`, `tda4j-parallel-1t` and
+`giotto-ph-1t`, and `sweep-threads` gives the scaling in between. `tda4j` itself is `Engine.Auto` on one thread, i.e.
+Ripser; whether `Auto` should choose `ParallelRipser` on one thread is the comparison of `tda4j` against
+`tda4j-parallelverb-1t` (#223).
+
+The alpha cases without a radius of their own give every tool that takes one the enclosing radius: TDA4j's alpha complex
+stops there by default and GUDHI's does not, and the barcode no longer changes after it. The tools that take none
+(`tda4j-fastalpha`, which reduces the whole triangulation) are given none.
+
+## The final run
+
+`bench/final_run.sh` runs the final benchmark of the paper in stages on one frozen commit of TDA4j. A full run takes about
+a week, and nearly all of it is the other tools, whose rows do not depend on TDA4j's commit; so the final run measures
+TDA4j's rows (the JVM build everywhere, the Scala.js build on a subset), checks that the machine still runs the other tools
+as it did, and merges both with the earlier run's rows into one set of tables.
+
+```sh
+BASE=$WORKDIR/results/20261020-101500 bench/final_run.sh plan    # every command, nothing run
+BASE=$WORKDIR/results/20261020-101500 JVM_HEAP=160g bench/final_run.sh all
+bench/final_run.sh status                                        # while it runs
+```
+
+| stage | what it does |
+|---|---|
+| `freeze` | requires a clean checkout, records its commit in `$FINAL/commit`, builds the JVM classes and the npm package. Every later stage refuses to run at another commit |
+| `smoke` | `sphere3_192`, `o3_1024`, `dragon2000` at p = 17: every TDA4j row against ripser.cpp. Stops the run on an error or a barcode that disagrees |
+| `anchors` | reruns `ripser.cpp`, `gudhi` and `giotto-ph-1t` on three cases and compares the times with `BASE`'s (`bench.py anchors`). A row more than 20 % away from the earlier run's means this is not the machine, or not the load, that measured it |
+| `tda4j` | every TDA4j JVM row on every task, including the shipped parallel engine and the bars-only experiment (`clifford50000` too: the experiment takes up to 60,000 points). Resumable |
+| `js` | the Scala.js twins on a subset of the cases at one field. Resumable |
+| `merge` | `BASE` without its TDA4j rows (they are from the older commit), then `$FINAL/tda4j` and `$FINAL/js`: `bench.py merge`. Refuses when the anchors drifted (`ALLOW_DRIFT=1` overrides). Runs `bench.py check` on the result |
+| `sweeps` | the threads, cubical and alpha sweeps. A sweep directory has its own tables and does not merge, so each sweep reruns its external tools too |
+
+The measurement protocol (fields, timeout, warm-up, trials, heap) is `BASE`'s own, read from its `env.json`, unless the
+environment says otherwise; the header of the script lists the variables. The bars-only experiment tabulates all distances
+(8 n² bytes: 20 GB for `clifford50000`), so the heap must hold that.
+
+The commands under it are `bench.py`'s, usable on their own:
+
+| command | what it does |
+|---|---|
+| `bench/run.sh merge OUT DIR[:tools]...` | one results directory from several. For each (case, field, tool) the rows come from the last source that has them, with their bars and logs; `DIR:tool,tool` takes only those tools, `DIR:'!tda4j*'` all but those; `--drop` leaves tools out. `OUT` is summarized, and its `env.json` is the last source's that ran TDA4j (so the summary names its commit) with each source's directory, date, host and tools under `merged_from` |
+| `bench/run.sh anchors NEW OLD [--tools a,b] [--tolerance 0.2]` | the rows two runs share, with their times and the ratio; exit status 1 when one is outside the tolerance, 2 when none is common |
+| `bench/run.sh check DIR [--tools 'tda4j*'] [--allow unsupported,missing]` | the rows of a summarized run that failed or whose barcode differs from the reference's (for the Vietoris–Rips, cubical and alpha tasks); exit status 1 if there are any |
+| `bench/run.sh constraints DIR` | the Python packages a run measured, as a pip constraints file; `PIP_CONSTRAINTS=file bench/run.sh setup python` installs them in a new `WORKDIR` |
+
+`setup tda4j-js` leaves a note of the commit and the changed files its npm package was built from; `env.json` records it as
+`tda4j_js_git` (with `tda4j_js_stale`, whether `src/main` has changed since), and both summaries name it where it is not the
+JVM classes' commit.
 
 ## What is measured
 

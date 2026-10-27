@@ -28,10 +28,11 @@ import scala.jdk.CollectionConverters.ListHasAsScala
   *     coboundaries) instead of `Persistence`, bars only (no representatives), on `threads` threads (default: every
   *     processor). Without a threshold it stops at the enclosing radius, as `Persistence` does; the edge table and the
   *     complex are built inside the timed region. `engine=parallel wide=true` uses two-word keys even where one Long
-  *     would do (what they cost).
-  *   - `task=vr engine=parallelverb`: the same engine through `Persistence` (`Engine.ParallelRipser`, cocycles or
-  *     cycles as `reps` says), on `Parallel.threads` threads (`sequential=true`: one); the pool is made inside the
-  *     timed region.
+  *     would do (what they cost). The distances are tabulated before the timed region as one row of doubles per point
+  *     (8 n^2 bytes, so `--jvm-heap` must hold 29 GB at the limit of 60,000 points).
+  *   - `task=vr engine=parallelverb [threads=N]`: the same engine through `Persistence` (`Engine.ParallelRipser`,
+  *     cocycles or cycles as `reps` says), on `threads` threads, else on `Parallel.threads` (`sequential=true`: one);
+  *     the pool is made inside the timed region.
   *   - `task=vr collapse=true`: Vietoris-Rips after `EdgeCollapse.collapse` (the collapse is inside the timed region);
   *     the cross-tool twin of GUDHI's edge collapse.
   *   - `task=sparse eps=0.3`: Sheehy's sparse Rips (`SparseRips`, Cavanna-Jahanseir-Sheehy); points or a distance
@@ -59,6 +60,9 @@ import scala.jdk.CollectionConverters.ListHasAsScala
   */
 object PaperBenchmarkDriver:
   given Epsilon = Epsilon(1e-5)
+
+  /** The most points `engine=parallel` takes: it tabulates all n^2 distances (28.8 GB at the limit, rows of 60,000). */
+  val MaxExperimentPoints: Int = 60000
 
   def main(args: Array[String]): Unit =
     // `sequential=true` runs every parallel step of the library on the main thread (the single-threaded reference).
@@ -116,9 +120,14 @@ object PaperBenchmarkDriver:
       case "vr" if engineName == "parallel" =>
         val ms = metricSpaceOf(opts)
         val n = ms.size
-        require(n.toLong * n <= Int.MaxValue, s"engine=parallel keeps n x n tables: $n points are too many")
-        val table = Array.tabulate(n * n)(k => ms.distance(k / n, k % n))
-        val distance: (Int, Int) => Double = (i, j) => table(i * n + j)
+        require(
+          n <= MaxExperimentPoints,
+          s"engine=parallel keeps an n x n table of distances (${n.toLong * n * 8 >> 30} GiB for $n points; the " +
+            s"heap must hold it): at most $MaxExperimentPoints points"
+        )
+        // One row per point: a flat array of n * n doubles stops at Int.MaxValue entries, 46,340 points.
+        val table = Array.tabulate(n)(i => Array.tabulate(n)(j => ms.distance(i, j)))
+        val distance: (Int, Int) => Double = (i, j) => table(i)(j)
         val t = threshold.getOrElse(ms.minimumEnclosingRadius)
         () =>
           val space =
@@ -248,12 +257,17 @@ object PaperBenchmarkDriver:
           ).triples
       case other => throw IllegalArgumentException(s"task=$other (vr|cubical|alpha|cech|sparse|dtm|witness|dowker)")
     val loadSeconds = (System.nanoTime() - loadStart) / 1e9
+    // `engine=parallelverb threads=N` runs the verb on N threads (a pool made for the call); without `threads` the
+    // verb takes `Parallel.threads`, and `sequential=true` makes that one.
+    val timed: () => List[(Int, Double, Double)] =
+      if engineName == "parallelverb" && opts.contains("threads") then () => Parallel.withThreads(threads)(compute())
+      else compute
 
     // The last run's bars are let go before the next run starts: a measured peak is one computation's, not two.
     var bars: List[(Int, Double, Double)] = Nil
     (1 to warmup).foreach { _ =>
       bars = Nil
-      bars = compute()
+      bars = timed()
     }
     // The peak use of each heap pool over the timed runs: the RSS of a JVM follows its collector's policy (a parallel
     // collector with a large heap shows its total allocation), the pools' peaks follow the computation.
@@ -262,7 +276,7 @@ object PaperBenchmarkDriver:
     val times = (1 to trials).map { _ =>
       bars = Nil
       val t0 = System.nanoTime()
-      bars = compute()
+      bars = timed()
       (System.nanoTime() - t0) / 1e9
     }
     opts.get("out").foreach { path =>

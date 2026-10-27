@@ -7,7 +7,8 @@ cases heavy enough for that to matter.
                                [--no-pin] [--jvm-heap 16g]
 
 `run.sh setup` and `run.sh prepare` must have run. Tools: every `multithreaded` Vietoris-Rips row of bench.py's TOOLS
-(`tda4j-parallel-mt`, the block-parallel experiment; `giotto-ph-mt`; `dipha-mt`, whose
+(`tda4j-parallelverb-mt`, the engine `Engine.Auto` picks with several threads, with representatives;
+`tda4j-parallel-mt`, the bars-only block-parallel experiment; `giotto-ph-mt`; `dipha-mt`, whose
 threads are MPI ranks), each at every count of `--threads` (default: 1, 2, 4, ... up to the machine's logical CPUs, and
 that number itself). The `--baselines` (default ripser.cpp) run once per case, single-threaded, for scale.
 
@@ -20,8 +21,8 @@ the computation; `--no-pin` lets them use the whole machine (a single-threaded J
 
 Default cases: fractal-r (512 points, 2.2 billion cells to H2) and cube10_40, generated here: 40 points uniform in
 [0,1]^10 to H10 at t = 1.6, 235 million cells, the high degrees where the work splits by edge block. `--cases o3_4096`
-is the heaviest case of bench.py that `tda4j-parallel-mt` can run (its keys are two words there); clifford50000 is not
-one (its n x n tables do not fit).
+is a heavy case whose keys are two words, `--cases clifford50000` the largest point set (the bars-only experiment
+tabulates its distances, 20 GB of heap; it takes up to 60,000 points).
 
 Checks: the barcode must not depend on the thread count, so each run's bars are compared with the same tool's at the
 fewest threads that finished (exactly), and with the first baseline's (the bottleneck distance, if GUDHI is installed;
