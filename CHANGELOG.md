@@ -353,6 +353,8 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Build, CI and Documentation
 
+- A SNAPSHOT of the `scala` branch (`tda4j_3` and `tda4j_sjs1_3`) is published to Maven Central's snapshot repository on
+  every day on which a commit has landed; the installation page has the resolver line (`snapshot.yml`, `RELEASE.md`).
 - The benchmark harness's JVMs run the serial collector with a heap that follows the live data (up to `--jvm-heap`)
   instead of a pinned heap with the parallel collector, so peak RSS says what a computation needs and compares with the
   native tools (with a pinned heap a JVM's RSS is what it allocated until its first collection). `--jvm-fixed-heap`

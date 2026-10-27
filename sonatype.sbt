@@ -34,3 +34,12 @@ ThisBuild / publishTo := {
 }
 
 ThisBuild / credentials += Credentials(Path.userHome / ".sbt" / "sonatype_credentials")
+
+// Snapshots go to Central's Nexus, which asks for credentials under the realm "Sonatype Nexus Repository Manager"; sbt
+// sends a token only to the realm it was given for, so the realm "Sonatype Central" of the file above (the one `sonaUpload`
+// uses) is refused there with a 401. `snapshot.yml` has the Central Portal user token in these two variables, and a local
+// `sbt publish` of a snapshot needs them too (RELEASE.md, "Snapshots").
+ThisBuild / credentials ++= (for {
+  user <- sys.env.get("SONATYPE_USERNAME")
+  password <- sys.env.get("SONATYPE_PASSWORD")
+} yield Credentials("Sonatype Nexus Repository Manager", "central.sonatype.com", user, password)).toSeq
