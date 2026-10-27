@@ -6,24 +6,24 @@ paths:
   - "src/test/scala/org/appliedtopology/tda4j/barcode/**"
 ---
 
-# Persistent homology engines, barcode distances, circular coordinates, benchmark specs
+# Persistent homology engines, barcode distances, benchmark specs
 
 ## Persistent homology: four independent engines
 
 Independent implementations sharing `Chain` primitives: a fix in one doesn't imply the others need it. `maxDim`/
-`maxDimension` = top homological degree in the engines and the facade (engines build one dimension higher internally).
-The stream constructors differ: `IncrementalVietorisRipsSimplexStream.maxDimension` is the top SIMPLEX dimension and
-coface streams have none; use `VietorisRips` (`DESIGN-stream-naming.md`, `WORKLOG-maxdim-semantics-fix.md`).
+`maxDimension` = top homological degree in the engines and the facade (engines build one dimension higher internally);
+the stream constructors differ (`IncrementalVietorisRipsSimplexStream.maxDimension` is the top SIMPLEX dimension, coface
+streams have none): use `VietorisRips` (`DESIGN-stream-naming.md`, `WORKLOG-maxdim-semantics-fix.md`).
 `CellularCohomologyEngine` has no such param: callers truncate via `LimitedCofaceSimplexStream(stream, k+1)` and drop
 `dim==k+1` bars. Over a field, cohomology and homology barcodes coincide.
 
 1. **Naive** (`CellularHomologyEngine`/`SimplicialHomologyEngine`) — single-pivot-table reduction, no clearing; the
    reference baseline. Incremental (`advanceOne`/`advanceTo`/`advanceAll`); a raw-UnionFind fast path was measured and
    rejected.
-   `persistentHomology(stream, k)` CAPS it at degree `k` (the verb, `PersistenceEngine.naive`/`naiveCocycles` too, at the
-   stream's `homologyDegreeLimit`): cells above dimension `k + 1` are not read, and a `k + 1` cell keeps only the pairing
-   it makes and is not reduced while no class of degree `k` is open. The uncapped cursor stays the reference. Cells are
-   compared by rank (`CellRanks`, below; `WORKLOG-naive-cap-review-2026-10-15.md`; `NaiveCappedSpec`).
+   `persistentHomology(stream, k)` CAPS it at degree `k` (the verb and `PersistenceEngine.naive`/`naiveCocycles` too, at
+   the stream's `homologyDegreeLimit`): cells above dimension `k + 1` are not read, and a `k + 1` cell keeps only its
+   pairing and is not reduced while no class of degree `k` is open. The uncapped cursor stays the reference. Cells are
+   compared by rank (`CellRanks`; `WORKLOG-naive-cap-review-2026-10-15.md`; `NaiveCappedSpec`).
 2. **Chunks** (`CellularPersistenceInChunksEngine`) — clear-and-compress chunked algorithm, walks `0..maxDim+1`,
    filters essentials to `<=maxDim`. Dims 0/1 via raw union-find (`unionFindDim01`, `DESIGN-unionfind-in-chunks.md`): a
    zero edge closes a cycle; an edge not `c·(v-u)` (`edgeShape` Irregular) hands dims 0/1 to the general reduction
@@ -49,11 +49,11 @@ coface streams have none; use `VietorisRips` (`DESIGN-stream-naming.md`, `WORKLO
    change to the reduction (`WORKLOG-vr-working-column.md`). The heap needs ONE diameter per simplex: non-trusted metrics
    are read as `d(max, min)` (else an asymmetric one grows the column until OOM); Euclidean/Explicit are read as given
    (canonicalizing breaks the distance cache's row-wise walk). Edge-block units on threads are exact (#192, #194);
-   `Engine.ParallelRipser` runs them from the verb: `Auto` picks it over `Ripser` when
-   `Parallel.threads > 1` and it applies (prime <= 46,000, no `includeZeroLength`; edge ranks are a dense table up to `DenseRankLimit` = 4,096 points, sorted neighbour lists above: `WORKLOG-sparse-ranks.md`); the MATLAB facade and CLI do
-   the same for an unset `engine` (`engine=ripser` stays Ripser, `parallel-ripser` asks); `Persistence(threads = n)`/`threads`/
-   `--threads` run under `Parallel.withThreads`. Its representatives are `LazyChain`s (cocycles from the logs; cycles from one
-   parallel `Involution` pass), so they may differ from `Ripser`'s in ties; shared code (one thread on Scala.js). Check pivots/orders with `Ordering.Long`
+   `Engine.ParallelRipser` runs them from the verb (`Auto` picks it with `Parallel.threads > 1` when it applies: prime
+   <= 46,000, no `includeZeroLength`; edge ranks are dense up to `DenseRankLimit` = 4,096 points, sorted neighbour lists
+   above: `WORKLOG-sparse-ranks.md`; facade and CLI likewise for an unset `engine`; `threads` runs under
+   `Parallel.withThreads`). Its representatives are `LazyChain`s (cocycles from the logs; cycles from one parallel
+   `Involution` pass), so they may differ from `Ripser`'s in ties; shared code (one thread on Scala.js). Check pivots/orders with `Ordering.Long`
    explicitly where the chains' reversed `given` is in scope (`WORKLOG-parallelism.md`). Under a sparse threshold cofacets come from per-vertex
    NEIGHBOUR LISTS (`NeighbourLists`) in the all-vertex scan's order with bit-identical diameters (`NeighbourListsSpec`).
    A uniform sign flip of every coboundary changes no output: sign mutations must be non-uniform. Per-simplex state is
@@ -108,18 +108,7 @@ Essential bars: matched by sorted birth for distance (count mismatch → `+Infin
 images. `matlab.PersistenceResult` exposes both; CLI `--distance-to` only distance.
 `WORKLOG-bottleneck-wasserstein-vectorizations.md`.
 
-**`CircularCoordinates`** (de Silva-Morozov-Vejdemo-Johansson 2011): `h1Bars` lists persistent H¹ `(birth,death)` by
-persistence descending (pick `r` from this first); `compute(metricSpace, r, cocycleIndex, prime=47,...)` computes
-cohomology of the *static* truncated complex `K_r` (essential there, matched to the full-filtration bar by birth value).
-Odd prime field only (p=2 can hide torsion); the integer lift is checked **exactly** per triangle
-(`NoIntegerCocycleException` otherwise). Harmonic smoothing by `ConjugateGradient` on the cocycle's connected
-component, anchored at `g=0`; `theta(v)=frac(g(v))`. MATLAB mirrors it; no CLI. `WORKLOG-circular-coordinates.md`.
-
-**Toroidal coordinates** (`computeToroidal`, Scoccola et al. 2022, arXiv:2212.07201): combines `k` *simultaneously*-alive
-H¹ classes (common `r`, same connected component of `K_r`, checked) into one torus-valued map: `LatticeReduction` (LLL,
-`delta=3/4`) of the classes' harmonic-cochain Gram matrix's Cholesky factor, the unimodular `U` applied to the per-class
-`theta`s. Not a port of DREiMac's `toroidalcoords.py` (its `_gram_schmidt` bug: `.claude/BUGS-IN-REFERENCES.md`). MATLAB: `toroidalCoordinates`/`ToroidalCoordinatesResult`; no CLI.
-`WORKLOG-toroidal-coordinates.md`.
+Circular and toroidal coordinates (`CircularCoordinates`, `LatticeReduction`): `rules/circular-coordinates.md`.
 
 ## Cross-engine benchmark
 

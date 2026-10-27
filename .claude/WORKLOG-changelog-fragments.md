@@ -31,7 +31,7 @@ shared file, not a better conflict routine.
   a bypass. It is a job of its own because the `lint` job skips when a PR touches only `.github/` or `.claude/` and is
   slow; this one needs no build.
 
-**Not done.** `.claude/CLAUDE.md` is another file PRs append to (#238 touched it too); whether it has ever conflicted in the
-queue is unchecked; it is the next candidate if the queue keeps dropping PRs. `release.yml` still uses
+**Not done.** `.claude/CLAUDE.md` is another file PRs append to (#238 touched it too); it is the next candidate if the queue keeps dropping PRs. It
+conflicted on this very PR: #238 merged first and condensed the same paragraph of CLAUDE.md that this PR condensed. `release.yml` still uses
 `--generate-notes`; building the Release description from the changelog section would drop the manual paste in
 RELEASE.md. The repository's required checks need `changelog` added in the settings for it to block a merge.

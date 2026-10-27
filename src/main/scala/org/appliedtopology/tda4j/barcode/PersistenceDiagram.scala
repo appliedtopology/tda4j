@@ -28,10 +28,16 @@ trait PersistenceDiagram[CellT]:
   /** The scale `significant` measures persistence against by default (a point cloud's minimum enclosing radius). */
   def scale: Option[Double]
 
+  /** Which kind of representative the bars carry: what `Persistence(...)` was asked for, `None` for a diagram that does
+    * not say (one built by hand, or by an engine's cursor). [[CircularCoordinates]] reads a cocycle straight off a
+    * diagram that says `Some(Representatives.Cocycles)` and recovers it otherwise.
+    */
+  def representatives: Option[Representatives] = None
+
   private def withBars(
     bs: List[PersistenceBar[Double, Chain[CellT, Coefficient]]]
   ): PersistenceDiagram.Of[CellT, Coefficient] =
-    PersistenceDiagram[CellT, Coefficient](bs, maxDimension, lastFiltrationValue, scale)
+    PersistenceDiagram[CellT, Coefficient](bs, maxDimension, lastFiltrationValue, scale, representatives)
 
   /** The bars of degree `k`. */
   def dim(k: Int): PersistenceDiagram.Of[CellT, Coefficient] = withBars(bars.filter(_.dim == k))
@@ -112,9 +118,10 @@ object PersistenceDiagram:
     bars: List[PersistenceBar[Double, Chain[CellT, C]]],
     maxDimension: Int,
     lastFiltrationValue: Double,
-    scale: Option[Double] = None
+    scale: Option[Double] = None,
+    representatives: Option[Representatives] = None
   )(using field: C is Field): Of[CellT, C] =
-    val (b, m, l, s) = (bars, maxDimension, lastFiltrationValue, scale)
+    val (b, m, l, s, k) = (bars, maxDimension, lastFiltrationValue, scale, representatives)
     new PersistenceDiagram[CellT]:
       type Coefficient = C
       override given coefficientField: (C is Field) = field
@@ -122,3 +129,4 @@ object PersistenceDiagram:
       val maxDimension = m
       val lastFiltrationValue = l
       val scale = s
+      override val representatives = k

@@ -115,10 +115,10 @@ No `sbt` on `PATH`: `.claude/scripts/install-sbt.sh`. A cloud Setup script
 should hold `.claude/scripts/cloud-setup-script.sh` (installer plus warmed dependencies), else a session starts cold (~1 h).
 
 No linter beyond scalafmt; tests are specs2. CI jobs (`test` with a fat-jar smoke run, `test-js`, `npm-package`,
-`docs-build`, `mima`, `lint`, `changelog`) and their local equivalents: steward skill; a weekly `coverage.yml` maps coverage. A deliberate binary break is
-a commented `mimaBinaryIssueFilters` entry (project lead: not a strong requirement before 1.0). The ~319 `-Wunused:all` warnings stay
-(`WORKLOG-compiler-warnings.md`). Docs build with 3.8.4 (only a FRESH sbt server sees `TDA4J_SCALA_VERSION`: `rules/docs-and-tutorials.md`). After `sbt package` or a docs build a test compile can miss main classes ("Not found:
-TDAlab"): `sbt clean`. **scalafmt only sees git-tracked files**: `git add` a new file before `scalafmtAll`.
+`docs-build`, `mima`, `lint`, `changelog`) and their local equivalents: steward skill; a weekly `coverage.yml` maps coverage. A binary
+break is not a strong requirement before 1.0 (project lead). The ~319 `-Wunused:all` warnings stay
+(`WORKLOG-compiler-warnings.md`). Docs build with 3.8.4 (a FRESH sbt server only: `rules/docs-and-tutorials.md`). After
+`sbt package` or a docs build a test compile can miss main classes ("Not found: TDAlab"): `sbt clean`. **scalafmt only sees git-tracked files**: `git add` a new file before `scalafmtAll`.
 
 **Never run two `sbt` invocations against this checkout at once**: one process reads the other's half-written class
 files, and the `NoClassDefFoundError` looks like a regression until a clean, sequential rerun.
@@ -185,9 +185,8 @@ every homology implementation should (a) be generic over `Field` coefficients an
 real chain witnessing each bar). An optimization that abandons representatives is probably not worth it. Every
 public interface (MATLAB facade included) should expose representatives; anywhere that doesn't is incomplete.
 **Current gaps**: every engine records a representative for every bar (`PackedRipserCohomologyEngine`'s apparent pairs
-too), and so does `ClassifyingSpace.persistentGroupHomology`. `BlockParallelReduction` (JVM only, not reachable from `Persistence`) gives bars only (#192);
-`ParallelPackedCohomology` is `Engine.ParallelRipser`, picked by `Auto` (and the facade/CLI, unset `engine`) with more
-than one thread; `threads` caps it everywhere (#220, `WORKLOG-parallelism.md`).
+too), and so does `ClassifyingSpace.persistentGroupHomology`. `BlockParallelReduction` (JVM only, not reachable from
+`Persistence`) gives bars only (#192); `ParallelPackedCohomology` is `Engine.ParallelRipser` (`rules/engines.md`).
 
 **Openness principle (project lead, foundational: the library is a platform for experiments and research)**: public
 and extensible by default. Access modifiers are not documentation: "not the entry point" is said in scaladoc ("what
@@ -237,7 +236,8 @@ file before changing that subsystem; this table is the index, in case a rule did
 | file | covers | loads for |
 |---|---|---|
 | `rules/streams.md` | the ordering contract every stream must satisfy (the #1 historical bug source), VR constructions, `maxFiltrationValue` default, `ExplicitStreamBuilder` | `streams/` |
-| `rules/engines.md` | the four persistence engines, `BarcodeDistance`/`Vectorization`, circular and toroidal coordinates, benchmark specs | `homology/`, `barcode/` |
+| `rules/engines.md` | the four persistence engines, `BarcodeDistance`/`Vectorization`, benchmark specs | `homology/`, `barcode/` |
+| `rules/circular-coordinates.md` | circular and toroidal coordinates, from points or a diagram | those files |
 | `rules/cubical.md` | cubical complexes, `FastCubicalHomologyEngine` | cubical files |
 | `rules/simplicial-sets.md` | the `sset` add-on: simplicial sets, the Sage-parity layer, group classifying spaces | `sset/` |
 | `rules/filtered-complexes.md` | Cech, witness, Dowker, DTM, sparse Rips, edge collapse | those files |

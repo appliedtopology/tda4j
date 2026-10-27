@@ -51,6 +51,14 @@ Entries since the last release that are not listed below are the files of [`chan
 
 ### Added
 
+- `CircularCoordinates(diagram, input, bar, r, complex)` and `CircularCoordinates.toroidal(diagram, input, bars, ...)`
+  give circular and toroidal coordinates from any `PersistenceDiagram[Simplex[Int]]`, not only from the Vietoris-Rips
+  complex of a metric space: a Cech or alpha diagram (say `complex = Cech`), a diagram of a stream or metric space, any
+  engine, over any odd prime. `h1Bars(diagram)` lists its loops. A diagram of cocycles
+  (`representatives = Representatives.Cocycles`) supplies each bar's cocycle, restricted to the complex at `r` and checked
+  exactly over the integers; a diagram of cycles has the class recovered by the cohomology of that complex. The scale
+  defaults to the middle of the bar. `PersistenceDiagram.representatives` says which kind of representative a diagram
+  carries. `compute`, `computeToroidal` and `h1Bars(metricSpace)` are as they were (#236).
 - `FastAlphaHomologyEngine.persistentHomology` takes `maxDimension`: the simplices above `maxDimension + 1` are no
   longer built and the dual graph is walked only for the top degree, so `engine=fast-alpha` with the default
   `maxDimension = 2` stops doing the work for degrees nobody asked for in 4 or more dimensions (MATLAB, CLI and JS too).

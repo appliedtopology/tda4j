@@ -342,6 +342,19 @@ representatives cell for cell across engines; check that each one is a cycle
 their union-finds break ties by value rather than by the stream's order. Image
 cocycles go through `Engine.Cohomology`.
 
+## Circular coordinates from a diagram
+
+`CircularCoordinates(diagram, input, ...)` turns a degree-1 bar of any `PersistenceDiagram[Simplex[Int]]` into a map to
+the circle. A finite bar's cocycle `V_σ` has `σ` as its oldest cell and a coboundary that starts at the death cell, so
+restricted to the complex `K_r` at a scale `r` inside the bar it is a cocycle, and it is non-zero there. The diagram
+records which kind it carries (`PersistenceDiagram.representatives`); a diagram of cocycles supplies the class directly, and
+a diagram of cycles has it recovered by the cohomology of `K_r` over the diagram's field, matched to the bar by its
+birth. Both lift to integers (checked exactly on every triangle) and are smoothed to the harmonic representative.
+
+A bar's class is only defined up to adding the classes of shorter bars nested inside it. When such bars are alive at `r`,
+the engines' representatives, and so their coordinates, differ; every one is a valid circle map. To compare two routes,
+choose `r` where only the loops asked for are alive.
+
 ## Streams × engines: what works with what
 
 Not every engine supports every complex construction. `ripser` relies on
