@@ -153,7 +153,7 @@
    </tbody>
   </table>
   <p>Everything runs on the JVM or in JavaScript; there is nothing to compile and no native library to install.</p>
-  <p>The current version is on <a href="https://central.sonatype.com/artifact/org.appliedtopology/tda4j_3">Maven Central</a> and in the <a href="https://github.com/appliedtopology/tda4j/releases">releases</a>; below it is written <code>VERSION</code>. A version that ends in <code>-SNAPSHOT</code> is a development build: <a href="#from-source">build it from source</a>.</p>
+  <p>The current version is on <a href="https://central.sonatype.com/artifact/org.appliedtopology/tda4j_3">Maven Central</a> and in the <a href="https://github.com/appliedtopology/tda4j/releases">releases</a>; below it is written <code>VERSION</code>. A version that ends in <code>-SNAPSHOT</code> is a development build: take the <a href="#development-snapshots">daily snapshot</a> or <a href="#from-source">build it from source</a>.</p>
  </section>
  <section id="scala">
   <h2 class="h500"><a href="#scala" class="anchor"></a>Scala</h2>
@@ -224,6 +224,18 @@
   <h2 class="h500"><a href="#try-it-without-installing-anything-to-your-project" class="anchor"></a>Try it without installing anything to your project</h2>
   <p><code>tda4j-demo-VERSION.jar</code> from the releases is a Scala REPL with the library and its imports in place: <code>java -jar tda4j-demo-VERSION.jar</code>.</p>
  </section>
+ <section id="development-snapshots">
+  <h2 class="h500"><a href="#development-snapshots" class="anchor"></a>Development snapshots</h2>
+  <p>The <code>scala</code> branch is published as a <code>-SNAPSHOT</code> of the next version (the one in <code>version.sbt</code>) to Maven Central's snapshot repository on every day on which a commit has landed. A snapshot is whatever the branch held at that time: it can change or break without notice, and Central deletes one after 90 days. Add the repository and ask for the snapshot version:</p>
+  <div class="snippet mono-small-block" scala-snippet="">
+   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>// sbt: NEXT-SNAPSHOT is the version in version.sbt, for example 0.7.0-SNAPSHOT
+</span><span line-number="2" class=""><span class="tooltip-container"></span>resolvers += "Central Snapshots" at "https://central.sonatype.com/repository/maven-snapshots/"
+</span><span line-number="3" class=""><span class="tooltip-container"></span>libraryDependencies += "org.appliedtopology" %% "tda4j" % "NEXT-SNAPSHOT"
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+  <p>Other build tools take the same repository URL, <code>https://central.sonatype.com/repository/maven-snapshots/</code>.</p>
+ </section>
  <section id="from-source">
   <h2 class="h500"><a href="#from-source" class="anchor"></a>From source</h2>
   <div class="snippet mono-small-block">
@@ -237,4 +249,4 @@
   <p>This needs Java 21 and <a href="https://www.scala-sbt.org/">sbt</a> 2. <a href="https://github.com/appliedtopology/tda4j/blob/scala/CONTRIBUTING.md">CONTRIBUTING.md</a> has the rest.</p>
   <p>If something does not work, see <a href="troubleshooting.html">troubleshooting</a>.</p>
  </section>
-</main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#requirements">Requirements</a></li><li><a href="#scala">Scala</a></li><li><a href="#java-and-matlab">Java and MATLAB</a></li><li><a href="#command-line">Command line</a></li><li><a href="#javascript-and-typescript">JavaScript and TypeScript</a></li><li><a href="#try-it-without-installing-anything-to-your-project">Try it without installing anything to your project</a></li><li><a href="#from-source">From source</a></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>
+</main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#requirements">Requirements</a></li><li><a href="#scala">Scala</a></li><li><a href="#java-and-matlab">Java and MATLAB</a></li><li><a href="#command-line">Command line</a></li><li><a href="#javascript-and-typescript">JavaScript and TypeScript</a></li><li><a href="#try-it-without-installing-anything-to-your-project">Try it without installing anything to your project</a></li><li><a href="#development-snapshots">Development snapshots</a></li><li><a href="#from-source">From source</a></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>
