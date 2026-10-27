@@ -5,7 +5,7 @@ name: Snapshot
 # has the credentials, the one-time Central Portal setup and how a user depends on a snapshot. This workflow never
 # publishes a release: `sbt release` does that locally, and `release.yml` takes over from the tag.
 #
-# Three ways to run, told apart by the "Plan" step:
+# Three jobs. `plan` decides what this run does; `publish` and `dry-run` are the two things it can do:
 #   - the daily schedule, and a manual run on `scala`: publish (skipped when HEAD is the commit of the last successful run);
 #     the manual run's `force` input publishes even then;
 #   - a manual run on any other branch, and a pull request that changes this file or `sonatype.sbt`: a dry run. It builds
@@ -39,12 +39,20 @@ concurrency:
   group: snapshot-${{ github.ref }}
   cancel-in-progress: false
 
+# Every sbt call runs with `--server`: sbt in the foreground, so no sbt server is left to race setup-sbt's post-job cache
+# step (test.yml's header says why). The sbt disk cache is off (`set Global / cacheStores := Nil`), as for the demo jar in
+# release.yml: setup-sbt restores ~/.cache/sbt from an earlier run, and a publish must send what THIS checkout builds, not
+# what a cache hands back. TDA4J_DOCS_VERSION titles the scaladoc in the javadoc jar with the snapshot's version (it says
+# "dev" otherwise). Docs are built with Scala 3.9.0 here, not 3.8.4 as for the site: a javadoc jar needs no JavaScript.
 jobs:
-  snapshot:
+  plan:
     # Not in forks: they have neither the secrets nor the namespace.
     if: github.repository == 'appliedtopology/tda4j'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 10
+    outputs:
+      mode: ${{ steps.plan.outputs.mode }}
+      version: ${{ steps.plan.outputs.version }}
     steps:
       - uses: actions/checkout@v7
       - name: Plan
@@ -84,74 +92,87 @@ jobs:
           fi
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
           echo "plan: $MODE $VERSION ($GITHUB_SHA)"
+          echo "### Snapshot ${VERSION} of \`${GITHUB_SHA::7}\`: ${MODE}" >> "$GITHUB_STEP_SUMMARY"
+
+  dry-run:
+    needs: plan
+    if: needs.plan.outputs.mode == 'dry-run'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+      TDA4J_DOCS_VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
       - name: Setup JDK
-        if: steps.plan.outputs.mode != 'skip'
         uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 21
       - name: Setup sbt launcher
-        if: steps.plan.outputs.mode != 'skip'
         uses: sbt/setup-sbt@v1
-      # `--server` runs sbt in the foreground, so no sbt server is left to race setup-sbt's post-job cache step (test.yml's
-      # header says why). The sbt disk cache is off, as for the demo jar in release.yml: setup-sbt restores ~/.cache/sbt from
-      # an earlier run, and a publish must send what THIS checkout builds, not what a cache hands back. TDA4J_DOCS_VERSION
-      # titles the scaladoc in the javadoc jar with the snapshot's version (it says "dev" otherwise). Docs are built with
-      # Scala 3.9.0 here, not 3.8.4 as for the site: a javadoc jar needs no JavaScript.
-      - name: Dry run (publish into target/dry-run-repo)
-        if: steps.plan.outputs.mode == 'dry-run'
-        env:
-          TDA4J_DOCS_VERSION: ${{ steps.plan.outputs.version }}
+      - name: Publish into target/dry-run-repo
         run: |
           sbt --server 'set Global / cacheStores := Nil ; set ThisBuild / publishTo := Some(Resolver.file("dry-run", file("target/dry-run-repo"))(Resolver.mavenStylePatterns)) ; tda4j/publish ; tda4jJS/publish'
           find target/dry-run-repo -type f ! -name '*.md5' ! -name '*.sha1' | sort | tee dry-run-files.txt
           # Both artifacts, each with the jar, the sources, the scaladoc and the POM.
           for a in tda4j_3 tda4j_sjs1_3; do
             for suffix in .jar -sources.jar -javadoc.jar .pom; do
-              f="target/dry-run-repo/org/appliedtopology/$a/${{ steps.plan.outputs.version }}/$a-${{ steps.plan.outputs.version }}$suffix"
+              f="target/dry-run-repo/org/appliedtopology/$a/$VERSION/$a-$VERSION$suffix"
               test -s "$f" || { echo "::error::$f was not published"; exit 1; }
             done
           done
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Dry run of snapshot ${VERSION} (${{ job.status }})"
+            echo
+            echo "Nothing was sent to Central. The files:"
+            echo '```'
+            cat dry-run-files.txt 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  publish:
+    needs: plan
+    if: needs.plan.outputs.mode == 'publish'
+    # The environment holds the Central Portal token as the secrets SONATYPE_USERNAME and SONATYPE_PASSWORD (RELEASE.md,
+    # "Snapshots"). Only this job is in it, so a protection rule of the environment (a branch restriction, a reviewer) does
+    # not reach the dry runs of pull requests.
+    environment: sonatype
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+      TDA4J_DOCS_VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Setup JDK
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Setup sbt launcher
+        uses: sbt/setup-sbt@v1
       - name: Publish snapshot
-        if: steps.plan.outputs.mode == 'publish'
         env:
-          # The Central Portal user token (RELEASE.md, "Snapshots"), read by sonatype.sbt. Only this step sees it.
+          # Read by sonatype.sbt; only this step sees them.
           SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
           SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
-          TDA4J_DOCS_VERSION: ${{ steps.plan.outputs.version }}
         run: |
           if [ -z "$SONATYPE_USERNAME" ] || [ -z "$SONATYPE_PASSWORD" ]; then
-            echo "::error::the repository secrets SONATYPE_USERNAME and SONATYPE_PASSWORD (a Central Portal user token) are not set; RELEASE.md, 'Snapshots', says how"
+            echo "::error::the secrets SONATYPE_USERNAME and SONATYPE_PASSWORD (a Central Portal user token) are not set in the 'sonatype' environment; RELEASE.md, 'Snapshots', says how"
             exit 1
           fi
           sbt --server 'set Global / cacheStores := Nil ; tda4j/publish ; tda4jJS/publish'
       - name: Summary
-        if: always() && steps.plan.outputs.mode != ''
-        env:
-          MODE: ${{ steps.plan.outputs.mode }}
-          VERSION: ${{ steps.plan.outputs.version }}
-          JOB_STATUS: ${{ job.status }}
+        if: success()
         run: |
           {
-            echo "### Snapshot ${VERSION} of \`${GITHUB_SHA::7}\`: ${MODE} (${JOB_STATUS})"
-            case "$MODE" in
-              publish)
-                if [ "$JOB_STATUS" = success ]; then
-                  echo
-                  echo "Published \`tda4j_3\` and \`tda4j_sjs1_3\`. Use it with"
-                  echo '```scala'
-                  echo 'resolvers += "Central Snapshots" at "https://central.sonatype.com/repository/maven-snapshots/"'
-                  echo "libraryDependencies += \"org.appliedtopology\" %% \"tda4j\" % \"${VERSION}\""
-                  echo '```'
-                fi ;;
-              dry-run)
-                echo
-                echo "Nothing was sent to Central. The files:"
-                echo '```'
-                cat dry-run-files.txt 2>/dev/null || true
-                echo '```' ;;
-              skip)
-                echo
-                echo "Nothing to publish; the notice on the \"Plan\" step says why." ;;
-            esac
+            echo "Published \`tda4j_3\` and \`tda4j_sjs1_3\`. Use it with"
+            echo '```scala'
+            echo 'resolvers += "Central Snapshots" at "https://central.sonatype.com/repository/maven-snapshots/"'
+            echo "libraryDependencies += \"org.appliedtopology\" %% \"tda4j\" % \"${VERSION}\""
+            echo '```'
           } >> "$GITHUB_STEP_SUMMARY"

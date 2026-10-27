@@ -49,3 +49,18 @@ nothing to Maven (`sbt release` does it locally). `version.sbt` says `0.7.0-SNAP
   is the test; `RELEASE.md` says what to look at.
 - `gh run list --workflow snapshot.yml --branch scala --status success --json headSha` on the real API (the Plan step's
   logic was run against a fake `gh` for six cases).
+
+## Addendum, same day: file or environment, and the `sonatype` environment (Mikael's review)
+
+- `sonatype.sbt` had read only the two environment variables for the Nexus realm, and left the credentials file with its
+  own `realm=Sonatype Central`; a local snapshot publish with the file alone got the 401. Now one credential, registered
+  under the Nexus realm: `SONATYPE_USERNAME`/`SONATYPE_PASSWORD` when both are set, otherwise the file (parsed with
+  `java.util.Properties`: sbt's own `loadCredentials` is not public; a missing or unreadable file, or one whose `host` is not
+  `central.sonatype.com`, gives nothing). `sonaUpload` looks its token up by host only (`Publishing` calls `forHost`), so a
+  single Nexus-realm credential serves it too. Against the stub aliased to `central.sonatype.com`: the file alone
+  publishes; the variables beat a file with a wrong token; wrong variables fail although the file is right (no fallback);
+  a file for another host and no credentials at all both get the 401.
+- The repository has a GitHub environment `sonatype` holding the credentials. `snapshot.yml` is three jobs now: `plan`
+  (mode and version), `dry-run` (no environment) and `publish` (`environment: sonatype`), so an environment's protection
+  rules (a branch restriction, a required reviewer) reach a publish and never a pull request's dry run. The names of the
+  secrets in that environment were not stated; the workflow reads `SONATYPE_USERNAME` and `SONATYPE_PASSWORD`.

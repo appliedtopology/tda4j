@@ -69,14 +69,14 @@ a snapshot after 90 days.
   a green run that says "no commit since the last snapshot". Run it by hand from the Actions tab to publish now: on `scala`,
   with `force` it publishes even without a new commit. It does not run the tests: CI has run them on every commit that
   reached `scala`.
-- **Dry run:** a manual run on any other branch, and every pull request that changes `snapshot.yml` or `sonatype.sbt`,
-  builds both artifacts and publishes them into `target/dry-run-repo` of the runner instead, then checks that the four files
-  of each exist and lists them in the run's summary. It needs no secrets and cannot reach Central.
-- **A local publish** of a snapshot (`sbt tda4j/publish tda4jJS/publish`) needs `SONATYPE_USERNAME` and `SONATYPE_PASSWORD`
-  in the environment. The credentials file of [Credentials](#2-credentials-and-secrets) does not work for it: Central answers a
-  snapshot upload with the realm `Sonatype Nexus Repository Manager`, and sbt sends a token only to the realm it was
-  made for (the file's `Sonatype Central` gets a 401), so `sonatype.sbt` builds a second credential for that realm from
-  the two variables.
+- **Dry run:** a manual run on any other branch, and every pull request that changes `snapshot.yml` or `sonatype.sbt`
+  (the `dry-run` job), builds both artifacts and publishes them into `target/dry-run-repo` of the runner instead, then checks
+  that the four files of each exist and lists them in the run's summary. It needs no secrets and cannot reach Central.
+- **A local publish** of a snapshot (`sbt tda4j/publish tda4jJS/publish`) uses the credentials file of
+  [Credentials](#2-credentials-and-secrets), or `SONATYPE_USERNAME` and `SONATYPE_PASSWORD` when both are set in the
+  environment (they win over the file). Central answers a snapshot upload with the realm `Sonatype Nexus Repository
+  Manager`, and sbt sends a token only to the realm it was made for, so a credential for the file's `realm=Sonatype
+  Central` alone gets a 401; `sonatype.sbt` registers the token, from the variables or the file, under the Nexus realm.
 - **Using a snapshot:**
 
   ```scala
@@ -89,9 +89,11 @@ a snapshot after 90 days.
 1. In the [Central Portal](https://central.sonatype.com/publishing/namespaces), open the namespace's menu, choose "Enable
    SNAPSHOTs" and confirm; the namespace then shows a "SNAPSHOTs enabled" badge. Central takes snapshot uploads only for a
    namespace that has it.
-2. Generate a user token on the [account page](https://central.sonatype.com/account) ("Generate User Token"). Add its user name as the repository secret
-   `SONATYPE_USERNAME` and its password as `SONATYPE_PASSWORD` (Settings, Secrets and variables, Actions). Until both exist
-   the scheduled run fails, with a message that names them.
+2. Generate a user token on the [account page](https://central.sonatype.com/account) ("Generate User Token"). Add its user
+   name as the secret `SONATYPE_USERNAME` and its password as `SONATYPE_PASSWORD` of the GitHub environment `sonatype`
+   (Settings, Environments). Until both exist the scheduled run fails, with a message that names them. Only the `publish` job
+   is in that environment, so its protection rules (a branch restriction, a required reviewer) apply to a publish and not to
+   the dry runs of pull requests; a required reviewer would hold every daily run until it is approved.
 3. Run the workflow once from the Actions tab on `scala` with `force`, and look at
    `https://central.sonatype.com/repository/maven-snapshots/org/appliedtopology/tda4j_3/`.
 
@@ -135,9 +137,9 @@ a snapshot after 90 days.
   user=<token user>
   password=<token password>
   ```
-  `sonatype.sbt` adds that path to `credentials`, so `sonaUpload` and `sonaRelease` find the token there; no environment
-  variables are involved in a release. (A local `sbt publish` of a *snapshot* is different: it needs the token in the
-  environment, see [Snapshots](#snapshots).) `host` must say `central.sonatype.com`
+  `sonatype.sbt` reads that file, so `sonaUpload`, `sonaRelease` and a snapshot publish find the token there. If the
+  environment variables `SONATYPE_USERNAME` and `SONATYPE_PASSWORD` are both set, they are used instead of the file (that
+  is how `snapshot.yml` has it, see [Snapshots](#snapshots)). `host` must say `central.sonatype.com`
   exactly (a file left over from before the Central Portal migration may still say the old OSSRH host, which
   won't match and leaves the build effectively uncredentialed). This is a different file and format from
   Maven's own `~/.m2/settings.xml` — sbt doesn't read that XML format, so a token stored only there isn't
@@ -159,13 +161,13 @@ a snapshot after 90 days.
   tarball, attaches it to the GitHub Release and skips the publish step; `npm publish --access public` of that tarball
   by hand does the same.
 
-- **`SONATYPE_USERNAME`** and **`SONATYPE_PASSWORD`** (for `snapshot.yml` only): the user name and password of a Central
-  Portal user token (not the account's own login), as in the credentials file above. [Snapshots](#snapshots) says where
-  to make the token and what else to switch on once.
+- **`SONATYPE_USERNAME`** and **`SONATYPE_PASSWORD`** (secrets of the environment `sonatype`, for `snapshot.yml` only): the
+  user name and password of a Central Portal user token (not the account's own login), as in the credentials file above.
+  [Snapshots](#snapshots) says where to make the token and what else to switch on once.
 
 Nothing else is required in CI today. If release publishing is later moved into CI (see the note above), add
 `PGP_PASSPHRASE` (plus the PGP private key itself, e.g. base64 in a `PGP_SECRET` secret, imported with `gpg --import`
-before `publishSigned` runs) as repo secrets at that point; the two Sonatype secrets are already there.
+before `publishSigned` runs) as secrets at that point; the two Sonatype secrets are already there (a job that releases would use the `sonatype` environment too).
 
 ### 3. Run the release
 

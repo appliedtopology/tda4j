@@ -30,7 +30,7 @@ after every job below passes locally.
 | `npm-package` (`test.yml`) | `sbt tda4jJS/npmPack`, then install the tarball into an empty project and run the library and `npx tda4j` | the same | the step that failed names it |
 | `docs-build` (`test.yml`) | `TDA4J_SCALA_VERSION=3.8.4 sbt tda4j/doc` | `sbt shutdown`, then the same | the error names `page.md:line` |
 | `mima` (`test.yml`) | `sbt tda4j/mimaReportBinaryIssues` | the same | see below |
-| `snapshot` (`snapshot.yml`, only on a PR that changes it or `sonatype.sbt`) | a dry run of the daily snapshot: `tda4j/publish` and `tda4jJS/publish` into `target/dry-run-repo`, then a check that the jar, sources, scaladoc and POM of both artifacts exist | `sbt 'set ThisBuild / publishTo := Some(Resolver.file("dry-run", file("target/dry-run-repo"))(Resolver.mavenStylePatterns))' tda4j/publish tda4jJS/publish` | the step names the missing file; a real publish needs secrets and is not run on a PR (`RELEASE.md`, "Snapshots") |
+| `dry-run` (`snapshot.yml`, only on a PR that changes it or `sonatype.sbt`) | a dry run of the daily snapshot: `tda4j/publish` and `tda4jJS/publish` into `target/dry-run-repo`, then a check that the jar, sources, scaladoc and POM of both artifacts exist | `sbt 'set ThisBuild / publishTo := Some(Resolver.file("dry-run", file("target/dry-run-repo"))(Resolver.mavenStylePatterns))' tda4j/publish tda4jJS/publish` | the step names the missing file; a real publish needs secrets and is not run on a PR (`RELEASE.md`, "Snapshots") |
 
 CI starts every one of these with `sbt --server` (sbt in the foreground, exiting with its step), in every workflow; the
 table leaves the flag out because locally plain `sbt` is right. Through the thin client a server stays behind and
