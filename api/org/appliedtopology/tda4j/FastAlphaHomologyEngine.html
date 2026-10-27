@@ -100,12 +100,12 @@ node3 -> node2;
          <button class="icon-button show-content expand"></button>
          <h4 class="groupHeader h200">Concrete methods</h4>
         </div>
-        <div class="documentableElement" id="persistentHomology-fffff3e8">
+        <div class="documentableElement" id="persistentHomology-455">
          <div class="documentableElement-expander">
           <button class="icon-button ar show-content"></button>
           <div class="header monospace mono-medium">
            <div class="signature">
-            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="FastAlphaHomologyEngine.html#persistentHomology-fffff3e8" t="n" class="documentableName ">persistentHomology</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">helix</span>: <a href="DelaunayAlphaShapes.html" t="t">DelaunayAlphaShapes</a>, <span t="k"></span><span data-unresolved-link="" t="n">includeZeroLength</span>: <span data-unresolved-link="" t="t">Boolean</span> = ...): <span data-unresolved-link="" t="t">List</span>[<a href="PersistenceBar.html" t="t">PersistenceBar</a>[<span data-unresolved-link="" t="t">Double</span>, <a href="Chain.html" t="t">Chain</a>[<a href="../tda4j.html#Simplex-0" t="t">Simplex</a>[<span data-unresolved-link="" t="t">Int</span>], <span t="t">CoefficientT</span>]]]
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="FastAlphaHomologyEngine.html#persistentHomology-455" t="n" class="documentableName ">persistentHomology</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">helix</span>: <a href="DelaunayAlphaShapes.html" t="t">DelaunayAlphaShapes</a>, <span t="k"></span><span data-unresolved-link="" t="n">includeZeroLength</span>: <span data-unresolved-link="" t="t">Boolean</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">maxDimension</span>: <a href="Optional.html" t="t">Optional</a>[<span data-unresolved-link="" t="t">Int</span>] = ...): <span data-unresolved-link="" t="t">List</span>[<a href="PersistenceBar.html" t="t">PersistenceBar</a>[<span data-unresolved-link="" t="t">Double</span>, <a href="Chain.html" t="t">Chain</a>[<a href="../tda4j.html#Simplex-0" t="t">Simplex</a>[<span data-unresolved-link="" t="t">Int</span>], <span t="t">CoefficientT</span>]]]
            </div>
           </div>
          </div>
@@ -115,11 +115,11 @@ node3 -> node2;
            <div class="originInfo"></div>
            <div class="memberDocumentation">
             <div class="documentableBrief doc">
-             <p>Every bar of the alpha filtration, with representatives; zero-length bars only if <code>includeZeroLength</code>.</p>
+             <p>Every bar of the alpha filtration up to degree <code>maxDimension</code> (default: all, up to <code>d - 1</code>), with representatives; zero-length bars only if <code>includeZeroLength</code>. Below the top degree only the simplices of dimension <code>maxDimension + 1</code> and lower are built, as for any other engine, and the dual graph is walked only when the top degree is asked for.</p>
             </div>
             <div class="cover">
              <div class="doc">
-              <p>Every bar of the alpha filtration, with representatives; zero-length bars only if <code>includeZeroLength</code>.</p>
+              <p>Every bar of the alpha filtration up to degree <code>maxDimension</code> (default: all, up to <code>d - 1</code>), with representatives; zero-length bars only if <code>includeZeroLength</code>. Below the top degree only the simplices of dimension <code>maxDimension + 1</code> and lower are built, as for any other engine, and the dual graph is walked only when the top degree is asked for.</p>
              </div>
              <h2 class="h200">Attributes</h2>
              <dl class="attributes attributes-small">
@@ -127,7 +127,42 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/FastAlphaHomology.scala#L27" target="_blank">FastAlphaHomology.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/FastAlphaHomology.scala#L31" target="_blank">FastAlphaHomology.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="persistentHomologyTopDegree-fffff3e8">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="FastAlphaHomologyEngine.html#persistentHomologyTopDegree-fffff3e8" t="n" class="documentableName ">persistentHomologyTopDegree</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">helix</span>: <a href="DelaunayAlphaShapes.html" t="t">DelaunayAlphaShapes</a>, <span t="k"></span><span data-unresolved-link="" t="n">includeZeroLength</span>: <span data-unresolved-link="" t="t">Boolean</span> = ...): <span data-unresolved-link="" t="t">List</span>[<a href="PersistenceBar.html" t="t">PersistenceBar</a>[<span data-unresolved-link="" t="t">Double</span>, <a href="Chain.html" t="t">Chain</a>[<a href="../tda4j.html#Simplex-0" t="t">Simplex</a>[<span data-unresolved-link="" t="t">Int</span>], <span t="t">CoefficientT</span>]]]
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>Only the top degree <code>d - 1</code>, the bars of the dual union-find: no simplex below the top dimension is built and no matrix is reduced, so the cost is one pass over the top simplices and their facets. The lower degrees come from <a href="FastAlphaHomologyEngine.html#persistentHomology-455">persistentHomology</a>.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p>Only the top degree <code>d - 1</code>, the bars of the dual union-find: no simplex below the top dimension is built and no matrix is reduced, so the cost is one pass over the top simplices and their facets. The lower degrees come from <a href="FastAlphaHomologyEngine.html#persistentHomology-455">persistentHomology</a>.</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/FastAlphaHomology.scala#L49" target="_blank">FastAlphaHomology.scala</a>
               </dd>
              </dl>
             </div>
