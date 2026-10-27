@@ -1,11 +1,13 @@
 # Changelog
 
-What changed in each release of `tda4j`, newest first. Every pull request that changes what a user sees or calls adds a
-line under **Unreleased**; at a release the section is renamed to the version (`RELEASE.md`). Each section opens with
-the changes that break existing code. Before 1.0, a minor version may break the API, and every break inside a series
+What changed in each release of `tda4j`, newest first. A pull request that changes what a user sees or calls adds a
+file to [`changelog.d/`](changelog.d/README.md), not a line here; the release folds the files into a section named for
+the version (`RELEASE.md`). Each section opens with the changes that break existing code. Before 1.0, a minor version may break the API, and every break inside a series
 is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ## Unreleased
+
+Entries since the last release that are not listed below are the files of [`changelog.d/`](changelog.d/), one per pull request; the release folds them in here.
 
 ### Breaking
 

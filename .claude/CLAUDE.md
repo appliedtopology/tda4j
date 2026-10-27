@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **How this file works.** Each entry is a current rule, invariant, or known limitation, plus a pointer to the
 `.claude/WORKLOG-*.md`/`DESIGN-*.md` that holds its derivation (what was tried, measurements, repros). Derivations
 go in the worklog, not here. Detail that matters for one subsystem only is in `.claude/rules/` (see "Subsystem notes").
-Last condensed 2026-10-17; earlier, longer versions: `git show e5e86ec:.claude/CLAUDE.md`.
+Last condensed 2026-10-27; earlier, longer versions: `git show e5e86ec:.claude/CLAUDE.md`.
 
 ## What this is
 
@@ -95,11 +95,11 @@ has one in its companion; cats' `Show` is invariant, so a hierarchy's instance i
 
 ## Commands
 
-Java 21, Scala 3.9.0 LTS (`WORKLOG-scala-3.9-lts-upgrade.md`). `.jvmopts` sets `-Xmx2G` (sbt's own 1024MB default caused
-the old test-suite OOMs: `WORKLOG-test-suite-memory-and-benchmark-gating.md`). Node >= 20.16 for the Scala.js tests.
+Java 21, Scala 3.9.0 LTS (`WORKLOG-scala-3.9-lts-upgrade.md`). `.jvmopts` sets `-Xmx2G` (the 1024MB default caused test-suite OOMs:
+`WORKLOG-test-suite-memory-and-benchmark-gating.md`). Node >= 20.16 for the Scala.js tests.
 
 ```
-sbt tda4j/testFull              # JVM specs (plain `test` is incremental+disk-cached in sbt 2 and can run 0 specs; CI's fresh runner is fine)
+sbt tda4j/testFull              # JVM specs (plain `test` is disk-cached in sbt 2 and can run 0 specs)
 sbt tda4jJS/test                # Scala.js specs, on Node >= 20.16
 sbt "tda4j/testOnly *SimplexSpec"   # single specs2 spec (glob ok)
 sbt scalafmtAll                 # format everything — run before committing
@@ -111,11 +111,11 @@ sbt tda4jJS/npmPack             # the npm package, target/npm/tda4j-<version>.tg
 sbt -DrunBenchmarks=true tda4j/test   # also run benchmark/profiling specs — NOT what CI runs
 ```
 
-No `sbt` on `PATH`: `.claude/scripts/install-sbt.sh` (paced around Maven Central's cold-cache 429s). A cloud Setup script
-should hold `.claude/scripts/cloud-setup-script.sh` (installer plus warmed dependencies); without it a session starts cold (~1 h).
+No `sbt` on `PATH`: `.claude/scripts/install-sbt.sh`. A cloud Setup script
+should hold `.claude/scripts/cloud-setup-script.sh` (installer plus warmed dependencies), else a session starts cold (~1 h).
 
 No linter beyond scalafmt; tests are specs2. CI jobs (`test` with a fat-jar smoke run, `test-js`, `npm-package`,
-`docs-build`, `mima`, `lint`) and their local equivalents: steward skill; a weekly `coverage.yml` maps coverage. A binary
+`docs-build`, `mima`, `lint`, `changelog`) and their local equivalents: steward skill; a weekly `coverage.yml` maps coverage. A binary
 break is not a strong requirement before 1.0 (project lead). The ~319 `-Wunused:all` warnings stay
 (`WORKLOG-compiler-warnings.md`). Docs build with 3.8.4 (a FRESH sbt server only: `rules/docs-and-tutorials.md`). After
 `sbt package` or a docs build a test compile can miss main classes ("Not found: TDAlab"): `sbt clean`. **scalafmt only sees git-tracked files**: `git add` a new file before `scalafmtAll`.
@@ -128,7 +128,7 @@ files, and the `NoClassDefFoundError` looks like a regression until a clean, seq
 **Every user file needs `import scala.language.experimental.modularity`** (or `-experimental`): every definition of the
 library is `@experimental` (the `Self`-member context bounds `C: Field` need the flag; ~100 errors without it). With
 that line a plain downstream project needs nothing else, `into` conversions included (packaged jar checked,
-`WORKLOG-cursor-and-verb.md`). Doc fences include the line although the docs build would not need it.
+`WORKLOG-cursor-and-verb.md`).
 
 **`Persistence(input, maxDimension = 2, maxFiltrationValue, complex = VietorisRips, characteristic = 17, engine = Auto)`**
 (`homology/Persistence.scala`) is the one-call verb: points/metric space/`Image`/any stream in, an immutable
@@ -151,7 +151,7 @@ Engines also have inferring companion forms: `SimplicialHomologyEngine.persisten
 
 **`into` parameter types** (`Optional[Double]`, `PointCloud`): public numeric options take `2.0`, `2`, `Some(2.0)` or
 `None`; point inputs take `Array[Array[Double]]`, `Seq[Seq[Double]]`, `Seq[Array[Double]]`. Use them for new public
-signatures instead of `Option[Double]` / a fixed collection type. `AlphaBackend` (enum) replaced string dispatch.
+signatures instead of `Option[Double]` / a fixed collection type.
 
 ### TDAlab and the other labs (detail: `rules/labs.md`)
 
@@ -212,9 +212,8 @@ anything may). `WORKLOG-openness-audit.md`.
 
 Everything downstream is generic over `Field` (`Fp` is an opaque type per prime). **Never test the runtime class of a
 generic coefficient** (`case d: Double`): on Scala.js every boxed number is a `Double`, so an `Fp` matches. Ask the field
-(`Field.toDouble`, #80; `WORKLOG-release-prep-2026-10-14.md`). `Chain` is abstract and OPEN (a place for the community to
-experiment); its `equals` and `hashCode` are those of the formal sum (`Field.hash` for the coefficients, #58). `Cocell`/`OrderedCocell` were
-**removed on purpose**: don't reintroduce (`DESIGN-generic-cohomology.md`).
+(`Field.toDouble`, #80). `Chain` is abstract and OPEN; its `equals` and `hashCode` are those of the formal sum (#58).
+`Cocell`/`OrderedCocell` were **removed on purpose**: don't reintroduce (`DESIGN-generic-cohomology.md`).
 **Generic-`given` capture gotcha**: a `given` like `chainRM` fixes its `Ordering[CellT]` where it is summoned; at
 class scope (before the stream's ordering exists) it silently pivots on the cell's intrinsic order. Summon it where
 the per-stream ordering is in scope (`WORKLOG-naive-homology.md`). The intrinsic order is opt-in (`import
@@ -255,29 +254,30 @@ file before changing that subsystem; this table is the index, in case a rule did
 
 - **Write a `.claude/WORKLOG-<topic>.md` by default** for any substantial investigation, debugging, or
   profiling arc, without being asked. Worklogs are point-in-time snapshots, never retroactively edited. At the
-  end of the arc, update this file, or the matching `.claude/rules/` file for a single subsystem, with **only the resulting
-  rule/invariant/limitation plus a worklog pointer** — no narrative, measurements, or repros there. This file loads in
+  end of the arc, update this file (or the matching `.claude/rules/` file, for one subsystem) with **only the resulting
+  rule/invariant/limitation plus a worklog pointer**: no narrative, measurements or repros. This file loads in
   every session: keep it under ~25k characters (and each rule file under ~12k); when one drifts past that, condense it
   the same way (strip narrative to worklog pointers, move single-subsystem detail into a rule file) and note the new
   condensing date/commit at top.
 - **Docs carry the contract, worklogs carry the history.** Scaladoc, user guide and tutorials say what the code does and
-  what to call (Li Haoyi's "easy": one import, defaults, errors that say what to do); no "used to", "fixed in session
-  X", "confirmed by", worklog pointers or measurements there -- those go in `.claude/`. `//` implementation comments
+  what to call; no "used to", "fixed in session X", "confirmed by", worklog pointers or measurements there -- those go
+  in `.claude/`. `//` implementation comments
   MAY carry history and worklog pointers (project lead, 2026-10-03), as long as none of it moves into scaladoc. Error
   messages and `--help` never name `.claude/` files or private classes. **The Developer's Guide is kept current with the
   code like the other docs** (project lead, 2026-10-17): a change to a subsystem updates that subsystem's page, under the
   same rule, and a fact the code contradicts is fixed in the change that makes it false.
 - **Never revert the formatter's output.** If `scalafmtAll` touches files outside your change, commit that in its OWN
-  commit ("Format: ... formatter output only, no behavior change") and say so — reverting only hides the debt, and a
-  clean lint beats a minimal diff. Run all three lint checks (Commands) before pushing.
+  commit ("Format: ... formatter output only, no behavior change") and say so: a clean lint beats a minimal diff. Run
+  all three lint checks (Commands) before pushing.
 - Performance claims need isolated A/B measurement (`git stash` A/B, median of trials, one engine per JVM);
   machine noise here often exceeds small effects — report unconfirmed effects as unconfirmed.
-- **Finalizing a user-visible capability** (new complex, engine, or option) means checking four surfaces each
-  session that lands a chunk of it: `matlab.TDA4j`, `cli.TDA4jConf` (1:1 mirror), `_docs/developers-guide/`,
-  `_docs/user-guide/`. Internal refactors and bug fixes with no new surface are exempt.
+- **A new user-visible capability** (complex, engine, option): each session that lands a chunk of it checks
+  `matlab.TDA4j`, `cli.TDA4jConf` (1:1 mirror), `_docs/developers-guide/`, `_docs/user-guide/`. Refactors and bug fixes
+  with no new surface are exempt.
 - **Open items are GitHub issues** (project lead, 2026-10-11; labels and workflow in `CONTRIBUTING.md`): a question,
   limitation or unverified claim a session leaves gets an issue, linked from its worklog and PR; a user-visible change
-  gets a `CHANGELOG.md` line under Unreleased.
+  gets a `changelog.d/<topic>.md` fragment, never a `CHANGELOG.md` line (PRs that add to it conflict and drop out of the
+  merge queue; `changelog.d/README.md`, `WORKLOG-changelog-fragments.md`).
 - A cloud session (working on its own `claude/...` branch) may commit and push its own work to that branch at
   will, without asking first — the branch is disposable/session-scoped, not shared history. A local/interactive
   session working directly on a shared branch still waits to be asked; the project lead commits that work.

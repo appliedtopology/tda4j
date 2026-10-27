@@ -93,8 +93,9 @@ Codecov's commit statuses are informational (`codecov.yml`).
 
 ## What a push carries
 
-- **A `CHANGELOG.md` line** under Unreleased for anything a user sees or calls; a break goes under Breaking, with what
-  to write instead.
+- **A `changelog.d/<topic>.md` fragment** for anything a user sees or calls (format: `changelog.d/README.md`); a break
+  goes under Breaking, with what to write instead. Never a line of `CHANGELOG.md`: the `changelog` job fails it, and two
+  PRs that add to the same list conflict and drop out of the merge queue.
 - **An issue for everything left open**: a question for the project lead (`question`), a limitation (`enhancement`,
   `performance`), a claim nobody has checked (`unverified`). Search the issues first, open and closed. The body says
   what, where (files, worklog) and what done looks like, and ends with the attribution footer. Link the issues from

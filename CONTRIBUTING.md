@@ -81,15 +81,17 @@ The labels:
 against `scala`. The template asks what changed and why, which checks you ran, and what is not verified; delete what
 does not apply. "Closes #N" in the description closes the issue when the pull request merges.
 
-**A change a user can see adds a line to [CHANGELOG.md](CHANGELOG.md)** under Unreleased, in the section it belongs
-to; a change that breaks existing code goes under Breaking, with what to write instead.
+**A change a user can see adds a file to [changelog.d/](changelog.d/README.md)**, `changelog.d/<topic>.md`, with its
+entries under the section they belong to; a change that breaks existing code goes under Breaking, with what to write
+instead. Never a line of `CHANGELOG.md` itself: two pull requests that add to the same list conflict, and the merge
+queue drops the second. The release folds the files into `CHANGELOG.md` (`RELEASE.md`).
 
 **CI must be green**: `test` (the JVM test suite, then the fat jar built and run on a sample), `test-js` (the Scala.js
-suite on Node.js), `npm-package` (the npm tarball installed and run), `docs-build`, `mima` and `lint`. Reproduce a failure locally before fixing it. A change to the formatter's output on files the pull request
+suite on Node.js), `npm-package` (the npm tarball installed and run), `docs-build`, `mima`, `lint` and `changelog`. Reproduce a failure locally before fixing it. A change to the formatter's output on files the pull request
 does not otherwise touch goes in a commit of its own, "Format: ..., formatter output only".
 
 **Binary compatibility** is checked within a release series (0.5.x). Before 1.0 a deliberate break is allowed, but it
-is named: a commented `mimaBinaryIssueFilters` entry in `build.sbt` and a line under Breaking in the changelog. An
+is named: a commented `mimaBinaryIssueFilters` entry in `build.sbt` and an entry under Breaking in the changelog. An
 accidental break is restored, not filtered.
 
 **A new user-visible capability** (a complex, an engine, an option) is finished when four places know about it: the

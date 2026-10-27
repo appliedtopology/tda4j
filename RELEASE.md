@@ -106,8 +106,10 @@ a snapshot after 90 days.
   tda4jJS/npmPack` all green — same as CI (`test.yml`), run locally first so the interactive `sbt-release` sequence
   doesn't fail partway through.
 - `sbt scalafmtCheck scalafmtSbtCheck` clean (`lint.yml`'s own check).
-- **The changelog.** In `CHANGELOG.md`, rename the `Unreleased` section to `X.Y.Z (YYYY-MM-DD)`, read it over
-  (breaking changes first, each with what to write instead), and commit that before `sbt release`. It is the release
+- **The changelog.** `python3 changelog.d/assemble.py release X.Y.Z` folds the fragments of `changelog.d/` into the
+  entries under `Unreleased` in `CHANGELOG.md`, writes them as `## X.Y.Z (today's date)` (`--date YYYY-MM-DD` for another),
+  deletes the fragments and leaves `Unreleased` empty. Read `git diff CHANGELOG.md` over (breaking changes first, each with
+  what to write instead) and commit the diff and the deleted fragments before `sbt release`. The section is the release
   notes: `release.yml`'s `gh release create --generate-notes` lists only the merged pull requests, so paste the
   section into the GitHub Release's description once the workflow has created it.
 - **Open issues.** Skim the [issues](https://github.com/appliedtopology/tda4j/issues) for anything that should block
@@ -229,4 +231,5 @@ instead, replicate steps 1–4 locally; the commands are in the workflow file.
   "@appliedtopology/tda4j"` (skip until the package has been published once).
 - Confirm `release.yml` finished green in the Actions tab and the GitHub Release looks right (all six files
   attached, the changelog section pasted into its description) before announcing the release anywhere.
-- Add a new, empty `## Unreleased` section at the top of `CHANGELOG.md` if the release commit did not.
+- `CHANGELOG.md` has an empty `## Unreleased` section above the new version's (the script writes it) and `changelog.d/`
+  holds only its `README.md`.
