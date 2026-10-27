@@ -99,6 +99,8 @@ if (task === "vr") {
   else if (format === "distance") compute = () => tda4j.persistenceFromDistances(matrix, options);
   else throw new Error(`format=${format} (points|distance)`);
 } else if (task === "cubical") {
+  // The array holds the values of the top cells; the JavaScript API has no vertex-valued input (construction=V).
+  if (opts.construction === "V") unsupported("construction=V: the grid is read as the values of its top cells");
   const [shape, values] = readNpy(input);
   compute = () => tda4j.persistenceFromGrid(shape, values, options);
 } else if (task === "alpha") {

@@ -3,7 +3,7 @@
 # See bench/README.md. Idempotent: re-running skips what is already built or downloaded.
 #
 #   bench/run.sh setup [tool...]    build/install every tool into $WORKDIR, or only the named ones:
-#                                   python tda4j tda4j-js ripser julia javaplex dipha phat eirene dowker
+#                                   python flashcubical tda4j tda4j-js ripser julia javaplex dipha phat eirene dowker
 #   bench/run.sh prepare            download and generate the data sets into $WORKDIR/data
 #   bench/run.sh run [bench.py run options...]   e.g. --tasks vr --fields 2,17 --timeout 3600
 #   bench/run.sh all [options...]   setup + prepare + run
@@ -62,6 +62,16 @@ setup_python() {
     "$VENV/bin/python" -m pip install ${constraints[@]+"${constraints[@]}"} "$pkg" \
       || echo "WARNING: could not install $pkg; it will be reported as missing"
   done
+}
+
+setup_flashcubical() {
+  log "FlashCubical (T-prog123; a C++17 pybind11 extension for 2-D and 3-D arrays) at a pinned commit, into $VENV"
+  if [ ! -x "$VENV/bin/python" ]; then echo "WARNING: FlashCubical installs into the Python venv (run setup python first): flashcubical will be reported as missing"; return; fi
+  # scikit-build-core builds it with CMake (3.20 or newer) and a C++17 compiler; pip fetches both build requirements.
+  # The commit's tarball, so that no git is needed; "Update README.md v2", 2026-06-04.
+  "$VENV/bin/python" -m pip install "https://github.com/T-prog123/FlashCubical/archive/eaff91f54a126eed48170cdf1d92fef20537bec9.tar.gz" \
+    && "$VENV/bin/python" -c 'import numpy, flash_cubical; print("flash_cubical:", len(flash_cubical.compute(numpy.arange(16.0).reshape(4, 4)).values), "pairs on a 4x4 ramp")' \
+    || echo "WARNING: FlashCubical did not build; it will be reported as missing"
 }
 
 setup_ripser() {
@@ -292,10 +302,11 @@ case "$cmd" in
   # TDA4j first: the optional tools after it only warn when they fail.
   setup)
     components=("$@")
-    if [ ${#components[@]} -eq 0 ]; then components=(python tda4j tda4j-js ripser julia javaplex dipha phat eirene); fi
+    if [ ${#components[@]} -eq 0 ]; then components=(python flashcubical tda4j tda4j-js ripser julia javaplex dipha phat eirene); fi
     for component in "${components[@]}"; do
       case "$component" in
         python) setup_python ;;
+        flashcubical) setup_flashcubical ;;
         tda4j) setup_tda4j ;;
         tda4j-js) setup_tda4j_js ;;
         ripser) setup_ripser ;;
@@ -305,7 +316,7 @@ case "$cmd" in
         phat) setup_phat ;;
         eirene) setup_eirene ;;
         dowker) setup_dowker ;;
-        *) echo "unknown component '$component' (python tda4j tda4j-js ripser julia javaplex dipha phat eirene dowker)"; exit 2 ;;
+        *) echo "unknown component '$component' (python flashcubical tda4j tda4j-js ripser julia javaplex dipha phat eirene dowker)"; exit 2 ;;
       esac
     done
     ;;

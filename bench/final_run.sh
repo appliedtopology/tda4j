@@ -11,14 +11,19 @@
 #
 #   plan      print every command the stages would run (this is `DRY_RUN=1 ... all`); changes nothing
 #   freeze    require a clean checkout, record its commit in $FINAL/commit, build TDA4j (JVM classes and the npm package)
-#   smoke     the gate: three small cases at the frozen commit, TDA4j's rows against ripser.cpp; stops on any failure
+#   smoke     the gate: three small cases at the frozen commit, TDA4j's rows against ripser.cpp, and two small
+#             V-construction cubical cases at p = 2, TDA4j's rows against GUDHI, CubicalRipser and FlashCubical; stops on
+#             any failure (FlashCubical not installed is one: setup flashcubical)
 #   anchors   rerun a few of BASE's rows (ripser.cpp, GUDHI, giotto-ph) and compare their times with BASE's
 #   tda4j     every TDA4j JVM row, every task, in $FINAL/tda4j (resumable: rerun the stage after an interruption)
 #   js        the Scala.js twins on a subset of the cases, in $FINAL/js (resumable)
-#   merge     BASE's rows of the other tools + $FINAL/tda4j + $FINAL/js -> $FINAL/merged, summarized and checked
+#   cubicalv  GUDHI, CubicalRipser and FlashCubical on the V-construction cubical cases (`*_v`), which BASE has no rows
+#             for, at p = 2 (FlashCubical and CubicalRipser are Z/2 only), in $FINAL/cubicalv (resumable)
+#   merge     BASE's rows of the other tools + $FINAL/tda4j + $FINAL/js + $FINAL/cubicalv -> $FINAL/merged, summarized
+#             and checked
 #   sweeps    the threads, cubical and alpha sweeps, each in its own directory under $FINAL/sweeps
 #   status    the commit, the anchors verdict and the number of rows of each stage
-#   all       freeze smoke anchors tda4j js merge sweeps
+#   all       freeze smoke anchors tda4j js cubicalv merge sweeps
 #
 # Every stage after `freeze` refuses to run when HEAD is not the commit `freeze` recorded: a new commit is a new FINAL.
 #
@@ -32,6 +37,8 @@
 #   JS_TOOLS, JS_CASES, JS_FIELDS, JS_TIMEOUT   the Scala.js twins [tda4j-js*; a subset of the cases: not o3_4096 (two
 #                hours a row), not clifford50000; the last field of FIELDS; TIMEOUT]
 #   SMOKE_CASES, SMOKE_FIELD    [sphere3_192,o3_1024,dragon2000; 17]
+#   SMOKE_V_CASES, SMOKE_V_FIELD   [random2d_512_v,random3d_32_v; 2]
+#   CUBICALV_TOOLS, CUBICALV_CASES, CUBICALV_FIELDS   the external V-construction rows [gudhi,cripser,flashcubical; *_v; 2]
 #   ANCHOR_TOOLS, ANCHOR_CASES, ANCHOR_FIELDS, ANCHOR_TOLERANCE   [ripser.cpp,gudhi,giotto-ph-1t; sphere3_192,o3_1024,
 #                random2d_1024; the last field of FIELDS; 0.2]. Only the rows BASE also has are compared
 #   ALLOW_DRIFT=1   merge although the anchors differ from BASE's by more than the tolerance (say so in the paper)
@@ -94,6 +101,11 @@ JS_FIELDS="${JS_FIELDS:-$LAST_FIELD}"
 JS_TIMEOUT="${JS_TIMEOUT:-$TIMEOUT}"
 SMOKE_CASES="${SMOKE_CASES:-sphere3_192,o3_1024,dragon2000}"
 SMOKE_FIELD="${SMOKE_FIELD:-17}"
+SMOKE_V_CASES="${SMOKE_V_CASES:-random2d_512_v,random3d_32_v}"
+SMOKE_V_FIELD="${SMOKE_V_FIELD:-2}"
+CUBICALV_TOOLS="${CUBICALV_TOOLS:-gudhi,cripser,flashcubical}"
+CUBICALV_CASES="${CUBICALV_CASES:-*_v}"
+CUBICALV_FIELDS="${CUBICALV_FIELDS:-2}"
 ANCHOR_TOOLS="${ANCHOR_TOOLS:-ripser.cpp,gudhi,giotto-ph-1t}"
 ANCHOR_CASES="${ANCHOR_CASES:-sphere3_192,o3_1024,random2d_1024}"
 ANCHOR_FIELDS="${ANCHOR_FIELDS:-$LAST_FIELD}"
@@ -154,6 +166,13 @@ stage_smoke() {
   step env RESULTS_DIR="$FINAL/smoke" "$RUN" run --cases "$SMOKE_CASES" --fields "$SMOKE_FIELD" \
     --timeout "$TIMEOUT" --tools "$TDA4J_TOOLS,ripser.cpp" "${protocol[@]}"
   bench_py check "$FINAL/smoke" --tools 'tda4j*'
+  # The V-construction cubical rows: GUDHI (vertices=) is the reference, and TDA4j (on the refined image), CubicalRipser
+  # and FlashCubical must give its barcode. Z/2 only, so a field of its own; a missing tool is an error here.
+  say "smoke: $SMOKE_V_CASES (V-construction) at p=$SMOKE_V_FIELD"
+  step "$RUN" setup flashcubical
+  step env RESULTS_DIR="$FINAL/smoke-v" "$RUN" run --cases "$SMOKE_V_CASES" --fields "$SMOKE_V_FIELD" \
+    --timeout "$TIMEOUT" --tools "$TDA4J_TOOLS,$CUBICALV_TOOLS" "${protocol[@]}"
+  bench_py check "$FINAL/smoke-v" --tools "tda4j*,$CUBICALV_TOOLS" --allow unsupported
 }
 
 stage_anchors() {
@@ -204,6 +223,16 @@ stage_js() {
   bench_py check "$FINAL/js" --tools 'tda4j*' --allow unsupported,missing,timeout,oom,limit
 }
 
+stage_cubicalv() {
+  say "cubicalv: $CUBICALV_TOOLS on $CUBICALV_CASES at p=$CUBICALV_FIELDS"
+  require_frozen
+  step "$RUN" setup flashcubical
+  step env RESULTS_DIR="$FINAL/cubicalv" "$RUN" run --tools "$CUBICALV_TOOLS" --cases "$CUBICALV_CASES" \
+    --fields "$CUBICALV_FIELDS" --timeout "$TIMEOUT" "${protocol[@]}"
+  # A tool that is not installed is an error (the default would allow `missing`); a timeout or a lack of memory is a result.
+  bench_py check "$FINAL/cubicalv" --tools "$CUBICALV_TOOLS" --allow unsupported,timeout,oom,limit
+}
+
 stage_merge() {
   say "merge: BASE's other tools + this run's TDA4j rows"
   require_frozen
@@ -220,6 +249,7 @@ stage_merge() {
   # BASE's own TDA4j rows (including the JS twins) are from an older commit: only the other tools' rows are taken.
   local sources=("$BASE:!tda4j*" "$FINAL/tda4j")
   if [ -f "$FINAL/js/runs.csv" ] || [ -n "${DRY_RUN:-}" ]; then sources+=("$FINAL/js"); fi
+  if [ -f "$FINAL/cubicalv/runs.csv" ] || [ -n "${DRY_RUN:-}" ]; then sources+=("$FINAL/cubicalv"); fi
   step "$RUN" merge "$FINAL/merged" "${sources[@]}"
   bench_py check "$FINAL/merged" --tools 'tda4j*' --allow unsupported,missing,timeout,oom,limit
 }
@@ -243,7 +273,7 @@ stage_status() {
   echo "frozen at: $(cat "$FINAL/commit" 2>/dev/null || echo 'not yet')   HEAD: $(git -C "$REPO" rev-parse HEAD)"
   echo "anchors verdict: $(cat "$FINAL/anchors.verdict" 2>/dev/null || echo 'not yet')"
   local dir
-  for dir in smoke anchors tda4j js merged sweeps/threads sweeps/cubical sweeps/alpha; do
+  for dir in smoke smoke-v anchors tda4j js cubicalv merged sweeps/threads sweeps/cubical sweeps/alpha; do
     for csv in runs.csv sweep.csv; do
       if [ -f "$FINAL/$dir/$csv" ]; then
         printf '%-16s %6d rows  (%s)\n' "$dir" "$(($(wc -l < "$FINAL/$dir/$csv") - 1))" "$csv"
@@ -256,8 +286,8 @@ stage="${1:-}"
 shift || true
 case "$stage" in
   plan) DRY_RUN=1; export DRY_RUN
-        for s in freeze smoke anchors tda4j js merge sweeps; do "stage_$s"; done ;;
-  freeze|smoke|anchors|tda4j|js|merge|sweeps|status) "stage_$stage" ;;
-  all) for s in freeze smoke anchors tda4j js merge sweeps; do "stage_$s"; done ;;
+        for s in freeze smoke anchors tda4j js cubicalv merge sweeps; do "stage_$s"; done ;;
+  freeze|smoke|anchors|tda4j|js|cubicalv|merge|sweeps|status) "stage_$stage" ;;
+  all) for s in freeze smoke anchors tda4j js cubicalv merge sweeps; do "stage_$s"; done ;;
   *) sed -n '2,/^set -euo/p' "${BASH_SOURCE[0]}" | sed '$d' | sed 's/^# \{0,1\}//'; [ -z "$stage" ] || exit 2 ;;
 esac
