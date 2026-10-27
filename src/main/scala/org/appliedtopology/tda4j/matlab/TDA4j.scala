@@ -1256,7 +1256,11 @@ object TDA4j:
                 // for circularCoordinates -- catching and re-throwing a DIFFERENT exception here would only
                 // lose the original's own stack trace for no benefit.
                 fromBars[Simplex[Int], C](
-                  FastAlphaHomologyEngine[C]().persistentHomology(helix, includeZeroLength = includeZeroLength),
+                  FastAlphaHomologyEngine[C]().persistentHomology(
+                    helix,
+                    includeZeroLength = includeZeroLength,
+                    maxDimension = requestedMaxDimension
+                  ),
                   alphaCellVertices,
                   toDouble,
                   requestedMaxDimension,

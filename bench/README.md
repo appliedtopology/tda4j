@@ -106,7 +106,17 @@ in the interior or on the surface, over the dimensions 5, 6, 7, 8, 10, 12, 15, 2
 sphere are deliberately not sampled: they are all cospherical, and every Delaunay-based tool then triangulates the one
 degenerate cell its own way.
 
-Tools: `tda4j`, `tda4j-helix`, `tda4j-fastalpha`, `tda4j-dqp`, `tda4j-cech`, `gudhi`, and the `tda4j-js` twins. A barcode is
+Three presets (`--path`) cover what the sweep is read by, each setting the options you do not give:
+
+| `--path` | what it runs |
+|---|---|
+| `top` | R^d for d = 3 to 12, every degree up to d - 1: the whole barcode, where the fast alpha engine's dual union-find does the top degree and `tda4j-fastalpha-top` computes that degree alone |
+| `four` | R^d for d = 5 to 15, degrees up to 4: more than the default sweep's 2, less than the whole barcode |
+| `plane` | R^2, the point count from 1 000 to 3 000 000 (`--grid`), degrees 0 and 1: the point count is raised until each tool gives up |
+
+Without `--path`, `--dim` (a number, or `top`; at most d - 1) sets the highest degree, 2 by default.
+
+Tools: `tda4j`, `tda4j-helix`, `tda4j-fastalpha`, `tda4j-fastalpha-top` (the top degree alone), `tda4j-dqp`, `tda4j-cech`, `gudhi`, and the `tda4j-js` twins. A barcode is
 compared with the first of GUDHI, the Cech complex and the dual-QP that finished on the same draw. GUDHI (CGAL) is the other
 implementation but stops early in d. The Cech complex (minimum enclosing balls, no triangulation) and the dual-QP (a
 quadratic program per simplex) are other algorithms than the Delaunay walk, and by the nerve lemma the Cech and alpha
@@ -120,12 +130,12 @@ out-of-memory. The defaults assume a machine like the compute server's (`--jvm-h
 
 ```sh
 bench/run.sh sweep-alpha --seeds 1 --dims 5,6,7,8 --points 40 --shapes interior   # a quick look
+bench/run.sh sweep-alpha --seeds 1 --path top                                       # the whole barcode in R^d
 bench/run.sh sweep-alpha --extra 800:11:interior                                    # the whole grid
 ```
 
-What it does not do: **failure rates.** Helix's invalid triangulations were about 1 in 170 clouds at d = 4 with 20 to 30
-points, so a rate needs hundreds of draws per cell, not three; the sweep reports timing and whether a draw failed. Also **no
-simplex counts** (the driver does not report the size of the complex). And the points are noise: in high dimension the
+Failure rates and simplex counts are separate options (`--validity`, `--count`): a rate needs hundreds of draws per cell, not
+three, so it runs in one JVM per cell on the driver's own draws. The points are noise: in high dimension the
 distances concentrate, filtration values cluster, and a few nearly flat simplices have circumradii of 50 and more in a unit
 cube, so the bottleneck distance between backends is mostly the agreement of near-degenerate values; read it as a
 correctness stress, not a statement about topology. Cube-surface draws with d + 1 points on one facet are not in general

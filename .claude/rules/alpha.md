@@ -103,7 +103,9 @@ top simplices (BowyerWatson or Helix); valid any ambient dim≥2, never DQP (no 
 cofaces" precondition is guaranteed by BowyerWatson, NOT by Helix (more likely violated at higher dim/more points) — validated
 explicitly, throws `FastAlphaTriangulationException` rather than a silently-wrong dual graph. Facet dual-edge
 value from `HelixDelaunay.filtrationValue` directly, never recomputed as min over top simplices. At dim≥3, same
-cohomology hybrid as cubical on `LimitedAlphaShapesStream`; cross-validated at d=3. Wired as
+cohomology hybrid as cubical on `LimitedAlphaShapesStream`, capped by `maxDimension` (simplices up to
+`maxDimension + 1`; the dual graph only when the cap reaches `d - 1`; `persistentHomologyTopDegree` is the dual pass alone;
+`WORKLOG-fastalpha-degree-cap.md`); cross-validated at d=3. Wired as
 `engine="fast-alpha"` (alpha with a triangulating backend, project lead signed off on the measured exception rate). Representatives
 use `SignedUnionFind[C]` (`WORKLOG-fast-cubical-representatives.md`); the cubical engine moved to its byte-signed sibling
 `UnitSignedUnionFind` (`WORKLOG-cubical-performance.md`).

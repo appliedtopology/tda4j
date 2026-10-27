@@ -519,6 +519,33 @@ class AddressSpaceTests(unittest.TestCase):
             self.assertEqual(bench.run_proc(child("x = bytearray(300 * 1024**2)"), 60, Path(d) / "log").status, "ok")
 
 
+class TopDegreeTests(unittest.TestCase):
+    def test_dim_top_is_one_less_than_the_ambient_dimension(self):
+        self.assertEqual([sweep_alpha.degree_for("top", d) for d in (3, 8)], [2, 7])
+        self.assertEqual(sweep_alpha.degree_for("2", 8), 2)
+
+    def test_a_number_never_asks_for_more_than_the_top_degree(self):
+        self.assertEqual([sweep_alpha.degree_for("4", d) for d in (2, 3, 5, 9)], [1, 2, 4, 4])
+
+    def test_the_plane_path_is_one_series_over_n_in_two_dimensions(self):
+        preset = sweep_alpha.PATHS["plane"]
+        args = Namespace(shapes=preset["shapes"], points=preset["points"], dims=preset["dims"], grid=preset["grid"],
+                         extra="")
+        cells = sweep_alpha.plan(args)
+        self.assertEqual({(shape, d) for shape, _, d, _ in cells}, {("interior", 2)})
+        self.assertEqual([n for _, n, _, _ in cells], sorted(n for _, n, _, _ in cells))
+        self.assertTrue(all(series[0] == "n" for _, _, _, series in cells))
+
+    def test_a_top_only_barcode_is_compared_in_its_degree_only(self):
+        a = {2: [(0.1, 0.5)]}
+        b = {0: [(0.0, math.inf)], 1: [(0.2, 0.4)], 2: [(0.1, 0.5)]}
+        bottleneck = lambda x, y: float(abs(len(x) - len(y)))
+        self.assertGreater(bench.agreement(a, b, 2, bottleneck)[0], 0)
+        self.assertEqual(bench.agreement(a, b, 2, bottleneck, [2])[0], 0)
+        a[2] = [(0.1, 0.5), (0.2, 0.3)]
+        self.assertGreater(bench.agreement(a, b, 2, bottleneck, [2])[0], 0)
+
+
 class CubePointsTests(unittest.TestCase):
     def test_interior_points_are_inside_the_cube_and_deterministic(self):
         x = sweep_alpha.points("interior", 40, 7, 0)

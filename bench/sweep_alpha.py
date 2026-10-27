@@ -13,8 +13,13 @@ fixed d (`d:n,n,..;d:n,..`); `--extra n:d:shape` single cells such as 800 points
 `--seeds` independent draws: cold, and warm when the cold run took under `--warm-cap` seconds. A tool's series stops at its
 first timeout or out-of-memory (a series runs along d, or along n for a grid); a timeout costs `--timeout`.
 
+`--path top|four|plane` runs one of the three sweeps the benchmark is read by: the whole barcode up to degree d - 1 in R^d (the
+top degree is where the fast alpha engine's dual union-find needs no reduction), degrees up to 4 in R^d, and the plane with
+the point count raised until each tool gives up. `--dim` sets the highest degree directly (a number, or `top`; at most d - 1).
+
 Tools: `tda4j` (the default: Helix without a radius above 4-D), `tda4j-helix`, `tda4j-fastalpha` (Helix's triangulation, then
-the dual union-find), `tda4j-dqp` (the dual quadratic program: it needs no triangulation, so with no radius it builds every
+the dual union-find for the top degree and the cohomology engine for the degrees up to `--dim` below it),
+`tda4j-fastalpha-top` (the top degree d - 1 alone, compared with the reference in that degree only), `tda4j-dqp` (the dual quadratic program: it needs no triangulation, so with no radius it builds every
 candidate simplex up to dimension 3), `tda4j-cech`, `gudhi` (CGAL's Delaunay triangulation), and the Scala.js twins when
 installed. Bowyer-Watson stops at 4-D, the sweep starts at 5. `--py-mem-gb` caps GUDHI's address space, so CGAL's allocation
 at high d ends in `oom` and not in the kernel's killer; JVM and Node are not capped.
@@ -57,8 +62,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bench  # noqa: E402  (Case, TOOLS, command, run_proc, last_json, available, agreement, read_bars)
 import count_cells  # noqa: E402  (count_tda4j, count_gudhi: the size of the complex a draw produces)
 
-TOOL_NAMES = ["tda4j", "tda4j-helix", "tda4j-fastalpha", "tda4j-dqp", "tda4j-cech", "gudhi",
+TOOL_NAMES = ["tda4j", "tda4j-helix", "tda4j-fastalpha", "tda4j-fastalpha-top", "tda4j-dqp", "tda4j-cech", "gudhi",
               "tda4j-js", "tda4j-js-helix", "tda4j-js-fastalpha", "tda4j-js-dqp"]
+TOP_ONLY = ("tda4j-fastalpha-top",)  # the tools that report only degree d - 1
 REFERENCES = ["gudhi", "tda4j-cech", "tda4j-dqp"]  # the barcode a row is compared with: the first that finished
 COLUMNS = ["shape", "n", "d", "series", "seed", "tool", "status", "reason", "degenerate", "densest_facet", "cold_wall_s",
            "cold_s", "warm_median_s", "rss_mb", "rss_src", "heap_peak_mb", "old_peak_mb", "bars", "cells"]
@@ -103,6 +109,24 @@ def parse_grid(text):
     return out
 
 
+def degree_for(dim, d):
+    """The highest homological degree of a cell in R^d: `--dim top` is d - 1, the top degree of an alpha complex, and no
+    number asks for more than that (an alpha complex of points in R^d has no homology above d - 1)."""
+    return d - 1 if dim == "top" else min(int(dim), d - 1)
+
+
+# `--path`: the three sweeps the alpha benchmark is read by. Each sets the options still at their defaults.
+PATHS = {
+    # the whole barcode, up to the top degree d - 1: where the fast alpha engine's dual union-find does the top degree
+    "top": {"dim": "top", "dims": "3,4,5,6,7,8,9,10,12", "points": "40,60"},
+    # degrees up to 4 in R^d: more than the default sweep's 2, less than the whole barcode
+    "four": {"dim": "4", "dims": "5,6,7,8,10,12,15", "points": "40,60"},
+    # the plane, the point count raised until each tool gives up: the case the dual union-find needs no reduction for
+    "plane": {"dim": "top", "dims": "", "points": "", "shapes": "interior",
+              "grid": "2:1000,3000,10000,30000,100000,300000,1000000,3000000"},
+}
+
+
 def run_cell(name, kind, opts, shape, n, d, seed, series, args, bench_args, out):
     """One tool on one draw: a cold run, then a warm one if the cold computation was quick. Returns a row."""
     x = points(shape, n, d, seed)
@@ -111,7 +135,7 @@ def run_cell(name, kind, opts, shape, n, d, seed, series, args, bench_args, out)
     if not path.exists():
         np.savetxt(path, x, fmt="%.17g")
     task = "cech" if name == "tda4j-cech" else "alpha"
-    case = bench.Case(f"{shape}{d}d_{n}_s{seed}", task, rel, "points", args.dim)
+    case = bench.Case(f"{shape}{d}d_{n}_s{seed}", task, rel, "points", degree_for(args.dim, d))
     bars = out / "bars" / f"{shape}_{n}_{d}_{seed}__{name}.tsv"
     tag = f"{shape}_{n}_{d}_{seed}__{name}"
     caps = {"address_space_mb": args.py_mem_gb * 1024} if kind == "py" and args.py_mem_gb else {}
@@ -192,13 +216,18 @@ def plan(args):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--path", default="", choices=[""] + list(PATHS),
+                    help="a preset sweep: `top` (degrees up to d - 1 in R^d), `four` (degrees up to 4 in R^d), `plane` "
+                         "(R^2, the point count raised until each tool gives up); it sets the options you did not give")
     ap.add_argument("--dims", default="5,6,7,8,10,12,15,20,25", help="the dimensions of the sweep over d")
     ap.add_argument("--points", default="40,60", help="the point counts of the sweep over d")
     ap.add_argument("--shapes", default="interior,surface")
     ap.add_argument("--grid", default="", help="sweeps over n at fixed d: d:n,n,..;d:n,.. (default: none)")
     ap.add_argument("--extra", default="", help="single cells n:d:shape, run on their own, e.g. 800:11:interior")
     ap.add_argument("--seeds", type=int, default=3)
-    ap.add_argument("--dim", type=int, default=2, help="the highest homological degree")
+    ap.add_argument("--dim", default="2",
+                    help="the highest homological degree: a number, or `top` for d - 1 in R^d (the whole barcode, "
+                         "where the fast alpha engine's dual union-find does the top degree)")
     ap.add_argument("--field", type=int, default=17)
     ap.add_argument("--trials", type=int, default=3)
     ap.add_argument("--count", action="store_true",
@@ -223,6 +252,9 @@ def main():
     ap.add_argument("--python", default=sys.executable)
     ap.add_argument("--summarize", default="", help="rebuild the tables of an existing sweep directory and stop")
     args = ap.parse_args()
+    for key, value in PATHS.get(args.path, {}).items():
+        if getattr(args, key) == ap.get_default(key):
+            setattr(args, key, value)
     if args.summarize:
         summarize(Path(args.summarize))
         return
@@ -325,7 +357,8 @@ def summarize(out, bottleneck=None):
                 continue
             ref, theirs = found
             try:
-                dist, _ = bench.agreement(mine, theirs, max(list(mine) + list(theirs) + [0]), bottleneck)
+                only = [d - 1] if tool in TOP_ONLY else None  # a top-degree-only tool is compared in that degree
+                dist, _ = bench.agreement(mine, theirs, max(list(mine) + list(theirs) + [0]), bottleneck, only)
             except ImportError:  # the bottleneck distance is GUDHI's: the times and memory tables do not need it
                 return "needs gudhi"
             if worst is None or dist > worst:

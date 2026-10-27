@@ -23,34 +23,53 @@ open class FastAlphaHomologyEngine[CoefficientT: Field]:
   private val fr = summon[CoefficientT is Field]
   given Ordering[Simplex[Int]] = simplexOrdering[Int]
 
-  /** Every bar of the alpha filtration, with representatives; zero-length bars only if `includeZeroLength`. */
+  /** Every bar of the alpha filtration up to degree `maxDimension` (default: all, up to `d - 1`), with representatives;
+    * zero-length bars only if `includeZeroLength`. Below the top degree only the simplices of dimension
+    * `maxDimension + 1` and lower are built, as for any other engine, and the dual graph is walked only when the top
+    * degree is asked for.
+    */
   def persistentHomology(
+    helix: DelaunayAlphaShapes,
+    includeZeroLength: Boolean = false,
+    maxDimension: Optional[Int] = Optional.empty
+  ): List[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]] =
+    val d = helix.ambientDimension
+    requireAmbientDimension(d)
+    val top = d - 1
+    val cap = math.min(maxDimension.getOrElse(top), top)
+    require(cap >= 0, s"maxDimension must be at least 0, got $cap")
+    val dual = if cap == top then computeDualTopDimension(helix, includeZeroLength) else Nil
+    if d == 2 then computeH0(helix, includeZeroLength) ++ dual
+    else computeMiddleDimensions(helix, includeZeroLength, math.min(cap, d - 2)) ++ dual
+
+  /** Only the top degree `d - 1`, the bars of the dual union-find: no simplex below the top dimension is built and no
+    * matrix is reduced, so the cost is one pass over the top simplices and their facets. The lower degrees come from
+    * [[persistentHomology]].
+    */
+  def persistentHomologyTopDegree(
     helix: DelaunayAlphaShapes,
     includeZeroLength: Boolean = false
   ): List[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]] =
-    require(
-      helix.ambientDimension >= 2,
-      s"FastAlphaHomologyEngine requires ambient dimension >= 2, got ${helix.ambientDimension}"
-    )
-    val bars =
-      if helix.ambientDimension == 2 then
-        computeH0(helix, includeZeroLength) ++ computeDualTopDimension(helix, includeZeroLength)
-      else computeMiddleDimensions(helix, includeZeroLength) ++ computeDualTopDimension(helix, includeZeroLength)
-    bars
+    requireAmbientDimension(helix.ambientDimension)
+    computeDualTopDimension(helix, includeZeroLength)
+
+  private def requireAmbientDimension(d: Int): Unit =
+    require(d >= 2, s"FastAlphaHomologyEngine requires ambient dimension >= 2, got $d")
 
   // -------------------------------------------------------------------------------------------------------------
   // d >= 3's "middle" degrees (1 <= k <= d-2): see FastCubicalHomologyEngine.computeMiddleDimensions, whose
-  // structure this mirrors exactly (the cohomology engine on a view hiding the top-dimensional simplices, which
-  // declares homologyDegreeLimit = d - 2; H_0 comes out of the same computation).
+  // structure this mirrors exactly (the cohomology engine on a view hiding the simplices above `upTo + 1`, which
+  // declares homologyDegreeLimit = upTo; H_0 comes out of the same computation).
   // -------------------------------------------------------------------------------------------------------------
   private def computeMiddleDimensions(
     helix: DelaunayAlphaShapes,
-    includeZeroLength: Boolean
+    includeZeroLength: Boolean,
+    upTo: Int
   ): List[PersistenceBar[Double, Chain[Simplex[Int], CoefficientT]]] =
-    val truncated = LimitedAlphaShapesStream(helix, helix.ambientDimension - 1)
+    val truncated = LimitedAlphaShapesStream(helix, upTo + 1)
     CellularCohomologyEngine[Simplex[Int], CoefficientT, Double]()
       .persistentHomology(truncated, includeZeroLength)
-      .filter(_.dim <= helix.ambientDimension - 2)
+      .filter(_.dim <= upTo)
 
   private def endpoint(lower: Boolean)(v: Double): BarcodeEndpoint[Double] =
     if !lower && v == Double.PositiveInfinity then PositiveInfinity()

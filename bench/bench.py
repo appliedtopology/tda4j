@@ -220,6 +220,10 @@ TOOLS = [
     # fast-alpha runs on the whole triangulation, so it takes no radius; Bowyer-Watson refuses an affine span above
     # 4; DQP is only run with a radius (untruncated it is about 100 times slower than Helix in 2-D).
     ("tda4j-fastalpha", "tda4j", "alpha", {"engine": "fastalpha", "reps": "cycles", "no_radius": True}),
+    # Only the top degree d - 1, by the dual union-find alone (no matrix is reduced): its barcode is compared in that
+    # degree only.
+    ("tda4j-fastalpha-top", "tda4j", "alpha",
+     {"engine": "fastalpha-top", "reps": "cycles", "no_radius": True}),
     # The default above is Bowyer-Watson up to 4 dimensions, Helix above and DQP for a small radius; these name each.
     ("tda4j-bw", "tda4j", "alpha", {"engine": "auto", "reps": "cycles", "backend": "bowyer-watson", "max_ambient": 4}),
     ("tda4j-helix", "tda4j", "alpha", {"engine": "auto", "reps": "cycles", "backend": "helix"}),
@@ -823,8 +827,9 @@ def read_bars(path):
     return bars
 
 
-def agreement(a, b, max_dim, bottleneck=None):
-    """(distance, note): the largest discrepancy over degrees 0..max_dim, as the bottleneck distance on finite bars
+def agreement(a, b, max_dim, bottleneck=None, degrees=None):
+    """(distance, note): the largest discrepancy over degrees 0..max_dim (or over `degrees`, for a tool that reports
+    only some), as the bottleneck distance on finite bars
     and essential births matched in sorted order. A different number of essential bars in some degree is distance inf,
     and the note says which degree and how many. Distances below 1e-12 are 0 (the bottleneck routine returns
     denormals for equal diagrams). `bottleneck` defaults to GUDHI's."""
@@ -832,7 +837,7 @@ def agreement(a, b, max_dim, bottleneck=None):
         import gudhi
         bottleneck = gudhi.bottleneck_distance
     worst = 0.0
-    for k in range(max_dim + 1):
+    for k in (range(max_dim + 1) if degrees is None else degrees):
         fa = [(x, y) for x, y in a.get(k, []) if math.isfinite(y) and y > x]
         fb = [(x, y) for x, y in b.get(k, []) if math.isfinite(y) and y > x]
         worst = max(worst, bottleneck(np.array(fa).reshape(-1, 2), np.array(fb).reshape(-1, 2)))

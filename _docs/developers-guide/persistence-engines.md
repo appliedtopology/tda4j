@@ -271,7 +271,9 @@ or `HelixDelaunay`).
 It requires a full triangulation and is not compatible with the DQP alpha
 backends. As with the cubical engine, `H_0` and `H_{d-1}` use union-find and
 intermediate dimensions go to `CellularCohomologyEngine` (cycles by the
-involution).
+involution). `maxDimension` caps the degrees: the cohomology engine then sees the
+stream only up to dimension `maxDimension + 1`, and the dual graph is walked only
+when the cap reaches `d - 1`. `persistentHomologyTopDegree` is that dual pass alone.
 
 The dual construction assumes each facet has at most two cofaces.
 `BowyerWatsonDelaunay`'s exact predicates guarantee this. `HelixDelaunay` can
@@ -339,6 +341,19 @@ representatives cell for cell across engines; check that each one is a cycle
 (or cocycle) present at the bar's birth. The fast engines have no derived kind:
 their union-finds break ties by value rather than by the stream's order. Image
 cocycles go through `Engine.Cohomology`.
+
+## Circular coordinates from a diagram
+
+`CircularCoordinates(diagram, input, ...)` turns a degree-1 bar of any `PersistenceDiagram[Simplex[Int]]` into a map to
+the circle. A finite bar's cocycle `V_σ` has `σ` as its oldest cell and a coboundary that starts at the death cell, so
+restricted to the complex `K_r` at a scale `r` inside the bar it is a cocycle, and it is non-zero there. The diagram
+records which kind it carries (`PersistenceDiagram.representatives`); a diagram of cocycles supplies the class directly, and
+a diagram of cycles has it recovered by the cohomology of `K_r` over the diagram's field, matched to the bar by its
+birth. Both lift to integers (checked exactly on every triangle) and are smoothed to the harmonic representative.
+
+A bar's class is only defined up to adding the classes of shorter bars nested inside it. When such bars are alive at `r`,
+the engines' representatives, and so their coordinates, differ; every one is a valid circle map. To compare two routes,
+choose `r` where only the loops asked for are alive.
 
 ## Streams × engines: what works with what
 
