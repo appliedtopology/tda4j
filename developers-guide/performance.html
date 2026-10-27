@@ -174,7 +174,7 @@
   <p><code>bench/</code> times TDA4j against the other persistent-homology libraries on the same inputs on one machine:</p>
   <ul>
    <li>for Vietoris-Rips: ripser.cpp, ripser.py, giotto-ph, GUDHI, Ripserer.jl and JavaPlex;</li>
-   <li>for cubical complexes: GUDHI and CubicalRipser;</li>
+   <li>for cubical complexes: GUDHI and CubicalRipser, and FlashCubical (2-D and 3-D, Z/2, which reads vertex values: the benchmark's <code>_v</code> cases give TDA4j the equivalent image);</li>
    <li>alpha complexes as well;</li>
    <li>Čech (GUDHI's Delaunay-Čech), DTM-Rips (GUDHI), witness (GUDHI, JavaPlex), sparse Rips (GUDHI's sparse Rips, a different construction, and the exact Rips barcode from ripser.cpp as the reference) and Dowker complexes (a hand-built GUDHI simplex tree, Blaser and Brun's <code>dowker_homology</code>, Yoon's Julia package);</li>
    <li>edge collapse: <code>tda4j-collapse</code> beside <code>gudhi-collapse</code>.</li>
