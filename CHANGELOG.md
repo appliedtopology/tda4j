@@ -57,6 +57,13 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   exactly over the integers; a diagram of cycles has the class recovered by the cohomology of that complex. The scale
   defaults to the middle of the bar. `PersistenceDiagram.representatives` says which kind of representative a diagram
   carries. `compute`, `computeToroidal` and `h1Bars(metricSpace)` are as they were (#236).
+- `FastAlphaHomologyEngine.persistentHomology` takes `maxDimension`: the simplices above `maxDimension + 1` are no
+  longer built and the dual graph is walked only for the top degree, so `engine=fast-alpha` with the default
+  `maxDimension = 2` stops doing the work for degrees nobody asked for in 4 or more dimensions (MATLAB, CLI and JS too).
+  `persistentHomologyTopDegree` gives the top degree `d - 1` alone, by the dual union-find.
+- The alpha sweep (`bench/run.sh sweep-alpha`) has `--path top|four|plane`, the whole barcode in R^d, degrees up to 4 in
+  R^d, and the plane with the point count raised until each tool gives up; `--dim` takes `top`; the tool
+  `tda4j-fastalpha-top` times the top degree alone.
 - `Field.hash(x)`: a hash of a field element that agrees with `isEqual`, which `Chain.hashCode` uses. The default, `0`
   for every element, is right for any field; override it for an exact field of your own to hash its coefficients too
   (`Fp` hashes its residue in `0 until p`).

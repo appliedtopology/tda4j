@@ -371,6 +371,25 @@ class TDA4jSpec extends mutable.Specification:
       agree must beTrue
     }
 
+    "engine=fast-alpha with maxDimension=1 on a 4D point cloud reports the cohomology engine's bars up to degree 1" in {
+      val rng = new scala.util.Random(4)
+      val points4d = Array.fill(16)(Array.fill(4)(rng.nextDouble()))
+      val capped = Array("complex", "alpha", "maxDimension", "1")
+      val reference =
+        triples(FullBarcode.computeFromPoints(points4d, capped ++ Array("engine", "cohomology")).toArray())
+          .sortBy(t => (t._1, t._2, t._3))
+      val fastAlpha =
+        triples(FullBarcode.computeFromPoints(points4d, capped ++ Array("engine", "fast-alpha")).toArray())
+          .sortBy(t => (t._1, t._2, t._3))
+
+      (fastAlpha.map(_._1).max must be_==(1)) and (reference.length must be_==(fastAlpha.length)) and {
+        reference.zip(fastAlpha).forall { case ((d1, b1, e1), (d2, b2, e2)) =>
+          d1 == d2 && math.abs(b1 - b2) < 1e-9 && (e1.isInfinite == e2.isInfinite) &&
+          (e1.isInfinite || math.abs(e1 - e2) < 1e-9)
+        } must beTrue
+      }
+    }
+
     "engine=fast-alpha on an exact 4x4x4 grid (cospherical cubes) agrees with engine=naive" in {
       // fast-alpha needs a valid triangulation (it throws otherwise); the facade's default epsilon is AlphaShapes' own.
       val grid =

@@ -271,7 +271,9 @@ or `HelixDelaunay`).
 It requires a full triangulation and is not compatible with the DQP alpha
 backends. As with the cubical engine, `H_0` and `H_{d-1}` use union-find and
 intermediate dimensions go to `CellularCohomologyEngine` (cycles by the
-involution).
+involution). `maxDimension` caps the degrees: the cohomology engine then sees the
+stream only up to dimension `maxDimension + 1`, and the dual graph is walked only
+when the cap reaches `d - 1`. `persistentHomologyTopDegree` is that dual pass alone.
 
 The dual construction assumes each facet has at most two cofaces.
 `BowyerWatsonDelaunay`'s exact predicates guarantee this. `HelixDelaunay` can
