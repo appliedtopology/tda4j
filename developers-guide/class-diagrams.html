@@ -454,21 +454,22 @@
 </span><span line-number="29" class=""><span class="tooltip-container"></span>        &lt;&lt;trait&gt;&gt;
 </span><span line-number="30" class=""><span class="tooltip-container"></span>        type Coefficient
 </span><span line-number="31" class=""><span class="tooltip-container"></span>        bars: List~PersistenceBar~
-</span><span line-number="32" class=""><span class="tooltip-container"></span>        dim(k), at(f), longerThan(x)
-</span><span line-number="33" class=""><span class="tooltip-container"></span>        significant(), bettiNumbers
-</span><span line-number="34" class=""><span class="tooltip-container"></span>    }
-</span><span line-number="35" class=""><span class="tooltip-container"></span>    class Coefficients {
-</span><span line-number="36" class=""><span class="tooltip-container"></span>        &lt;&lt;trait&gt;&gt;
-</span><span line-number="37" class=""><span class="tooltip-container"></span>        type C
-</span><span line-number="38" class=""><span class="tooltip-container"></span>        field: C is Field
-</span><span line-number="39" class=""><span class="tooltip-container"></span>        fromInt(x) C
-</span><span line-number="40" class=""><span class="tooltip-container"></span>    }
-</span><span line-number="41" class=""><span class="tooltip-container"></span>    Persistence ..&gt; Input : takes
-</span><span line-number="42" class=""><span class="tooltip-container"></span>    Persistence ..&gt; Engine : takes
-</span><span line-number="43" class=""><span class="tooltip-container"></span>    Persistence ..&gt; Representatives : takes
-</span><span line-number="44" class=""><span class="tooltip-container"></span>    Persistence ..&gt; PointCloudComplex : takes
-</span><span line-number="45" class=""><span class="tooltip-container"></span>    Persistence ..&gt; Coefficients : picks the field
-</span><span line-number="46" class=""><span class="tooltip-container"></span>    Persistence ..&gt; PersistenceDiagram : returns
+</span><span line-number="32" class=""><span class="tooltip-container"></span>        representatives: Option~Representatives~
+</span><span line-number="33" class=""><span class="tooltip-container"></span>        dim(k), at(f), longerThan(x)
+</span><span line-number="34" class=""><span class="tooltip-container"></span>        significant(), bettiNumbers
+</span><span line-number="35" class=""><span class="tooltip-container"></span>    }
+</span><span line-number="36" class=""><span class="tooltip-container"></span>    class Coefficients {
+</span><span line-number="37" class=""><span class="tooltip-container"></span>        &lt;&lt;trait&gt;&gt;
+</span><span line-number="38" class=""><span class="tooltip-container"></span>        type C
+</span><span line-number="39" class=""><span class="tooltip-container"></span>        field: C is Field
+</span><span line-number="40" class=""><span class="tooltip-container"></span>        fromInt(x) C
+</span><span line-number="41" class=""><span class="tooltip-container"></span>    }
+</span><span line-number="42" class=""><span class="tooltip-container"></span>    Persistence ..&gt; Input : takes
+</span><span line-number="43" class=""><span class="tooltip-container"></span>    Persistence ..&gt; Engine : takes
+</span><span line-number="44" class=""><span class="tooltip-container"></span>    Persistence ..&gt; Representatives : takes
+</span><span line-number="45" class=""><span class="tooltip-container"></span>    Persistence ..&gt; PointCloudComplex : takes
+</span><span line-number="46" class=""><span class="tooltip-container"></span>    Persistence ..&gt; Coefficients : picks the field
+</span><span line-number="47" class=""><span class="tooltip-container"></span>    Persistence ..&gt; PersistenceDiagram : returns
 </span></code></pre>
    <div class="buttons"></div>
   </div>

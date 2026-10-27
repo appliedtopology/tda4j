@@ -13,7 +13,8 @@
 <div class="cover">
  <div class="doc">
   <p>Circular coordinates (de Silva, Morozov, Vejdemo-Johansson, "Persistent Cohomology and Circular Coordinates", Discrete &amp; Computational Geometry 45:737-759, 2011): a map from the points to the circle <code>R/Z</code> that represents a persistent H¹ class of the Vietoris-Rips complex.</p>
-  <p>Pick a scale <code>r</code> inside the class's bar (see <a href="CircularCoordinates$.html#h1Bars-fffff9fb">h1Bars</a>). The class is then an essential class of the fixed complex <code>K_r</code>, the complex truncated at <code>r</code>; it is matched to the bar of the full computation with the same birth, since truncation never changes a birth. Its cocycle, computed over <code>F_prime</code> and lifted to the integers, is smoothed to the harmonic representative: <code>g</code> minimizing <code>||z - d0 g||²</code> over the connected component of <code>K_r</code> carrying the class, solved by conjugate gradients on the normal equations with one vertex fixed at <code>0</code>. The coordinate of a point is <code>g(v) mod 1</code>. The solve follows DREiMac's <code>toroidalcoords.py</code>.</p>
+  <p>Pick a scale <code>r</code> inside the class's bar (see <a href="CircularCoordinates$.html#h1Bars-cfb">h1Bars</a>). The class is then an essential class of the fixed complex <code>K_r</code>, the complex truncated at <code>r</code>; it is matched to the bar of the full computation with the same birth, since truncation never changes a birth. Its cocycle, computed over <code>F_prime</code> and lifted to the integers, is smoothed to the harmonic representative: <code>g</code> minimizing <code>||z - d0 g||²</code> over the connected component of <code>K_r</code> carrying the class, solved by conjugate gradients on the normal equations with one vertex fixed at <code>0</code>. The coordinate of a point is <code>g(v) mod 1</code>. The solve follows DREiMac's <code>toroidalcoords.py</code>.</p>
+  <p>There are two ways in. <code>compute(metricSpace, r, ...)</code> takes the points and does everything itself, on the Vietoris-Rips complex. <code>CircularCoordinates(diagram, input, ...)</code> takes a <a href="PersistenceDiagram.html">PersistenceDiagram</a> you already have, of any complex and from any engine, together with what it was computed from, and reads the bar, its field and (when the diagram carries cocycles) its cocycle from the diagram.</p>
  </div>
  <section id="attributes">
   <h2 class="h500">Attributes</h2>
@@ -28,7 +29,7 @@
     Source
    </dt>
    <dd class="body-medium">
-    <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/CircularCoordinates.scala#L22" target="_blank">CircularCoordinates.scala</a>
+    <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/CircularCoordinates.scala#L27" target="_blank">CircularCoordinates.scala</a>
    </dd>
    <dt class="body-small">
     Graph
@@ -129,7 +130,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/CircularCoordinates.scala#L30" target="_blank">CircularCoordinates.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/CircularCoordinates.scala#L35" target="_blank">CircularCoordinates.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -189,7 +190,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/CircularCoordinates.scala#L225" target="_blank">CircularCoordinates.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/CircularCoordinates.scala#L236" target="_blank">CircularCoordinates.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -237,6 +238,83 @@ node3 -> node2;
          <button class="icon-button show-content expand"></button>
          <h4 class="groupHeader h200">Concrete methods</h4>
         </div>
+        <div class="documentableElement" id="apply-bf7">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="CircularCoordinates$.html#apply-bf7" t="n" class="documentableName ">apply</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">diagram</span>: <a href="PersistenceDiagram.html" t="t">PersistenceDiagram</a>[<a href="../tda4j.html#Simplex-0" t="t">Simplex</a>[<span data-unresolved-link="" t="t">Int</span>]], <span t="k"></span><span data-unresolved-link="" t="n">input</span>: <a href="Persistence$$Input.html" t="t">Input</a>[<a href="../tda4j.html#Simplex-0" t="t">Simplex</a>[<span data-unresolved-link="" t="t">Int</span>]], <span t="k"></span><span data-unresolved-link="" t="n">bar</span>: <span data-unresolved-link="" t="t">Int</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">r</span>: <a href="Optional.html" t="t">Optional</a>[<span data-unresolved-link="" t="t">Double</span>] = ..., <span t="k"></span><span data-unresolved-link="" t="n">complex</span>: <a href="PointCloudComplex.html" t="t">PointCloudComplex</a> = ...): <a href="CircularCoordinates$$Result.html" t="t">Result</a>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>Circular coordinates for one H¹ bar of a persistence diagram: the loop <code>diagram.dim(1)</code> found, whichever complex and engine found it.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p>Circular coordinates for one H¹ bar of a persistence diagram: the loop <code>diagram.dim(1)</code> found, whichever complex and engine found it.</p>
+              <div class="snippet mono-small-block">
+               <pre><code class="language-"><span line-number="1" class=""><span class="tooltip-container"></span>val diagram = Persistence(points, maxDimension = 1)
+</span><span line-number="2" class=""><span class="tooltip-container"></span>val coordinate = CircularCoordinates(diagram, points)       // the most persistent loop, at the middle of its bar
+</span><span line-number="3" class=""><span class="tooltip-container"></span>CircularCoordinates(diagram, points, bar = 1, r = 0.6)      // another loop, at a chosen scale
+</span><span line-number="4" class=""><span class="tooltip-container"></span>CircularCoordinates(cechDiagram, points, complex = Cech)    // a Cech diagram: say which complex it is of
+</span></code></pre>
+               <div class="buttons"></div>
+              </div>
+              <p>The scale <code>r</code> and the cocycle are read off the diagram where they can be. With <code>representatives = Representatives.Cocycles</code> the bar's own cocycle is restricted to the complex at <code>r</code> and used as it is. A diagram of cycles (the default of <a href="Persistence$.html">Persistence</a>), or one that does not say, has its class recovered by the cohomology of that complex over the diagram's field, matched to the bar by its birth. Either way the cocycle is lifted to the integers, checked there, and smoothed to the harmonic representative as in <a href="CircularCoordinates$.html#compute-fffff330">compute</a>.</p>
+             </div>
+             <h2 class="h200">Value parameters</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               bar
+              </dt>
+              <dd class="body-medium">
+               <p>the bar, counted among the diagram's H¹ bars from the most persistent, as in <a href="CircularCoordinates$.html#h1Bars-cfb">h1Bars</a>.</p>
+              </dd>
+              <dt class="body-small">
+               complex
+              </dt>
+              <dd class="body-medium">
+               <p>the complex a point cloud is turned into, as in <code>Persistence(points, complex = ...)</code>.</p>
+              </dd>
+              <dt class="body-small">
+               diagram
+              </dt>
+              <dd class="body-medium">
+               <p>a diagram of degrees up to at least 1, over <code>Z/p</code> for an odd prime <code>p</code> (the <code>characteristic</code> it was computed with), of a complex on integer vertices.</p>
+              </dd>
+              <dt class="body-small">
+               input
+              </dt>
+              <dd class="body-medium">
+               <p>what the diagram was computed from, as <code>Persistence</code> took it: points, a metric space or a stream.</p>
+              </dd>
+              <dt class="body-small">
+               r
+              </dt>
+              <dd class="body-medium">
+               <p>the scale to compute at; it must lie in <code>[birth, death)</code> of the bar (default: the middle of the bar, or the end of the diagram for a bar that never dies).</p>
+              </dd>
+             </dl>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/CircularCoordinates.scala#L447" target="_blank">CircularCoordinates.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
         <div class="documentableElement" id="compute-fffff330">
          <div class="documentableElement-expander">
           <button class="icon-button ar show-content"></button>
@@ -264,7 +342,7 @@ node3 -> node2;
                cocycleIndex
               </dt>
               <dd class="body-medium">
-               <p>the class, <code>0</code> being the most persistent (as in <a href="CircularCoordinates$.html#h1Bars-fffff9fb">h1Bars</a> and DREiMac's <code>cocycle_idx</code>).</p>
+               <p>the class, <code>0</code> being the most persistent (as in <a href="CircularCoordinates$.html#h1Bars-cfb">h1Bars</a> and DREiMac's <code>cocycle_idx</code>).</p>
               </dd>
               <dt class="body-small">
                maxFiltrationValue
@@ -297,7 +375,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/CircularCoordinates.scala#L80" target="_blank">CircularCoordinates.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/CircularCoordinates.scala#L85" target="_blank">CircularCoordinates.scala</a>
               </dd>
              </dl>
             </div>
@@ -333,7 +411,7 @@ node3 -> node2;
                cocycleIndices
               </dt>
               <dd class="body-medium">
-               <p>the classes (indexed as in <a href="CircularCoordinates$.html#h1Bars-fffff9fb">h1Bars</a>), at least one and without repeats. Each bar must contain <code>r</code>, and all of them must live on the same connected component of <code>K_r</code>.</p>
+               <p>the classes (indexed as in <a href="CircularCoordinates$.html#h1Bars-cfb">h1Bars</a>), at least one and without repeats. Each bar must contain <code>r</code>, and all of them must live on the same connected component of <code>K_r</code>.</p>
               </dd>
               <dt class="body-small">
                reduce
@@ -348,7 +426,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/CircularCoordinates.scala#L250" target="_blank">CircularCoordinates.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/CircularCoordinates.scala#L261" target="_blank">CircularCoordinates.scala</a>
               </dd>
              </dl>
             </div>
@@ -383,7 +461,42 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/CircularCoordinates.scala#L47" target="_blank">CircularCoordinates.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/CircularCoordinates.scala#L52" target="_blank">CircularCoordinates.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="h1Bars-cfb">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="CircularCoordinates$.html#h1Bars-cfb" t="n" class="documentableName ">h1Bars</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">diagram</span>: <a href="PersistenceDiagram.html" t="t">PersistenceDiagram</a>[<a href="../tda4j.html#Simplex-0" t="t">Simplex</a>[<span data-unresolved-link="" t="t">Int</span>]]): <span data-unresolved-link="" t="t">IndexedSeq</span>[(<span data-unresolved-link="" t="t">Double</span>, <span data-unresolved-link="" t="t">Double</span>)]
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>The <code>(birth, death)</code> of every H¹ bar of <code>diagram</code>, most persistent first: index <code>i</code> is <code>bar = i</code> in <a href="CircularCoordinates$.html#apply-bf7">apply</a> and <a href="CircularCoordinates$.html#toroidal-1ed">toroidal</a>. Call this first to choose <code>r</code>.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p>The <code>(birth, death)</code> of every H¹ bar of <code>diagram</code>, most persistent first: index <code>i</code> is <code>bar = i</code> in <a href="CircularCoordinates$.html#apply-bf7">apply</a> and <a href="CircularCoordinates$.html#toroidal-1ed">toroidal</a>. Call this first to choose <code>r</code>.</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/CircularCoordinates.scala#L410" target="_blank">CircularCoordinates.scala</a>
               </dd>
              </dl>
             </div>
@@ -418,7 +531,63 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/CircularCoordinates.scala#L169" target="_blank">CircularCoordinates.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/CircularCoordinates.scala#L174" target="_blank">CircularCoordinates.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="toroidal-1ed">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="CircularCoordinates$.html#toroidal-1ed" t="n" class="documentableName ">toroidal</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">diagram</span>: <a href="PersistenceDiagram.html" t="t">PersistenceDiagram</a>[<a href="../tda4j.html#Simplex-0" t="t">Simplex</a>[<span data-unresolved-link="" t="t">Int</span>]], <span t="k"></span><span data-unresolved-link="" t="n">input</span>: <a href="Persistence$$Input.html" t="t">Input</a>[<a href="../tda4j.html#Simplex-0" t="t">Simplex</a>[<span data-unresolved-link="" t="t">Int</span>]], <span t="k"></span><span data-unresolved-link="" t="n">bars</span>: <span data-unresolved-link="" t="t">Seq</span>[<span data-unresolved-link="" t="t">Int</span>], <span t="k"></span><span data-unresolved-link="" t="n">r</span>: <a href="Optional.html" t="t">Optional</a>[<span data-unresolved-link="" t="t">Double</span>] = ..., <span t="k"></span><span data-unresolved-link="" t="n">complex</span>: <a href="PointCloudComplex.html" t="t">PointCloudComplex</a> = ..., <span t="k"></span><span data-unresolved-link="" t="n">reduce</span>: <span data-unresolved-link="" t="t">Boolean</span> = ...): <a href="CircularCoordinates$$ToroidalResult.html" t="t">ToroidalResult</a>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>Toroidal coordinates for several H¹ bars of a persistence diagram, as <a href="CircularCoordinates$.html#computeToroidal-56a">computeToroidal</a> does for a metric space: the bars must be alive together at <code>r</code> and on one connected piece of the complex.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p>Toroidal coordinates for several H¹ bars of a persistence diagram, as <a href="CircularCoordinates$.html#computeToroidal-56a">computeToroidal</a> does for a metric space: the bars must be alive together at <code>r</code> and on one connected piece of the complex.</p>
+             </div>
+             <h2 class="h200">Value parameters</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               bars
+              </dt>
+              <dd class="body-medium">
+               <p>the bars, counted as in <a href="CircularCoordinates$.html#h1Bars-cfb">h1Bars</a>; at least one, without repeats.</p>
+              </dd>
+              <dt class="body-small">
+               r
+              </dt>
+              <dd class="body-medium">
+               <p>the scale (default: the middle of the stretch where all the bars are alive).</p>
+              </dd>
+              <dt class="body-small">
+               reduce
+              </dt>
+              <dd class="body-medium">
+               <p><code>false</code> keeps the classes as given, without the lattice reduction.</p>
+              </dd>
+             </dl>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/CircularCoordinates.scala#L468" target="_blank">CircularCoordinates.scala</a>
               </dd>
              </dl>
             </div>

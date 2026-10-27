@@ -2820,7 +2820,8 @@
             <div class="cover">
              <div class="doc">
               <p>Circular coordinates (de Silva, Morozov, Vejdemo-Johansson, "Persistent Cohomology and Circular Coordinates", Discrete &amp; Computational Geometry 45:737-759, 2011): a map from the points to the circle <code>R/Z</code> that represents a persistent H¹ class of the Vietoris-Rips complex.</p>
-              <p>Pick a scale <code>r</code> inside the class's bar (see <a href="tda4j/CircularCoordinates$.html#h1Bars-fffff9fb">h1Bars</a>). The class is then an essential class of the fixed complex <code>K_r</code>, the complex truncated at <code>r</code>; it is matched to the bar of the full computation with the same birth, since truncation never changes a birth. Its cocycle, computed over <code>F_prime</code> and lifted to the integers, is smoothed to the harmonic representative: <code>g</code> minimizing <code>||z - d0 g||²</code> over the connected component of <code>K_r</code> carrying the class, solved by conjugate gradients on the normal equations with one vertex fixed at <code>0</code>. The coordinate of a point is <code>g(v) mod 1</code>. The solve follows DREiMac's <code>toroidalcoords.py</code>.</p>
+              <p>Pick a scale <code>r</code> inside the class's bar (see <a href="tda4j/CircularCoordinates$.html#h1Bars-cfb">h1Bars</a>). The class is then an essential class of the fixed complex <code>K_r</code>, the complex truncated at <code>r</code>; it is matched to the bar of the full computation with the same birth, since truncation never changes a birth. Its cocycle, computed over <code>F_prime</code> and lifted to the integers, is smoothed to the harmonic representative: <code>g</code> minimizing <code>||z - d0 g||²</code> over the connected component of <code>K_r</code> carrying the class, solved by conjugate gradients on the normal equations with one vertex fixed at <code>0</code>. The coordinate of a point is <code>g(v) mod 1</code>. The solve follows DREiMac's <code>toroidalcoords.py</code>.</p>
+              <p>There are two ways in. <code>compute(metricSpace, r, ...)</code> takes the points and does everything itself, on the Vietoris-Rips complex. <code>CircularCoordinates(diagram, input, ...)</code> takes a <a href="tda4j/PersistenceDiagram.html">PersistenceDiagram</a> you already have, of any complex and from any engine, together with what it was computed from, and reads the bar, its field and (when the diagram carries cocycles) its cocycle from the diagram.</p>
              </div>
              <h2 class="h200">Attributes</h2>
              <dl class="attributes attributes-small">
@@ -2834,7 +2835,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/CircularCoordinates.scala#L22" target="_blank">CircularCoordinates.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/CircularCoordinates.scala#L27" target="_blank">CircularCoordinates.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -12963,7 +12964,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/barcode/PersistenceDiagram.scala#L96" target="_blank">PersistenceDiagram.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/barcode/PersistenceDiagram.scala#L102" target="_blank">PersistenceDiagram.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
