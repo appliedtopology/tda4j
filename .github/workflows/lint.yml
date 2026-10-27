@@ -69,3 +69,23 @@ jobs:
       # Fix locally with `sbt scalafmtAll scalafmtSbt`.
       - name: Formatting
         run: sbt --server "scalafmtSbtCheck ; scalafmtCheck ; Test / scalafmtCheck"
+
+  # A pull request's changelog entry is a file in changelog.d/ (changelog.d/README.md), not a line of CHANGELOG.md: two pull
+  # requests that add to the same list conflict, and the merge queue drops the second. No build, so it runs on every pull
+  # request, queue batch and push, whatever the paths, and `changes` does not gate it.
+  changelog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Fragments are well-formed
+        run: python3 changelog.d/assemble.py check
+      - name: The release script
+        run: python3 -m unittest discover -s changelog.d
+      - name: The pull request adds no entry to CHANGELOG.md
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.base_ref }}
+        run: python3 changelog.d/assemble.py check --base "origin/$BASE"

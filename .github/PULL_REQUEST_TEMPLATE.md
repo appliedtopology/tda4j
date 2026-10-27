@@ -21,7 +21,7 @@
 
 ## If this adds or changes a user-visible capability (complex, engine, option)
 
-- [ ] A line in `CHANGELOG.md` under Unreleased (a break goes under Breaking, with what to write instead)
+- [ ] A file `changelog.d/<topic>.md`, not a line of `CHANGELOG.md` (format: `changelog.d/README.md`; a break goes under Breaking, with what to write instead)
 - [ ] `matlab.TDA4j` dispatch
 - [ ] `cli.TDA4jCLI` / `TDA4jConf` (a 1:1 mirror of the MATLAB option keys)
 - [ ] `_docs/developers-guide/` (`persistence-engines.md`, `architecture.md`, `class-diagrams.md`)
