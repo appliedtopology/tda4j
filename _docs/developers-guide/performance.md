@@ -111,6 +111,13 @@ It records peak RSS for each. `bench/run.sh sweep-cubical` times the image
 engines across sizes, with CubicalRipser and GUDHI beside them, and is how the
 `Auto` default for images is chosen; its RSS column is the memory comparison.
 `bench/run.sh sweep-threads` times the multithreaded Vietoris-Rips tools,
-the two block-parallel experiments among them, at 1, 2, 4, ... threads, each
-run pinned to as many CPUs, and checks that the barcode does not change with
-the thread count.
+`ParallelRipser` through the verb and the bars-only block-parallel experiment
+among them, at 1, 2, 4, ... threads, each run pinned to as many CPUs, and
+checks that the barcode does not change with the thread count.
+
+The main tables are single-threaded, as ripser.cpp and GUDHI are: every TDA4j
+row runs with `sequential=true`, except the rows named `-mt`. `bench/final_run.sh`
+runs the paper's final benchmark in stages on one frozen commit: it measures
+TDA4j's own rows and merges them (`bench.py merge`) with the rows of the other
+tools from an earlier full run, after anchor rows have shown that the machine
+still runs those tools at the same speed.

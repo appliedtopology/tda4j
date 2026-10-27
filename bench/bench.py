@@ -4,6 +4,9 @@
     bench.py prepare  --data DATA                        download the benchmark data, generate the synthetic sets
     bench.py run      --data DATA --out RESULTS [...]    time every (case, tool, field), check the barcodes agree
     bench.py summarize RESULTS                           tables: per case, and TDA4j's slowdown
+    bench.py merge    OUT DIR[:tool,...]...              one results directory from several (the last source wins)
+    bench.py anchors  NEW OLD                            do the rows two runs share agree in time?
+    bench.py constraints RESULTS                         a pip constraints file from the run's env.json
 
 Normally driven by bench/run.sh, which builds the tools and sets the environment variables read here
 (TDA4J_CP, TDA4J_JS, NODE, RIPSER_BIN, RIPSER_COEFF_BIN, JULIA, RIPSERER_PROJECT, JAVAPLEX_JAR, JAVAPLEX_BUILD). A tool
@@ -25,11 +28,17 @@ Method (see .claude/PLAN-paper.md, section 3.0):
     Vietoris-Rips, GUDHI for cubical and alpha): bottleneck distance on finite bars, and essential bars
     matched by birth. ripser.cpp computes in float32, so agreement is up to a tolerance, not exact.
   - Distance matrices are symmetrized (ripser.cpp's lower triangle wins) so every tool reads the same input.
-  - When a case has no threshold, every tool gets the enclosing radius explicitly (ripser.cpp's default).
+  - When a case has no threshold, every tool gets the enclosing radius explicitly (ripser.cpp's default). An alpha
+    case without one gives every tool that takes a radius the enclosing radius too (TDA4j stops there by default and
+    GUDHI does not; the barcode is the same), and the tools that take none (`no_radius`: the whole triangulation) none.
+  - Every TDA4j row runs on one thread (`sequential=true`), as ripser.cpp and GUDHI do, except the `multithreaded` rows
+    (`tda4j-parallelverb-mt`, `tda4j-parallel-mt`), which run on every processor. The block-parallel experiment's rows
+    are `experiment` rows: left out of a run that does not name them in --tools.
 """
 import argparse
 import csv
 import datetime
+import fnmatch
 import hashlib
 import json
 import math
@@ -173,10 +182,18 @@ def cells_reference():
 TOOLS = [
     ("tda4j", "tda4j", "vr", {"engine": "auto", "reps": "cycles"}),
     ("tda4j-cocycles", "tda4j", "vr", {"engine": "auto", "reps": "cocycles"}),
-    # The block-parallel experiment (#194): bars only, no representatives, implicit coboundaries; bench/sweep_threads.py
-    # runs the `multithreaded` rows at 1, 2, 4, ... threads.
-    ("tda4j-parallel-1t", "tda4j", "vr", {"engine": "parallel", "reps": "none", "threads": "1"}),
-    ("tda4j-parallel-mt", "tda4j", "vr", {"engine": "parallel", "reps": "none", "threads": "ALL", "multithreaded": True}),
+    # The engine `Engine.Auto` picks with several threads (`Engine.ParallelRipser`), with representatives (cocycles, built
+    # from the reduction logs): on one thread, and on every CPU. bench/sweep_threads.py runs the `multithreaded` rows at
+    # 1, 2, 4, ... threads.
+    ("tda4j-parallelverb-1t", "tda4j", "vr", {"engine": "parallelverb", "reps": "cocycles"}),
+    ("tda4j-parallelverb-mt", "tda4j", "vr",
+     {"engine": "parallelverb", "reps": "cocycles", "threads": "ALL", "multithreaded": True}),
+    # The block-parallel experiment (#194): bars only, no representatives, implicit coboundaries. An `experiment` row is
+    # left out of `run` unless --tools names it; bench/sweep_threads.py runs its `multithreaded` row as the bars-only
+    # reference for the tools that report bars only.
+    ("tda4j-parallel-1t", "tda4j", "vr", {"engine": "parallel", "reps": "none", "threads": "1", "experiment": True}),
+    ("tda4j-parallel-mt", "tda4j", "vr",
+     {"engine": "parallel", "reps": "none", "threads": "ALL", "multithreaded": True, "experiment": True}),
     ("ripser.cpp", "ripser", "vr", {}),
     # DIPHA (Bauer, Kerber and Reininghaus; MPI): Z/2 only, always the dualized algorithm (as in the Ripser paper's
     # Dockerfile). Its input is a sparse distance matrix with the threshold in it, made before the run and not timed
@@ -618,11 +635,14 @@ def command(kind, name, opts, case, data, p, threshold, warmup, trials, out, arg
         threads = [] if "threads" not in opts else [os.cpu_count() if opts["threads"] == "ALL" else int(opts["threads"])]
         # The parallel experiment's sorts run on the common fork-join pool: give it the same number of threads.
         pool = [f"-Djava.util.concurrent.ForkJoinPool.common.parallelism={t}" for t in threads]
+        # The library uses every processor by default (Engine.Auto, the Cech/DTM/alpha builders). The primary tables are
+        # single-threaded, as ripser.cpp and GUDHI are, so a row runs on the main thread unless it is a multithreaded one.
+        sequential = [] if opts.get("multithreaded") else ["sequential=true"]
         return (["java"] + jvm_flags(args.jvm_heap, args.jvm_opts, getattr(args, "jvm_fixed_heap", False)) + pool +
                 ["-cp", cp, "org.appliedtopology.tda4j.PaperBenchmarkDriver",
                  f"engine={opts['engine']}", f"reps={opts['reps']}"] +
                 ([f"backend={opts['backend']}"] if "backend" in opts else []) +
-                [f"threads={t}" for t in threads] +
+                [f"threads={t}" for t in threads] + sequential +
                 [f"{k}={opts[k]}" for k in ("collapse", "wvariant", "dual", "nu") if k in opts] + common)
     if kind == "tda4j-js":
         heap = args.node_heap or args.jvm_heap
@@ -772,6 +792,26 @@ def case_threshold(case, data):
     return float(np.min(np.max(d, axis=1)))
 
 
+def tool_selected(name, spec):
+    """Whether a tool name is in `spec`, comma-separated names or `fnmatch` patterns (`tda4j*`); `!pattern` leaves
+    tools out. An empty `spec`, or one of exclusions only, selects every tool the exclusions do not name."""
+    items = [t.strip() for t in str(spec or "").split(",") if t.strip()]
+    include = [t for t in items if not t.startswith("!")]
+    if any(fnmatch.fnmatchcase(name, t[1:]) for t in items if t.startswith("!")):
+        return False
+    return not include or any(fnmatch.fnmatchcase(name, t) for t in include)
+
+
+def default_alpha_radius(case, data):
+    """The radius an alpha case without its own gets for every tool that takes one: the enclosing radius, as for
+    Vietoris-Rips. TDA4j's alpha complex stops there by default and GUDHI's does not, and the barcode no longer changes
+    after it, so without this the two would not do the same work. None for a case with its own radius, for another
+    task, and for a tool that takes no radius (`no_radius`, which the caller handles)."""
+    if case.task != "alpha" or case.threshold is not None or case.radius_k:
+        return None
+    return float(np.min(np.max(pairwise_distances(np.loadtxt(data / case.file, ndmin=2)), axis=1)))
+
+
 def ambient_dimension(case, data):
     """The number of coordinates of a point file's first row; 0 for any other input."""
     if case.format != "points":
@@ -883,6 +923,36 @@ RUNS_COLUMNS = ["case", "task", "p", "tool", "mode", "status", "wall_s", "times_
                 "threshold", "multithreaded", "info", "reason", "rss_src", "heap_peak_mb", "old_peak_mb"]
 
 
+def resume_state(runs_csv):
+    """What a resumed run keeps of an interrupted one's runs.csv: the (case, p, tool) groups that finished, which it
+    skips, and the timeouts and out-of-memory runs among them, which still stop the later fields and the slower
+    variants. A group is finished once it has a warm row or a cold row that did not end ok (a failure, a timeout or
+    `unsupported` has no warm row); one that stopped after its cold row is dropped from the file and rerun. Returns
+    (done, timed_out, gave_up), the last two as `run` keeps them."""
+    with open(runs_csv, newline="") as f:
+        rows = list(csv.DictReader(f))
+    groups = {}
+    for r in rows:
+        groups.setdefault((r["case"], r["p"], r["tool"]), []).append(r)
+    done, timed_out, gave_up = set(), {}, {}
+    for key, rs in groups.items():
+        modes = {r["mode"]: r for r in rs}
+        cold = modes.get("cold") or modes.get("-")
+        if "warm" in modes or (cold is not None and cold["status"] != "ok"):
+            done.add(key)
+            if cold is not None and cold["status"] in ("timeout", "oom") and not cold["reason"].startswith("not run"):
+                case, p, tool = key
+                gave_up.setdefault((case, tool), cold["status"])
+                if cold["status"] == "timeout":
+                    timed_out.setdefault((case, tool), int(p))
+    if len(done) < len(groups):
+        with open(runs_csv, "w", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=RUNS_COLUMNS, extrasaction="ignore", restval="")
+            w.writeheader()
+            w.writerows(r for key, rs in groups.items() if key in done for r in rs)
+    return done, timed_out, gave_up
+
+
 def run(args):
     data = Path(args.data)
     out = Path(args.out)
@@ -891,13 +961,15 @@ def run(args):
     write_env(out, args)
     cases = [c for c in CASES if not args.cases or c.name in args.cases.split(",")]
     tasks = set(args.tasks.split(",")) if args.tasks else None
-    wanted = set(args.tools.split(",")) if args.tools else None
+    wanted_names = {t.strip() for t in (args.tools or "").split(",") if t.strip() and not t.startswith("!")}
     fields = [int(p) for p in args.fields.split(",")]
     runs_csv = out / "runs.csv"
     new = not runs_csv.exists()
+    done, timed_out, gave_up = set(), {}, {}  # done: (case, p, tool) groups a resumed run keeps
+    if getattr(args, "resume", False) and not new:
+        done, timed_out, gave_up = resume_state(runs_csv)
     cells = cells_reference()
-    timed_out = {}  # (case, tool) -> the first field at which it timed out
-    gave_up = {}  # (case, tool) -> "timeout" or "oom", the first time it did
+    # timed_out: (case, tool) -> the first field at which it timed out; gave_up: (case, tool) -> "timeout" or "oom"
     with open(runs_csv, "a", newline="") as f:
         w = csv.DictWriter(f, fieldnames=RUNS_COLUMNS)
         if new:
@@ -906,10 +978,15 @@ def run(args):
             if tasks and case.task not in tasks:
                 continue
             threshold = case_threshold(case, data)
+            shared_radius = default_alpha_radius(case, data)
             ambient = ambient_dimension(case, data)
             for p in fields:
                 for name, kind, ttask, opts in TOOLS:
-                    if ttask != case.task or (wanted and name not in wanted):
+                    if ttask != case.task or not tool_selected(name, args.tools):
+                        continue
+                    if opts.get("experiment") and name not in wanted_names:
+                        continue  # an experiment row is run only by its own name in --tools, never by a pattern
+                    if (case.name, str(p), name) in done:
                         continue
                     opts = dict(opts)
                     opts.setdefault("pytool", name)
@@ -947,7 +1024,10 @@ def run(args):
                         not_run(outcome, f"not run: {faster}, the faster variant, "
                                          f"{'timed out' if outcome == 'timeout' else 'ran out of memory'} on this case")
                         continue
-                    status = run_one(w, f, data, out, case, p, threshold, name, kind, opts, args)
+                    # A tool that takes no radius (the whole triangulation) is given none; the others the case's own
+                    # radius, or the enclosing radius of an alpha case that has none.
+                    given = threshold if threshold is not None else (None if opts.get("no_radius") else shared_radius)
+                    status = run_one(w, f, data, out, case, p, given, name, kind, opts, args)
                     if status == "timeout":
                         timed_out.setdefault((case.name, name), p)
                     if status in ("timeout", "oom"):
@@ -1038,20 +1118,45 @@ def classes_directory():
     return Path(first) if first else None
 
 
+def git_output(repo, *args):
+    """`git -C repo args` as stripped text, or None where git fails."""
+    try:
+        r = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, timeout=60)
+    except Exception:
+        return None
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
+def checkout_of(classes, default_repo=HERE.parent):
+    """The checkout TDA4j's classes were built in (the directory above their `target`), else `default_repo`."""
+    return next((p.parent for p in (classes.resolve() if classes else Path()).parents if p.name == "target"),
+                default_repo)
+
+
+def js_revision(note, repo):
+    """Which TDA4j the npm package behind the `tda4j-js*` rows was built from. `note` is the file `run.sh setup
+    tda4j-js` leaves next to `tda4j-js.path`: the HEAD it built from on the first line, then the tracked files that
+    differed from it. `tda4j_js_stale` says whether a file of `src/main` differs now (working tree included) from that
+    HEAD, so the package is older than the sources; None where git cannot say. {} where there is no note."""
+    try:
+        lines = Path(note).read_text().split("\n") if note else []
+    except OSError:
+        return {}
+    lines = [l.strip() for l in lines if l.strip()]
+    if not lines:
+        return {}
+    changed = git_output(repo, "diff", "--name-only", lines[0], "--", "src/main")
+    return {"tda4j_js_git": lines[0], "tda4j_js_dirty": lines[1:],
+            "tda4j_js_stale": None if changed is None else bool(changed)}
+
+
 def revision(classes, default_repo=HERE.parent):
     """Which TDA4j a run measured. The checkout is the one the classes were built in (the directory above their
     `target`), else `default_repo`, the harness's own. `tda4j_git` is its HEAD; `tda4j_dirty` the tracked files that
     differ from it (untracked ones are not named); `tda4j_classes_stale` whether a JVM source is newer than the newest
     class, which a checkout made after `setup` leaves true (None when there are no classes to compare)."""
-    def git(repo, *args):
-        try:
-            r = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, timeout=60)
-        except Exception:
-            return None
-        return r.stdout.strip() if r.returncode == 0 else None
-
-    repo = next((p.parent for p in (classes.resolve() if classes else Path()).parents if p.name == "target"),
-                default_repo)
+    git = git_output
+    repo = checkout_of(classes, default_repo)
     stale = None
     if classes is not None and classes.is_dir():
         built = max((Path(d, f).stat().st_mtime for d, _, fs in os.walk(classes) for f in fs), default=None)
@@ -1076,7 +1181,19 @@ def revision_text(env):
         text += f" with {len(dirty)} changed file{'' if len(dirty) == 1 else 's'} ({named})"
     if env.get("tda4j_classes_stale"):
         text += "; the classes the JVM rows ran are older than the sources"
-    return text + "."
+    text += "."
+    js = env.get("tda4j_js_git") or ""
+    if re.fullmatch(r"[0-9a-f]{7,40}", js):
+        dirty = env.get("tda4j_js_dirty") or []
+        if js != head or dirty or env.get("tda4j_js_stale"):
+            text += f" The tda4j-js rows ran the npm package built from `{js[:12]}`"
+            if dirty:
+                text += f" with {len(dirty)} changed file{'' if len(dirty) == 1 else 's'} ({', '.join(dirty[:5])}" + (
+                    ", ...)" if len(dirty) > 5 else ")")
+            if env.get("tda4j_js_stale"):
+                text += "; src/main has changed since"
+            text += "."
+    return text
 
 
 def read_env(out):
@@ -1109,6 +1226,7 @@ def write_env(out, args):
         "julia": cmd_out([os.environ["JULIA"], "--version"]) if os.environ.get("JULIA") else "",
         "ripser_git": cmd_out(["git", "-C", str(Path(os.environ.get("RIPSER_BIN", ".")).parent), "rev-parse", "HEAD"]),
         **revision(classes_directory()),
+        **js_revision(os.environ.get("TDA4J_JS_GIT"), checkout_of(classes_directory())),
         "jvm_flags": jvm_flags(args.jvm_heap, args.jvm_opts, getattr(args, "jvm_fixed_heap", False)),
         "args": vars(args),
     }
@@ -1186,7 +1304,9 @@ def summarize(out: Path, bottleneck=None):
         w.writerows(summary)
 
     rev = revision_text(read_env(out))
+    merged = merged_text(read_env(out))
     lines = ["# TDA4j cross-platform benchmark", "", f"Results: `{out}`. Environment: `env.json`." + (f" {rev}" if rev else ""), "",
+             *merged,
              "Status: `ok`; `timeout`; `limit` (the tool's own index range); `oom`; `unsupported`; `error(code)`; "
              "`missing` (not installed). Peak MB is the kernel's peak RSS of the process (`≤` where it could only be "
              "read from `ru_maxrss`, an upper bound); heap MB is the JVM's peak use of its heap pools. "
@@ -1310,6 +1430,162 @@ def js_against_jvm(summary):
     return lines
 
 
+# ---------------------------------------------------------------------------------------------------------
+# merge, anchors
+# ---------------------------------------------------------------------------------------------------------
+def parse_source(spec):
+    """`DIR` or `DIR:tools` -> (Path, the tools part or ""). The tools part is `--tools`'s notation: names or
+    patterns, `!pattern` to leave tools out."""
+    head, sep, tail = str(spec).rpartition(":")
+    if sep and head and "/" not in tail:
+        return Path(head), tail
+    return Path(spec), ""
+
+
+def read_runs(directory):
+    with open(Path(directory) / "runs.csv", newline="") as f:
+        return list(csv.DictReader(f))
+
+
+def merge(out, sources, drop=""):
+    """Combines results directories into one that `summarize` reads. `sources` is a list of `DIR` or `DIR:tool,tool`
+    (only those tools of it, in `--tools`'s notation: `DIR:!tda4j*` is every tool but TDA4j's); for every
+    (case, p, tool) the rows come from the LAST source that has it, with its bars and logs, so a rerun of some tools
+    replaces their rows in an earlier run and leaves the rest. A source that only says a tool is `missing` there does
+    not replace rows another run measured. `drop` is a `--tools` pattern of tools to leave out of the result. The
+    merged `env.json` is that of the last source that ran a `tda4j` tool (its commit is the one the summary names), plus
+    `merged_from`: each source's directory, date, host, TDA4j commit and the tools it supplied. Returns that list."""
+    out = Path(out)
+    if (out / "runs.csv").exists():
+        raise SystemExit(f"{out} already holds a run: merge writes a new directory")
+    chosen = {}  # (case, p, tool) -> (index of the source, its rows)
+    parsed = [parse_source(spec) for spec in sources]
+    for i, (src, tools) in enumerate(parsed):
+        by = {}
+        for r in read_runs(src):
+            if tool_selected(r["tool"], tools) and not (drop and tool_selected(r["tool"], drop)):
+                by.setdefault((r["case"], r["p"], r["tool"]), []).append(r)
+        for key, rows in by.items():
+            if key in chosen and all(r["status"] == "missing" for r in rows):
+                continue
+            chosen[key] = (i, rows)
+    (out / "bars").mkdir(parents=True, exist_ok=True)
+    (out / "logs").mkdir(parents=True, exist_ok=True)
+    with open(out / "runs.csv", "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=RUNS_COLUMNS, extrasaction="ignore", restval="")
+        w.writeheader()
+        for i in range(len(parsed)):
+            for key, (j, rows) in chosen.items():
+                if j == i:
+                    w.writerows(rows)
+    origin = []
+    for i, (src, _) in enumerate(parsed):
+        env = read_env(src)
+        tools = sorted({key[2] for key, (j, _) in chosen.items() if j == i})
+        origin.append({"dir": str(src), "date": env.get("date", ""), "host": env.get("host", ""),
+                       "tda4j_git": env.get("tda4j_git", ""), "tda4j_js_git": env.get("tda4j_js_git", ""),
+                       "tools": tools, "keys": sum(1 for j, _ in chosen.values() if j == i)})
+        wanted = {f"{c}__p{p}__{t}" for (c, p, t), (j, _) in chosen.items() if j == i}
+        for sub in ("bars", "logs"):
+            if not (Path(src) / sub).is_dir():
+                continue
+            for entry in os.scandir(Path(src) / sub):
+                # bars/<tag>.tsv (or .diagram, .pairs), logs/<tag>__<cold|warm|n>.out (or .err)
+                stem = entry.name.rsplit(".", 1)[0]
+                stem = stem if sub == "bars" else stem.rsplit("__", 1)[0]
+                if stem in wanted:
+                    shutil.copy2(entry.path, out / sub / entry.name)
+    last = max((i for i, o in enumerate(origin) if any(t.startswith("tda4j") for t in o["tools"])),
+               default=len(parsed) - 1)
+    env = {**read_env(parsed[last][0]), "merged_from": origin}
+    with open(out / "env.json", "w") as f:
+        json.dump(env, f, indent=1, default=str)
+    return origin
+
+
+def merged_text(env):
+    """The lines a merged run's summary adds: where each part came from, and a warning where the hosts differ."""
+    origin = [o for o in env.get("merged_from") or [] if o.get("keys")]
+    if not origin:
+        return []
+    lines = ["Merged from:", ""]
+    for o in origin:
+        commit = f", TDA4j `{o['tda4j_git'][:12]}`" if re.fullmatch(r"[0-9a-f]{7,40}", o.get("tda4j_git") or "") else ""
+        lines.append(f"- `{o['dir']}` ({o.get('date', '')[:10]}, {o.get('host', '')}{commit}): "
+                     f"{', '.join(o['tools'])}")
+    hosts = {o.get("host") for o in origin if o.get("host")}
+    if len(hosts) > 1:
+        lines += ["", f"The parts ran on different machines ({', '.join(sorted(hosts))}): times of one part are "
+                      "not comparable with another's unless the anchor rows agree."]
+    return lines + [""]
+
+
+def anchors(new, old, tools=None, tolerance=0.2):
+    """The rows two runs have in common (status ok in both), with the time of each: the warm median, else the cold
+    wall time. A tool of the `old` run that was rerun in `new` (the anchors, `final_run.sh`) tells whether the two ran
+    at the same speed: the old run's other rows can then stand beside the new run's. Returns (rows, verdict): rows
+    are (case, p, tool, old s, new s, new ÷ old, within tolerance); the verdict is "ok" (all within `tolerance`,
+    a fraction), "drift" (one is not) or "none" (no common row)."""
+    def times(directory):
+        by = {}
+        for r in read_runs(directory):
+            if r["status"] == "ok" and r["mode"] in ("cold", "warm"):
+                value = r["median_s"] if r["mode"] == "warm" and r["median_s"] else r["wall_s"]
+                by.setdefault((r["case"], r["p"], r["tool"]), {})[r["mode"]] = float(value) if value else None
+        return {k: v.get("warm") or v.get("cold") for k, v in by.items()}
+
+    a, b = times(old), times(new)
+    rows = []
+    for key in sorted(set(a) & set(b)):
+        if (tools and key[2] not in tools) or not a[key] or not b[key]:
+            continue
+        ratio = b[key] / a[key]
+        rows.append((*key, a[key], b[key], ratio, 1 / (1 + tolerance) <= ratio <= 1 + tolerance))
+    verdict = "none" if not rows else ("ok" if all(r[-1] for r in rows) else "drift")
+    return rows, verdict
+
+
+def check(out, tools="", allow=("unsupported", "missing"), agreement_tasks=("vr", "cubical", "alpha")):
+    """The rows of a summarized run that should not be there: a selected tool (`--tools` notation) whose status is
+    neither `ok` nor in `allow`, and, for the tasks whose reference is ground truth (`agreement_tasks`: the sparse,
+    witness, DTM and Cech tasks compare with a different complex), one that disagrees with the reference outside a
+    degenerate case. Returns [(case, p, tool, what)]; empty when the run is as it should be."""
+    with open(Path(out) / "summary.csv", newline="") as f:
+        rows = list(csv.DictReader(f))
+    problems = []
+    for r in rows:
+        if not tool_selected(r["tool"], tools):
+            continue
+        if r["status"] not in ("ok", *allow):
+            problems.append((r["case"], r["p"], r["tool"], f"{r['status']} {r['reason']}".strip()))
+        elif r["status"] == "ok" and r["task"] in agreement_tasks and r["agrees"] == "False" \
+                and r["degenerate"] != "True":
+            problems.append((r["case"], r["p"], r["tool"], f"barcode differs from the reference ({r['vs_reference']}) "
+                                                          f"{r['note']}".strip()))
+    return problems
+
+
+def pip_constraints(env):
+    """The `name==version` lines of the run's `pip freeze` (env.json's `python_packages`): a constraints file that
+    installs the versions that run measured. Editable and URL installs, which a constraints file cannot name, are left
+    out."""
+    return [l.strip() for l in (env.get("python_packages") or "").splitlines()
+            if re.fullmatch(r"[A-Za-z0-9._-]+==[A-Za-z0-9._+!-]+", l.strip())]
+
+
+def anchors_text(rows, verdict, tolerance):
+    lines = ["| case | p | tool | old s | new s | new ÷ old | within |", "|---|---|---|---|---|---|---|"]
+    lines += [f"| {c} | {p} | {t} | {o:.3f} | {n:.3f} | {r:.2f} | {'yes' if ok else 'NO'} |"
+              for c, p, t, o, n, r, ok in rows]
+    verdict_text = {"ok": f"All {len(rows)} anchor rows are within {tolerance:.0%} of the earlier run: its rows "
+                          "for the other tools stand beside the new run's.",
+                    "drift": f"At least one anchor row differs by more than {tolerance:.0%} from the earlier run: "
+                             "the machine is not the one that measured it (or is busy); do not merge the two without "
+                             "saying so.",
+                    "none": "No row is common to both runs: nothing anchors the two."}[verdict]
+    return lines + ["", verdict_text]
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -1320,7 +1596,12 @@ def main():
     p2.add_argument("--out", required=True)
     p2.add_argument("--cases", default="", help="comma-separated case names (default: all)")
     p2.add_argument("--tasks", default="", help="comma-separated: vr,cubical,alpha (default: all)")
-    p2.add_argument("--tools", default="", help="comma-separated tool names (default: all available)")
+    p2.add_argument("--tools", default="",
+                    help="comma-separated tool names or patterns (`tda4j*`; `!tda4j-js*` leaves tools out); default: "
+                         "all available. An `experiment` row is run only when its own name is here")
+    p2.add_argument("--resume", action="store_true",
+                    help="continue an interrupted run in --out: groups already finished there are skipped (a group "
+                         "that stopped after its cold row is run again)")
     p2.add_argument("--fields", default="2", help="comma-separated primes, e.g. 2,17")
     p2.add_argument("--warmup", type=int, default=2)
     p2.add_argument("--trials", type=int, default=5)
@@ -1344,12 +1625,52 @@ def main():
     p2.add_argument("--python", default=sys.executable)
     p3 = sub.add_parser("summarize")
     p3.add_argument("out")
+    p4 = sub.add_parser("merge", help="one results directory from several: the last source with a row wins")
+    p4.add_argument("out", help="the new directory")
+    p4.add_argument("sources", nargs="+", metavar="DIR[:tools]",
+                    help="results directories, earliest first; DIR:tool,tool takes only those tools of it "
+                         "(DIR:!tda4j* all but those)")
+    p4.add_argument("--drop", default="", help="comma-separated tools or patterns to leave out of the result")
+    p7 = sub.add_parser("check", help="rows of a summarized run that failed or disagree; exit status 1 if there are any")
+    p7.add_argument("out", metavar="DIR")
+    p7.add_argument("--tools", default="", help="only these tools (names, patterns; default: all)")
+    p7.add_argument("--allow", default="unsupported,missing",
+                    help="statuses that are not problems (add timeout,oom,limit for a run that expects them)")
+    p6 = sub.add_parser("constraints", help="a pip constraints file (stdout) from a run's env.json")
+    p6.add_argument("out", metavar="DIR")
+    p5 = sub.add_parser("anchors", help="do the rows two runs share agree in time? exit status 1: they do not, 2: no "
+                                         "row is common to both")
+    p5.add_argument("new")
+    p5.add_argument("old")
+    p5.add_argument("--tools", default="", help="comma-separated tools (default: every row the two share)")
+    p5.add_argument("--tolerance", type=float, default=0.2, help="the largest fraction two times may differ by")
     args = ap.parse_args()
     if args.cmd == "prepare":
         prepare(Path(args.data))
     elif args.cmd == "run":
         run(args)
         summarize(Path(args.out))
+    elif args.cmd == "merge":
+        for o in merge(args.out, args.sources, args.drop):
+            print(f"{o['dir']}: {o['keys']} (case, p, tool) groups: {', '.join(o['tools'])}")
+        summarize(Path(args.out))
+    elif args.cmd == "check":
+        if not (Path(args.out) / "summary.csv").exists():
+            sys.exit(f"no summary.csv in {args.out}: the run wrote no rows, or did not finish")
+        problems = check(args.out, args.tools, tuple(t for t in args.allow.split(",") if t))
+        for case, p, tool, what in problems:
+            print(f"{case} p={p} {tool}: {what}")
+        print(f"{len(problems)} problem rows in {args.out}")
+        sys.exit(1 if problems else 0)
+    elif args.cmd == "constraints":
+        print("\n".join(pip_constraints(read_env(args.out))))
+    elif args.cmd == "anchors":
+        rows, verdict = anchors(Path(args.new), Path(args.old), {t for t in args.tools.split(",") if t},
+                                args.tolerance)
+        text = "\n".join(anchors_text(rows, verdict, args.tolerance))
+        print(text)
+        (Path(args.new) / "anchors.md").write_text(text + "\n")
+        sys.exit({"ok": 0, "drift": 1}.get(verdict, 2))
     else:
         summarize(Path(args.out))
 

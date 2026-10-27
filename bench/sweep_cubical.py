@@ -107,7 +107,7 @@ def main():
                                 return (["java"] + bench.jvm_flags(args.jvm_heap, fixed_heap=args.jvm_fixed_heap) +
                                         ["-cp", cp, "org.appliedtopology.tda4j.PaperBenchmarkDriver", "task=cubical",
                                          f"input={path}", f"dim={d - 1}", "p=2", f"engine={engine}", f"reps={reps}",
-                                         f"warmup={warmup}", f"trials={trials}"])
+                                         f"warmup={warmup}", f"trials={trials}", "sequential=true"])
                         return [args.python, str(bench.HERE / "workers" / "py_worker.py"), f"tool={label}",
                                 "task=cubical", f"input={path}", f"dim={d - 1}", "p=2", f"warmup={warmup}",
                                 f"trials={trials}"]
