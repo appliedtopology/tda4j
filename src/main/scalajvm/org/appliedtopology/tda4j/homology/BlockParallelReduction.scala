@@ -22,7 +22,7 @@ import scala.util.Random
   * block boundaries (all the argument needs is that a unit is contiguous in the order).
   *
   * {{{
-  * java -cp $CP org.appliedtopology.tda4j.BlockParallelReduction <dataset> <n> <maxDim> <threshold|mer> <method> [trials] [seed] [p]
+  * java -cp \$CP org.appliedtopology.tda4j.BlockParallelReduction <dataset> <n> <maxDim> <threshold|mer> <method> [trials] [seed] [p]
   * }}}
   *
   * `dataset` is `cube<d>` (uniform in the unit cube of R^d), `torus` or `sphere` (in R^3, with noise), or
