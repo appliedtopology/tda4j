@@ -826,8 +826,10 @@ open class AlphaComplexDQPBuilder(
 
   val n = space.size
 
-  /** One record produced by a single successful QP solve. */
-  final case class Found(cell: Simplex[Int], weight: Double, witness: Option[Array[Double]])
+  /** One record produced by a single successful QP solve: the simplex, its vertices in ascending order, its value and
+    * its witness.
+    */
+  final case class Found(cell: Simplex[Int], vertices: Array[Int], weight: Double, witness: Option[Array[Double]])
 
   /** Lines 1-2 of Algorithm 1: the 1-skeleton of the Čech complex of the weighted ball cover, Cech(S, p, a1). Only Čech
     * neighbours can constrain the part of V_x inside U_x, so restricting the QP's inequality constraints to them is
@@ -876,7 +878,13 @@ open class AlphaComplexDQPBuilder(
     val nbrs = cechNeighbours()
     val alive = IndexedSeq.tabulate[Boolean](n)(space.ballRadius(_, maxPower) >= 0.0)
 
-    val present = mutable.HashSet[Simplex[Int]]()
+    // The simplices found so far, per dimension, as rows of sorted vertices: what a candidate's facets are looked up in.
+    val present = Array.tabulate(maxDimension + 1)(k => DelaunayAlphaShapes.FaceTable(k + 1, 1024))
+    val presentRows = ArraySeq.unsafeWrapArray(present)
+    // The value of every row of `present`, and of every vertex (NaN: not in the complex); the rows are numbered as
+    // `byDim(k)` lists the simplices before the final sort.
+    val rowValues = Array.fill(maxDimension + 1)(AlphaComplexDQPBuilder.DoubleRows())
+    val vertexValues = Array.fill(n)(Double.NaN)
     val byDim = IndexedSeq.fill(maxDimension + 1)(mutable.IndexedBuffer[Simplex[Int]]())
     val weights = mutable.HashMap[Simplex[Int], Double]()
     val witnesses = mutable.HashMap[Simplex[Int], Array[Double]]()
@@ -891,12 +899,10 @@ open class AlphaComplexDQPBuilder(
       * order. Each vertex's solves share no state with the others', so they can run in parallel; the merge order, and
       * so the output, is the same either way.
       */
-    def solveDimension(k: Int, candidates: mutable.Map[Int, mutable.IndexedBuffer[Simplex[Int]]]): Unit =
-      val vertices: IndexedSeq[(Int, mutable.IndexedBuffer[Simplex[Int]])] =
-        candidates.iterator.filter(_._2.nonEmpty).toIndexedSeq
-      def solveEntry(entry: (Int, mutable.IndexedBuffer[Simplex[Int]])): mutable.IndexedBuffer[Found] =
-        val (x, cs) = entry
-        solveAtVertex(x, cs, nbrs(x), wsCap).to(mutable.IndexedBuffer)
+    def solveDimension(k: Int, candidates: IndexedSeq[AlphaComplexDQPBuilder.CandidateRows]): Unit =
+      val vertices: IndexedSeq[Int] = candidates.indices.filter(x => candidates(x).size > 0)
+      def solveEntry(x: Int): mutable.IndexedBuffer[Found] =
+        solveAtVertex(x, candidates(x), nbrs(x), wsCap).to(mutable.IndexedBuffer)
       val perVertex: IndexedSeq[mutable.IndexedBuffer[Found]] =
         if settings.parallel then Parallel.map(vertices)(solveEntry)
         else vertices.map(solveEntry)
@@ -905,13 +911,11 @@ open class AlphaComplexDQPBuilder(
       perVertex.foreach { founds =>
         founds.foreach { (f: Found) =>
           byDim(k) += f.cell
-          weights(f.cell) = f.weight
+          present(k).add(f.vertices)
+          rowValues(k).add(f.weight)
           f.witness.foreach(arr => witnesses(f.cell) = arr)
         }
       }
-
-      for f <- byDim(k)
-      do present.add(f)
 
     // k == 1 before k == 0: Definition 10 evaluated at a vertex x is the minimum of pi_x over its OWN restricted
     // power cell V_x, which is only pi_x(x) = -weight(x) (the unconstrained minimiser of the paraboloid) when x
@@ -935,7 +939,14 @@ open class AlphaComplexDQPBuilder(
     // points. Such a vertex can never appear in any higher-dimensional simplex either (those are only ever built
     // by extending existing lower-dimensional ones, bottoming out at k=1), so dropping it here is automatically
     // consistent with the rest of the complex -- no separate closure check is needed.
-    if maxDimension >= 1 then solveDimension(1, buildCandidates(1, nbrs, alive, byDim, present))
+    if maxDimension >= 1 then solveDimension(1, buildCandidates(1, nbrs, alive, presentRows))
+
+    // An edge's value before the final sort: its row in `present(1)` is its position in `byDim(1)`.
+    def edgeValue(e: Simplex[Int]): Double =
+      val vertices = e.iterator
+      val a = vertices.next()
+      val b = vertices.next()
+      rowValues(1)(present(1).indexOf(Array(a, b)))
 
     val incidentEdges: Map[Int, IndexedSeq[Simplex[Int]]] =
       if maxDimension >= 1 then
@@ -946,18 +957,23 @@ open class AlphaComplexDQPBuilder(
       val insideOwnCell = nbrs(x).forall(j => space.weight(j) - space.weight(x) <= space.squaredDistance(x, j))
       val chosen: Option[(Double, Option[Array[Double]])] =
         if insideOwnCell then Some((-space.weight(x), coordsOf(x)))
-        else incidentEdges.getOrElse(x, IndexedSeq.empty).minByOption(weights).map(e => (weights(e), witnesses.get(e)))
+        else
+          incidentEdges
+            .getOrElse(x, IndexedSeq.empty)
+            .minByOption(edgeValue)
+            .map(e => (edgeValue(e), witnesses.get(e)))
       chosen.foreach { case (w, witness) =>
         val f = Simplex(x)
         byDim(0) += f
-        present.add(f)
+        vertexValues(x) = w
         weights(f) = w
         witness.foreach(arr => witnesses(f) = arr)
       }
 
-    for k <- 2 to maxDimension do solveDimension(k, buildCandidates(k, nbrs, alive, byDim, present))
+    for k <- 2 to maxDimension do solveDimension(k, buildCandidates(k, nbrs, alive, presentRows))
 
-    if settings.enforceMonotonicity then clampMonotone(byDim, weights)
+    if settings.enforceMonotonicity then
+      for k <- 1 to maxDimension do clampMonotone(k, present, rowValues, vertexValues)
 
     // cellsOfDimension/iterateDimension hand out byDim(k) directly, and this order must be the exact
     // reverse of AlphaShapeDQP.filtrationOrdering (ascending weight -- monotonic in radius via radiusOf,
@@ -970,85 +986,128 @@ open class AlphaComplexDQPBuilder(
     // order standing in for filtrationOrdering position -- found via EngineComparisonBenchmarkSpec /
     // AlphaFiltrationOrderingRegressionSpec once the primary-key-direction half of this bug was fixed
     // and the crash it caused went away but disagreement with the naive engine remained. byDim(k) is
-    // populated per base vertex via a mutable.Map, whose iteration order is unspecified, so it needs an
-    // explicit sort regardless; do this after clampMonotone so the order reflects final, possibly-clamped
-    // weights.
-    val cellOrdering: Ordering[Simplex[Int]] =
+    // populated per base vertex, so it needs an explicit sort regardless; do this after the clamp so the order
+    // reflects final, possibly-clamped weights. The sort runs on the rows' values and vertices, not on the
+    // simplices: ascending value, then the vertices in descending lexicographic order (the reverse of
+    // `simplexOrdering[Int]`, all of a dimension's simplices having the same size).
+    byDim(0).sortInPlace()(using
       Ordering.by[Simplex[Int], Double](c => weights.getOrElse(c, 0.0)).orElse(simplexOrdering[Int].reverse)
-    for k <- byDim.indices do byDim(k).sortInPlace()(using cellOrdering)
+    )
+    for k <- 1 to maxDimension do
+      val table = present(k)
+      val values = rowValues(k)
+      val order = Array.tabulate[java.lang.Integer](table.size)(r => r)
+      val byValueThenVertices = new java.util.Comparator[java.lang.Integer]:
+        def compare(a: java.lang.Integer, b: java.lang.Integer): Int =
+          val byValue = java.lang.Double.compare(values(a), values(b))
+          if byValue != 0 then byValue
+          else
+            var i = 0
+            var c = 0
+            while c == 0 && i <= k do
+              c = Integer.compare(table.vertex(b, i), table.vertex(a, i))
+              i += 1
+            c
+      Parallel.sort(order, byValueThenVertices)
+      val cells = byDim(k).toVector
+      byDim(k).clear()
+      order.foreach { r =>
+        val cell = cells(r)
+        byDim(k) += cell
+        weights(cell) = values(r)
+      }
 
     new AlphaComplexDQP(space, maxPower, maxDimension, byDim, weights, witnesses)
   end compute
 
   // -------------------------------------------------------------------------
 
-  /** Candidate k-simplices, bucketed by their minimal vertex.
+  /** Candidate k-simplices, bucketed by their minimal vertex (index `x` of the result), as rows of their other
+    * vertices.
     *
-    * k = 0: the vertices of G (line 6). k = 1: the edges of G (line 6). k >= 2: the k-simplices of Lazy_{k-1}(X) (line
-    * 8), i.e. every (k+1)-set all of whose facets are already known to be in the complex.
+    * k = 1: the edges of G (line 6). k >= 2: the k-simplices of Lazy_{k-1}(X) (line 8), i.e. every (k+1)-set all of
+    * whose facets are already known to be in the complex: `present(k - 1)` holds the (k-1)-simplices found.
     *
     * Each candidate is stored as its vertices *other than* the minimal one, because the base vertex is the bucket key.
     * Considering only simplices whose minimum is x is the "x <= x_j1 <= ... <= x_jk" reduction of step 2(b): every
-    * simplex is then tested exactly once.
+    * simplex is then tested exactly once. The candidates of a bucket are in the order of the (k-1)-simplices they
+    * extend, which is the order those were found in, however many threads share the work.
     */
   /* lines 1 and 4-8 of Algorithm 1 */
   def buildCandidates(
     k: Int,
     nbrs: IndexedSeq[IndexedSeq[Int]],
     alive: IndexedSeq[Boolean],
-    byDim: IndexedSeq[mutable.IndexedBuffer[Simplex[Int]]],
-    present: mutable.HashSet[Simplex[Int]]
-  ): mutable.Map[Int, mutable.IndexedBuffer[Simplex[Int]]] = k match
-    case 0 =>
-      mutable.Map.from(
-        (0 until n)
-          .filter(alive)
-          .map(x => (x, mutable.IndexedBuffer[Simplex[Int]]()))
-      )
-    case 1 =>
-      mutable.Map.from(
-        (0 until n)
-          .filter(alive)
-          .map(x =>
-            (
-              x,
-              nbrs(x)
-                .filter(_ > x)
-                .map(Simplex[Int](_))
-                .to(mutable.IndexedBuffer)
-            )
-          )
-      )
-    case _ =>
-      byDim(k - 1)
-        .foldLeft(mutable.Map[Int, mutable.IndexedBuffer[Simplex[Int]]]()) { (acc, tau) =>
-          val x = tau.first
-          val last = tau.last
-          val rest = tau.tail
-          // allFacetsPresent must see the true candidate (including x): it
-          // checks all k+1 facets of a k-dimensional simplex, one of which
-          // is `rest` itself (obtained by dropping x). Checking it against
-          // `rest + w` alone silently skips every facet that keeps x and
-          // drops something else, which only matters once k >= 3 -- for
-          // triangles (k=2) those "extra" facets are single vertices and
-          // always present, so the bug is invisible there.
-          acc.getOrElseUpdate(x, mutable.IndexedBuffer()) ++= nbrs(x)
-            .filter(_ > last)
-            .filter(w => allFacetsPresent(tau + w, present))
-            .map(w => rest + w)
-          acc
-        }
-
-  def allFacetsPresent(sigma: Simplex[Int], present: mutable.HashSet[Simplex[Int]]): Boolean =
-    sigma
-      .map(v => sigma - v)
-      .forall(present.contains)
+    present: IndexedSeq[DelaunayAlphaShapes.FaceTable]
+  ): IndexedSeq[AlphaComplexDQPBuilder.CandidateRows] =
+    import AlphaComplexDQPBuilder.CandidateRows
+    if k == 1 then
+      IndexedSeq.tabulate(n) { x =>
+        val rows = CandidateRows(1)
+        if alive(x) then nbrs(x).foreach(j => if j > x then rows.add(Array.emptyIntArray, 0, j))
+        rows
+      }
+    else
+      val lower = present(k - 1)
+      val neighbours: Array[Array[Int]] = nbrs.map(_.toArray).toArray
+      // Rows [from, until) of `lower`, extended by every neighbour of their base vertex that comes after their last
+      // vertex and leaves all the facets of the extension in `lower`. Reads `lower` only, so chunks can run together.
+      def extend(from: Int, until: Int): Array[CandidateRows] =
+        val none = CandidateRows(k) // stands for every bucket nothing has been added to
+        val out = Array.fill(n)(none)
+        val tau = new Array[Int](k)
+        val face = new Array[Int](k)
+        var r = from
+        while r < until do
+          var i = 0
+          while i < k do
+            tau(i) = lower.vertex(r, i)
+            i += 1
+          val x = tau(0)
+          val last = tau(k - 1)
+          val nb = neighbours(x)
+          var at = java.util.Arrays.binarySearch(nb, last)
+          at = if at >= 0 then at + 1 else -at - 1
+          while at < nb.length do
+            val w = nb(at)
+            // The facets of tau + w other than tau: drop tau(drop), keep w.
+            var drop = 0
+            var all = true
+            while all && drop < k do
+              var j = 0
+              var c = 0
+              while c < k do
+                if c != drop then
+                  face(j) = tau(c)
+                  j += 1
+                c += 1
+              face(k - 1) = w
+              all = lower.indexOf(face) >= 0
+              drop += 1
+            if all then
+              if out(x) eq none then out(x) = CandidateRows(k)
+              out(x).add(tau, 1, w)
+            at += 1
+          r += 1
+        out
+      val chunk = 4096
+      val chunks = (lower.size + chunk - 1) / chunk
+      val perChunk: IndexedSeq[Array[CandidateRows]] =
+        if settings.parallel && chunks > 1 then
+          Parallel.map(0 until chunks)(c => extend(c * chunk, math.min(lower.size, (c + 1) * chunk)))
+        else (0 until chunks).map(c => extend(c * chunk, math.min(lower.size, (c + 1) * chunk)))
+      // Merged in chunk order, so a bucket lists its candidates as a single pass over `lower` would.
+      IndexedSeq.tabulate(n) { x =>
+        val rows = CandidateRows(k)
+        perChunk.foreach(part => rows.addAll(part(x)))
+        rows
+      }
 
   /** Steps 2(a)-(b): assemble the dual data for the cell V_x once, then run one QP per candidate simplex based at x.
     */
   def solveAtVertex(
     x: Int,
-    candidates: mutable.IndexedBuffer[Simplex[Int]],
+    candidates: AlphaComplexDQPBuilder.CandidateRows,
     nb: IndexedSeq[Int],
     wsCap: Int
   ): mutable.IndexedBuffer[Found] =
@@ -1056,11 +1115,8 @@ open class AlphaComplexDQPBuilder(
     val m = nb.length
     val c1 = 0.5 * (maxPower + space.weight(x))
 
-    // Isolated site: V_x is everything, the QP is trivially solved by
-    // lambda = 0, and only the vertex itself can be a simplex.
-    if m == 0 then
-      if candidates.exists(_.isEmpty) then found += Found(Simplex.from(Seq(x)), -space.weight(x), coordsOf(x))
-      return found
+    // Isolated site: V_x is everything and only the vertex itself can be a simplex, which `compute` adds.
+    if m == 0 then return found
 
     // line 11-12: B and U, once per vertex per dimension
     val b = new Array[Double](m * m)
@@ -1078,42 +1134,47 @@ open class AlphaComplexDQPBuilder(
 
     val qp = new DualQP(m, wsCap, settings)
     val eq = new Array[Int](maxDimension + 1)
-    val neighbourPositions =
-      scala.collection.immutable.SortedSet.from(nb).zipWithIndex.toMap
-
-    candidates.foreach { rest =>
-      rest.toSeq.flatMap(neighbourPositions.get) match
-        case positions if positions.size == rest.size =>
-          positions.toArray.copyToArray(eq)
-          val cStar =
-            try qp.solve(b, u, eq, rest.size, c1)
-            catch
-              case e: AlphaComplexDQPException =>
-                // Defense in depth, not the primary correctness mechanism:
-                // a handful of concrete near-degenerate configurations are
-                // known to make the active-set method fail to converge (see
-                // WORKLOG.md). Rather than let one candidate's non-convergence
-                // abort the entire complex, exclude just that candidate --
-                // the same outcome as a genuine (if conservatively wrong)
-                // infeasibility determination -- and keep going. This is
-                // meant to catch configurations *beyond* the ones already
-                // characterised, not to paper over a known, fixable bug.
-                if settings.verbose then
-                  System.err.println(
-                    s"AlphaComplexDQP: dropping candidate ${rest + x} (base vertex $x) after non-convergence: ${e.getMessage}"
-                  )
-                Double.PositiveInfinity
-          // cStar.isFinite (not just !cStar.isNaN): DualQP.solve uses
-          // Double.PositiveInfinity as its sentinel for "infeasible, discard".
-          // When c1 is also infinite (AlphaShapeDQP's untruncated mode),
-          // `cStar <= c1` alone is true for that sentinel too (Infinity <=
-          // Infinity), so an isFinite check is required to actually reject it.
-          if cStar <= c1 && cStar.isFinite then
-            val cell = rest + x
-            val w = 2.0 * cStar - space.weight(x)
-            found += Found(cell, math.min(w, maxPower), witnessOf(x, nb.toArray, qp))
-        case _ => ()
-    }
+    // The position of each neighbour of x in `nb`, which is in ascending order.
+    val nbArray = nb.toArray
+    val width = candidates.width
+    var row = 0
+    while row < candidates.size do
+      var t = 0
+      var inNeighbours = true
+      while inNeighbours && t < width do
+        val at = java.util.Arrays.binarySearch(nbArray, candidates.vertex(row, t))
+        if at < 0 then inNeighbours = false else eq(t) = at
+        t += 1
+      if inNeighbours then
+        val cStar =
+          try qp.solve(b, u, eq, width, c1)
+          catch
+            case e: AlphaComplexDQPException =>
+              // Defense in depth, not the primary correctness mechanism:
+              // a handful of concrete near-degenerate configurations are
+              // known to make the active-set method fail to converge (see
+              // WORKLOG.md). Rather than let one candidate's non-convergence
+              // abort the entire complex, exclude just that candidate --
+              // the same outcome as a genuine (if conservatively wrong)
+              // infeasibility determination -- and keep going. This is
+              // meant to catch configurations *beyond* the ones already
+              // characterised, not to paper over a known, fixable bug.
+              if settings.verbose then
+                System.err.println(
+                  s"AlphaComplexDQP: dropping candidate ${Simplex.from(candidates.rowWith(row, x).toSeq)} " +
+                    s"(base vertex $x) after non-convergence: ${e.getMessage}"
+                )
+              Double.PositiveInfinity
+        // cStar.isFinite (not just !cStar.isNaN): DualQP.solve uses
+        // Double.PositiveInfinity as its sentinel for "infeasible, discard".
+        // When c1 is also infinite (AlphaShapeDQP's untruncated mode),
+        // `cStar <= c1` alone is true for that sentinel too (Infinity <=
+        // Infinity), so an isFinite check is required to actually reject it.
+        if cStar <= c1 && cStar.isFinite then
+          val vertices = candidates.rowWith(row, x)
+          val w = 2.0 * cStar - space.weight(x)
+          found += Found(Simplex.from(vertices.toSeq), vertices, math.min(w, maxPower), witnessOf(x, nbArray, qp))
+      row += 1
     found
   end solveAtVertex
 
@@ -1143,22 +1204,100 @@ open class AlphaComplexDQPBuilder(
     * larger feasible set and a smaller optimum -- but floating point can violate it by an ulp or two, which some
     * persistence algorithms will not forgive. So each w(sigma) is raised to the largest value of its facets, and set
     * equal to it when the two agree to [[SnapTolerance]] (relative): a facet whose optimum is attained on sigma's power
-    * face has the same value as sigma, and the two QP solves only agree to solver accuracy.
+    * face has the same value as sigma, and the two QP solves only agree to solver accuracy. Dimension `k` of the rows
+    * in `present`, whose facets are in dimension `k - 1` (the vertices, for the edges), already clamped.
     */
   def clampMonotone(
-    byDim: IndexedSeq[mutable.IndexedBuffer[Simplex[Int]]],
-    weights: mutable.HashMap[Simplex[Int], Double]
+    k: Int,
+    present: IndexedSeq[DelaunayAlphaShapes.FaceTable],
+    rowValues: IndexedSeq[AlphaComplexDQPBuilder.DoubleRows],
+    vertexValues: Array[Double]
   ): Unit =
-    for k <- 1 until byDim.length do
-      val cells = byDim(k)
-      cells.foreach { sigma =>
-        val w = weights(sigma)
-        val facetMax = sigma.iterator.flatMap(v => weights.get(sigma - v)).maxOption.getOrElse(w)
-        weights(sigma) = if facetMax >= w || w - facetMax <= SnapTolerance * math.abs(w) then facetMax else w
-      }
+    val table = present(k)
+    val values = rowValues(k)
+    Parallel.ranges(table.size, 4096) { (from, until) =>
+      val facet = new Array[Int](k)
+      var r = from
+      while r < until do
+        val w = values(r)
+        var facetMax = Double.NegativeInfinity
+        var drop = 0
+        while drop <= k do
+          val facetValue =
+            if k == 1 then vertexValues(table.vertex(r, 1 - drop))
+            else
+              var j = 0
+              var c = 0
+              while c <= k do
+                if c != drop then
+                  facet(j) = table.vertex(r, c)
+                  j += 1
+                c += 1
+              val row = present(k - 1).indexOf(facet)
+              if row >= 0 then rowValues(k - 1)(row) else Double.NaN
+          if !facetValue.isNaN && facetValue > facetMax then facetMax = facetValue
+          drop += 1
+        values(r) =
+          if facetMax == Double.NegativeInfinity then w
+          else if facetMax >= w || w - facetMax <= SnapTolerance * math.abs(w) then facetMax
+          else w
+        r += 1
+    }
 
   /** Relative difference below which a simplex's value is taken to equal its largest facet's (see `clampMonotone`). */
   val SnapTolerance: Double = 1e-10
+end AlphaComplexDQPBuilder
+
+object AlphaComplexDQPBuilder:
+  /** A growable array of doubles, one per row of a face table. */
+  final class DoubleRows:
+    private var data = new Array[Double](1024)
+    private var count = 0
+
+    def size: Int = count
+
+    def apply(row: Int): Double = data(row)
+
+    def update(row: Int, value: Double): Unit = data(row) = value
+
+    def add(value: Double): Unit =
+      if count == data.length then data = java.util.Arrays.copyOf(data, count * 2)
+      data(count) = value
+      count += 1
+
+  /** The candidate simplices of one dimension that share a base vertex: `width` ints a row, the row's vertices other
+    * than the base, ascending. Rows are only added, and read once the adding is done.
+    */
+  final class CandidateRows(val width: Int):
+    private var data = new Array[Int](math.max(width, 1) * 8)
+    private var rows = 0
+
+    def size: Int = rows
+
+    def vertex(row: Int, i: Int): Int = data(row * width + i)
+
+    /** The base vertex `base` followed by the vertices of `row`: the sorted vertices of the candidate, when `base` is
+      * its smallest.
+      */
+    def rowWith(row: Int, base: Int): Array[Int] =
+      val out = new Array[Int](width + 1)
+      out(0) = base
+      System.arraycopy(data, row * width, out, 1, width)
+      out
+
+    /** Appends the row `prefix(from until from + width - 1)` followed by `last`. */
+    def add(prefix: Array[Int], from: Int, last: Int): Unit =
+      if (rows + 1) * width > data.length then data = java.util.Arrays.copyOf(data, data.length * 2)
+      System.arraycopy(prefix, from, data, rows * width, width - 1)
+      data(rows * width + width - 1) = last
+      rows += 1
+
+    def addAll(other: CandidateRows): Unit =
+      if other.rows > 0 then
+        val need = (rows + other.rows) * width
+        if need > data.length then data = java.util.Arrays.copyOf(data, math.max(need, data.length * 2))
+        System.arraycopy(other.data, 0, data, rows * width, other.rows * width)
+        rows += other.rows
 end AlphaComplexDQPBuilder
 
 open class AlphaShapeDQP(val points: Array[Array[Double]]) extends AlphaShapes:
