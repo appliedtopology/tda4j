@@ -6,3 +6,13 @@
   1 GB heap, with the same 190 bars. `CellularCohomologyEngine.persistentCohomology` and
   `PackedCubicalCohomologyEngine.persistentCohomology` leave out the bars above a truncated stream's
   `homologyDegreeLimit`, as `persistentHomology` and `Involution.cocycleBars` do (#199).
+
+- Every engine that reads a stream now stops at the stream's `homologyDegreeLimit`, whatever degree it was asked for.
+  `CellularPersistenceInChunksEngine` (default `maxDim = 5`, `PersistenceEngine.chunks(5)`) and the one-argument naive
+  cursor `CellularHomologyEngine.persistentHomology(stream)` used to report the unpaired cells of a truncated stream's top
+  dimension as essential classes of a degree the stream was not built for; the explicit-degree naive cursor now takes the
+  smaller of its argument and the limit. A hand-built complex that really wants its top degree must not be a
+  `Truncated`/`LimitedCofaceSimplexStream` (use `ExplicitStreamBuilder`).
+- `FastCubicalHomologyEngine.persistentHomology` takes a `maxDimension` like `FastAlphaHomologyEngine`: below the top
+  degree of an image it no longer walks the dual graph or builds the top degree's representatives only to drop them;
+  `Persistence(image, maxDimension = k, engine = FastCubical)` and the MATLAB facade pass it.

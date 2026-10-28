@@ -396,18 +396,30 @@ open class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtr
         new PersistenceBar(dim, lower, upper, Some(rep))
       }
 
+  /** The cursor for the whole stream. A stream that says it was cut off (`homologyDegreeLimit`, as `VietorisRips(..,
+    * maxDimension = k)` does) is read as `persistentHomology(stream, k)`: the cells above degree `k` close nothing, so
+    * they are not homology.
+    */
   def persistentHomology(stream: => CellStream[CellT, FiltrationT]): HomologyState =
-    start(stream, None)
+    val theStream = stream
+    start(theStream, declaredLimit(theStream))
 
-  /** The cursor for the degrees `0 .. maxDimension` only. The cells above dimension `maxDimension + 1` are neither
-    * sorted nor reduced, and the cells of dimension `maxDimension + 1`, which can only close a class of degree
-    * `maxDimension`, leave nothing but the pairing: no V-column, no class of degree `maxDimension + 1`, and no
-    * reduction at all while no class of degree `maxDimension` is open. The bars of degree `0 .. maxDimension` and their
-    * representatives are those of the uncapped cursor; there are no bars above `maxDimension`.
+  /** The cursor for the degrees `0 .. maxDimension` only (fewer for a stream cut off below that, see the whole-stream
+    * cursor). The cells above dimension `maxDimension + 1` are neither sorted nor reduced, and the cells of dimension
+    * `maxDimension + 1`, which can only close a class of degree `maxDimension`, leave nothing but the pairing: no
+    * V-column, no class of degree `maxDimension + 1`, and no reduction at all while no class of degree `maxDimension`
+    * is open. The bars of degree `0 .. maxDimension` and their representatives are those of the uncapped cursor; there
+    * are no bars above `maxDimension`.
     */
   def persistentHomology(stream: => CellStream[CellT, FiltrationT], maxDimension: Int): HomologyState =
     require(maxDimension >= 0, s"maxDimension must be >= 0, got $maxDimension")
-    start(stream, Some(maxDimension))
+    val theStream = stream
+    start(theStream, Some(declaredLimit(theStream).fold(maxDimension)(math.min(_, maxDimension))))
+
+  // The top degree whose bars are the stream's homology, when it says so (a stream built for degrees `0..k`).
+  private def declaredLimit(stream: CellStream[CellT, FiltrationT]): Option[Int] = stream match
+    case s: StratifiedCellStream[?, ?] => s.homologyDegreeLimit.filter(_ >= 0)
+    case _                             => None
 
   private def start(stream: => CellStream[CellT, FiltrationT], maxDegree: Option[Int]): HomologyState =
     HomologyState(
@@ -430,10 +442,7 @@ open class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: F
   val chainRM = summon[Chain[CellT, CoefficientT] is RingModule]
   import chainRM.*
 
-  // The real internal ceiling: one dimension higher than what's reported, so a class born AT maxDim can still be
-  // correctly killed by a genuine (maxDim + 1)-cell rather than looking essential purely because nothing above
-  // maxDim was ever considered. See the class doc above.
-  private val internalMaxDim: Int = maxDim + 1
+  private val requestedMaxDim: Int = maxDim
 
   class HomologyState(
     boundaries: mutable.Map[CellT, Chain[CellT, CoefficientT]],
@@ -452,6 +461,16 @@ open class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: F
   ):
 
     given Ordering[CellT] = ranks.ordering
+
+    // The degrees reported: the engine's `maxDim`, or fewer when the stream was cut off below it
+    // (`homologyDegreeLimit`): the cells above that degree close nothing, so their unpaired ones are not homology.
+    private val maxDim: Int =
+      stream.homologyDegreeLimit.filter(_ >= 0).fold(requestedMaxDim)(math.min(_, requestedMaxDim))
+
+    // The real internal ceiling: one dimension higher than what's reported, so a class born AT maxDim can still be
+    // correctly killed by a genuine (maxDim + 1)-cell rather than looking essential purely because nothing above
+    // maxDim was ever considered. See the class doc above.
+    private val internalMaxDim: Int = maxDim + 1
 
     // top-down state:
     //   cleared ------------- simplices paired as pivots (positive side); their column is implicitly zero

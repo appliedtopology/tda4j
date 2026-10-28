@@ -61,3 +61,34 @@ same 190 bars. `CohomologyDegreeLimitSpec` fails on the old code (4 of 6 example
 On the `Cohomology` runs above, 40 to 60% of the time is `RipserCofaceSimplexStream$LayerSorter` (sorting each layer of
 the Rips stream) and `CellularCohomologyEngine$PackedCells.matches` (the face hash lookups); neither was A/B tested.
 `Chunks` spends 15% in `CellRanks.canonical`.
+
+## All-engines audit of the top degree (2026-10-28, #252)
+
+Request: check every engine, not only cohomology, for what it does with the cells of a truncated stream's top
+dimension (`VietorisRips(.., maxDimension = k)` holds cells of dimension `k + 1`; the ones that close nothing are not
+homology). `TruncatedTopDegreeSpec` runs each way to a barcode on a random cloud and an integer grid (many ties) and
+compares the truncated stream's bars with the same way on the stream one degree longer, filtered to degree `k`, with and
+without zero-length bars. The ways: `PersistenceEngine.{naive, naiveCocycles, chunks, chunksCocycles, cohomology,
+cohomologyCycles}`, chunks at its default `maxDim = 5`, the direct engines (chunks at its default, the naive cursor on the
+whole stream, the cohomology engine's two methods), the verb with `Naive`, `Chunks`, `Cohomology`, `Ripser`,
+`ParallelRipser` (both representative kinds), alpha, and a 3-D image with `FastCubical`, `Cohomology`, `Chunks`, `Naive`,
+and the fast cubical engine directly with a degree cap in 2, 3 and 4 dimensions.
+
+Run against the code without the fixes below, three ways failed (the same three, on both inputs): chunks at `maxDim = 5`
+(and `PersistenceEngine.chunks(5)`), `CellularPersistenceInChunksEngine()` and the one-argument naive cursor. Each
+reported the unpaired cells of the stream's top dimension as essential classes of a degree the stream was not built for
+(for `chunksCocycles(5)` the bars were already cut, by `Involution.cocycleBars`). The verb was never wrong for them: it
+throws when the requested degree exceeds the stream's limit and otherwise passes the limit as the degree.
+
+Fixes: the chunks engine reads `min(maxDim, homologyDegreeLimit)` per stream (the state's `maxDim`/`internalMaxDim`); the
+naive cursor with no degree reads a stream with a limit as the cursor with that degree, and the cursor with a degree takes
+the smaller of the two; `PersistenceEngine.naive` no longer picks the cap itself. `FastCubicalHomologyEngine` had no
+degree argument and computed every degree, the dual-graph top degree with its representatives included, for the verb to
+filter; it now takes `maxDimension` as `FastAlphaHomologyEngine` does. Nothing else needed a change: Ripser and
+ParallelRipser take the degree and read cofacets one dimension up themselves; `FastAlphaHomologyEngine` already capped.
+
+Specs that used a stream with a declared limit as the reference "uncapped" input were wrong about what they tested and
+changed: `NaiveCappedSpec` wraps the Rips stream in a view without the limit; `PersistenceInChunksSpec`'s three-cycle graph
+was a `LimitedCofaceSimplexStream` of dimension 1 (declares degree 1 an artifact) and is an `ExplicitStreamBuilder` now.
+
+Not measured: the saving of the fast cubical cap (the dual graph skipped for a 3-D image at `maxDimension = 1`).

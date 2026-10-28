@@ -30,16 +30,11 @@ object PersistenceEngine:
         state.advanceAll()
         state.barcodeAt(Double.PositiveInfinity, includeZeroLength)
 
-  // The naive cursor for `stream`: capped at the stream's `homologyDegreeLimit` when it has one (what `VietorisRips(..,
-  // maxDimension = k)` and the other truncated complexes report: the cells of dimension `k + 1` only close classes of
-  // degree `k`), the whole complex otherwise.
+  // The naive cursor for `stream`, which reads a stream cut off at a degree (`homologyDegreeLimit`) up to that degree.
   private def naiveState[CellT: OrderedCell, C: Field](
     stream: StratifiedCellStream[CellT, Double]
   ): CellularHomologyEngine[CellT, C, Double]#HomologyState =
-    val engine = CellularHomologyEngine[CellT, C, Double]()
-    stream.homologyDegreeLimit match
-      case Some(k) if k >= 0 => engine.persistentHomology(stream, k)
-      case _                 => engine.persistentHomology(stream)
+    CellularHomologyEngine[CellT, C, Double]().persistentHomology(stream)
 
   /** The chunks engine reporting degrees `0 .. maxDim`. */
   def chunks[CellT: OrderedCell, C: Field](maxDim: Int): PersistenceEngine[CellT, C] =

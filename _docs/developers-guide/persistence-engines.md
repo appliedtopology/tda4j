@@ -41,9 +41,10 @@ parallel V-column alongside the ordinary reduction.
 `maxDimension + 1` are neither sorted nor reduced. A cell of dimension `maxDimension + 1` can only close a class of
 degree `maxDimension`, so it is reduced only while such a class is open, and it leaves nothing but the pairing it makes
 (no V-column, no class of degree `maxDimension + 1`). The bars of degrees `0 .. maxDimension` and their representatives
-are those of the uncapped cursor, which the one-argument form stays. `Persistence` uses the capped cursor, and so does
-`PersistenceEngine.naive`, with the cap taken from the stream's `homologyDegreeLimit` (a complete complex has none and is
-read whole).
+are those of the cursor on the whole complex. The one-argument form reads a stream that has no `homologyDegreeLimit`
+whole, and a stream cut off at degree `k` (`VietorisRips(points, maxDimension = k)`) up to `k`, which is also what a
+larger explicit `maxDimension` comes to: the cells above `k` close nothing, so their unpaired ones are not homology.
+`Persistence` uses the capped cursor, and so does `PersistenceEngine.naive`.
 
 ## 2. `CellularPersistenceInChunksEngine` / `PersistenceInChunksEngine` — chunked, generic
 
@@ -61,6 +62,9 @@ essential classes — reconstructed incrementally from this class's own already-
 `boundaries`/`cleared`/`paired`/`killer` state (`vcolOf`, memoized) rather than by delegating to a second
 engine run. `advanceAll()` runs the whole pipeline in one shot; there is no incremental querying the way
 engine 1 has.
+
+Like every engine that reads a stream, it reports no degree above the stream's `homologyDegreeLimit`, whatever `maxDim`
+says: the default `maxDim = 5` on `VietorisRips(points, maxDimension = 2)` gives degrees `0..2`.
 
 **What the union-find takes.** `unionFindDim01` sorts each edge by its
 boundary over the engine's field (`edgeShape`):
@@ -244,6 +248,10 @@ For ambient dimension `d >= 3`, intermediate dimensions
 (`PackedCubicalCohomologyEngine`, cycles by the involution).
 
 The engine is valid for ambient dimension `>= 2` and avoids general `Chain` reduction in the two shortcut dimensions, `H_0` and `H_{d-1}`.
+
+`persistentHomology(grid, includeZeroLength, maxDimension)` stops at degree `maxDimension`: the dual graph is walked only
+when the top degree `d - 1` is asked for, and the middle degrees are reduced on the grid cut to dimension
+`maxDimension + 1`, the same shape as `FastAlphaHomologyEngine`.
 
 A masked (NaN) pixel is not in the complex. In the dual graph it is present
 from the start, like the outside of the grid, and a masked region that dies

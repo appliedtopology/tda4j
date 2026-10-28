@@ -1888,7 +1888,7 @@ object TDA4j:
         // for real filtering now that ambientDim >= 3 is possible here too (unlike the old ambientDim=2-only
         // engine, where the grid's own natural top dimension was always <= 1 and nothing was ever filtered).
         fromBars[Cube, C](
-          FastCubicalHomologyEngine[C]().persistentHomology(stream, includeZeroLength = includeZeroLength),
+          FastCubicalHomologyEngine[C]().persistentHomology(stream, includeZeroLength, maxDimension),
           cellVertices,
           toDouble,
           maxDimension,
