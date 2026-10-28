@@ -6323,6 +6323,7 @@
             <div class="cover">
              <div class="doc">
               <p>Vietoris-Rips (or, with <code>filtrationValueOverride</code>, any filtration on the same vertex set that is monotone along faces), each dimension enumerated in full by <a href="tda4j/SimplexIndexing.html">SimplexIndexing</a>'s combinatorial number system and filtered by <code>keepCriterion</code> and <code>maxFiltrationValue</code>. What <a href="tda4j/VietorisRips$.html">VietorisRips</a> chooses between, with <a href="tda4j/RipserCofaceSimplexStream.html">RipserCofaceSimplexStream</a>.</p>
+              <p>Enumerating every vertex set of a dimension holds only while there are at most <code>Int.MaxValue</code> of them (a <code>Range</code> of indices); <a href="tda4j/RipserCofaceSimplexStream.html">RipserCofaceSimplexStream</a>, the default, builds each dimension from the cofaces of the cells it kept and has no such limit. The tie-break of <a href="tda4j/EnumeratingCofaceSimplexStream.html#filtrationOrdering-0">filtrationOrdering</a> is <a href="tda4j/SimplexIndexing$.html#colexOrdering-0">SimplexIndexing.colexOrdering</a>, which has none either.</p>
              </div>
              <h2 class="h200">Attributes</h2>
              <dl class="attributes attributes-small">
@@ -6336,7 +6337,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L358" target="_blank">SimplexStream.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L363" target="_blank">SimplexStream.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -10249,7 +10250,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L991" target="_blank">SimplexStream.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L1003" target="_blank">SimplexStream.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -11823,7 +11824,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexIndexing.scala#L397" target="_blank">SimplexIndexing.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexIndexing.scala#L415" target="_blank">SimplexIndexing.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -11881,7 +11882,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexIndexing.scala#L404" target="_blank">SimplexIndexing.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexIndexing.scala#L422" target="_blank">SimplexIndexing.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -14453,7 +14454,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L539" target="_blank">SimplexStream.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L551" target="_blank">SimplexStream.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -14566,7 +14567,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L809" target="_blank">SimplexStream.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L821" target="_blank">SimplexStream.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
