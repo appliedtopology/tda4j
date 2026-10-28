@@ -17,7 +17,7 @@ recorded open class" `IllegalStateException` at least five times, or worse, a si
 
 1. **`filtrationOrdering` is a total order with the primary key reversed**: smaller-under-the-ordering = younger.
    Build it with `FiltrationOrdering.canonical(filtrationValue, dim, tieBreak)` — filtration value reversed, then
-   dimension, then `tieBreak` (colex via `simplexIndexing` for VR, matching Ripser's Def 3.2) — rather than
+   dimension, then `tieBreak` (`SimplexIndexing.colexOrdering` for VR, matching Ripser's Def 3.2: the order of the combinatorial index on sets of one size, with no `Long` limit, `WORKLOG-colex-tie-break.md`) — rather than
    hand-rolling the comparator; every stream in this codebase goes through this one combinator
    (`WORKLOG-code-critique.md`). Reverse *only* the primary key — `.reverse` on a whole ascending ordering also
    flips the dimension tie-break. No tie-break at all = tied cells collide as one `SortedMap` key.
