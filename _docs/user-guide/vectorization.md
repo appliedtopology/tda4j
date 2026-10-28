@@ -51,6 +51,27 @@ val image = Vectorization.persistenceImage(loops, 0.1, (0.0, 2.0), (0.0, 2.0), 2
   from 0 at persistence 0 to 1 at `weightCap` (default: the largest persistence), blurs it with a Gaussian, and
   integrates over each pixel. Essential bars are left out. The result matches `persim`.
 
-The [comparing barcodes](../tutorials/comparing-barcodes.md) tutorial uses all four. From MATLAB, these are methods of a
+### The Euler characteristic curve
+
+The Euler characteristic of the Vietoris-Rips complex at scale `t`, the number of vertices minus the edges plus the
+triangles and so on, is a step function of `t`. It is a vector of its own that needs no persistence:
+
+```scala 3
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+
+val points = Array.tabulate(30)(i => Array(math.cos(i * 0.21), math.sin(i * 0.21)))
+
+val curve = EulerCharacteristicCurve(points)   // simplices up to dimension 2, scales up to the enclosing radius
+curve(0.5)                                     // the Euler characteristic at scale 0.5
+curve.sample(0.0, 1.0, 50)                     // 50 evenly spaced samples, an Array[Long]
+```
+
+`maxSimplexDimension` (default 2) is the dimension of the largest simplices counted and `maxFiltrationValue` the largest
+scale. The curve is computed from the cliques of each edge's lens (the points closer than the edge to both its ends)
+without building the complex, so it is cheap where a stream of the same simplices is not. `EulerCharacteristicCurve.ofStream(stream)`
+counts the cells of any other stream, an alpha complex or a cubical one for instance.
+
+The [comparing barcodes](../tutorials/comparing-barcodes.md) tutorial uses the four diagram operations above. From MATLAB, these are methods of a
 result: `r1.bottleneckDistance(r2, dim)`, `wassersteinDistance`, `landscape`, `persistenceImage`. From the command line,
 `--distance-to saved.csv` prints the distances to a diagram saved earlier.
