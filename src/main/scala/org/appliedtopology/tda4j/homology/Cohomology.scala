@@ -50,7 +50,10 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
     largest = values.reduceOption(ordering.max)
 
   /** Every bar of `stream`'s persistent cohomology with its representative (see the class doc); zero-length bars only
-    * if `includeZeroLength`. Works one degree at a time, so memory is bounded by the largest coboundary block.
+    * if `includeZeroLength`. Works one degree at a time, so memory is bounded by the largest coboundary block. For a
+    * stream built for degrees `0..k` (its `homologyDegreeLimit`), bars of higher degree are left out, as in
+    * [[persistentHomology]]: the cells of degree `k + 1` are all there to kill degree-`k` classes, and the ones that
+    * kill none would each become a bar and a representative of their own.
     */
   def persistentCohomology(
     stream: => CellStream[CellT, FiltrationT],
@@ -58,10 +61,16 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
   ): List[PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]]] =
     val theStream = stream
     lazy val cells = readCells(theStream)
+    val limit = degreeLimit(theStream)
     packed(theStream, cells) match
-      case Some(p) => p.cocycleBars(includeZeroLength)
+      case Some(p) => p.cocycleBars(limit, includeZeroLength)
       case None    =>
-        PersistenceBar.dropZeroLength(paired(theStream, cells)._1.map(_._1), includeZeroLength)
+        PersistenceBar.dropZeroLength(paired(theStream, cells, limit)._1.map(_._1), includeZeroLength)
+
+  // The top degree whose bars are the complex's homology: a stream built for degrees 0..k says k.
+  private def degreeLimit(theStream: CellStream[CellT, FiltrationT]): Int = theStream match
+    case s: StratifiedCellStream[?, ?] => s.homologyDegreeLimit.getOrElse(Int.MaxValue)
+    case _                             => Int.MaxValue
 
   /** Whether `stream` is reduced on flat arrays (simplices with `Int` vertices, ascending under the vertex order, under
     * the library's own cell instance; see the class doc) rather than as cells. Reads the whole stream.
@@ -83,9 +92,7 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
     // A stream truncated for degrees 0..k leaves its top cells as "essential" classes of degree k + 1 that are not
     // the complex's homology; reducing their boundaries would redo all the work the involution skips. Essential pairs
     // are never pivots, so leaving them out changes no other cycle.
-    val limit = theStream match
-      case s: StratifiedCellStream[?, ?] => s.homologyDegreeLimit.getOrElse(Int.MaxValue)
-      case _                             => Int.MaxValue
+    val limit = degreeLimit(theStream)
     lazy val cells = readCells(theStream)
     packed(theStream, cells)
       .map(_.cycleBars(limit, includeZeroLength))
@@ -128,16 +135,17 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
   ): (List[(PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]], Involution.Pair[CellT])], Ordering[CellT]) =
     val theStream = stream
     lazy val cells = readCells(theStream)
-    packed(theStream, cells).map(_.pairs).getOrElse(paired(theStream, cells))
+    packed(theStream, cells).map(_.pairs).getOrElse(paired(theStream, cells, Int.MaxValue))
 
   private def paired(
     theStream: CellStream[CellT, FiltrationT],
-    cells: Vector[CellT]
+    cells: Vector[CellT],
+    limit: Int
   ): (List[(PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]], Involution.Pair[CellT])], Ordering[CellT]) =
     reduction(theStream, cells) match
       case None    => (List.empty, Ordering.by[CellT, Int](_ => 0))
       case Some(r) =>
-        val paired = r.entries.toList.map { e =>
+        val paired = r.entries.iterator.filter(_.dim <= limit).toList.map { e =>
           val cells = r.cellsByDim(e.dim)
           val rep = Chain.from(e.cocycle.map((i, c) => (cells(i), c)))(using r.olderFirst)
           val death = Option.when(e.death >= 0)(r.cellsByDim(e.dim + 1)(e.death))
@@ -626,9 +634,12 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
       }
       (paired, olderFirst)
 
-    def cocycleBars(includeZeroLength: Boolean): List[PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]]] =
+    def cocycleBars(
+      limit: Int,
+      includeZeroLength: Boolean
+    ): List[PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]]] =
       (0 until count).iterator
-        .filter(e => includeZeroLength || !isZeroLength(e))
+        .filter(e => barDims(e) <= limit && (includeZeroLength || !isZeroLength(e)))
         .map(e => PersistenceBar(barDims(e), lower(e), upper(e), Some(cocycleChain(e))))
         .toList
 

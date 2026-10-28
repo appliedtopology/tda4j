@@ -184,7 +184,10 @@ largest single band) — no `SimplexIndexing`-style combinatorial machinery, and
 formula.
 
 **No `maxDim` parameter and no apparent pairs.** Callers truncate the input stream when needed, and the coboundary
-relation is already materialized, so apparent-pair optimizations have nothing to save.
+relation is already materialized, so apparent-pair optimizations have nothing to save. A stream built for degrees
+`0..k` says so in its `homologyDegreeLimit`; the engine then reports no bar above `k`, cocycles and cycles alike, because
+the cells of degree `k + 1` that close no class are not the complex's homology and would each cost a bar and a
+representative (`PackedCubicalCohomologyEngine` does the same on a truncated grid).
 
 **Representatives**: Every bar carries a V-column. Essential bars yield genuine cocycles over the
 full complex; finite bars carry representatives valid over their persistence

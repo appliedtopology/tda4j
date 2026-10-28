@@ -660,10 +660,16 @@ open class PackedCubicalCohomologyEngine[C: Field](
           cocycleOf(row.toLong) = cubeChain(v, youngestFirst = false)
     (rows, cocycleOf)
 
-  /** Every bar with its cocycle, as `CellularCohomologyEngine.persistentCohomology` gives it on the stream. */
+  // The top degree whose bars are the grid's homology: all of them for the whole grid, one less than the cells' top
+  // dimension for a truncated one (its declared `homologyDegreeLimit`).
+  private def degreeLimit: Int = if topDim < d then topDim - 1 else topDim
+
+  /** Every bar with its cocycle, as `CellularCohomologyEngine.persistentCohomology` gives it on the stream: degrees up
+    * to `topDim - 1` for a truncated grid (its declared `homologyDegreeLimit`), all of them for the whole grid.
+    */
   def persistentCohomology(includeZeroLength: Boolean = false): List[PersistenceBar[Double, Chain[Cube, C]]] =
     val keep = (_: Int, birth: Int, death: Int) => includeZeroLength || death < 0 || cellRank(birth) != cellRank(death)
-    val (rows, cocycleOf) = pairing(topDim, cocycles = true, keep)
+    val (rows, cocycleOf) = pairing(degreeLimit, cocycles = true, keep)
     var bars: List[PersistenceBar[Double, Chain[Cube, C]]] = Nil
     var row = rows.size - 1
     while row >= 0 do
@@ -675,8 +681,7 @@ open class PackedCubicalCohomologyEngine[C: Field](
     * `topDim - 1` for a truncated grid (its declared `homologyDegreeLimit`), all of them for the whole grid.
     */
   def persistentHomology(includeZeroLength: Boolean = false): List[PersistenceBar[Double, Chain[Cube, C]]] =
-    val limit = if topDim < d then topDim - 1 else topDim
-    val (rows, _) = pairing(limit, cocycles = false, (_, _, _) => false)
+    val (rows, _) = pairing(degreeLimit, cocycles = false, (_, _, _) => false)
     val reported = (row: Int) => includeZeroLength || !rows.isZeroLength(row)
     val cycles = involutedCycles(rows, reported)
     var bars: List[PersistenceBar[Double, Chain[Cube, C]]] = Nil

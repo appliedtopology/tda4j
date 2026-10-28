@@ -14,8 +14,10 @@ Independent implementations sharing `Chain` primitives: a fix in one doesn't imp
 `maxDimension` = top homological degree in the engines and the facade (engines build one dimension higher internally);
 the stream constructors differ (`IncrementalVietorisRipsSimplexStream.maxDimension` is the top SIMPLEX dimension, coface
 streams have none): use `VietorisRips` (`DESIGN-stream-naming.md`, `WORKLOG-maxdim-semantics-fix.md`).
-`CellularCohomologyEngine` has no such param: callers truncate via `LimitedCofaceSimplexStream(stream, k+1)` and drop
-`dim==k+1` bars. Over a field, cohomology and homology barcodes coincide.
+`CellularCohomologyEngine` has no such param: callers truncate via a stream with a `homologyDegreeLimit`
+(`VietorisRips(.., k)`, `Truncated`), and `persistentCohomology` (and the packed cubical engine's) leaves out the bars
+above it before building any representative (`CohomologyDegreeLimitSpec`, `WORKLOG-generic-engine-profile.md`: the
+top-degree cells that kill nothing were once 8.2M bars). Over a field, cohomology and homology barcodes coincide.
 
 1. **Naive** (`CellularHomologyEngine`/`SimplicialHomologyEngine`) — single-pivot-table reduction, no clearing; the
    reference baseline. Incremental (`advanceOne`/`advanceTo`/`advanceAll`); a raw-UnionFind fast path was measured and
