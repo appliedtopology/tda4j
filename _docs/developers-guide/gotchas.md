@@ -60,8 +60,8 @@ more than one stream in this codebase's history for exactly that reason.
 
 The generic default tie-breaks on plain lexicographic vertex-set order. `EnumeratingCofaceSimplexStream`'s
 and `RipserCohomologyEngine`'s own orderings deliberately use **colexicographic** order instead, via
-`SimplexIndexing`'s own combinatorial-number-system index — the exact tie-break Ripser's Definition
-3.2/Proposition 3.9 (apparent pairs) are stated in terms of. Don't "simplify" a colex ordering to plain lex
+`SimplexIndexing.colexOrdering` — the order of `SimplexIndexing`'s combinatorial-number-system index, without its
+width limit — the exact tie-break Ripser's Definition 3.2/Proposition 3.9 (apparent pairs) are stated in terms of. Don't "simplify" a colex ordering to plain lex
 in code that touches `SimplexIndexing`/the Ripser engines; they need to agree with each other, not just each
 independently be a valid tie-break.
 
