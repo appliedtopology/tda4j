@@ -283,8 +283,8 @@ Entries since the last release that are not listed below are the files of [`chan
   `vr`, `cech` and `alpha`, with the alpha backend and parameters the result used. Past the result's
   `maxFiltrationValue` the plot stops there and says so (#76).
 - The brand is Teal & Gold (was Slate & Gold): the teal is `#1a729b` (`#81bde0` in dark mode). The default plot palette
-  (`Palette.brand`) and the live viewer follow: degree 0 is `#1a729b` in light mode and the secondary ink is teal; the
-  other slots are as they were.
+  (`Palette.brand`) and the live viewer follow: degree 0 is `#1a729b` and degree 1 (gold) is `#b58605` in light mode, and the secondary ink is
+  teal; the other slots are as they were.
 - `BarcodeDistance.bottleneckDistance` no longer builds the all-pairs cost matrix: near pairs are found in a window of
   the other diagram sorted by birth, and feasibility is two matchings (one covering the bars too far from the diagonal on
   each side). The values are the same; two random diagrams of 1,500 bars took 22 s and take 0.2 s.

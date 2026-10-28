@@ -14,21 +14,26 @@ favicon scale with bolded strokes and no redraw — the one property that elimin
 (see "Rejected," below).
 
 **Color base: Teal & Gold** (2026-10-23; was Slate & Gold, see "Revision" below). Two-tier palette, deliberately: a
-"UI-safe" tier tuned for text/functional-element contrast, and a brighter "brand-mark" tier for the logo graphic and
-wordmark specifically, which only needs to clear WCAG's 3:1 non-text threshold, not 4.5:1. These are related (same
-hue, different lightness/saturation), not two unrelated colors — but they ARE two different hex values, and that
-distinction has to survive into `_layouts/main.html` and any future palette doc, or the two tiers will drift back
-together the first time someone "simplifies" it.
+"UI-safe" tier tuned for text/functional-element contrast (4.5:1), and a brighter "brand-mark" tier for the logo
+graphic and wordmark specifically, which is a logotype and so exempt from contrast minimums (the teal mark clears 3:1
+anyway; the gold mark deliberately does not, see the 2026-10-28 revision). A third tier is for charts, where marks
+need 3:1 on their surface. These are related (same hue, different lightness/saturation), not unrelated colors — but
+they ARE different hex values, and that distinction has to survive into `_layouts/main.html`, `plot/Color.scala` and
+any future palette doc, or the tiers will drift back together the first time someone "simplifies" them.
 
-| Role | UI-safe (site theme, text/links) | Brand-mark (logo, wordmark) |
-|---|---|---|
-| Teal, light | `#205976` | `#1a729b` |
-| Teal, dark | `#81bde0` | `#81bde0` (one value: dark mode needs no separate brightening) |
-| Gold, light | `#866504` | `#a67f07` |
-| Gold, dark | `#f0c647` | `#f0c647` (unchanged — see darkening note below) |
+| Role | UI-safe (site theme, text/links) | Brand-mark (logo, wordmark) | Charts (`Palette.brand`, `fam_colors`) |
+|---|---|---|---|
+| Teal, light | `#205976` | `#1a729b` | `#1a729b` |
+| Teal, dark | `#81bde0` | `#81bde0` (one value: dark mode needs no separate brightening) | `#4aa0c7` |
+| Gold, light | `#866504` | `#d6a20a` | `#b58605` |
+| Gold, dark | `#f0c647` | `#f0c647` (see darkening note below) | `#b98e1b` |
 
-Surfaces: cream `#f8f7f4` (light), blue-black `#161b1e` (dark). Contrast on them: UI teal 7.1:1 on cream, dark teal
-8.5:1 on `#161b1e`, mark teal 5.0:1 on cream and 3.2:1 on `#161b1e` (the dark mark is `#81bde0`, not this).
+Solid gold field (the gold sticker): `#f2b705`.
+
+Surfaces: white `#ffffff` for everything printed or published (stickers, badges, PNG icons, papers, benchmark
+graphs, `Palette.print`), cream `#f8f7f4` only for the docs site and the live viewer's page, blue-black `#161b1e` for
+dark mode. Contrast: UI teal 7.6:1 on white (7.1:1 on cream), dark teal 8.5:1 on `#161b1e`, mark teal 5.3:1 on white
+(5.0:1 on cream), chart gold 3.3:1 on white (3.07:1 on cream).
 
 **Revision, Slate → Teal (2026-10-23, project lead)**: the slate brand-mark `#456f87` has OKLCH chroma 0.06, below the
 0.10 floor of the data-viz palette checks, so it read as gray next to the chart colors and could not be a slot of a
@@ -37,6 +42,22 @@ slate's hue (OKLCH 234.6°) and lightness (0.52) and raises chroma to 0.10: `#1a
 to 0.0997 after rounding to hex and fails the floor). The other tiers are the same hue at the old tiers' lightness:
 UI-safe L 0.44 / C 0.075, dark L 0.77 / C 0.08. Gold is unchanged. Superseded slate values: `#456f87` (mark), `#3c5a6b`
 (UI-safe), `#8fb4c7` (dark).
+
+**Revision, brighter gold, white not cream (2026-10-28, project lead)**: the first printed stickers (the three square
+badges, still in the slate palette) showed two problems. The gold sticker, `#a67f07` as the field, printed khaki-brown,
+and the gold of the white card was dull. `#a67f07` (OKLCH L 0.62, C 0.125) is about as chromatic as a gold can be in sRGB
+at a lightness that holds 3:1 on white: gold at that lightness is the olive-brown that printed, so punch and 3:1 pull
+apart. Decisions:
+- the brand-mark gold is `#d6a20a` (L 0.74, C 0.150, hue 85°, 2.33:1 on white): same hue family, a gold that reads as
+  gold. A logotype is exempt from contrast minimums, and the teal beside it carries the mark's edges;
+- the gold sticker's field is `#f2b705`, with UI-safe teal `#205976` (4.2:1 on the field) for the wordmark, the left ball
+  and the line, and white for the "4" and the right ball (1.8:1: accepted, large bold shapes against a field, checked by
+  rendering). The earlier recipe (a darker partner on a mid gold) is gone with the brown;
+- charts keep 3:1 on their surface, so the chart gold is `#b58605` (the most chromatic gold at 3.07:1 on cream, 3.3:1
+  on white), up from `#a68018`, and it separates better from the brick (worst color-vision ΔE 8.5 to 11.7). It is the
+  gold of `Palette.brand` and of `b` in `fam_colors`;
+- white replaces cream wherever something is printed or published: the white card's background and the teal sticker's
+  whites were cream `#f8f7f4`. Cream stays the docs site's and the live viewer's page color.
 
 **Gold, dark, darkened from `#f3d068` to `#f0c647`**: the original value read visibly thinner/paler than the
 light-mode gold (`#866504` on cream) when compared directly — light and dark golds are meant to differ in
@@ -78,24 +99,19 @@ loaded from Google Fonts). Chosen over Space Mono; the "shares a foundry with Sp
 Mono didn't hold up since Space Grotesk isn't used as body/heading type anywhere near this wordmark.
 
 **Square badge: three live variants**, not one, because they serve different jobs:
-- `badge-lowercase.svg` — light card, icon-dominant, text at real size below. For contexts where the badge is
+- `badge-lowercase.svg` — white card, icon-dominant, text at real size below. For contexts where the badge is
   the whole artifact (README avatar, social preview) and needs to stand alone at a readable size.
-- `badge-sticker-teal.svg` — full-bleed brand-mark teal background, inverted (cream + dark-mode gold) mark and text.
+- `badge-sticker-teal.svg` — full-bleed brand-mark teal background, inverted (white + dark-mode gold) mark and text.
   For print/stickers specifically: a light-background square, however tightly cropped, still reads as "logo on
   a white card" once printed and die-cut. Full-bleed color removes that problem outright, and costs nothing new
   — it's the already-approved dark-mode palette applied to a solid field instead of a dark background.
-- `badge-sticker-gold.svg` — full-bleed brand-mark gold (`#a67f07`) background. The teal sticker's trick (reuse
-  an already-approved palette pair on a solid field) does NOT transfer to gold: darkening gold enough to get a
-  legible partner color makes it read as brown/olive, not gold — yellow-family hues collapse into a different
-  color name at much higher lightness than blue-family hues do, verified by rendering candidates rather than
-  assumed. Lightening the partner color the other way collapses it into the mark's own cream well before it
-  clears contrast against the gold field. What actually works: UI-safe teal (`#205976`) for the
-  wordmark/primary ball/connecting line, cream (`#f8f7f4`, unchanged) for the "4"/accent ball — zero new colors.
-  **Accepted exception**: `#205976` on `#a67f07` measures 2.06:1, under this system's own 3:1 brand-mark floor;
-  kept anyway because the hue separation (cool teal vs. warm gold) carries it at logo weight/scale — confirmed
-  by rendering side by side with `badge-sticker-teal.svg`, not by contrast ratio alone. A darker same-hue slate
-  (`#253741`, 3.33:1, tried in the slate palette) was tried first and rejected: it clears the number but reads as
-  disconnected from the rest of the palette, which is the thing this whole two-tier system exists to avoid.
+- `badge-sticker-gold.svg` — full-bleed gold (`#f2b705`) background. The teal sticker's trick (reuse an
+  already-approved palette pair on a solid field) does NOT transfer to gold: the first print used the mid gold
+  `#a67f07` as the field and came out khaki-brown, because darkening gold enough to hold a partner color turns it
+  olive. A bright field and a dark partner works: UI-safe teal (`#205976`) for the wordmark, left ball and connecting
+  line, white for the "4" and the right ball, white lenses in both balls. Rendered next to the other two before it was
+  chosen; a thin teal outline on the white "4" was tried and rejected (it reads as a double edge).
+  **Accepted exception**: white on `#f2b705` measures 1.8:1; the "4" is 56 units of bold monospace on a 192 field.
 
 **Print caveat, stated plainly**: these SVGs use live `<text>` styled with `font-family: 'JetBrains Mono'`, which
 renders correctly in a browser (where the Google Fonts stylesheet is loaded) but will NOT render correctly in
@@ -150,12 +166,14 @@ looks right, and a botched auto-outline is worse than an honest gap.
 ## Colors outside the site
 
 - The plot defaults (`Palette.brand`, the live viewer's accent) use the same teal and gold, stepped for charts: light
-  series 0 is the brand-mark teal `#1a729b`, secondary ink the UI-safe `#205976`, dark secondary ink `#81bde0`.
+  series 0 is the brand-mark teal `#1a729b`, series 1 the chart gold `#b58605`, secondary ink the UI-safe `#205976`,
+  dark secondary ink `#81bde0`. `Palette.brand`'s light surface is still the cream; a figure for a paper is
+  `Palette.print` or `Palette.brand.withSurface("#ffffff")`.
 - Benchmark graphs color tool families with `fam_colors`; `a` is tda4j (brand teal) and `b` is tda4j-js (brand gold).
-  Light (white background; every pair at least 9.5 ΔE under protanopia/deuteranopia and 15.9 normally, 3:1 contrast):
+  Light (white background; every pair at least 8.7 ΔE under protanopia/deuteranopia and 16.7 normally, 3:1 contrast):
 
   ```r
-  fam_colors = c(a = "#1a729b", b = "#a67f07", c = "#4b8efe", d = "#0c9e71", e = "#8443d3", f = "#b63039", g = "#c27cba")
+  fam_colors = c(a = "#1a729b", b = "#b58605", c = "#4b8efe", d = "#0c9e71", e = "#8443d3", f = "#b63039", g = "#c27cba")
   ```
 
   Dark (surface `#161b1e`, lightness band 0.48–0.67 of the dark charts, so `a` and `b` are the charts' dark steps
