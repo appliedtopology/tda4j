@@ -562,6 +562,22 @@ open class RipserCofaceSimplexStream(
   protected def flatFiltration: Option[FlatFiltration] =
     if filtrationIsDefault then Some(FlatFiltration.flag(metricSpace)) else None
 
+  /** The generator that builds this stream's dimensions from the edges up, in filtration order and without sorting
+    * ([[LayeredInorderSimplexStream.FlagGenerator]]), for a stream that is the flag complex of a weighted graph: a
+    * simplex is a set of vertices whose pairs are all edges, and its value is the largest weight. It is used instead of
+    * the coface loop when `keepCriterion` keeps everything and the vertices are `0 until n`; `None` (the default) is
+    * the coface loop. A stream that gives one must give, for every simplex, the cell and the value of its
+    * [[flatFiltration]] (the stream's tests compare the two). A fresh generator is asked for once per stream.
+    */
+  protected def flatGenerator: Option[LayeredInorderSimplexStream.FlagGenerator] = None
+
+  private lazy val generator: Option[LayeredInorderSimplexStream.FlagGenerator] =
+    if keepsEverything && java.util.Arrays.equals(vertexIds, Array.range(0, vertexIds.length)) then flatGenerator
+    else None
+
+  // The generator's layer of the dimension built last, which the next dimension is generated from.
+  private var generated: Option[LayeredInorderSimplexStream.Layer] = None
+
   override def flatLayers: Option[Iterator[FlatLayerStream.Layer]] =
     flatFiltration.map(f => Iterator.range(0, metricSpace.size).map(flatLayer(f, _)).takeWhile(_.size > 0))
 
@@ -574,12 +590,34 @@ open class RipserCofaceSimplexStream(
   private def flatLayer(f: FlatFiltration, d: Int): FlatLayerStream.Layer =
     flatCurrent.filter(_.dim == d).orElse(flatPrevious.filter(_.dim == d)).getOrElse {
       val parent = if d == 0 then None else Some(flatLayer(f, d - 1))
-      val layer = parent.fold(flatVertices(f))(flatCofaces(f, _))
+      val layer = parent.fold(flatVertices(f))(p => generator.fold(flatCofaces(f, p))(generatedLayer(_, d)))
       flatPrevious = parent
       flatCurrent = Some(layer)
-      if d == 1 then buildNeighbours(layer)
+      if d == 1 && generator.isEmpty then buildNeighbours(layer)
       layer
     }
+
+  // Dimension `d >= 1` from the generator, as a flat layer: its tied runs, which it lists colexicographically descending,
+  // are reversed to the order a layer is in (ascending).
+  private def generatedLayer(g: LayeredInorderSimplexStream.FlagGenerator, d: Int): FlatLayerStream.Layer =
+    val below =
+      if d == 1 then None
+      else generated.filter(_.dim == d - 1).orElse(Some((2 until d).foldLeft(g.edges)((layer, _) => g.cofacets(layer))))
+    val raw = below.fold(g.edges)(g.cofacets)
+    generated = Some(raw)
+    val width = d + 1
+    val values = Array.tabulate(raw.size)(g.diameter(raw, _))
+    val vertices = new Array[Int](raw.vertices.length)
+    var start = 0
+    while start < raw.size do
+      var end = start + 1
+      while end < raw.size && java.lang.Double.compare(values(start), values(end)) == 0 do end += 1
+      var i = start
+      while i < end do
+        System.arraycopy(raw.vertices, i * width, vertices, (end - 1 - (i - start)) * width, width)
+        i += 1
+      start = end
+    FlatLayerStream.Layer(d, vertices, values)
 
   private def flatKept(value: Double, vertices: Array[Int], from: Int, width: Int): Boolean =
     keptValue(value) && (keepsEverything || criterionKeeps(FlatLayerStream.simplexOf(vertices, from, width)))

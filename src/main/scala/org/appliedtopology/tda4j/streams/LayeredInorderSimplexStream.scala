@@ -65,7 +65,9 @@ object LayeredInorderSimplexStream:
     def simplex(i: Int): Simplex[Int] =
       Simplex.from(ArraySeq.unsafeWrapArray(java.util.Arrays.copyOfRange(vertices, i * (dim + 1), (i + 1) * (dim + 1))))
 
-  /** Builds the layers of the Vietoris-Rips complex of the `n` points with the given distance, up to `threshold`.
+  /** Builds the layers of the flag complex of a weighted graph on the vertices `0 until n`, up to `threshold`: a set of
+    * vertices is a simplex when all its pairs are edges, and its value is the largest edge weight, the diameter in the
+    * paper. Vietoris-Rips is the graph with an edge for every pair within `threshold` ([[Generator]]).
     *
     * The paper writes vertices in decreasing order and lets the facet without the largest vertex generate a simplex
     * when it can. Here vertices ascend and the smallest vertex plays that part, which makes simplices with the same
@@ -81,32 +83,33 @@ object LayeredInorderSimplexStream:
     * candidates are emitted largest first. On points in general position (no two distances equal) that is already the
     * colexicographically descending order of each tie; elsewhere a run of equal diameters that comes out of order is
     * sorted, and counted in `tieRunsSorted`.
+    *
+    * Only the edge weights are read, so any flag filtration whose simplices take the largest weight of their edges can
+    * be built with it. A vertex `w` can also leave: with `deadline(w) < α` the vertex is added to no simplex of value
+    * `α` (Sheehy's sparse Rips complex, where a point vanishes from the nerve after a scale); an empty `deadline` means
+    * no vertex does. A vertex's own value never matters for the layers from dimension 1 on, provided no edge is below
+    * the values of its ends, as in the DTM filtration.
+    *
+    * @param edges
+    *   the edges within `threshold`, unsorted, each once with `a < b` ([[FlagGenerator.ofEdges]] checks and builds
+    *   them)
+    * @param deadline
+    *   per vertex, the last value at which it can join a simplex; empty for no deadline
     */
-  open class Generator(
+  open class FlagGenerator(
     val n: Int,
-    distance: (Int, Int) => Double,
     val threshold: Double,
-    val candidates: Candidates = Candidates.Bitsets
+    val candidates: Candidates,
+    edgeList: FlagGenerator.Edges,
+    val deadline: Array[Double]
   ):
+    private val hasDeadlines = deadline.nonEmpty
+
     /** The edges within `threshold`, sorted by length and then colexicographically descending: endpoints `edgeA(e) <
       * edgeB(e)`, length `edgeLength(e)`.
       */
     private val sortedEdges: (Array[Int], Array[Int], Array[Double]) =
-      val as = IntBuffer()
-      val bs = IntBuffer()
-      val ls = DoubleBuffer()
-      var b = 1
-      while b < n do
-        var a = 0
-        while a < b do
-          val d = distance(a, b)
-          if d <= threshold then
-            as += a
-            bs += b
-            ls += d
-          a += 1
-        b += 1
-      val (a0, b0, l0) = (as.result, bs.result, ls.result)
+      val (a0, b0, l0) = (edgeList.a, edgeList.b, edgeList.weight)
       val order = sortIndices(
         a0.length,
         (x, y) =>
@@ -227,6 +230,9 @@ object LayeredInorderSimplexStream:
       resetSweep()
 
       def emit(o: Int, w: Int, at: Int, r: Int): Unit =
+        if !hasDeadlines || deadline(w) >= edgeLength(r) then emitUnchecked(o, w, at, r)
+
+      def emitUnchecked(o: Int, w: Int, at: Int, r: Int): Unit =
         var j = 0
         while j < at do
           outVertices += vs(o + j)
@@ -353,6 +359,82 @@ object LayeredInorderSimplexStream:
             layer.root(start + t) = rs(order(t))
             t += 1
         start = end
+
+  object FlagGenerator:
+
+    /** The edges of a graph as three parallel arrays, `a(i) < b(i)` with weight `weight(i)`, in no particular order. */
+    final case class Edges(a: Array[Int], b: Array[Int], weight: Array[Double])
+
+    /** A generator for the flag complex of the graph on `0 until n` with the edges `(a(i), b(i))` of weight
+      * `weight(i)`. Edges heavier than `threshold`, or than the deadline of one of their ends, are left out, since they
+      * would be no simplices; the ends may come in either order.
+      *
+      * @throws IllegalArgumentException
+      *   for an end outside `0 until n`, a loop, an edge listed twice, or a weight that is not a number
+      */
+    def ofEdges(
+      n: Int,
+      a: Array[Int],
+      b: Array[Int],
+      weight: Array[Double],
+      threshold: Double,
+      candidates: Candidates = Candidates.Bitsets,
+      deadline: Array[Double] = Array.emptyDoubleArray
+    ): FlagGenerator =
+      require(a.length == b.length && a.length == weight.length, "the edge arrays must have the same length")
+      require(deadline.isEmpty || deadline.length == n, s"one deadline per vertex (${n}), got ${deadline.length}")
+      val seen = mutable.HashSet.empty[Long]
+      val keptA = IntBuffer()
+      val keptB = IntBuffer()
+      val keptWeight = DoubleBuffer()
+      var i = 0
+      while i < a.length do
+        val (lo, hi) = (math.min(a(i), b(i)), math.max(a(i), b(i)))
+        require(lo >= 0 && hi < n, s"edge ${a(i)} ${b(i)} has an end outside 0 until $n")
+        require(lo != hi, s"edge ${a(i)} ${b(i)} is a loop")
+        require(!weight(i).isNaN, s"edge ${a(i)} ${b(i)} has weight NaN")
+        require(seen.add(lo.toLong * n + hi), s"edge $lo $hi is listed twice")
+        val alive = deadline.isEmpty || weight(i) <= math.min(deadline(lo), deadline(hi))
+        if weight(i) <= threshold && alive then
+          keptA += lo
+          keptB += hi
+          keptWeight += weight(i)
+        i += 1
+      new FlagGenerator(n, threshold, candidates, Edges(keptA.result, keptB.result, keptWeight.result), deadline)
+
+    /** The edges of the complete graph on `0 until n` with `distance` as weight, those within `threshold`. */
+    def edgesWithin(n: Int, distance: (Int, Int) => Double, threshold: Double): Edges =
+      val as = IntBuffer()
+      val bs = IntBuffer()
+      val ls = DoubleBuffer()
+      var b = 1
+      while b < n do
+        var a = 0
+        while a < b do
+          val d = distance(a, b)
+          if d <= threshold then
+            as += a
+            bs += b
+            ls += d
+          a += 1
+        b += 1
+      Edges(as.result, bs.result, ls.result)
+
+  /** Builds the layers of the Vietoris-Rips complex of the `n` points with the given distance, up to `threshold`: the
+    * flag complex of the graph with an edge for every pair within `threshold` ([[FlagGenerator]]).
+    */
+  open class Generator(
+    n: Int,
+    distance: (Int, Int) => Double,
+    threshold: Double,
+    candidates: Candidates = Candidates.Bitsets
+  ) extends FlagGenerator(
+        n,
+        threshold,
+        candidates,
+        FlagGenerator.edgesWithin(n, distance, threshold),
+        Array.emptyDoubleArray
+      )
 
   /** `0 until count` stably sorted by `compare`: a merge sort on primitive indices. */
   def sortIndices(count: Int, compare: (Int, Int) => Int): Array[Int] =
