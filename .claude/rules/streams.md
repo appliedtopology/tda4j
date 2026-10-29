@@ -47,7 +47,9 @@ comparisons must be cheap: `EnumeratingCofaceSimplexStream`/`CubicalGridStream` 
 first longest edge (inherited by its cofacets: diameter and case flags from it), candidates from sweep-updated bitset
 balls (`n²/4` bytes), no sort above the edges in general position; tied runs are checked and sorted only when out of
 order. The old `InorderCofaceSimplexStream` (tie order broken, duplicates on tied distances) is deleted (#182).
-`WORKLOG-layered-inorder.md`. `FiniteMetricSpace` has
+Its generator reads only a sorted weighted edge list (`FlagGenerator.ofEdges`, optional per-vertex deadlines), so a
+coface stream that is the flag complex of a graph can build its flat layers from it (`flatGenerator`: DTM-Rips, sparse
+Rips, edge-collapsed Rips; `filtered-complexes.md`, #190). `WORKLOG-layered-inorder.md`, `WORKLOG-flag-generator.md`. `FiniteMetricSpace` has
 a VP-tree impl (`VantagePointTree`, `VantagePointQuery`; `WORKLOG-scalajs-numerics-spatial.md`) and `SparseMetricSpace` (+∞ past its cutoff rather than excluding — don't use it as a
 thresholded oracle).
 

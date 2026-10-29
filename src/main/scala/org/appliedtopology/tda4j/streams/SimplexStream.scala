@@ -579,9 +579,25 @@ open class RipserCofaceSimplexStream(
     * simplex is a set of vertices whose pairs are all edges, and its value is the largest weight. It is used instead of
     * the coface loop when `keepCriterion` keeps everything and the vertices are `0 until n`; `None` (the default) is
     * the coface loop. A stream that gives one must give, for every simplex, the cell and the value of its
-    * [[flatFiltration]] (the stream's tests compare the two). A fresh generator is asked for once per stream.
+    * [[flatFiltration]] (the stream's tests compare the two). A fresh generator is asked for once per stream. The
+    * default gives one for the edge-collapsed graph of an [[EdgeCollapsedMetricSpace]] with the default filtration,
+    * from its surviving edges, so that the pairs the collapse removed are never scanned.
     */
-  protected def flatGenerator: Option[LayeredInorderSimplexStream.FlagGenerator] = None
+  protected def flatGenerator: Option[LayeredInorderSimplexStream.FlagGenerator] = metricSpace match
+    case collapsed: EdgeCollapsedMetricSpace if filtrationIsDefault =>
+      val as = LayeredInorderSimplexStream.IntBuffer()
+      val bs = LayeredInorderSimplexStream.IntBuffer()
+      val weights = LayeredInorderSimplexStream.DoubleBuffer()
+      collapsed.edges.foreach { (a, b, weight) =>
+        as += a
+        bs += b
+        weights += weight
+      }
+      Some(
+        LayeredInorderSimplexStream.FlagGenerator
+          .ofEdges(metricSpace.size, as.result, bs.result, weights.result, resolvedMaxFiltrationValue)
+      )
+    case _ => None
 
   private lazy val generator: Option[LayeredInorderSimplexStream.FlagGenerator] =
     if keepsEverything && java.util.Arrays.equals(vertexIds, Array.range(0, vertexIds.length)) then flatGenerator
