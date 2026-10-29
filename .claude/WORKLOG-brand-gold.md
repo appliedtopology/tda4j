@@ -43,3 +43,27 @@ The project lead on the cream question: cream is fine as a display choice; a plo
 transparent background. `Style(transparent = true)` (`Style.clear`, `Figure.withTransparentBackground()`) draws no
 background rect, but it is off by default, so a saved `.svg` of `Palette.brand` still has the cream rect. Whether saved
 files should default to transparent is the open question of #253 (renamed). `DECISIONS.md` states the rule.
+
+## Addendum (2026-10-29, #253): saved plots have no background
+
+Decision (project lead): cream for the live viewer and the docs, transparent otherwise. Implemented as: `Style.transparent`
+is an `Optional[Boolean]`. Unset draws the surface where a figure is displayed (`svg`, `fragment`, `html`, the viewer) and
+none in a file (`svgFile`, hence `save` of an `.svg`, MATLAB, the CLI and the JS `svg()`); `true` and `false` mean the same
+in both. `Svg.render(fig, theme, saved)` and `Scene.staticSvg(theme, saved)` take the flag, `Board.svgFile` passes it to
+its panels and its heading, `Style.hasBackground(saved)` decides. `Style.print` is `false`, so a paper keeps its white
+background in a file; `Style.clear` is `true`. New: `withOpaqueBackground()` on `Figure` and `Scene`, the way back to the
+old file (MATLAB gets it from the Java object; the CLI's way is `--style print`).
+
+Read the instruction narrowly where it could be read two ways: "white on for-publication plots" and "transparent when
+deployed elsewhere" are both kept, by `Palette.print + Style.print` (white, opaque, for a paper) and by the default file
+(no background). If a publisher wants transparent figures, `Style.clear` is that.
+
+Checked: a file differs from the old default (`withOpaqueBackground().svgFile`) in the background rectangle alone, in both
+themes (`PlotGrammarSpec`); the board's and its heading's rectangles, and its panels', are each pinned (mutation: a board
+that renders its panels for the page, a heading that ignores `saved`, both fail a spec). No MiMa filter: 0.7.0 has an empty
+baseline.
+
+Consequences worth knowing: a dark-theme `.svg` is light ink on nothing, so opened alone in a browser tab on white it is
+unreadable (it is for a dark page); `save("d.svg", Some(Theme.Dark))` users who want the old file call
+`withOpaqueBackground()`. Not verified: how a PDF viewer, PowerPoint or a journal's pipeline treats a transparent SVG or the
+PNG made from it (some convert transparency to black); nothing was rendered through those.

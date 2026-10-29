@@ -618,8 +618,11 @@ final case class Figure(
   /** Without gridlines. */
   def withoutGrid(): Figure = withStyle(style.copy(grid = false))
 
-  /** Without a background, so that the figure takes the color of the page behind it. */
+  /** Without a background, so that the figure takes the color of the page behind it, in a saved file and on a page. */
   def withTransparentBackground(): Figure = withStyle(style.copy(transparent = true))
+
+  /** With its palette's surface as the background in a saved file too, where it has none unless asked. */
+  def withOpaqueBackground(): Figure = withStyle(style.copy(transparent = false))
 
   /** One change written as text, `element.property=value`: `withSetting("title.size=18")`,
     * `withSetting("tick-label.angle=45")`, `withSetting("grid.dash=dotted")`, `withSetting("x-axis=top")`. See
@@ -647,5 +650,6 @@ final case class Figure(
 
   def svg(theme: Theme = Theme.Auto): String = Svg.render(this, theme)
   def fragment(theme: Theme = Theme.Auto): String = svg(theme)
-  def svgFile(theme: Theme): String = """<?xml version="1.0" encoding="UTF-8"?>""" + "\n" + svg(theme)
+  def svgFile(theme: Theme): String =
+    """<?xml version="1.0" encoding="UTF-8"?>""" + "\n" + Svg.render(this, theme, saved = true)
   def html(theme: Theme = Theme.Auto): String = Html.page(title, svg(theme), palette)

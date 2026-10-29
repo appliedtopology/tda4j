@@ -42,13 +42,19 @@ import org.appliedtopology.tda4j.plot.*
 val points = Array.tabulate(40)(i => Array(math.cos(i * 0.157), math.sin(i * 0.157)))
 val diagram = Persistence(points, maxDimension = 1)
 
-Plot.barcode(diagram).save("barcode.svg")            // plain light colors, for a paper
-Plot.diagram(diagram).save("diagram.svg", Some(Theme.Dark))
+Plot.barcode(diagram).save("barcode.svg")            // plain light colors, no background
+Plot.diagram(diagram).save("diagram.svg", Some(Theme.Dark))   // light ink, for a dark page
 Plot.diagram(diagram).save("diagram.html")           // follows the reader's light or dark setting
 Plot.side(Plot.barcode(diagram), Plot.diagram(diagram)).save("both.svg")
 ```
 
 `figure.svg()` is the SVG as a string: a notebook cell that displays HTML, or any web page, shows it as it is.
+
+A saved `.svg` has no background, so the figure takes the color of the paper, slide or page it goes onto; the cream
+behind a figure in the viewer, in `figure.svg()` and in an `.html` page is for a page of its own. A figure in the dark
+theme is light ink on nothing: put it on a dark page. Where a file must carry its own background (an image that has to
+be opaque, or a dark figure opened on its own), save `figure.withOpaqueBackground()`, or `Palette.print + Style.print` for
+a white one, as for a paper (see [For a paper](#for-a-paper-and-for-a-page-of-either-color)).
 
 ### PNG and PDF
 
@@ -659,7 +665,8 @@ From MATLAB it is `scene.withCamera(20, 10, 1.3)` and `scene.withSetting('camera
 
 Two looks are ready-made, each a palette and a style, and they differ in what is behind the figure.
 
-`Palette.print` and `Style.print` are for a figure that has a white background of its own, as in a paper. The palette is
+`Palette.print` and `Style.print` are for a figure that has a white background of its own, as in a paper, in a saved
+file too. The palette is
 black text and axes on a surface of exactly white (the default's cream would print as a grey patch); its degree colors
 stay apart for every common color vision and read on white (blue, vermillion and bluish green for degrees 0 to 2,
 checked on all pairs), and its heatmap ramp darkens steadily, so it keeps its order on a grayscale printer. It has one
@@ -681,10 +688,11 @@ themes, as Okabe and Ito defined their colors for a light background. The palett
 on any other background the checks no longer hold.
 
 `Palette.clear` and `Style.clear` are for a figure with no background, that takes the color of what is behind it. The
-style draws none. The palette has two looks, which the theme picks: pure black elements for a light page
-(`Theme.Light`, what an `.svg` file gets) and pure white ones for a dark page (`Theme.Dark`), each with degree colors
-chosen to read on its own page color. `Theme.Auto` follows the reader's setting, which is right only where the page does
-too. Without the style the figure keeps the white or the black background of its mode.
+style draws none, on a page as in a file (a saved `.svg` has none anyway, unless its style asks for one). The palette
+has two looks, which the theme picks: pure black elements for a light page (`Theme.Light`, what an `.svg` file gets) and
+pure white ones for a dark page (`Theme.Dark`), each with degree colors chosen to read on its own page color.
+`Theme.Auto` follows the reader's setting, which is right only where the page does too. Without the style, a figure shown
+on a page keeps the white or the black background of its mode.
 
 A size is in pixels of 1/96 inch, and text is 11 to 15 pixels. Give the figure the size it has on the page and place it
 at that size, and its text comes out at the size the journal asks for: a 3.4-inch column is 326 pixels, in which tick
@@ -860,7 +868,8 @@ A `plot...` method of a result returns a figure (a `plot...3D` method a scene), 
 | `withLegend(position)` | `'right'`, `'left'`, `'top'`, `'bottom'`, `'upper-left'`, `'upper-right'`, `'lower-left'`, `'lower-right'` or `'none'` |
 | `withLegendBox(color)`, `withLegendColumns(n)` | a box round the legend, filled with `color` and framed; the entries in `n` columns (`withSetting('legend-box.padding=10')` and its siblings reach the rest) |
 | `withoutGrid()` | removes the gridlines |
-| `withTransparentBackground()` (3-D) | draws no background |
+| `withTransparentBackground()` (3-D) | draws no background, on a page as well as in a saved file |
+| `withOpaqueBackground()` (3-D) | draws the background in a saved `.svg` too, where there is none unless asked |
 | `withLocale(tag)` | writes numbers as a locale does (`'de'`, `'sv'`, ...) |
 | `withSetting(spec)` (3-D) | any change of an element, as `'element.property=value'` (see [finer control](#finer-control-text-lines-the-plot-area-the-sides-of-the-axes)) |
 | `withCamera(azimuth, elevation, zoom)` (3-D only) | the view of a 3-D scene |

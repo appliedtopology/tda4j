@@ -14,7 +14,10 @@ trait Plot:
   /** A complete HTML page, following the reader's light or dark setting under `Theme.Auto`. */
   def html(theme: Theme = Theme.Auto): String
 
-  /** A complete SVG document in plain colors (for a 3-D scene: one fixed view). */
+  /** A complete SVG document in plain colors (for a 3-D scene: one fixed view), with no background unless the style
+    * asks for one (`Style.print`, or [[Style.transparent]] `= false`), so that it takes the color of the page it goes
+    * onto.
+    */
   def svgFile(theme: Theme = Theme.Light): String
 
   /** Shows the plot in the live viewer, a browser tab that adds every plot `view()`ed (see [[Viewer]]). */
@@ -22,8 +25,9 @@ trait Plot:
     Viewer.show(this)
     this
 
-  /** Writes the plot to `path`: an `.svg` file in plain light colors (another `theme` on request), or an `.html` page
-    * (interactive for 3-D) that follows the reader's light or dark setting. Returns the absolute path.
+  /** Writes the plot to `path`: an `.svg` file in plain light colors with no background (another `theme` on request;
+    * see [[svgFile]]), or an `.html` page (interactive for 3-D) that follows the reader's light or dark setting and has
+    * its background. Returns the absolute path.
     */
   def save(path: String, theme: Option[Theme] = None): String =
     val absolute = FileAccess.absolute(path)
@@ -179,12 +183,12 @@ final case class Board(
   private def drawingWidth: Int = layout.fold(plots.map(_.width).sum)(_.width)
 
   // the heading above the panels as an `<svg>` and its height, none without one
-  private def headingAbove(theme: Theme): Option[(String, Int)] =
-    plots.headOption.filter(_ => heading.nonEmpty).map(Svg.heading(_, heading, drawingWidth, theme))
+  private def headingAbove(theme: Theme, saved: Boolean): Option[(String, Int)] =
+    plots.headOption.filter(_ => heading.nonEmpty).map(Svg.heading(_, heading, drawingWidth, theme, saved))
 
   def fragment(theme: Theme = Theme.Auto): String =
     val panels = panelsFragment(theme)
-    headingAbove(theme).fold(panels)((svg, _) => s"<div>$svg$panels</div>")
+    headingAbove(theme, saved = false).fold(panels)((svg, _) => s"<div>$svg$panels</div>")
 
   private def panelsFragment(theme: Theme): String = layout match
     case None =>
@@ -210,16 +214,16 @@ final case class Board(
     val (w, panelsHeight) = layout match
       case Some(grid) => (grid.width, grid.height)
       case None       => (plots.map(_.width).sum, plots.map(_.height).maxOption.getOrElse(0))
-    val head = headingAbove(theme)
+    val head = headingAbove(theme, saved = true)
     val band = head.fold(0)(_._2)
     val h = panelsHeight + band
     val inner = head.fold("")((svg, _) => svg) +: drawn.map((f, x, y) =>
-      f.svg(theme).replaceFirst("<svg ", s"""<svg x="$x" y="${y + band}" """)
+      Svg.render(f, theme, saved = true).replaceFirst("<svg ", s"""<svg x="$x" y="${y + band}" """)
     )
     val surface = plots.headOption.fold(Palette.default)(_.palette).hex(Paint.Surface, theme)
     // a board of panels with no background of their own has none either
     val background =
-      if plots.nonEmpty && plots.forall(_.style.transparent) then ""
+      if plots.nonEmpty && plots.forall(!_.style.hasBackground(saved = true)) then ""
       else s"""<rect width="$w" height="$h" style="fill:$surface"/>"""
     s"""<?xml version="1.0" encoding="UTF-8"?>
        |<svg xmlns="http://www.w3.org/2000/svg" width="$w" height="$h" viewBox="0 0 $w $h">$background${inner.mkString}</svg>""".stripMargin

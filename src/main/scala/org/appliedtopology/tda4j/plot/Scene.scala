@@ -136,6 +136,9 @@ final case class Scene(
   /** Without a background. */
   def withTransparentBackground(): Scene = withStyle(style.copy(transparent = true))
 
+  /** With its palette's surface as the background in a saved `.svg` too, where it has none unless asked. */
+  def withOpaqueBackground(): Scene = withStyle(style.copy(transparent = false))
+
   // One line, so that a REPL echoing the value of `scene.view()` does not print every point.
   override def toString: String = Plot.describe("Scene", title, s"${layers.size} layers")
 
@@ -172,10 +175,12 @@ final case class Scene(
   // ----- the static view (SVG)
 
   def svgFile(theme: Theme = Theme.Light): String =
-    """<?xml version="1.0" encoding="UTF-8"?>""" + "\n" + staticSvg(theme)
+    """<?xml version="1.0" encoding="UTF-8"?>""" + "\n" + staticSvg(theme, saved = true)
 
-  /** One view as an `<svg>`, primitives sorted back to front (orthographic projection). */
-  def staticSvg(theme: Theme = Theme.Light): String =
+  /** One view as an `<svg>`, primitives sorted back to front (orthographic projection). With `saved`, the view of a
+    * file, which draws no background unless the style asks for one (see [[Style.transparent]]).
+    */
+  def staticSvg(theme: Theme = Theme.Light, saved: Boolean = false): String =
     val pal = palette.withDegrees(degrees)
     val (ts, ink) = (style.textScale, style.markScale)
     def paint(p: Paint) = if theme == Theme.Auto then pal.css(p) else pal.hex(p, theme)
@@ -259,7 +264,7 @@ final case class Scene(
              )}">${Svg.escape(subtitle)}</text>"""
          else "")
     val background =
-      if style.transparent then ""
+      if !style.hasBackground(saved) then ""
       else s"""<rect width="$width" height="$height" style="fill:${paint(Paint.Surface)}"/>"""
     s"""<svg xmlns="http://www.w3.org/2000/svg" id="$id" width="$width" height="$height" viewBox="0 0 $width $height" font-family="${Svg
         .escape(style.font)}">$css$background$heading$body</svg>"""

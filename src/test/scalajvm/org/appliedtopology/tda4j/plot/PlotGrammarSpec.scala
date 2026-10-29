@@ -465,6 +465,41 @@ class PlotGrammarSpec extends Specification:
       full must beEqualTo(1)
       clear must beEqualTo(0)
     }
+    "draw its background on a page unless transparent, whether it is asked for or not" in {
+      def drawn(f: Figure): Int = elements(f.svg(), "rect").count(r => r.getAttribute("width") == "560")
+      (drawn(fig), drawn(fig.withOpaqueBackground()), drawn(fig.withTransparentBackground())) must
+        beEqualTo((1, 1, 0))
+    }
+    "save with no background, in either theme, unless its style asks for one" in {
+      def drawn(svg: String): Int = elements(svg, "rect").count(r => r.getAttribute("width") == "560")
+      val file = (fig.svgFile(Theme.Light), fig.svgFile(Theme.Dark))
+      (drawn(file._1), drawn(file._2)) must beEqualTo((0, 0))
+      drawn(fig.withOpaqueBackground().svgFile(Theme.Light)) must beEqualTo(1)
+      drawn((fig + Style(transparent = false)).svgFile(Theme.Dark)) must beEqualTo(1)
+      drawn(fig.withTransparentBackground().svgFile(Theme.Light)) must beEqualTo(0)
+      // what a page and the viewer show is unchanged
+      (drawn(fig.svg(Theme.Light)), drawn(fig.fragment(Theme.Dark))) must beEqualTo((1, 1))
+    }
+    "differ from the file it used to save in the background rectangle alone" in {
+      def normalized(svg: String) = svg.replaceAll("tda4j[0-9]+", "tda4jN")
+      def withoutBackground(svg: String) =
+        svg.replaceFirst("""<rect width="560" height="520" style="fill:#[0-9a-f]+"/>""", "")
+      Seq(Theme.Light, Theme.Dark)
+        .map { theme =>
+          val old = fig.withOpaqueBackground().svgFile(theme)
+          (old must not(beEqualTo(fig.svgFile(theme)))) and
+            (normalized(withoutBackground(old)) must beEqualTo(normalized(fig.svgFile(theme))))
+        }
+        .reduce(_ and _)
+    }
+    "write no background to a file it saves" in {
+      val path = java.nio.file.Files.createTempFile("tda4j-background", ".svg")
+      try
+        fig.save(path.toString)
+        val written = java.nio.file.Files.readString(path)
+        elements(written, "rect").count(r => r.getAttribute("width") == "560") must beEqualTo(0)
+      finally java.nio.file.Files.deleteIfExists(path)
+    }
     "replace the figure's style as a whole, and a preset can be adjusted with copy" in {
       (fig + Style.slides + Style(grid = false)).style must beEqualTo(Style(grid = false))
       (fig + Style.slides.copy(grid = false)).style must beEqualTo(
@@ -506,6 +541,9 @@ class PlotGrammarSpec extends Specification:
     "keep that white background with its fonts, which are named families rather than system-ui" in {
       val svg = (fig + paper + Style.print).svg(Theme.Light)
       backgrounds(svg, fig).map(_.getAttribute("style")) must beEqualTo(Seq("fill:#ffffff"))
+      // a paper's figure has it in a saved file too, where the default has none
+      backgrounds((fig + paper + Style.print).svgFile(Theme.Light), fig).map(_.getAttribute("style")) must
+        beEqualTo(Seq("fill:#ffffff"))
       fontFamily(svg) must contain("Helvetica")
       fontFamily(svg) must not(contain("system-ui"))
     }
@@ -532,8 +570,10 @@ class PlotGrammarSpec extends Specification:
       (image + paper).svg(Theme.Light) must contain(paper.sequentialAt(1.0))
       (image + paper).svg(Theme.Light) must not(contain(Palette.brand.sequentialAt(1.0)))
     }
-    "change nothing but the font of the default style" in {
-      Style.print.copy(font = Style.DefaultFont) must beEqualTo(Style.default)
+    "change nothing but the font and a background that a saved file keeps, of the default style" in {
+      Style.print.copy(font = Style.DefaultFont, transparent = Optional.empty) must beEqualTo(Style.default)
+      Style.print.hasBackground(saved = true) must beTrue
+      Style.default.hasBackground(saved = true) must beFalse
     }
   }
 
@@ -681,6 +721,9 @@ class PlotGrammarSpec extends Specification:
       val scene = Plot.points3D(circle)
       def rects(svg: String) = elements(svg, "rect").map(_.getAttribute("style"))
       rects((scene + Palette.print).staticSvg(Theme.Light)) must contain("fill:#ffffff")
+      rects((scene + Palette.print).svgFile(Theme.Light)) must beEmpty
+      rects((scene + Palette.print + Style.print).svgFile(Theme.Light)) must contain("fill:#ffffff")
+      rects(scene.withOpaqueBackground().svgFile(Theme.Dark)) must contain(s"fill:${Palette.brand.dark.surface}")
       rects((scene + clear).staticSvg(Theme.Light)) must beEmpty
       rects((scene + clear).staticSvg(Theme.Dark)) must beEmpty
       rects((scene + Palette.clear).staticSvg(Theme.Dark)) must contain("fill:#000000")
@@ -1142,8 +1185,18 @@ class PlotGrammarSpec extends Specification:
       val b = Plot.barcode(circleDiagram)
       val clear = (Plot.side(a, b) + Style.clear).svgFile(Theme.Light)
       topRects(clear) must beEmpty
-      val mixed = Plot.side(a + Style.clear, b).svgFile(Theme.Light)
+      val mixed = Plot.side(a + Style.clear, b + Style.print).svgFile(Theme.Light)
       topRects(mixed).size must beEqualTo(1)
+    }
+    "be the board of a saved file by default, where the panels have none unless one asks" in {
+      val a = Plot.diagram(circleDiagram)
+      val b = Plot.barcode(circleDiagram)
+      topRects(Plot.side(a, b).svgFile(Theme.Light)) must beEmpty
+      topRects(Plot.side(a, b).svgFile(Theme.Dark)) must beEmpty
+      topRects(Plot.side(a + Style(transparent = false), b).svgFile(Theme.Light)).size must beEqualTo(1)
+      // nor do the heading and the panels (a background has no x; the clip of a plot area does)
+      val titled = (Plot.side(a, b) + Labels(title = "both")).svgFile(Theme.Light)
+      elements(titled, "rect").filterNot(_.hasAttribute("x")) must beEmpty
     }
   }
 

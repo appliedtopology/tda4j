@@ -129,6 +129,15 @@ keyword; `Style.clear` is that and no background. The two looks are separate
 because a figure with a white background of its own and a figure that takes its
 page's color need different elements.
 
+`Style.transparent` is unset, `true` or `false`. Unset, a figure draws its
+palette's surface where it is displayed (`svg`, `fragment`, `html`, the viewer)
+and none in a file (`svgFile`, so `save` of an `.svg`, the facade and the CLI): a
+file is deployed somewhere else, which supplies the color behind it. The two
+renderings differ in one argument, `Svg.render(fig, theme, saved)` (a board
+and a scene pass it to their panels and their heading, too); `Style.print` is
+`false` so that a paper's figure keeps its white in a file, `Style.clear` is
+`true`, and `Style.hasBackground(saved)` is the one place that decides.
+
 ## The live viewer
 
 `view()` hands a plot to `Viewer`. On first use it starts an HTTP server on

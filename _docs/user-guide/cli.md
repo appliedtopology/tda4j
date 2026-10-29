@@ -170,8 +170,8 @@ plot it without computing again. Computation flags are refused for it.
 
 ## Plots
 
-`--plot KIND` draws the result instead of writing it, into `--output` (`.svg` in plain light colors, `.html` a page that
-follows the reader's light or dark setting) or, without `--output`, a page opened in the browser.
+`--plot KIND` draws the result instead of writing it, into `--output` (`.svg` in plain light colors with no background, `.html` a
+page that follows the reader's light or dark setting) or, without `--output`, a page opened in the browser.
 
 | `--plot` | draws |
 |---|---|
@@ -197,7 +197,7 @@ and the other look flags apply to every panel. A 3-D plot is drawn on its own.
 | `--look` | a whole look at once: `default`, `print` (`--palette print --style print`) or `clear`; the flags below, after it, win |
 | `--width`, `--height` | the size in pixels, 100 to 20000 |
 | `--palette` | `brand` (default), `reference`, `print` (black on pure white, for a paper), `grayscale` (that in grays only, for a black-and-white print), `okabe-ito` (the eight colors of Okabe and Ito on white), `clear` (black for a light page, white for a dark one) |
-| `--style` | `default`, `slides` (larger text and marks), `print`, `clear` (portable fonts, no background) |
+| `--style` | `default`, `slides` (larger text and marks), `print` (portable fonts, a white background in an `.svg` too), `clear` (portable fonts, no background) |
 | `--theme` | `light`, `dark`, `auto`; default `light` for `.svg`, `auto` for `.html` |
 | `--text-scale F` | a factor on every text size (1.3 suits a slide) |
 | `--x-scale`, `--y-scale` | `linear` (default), `log`, `sqrt`, `symlog`; 2-D plots only |
@@ -205,7 +205,7 @@ and the other look flags apply to every panel. A 3-D plot is drawn on its own.
 
 The settings `--set` takes are listed under [finer control](plotting.md#finer-control-text-lines-the-plot-area-the-sides-of-the-axes)
 on the plotting page, with the other plot flags in [From MATLAB and the command line](plotting.md#from-matlab-and-the-command-line).
-`--look print` (or `--palette print --style print`) makes a figure for a paper; `--look clear` one with no background.
+`--look print` (or `--palette print --style print`) makes a figure for a paper, white behind it in the `.svg`; `--look clear` one with no background on a page as well.
 A flag a plot cannot use (an x scale for a 3-D scene) is an error, reported before anything is computed.
 
 ## Exit status
