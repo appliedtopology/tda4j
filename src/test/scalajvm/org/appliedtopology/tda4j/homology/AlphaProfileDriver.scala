@@ -66,6 +66,15 @@ object AlphaProfileDriver:
       val bars =
         timed(s"Persistence verb, degree $dim")(Persistence(Truncated(stream, dim), characteristic = 17).bars.size)
       println(s"  $bars bars")
+      // The same dump as the triangulation backends: every simplex with its value in full precision, to diff builds.
+      opts.get("dump").foreach { path =>
+        val lines = (0 to dim + 1).flatMap(k =>
+          stream
+            .iterateDimension(k)
+            .map(s => s.toSeq.mkString(",") + " " + java.lang.Double.toHexString(stream.filtrationValue(s)))
+        )
+        java.nio.file.Files.write(java.nio.file.Paths.get(path), lines.sorted.mkString("\n").getBytes("UTF-8"))
+      }
       return
     val sampler = Option.when(opts.get("sample").contains("true"))(new Sampler(Thread.currentThread()))
     sampler.foreach(_.start())
