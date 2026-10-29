@@ -1194,9 +1194,9 @@ class PlotGrammarSpec extends Specification:
       topRects(Plot.side(a, b).svgFile(Theme.Light)) must beEmpty
       topRects(Plot.side(a, b).svgFile(Theme.Dark)) must beEmpty
       topRects(Plot.side(a + Style(transparent = false), b).svgFile(Theme.Light)).size must beEqualTo(1)
-      // nor do the heading and the panels
+      // nor do the heading and the panels (a background has no x; the clip of a plot area does)
       val titled = (Plot.side(a, b) + Labels(title = "both")).svgFile(Theme.Light)
-      elements(titled, "rect") must beEmpty
+      elements(titled, "rect").filterNot(_.hasAttribute("x")) must beEmpty
     }
   }
 
