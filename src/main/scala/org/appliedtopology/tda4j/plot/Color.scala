@@ -151,14 +151,14 @@ object Palette:
     * sees.
     */
   val brand: Palette = Palette(
-    seriesLight = IndexedSeq("#1a729b", "#a68018", "#b54436", "#099393", "#aa5910", "#7f5bb6", "#5b7f1d", "#a84e7c"),
+    seriesLight = IndexedSeq("#1a729b", "#b58605", "#b54436", "#099393", "#aa5910", "#7f5bb6", "#5b7f1d", "#a84e7c"),
     seriesDark = IndexedSeq("#4aa0c7", "#b98e1b", "#c65954", "#25a6a6", "#bd6b2a", "#916dca", "#6c9133", "#bc5f8e"),
     light = Chrome("#f8f7f4", "#1d2a32", "#205976", "#7d8a91", "#e4e2dc", "#c5c9c9"),
     dark = Chrome("#161b1e", "#e8eef1", "#81bde0", "#7f8c93", "#252d32", "#3a454b"),
     sequential =
       IndexedSeq("#e2f1fa", "#afdaf4", "#7fc1e9", "#55a8d7", "#368ebd", "#2a749b", "#2c5a75", "#2f414c", "#1f2b32"),
     divergingNegative = "#1a729b",
-    divergingPositive = "#a68018",
+    divergingPositive = "#b58605",
     divergingMidpoint = "#d9d7d0"
   )
 
