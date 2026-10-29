@@ -60,7 +60,7 @@ paths).
 
 The collapse itself is the cost of the edge-collapsed pipeline at the enclosing radius: 1,200 points took over four
 minutes in `EdgeCollapse.collapse` (a TreeMap per vertex and a domination test per edge) before any layer was built. That
-is not this change's, and is the larger problem for that pipeline.
+is the larger problem for that pipeline (#256).
 
 ## Left
 
