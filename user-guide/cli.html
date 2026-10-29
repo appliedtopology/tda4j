@@ -462,6 +462,51 @@
    </tbody>
   </table>
  </section>
+ <section id="the-euler-characteristic-curve">
+  <h2 class="h500"><a href="#the-euler-characteristic-curve" class="anchor"></a>The Euler characteristic curve</h2>
+  <p><code>--euler-curve</code> writes the <a href="vectorization.html#the-euler-characteristic-curve">Euler characteristic curve</a> of the Vietoris-Rips complex of a point cloud or a distance matrix instead of a diagram: a <code>scale,value</code> line for each scale where the curve steps, after a header line.</p>
+  <div class="snippet mono-small-block">
+   <pre><code class="language-"><span line-number="1" class=""><span class="tooltip-container"></span>$ tda4j --euler-curve circle.csv        # 30 points on a circle, as in the Scala example
+</span><span line-number="2" class=""><span class="tooltip-container"></span>scale,value
+</span><span line-number="3" class=""><span class="tooltip-container"></span>0.0,30
+</span><span line-number="4" class=""><span class="tooltip-container"></span>0.1928850396070111,29
+</span><span line-number="5" class=""><span class="tooltip-container"></span>0.20961433765776488,27
+</span><span line-number="6" class=""><span class="tooltip-container"></span>...
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+  <table>
+   <thead>
+    <tr>
+     <th>flag</th>
+     <th>meaning</th>
+    </tr>
+   </thead>
+   <tbody>
+    <tr>
+     <td><code>--euler-curve</code></td>
+     <td>write the curve instead of the diagram</td>
+    </tr>
+    <tr>
+     <td><code>--max-simplex-dimension</code></td>
+     <td>the largest simplex dimension counted; default <code>2</code></td>
+    </tr>
+    <tr>
+     <td><code>--max-filtration-value</code></td>
+     <td>the largest scale; default the minimum enclosing radius</td>
+    </tr>
+    <tr>
+     <td><code>--threads</code></td>
+     <td>as for a diagram</td>
+    </tr>
+    <tr>
+     <td><code>--output</code></td>
+     <td>the file to write; default standard output</td>
+    </tr>
+   </tbody>
+  </table>
+  <p>A flag that would change a diagram (<code>--complex</code>, <code>--max-dimension</code>, <code>--engine</code>, <code>--field</code>, ...), <code>--plot</code>, <code>--distance-to</code>, <code>--save-result</code> and the landmark flags are rejected with <code>--euler-curve</code>, as are images, relations and saved results as input.</p>
+ </section>
  <section id="saved-results">
   <h2 class="h500"><a href="#saved-results" class="anchor"></a>Saved results</h2>
   <p><code>--save-result result.json</code> also saves the whole result: every bar, the reported bars' representatives, the input and how it was computed. The file is an input of its own (<code>--input-format result</code>, chosen by itself): print, convert, compare or plot it without computing again. Computation flags are refused for it.</p>
@@ -572,4 +617,4 @@
   <h2 class="h500"><a href="#exit-status" class="anchor"></a>Exit status</h2>
   <p><code>0</code> on success. <code>1</code> when the command fails, with one line on standard error starting <code>tda4j:</code> that says what to change, and when the arguments do not parse (<code>--help</code> shows the usage).</p>
  </section>
-</main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#input">Input</a></li><li><a href="#computation">Computation</a><ul><li><a href="#the-witness-complex-in-two-steps">The witness complex in two steps</a></li></ul></li><li><a href="#output">Output</a><ul><li><a href="#which-bars-are-reported">Which bars are reported</a></li></ul></li><li><a href="#comparing-diagrams">Comparing diagrams</a></li><li><a href="#saved-results">Saved results</a></li><li><a href="#plots">Plots</a></li><li><a href="#exit-status">Exit status</a></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>
+</main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#input">Input</a></li><li><a href="#computation">Computation</a><ul><li><a href="#the-witness-complex-in-two-steps">The witness complex in two steps</a></li></ul></li><li><a href="#output">Output</a><ul><li><a href="#which-bars-are-reported">Which bars are reported</a></li></ul></li><li><a href="#comparing-diagrams">Comparing diagrams</a></li><li><a href="#the-euler-characteristic-curve">The Euler characteristic curve</a></li><li><a href="#saved-results">Saved results</a></li><li><a href="#plots">Plots</a></li><li><a href="#exit-status">Exit status</a></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>

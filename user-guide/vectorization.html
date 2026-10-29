@@ -169,6 +169,46 @@
    <li>A <strong>persistence landscape</strong> (Bubenik 2015) turns each bar into a tent and lists the tallest, second tallest, ... tent at each sample point. An essential bar is a ramp <code>t - birth</code>, finite at every sample point.</li>
    <li>A <strong>persistence image</strong> (Adams et al. 2017) places each bar at <code>(birth, persistence)</code>, weighted by a function rising from 0 at persistence 0 to 1 at <code>weightCap</code> (default: the largest persistence), blurs it with a Gaussian, and integrates over each pixel. Essential bars are left out. The result matches <code>persim</code>.</li>
   </ul>
-  <p>The <a href="../tutorials/comparing-barcodes.html">comparing barcodes</a> tutorial uses all four. From MATLAB, these are methods of a result: <code>r1.bottleneckDistance(r2, dim)</code>, <code>wassersteinDistance</code>, <code>landscape</code>, <code>persistenceImage</code>. From the command line, <code>--distance-to saved.csv</code> prints the distances to a diagram saved earlier.</p>
  </section>
-</main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#distances-between-diagrams">Distances between diagrams</a></li><li><a href="#diagrams-as-vectors">Diagrams as vectors</a></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>
+ <section id="the-euler-characteristic-curve">
+  <h3 class="h400"><a href="#the-euler-characteristic-curve" class="anchor"></a>The Euler characteristic curve</h3>
+  <p>The Euler characteristic of the Vietoris-Rips complex at scale <code>t</code>, the number of vertices minus the edges plus the triangles and so on, is a step function of <code>t</code>. It is a vector of its own that needs no persistence:</p>
+  <div class="tabset">
+   <div class="tab" data-lang="Scala">
+    <div class="snippet mono-small-block" scala-snippet="" runnable="">
+     <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import scala.language.experimental.modularity
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.*
+</span><span line-number="3" class=""><span class="tooltip-container"></span>
+</span><span line-number="4" class=""><span class="tooltip-container"></span>val points = Array.tabulate(30)(i =&gt; Array(math.cos(i * 0.21), math.sin(i * 0.21)))
+</span><span line-number="5" class=""><span class="tooltip-container"></span>
+</span><span line-number="6" class=""><span class="tooltip-container"></span>val curve = EulerCharacteristicCurve(points)   // simplices up to dimension 2, scales up to the enclosing radius
+</span><span line-number="7" class=""><span class="tooltip-container"></span>curve(0.5)                                     // the Euler characteristic at scale 0.5
+</span><span line-number="8" class=""><span class="tooltip-container"></span>curve.sample(0.0, 1.0, 50)                     // 50 evenly spaced samples, an Array[Long]
+</span></code></pre>
+     <div class="buttons"></div>
+    </div>
+   </div>
+   <div class="tab" data-lang="MATLAB">
+    <div class="snippet mono-small-block">
+     <pre><code class="language-matlab"><span line-number="1" class=""><span class="tooltip-container"></span>javaaddpath('/path/to/tda4j-VERSION-assembly.jar');
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.matlab.*;
+</span><span line-number="3" class=""><span class="tooltip-container"></span>
+</span><span line-number="4" class=""><span class="tooltip-container"></span>i = (0:29)';
+</span><span line-number="5" class=""><span class="tooltip-container"></span>points = [cos(i * 0.21), sin(i * 0.21)];
+</span><span line-number="6" class=""><span class="tooltip-container"></span>
+</span><span line-number="7" class=""><span class="tooltip-container"></span>curve = TDA4j.eulerCurveFromPoints(points);    % simplices up to dimension 2, scales up to the enclosing radius
+</span><span line-number="8" class=""><span class="tooltip-container"></span>curve.at(0.5)                                  % the Euler characteristic at scale 0.5
+</span><span line-number="9" class=""><span class="tooltip-container"></span>curve.sample(0, 1, 50)                         % 50 evenly spaced samples
+</span><span line-number="10" class=""><span class="tooltip-container"></span>stairs(curve.scales(), double(curve.values())) % the steps themselves
+</span><span line-number="11" class=""><span class="tooltip-container"></span>
+</span><span line-number="12" class=""><span class="tooltip-container"></span>TDA4j.eulerCurveFromPoints(points, {'maxSimplexDimension', '3', 'maxFiltrationValue', '1.0'});
+</span></code></pre>
+     <div class="buttons"></div>
+    </div>
+   </div>
+  </div>
+  <p><code>maxSimplexDimension</code> (default 2) is the dimension of the largest simplices counted and <code>maxFiltrationValue</code> the largest scale. The curve is computed from the cliques of each edge's lens (the points closer than the edge to both its ends) without building the complex, so it is cheap where a stream of the same simplices is not. <code>EulerCharacteristicCurve.ofStream(stream)</code> counts the cells of any other stream, an alpha complex or a cubical one for instance.</p>
+  <p>From JavaScript, <code>eulerCurve(points, { maxSimplexDimension: 3 })</code> returns an object with <code>scales</code> and <code>values</code> and the methods <code>at(t)</code> and <code>sample(tMin, tMax, resolution)</code>; <code>eulerCurveFromDistances</code> takes a distance matrix. From the command line, <code>tda4j --euler-curve points.csv</code> writes one <code>scale,value</code> line for each scale where the curve steps. MATLAB, JavaScript and the command line take a distance matrix as well as points (<code>eulerCurveFromDistanceMatrix</code>, <code>eulerCurveFromDistances</code>, <code>--input-format csv-distances</code>).</p>
+  <p>The <a href="../tutorials/comparing-barcodes.html">comparing barcodes</a> tutorial uses the four diagram operations above. From MATLAB, these are methods of a result: <code>r1.bottleneckDistance(r2, dim)</code>, <code>wassersteinDistance</code>, <code>landscape</code>, <code>persistenceImage</code>. From the command line, <code>--distance-to saved.csv</code> prints the distances to a diagram saved earlier.</p>
+ </section>
+</main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#distances-between-diagrams">Distances between diagrams</a></li><li><a href="#diagrams-as-vectors">Diagrams as vectors</a></li><li><a href="#the-euler-characteristic-curve">The Euler characteristic curve</a></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>

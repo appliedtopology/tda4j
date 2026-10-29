@@ -201,6 +201,10 @@
      <td>the covering radius <code>R</code> of a landmark set: the largest distance from a point to its nearest landmark</td>
     </tr>
     <tr>
+     <td><code>eulerCurveFromPoints(points, options)</code>, <code>eulerCurveFromDistanceMatrix(distances, options)</code></td>
+     <td>the <a href="vectorization.html#the-euler-characteristic-curve">Euler characteristic curve</a> of the Vietoris-Rips complex, counted without building it. Options: <code>maxSimplexDimension</code> (default <code>2</code>), <code>maxFiltrationValue</code>, <code>threads</code>. Returns an <code>EulerCurveResult</code> with <code>scales()</code>, <code>values()</code>, <code>at(t)</code> and <code>sample(tMin, tMax, resolution)</code></td>
+    </tr>
+    <tr>
      <td><code>h1Bars(points)</code></td>
      <td>the loops of the Vietoris-Rips complex: one row <code>(birth, death)</code> per persistent H¹ class, most persistent first</td>
     </tr>

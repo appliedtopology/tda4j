@@ -199,6 +199,10 @@
      <td>the covering radius of any landmarks</td>
     </tr>
     <tr>
+     <td><code>eulerCurve(points, { maxSimplexDimension, maxFiltrationValue })</code></td>
+     <td>the <a href="vectorization.html#the-euler-characteristic-curve">Euler characteristic curve</a> of the Vietoris-Rips complex: an object with <code>scales</code>, <code>values</code>, <code>at(t)</code> and <code>sample(tMin, tMax, resolution)</code>; <code>eulerCurveFromDistances</code> for a distance matrix</td>
+    </tr>
+    <tr>
      <td><code>h1Bars(points)</code></td>
      <td>the loops of the Vietoris-Rips complex as <code>[birth, death]</code>, most persistent first</td>
     </tr>
