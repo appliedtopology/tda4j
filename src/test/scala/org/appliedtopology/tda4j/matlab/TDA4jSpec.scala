@@ -108,6 +108,34 @@ class TDA4jSpec extends mutable.Specification:
       cohomology must containTheSameElementsAs(ripser)
     }
 
+    // The facade builds the complex the way the verb does, so the same engine gives the same bars AND the same
+    // representatives (a different cell order would move the chains and leave the bar values alone).
+    "give the bars and representative cells of the Persistence verb, for engine=cohomology and engine=naive" in {
+      val rng = new scala.util.Random(3L)
+      val cloud = Array.fill(24)(Array.fill(3)(rng.nextDouble()))
+      def value(endpoint: BarcodeEndpoint[Double]): Double = endpoint match
+        case ClosedEndpoint(v)  => v
+        case OpenEndpoint(v)    => v
+        case PositiveInfinity() => Double.PositiveInfinity
+        case NegativeInfinity() => Double.NegativeInfinity
+      forall(Seq("cohomology" -> Persistence.Engine.Cohomology, "naive" -> Persistence.Engine.Naive)) {
+        case (name, engine) =>
+          val facade = FullBarcode.computeFromPoints(cloud, Array("engine", name))
+          val viaFacade = triples(facade.toArray()).zipWithIndex.map { (bar, i) =>
+            (bar, facade.cycleVertices(i).map(_.sorted.toList).toSet)
+          }
+          val viaVerb = Persistence(cloud, maxDimension = 2, engine = engine).bars.map { bar =>
+            (
+              (bar.dim, value(bar.lower), value(bar.upper)),
+              bar.representative.terms.map(_._1.underlying.toList.sorted).toSet
+            )
+          }
+          (viaFacade.size === viaVerb.size)
+            .and(viaFacade.toSet === viaVerb.toSet)
+            .and(viaFacade.exists(_._1._1 == 1) must beTrue)
+      }
+    }
+
     // Every bar carries a real annotation (this engine never resolves a bar via a shortcut that skips
     // recording one, unlike engine=ripser's apparent-pairs case) -- mirrors the equivalent engine=chunks
     // check below.

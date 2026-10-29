@@ -601,7 +601,11 @@ open class RipserCofaceSimplexStream(
       )
     case _ if filtrationIsDefault && metricSpace.size <= RipserCofaceSimplexStream.MaxGeneratorVertices =>
       Some(
-        LayeredInorderSimplexStream.Generator(metricSpace.size, metricSpace.distance(_, _), resolvedMaxFiltrationValue)
+        LayeredInorderSimplexStream.Generator(
+          metricSpace.size,
+          LayeredInorderSimplexStream.distanceOf(metricSpace),
+          resolvedMaxFiltrationValue
+        )
       )
     case _ => None
 

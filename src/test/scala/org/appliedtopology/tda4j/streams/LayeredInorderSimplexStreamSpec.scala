@@ -106,4 +106,37 @@ class LayeredInorderSimplexStreamSpec extends Specification with ScalaCheck:
         wrong.take(3) must beEmpty
       check(octagon).and(check(grid)).and(check(threeValues))
     }
+
+    // The edge pass reads (larger, smaller), the lower triangle, as ripser.cpp and ExplicitMetricSpace do (and along a
+    // row of a cached matrix): on a function that is not symmetric the lengths are the lower entries.
+    "read the lower triangle of a distance function that is not symmetric" in {
+      val lower = (i: Int, j: Int) => 1.0 + 0.01 * i + 0.001 * j
+      val g = Generator(5, (i, j) => if i > j then lower(i, j) else 100.0 + lower(j, i), 10.0)
+      (g.edgeCount must beEqualTo(10))
+        .and(Result.foreach(0 until g.edgeCount)(r => g.edgeLength(r) must beEqualTo(lower(g.edgeB(r), g.edgeA(r)))))
+    }
+
+    // `distanceOf` calls the class's own `distance`, so an override is honoured; the generator over such a space lists
+    // what the enumerating stream lists.
+    "read the distance of a subclass that overrides it" in {
+      val stretched = new EuclideanMetricSpace(octagon.pts):
+        override def distance(x: Int, y: Int): Double = if x == y then 0.0 else 3.0 * super.distance(x, y)
+      val pairs = for x <- 0 until 8; y <- 0 until 8 yield (x, y)
+      val distance = LayeredInorderSimplexStream.distanceOf(stretched)
+      Result.foreach(pairs)((x, y) => distance(x, y) must beEqualTo(stretched.distance(x, y))).and(allAgree(stretched))
+    }
+
+    "give the distances of every kind of finite metric space unchanged" in {
+      val path = new FiniteMetricSpace[Int]:
+        def distance(x: Int, y: Int): Double = math.abs(x - y).toDouble
+        def size: Int = 6
+        def elements: Iterable[Int] = 0 until 6
+        def contains(x: Int): Boolean = 0 <= x && x < 6
+      def same(space: FiniteMetricSpace[Int]): Result =
+        val distance = LayeredInorderSimplexStream.distanceOf(space)
+        Result.foreach(for x <- 0 until space.size; y <- 0 until space.size yield (x, y)) { (x, y) =>
+          distance(x, y) must beEqualTo(space.distance(x, y))
+        }
+      same(octagon).and(same(threeValues)).and(same(path)).and(allAgree(path))
+    }
   }

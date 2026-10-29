@@ -39,7 +39,7 @@ comparisons must be cheap: `EnumeratingCofaceSimplexStream`/`CubicalGridStream` 
 
 **VR constructions** (same output contract, alternate engines): `RipserCofaceSimplexStream` (+ `SimplexIndexing`), what
 `VietorisRips(...)` builds by default (project lead: Enumerating is a last resort; the exclusion hooks `keepCriterion` and
-`filtrationValueOverride` come with it, from the base class; `LayeredInorderSimplexStream` does not forward them yet, #184),
+`filtrationValueOverride` come with it, from the base class; `LayeredInorderSimplexStream` does not forward them: no entry point takes a criterion, `WORKLOG-vr-leftovers.md`, #268),
 `EnumeratingCofaceSimplexStream` (the reference the others are checked against),
 `RecursiveStackVietorisRipsSimplexStream`, `IncrementalVietorisRipsSimplexStream` (Rieser's New-VR, arXiv:2301.07191
 — cross-validation baseline, not a fast engine); `CofacetIterator` for lazy coboundaries. `LayeredInorderSimplexStream` (what
@@ -96,6 +96,9 @@ the min with the wrapped stream's). `PersistenceVerbSpec`, `WORKLOG-default-degr
 `ExplicitMetricSpace.distance(x, y)` is `dist(max)(min)`, and the packed Ripser engine reads any metric that is not
 symmetric by construction as `d(max, min)`. A non-symmetric file (fractal-r) then gives the same input to every tool.
 `MetricSpaceSpec` pins it with a matrix whose two triangles have different `H_1`.
+A loop over all pairs `a < b` asks `distance(b, a)` (a row of the cache), and takes the space as
+`LayeredInorderSimplexStream.distanceOf(space)`, which calls the concrete `distance(Int, Int)` of `EuclideanMetricSpace`
+and `ExplicitMetricSpace` instead of the boxing generic one (edge pass 2-7x, `WORKLOG-vr-leftovers.md`).
 
 **`EuclideanMetricSpace` caches all n^2 distances only up to `MaxCachedPoints = 8192` (512 MB)**; above that, and with
 `cacheDistances = false`, distances are computed on demand. Before the cap, n^2 overflowed `Int` at 46,341 points

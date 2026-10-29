@@ -181,4 +181,13 @@ class ParallelPackedCohomologySpec extends Specification with ScalaCheck:
       val stats = reduce(sp, 3, 4).degrees(1).stats
       (stats.apparent + stats.claimed1 must beGreaterThan(0)).and(stats.deferred must beGreaterThan(0))
     }
+
+    // The edge pass reads (larger, smaller), the lower triangle, as ripser.cpp and ExplicitMetricSpace do (and along a
+    // row of a cached matrix): on a function that is not symmetric the lengths are the lower entries.
+    "read the lower triangle of a distance function that is not symmetric" in {
+      val lower = (i: Int, j: Int) => 1.0 + 0.01 * i + 0.001 * j
+      val sp = Space(5, (i, j) => if i > j then lower(i, j) else 100.0 + lower(j, i), 10.0, 1, 17)
+      val edges = sp.edgeA.indices.map(e => (sp.edgeA(e), sp.edgeB(e), sp.edgeLength(e)))
+      (edges.size must beEqualTo(10)).and(TestResult.foreach(edges)((a, b, l) => l must beEqualTo(lower(b, a))))
+    }
   }
