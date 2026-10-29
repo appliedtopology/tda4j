@@ -102,7 +102,7 @@ node3 -> node2;
           <button class="icon-button ar show-content"></button>
           <div class="header monospace mono-medium">
            <div class="signature">
-            <span class="modifiers"></span><span class="kind"><span t="k">class </span></span><a href="SimplexIndexing$CofacetCursor.html" t="n" class="documentableName ">CofacetCursor</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">startIndex</span>: <span data-unresolved-link="" t="t">Long</span>, <span t="k"></span><span data-unresolved-link="" t="n">size</span>: <span data-unresolved-link="" t="t">Int</span>, <span t="k"></span><span data-unresolved-link="" t="n">allCofacets</span>: <span data-unresolved-link="" t="t">Boolean</span>)
+            <span class="modifiers"></span><span class="kind"><span t="k">class </span></span><a href="SimplexIndexing$CofacetCursor.html" t="n" class="documentableName ">CofacetCursor</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">startIndex</span>: <span data-unresolved-link="" t="t">Long</span>, <span t="k"></span><span data-unresolved-link="" t="n">vertices</span>: <span data-unresolved-link="" t="t">Array</span>[<span data-unresolved-link="" t="t">Int</span>], <span t="k"></span><span data-unresolved-link="" t="n">allCofacets</span>: <span data-unresolved-link="" t="t">Boolean</span>)
            </div>
           </div>
          </div>
@@ -153,7 +153,7 @@ node3 -> node2;
           <button class="icon-button ar show-content"></button>
           <div class="header monospace mono-medium">
            <div class="signature">
-            <span class="modifiers"></span><span class="kind"><span t="k">class </span></span><a href="SimplexIndexing$FacetCursor.html" t="n" class="documentableName ">FacetCursor</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">startIndex</span>: <span data-unresolved-link="" t="t">Long</span>, <span t="k"></span><span data-unresolved-link="" t="n">size</span>: <span data-unresolved-link="" t="t">Int</span>)
+            <span class="modifiers"></span><span class="kind"><span t="k">class </span></span><a href="SimplexIndexing$FacetCursor.html" t="n" class="documentableName ">FacetCursor</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">startIndex</span>: <span data-unresolved-link="" t="t">Long</span>, <span t="k"></span><span data-unresolved-link="" t="n">vertices</span>: <span data-unresolved-link="" t="t">Array</span>[<span data-unresolved-link="" t="t">Int</span>])
            </div>
           </div>
          </div>
@@ -175,7 +175,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexIndexing.scala#L293" target="_blank">SimplexIndexing.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexIndexing.scala#L302" target="_blank">SimplexIndexing.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -226,7 +226,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexIndexing.scala#L187" target="_blank">SimplexIndexing.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexIndexing.scala#L196" target="_blank">SimplexIndexing.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -327,7 +327,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexIndexing.scala#L339" target="_blank">SimplexIndexing.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexIndexing.scala#L360" target="_blank">SimplexIndexing.scala</a>
               </dd>
              </dl>
             </div>
@@ -357,7 +357,42 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexIndexing.scala#L178" target="_blank">SimplexIndexing.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexIndexing.scala#L181" target="_blank">SimplexIndexing.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="cofacetCursor-c9b">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="SimplexIndexing.html#cofacetCursor-c9b" t="n" class="documentableName ">cofacetCursor</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">index</span>: <span data-unresolved-link="" t="t">Long</span>, <span t="k"></span><span data-unresolved-link="" t="n">vertices</span>: <span data-unresolved-link="" t="t">Array</span>[<span data-unresolved-link="" t="t">Int</span>], <span t="k"></span><span data-unresolved-link="" t="n">allCofacets</span>: <span data-unresolved-link="" t="t">Boolean</span>): <a href="SimplexIndexing$CofacetCursor.html" t="t">CofacetCursor</a>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p><a href="SimplexIndexing.html#cofacetCursor-c9b">cofacetCursor</a> for a caller that has decoded the simplex already: <code>vertices</code> are the simplex at <code>index</code>, ascending (the cursor reads, never changes, the array).</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p><a href="SimplexIndexing.html#cofacetCursor-c9b">cofacetCursor</a> for a caller that has decoded the simplex already: <code>vertices</code> are the simplex at <code>index</code>, ascending (the cursor reads, never changes, the array).</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexIndexing.scala#L187" target="_blank">SimplexIndexing.scala</a>
               </dd>
              </dl>
             </div>
@@ -452,7 +487,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexIndexing.scala#L273" target="_blank">SimplexIndexing.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexIndexing.scala#L282" target="_blank">SimplexIndexing.scala</a>
               </dd>
              </dl>
             </div>
@@ -518,7 +553,42 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexIndexing.scala#L322" target="_blank">SimplexIndexing.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexIndexing.scala#L337" target="_blank">SimplexIndexing.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="facetCursor-4bd">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="SimplexIndexing.html#facetCursor-4bd" t="n" class="documentableName ">facetCursor</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">index</span>: <span data-unresolved-link="" t="t">Long</span>, <span t="k"></span><span data-unresolved-link="" t="n">vertices</span>: <span data-unresolved-link="" t="t">Array</span>[<span data-unresolved-link="" t="t">Int</span>]): <a href="SimplexIndexing$FacetCursor.html" t="t">FacetCursor</a>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p><a href="SimplexIndexing.html#facetCursor-4bd">facetCursor</a> for a caller that has decoded the simplex already: <code>vertices</code> are the simplex at <code>index</code>, ascending (the cursor reads, never changes, the array).</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p><a href="SimplexIndexing.html#facetCursor-4bd">facetCursor</a> for a caller that has decoded the simplex already: <code>vertices</code> are the simplex at <code>index</code>, ascending (the cursor reads, never changes, the array).</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexIndexing.scala#L343" target="_blank">SimplexIndexing.scala</a>
               </dd>
              </dl>
             </div>
@@ -553,7 +623,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexIndexing.scala#L328" target="_blank">SimplexIndexing.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexIndexing.scala#L349" target="_blank">SimplexIndexing.scala</a>
               </dd>
              </dl>
             </div>
@@ -583,7 +653,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexIndexing.scala#L258" target="_blank">SimplexIndexing.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexIndexing.scala#L267" target="_blank">SimplexIndexing.scala</a>
               </dd>
              </dl>
             </div>
