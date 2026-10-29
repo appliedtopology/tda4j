@@ -198,7 +198,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/LayeredInorderSimplexStream.scala#L480" target="_blank">LayeredInorderSimplexStream.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/LayeredInorderSimplexStream.scala#L522" target="_blank">LayeredInorderSimplexStream.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -340,7 +340,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/LayeredInorderSimplexStream.scala#L363" target="_blank">LayeredInorderSimplexStream.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/LayeredInorderSimplexStream.scala#L366" target="_blank">LayeredInorderSimplexStream.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -402,7 +402,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/LayeredInorderSimplexStream.scala#L426" target="_blank">LayeredInorderSimplexStream.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/LayeredInorderSimplexStream.scala#L429" target="_blank">LayeredInorderSimplexStream.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -456,7 +456,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/LayeredInorderSimplexStream.scala#L468" target="_blank">LayeredInorderSimplexStream.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/LayeredInorderSimplexStream.scala#L510" target="_blank">LayeredInorderSimplexStream.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -546,12 +546,12 @@ node3 -> node2;
          <button class="icon-button show-content expand"></button>
          <h4 class="groupHeader h200">Concrete methods</h4>
         </div>
-        <div class="documentableElement" id="sortIndices-fffff55e">
+        <div class="documentableElement" id="sortIndices-fffff55e" data-f-keywords="inline">
          <div class="documentableElement-expander">
           <button class="icon-button ar show-content"></button>
           <div class="header monospace mono-medium">
            <div class="signature">
-            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="LayeredInorderSimplexStream$.html#sortIndices-fffff55e" t="n" class="documentableName ">sortIndices</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">count</span>: <span data-unresolved-link="" t="t">Int</span>, <span t="k"></span><span data-unresolved-link="" t="n">compare</span>: (<span data-unresolved-link="" t="t">Int</span>, <span data-unresolved-link="" t="t">Int</span>) <span t="k">=&gt;</span> <span data-unresolved-link="" t="t">Int</span>): <span data-unresolved-link="" t="t">Array</span>[<span data-unresolved-link="" t="t">Int</span>]
+            <span class="modifiers"><span t="k">inline </span></span><span class="kind"><span t="k">def </span></span><a href="LayeredInorderSimplexStream$.html#sortIndices-fffff55e" t="n" class="documentableName ">sortIndices</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">count</span>: <span data-unresolved-link="" t="t">Int</span>, <span t="k">inline </span><span data-unresolved-link="" t="n">compare</span>: (<span data-unresolved-link="" t="t">Int</span>, <span data-unresolved-link="" t="t">Int</span>) <span t="k">=&gt;</span> <span data-unresolved-link="" t="t">Int</span>): <span data-unresolved-link="" t="t">Array</span>[<span data-unresolved-link="" t="t">Int</span>]
            </div>
           </div>
          </div>
@@ -561,11 +561,11 @@ node3 -> node2;
            <div class="originInfo"></div>
            <div class="memberDocumentation">
             <div class="documentableBrief doc">
-             <p><code>0 until count</code> stably sorted by <code>compare</code>: a merge sort on primitive indices.</p>
+             <p><code>0 until count</code> stably sorted by <code>compare</code>: a merge sort on primitive indices, over insertion-sorted blocks, whose merge of two neighbours moves only the part of each that overlaps the other. A sequence that is nearly in order, as the runs of equal diameter the generator emits are, costs little more at a block size above its disorder than the comparisons that find the overlap.</p>
             </div>
             <div class="cover">
              <div class="doc">
-              <p><code>0 until count</code> stably sorted by <code>compare</code>: a merge sort on primitive indices.</p>
+              <p><code>0 until count</code> stably sorted by <code>compare</code>: a merge sort on primitive indices, over insertion-sorted blocks, whose merge of two neighbours moves only the part of each that overlaps the other. A sequence that is nearly in order, as the runs of equal diameter the generator emits are, costs little more at a block size above its disorder than the comparisons that find the overlap.</p>
              </div>
              <h2 class="h200">Attributes</h2>
              <dl class="attributes attributes-small">
@@ -573,7 +573,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/LayeredInorderSimplexStream.scala#L440" target="_blank">LayeredInorderSimplexStream.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/LayeredInorderSimplexStream.scala#L450" target="_blank">LayeredInorderSimplexStream.scala</a>
               </dd>
              </dl>
             </div>
