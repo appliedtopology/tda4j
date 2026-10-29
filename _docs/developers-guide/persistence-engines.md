@@ -146,7 +146,10 @@ distance stored) rather than by trying every vertex; the lists give the same cof
 bookkeeping is kept in primitive arrays (each degree's simplices, the pairing, the cleared indices), and a
 `PersistenceBar` is built only for a bar that is returned; in the involution, an apparent pair's boundary column is
 rebuilt from its death simplex when needed rather than stored. A stored reduced column keeps its pivot first and the
-remaining terms uncombined. An emergent pair (Bauer's Definition 3.11) is a column whose oldest cofacet of the same
+remaining terms uncombined. The test for an apparent or emergent pair decodes a column once: the vertices of its oldest
+cofacet of the same diameter are the column's with one added, those of that cofacet's facets the cofacet's with one
+removed, and its youngest facet of the same diameter comes from its longest edges (a facet keeps the diameter unless
+the removed vertex is an endpoint of every longest edge). An emergent pair (Bauer's Definition 3.11) is a column whose oldest cofacet of the same
 diameter is the pivot of no earlier column (no stored column, no emergent pair, and not the apparent partner of that
 cofacet's youngest facet): its coboundary is reduced as it stands, so the engine pairs it at once without putting its
 cofacets on the working column, and keeps only the simplex, from which the column is rebuilt in the rare case that a

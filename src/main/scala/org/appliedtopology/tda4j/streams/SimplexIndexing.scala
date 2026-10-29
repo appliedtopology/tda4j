@@ -127,8 +127,11 @@ open class SimplexIndexing(val vertexCount: Int):
   /** A cursor over the cofacets of a simplex that allocates nothing per step: read `vertex` (the added vertex) and
     * `index` (the cofacet's index) as often as needed, then `advance()`.
     */
-  class CofacetCursor(startIndex: Long, size: Int, allCofacets: Boolean):
-    private val vertices: Array[Int] = decodeToArray(startIndex, size)
+  class CofacetCursor(startIndex: Long, vertices: Array[Int], allCofacets: Boolean):
+    /** The cursor over the simplex of `size` vertices at `startIndex`, which it decodes. */
+    def this(startIndex: Long, size: Int, allCofacets: Boolean) =
+      this(startIndex, decodeToArray(startIndex, size), allCofacets)
+    private val size: Int = vertices.length
     private var iB: Long = startIndex
     private var iA: Long = 0L
     private var k: Int = size
@@ -177,6 +180,12 @@ open class SimplexIndexing(val vertexCount: Int):
 
   def cofacetCursor(index: Long, size: Int, allCofacets: Boolean = true): CofacetCursor =
     new CofacetCursor(index, size, allCofacets)
+
+  /** [[cofacetCursor]] for a caller that has decoded the simplex already: `vertices` are the simplex at `index`,
+    * ascending (the cursor reads, never changes, the array).
+    */
+  def cofacetCursor(index: Long, vertices: Array[Int], allCofacets: Boolean): CofacetCursor =
+    new CofacetCursor(index, vertices, allCofacets)
 
   /** The cofacets of a simplex whose added vertex is a neighbour of every one of its vertices: the same cofacets, in
     * the same order (vertex, and so index, strictly decreasing) and with the same indices as `CofacetCursor`, but found
@@ -290,12 +299,14 @@ open class SimplexIndexing(val vertexCount: Int):
     * `apply(...).toSeq.sorted` (a `Simplex[Int]` decode followed by a redundant re-sort of an already-sorted
     * `SortedSet`).
     */
-  class FacetCursor(startIndex: Long, size: Int):
-    private val vertices: Array[Int] = decodeToArray(startIndex, size)
+  class FacetCursor(startIndex: Long, vertices: Array[Int]):
+    /** The cursor over the simplex of `size` vertices at `startIndex`, which it decodes. */
+    def this(startIndex: Long, size: Int) = this(startIndex, decodeToArray(startIndex, size))
     private var iB: Long = startIndex
     private var iA: Long = 0L
-    private var k: Int = size - 1
+    private var k: Int = vertices.length - 1
     private var _vertex: Int = -1
+    private var _position: Int = -1
     private var _index: Long = -1L
     private var havePending: Boolean = false
 
@@ -305,6 +316,7 @@ open class SimplexIndexing(val vertexCount: Int):
         val iiB = iB - binomialChoose(v, k + 1)
         val iiA = iA + binomialChoose(v, k)
         _vertex = v
+        _position = k
         _index = iiB + iA
         iB = iiB
         iA = iiA
@@ -316,11 +328,20 @@ open class SimplexIndexing(val vertexCount: Int):
 
     def hasNext: Boolean = havePending
     def vertex: Int = _vertex
+
+    /** The place of `vertex` among the simplex's vertices, ascending from 0. */
+    def position: Int = _position
     def index: Long = _index
     def advance(): Unit = step()
 
   def facetCursor(index: Long, size: Int): FacetCursor =
     new FacetCursor(index, size)
+
+  /** [[facetCursor]] for a caller that has decoded the simplex already: `vertices` are the simplex at `index`,
+    * ascending (the cursor reads, never changes, the array).
+    */
+  def facetCursor(index: Long, vertices: Array[Int]): FacetCursor =
+    new FacetCursor(index, vertices)
 
   /** Now a thin `Iterator[Long]` wrapper over `FacetCursor` above, kept for `SimplexIndexingSpec`'s own
     * `Iterator`-based assertions -- new call sites use `facetCursor` directly.
