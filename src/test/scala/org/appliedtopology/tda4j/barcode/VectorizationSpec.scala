@@ -259,6 +259,8 @@ class VectorizationSpec extends Specification with ScalaCheck:
       val equal = List.tabulate(5)(i => bar(1, i.toDouble, i + 2.0))
       Vectorization.persistenceEntropy(equal) must beCloseTo(math.log(5.0), 1e-12)
       Vectorization.persistenceEntropy(equal, normalized = true) must beCloseTo(1.0, 1e-12)
+      // equal lengths give the largest value, which rounding must not push past 1 (it did on Scala.js)
+      Vectorization.persistenceEntropy(List.fill(7)(bar(1, 0.0, 1.0)), normalized = true) must beLessThanOrEqualTo(1.0)
       Vectorization.persistenceEntropy(List(bar(1, 0.0, 3.0))) must beEqualTo(0.0)
     }
 

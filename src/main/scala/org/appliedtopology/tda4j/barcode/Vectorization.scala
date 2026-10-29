@@ -166,4 +166,6 @@ object Vectorization:
     if lengths.size < 2 then 0.0
     else
       val entropy = -lengths.map(l => (l / total) * math.log(l / total)).sum
-      if normalized then entropy / math.log(lengths.size.toDouble) else entropy
+      // Rounding can leave the quotient a few ulps outside [0, 1].
+      if normalized then math.min(1.0, math.max(0.0, entropy / math.log(lengths.size.toDouble)))
+      else math.max(0.0, entropy)
