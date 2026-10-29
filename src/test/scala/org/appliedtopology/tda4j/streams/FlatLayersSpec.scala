@@ -42,8 +42,8 @@ class FlatLayersSpec extends Specification:
 
   // A criterion of the user's (not `keepAll`), closed under faces as `keepCriterion` must be: every face of a simplex it
   // keeps is kept.
-  private val evenOrSmall: PartialFunction[Simplex[Int], Boolean] = {
-    case s => s.size <= 2 || s.underlying.forall(_ % 2 == 0)
+  private val evenOrSmall: PartialFunction[Simplex[Int], Boolean] = { case s =>
+    s.size <= 2 || s.underlying.forall(_ % 2 == 0)
   }
 
   private type Stream = LevelwiseSimplexStream[Int, Double]

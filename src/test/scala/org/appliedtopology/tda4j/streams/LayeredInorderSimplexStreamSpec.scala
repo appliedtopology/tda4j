@@ -87,7 +87,9 @@ class LayeredInorderSimplexStreamSpec extends Specification with ScalaCheck:
     Result
       .foreach(0 to math.min(topDimension, metricSpace.size - 1)) { d =>
         val expected = listing(enumerating, d)
-        firstDifference(listing(viaGenerator, d), expected).orElse(firstDifference(listing(viaCofaceLoop, d), expected)) must
+        firstDifference(listing(viaGenerator, d), expected).orElse(
+          firstDifference(listing(viaCofaceLoop, d), expected)
+        ) must
           beNone
       }
       .and(usedGenerator() must beTrue)

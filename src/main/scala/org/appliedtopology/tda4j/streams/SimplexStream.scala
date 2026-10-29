@@ -313,8 +313,8 @@ trait CofaceSimplexStream[VertexT: Ordering, FiltrationT: Filterable]
     * returns `true` (a simplex it is not defined at is kept).
     *
     * '''The criterion must be closed under faces''': every face of a simplex it keeps, a vertex or an edge among them,
-    * is kept too. That is what makes the kept simplices a simplicial complex, which every engine needs for `∂∂ = 0`.
-    * It is not checked, and a criterion that breaks it gives a stream whose cells, order and bars are not defined.
+    * is kept too. That is what makes the kept simplices a simplicial complex, which every engine needs for `∂∂ = 0`. It
+    * is not checked, and a criterion that breaks it gives a stream whose cells, order and bars are not defined.
     */
   def keepCriterion: PartialFunction[Simplex[VertexT], Boolean]
 
@@ -540,8 +540,8 @@ open class EnumeratingCofaceSimplexStream(
   // eventually staying false (an unbounded catch-all here was the actual root cause of the "some engines' .iterator
   // hangs / eventually crashes" bug, see StratifiedCellStream's doc).
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
-    case 0                                   => metricSpace.elements.map(v => Simplex(v)).filter(criterionKeeps).iterator
-    case 1                                   => sortedByFiltration(edges).iterator
+    case 0 => metricSpace.elements.map(v => Simplex(v)).filter(criterionKeeps).iterator
+    case 1 => sortedByFiltration(edges).iterator
     case d if d >= 0 && d < metricSpace.size =>
       // first, generate all simplices of this dimension
       sortedByFiltration(
@@ -589,12 +589,12 @@ open class RipserCofaceSimplexStream(
     * ([[LayeredInorderSimplexStream.FlagGenerator]]), for a stream that is the flag complex of a weighted graph: a
     * simplex is a set of vertices whose pairs are all edges, and its value is the largest weight. It is used instead of
     * the coface loop when the vertices are `0 until n`, with `keepCriterion` applied to each generated dimension;
-    * `None` (the default) is the coface loop. A stream that gives one must give, for every simplex, the cell and the value of its
-    * [[flatFiltration]] (the stream's tests compare the two). A fresh generator is asked for once per stream. The
-    * default gives one for the edge-collapsed graph of an [[EdgeCollapsedMetricSpace]] with the default filtration,
-    * from its surviving edges, so that the pairs the collapse removed are never scanned, and for any other metric space
-    * with the default filtration of up to `MaxGeneratorVertices` points (the Vietoris-Rips complex), where it replaces
-    * the sort of each dimension.
+    * `None` (the default) is the coface loop. A stream that gives one must give, for every simplex, the cell and the
+    * value of its [[flatFiltration]] (the stream's tests compare the two). A fresh generator is asked for once per
+    * stream. The default gives one for the edge-collapsed graph of an [[EdgeCollapsedMetricSpace]] with the default
+    * filtration, from its surviving edges, so that the pairs the collapse removed are never scanned, and for any other
+    * metric space with the default filtration of up to `MaxGeneratorVertices` points (the Vietoris-Rips complex), where
+    * it replaces the sort of each dimension.
     */
   protected def flatGenerator: Option[LayeredInorderSimplexStream.FlagGenerator] = metricSpace match
     case collapsed: EdgeCollapsedMetricSpace if filtrationIsDefault =>
