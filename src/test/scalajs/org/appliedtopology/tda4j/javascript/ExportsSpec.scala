@@ -5,8 +5,8 @@ import org.specs2.mutable.Specification
 
 import scala.scalajs.js
 
-/** The functions the npm package exports beyond `persistence`: landmarks, circular and toroidal coordinates, the text
-  * parsers, and the persistence image and boundary matrix of a `Result`.
+/** The functions the npm package exports beyond `persistence`: landmarks, the Euler curve, circular and toroidal
+  * coordinates, the text parsers, and the persistence image and boundary matrix of a `Result`.
   */
 class ExportsSpec extends Specification:
 
@@ -36,6 +36,29 @@ class ExportsSpec extends Specification:
     }
     "say what is missing" >> {
       Exports.selectLandmarks(circle(10)) must throwA[js.JavaScriptException]
+    }
+  }
+
+  "eulerCurve" should {
+    "give the unit square's steps: four vertices, then four edges close a loop, then the diagonals fill it" >> {
+      val square = js.Array(js.Array(0.0, 0.0), js.Array(1.0, 0.0), js.Array(1.0, 1.0), js.Array(0.0, 1.0))
+      val curve = Exports.eulerCurve(square)
+      val sqrt2 = math.sqrt(2.0)
+      (curve.scales.toSeq must beEqualTo(Seq(0.0, 1.0, sqrt2))) and
+        (curve.values.toSeq must beEqualTo(Seq(4.0, 0.0, 2.0))) and
+        (curve.at(0.5) must beEqualTo(4.0)) and (curve.at(-1.0) must beEqualTo(0.0)) and
+        (curve.sample(0.0, 2.0, 3).toSeq must beEqualTo(Seq(4.0, 0.0, 2.0)))
+    }
+    "take a distance matrix and the facade's options, and refuse the ones it does not have" >> {
+      val distances = js.Array(js.Array(0.0, 1.0, 2.0), js.Array(1.0, 0.0, 1.0), js.Array(2.0, 1.0, 0.0))
+      val curve = Exports.eulerCurveFromDistances(
+        distances,
+        options("maxSimplexDimension" -> 1, "maxFiltrationValue" -> 2)
+      )
+      (curve.scales.toSeq must beEqualTo(Seq(0.0, 1.0, 2.0))) and (curve.values.toSeq must beEqualTo(
+        Seq(3.0, 1.0, 0.0)
+      )) and
+        (Exports.eulerCurve(circle(5), options("maxDimension" -> 1)) must throwA[js.JavaScriptException])
     }
   }
 

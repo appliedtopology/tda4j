@@ -365,6 +365,35 @@ object TDA4j:
     validateLandmarks(landmarks, metricSpace.size)
     LandmarkSelector.coveringRadius(metricSpace, landmarks.toIndexedSeq)
 
+  /** The Euler characteristic curve of the Vietoris-Rips complex of a point cloud, one row per point, with Euclidean
+    * distances: see [[EulerCurveResult]]. Options `maxSimplexDimension` (the largest simplices counted, default `2`),
+    * `maxFiltrationValue` (the largest scale, default the minimum enclosing radius) and `threads`, and no others.
+    */
+  def eulerCurveFromPoints(points: Array[Array[Double]], options: Array[String]): EulerCurveResult =
+    validatePoints(points)
+    eulerCurve(EuclideanMetricSpace(points), options)
+
+  def eulerCurveFromPoints(points: Array[Array[Double]]): EulerCurveResult =
+    eulerCurveFromPoints(points, Array.empty[String])
+
+  /** As [[eulerCurveFromPoints]], from a distance matrix. */
+  def eulerCurveFromDistanceMatrix(distances: Array[Array[Double]], options: Array[String]): EulerCurveResult =
+    validateSquare(distances)
+    eulerCurve(explicitMetricSpace(distances), options)
+
+  def eulerCurveFromDistanceMatrix(distances: Array[Array[Double]]): EulerCurveResult =
+    eulerCurveFromDistanceMatrix(distances, Array.empty[String])
+
+  private val eulerCurveKeys = Set("maxsimplexdimension", "maxfiltrationvalue", "threads")
+
+  private def eulerCurve(metricSpace: FiniteMetricSpace[Int], options: Array[String]): EulerCurveResult =
+    val opts = parseOptionsWithKeys(options, eulerCurveKeys)
+    val maxSimplexDimension = opts.get("maxsimplexdimension").fold(2)(parseIntOption("maxSimplexDimension", _))
+    val maxFiltrationValue = opts.get("maxfiltrationvalue").map(parseDoubleOption("maxFiltrationValue", _))
+    withThreads(opts) {
+      new EulerCurveResult(EulerCharacteristicCurve.vietorisRips(metricSpace, maxSimplexDimension, maxFiltrationValue))
+    }
+
   /** The loops of the point cloud's Vietoris-Rips complex: one row `(birth, death)` per persistent H¹ class, most
     * persistent first. Row `i` is `cocycleIndex = i` of [[circularCoordinates]]; pick `r` between its birth and death.
     */

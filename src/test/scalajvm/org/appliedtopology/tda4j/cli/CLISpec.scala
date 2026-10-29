@@ -580,6 +580,64 @@ class CLISpec extends mutable.Specification:
       }
   }
 
+  "--euler-curve" should {
+    val square = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0))
+
+    def run(args: Seq[String]): (Int, Seq[String], String) =
+      val out = new ByteArrayOutputStream()
+      val err = new ByteArrayOutputStream()
+      val code = TDA4jCLI.run(args, new PrintStream(out), new PrintStream(err))
+      (code, out.toString.linesIterator.toSeq, err.toString)
+
+    "write the curve of a point cloud as scale,value lines, the facade's steps" >> {
+      val path = tempFile(".csv")
+      CSV.writePointCloud(path, square)
+      val (code, lines, _) = run(Seq("--euler-curve", path))
+      val direct = TDA4j.eulerCurveFromPoints(square)
+      (code must beEqualTo(0)) and (lines must beEqualTo(
+        "scale,value" +: direct.scales().zip(direct.values()).toSeq.map((s, v) => s"$s,$v")
+      )) and (lines.drop(1) must beEqualTo(Seq("0.0,4", "1.0,0", s"${math.sqrt(2.0)},2")))
+    }
+
+    "take a distance matrix, --max-simplex-dimension, --max-filtration-value and --output" >> {
+      val path = tempFile(".csv")
+      java.nio.file.Files.writeString(java.nio.file.Path.of(path), "0,1,2\n1,0,1\n2,1,0\n")
+      val outPath = tempFile(".csv")
+      val (code, lines, _) = run(
+        Seq(
+          "--euler-curve",
+          "--input-format",
+          "csv-distances",
+          "--max-simplex-dimension",
+          "1",
+          "--max-filtration-value",
+          "2",
+          "--output",
+          outPath,
+          path
+        )
+      )
+      (code must beEqualTo(0)) and (lines must beEmpty) and
+        (scala.io.Source.fromFile(outPath).getLines().toSeq must beEqualTo(
+          Seq("scale,value", "0.0,3", "1.0,1", "2.0,0")
+        ))
+    }
+
+    "refuse what it does not do, saying what it takes" >> {
+      val path = tempFile(".csv")
+      CSV.writePointCloud(path, square)
+      val (codeA, _, errA) = run(Seq("--euler-curve", "--max-dimension", "1", "--engine", "chunks", path))
+      val (codeB, _, errB) = run(Seq("--euler-curve", "--plot", "barcode", path))
+      val (codeC, _, errC) = run(Seq("--max-simplex-dimension", "1", path))
+      val (codeD, _, errD) = run(Seq("--euler-curve", "--input-format", "perseus-cubical", path))
+      (codeA must beEqualTo(1)) and (errA must contain("--engine, --max-dimension")) and
+        (errA must contain("--max-simplex-dimension, --max-filtration-value and --threads")) and
+        (codeB must beEqualTo(1)) and (errB must contain("--plot")) and
+        (codeC must beEqualTo(1)) and (errC must contain("--max-simplex-dimension is for --euler-curve")) and
+        (codeD must beEqualTo(1))
+    }
+  }
+
   "--distance-to (BarcodeDistance mirror)" should {
     def writeComparisonDiagram(points: Array[Array[Double]]): String =
       val result = FullBarcode.computeFromPoints(points, Array("maxDimension", "1"))

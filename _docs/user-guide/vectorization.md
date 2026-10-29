@@ -56,6 +56,9 @@ val image = Vectorization.persistenceImage(loops, 0.1, (0.0, 2.0), (0.0, 2.0), 2
 The Euler characteristic of the Vietoris-Rips complex at scale `t`, the number of vertices minus the edges plus the
 triangles and so on, is a step function of `t`. It is a vector of its own that needs no persistence:
 
+<div class="tabset">
+<div class="tab" data-lang="Scala">
+
 ```scala 3
 import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.*
@@ -67,10 +70,37 @@ curve(0.5)                                     // the Euler characteristic at sc
 curve.sample(0.0, 1.0, 50)                     // 50 evenly spaced samples, an Array[Long]
 ```
 
+</div>
+<div class="tab" data-lang="MATLAB">
+
+```matlab
+javaaddpath('/path/to/tda4j-VERSION-assembly.jar');
+import org.appliedtopology.tda4j.matlab.*;
+
+i = (0:29)';
+points = [cos(i * 0.21), sin(i * 0.21)];
+
+curve = TDA4j.eulerCurveFromPoints(points);    % simplices up to dimension 2, scales up to the enclosing radius
+curve.at(0.5)                                  % the Euler characteristic at scale 0.5
+curve.sample(0, 1, 50)                         % 50 evenly spaced samples
+stairs(curve.scales(), double(curve.values())) % the steps themselves
+
+TDA4j.eulerCurveFromPoints(points, {'maxSimplexDimension', '3', 'maxFiltrationValue', '1.0'});
+```
+
+</div>
+</div>
+
 `maxSimplexDimension` (default 2) is the dimension of the largest simplices counted and `maxFiltrationValue` the largest
 scale. The curve is computed from the cliques of each edge's lens (the points closer than the edge to both its ends)
 without building the complex, so it is cheap where a stream of the same simplices is not. `EulerCharacteristicCurve.ofStream(stream)`
 counts the cells of any other stream, an alpha complex or a cubical one for instance.
+
+From JavaScript, `eulerCurve(points, { maxSimplexDimension: 3 })` returns an object with `scales` and `values` and the
+methods `at(t)` and `sample(tMin, tMax, resolution)`; `eulerCurveFromDistances` takes a distance matrix. From the command
+line, `tda4j --euler-curve points.csv` writes one `scale,value` line for each scale where the curve steps. MATLAB, JavaScript
+and the command line take a distance matrix as well as points (`eulerCurveFromDistanceMatrix`, `eulerCurveFromDistances`,
+`--input-format csv-distances`).
 
 The [comparing barcodes](../tutorials/comparing-barcodes.md) tutorial uses the four diagram operations above. From MATLAB, these are methods of a
 result: `r1.bottleneckDistance(r2, dim)`, `wassersteinDistance`, `landscape`, `persistenceImage`. From the command line,

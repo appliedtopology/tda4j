@@ -46,6 +46,8 @@ object TDA4jCLI:
       val options = buildOptions(conf)
       val format = inputFormatOf(conf)
       checkPlotFlags(conf)
+      if conf.maxSimplexDimension.isSupplied && !conf.eulerCurve() then
+        throw new IllegalArgumentException("--max-simplex-dimension is for --euler-curve, which counts simplices")
       if conf.saveResult.isSupplied && conf.selectLandmarks() then
         throw new IllegalArgumentException(
           "--save-result is meaningless with --select-landmarks: there is no result here, only a landmark set"
@@ -139,7 +141,10 @@ object TDA4jCLI:
           )
         case _ => ()
 
-      if conf.selectLandmarks() then
+      if conf.eulerCurve() then
+        writeEulerCurve(conf, options, format, resolved, out)
+        0
+      else if conf.selectLandmarks() then
         if conf.representatives() then
           throw new IllegalArgumentException(
             "--representatives is meaningless with --select-landmarks: there is no barcode here, only a " +
@@ -359,6 +364,50 @@ object TDA4jCLI:
       s"tda4j: covering radius R = ${selection.coveringRadius()} -- e.g. pass '${2 * selection.coveringRadius()}' " +
         "as --max-filtration-value for step 2 (the JavaPlex tutorial's own 2R recipe)"
     )
+
+  private val eulerCurveOptions = Set("maxFiltrationValue", "threads")
+
+  /** `--euler-curve`: the curve of the Vietoris-Rips complex of a point cloud or distance matrix, one `scale,value`
+    * line for every scale where it steps. A flag that would change a computation this mode does not do is refused.
+    */
+  private[cli] def writeEulerCurve(
+    conf: TDA4jConf,
+    options: Array[String],
+    format: String,
+    resolved: ResolvedInput,
+    out: java.io.PrintStream
+  ): Unit =
+    val others = Seq(
+      "--plot" -> conf.plot.isSupplied,
+      "--distance-to" -> conf.distanceTo.isSupplied,
+      "--select-landmarks" -> conf.selectLandmarks(),
+      "--landmarks-file" -> conf.landmarksFile.isSupplied,
+      "--representatives" -> conf.representatives(),
+      "--output-format" -> conf.outputFormat.isSupplied,
+      "--save-result" -> conf.saveResult.isSupplied
+    ).collect { case (flag, true) => flag } ++
+      options.grouped(2).map(_(0)).filterNot(eulerCurveOptions).map(flagName)
+    if others.nonEmpty then
+      throw new IllegalArgumentException(
+        s"--euler-curve counts the cells of the Vietoris-Rips complex, and ${others.mkString(", ")} cannot go with it " +
+          "(it takes --max-simplex-dimension, --max-filtration-value and --threads)"
+      )
+    val chosen = options.grouped(2).filter(pair => eulerCurveOptions(pair(0))).flatten.toArray ++
+      conf.maxSimplexDimension.toOption.toSeq.flatMap(d => Seq("maxSimplexDimension", d.toString))
+    val curve = resolved match
+      case ResolvedInput.Points(points)       => TDA4j.eulerCurveFromPoints(points, chosen)
+      case ResolvedInput.Distances(distances) => TDA4j.eulerCurveFromDistanceMatrix(distances, chosen)
+      case _                                  =>
+        throw new IllegalArgumentException(
+          s"--euler-curve needs a point cloud or a distance matrix; --input-format=$format reads something else"
+        )
+    val lines = "scale,value" +: curve.scales().zip(curve.values()).toSeq.map((scale, value) => s"$scale,$value")
+    conf.output.toOption match
+      case Some(path) =>
+        val writer = FileAccess.printWriter(path)
+        try lines.foreach(writer.println)
+        finally writer.close()
+      case None => lines.foreach(out.println)
 
   /** Reads a `--landmarks-file` written by `writeLandmarkSelection` above (or hand-edited in the same shape): one
     * 0-based landmark index per line, blank lines and `#`-prefixed comment lines ignored. Parse errors report the
