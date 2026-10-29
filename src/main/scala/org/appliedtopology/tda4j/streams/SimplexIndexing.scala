@@ -373,6 +373,24 @@ object SimplexIndexing:
         i += 1
       result
 
+  /** The colexicographic order of vertex sets: the larger top vertex is the larger set, equal top vertices are compared
+    * by the next ones down. On sets of one size it is the order of the combinatorial index, so a tie-break by
+    * `colexOrdering` is the tie-break by index with no limit on the vertex count or the size (an index passes `Long`
+    * for 1,000 points at 8 vertices). Of two sets of different sizes whose top vertices agree, the shorter is smaller.
+    */
+  val colexOrdering: Ordering[Simplex[Int]] = (x, y) => colexCompare(x.underlying.toArray, y.underlying.toArray)
+
+  /** [[colexOrdering]] on ascending vertex arrays. */
+  def colexCompare(x: Array[Int], y: Array[Int]): Int =
+    var i = x.length - 1
+    var j = y.length - 1
+    var c = 0
+    while c == 0 && i >= 0 && j >= 0 do
+      c = Integer.compare(x(i), y(j))
+      i -= 1
+      j -= 1
+    if c != 0 then c else Integer.compare(i, j)
+
   /** Whether a `SimplexIndexing(vertexCount)` can index and decode every simplex with at most `size` vertices: its
     * decoding looks up coefficients up to `C(vertexCount + size, size)`, which must fit in a `Long`. Otherwise use
     * [[WideSimplexIndexing]].
