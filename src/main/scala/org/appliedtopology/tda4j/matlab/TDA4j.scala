@@ -987,17 +987,16 @@ object TDA4j:
       }
 
   /** The Vietoris-Rips complex of `space` as the engines other than Ripser read it: cells to dimension
-    * `maxDimension + 1`, the scaffolding the boundary matrix and the dimension-capped engines need.
+    * `maxDimension + 1`, the scaffolding the boundary matrix and the dimension-capped engines need. Built as
+    * `Persistence` builds it (`VietorisRips`' default implementation), so `engine=cohomology` here runs on the stream
+    * the verb's does.
     */
   private def vrStream(
     space: FiniteMetricSpace[Int],
     maxFiltrationValue: Option[Double],
     maxDimension: Int
-  ): LimitedCofaceSimplexStream =
-    LimitedCofaceSimplexStream(
-      EnumeratingCofaceSimplexStream(space, maxFiltrationValue = maxFiltrationValue),
-      maxDimension + 1
-    )
+  ): LevelwiseSimplexStream[Int, Double] =
+    Truncated.ofCofaces(RipserCofaceSimplexStream(space, maxFiltrationValue = maxFiltrationValue), maxDimension)
 
   /** `engine=ripser` for the Vietoris-Rips complex over `Z/prime` by the block-parallel engine: the same bars, with
     * representatives built when a bar's cycle is first read.

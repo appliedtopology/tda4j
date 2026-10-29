@@ -40,8 +40,11 @@ class FlatLayersSpec extends Specification:
     "two distances" -> fewDistances(10, Seq(1.0, 2.0), 6L)
   )
 
-  // A criterion of the user's (not `keepAll`): the edges of every simplex it keeps are kept.
-  private val evenOrSmall: PartialFunction[Simplex[Int], Boolean] = { case s => s.size <= 2 || s.min % 2 == 0 }
+  // A criterion of the user's (not `keepAll`), closed under faces as `keepCriterion` must be: every face of a simplex it
+  // keeps is kept.
+  private val evenOrSmall: PartialFunction[Simplex[Int], Boolean] = { case s =>
+    s.size <= 2 || s.underlying.forall(_ % 2 == 0)
+  }
 
   private type Stream = LevelwiseSimplexStream[Int, Double]
 
