@@ -15,7 +15,7 @@
   <p>Persistent cohomology for any cell type (simplices, cubes, simplicial-set generators): the reduction of the coboundary matrix, following Bauer's Ripser (arXiv:1908.02518) without its Vietoris-Rips-specific shortcuts. Over a field the barcode is the same as the homology barcode; what this engine adds is cocycle representatives, and it works where the Ripser engines do not (Cech, alpha, cubical, simplicial sets, non-flag complexes).</p>
   <p>The coboundary is built by inverting the boundaries of the stream's cells, so the stream is read in full first. There is no <code>maxDim</code>: the stream decides the top degree. For degrees <code>0 .. k</code>, pass a stream with cells up to dimension <code>k + 1</code> (<code>LimitedCofaceSimplexStream(stream, k + 1)</code> for a coface stream) and ignore the degree-<code>(k + 1)</code> bars.</p>
   <p>Representatives: every bar carries its V-column. For an essential bar it is a cocycle of the whole complex; for a finite bar its coboundary is the bar's reduced column, which is born at or after the bar's death, so it is a cocycle on the subcomplex before the death. <code>coboundaryOfChain</code> checks either.</p>
-  <p>Simplices with <code>Int</code> vertices (every complex the library builds: alpha, Čech, witness, Dowker, explicit streams) are reduced on flat arrays: each dimension's vertex tuples, a hash table from a tuple to its cell, and each coboundary block as compressed columns of signs. Only a column that needs an addition becomes a <code>Chain</code>, and only the cells of the representatives returned are looked up again. The bars and representatives are exactly those of reducing the cells themselves.</p>
+  <p>Simplices with <code>Int</code> vertices (every complex the library builds: alpha, Čech, witness, Dowker, explicit streams) are reduced on flat arrays: each dimension's vertex tuples, a table from a tuple to its cell (the vertices side by side in one <code>Long</code> when they fit, else a hash of them), and each coboundary block as compressed columns of signs. Only a column that needs an addition becomes a <code>Chain</code>, and only the cells of the representatives returned are looked up again. The bars and representatives are exactly those of reducing the cells themselves.</p>
  </div>
  <section id="attributes">
   <h2 class="h500">Value parameters</h2>
@@ -129,7 +129,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Cohomology.scala#L764" target="_blank">Cohomology.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Cohomology.scala#L841" target="_blank">Cohomology.scala</a>
               </dd>
              </dl>
             </div>
