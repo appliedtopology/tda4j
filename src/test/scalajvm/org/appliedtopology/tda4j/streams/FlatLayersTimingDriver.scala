@@ -6,6 +6,7 @@ package org.appliedtopology.tda4j
   * {{{
   * java -cp <test classpath> org.appliedtopology.tda4j.FlatLayersTimingDriver dtm|sparse|collapsed coface|generator n dim [trials] [seed] [radius]
   * java -cp <test classpath> org.appliedtopology.tda4j.FlatLayersTimingDriver dowker plain|parent n dim [trials] [seed] [witnesses]
+  * java -cp <test classpath> org.appliedtopology.tda4j.FlatLayersTimingDriver cech flat n dim [trials] [seed]
   * }}}
   *
   * `dowker` times the layers of the Dowker complex of a random relation of `n` rows and `witnesses` columns (default
@@ -30,7 +31,9 @@ object FlatLayersTimingDriver:
       EuclideanMetricSpace(Array.fill(n)(Array.fill(ambient)(rng.nextDouble())))
     val withGenerator = variant == "generator"
     require(
-      if complex == "dowker" then variant == "plain" || variant == "parent" else withGenerator || variant == "coface",
+      if complex == "dowker" then variant == "plain" || variant == "parent"
+      else if complex == "cech" then variant == "flat"
+      else withGenerator || variant == "coface",
       s"variant is coface or generator (dowker: plain or parent), not $variant"
     )
     val keep = CofaceSimplexStream.keepAll
@@ -82,7 +85,8 @@ object FlatLayersTimingDriver:
           ,
           dim
         )
-      case other => throw new IllegalArgumentException(s"complex is dtm, sparse, collapsed or dowker, not $other")
+      case "cech" => Truncated.ofCofaces(new CechCofaceSimplexStream(cloud(3), keep, None, false), dim)
+      case other => throw new IllegalArgumentException(s"complex is dtm, sparse, collapsed, dowker or cech, not $other")
 
     val timings = (1 to trials).map { _ =>
       val s = stream()
