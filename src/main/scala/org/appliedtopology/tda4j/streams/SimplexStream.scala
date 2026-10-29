@@ -354,6 +354,11 @@ open class LimitedCofaceSimplexStream(stream: CofaceSimplexStream[Int, Double], 
 /** Vietoris-Rips (or, with `filtrationValueOverride`, any filtration on the same vertex set that is monotone along
   * faces), each dimension enumerated in full by [[SimplexIndexing]]'s combinatorial number system and filtered by
   * `keepCriterion` and `maxFiltrationValue`. What [[VietorisRips]] chooses between, with [[RipserCofaceSimplexStream]].
+  *
+  * Enumerating every vertex set of a dimension holds only while there are at most `Int.MaxValue` of them (a `Range` of
+  * indices); [[RipserCofaceSimplexStream]], the default, builds each dimension from the cofaces of the cells it kept
+  * and has no such limit. The tie-break of [[filtrationOrdering]] is [[SimplexIndexing.colexOrdering]], which has none
+  * either.
   */
 open class EnumeratingCofaceSimplexStream(
   val metricSpace: FiniteMetricSpace[Int],
@@ -441,21 +446,22 @@ open class EnumeratingCofaceSimplexStream(
     * ordering reversed, so iteration order and pivot order agree.
     */
   override val filtrationOrdering: Ordering[Simplex[Int]] =
-    FiltrationOrdering.canonical(filtrationValue, _.size, Ordering.by(simplexIndexing(_)))
+    FiltrationOrdering.canonical(filtrationValue, _.size, SimplexIndexing.colexOrdering)
 
   lazy val simplexIndexing: SimplexIndexing = SimplexIndexing(metricSpace.size)
 
-  /** `cells` sorted by `filtrationOrdering.reverse`, computing each cell's value and index once for the sort rather
-    * than on every comparison. The keys sit in primitive arrays and the sort moves positions, so no `Simplex` is hashed
-    * (a `SortedSet` hashes by walking its tree).
+  /** `cells` sorted by `filtrationOrdering.reverse`, computing each cell's value and tie-break key once for the sort
+    * rather than on every comparison. The keys sit in primitive arrays and the sort moves positions, so no `Simplex` is
+    * hashed (a `SortedSet` hashes by walking its tree). The tie-break key is the combinatorial index while the indices
+    * of this many vertices fit a `Long`, and the vertex array beyond that.
     */
   protected def sortedByFiltration(cells: IterableOnce[Simplex[Int]]): Vector[Simplex[Int]] =
     val all = mutable.ArrayBuffer.from(cells.iterator)
     val n = all.length
     val values = new Array[Double](n)
     val sizes = new Array[Int](n)
-    val indices = new Array[Long](n)
     var allDefined = true
+    var maxSize = 0
     var k = 0
     while k < n do
       val cell = all(k)
@@ -468,9 +474,17 @@ open class EnumeratingCofaceSimplexStream(
       )
       allDefined &&= defined
       sizes(k) = cell.size
-      indices(k) = simplexIndexing(cell)
+      maxSize = math.max(maxSize, sizes(k))
       k += 1
     if allDefined then
+      // The reverse of the tie-break of `filtrationOrdering`: colexicographic descending, by index or by vertices.
+      val laterFirst: (Int, Int) => Int =
+        if SimplexIndexing.fitsLong(metricSpace.size, maxSize) then
+          val indices = Array.tabulate(n)(j => simplexIndexing(all(j)))
+          (a, b) => java.lang.Long.compare(indices(b), indices(a))
+        else
+          val vertices = Array.tabulate(n)(j => all(j).underlying.toArray)
+          (a, b) => SimplexIndexing.colexCompare(vertices(b), vertices(a))
       val order: Array[Integer] = Array.tabulate(n)(Integer.valueOf(_))
       // The reverse of `filtrationOrdering` (value reversed, then size, then index): value ascending, then size and
       // index descending.
@@ -481,18 +495,16 @@ open class EnumeratingCofaceSimplexStream(
           if byValue != 0 then byValue
           else
             val bySize = Integer.compare(sizes(b), sizes(a))
-            if bySize != 0 then bySize else java.lang.Long.compare(indices(b), indices(a))
+            if bySize != 0 then bySize else laterFirst(a, b)
       )
       Vector.tabulate(n)(j => all(order(j)))
     else
       // A cell outside the filtration function's domain is ordered by size and index alone (`FiltrationOrdering`).
       val fvCache = mutable.HashMap.empty[Simplex[Int], Option[Double]]
-      val ixCache = mutable.HashMap.empty[Simplex[Int], Long]
       val memoFv: PartialFunction[Simplex[Int], Double] = new PartialFunction[Simplex[Int], Double]:
         def isDefinedAt(s: Simplex[Int]): Boolean = fvCache.getOrElseUpdate(s, filtrationValue.lift(s)).isDefined
         def apply(s: Simplex[Int]): Double = fvCache.getOrElseUpdate(s, filtrationValue.lift(s)).get
-      val memoTieBreak: Ordering[Simplex[Int]] = Ordering.by(s => ixCache.getOrElseUpdate(s, simplexIndexing(s)))
-      all.toVector.sorted(using FiltrationOrdering.canonical(memoFv, _.size, memoTieBreak).reverse)
+      all.toVector.sorted(using FiltrationOrdering.canonical(memoFv, _.size, SimplexIndexing.colexOrdering).reverse)
 
   /** A candidate is kept iff both the caller's own `keepCriterion` AND the threshold accept it -- one place deciding
     * "is this cell kept," per `sortedByFiltration`'s own note about not duplicating filtration-value lookups across
