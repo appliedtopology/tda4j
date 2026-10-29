@@ -24,6 +24,22 @@ class FlatLayersSpec extends Specification:
     Array.fill(rows, columns)(if infinite then if rng.nextInt(3) == 0 then 0.0 else Double.PositiveInfinity
     else rng.nextInt(4).toDouble)
 
+  // Distances drawn from a few values, so that nearly every simplex has company at its value; not a metric (no
+  // triangle inequality), which a flag filtration does not need.
+  private def fewDistances(n: Int, values: Seq[Double], seed: Long): ExplicitMetricSpace =
+    val rng = new scala.util.Random(seed)
+    val d = Array.ofDim[Double](n, n)
+    for b <- 1 until n; a <- 0 until b do
+      val x = values(rng.nextInt(values.size))
+      d(a)(b) = x
+      d(b)(a) = x
+    ExplicitMetricSpace(d.map(_.toSeq).toSeq)
+
+  private val tieMetrics: Seq[(String, FiniteMetricSpace[Int])] = Seq(
+    "four distances" -> fewDistances(12, Seq(1.0, 2.0, 3.0, 4.0), 5L),
+    "two distances" -> fewDistances(10, Seq(1.0, 2.0), 6L)
+  )
+
   // A criterion of the user's (not `keepAll`): the edges of every simplex it keeps are kept.
   private val evenOrSmall: PartialFunction[Simplex[Int], Boolean] = { case s => s.size <= 2 || s.min % 2 == 0 }
 
@@ -36,7 +52,7 @@ class FlatLayersSpec extends Specification:
     val criteria = Seq(CofaceSimplexStream.keepAll, evenOrSmall)
 
     val vietorisRips = for
-      (name, metric) <- metrics
+      (name, metric) <- metrics ++ tieMetrics
       max <- thresholds
       keep <- criteria
     yield s"Vietoris-Rips of the $name, threshold $max, ${if keep eq evenOrSmall then "criterion" else "keep all"}" ->
@@ -295,6 +311,70 @@ class FlatLayersSpec extends Specification:
           )
         }
     }
+
+  "the Vietoris-Rips stream" should {
+    // The coface loop sorts each dimension; the generator emits it in order, and sorts only the tied runs that come out
+    // of order. Same cells, same order, same bits.
+    def loopOf(metric: FiniteMetricSpace[Int], max: Option[Double]) =
+      new RipserCofaceSimplexStream(metric, maxFiltrationValue = max):
+        override protected def flatGenerator = None
+
+    def layersDifference(name: String, a: Seq[FlatLayerStream.Layer], b: Seq[FlatLayerStream.Layer]): Option[String] =
+      if a.size != b.size then Some(s"$name: ${a.size} layers and ${b.size}")
+      else
+        a.zip(b).collectFirst {
+          case (x, y) if x.dim != y.dim || x.size != y.size =>
+            s"$name: dimension ${x.dim} has ${x.size} cells, ${y.size}"
+          case (x, y) if !java.util.Arrays.equals(x.vertices, y.vertices) =>
+            s"$name, dimension ${x.dim}: other vertices"
+          case (x, y) if x.values.indices.exists(i => bits(x.values(i)) != bits(y.values(i))) =>
+            s"$name, dimension ${x.dim}: other values"
+        }
+
+    "list, from the generator, the layers of the coface loop it replaces, vertices and value bits" in {
+      val metrics = Seq(
+        "grid" -> EuclideanMetricSpace(grid),
+        "cloud" -> EuclideanMetricSpace(cloud(14, 3, 3L)),
+        "clustered cloud" -> EuclideanMetricSpace(cloud(14, 2, 4L).map(p => p.map(x => math.round(x * 4) / 4.0)))
+      ) ++ tieMetrics
+      val failures = for
+        (name, metric) <- metrics
+        max <- Seq(None, Some(1.6), Some(0.9))
+        failure <- layersDifference(
+          s"$name, threshold $max",
+          new RipserCofaceSimplexStream(metric, maxFiltrationValue = max).flatLayers.get.take(5).toList,
+          loopOf(metric, max).flatLayers.get.take(5).toList
+        )
+      yield failure
+      failures.take(3) must beEmpty
+    }
+
+    "give its dimensions the same when they are asked for in the other order" in {
+      val metric = EuclideanMetricSpace(grid)
+      def listed(order: Seq[Int]) =
+        val stream = new RipserCofaceSimplexStream(metric)
+        order.map(d => d -> stream.iterateDimension(d).toList).toMap
+      val expected = listed(Seq(1, 2, 3, 4))
+      Seq(Seq(4), Seq(3, 4), Seq(4, 2, 3), Seq(2, 1, 3, 1, 4, 2), Seq(3, 1, 2, 4)).map { order =>
+        listed(order).forall((d, cells) => cells == expected(d))
+      } must contain(beTrue).forall
+    }
+
+    "use the generator for the default value of up to 2^15 points, and the coface loop beyond that or for another value" in {
+      class Given(metric: FiniteMetricSpace[Int])
+          extends RipserCofaceSimplexStream(metric, maxFiltrationValue = Some(1.0)):
+        def usesGenerator = flatGenerator.isDefined
+      class GivenCech(metric: EuclideanMetricSpace)
+          extends CechCofaceSimplexStream(metric, maxFiltrationValue = Some(1.0)):
+        def usesGenerator = flatGenerator.isDefined
+      val big = new ExplicitMetricSpace(Seq.fill((1 << 15) + 1)(Seq.empty[Double]))
+      (
+        new Given(EuclideanMetricSpace(grid)).usesGenerator,
+        new Given(big).usesGenerator,
+        new GivenCech(EuclideanMetricSpace(grid)).usesGenerator
+      ) must beEqualTo((true, false, false))
+    }
+  }
 
   "a coface stream that builds its dimensions on arrays" should {
     "give the layers, values and listing of the stream built from cells" in {
