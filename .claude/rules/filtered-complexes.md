@@ -12,16 +12,16 @@ paths:
 
 # Cech, witness, Dowker, DTM, sparse (Sheehy) Rips and edge-collapse complexes
 
-Loads when you work on one of these complexes. Project-wide rules are in `.claude/CLAUDE.md`; the stream ordering contract they all satisfy is in `streams.md`.
+Project-wide rules: `.claude/CLAUDE.md`; the stream ordering contract all of these satisfy: `streams.md`.
 
 ## The coface loop they share (`RipserCofaceSimplexStream`; `WORKLOG-rare-complex-performance.md`, #181)
 
 Cech, witness, Dowker, DTM and sparse Rips all generate cells in `RipserCofaceSimplexStream`, and **generating the cells,
-not reducing them, was about 90 % of their time** (the reduction ~10 %; Cech's ball only 6 % of Cech's). Invariants:
+not reducing them, was about 90 % of their time**. Invariants:
 
 - Candidates of dimension `d >= 2` are `spx + i` for `i` below `spx.min` and adjacent, in the table of KEPT edges
   (`keptEdgeNeighbours`, bitset rows, built from dimension 1 or on first use), to every vertex of `spx`. A `keepCriterion`
-  or filtration that keeps a simplex but not one of its edges is outside the stream contract (and now yields fewer cells).
+  or filtration that keeps a simplex but not one of its edges is outside the stream contract.
 - On the `Simplex` path keep per-cell work to ONE hash lookup (a `TreeSet`'s own `hashCode`/`equals` allocate):
   `FiltrationCache` hashes by traversal; `MemoizedFiltration` answers a hit before it checks the domain;
   `FiltrationOrdering.canonical` calls `applyOrElse` once per cell. No `isDefinedAt`-then-`apply` pairs or `Simplex`-keyed
@@ -43,7 +43,7 @@ not reducing them, was about 90 % of their time** (the reduction ~10 %; Cech's b
   values are kept overrides `keptValue`, not only `keptByThresholdAndCriterion` (Dowker: finite values only).
 - **Generator-backed layers (#190, `WORKLOG-flag-generator.md`)**: a coface stream that is the flag complex of a weighted
   graph overrides `flatGenerator` (DTM-Rips, sparse Rips, Rips over an `EdgeCollapsedMetricSpace` by default): layers from
-  dimension 1 come from `LayeredInorderSimplexStream.FlagGenerator` in order, nothing sorted (2.2 to 7.5 times faster).
+  dimension 1 come from `LayeredInorderSimplexStream.FlagGenerator` in order, nothing sorted.
   It must list the cells and values of `flatFiltration`. Sheehy's vanishing points are per-vertex deadlines, checked where
   a vertex is added; `FlatLayersSpec` needs an input where they matter (`cloud(12, 2, 2L)`).
 - A flag-like hook gets the parent's value (`parentValue`) and only adds the new vertex's edges; an edge ignores it.
@@ -56,7 +56,7 @@ not reducing them, was about 90 % of their time** (the reduction ~10 %; Cech's b
   which facets are cached when it is first asked (the floor, the interior vertex reusing its facet's radius): two caches
   would give ULP-different values. `CechValuesSpec` feeds the earlier `Simplex`-keyed formula the same calls, with faces
   left out, and compares bits. About 4 times faster layers.
-- Left (#206): the general witness complex on arrays; Scala.js timings and the witness complexes' speed are unmeasured.
+- Left (#206): the general witness complex on arrays; Scala.js timings.
 
 ## Cech complexes
 
@@ -116,8 +116,7 @@ coface stream with nonzero distinct vertex filtration values (overrides `case 0`
 `maxFiltrationValue` defaults to `minimumEnclosingRadius`. Refuses `engine=ripser`.
 
 **`AlphaComplexDQP.dtm`**: `weight(i)=-f(i)²`, derived not copied. Cross-checked against
-`DtmRipsSimplexStream(p=2)`'s H0 via the persistent nerve lemma, not bar-for-bar (alpha correctly delays/omits
-vertices Rips can't).
+`DtmRipsSimplexStream(p=2)`'s H0 via the persistent nerve lemma, not bar-for-bar (alpha delays/omits vertices Rips can't).
 
 ## Sheehy's sparse/approximate Vietoris-Rips filtration
 
@@ -149,5 +148,7 @@ through inclusion free; `minimumEnclosingRadius` overridden to the collapse's ow
 "fixed-point iteration" draft was PROVEN WRONG by barcode cross-validation (two bugs, each silently turning a real bar
 essential on a 5-point counterexample). Processing order is load-bearing: reread the reference before touching this.
 
-Measured 73-76% edges removed, 43-47x reduction-phase speedup (`EdgeCollapseBenchmarkSpec`); the collapse itself is
-slow on dense input (#256). Wired through `matlab.TDA4j`'s `edgeCollapse` option (`complex=vr` only) and `cli --edge-collapse`.
+Measured 73-76% edges removed, 43-47x reduction-phase speedup (`EdgeCollapseBenchmarkSpec`). Up to 4,096 points the
+collapse runs on an `n x n` matrix and bit sets, above on sorted maps (the reference; `EdgeCollapseDenseSpec` holds the
+two equal); cost ~ edges x common neighbours (`WORKLOG-edge-collapse-dense.md`, #256). Wired through
+`matlab.TDA4j`'s `edgeCollapse` option (`complex=vr` only) and `cli --edge-collapse`.
