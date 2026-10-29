@@ -92,12 +92,12 @@ node3 -> node2;
          <button class="icon-button show-content expand"></button>
          <h4 class="groupHeader h200">Concrete methods</h4>
         </div>
-        <div class="documentableElement" id="persistentHomology-f3a">
+        <div class="documentableElement" id="persistentHomology-fffffb27">
          <div class="documentableElement-expander">
           <button class="icon-button ar show-content"></button>
           <div class="header monospace mono-medium">
            <div class="signature">
-            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="FastCubicalHomologyEngine.html#persistentHomology-f3a" t="n" class="documentableName ">persistentHomology</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">stream</span>: <a href="CubicalGridStream.html" t="t">CubicalGridStream</a>, <span t="k"></span><span data-unresolved-link="" t="n">includeZeroLength</span>: <span data-unresolved-link="" t="t">Boolean</span> = ...): <span data-unresolved-link="" t="t">List</span>[<a href="PersistenceBar.html" t="t">PersistenceBar</a>[<span data-unresolved-link="" t="t">Double</span>, <a href="Chain.html" t="t">Chain</a>[<a href="../tda4j.html#Cube-0" t="t">Cube</a>, <span t="t">CoefficientT</span>]]]
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="FastCubicalHomologyEngine.html#persistentHomology-fffffb27" t="n" class="documentableName ">persistentHomology</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">stream</span>: <a href="CubicalGridStream.html" t="t">CubicalGridStream</a>, <span t="k"></span><span data-unresolved-link="" t="n">includeZeroLength</span>: <span data-unresolved-link="" t="t">Boolean</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">maxDimension</span>: <a href="Optional.html" t="t">Optional</a>[<span data-unresolved-link="" t="t">Int</span>] = ...): <span data-unresolved-link="" t="t">List</span>[<a href="PersistenceBar.html" t="t">PersistenceBar</a>[<span data-unresolved-link="" t="t">Double</span>, <a href="Chain.html" t="t">Chain</a>[<a href="../tda4j.html#Cube-0" t="t">Cube</a>, <span t="t">CoefficientT</span>]]]
            </div>
           </div>
          </div>
@@ -107,11 +107,11 @@ node3 -> node2;
            <div class="originInfo"></div>
            <div class="memberDocumentation">
             <div class="documentableBrief doc">
-             <p>Every bar of the image's sublevel (or superlevel) filtration, with representatives; zero-length bars (a plateau's cells pairing off at one value) only if <code>includeZeroLength</code>.</p>
+             <p>Every bar of the image's sublevel (or superlevel) filtration up to degree <code>maxDimension</code> (default: all, up to <code>d - 1</code>), with representatives; zero-length bars (a plateau's cells pairing off at one value) only if <code>includeZeroLength</code>. Below the top degree only the cells of dimension <code>maxDimension + 1</code> and lower are built, as for any other engine, and the dual graph is walked only when the top degree is asked for.</p>
             </div>
             <div class="cover">
              <div class="doc">
-              <p>Every bar of the image's sublevel (or superlevel) filtration, with representatives; zero-length bars (a plateau's cells pairing off at one value) only if <code>includeZeroLength</code>.</p>
+              <p>Every bar of the image's sublevel (or superlevel) filtration up to degree <code>maxDimension</code> (default: all, up to <code>d - 1</code>), with representatives; zero-length bars (a plateau's cells pairing off at one value) only if <code>includeZeroLength</code>. Below the top degree only the cells of dimension <code>maxDimension + 1</code> and lower are built, as for any other engine, and the dual graph is walked only when the top degree is asked for.</p>
              </div>
              <h2 class="h200">Attributes</h2>
              <dl class="attributes attributes-small">
@@ -119,7 +119,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/FastCubicalHomology.scala#L33" target="_blank">FastCubicalHomology.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/FastCubicalHomology.scala#L35" target="_blank">FastCubicalHomology.scala</a>
               </dd>
              </dl>
             </div>

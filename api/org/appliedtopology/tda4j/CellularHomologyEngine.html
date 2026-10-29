@@ -193,15 +193,20 @@ node5 -> node0;
           <div>
            <div class="originInfo"></div>
            <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>The cursor for the whole stream. A stream that says it was cut off (<code>homologyDegreeLimit</code>, as <code>VietorisRips(.., maxDimension = k)</code> does) is read as <code>persistentHomology(stream, k)</code>: the cells above degree <code>k</code> close nothing, so they are not homology.</p>
+            </div>
             <div class="cover">
-             <div class="doc"></div>
+             <div class="doc">
+              <p>The cursor for the whole stream. A stream that says it was cut off (<code>homologyDegreeLimit</code>, as <code>VietorisRips(.., maxDimension = k)</code> does) is read as <code>persistentHomology(stream, k)</code>: the cells above degree <code>k</code> close nothing, so they are not homology.</p>
+             </div>
              <h2 class="h200">Attributes</h2>
              <dl class="attributes attributes-small">
               <dt class="body-small">
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Homology.scala#L399" target="_blank">Homology.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Homology.scala#L403" target="_blank">Homology.scala</a>
               </dd>
              </dl>
             </div>
@@ -224,11 +229,11 @@ node5 -> node0;
            <div class="originInfo"></div>
            <div class="memberDocumentation">
             <div class="documentableBrief doc">
-             <p>The cursor for the degrees <code>0 .. maxDimension</code> only. The cells above dimension <code>maxDimension + 1</code> are neither sorted nor reduced, and the cells of dimension <code>maxDimension + 1</code>, which can only close a class of degree <code>maxDimension</code>, leave nothing but the pairing: no V-column, no class of degree <code>maxDimension + 1</code>, and no reduction at all while no class of degree <code>maxDimension</code> is open. The bars of degree <code>0 .. maxDimension</code> and their representatives are those of the uncapped cursor; there are no bars above <code>maxDimension</code>.</p>
+             <p>The cursor for the degrees <code>0 .. maxDimension</code> only (fewer for a stream cut off below that, see the whole-stream cursor). The cells above dimension <code>maxDimension + 1</code> are neither sorted nor reduced, and the cells of dimension <code>maxDimension + 1</code>, which can only close a class of degree <code>maxDimension</code>, leave nothing but the pairing: no V-column, no class of degree <code>maxDimension + 1</code>, and no reduction at all while no class of degree <code>maxDimension</code> is open. The bars of degree <code>0 .. maxDimension</code> and their representatives are those of the uncapped cursor; there are no bars above <code>maxDimension</code>.</p>
             </div>
             <div class="cover">
              <div class="doc">
-              <p>The cursor for the degrees <code>0 .. maxDimension</code> only. The cells above dimension <code>maxDimension + 1</code> are neither sorted nor reduced, and the cells of dimension <code>maxDimension + 1</code>, which can only close a class of degree <code>maxDimension</code>, leave nothing but the pairing: no V-column, no class of degree <code>maxDimension + 1</code>, and no reduction at all while no class of degree <code>maxDimension</code> is open. The bars of degree <code>0 .. maxDimension</code> and their representatives are those of the uncapped cursor; there are no bars above <code>maxDimension</code>.</p>
+              <p>The cursor for the degrees <code>0 .. maxDimension</code> only (fewer for a stream cut off below that, see the whole-stream cursor). The cells above dimension <code>maxDimension + 1</code> are neither sorted nor reduced, and the cells of dimension <code>maxDimension + 1</code>, which can only close a class of degree <code>maxDimension</code>, leave nothing but the pairing: no V-column, no class of degree <code>maxDimension + 1</code>, and no reduction at all while no class of degree <code>maxDimension</code> is open. The bars of degree <code>0 .. maxDimension</code> and their representatives are those of the uncapped cursor; there are no bars above <code>maxDimension</code>.</p>
              </div>
              <h2 class="h200">Attributes</h2>
              <dl class="attributes attributes-small">
@@ -236,7 +241,7 @@ node5 -> node0;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Homology.scala#L408" target="_blank">Homology.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Homology.scala#L414" target="_blank">Homology.scala</a>
               </dd>
              </dl>
             </div>
