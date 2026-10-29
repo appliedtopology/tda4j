@@ -49,7 +49,9 @@ balls (`n²/4` bytes), no sort above the edges in general position; tied runs ar
 order. The old `InorderCofaceSimplexStream` (tie order broken, duplicates on tied distances) is deleted (#182).
 Its generator reads only a sorted weighted edge list (`FlagGenerator.ofEdges`, optional per-vertex deadlines), so a
 coface stream that is the flag complex of a graph can build its flat layers from it (`flatGenerator`: DTM-Rips, sparse
-Rips, edge-collapsed Rips; `filtered-complexes.md`, #190). `WORKLOG-layered-inorder.md`, `WORKLOG-flag-generator.md`. `FiniteMetricSpace` has
+Rips, edge-collapsed Rips; `filtered-complexes.md`, #190), and so does the default `RipserCofaceSimplexStream` (default
+value, keep-all, <= 2^15 points: `WORKLOG-cohomology-stream-sort.md`, #251); the stream keeps the generator's `root`s
+(4 bytes a simplex of the top layer) and rebuilds the generator's order from its flat layer by reversing tied runs. `WORKLOG-layered-inorder.md`, `WORKLOG-flag-generator.md`. `FiniteMetricSpace` has
 a VP-tree impl (`VantagePointTree`, `VantagePointQuery`; `WORKLOG-scalajs-numerics-spatial.md`) and `SparseMetricSpace` (+∞ past its cutoff rather than excluding — don't use it as a
 thresholded oracle).
 

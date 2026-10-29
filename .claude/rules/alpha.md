@@ -28,9 +28,11 @@ to it (a vertex on the sphere = the same sphere; otherwise a ~1e-16 bar that dep
 `CholeskyWorkspace` hand-rolled incremental Cholesky. Filtration values are squared radii internally; `radiusOf`
 takes sqrt. `AlphaShapeDQP` always untruncated; `AlphaComplexDQP.euclidean(points, maxRadius, ...)` for truncation.
 
-**Settled `DualQP.solve` numerics — don't retune**: `rankTolerance=1e-6` (safe `[1e-7,1e-5]`); ratio-test ties
-broken by global constraint index (Bland's rule); small-Schur-complement-no-swappable-inequality → infeasible
-(accepted limitation, "commit anyway" tried and reverted). Vertex filtration value is `-space.weight(x)` only
+**`DualQP.solve` numerics**: `rankTolerance=1e-6` (a lower one admits a poisoned factor); ratio-test ties broken
+by global constraint index (Bland's rule). A pivot under it rules a candidate out, which in high dimension dropped
+valid simplices of large circumradius and their cofaces: such a candidate is retried at `rescueRankTolerance=1e-11`
+and kept only if its multipliers are certified against the data (`WORKLOG-dqp-ill-conditioned-cells.md`). Values past
+about 100 times the point spacing stay approximate: truncate DQP. Vertex filtration value is `-space.weight(x)` only
 when `x` is inside its own restricted power cell `V_x`, else the min over `x`'s own incident already-solved
 edges (dim 1 before 0), and a vertex with no incident edges is dropped entirely
 (`AlphaComplexDQPVertexAttachmentSpec`, `WORKLOG-dtm-filtrations.md`). Regressions in
@@ -48,10 +50,9 @@ its true affine span first.
 
 **Helix alpha values are computed top-down** (`built`, read by `valueOf`): top cells take the smallest containing circumradius;
 below that a simplex takes its own smallest circumradius (centre in its affine hull, `smallestCircumsphere`, never
-`Hypersphere.apply`) if Gabriel w.r.t. its cofaces' opposite vertices, else the min over its immediate cofaces. The
-Gabriel rule once covered edges only, so 3-D lost most `H_2` (`WORKLOG-helix-alpha-values.md`). **In general position
-Helix must equal DQP bar for bar** (`HelixDqpAgreementSpec`, a CI gate in 2-D/3-D/4-D); only degenerate inputs stay
-diagnostic.
+`Hypersphere.apply`) if Gabriel w.r.t. its cofaces' opposite vertices, else the min over its immediate cofaces. (`WORKLOG-helix-alpha-values.md`). **In general position
+Helix must equal DQP bar for bar** (`HelixDqpAgreementSpec`, a CI gate in 2-D to 4-D, and cell for cell in 7-D within
+a radius); only degenerate inputs stay diagnostic.
 
 **`DelaunayAlphaShapes` keeps faces and values in flat tables, read per dimension** (`WORKLOG-helix-alpha-speed.md`): `built`
 is a `FaceTable` per dimension plus value arrays; the `Simplex` objects, the sorted order of a dimension
@@ -60,8 +61,8 @@ never the millions of faces above), and `filtrationValue` probes the table, not 
 here may be per-simplex hash sets or a scan of the cells per top simplex (`topValue` was quadratic in the number of cells
 and was 75% of the time at 40 points in R^7: `HelixDelaunay.smallestCircumradii`); no `tabulate`/`map`/`sum` in
 `circumsphere` (boxing, once per face). Any change here is checked by a before/after dump of every simplex, value (hex
-doubles) and stream order (`AlphaProfileDriver dump=`), not by Betti numbers. 40 points in R^8: 7 s, in R^10: 71 s (GUDHI
-3.7 s, 56 s). Helix's walk is now 40-55% of that; DQP and Cech pay for the 3-skeleton only (at most C(n, <= 4)).
+doubles) and stream order (`AlphaProfileDriver dump=`), not by Betti numbers. DQP and Cech pay for the
+3-skeleton only (at most C(n, <= 4)) when capped.
 
 **Helix walk** (`WORKLOG-helix-construction-speed.md`): hull facet by gift wrapping (deterministic, no RNG); across
 each frontier facet the cofacet is the light point with the smallest centre parameter `t` (sphere centre `c0 + t n`),
@@ -73,7 +74,7 @@ facet in 3 tops, every boundary facet on the hull -- Euler characteristic is NOT
 passes it); a failure goes to `repairByJitterRetriangulation` (jitter `1e-4` of the spacing, all points when the
 structural check fails; on the PROJECTED points). Exact grids are valid by default at the default epsilon; at a far
 smaller epsilon (`1e-9`) a 3-D grid can still fail to repair (near-coplanar float predicates) and the raw walk is
-returned. Agreement with GUDHI at scale (bench harness): bottleneck <= 1e-8 at 1000/5000 3-D, 6e-7 at 10000 2-D.
+returned.
 **Dispatch with a radius** (`AlphaShapes(points, maxRadius = r)`, the verb's and facade's `maxFiltrationValue`):
 `Default` = the triangulation without a radius, else `prefersDQP` (mean of `k^1.6`, k = neighbours within `2r`, 64
 samples, vs a fitted cost model: DQP `0.004·2.35^(d-2)·k^1.6`, BowyerWatson `b_d (n/1000)^0.2`, b = 0.03/0.1/1.1 for

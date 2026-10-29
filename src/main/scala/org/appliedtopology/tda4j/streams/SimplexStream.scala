@@ -581,7 +581,9 @@ open class RipserCofaceSimplexStream(
     * the coface loop. A stream that gives one must give, for every simplex, the cell and the value of its
     * [[flatFiltration]] (the stream's tests compare the two). A fresh generator is asked for once per stream. The
     * default gives one for the edge-collapsed graph of an [[EdgeCollapsedMetricSpace]] with the default filtration,
-    * from its surviving edges, so that the pairs the collapse removed are never scanned.
+    * from its surviving edges, so that the pairs the collapse removed are never scanned, and for any other metric space
+    * with the default filtration of up to `MaxGeneratorVertices` points (the Vietoris-Rips complex), where it replaces
+    * the sort of each dimension.
     */
   protected def flatGenerator: Option[LayeredInorderSimplexStream.FlagGenerator] = metricSpace match
     case collapsed: EdgeCollapsedMetricSpace if filtrationIsDefault =>
@@ -597,14 +599,20 @@ open class RipserCofaceSimplexStream(
         LayeredInorderSimplexStream.FlagGenerator
           .ofEdges(metricSpace.size, as.result, bs.result, weights.result, resolvedMaxFiltrationValue)
       )
+    case _ if filtrationIsDefault && metricSpace.size <= RipserCofaceSimplexStream.MaxGeneratorVertices =>
+      Some(
+        LayeredInorderSimplexStream.Generator(metricSpace.size, metricSpace.distance(_, _), resolvedMaxFiltrationValue)
+      )
     case _ => None
 
   private lazy val generator: Option[LayeredInorderSimplexStream.FlagGenerator] =
     if keepsEverything && java.util.Arrays.equals(vertexIds, Array.range(0, vertexIds.length)) then flatGenerator
     else None
 
-  // The generator's layer of the dimension built last, which the next dimension is generated from.
-  private var generated: Option[LayeredInorderSimplexStream.Layer] = None
+  // The dimension built last by the generator and its `root` (the first longest edge of each simplex, in the generator's
+  // order). The next dimension is generated from these and that dimension's flat layer, which is the generator's with
+  // each tied run reversed: the stream keeps 4 bytes a simplex of the top dimension, not a second copy of it.
+  private var generatedRoots: Option[(Int, Array[Int])] = None
 
   override def flatLayers: Option[Iterator[FlatLayerStream.Layer]] =
     flatFiltration.map(f => Iterator.range(0, metricSpace.size).map(flatLayer(f, _)).takeWhile(_.size > 0))
@@ -628,24 +636,33 @@ open class RipserCofaceSimplexStream(
   // Dimension `d >= 1` from the generator, as a flat layer: its tied runs, which it lists colexicographically descending,
   // are reversed to the order a layer is in (ascending).
   private def generatedLayer(g: LayeredInorderSimplexStream.FlagGenerator, d: Int): FlatLayerStream.Layer =
-    val below =
-      if d == 1 then None
-      else generated.filter(_.dim == d - 1).orElse(Some((2 until d).foldLeft(g.edges)((layer, _) => g.cofacets(layer))))
-    val raw = below.fold(g.edges)(g.cofacets)
-    generated = Some(raw)
-    val width = d + 1
+    val raw = if d == 1 then g.edges else g.cofacets(generatorLayer(g, d - 1))
+    generatedRoots = Some((d, raw.root))
     val values = Array.tabulate(raw.size)(g.diameter(raw, _))
-    val vertices = new Array[Int](raw.vertices.length)
+    FlatLayerStream.Layer(d, reversedTies(raw.vertices, values, d + 1), values)
+
+  // The generator's layer of dimension `d`: from the flat layer and roots kept, or built again from the edges (when
+  // dimensions are asked for out of order).
+  private def generatorLayer(g: LayeredInorderSimplexStream.FlagGenerator, d: Int): LayeredInorderSimplexStream.Layer =
+    val kept = for
+      (dim, root) <- generatedRoots if dim == d
+      flat <- flatCurrent if flat.dim == d
+    yield LayeredInorderSimplexStream.Layer(d, flat.size, reversedTies(flat.vertices, flat.values, d + 1), root)
+    kept.getOrElse((2 to d).foldLeft(g.edges)((layer, _) => g.cofacets(layer)))
+
+  // `vertices`, `width` to a simplex, with every run of equal `values` in the reverse order: its own inverse.
+  private def reversedTies(vertices: Array[Int], values: Array[Double], width: Int): Array[Int] =
+    val reversed = new Array[Int](vertices.length)
     var start = 0
-    while start < raw.size do
+    while start < values.length do
       var end = start + 1
-      while end < raw.size && java.lang.Double.compare(values(start), values(end)) == 0 do end += 1
+      while end < values.length && java.lang.Double.compare(values(start), values(end)) == 0 do end += 1
       var i = start
       while i < end do
-        System.arraycopy(raw.vertices, i * width, vertices, (end - 1 - (i - start)) * width, width)
+        System.arraycopy(vertices, i * width, reversed, (end - 1 - (i - start)) * width, width)
         i += 1
       start = end
-    FlatLayerStream.Layer(d, vertices, values)
+    reversed
 
   private def flatKept(value: Double, vertices: Array[Int], from: Int, width: Int): Boolean =
     keptValue(value) && (keepsEverything || criterionKeeps(FlatLayerStream.simplexOf(vertices, from, width)))
@@ -873,6 +890,11 @@ open class RipserCofaceSimplexStream(
   }
 
 object RipserCofaceSimplexStream:
+
+  /** The most points for which the default `flatGenerator` is the layered in-order generator: its two bit matrices take
+    * `n^2 / 4` bytes, 256 MB at this bound, the cap of the coface loop's neighbour table.
+    */
+  private val MaxGeneratorVertices = 1 << 15
 
   /** Candidates are valued, and kept or dropped, this many at a time. */
   private val ChunkSize = 1 << 15

@@ -202,7 +202,8 @@ end PowerDistance
   * @param rankTolerance
   *   a constraint counts as linearly dependent on the working set when its Schur complement falls below this fraction
   *   of `B_jj`. Values between 1e-7 and 1e-5 work; smaller lets nearly singular factorizations through (non-convergence
-  *   or wrong answers), larger rejects real directions.
+  *   or wrong answers), larger rejects real directions. A candidate ruled out for this reason gets a second attempt
+  *   (`rescueRankTolerance`).
   * @param feasibilityTolerance
   *   a constraint counts as violated when its slack exceeds this fraction of max|U|.
   * @param zeroTolerance
@@ -222,6 +223,10 @@ end PowerDistance
   *   to share the work (the JVM; a Scala.js program has one).
   * @param verbose
   *   print a line to stderr whenever a candidate is left out because its QP did not converge.
+  * @param rescueRankTolerance
+  *   a candidate that `rankTolerance` rules out because of a small pivot is solved again with this smaller tolerance
+  *   and kept if the multipliers it ends with satisfy the optimality conditions of the dual against the data. In high
+  *   ambient dimension many valid simplices are that ill-conditioned. 0 turns the second attempt off.
   */
 final case class AlphaDQPSettings(
   rankTolerance: Double = 1e-6,
@@ -232,7 +237,8 @@ final case class AlphaDQPSettings(
   workingSetCapacity: Int = 0,
   enforceMonotonicity: Boolean = true,
   parallel: Boolean = Parallel.byDefault,
-  verbose: Boolean = false
+  verbose: Boolean = false,
+  rescueRankTolerance: Double = 1e-11
 )
 
 // ===========================================================================
@@ -405,6 +411,55 @@ open class DualQP(val n: Int, workingSetCapacity: Int, settings: AlphaDQPSetting
     *   c* if c* <= c1, otherwise Double.PositiveInfinity
     */
   def solve(b: Array[Double], u: Array[Double], eq: Array[Int], nEq: Int, c1: Double): Double =
+    ambiguous = false
+    val c = attempt(b, u, eq, nEq, c1, settings.rankTolerance)
+    val rescue = settings.rescueRankTolerance
+    // A candidate left out only because a pivot fell under `rankTolerance` is retried with the smaller
+    // `rescueRankTolerance`, and kept only if the multipliers it ends with are a certified optimum.
+    if c == Double.PositiveInfinity && ambiguous && rescue > 0.0 && rescue < settings.rankTolerance then
+      val r = attempt(b, u, eq, nEq, c1, rescue)
+      if r.isFinite && certified(b, u) then r else Double.PositiveInfinity
+    else c
+
+  /** Set by [[attempt]] when it returns `Double.PositiveInfinity` because of a small pivot, not because the candidate
+    * was shown infeasible or beyond the cutoff.
+    */
+  private var ambiguous = false
+
+  /** The tolerance scale of the last [[attempt]], in units of squared length. */
+  private var lastScale = 1.0
+
+  /** Whether the multipliers the last [[attempt]] ended with satisfy the optimality conditions of the dual (11) against
+    * the data itself, not the factorisation: equality and active constraints have no slack, inequality multipliers are
+    * nonnegative, no constraint is violated. A nearly singular factor can end in a finite answer that is garbage; this
+    * rejects it.
+    */
+  private def certified(b: Array[Double], u: Array[Double]): Boolean =
+    val tol = 100.0 * settings.equalityTolerance * lastScale
+    var ok = true
+    var t = 0
+    while ok && t < nw do
+      if t >= neq && lam(t) < -settings.zeroTolerance then ok = false
+      t += 1
+    var i = 0
+    while ok && i < n do
+      var g = u(i)
+      t = 0
+      while t < nw do
+        g -= b(i * n + ws(t)) * lam(t)
+        t += 1
+      if inW(i) then ok = math.abs(g) <= tol else if !frozen(i) then ok = g <= tol
+      i += 1
+    ok
+
+  private def attempt(
+    b: Array[Double],
+    u: Array[Double],
+    eq: Array[Int],
+    nEq: Int,
+    c1: Double,
+    rankTol: Double
+  ): Double =
     // Tolerance scale, in units of squared length. Derived from the data, NOT
     // floored at 1: flooring makes these tolerances absolute for point clouds
     // of small diameter and the solver then stops one constraint early.
@@ -417,10 +472,10 @@ open class DualQP(val n: Int, workingSetCapacity: Int, settings: AlphaDQPSetting
       if d > scale then scale = d
       i += 1
     if scale <= 0.0 then scale = 1.0
+    lastScale = scale
     val gradTol = settings.feasibilityTolerance * scale
     val eqTol = settings.equalityTolerance * scale
     val lamTol = settings.zeroTolerance
-    val rankTol = settings.rankTolerance
     val maxIter = if settings.maxIterationsPerQP > 0 then settings.maxIterationsPerQP else 20 * n + 200
 
     chol.clear()
@@ -465,7 +520,9 @@ open class DualQP(val n: Int, workingSetCapacity: Int, settings: AlphaDQPSetting
         while t < nw do
           g -= b(ws(t) * n + q) * lam(t)
           t += 1
-        if math.abs(g) > eqTol then return Double.PositiveInfinity
+        if math.abs(g) > eqTol then
+          ambiguous = true
+          return Double.PositiveInfinity
         frozen(q) = true
       e += 1
 
@@ -567,6 +624,7 @@ open class DualQP(val n: Int, workingSetCapacity: Int, settings: AlphaDQPSetting
           // case: 5 points in R^4, where this excludes the top-dimensional
           // simplex and one of its facets that HelixDelaunay does include) --
           // preferred over the alternative, which is unpredictable cycling.
+          ambiguous = true
           return Double.PositiveInfinity
         else
           t = 0
@@ -584,7 +642,9 @@ open class DualQP(val n: Int, workingSetCapacity: Int, settings: AlphaDQPSetting
           // independence); bail out rather than commit a pivot small enough
           // to risk poisoning the factor (see the kb < 0 case above for why
           // "small but positive" is not safe to treat as committable here).
-          if s <= rankTol * beta then return Double.PositiveInfinity
+          if s <= rankTol * beta then
+            ambiguous = true
+            return Double.PositiveInfinity
           chol.commit(rvec, s)
           ws(nw) = j
           inW(j) = true
@@ -656,7 +716,7 @@ open class DualQP(val n: Int, workingSetCapacity: Int, settings: AlphaDQPSetting
       if dualObjective(b, u) > c1 then return Double.PositiveInfinity
     end while
     Double.NaN // unreachable
-  end solve
+  end attempt
 
   private def capacityExceeded(): AlphaComplexDQPException =
     new AlphaComplexDQPException(

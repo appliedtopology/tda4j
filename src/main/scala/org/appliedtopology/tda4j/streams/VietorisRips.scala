@@ -171,7 +171,8 @@ object VietorisRips extends PointCloudComplex:
     case Enumerating
 
     /** Ripser's coface order, via its combinatorial number system indexing, building each dimension as arrays; the
-      * default.
+      * default. The dimensions come from the layered in-order generator, with no sort, when the stream keeps every
+      * simplex and has at most 2^15 points; otherwise from the coface loop and a sort of each dimension.
       */
     case RipserCoface
 
