@@ -513,7 +513,7 @@
  </section>
  <section id="plots">
   <h2 class="h500"><a href="#plots" class="anchor"></a>Plots</h2>
-  <p><code>--plot KIND</code> draws the result instead of writing it, into <code>--output</code> (<code>.svg</code> in plain light colors, <code>.html</code> a page that follows the reader's light or dark setting) or, without <code>--output</code>, a page opened in the browser.</p>
+  <p><code>--plot KIND</code> draws the result instead of writing it, into <code>--output</code> (<code>.svg</code> in plain light colors with no background, <code>.html</code> a page that follows the reader's light or dark setting) or, without <code>--output</code>, a page opened in the browser.</p>
   <table>
    <thead>
     <tr>
@@ -591,7 +591,7 @@
     </tr>
     <tr>
      <td><code>--style</code></td>
-     <td><code>default</code>, <code>slides</code> (larger text and marks), <code>print</code>, <code>clear</code> (portable fonts, no background)</td>
+     <td><code>default</code>, <code>slides</code> (larger text and marks), <code>print</code> (portable fonts, a white background in an <code>.svg</code> too), <code>clear</code> (portable fonts, no background)</td>
     </tr>
     <tr>
      <td><code>--theme</code></td>
@@ -611,7 +611,7 @@
     </tr>
    </tbody>
   </table>
-  <p>The settings <code>--set</code> takes are listed under <a href="plotting.html#finer-control-text-lines-the-plot-area-the-sides-of-the-axes">finer control</a> on the plotting page, with the other plot flags in <a href="plotting.html#from-matlab-and-the-command-line">From MATLAB and the command line</a>. <code>--look print</code> (or <code>--palette print --style print</code>) makes a figure for a paper; <code>--look clear</code> one with no background. A flag a plot cannot use (an x scale for a 3-D scene) is an error, reported before anything is computed.</p>
+  <p>The settings <code>--set</code> takes are listed under <a href="plotting.html#finer-control-text-lines-the-plot-area-the-sides-of-the-axes">finer control</a> on the plotting page, with the other plot flags in <a href="plotting.html#from-matlab-and-the-command-line">From MATLAB and the command line</a>. <code>--look print</code> (or <code>--palette print --style print</code>) makes a figure for a paper, white behind it in the <code>.svg</code>; <code>--look clear</code> one with no background on a page as well. A flag a plot cannot use (an x scale for a 3-D scene) is an error, reported before anything is computed.</p>
  </section>
  <section id="exit-status">
   <h2 class="h500"><a href="#exit-status" class="anchor"></a>Exit status</h2>

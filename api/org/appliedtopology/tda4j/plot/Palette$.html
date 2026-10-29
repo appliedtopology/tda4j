@@ -420,7 +420,7 @@ node5 -> node1;
             <div class="cover">
              <div class="doc">
               <p>For a figure with no background of its own (<a href="Style$.html#clear-0">Style.clear</a>) that goes onto a page of either color: pure black elements for a light page (<code>Theme.Light</code>) and pure white ones for a dark page (<code>Theme.Dark</code>, or <code>Theme.Auto</code>, which follows the reader's setting, so use it only where the page does too). The degree colors are <span data-unresolved-link="">print</span>'s on a light page and the brand's dark steps on a dark one, each validated on its own surface (pure white, pure black: the first three on all pairs, all eight on adjacent pairs); the heatmap ramps are <span data-unresolved-link="">print</span>'s.</p>
-              <p>It is <span data-unresolved-link="">print</span> with a dark mode of its own; with no <a href="Style$.html#clear-0">Style.clear</a>, the figure has the white or the black background of its mode.</p>
+              <p>It is <span data-unresolved-link="">print</span> with a dark mode of its own; with no <a href="Style$.html#clear-0">Style.clear</a>, a figure shown on a page has the white or the black background of its mode (a saved <code>.svg</code> has none either way, unless its style asks for one).</p>
              </div>
              <h2 class="h200">Attributes</h2>
              <dl class="attributes attributes-small">
@@ -562,7 +562,7 @@ node5 -> node1;
             <div class="cover">
              <div class="doc">
               <p>For a paper: a pure white surface (the brand's cream prints as a grey patch), black ink, and colors that stay apart on paper. Degree colors are the Okabe-Ito blue, vermillion and bluish green first, so a persistence diagram keeps its degrees apart for every kind of color vision; the first three pass every check of the dataviz validator on ALL pairs, all eight on adjacent pairs. The sequential ramp is ColorBrewer's Blues (lightness falls steadily, so it survives a grayscale printer), the diverging pair is blue against vermillion.</p>
-              <p>Paper has one look: the dark mode is the light one, so <code>Theme.Dark</code> draws the same figure. It is for a figure that has its own white background, <a href="Style$.html#print-0">Style.print</a> being the fonts to go with it; for a figure that sits on a page of either color, see <a href="Palette$.html#clear-0">Palette.clear</a>.</p>
+              <p>Paper has one look: the dark mode is the light one, so <code>Theme.Dark</code> draws the same figure. It is for a figure that has its own white background, in a saved file too, <a href="Style$.html#print-0">Style.print</a> being the fonts to go with it; for a figure that sits on a page of either color, see <a href="Palette$.html#clear-0">Palette.clear</a>.</p>
              </div>
              <h2 class="h200">Attributes</h2>
              <dl class="attributes attributes-small">

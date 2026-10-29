@@ -10,7 +10,7 @@
 </div>
 <div class="main-signature mono-small-block">
  <div class="signature">
-  <span class="signature-short"><span class="modifiers"><span t="k">final case </span></span><span class="kind"><span t="k">class </span></span><a href="Style.html" t="n" class="documentableName ">Style</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">font</span>: <span data-unresolved-link="" t="t">String</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">textScale</span>: <span data-unresolved-link="" t="t">Double</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">markScale</span>: <span data-unresolved-link="" t="t">Double</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">grid</span>: <span data-unresolved-link="" t="t">Boolean</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">legend</span>: <a href="../Optional.html" t="t">Optional</a>[<a href="LegendPosition.html" t="t">LegendPosition</a>] = ..., <span t="k"></span><span data-unresolved-link="" t="n">transparent</span>: <span data-unresolved-link="" t="t">Boolean</span> = ...)<span t="k"> extends </span><a href="Tweak.html" t="t">Tweak</a></span><span class="signature-long"></span>
+  <span class="signature-short"><span class="modifiers"><span t="k">final case </span></span><span class="kind"><span t="k">class </span></span><a href="Style.html" t="n" class="documentableName ">Style</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">font</span>: <span data-unresolved-link="" t="t">String</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">textScale</span>: <span data-unresolved-link="" t="t">Double</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">markScale</span>: <span data-unresolved-link="" t="t">Double</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">grid</span>: <span data-unresolved-link="" t="t">Boolean</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">legend</span>: <a href="../Optional.html" t="t">Optional</a>[<a href="LegendPosition.html" t="t">LegendPosition</a>] = ..., <span t="k"></span><span data-unresolved-link="" t="n">transparent</span>: <a href="../Optional.html" t="t">Optional</a>[<span data-unresolved-link="" t="t">Boolean</span>] = ...)<span t="k"> extends </span><a href="Tweak.html" t="t">Tweak</a></span><span class="signature-long"></span>
  </div>
 </div>
 <div class="cover">
@@ -55,7 +55,7 @@
     transparent
    </dt>
    <dd class="body-medium">
-    <p><code>true</code> to draw no background: the figure takes the color of the page behind it</p>
+    <p><code>true</code> to draw no background anywhere, so that the figure takes the color of the page behind it; <code>false</code> to draw the palette's surface everywhere; unset, a figure shown on a page or in the viewer has it (cream, for the default palette) and a saved <code>.svg</code> has none, as a figure deployed elsewhere should take the color of its new page</p>
    </dd>
   </dl>
   <h2 class="h500">Attributes</h2>
@@ -76,7 +76,7 @@
     Source
    </dt>
    <dd class="body-medium">
-    <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/plot/Style.scala#L79" target="_blank">Style.scala</a>
+    <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/plot/Style.scala#L81" target="_blank">Style.scala</a>
    </dd>
    <dt class="body-small">
     Graph
@@ -163,6 +163,41 @@ node7 -> node2;
          <button class="icon-button show-content expand"></button>
          <h4 class="groupHeader h200">Concrete methods</h4>
         </div>
+        <div class="documentableElement" id="hasBackground-c00">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="Style.html#hasBackground-c00" t="n" class="documentableName ">hasBackground</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">saved</span>: <span data-unresolved-link="" t="t">Boolean</span>): <span data-unresolved-link="" t="t">Boolean</span>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>Whether a figure in this style draws its background, in a saved file (<code>saved</code>) or on a page.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p>Whether a figure in this style draws its background, in a saved file (<code>saved</code>) or on a page.</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/plot/Style.scala#L94" target="_blank">Style.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
         <div class="documentableElement" id="onFigure-ac0">
          <div class="documentableElement-expander">
           <button class="icon-button ar show-content"></button>
@@ -190,7 +225,7 @@ node7 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/plot/Style.scala#L91" target="_blank">Style.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/plot/Style.scala#L96" target="_blank">Style.scala</a>
               </dd>
              </dl>
             </div>
@@ -233,7 +268,7 @@ node7 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/plot/Style.scala#L92" target="_blank">Style.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/plot/Style.scala#L97" target="_blank">Style.scala</a>
               </dd>
              </dl>
             </div>

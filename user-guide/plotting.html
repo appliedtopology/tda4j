@@ -157,14 +157,15 @@
 </span><span line-number="5" class=""><span class="tooltip-container"></span>val points = Array.tabulate(40)(i =&gt; Array(math.cos(i * 0.157), math.sin(i * 0.157)))
 </span><span line-number="6" class=""><span class="tooltip-container"></span>val diagram = Persistence(points, maxDimension = 1)
 </span><span line-number="7" class=""><span class="tooltip-container"></span>
-</span><span line-number="8" class=""><span class="tooltip-container"></span>Plot.barcode(diagram).save("barcode.svg")            // plain light colors, for a paper
-</span><span line-number="9" class=""><span class="tooltip-container"></span>Plot.diagram(diagram).save("diagram.svg", Some(Theme.Dark))
+</span><span line-number="8" class=""><span class="tooltip-container"></span>Plot.barcode(diagram).save("barcode.svg")            // plain light colors, no background
+</span><span line-number="9" class=""><span class="tooltip-container"></span>Plot.diagram(diagram).save("diagram.svg", Some(Theme.Dark))   // light ink, for a dark page
 </span><span line-number="10" class=""><span class="tooltip-container"></span>Plot.diagram(diagram).save("diagram.html")           // follows the reader's light or dark setting
 </span><span line-number="11" class=""><span class="tooltip-container"></span>Plot.side(Plot.barcode(diagram), Plot.diagram(diagram)).save("both.svg")
 </span></code></pre>
    <div class="buttons"></div>
   </div>
   <p><code>figure.svg()</code> is the SVG as a string: a notebook cell that displays HTML, or any web page, shows it as it is.</p>
+  <p>A saved <code>.svg</code> has no background, so the figure takes the color of the paper, slide or page it goes onto; the cream behind a figure in the viewer, in <code>figure.svg()</code> and in an <code>.html</code> page is for a page of its own. A figure in the dark theme is light ink on nothing: put it on a dark page. Where a file must carry its own background (an image that has to be opaque, or a dark figure opened on its own), save <code>figure.withOpaqueBackground()</code>, or <code>Palette.print + Style.print</code> for a white one, as for a paper (see <a href="#for-a-paper-and-for-a-page-of-either-color">For a paper</a>).</p>
  </section>
  <section id="png-and-pdf">
   <h3 class="h400"><a href="#png-and-pdf" class="anchor"></a>PNG and PDF</h3>
@@ -812,10 +813,10 @@
  <section id="for-a-paper-and-for-a-page-of-either-color">
   <h3 class="h400"><a href="#for-a-paper-and-for-a-page-of-either-color" class="anchor"></a>For a paper, and for a page of either color</h3>
   <p>Two looks are ready-made, each a palette and a style, and they differ in what is behind the figure.</p>
-  <p><code>Palette.print</code> and <code>Style.print</code> are for a figure that has a white background of its own, as in a paper. The palette is black text and axes on a surface of exactly white (the default's cream would print as a grey patch); its degree colors stay apart for every common color vision and read on white (blue, vermillion and bluish green for degrees 0 to 2, checked on all pairs), and its heatmap ramp darkens steadily, so it keeps its order on a grayscale printer. It has one look: the dark theme draws the same figure. The style names fonts that converters and publishers know (<code>Helvetica, Arial</code>) instead of the browser's own <code>system-ui</code>.</p>
+  <p><code>Palette.print</code> and <code>Style.print</code> are for a figure that has a white background of its own, as in a paper, in a saved file too. The palette is black text and axes on a surface of exactly white (the default's cream would print as a grey patch); its degree colors stay apart for every common color vision and read on white (blue, vermillion and bluish green for degrees 0 to 2, checked on all pairs), and its heatmap ramp darkens steadily, so it keeps its order on a grayscale printer. It has one look: the dark theme draws the same figure. The style names fonts that converters and publishers know (<code>Helvetica, Arial</code>) instead of the browser's own <code>system-ui</code>.</p>
   <p><code>Palette.grayscale</code> is <code>print</code> with no color at all, for a paper that prints in black and white. Degrees are told apart by lightness (a dark, a light and a middle gray first, each dark enough to show on white) and by the marker shapes and the legend, which every palette keeps: past four degrees the grays run out, so rely on the shapes. A heatmap uses ColorBrewer's Greys, darker for larger. A diverging scale (a cocycle's values) is a dark gray against a middle gray around a light middle, a weaker cue for the sign than a hue; use <code>Palette.print</code> for those when color is available.</p>
   <p><code>Palette.okabeIto</code> is the color-blind-safe palette of Okabe and Ito on <code>print</code>'s white surface and black ink, with the same heatmap ramp and the same blue against vermillion for a diverging scale. Degrees 0 to 2 are its blue, vermillion and bluish green, which stay apart side by side for every common color vision; the next colors are orange, sky blue and reddish purple, then yellow and black. Orange and sky blue are lighter than a thin mark wants against white, and yellow barely shows on it, so they come last: past the third degree, rely on the marker shapes and the legend. Like <code>print</code> it has one look for both themes, as Okabe and Ito defined their colors for a light background. The palette is validated as accessible on white only; on any other background the checks no longer hold.</p>
-  <p><code>Palette.clear</code> and <code>Style.clear</code> are for a figure with no background, that takes the color of what is behind it. The style draws none. The palette has two looks, which the theme picks: pure black elements for a light page (<code>Theme.Light</code>, what an <code>.svg</code> file gets) and pure white ones for a dark page (<code>Theme.Dark</code>), each with degree colors chosen to read on its own page color. <code>Theme.Auto</code> follows the reader's setting, which is right only where the page does too. Without the style the figure keeps the white or the black background of its mode.</p>
+  <p><code>Palette.clear</code> and <code>Style.clear</code> are for a figure with no background, that takes the color of what is behind it. The style draws none, on a page as in a file (a saved <code>.svg</code> has none anyway, unless its style asks for one). The palette has two looks, which the theme picks: pure black elements for a light page (<code>Theme.Light</code>, what an <code>.svg</code> file gets) and pure white ones for a dark page (<code>Theme.Dark</code>), each with degree colors chosen to read on its own page color. <code>Theme.Auto</code> follows the reader's setting, which is right only where the page does too. Without the style, a figure shown on a page keeps the white or the black background of its mode.</p>
   <p>A size is in pixels of 1/96 inch, and text is 11 to 15 pixels. Give the figure the size it has on the page and place it at that size, and its text comes out at the size the journal asks for: a 3.4-inch column is 326 pixels, in which tick labels are 8.25 pt. For a serif face to match the text of the paper, copy the style:</p>
   <div class="snippet mono-small-block" scala-snippet="" runnable="">
    <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import scala.language.experimental.modularity
@@ -1024,7 +1025,11 @@
     </tr>
     <tr>
      <td><code>withTransparentBackground()</code> (3-D)</td>
-     <td>draws no background</td>
+     <td>draws no background, on a page as well as in a saved file</td>
+    </tr>
+    <tr>
+     <td><code>withOpaqueBackground()</code> (3-D)</td>
+     <td>draws the background in a saved <code>.svg</code> too, where there is none unless asked</td>
     </tr>
     <tr>
      <td><code>withLocale(tag)</code></td>
