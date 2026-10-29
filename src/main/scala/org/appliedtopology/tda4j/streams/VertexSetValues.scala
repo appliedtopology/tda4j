@@ -52,7 +52,7 @@ private[tda4j] final class VertexSetValues:
         byWidth(width)
       }
 
-object VertexSetValues:
+private[tda4j] object VertexSetValues:
   private val ShardCount = 64
   private def hashOf(vertices: Array[Int], from: Int, width: Int): Int =
     var h = width

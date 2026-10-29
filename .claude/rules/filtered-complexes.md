@@ -22,46 +22,48 @@ not reducing them, was about 90 % of their time** (the reduction ~10 %; Cech's b
 - Candidates of dimension `d >= 2` are `spx + i` for `i` below `spx.min` and adjacent, in the table of KEPT edges
   (`keptEdgeNeighbours`, bitset rows, built from dimension 1 or on first use), to every vertex of `spx`. A `keepCriterion`
   or filtration that keeps a simplex but not one of its edges is outside the stream contract (and now yields fewer cells).
-- Keep per-cell work to ONE hash lookup of the `Simplex` (a `TreeSet`, whose own `hashCode`/`equals` allocate):
-  `FiltrationCache` (JVM) hashes by traversal; `MemoizedFiltration` answers a cache hit before it checks the domain;
-  `FiltrationOrdering.canonical` calls `applyOrElse` once per cell; `sortedByFiltration` sorts on arrays. Do not add
-  `isDefinedAt`-then-`apply` pairs or `Simplex`-keyed `HashMap`s back on the per-cell path.
-- A hash of a `Simplex` that is linear in its vertices collides for every equal vertex sum (a sum of `x * c` made sparse
-  Rips run 7+ minutes); mix each element (MurmurHash3's finalizer).
-- `Persistence` takes the stream's largest value from `CellularCohomologyEngine.largestFiltrationValue`; iterating the
-  stream again builds the complex a second time.
-- Against GUDHI's Delaunay-Cech, Cech stays orders of magnitude slower by construction (every `dim + 2`-subset is a cell);
-  `AlphaShapes` gives the same barcode of a Euclidean point cloud.
+- On the `Simplex` path keep per-cell work to ONE hash lookup (a `TreeSet`'s own `hashCode`/`equals` allocate):
+  `FiltrationCache` hashes by traversal; `MemoizedFiltration` answers a hit before it checks the domain;
+  `FiltrationOrdering.canonical` calls `applyOrElse` once per cell. No `isDefinedAt`-then-`apply` pairs or `Simplex`-keyed
+  `HashMap`s. A hash linear in the vertices collides for every equal vertex sum (sparse Rips ran 7+ minutes): mix each
+  element (MurmurHash3's finalizer).
+- `Persistence` takes the largest value from `CellularCohomologyEngine.largestFiltrationValue`; iterating again rebuilds.
+- Against GUDHI's Delaunay-Cech, Cech stays orders of magnitude slower (every `dim + 2`-subset is a cell); `AlphaShapes`
+  gives the same barcode of a Euclidean point cloud.
 - **Flat layers (#206, `WORKLOG-rare-complex-performance.md`)**: a stream whose `flatFiltration` is defined builds each
   dimension on arrays (`FlatLayerStream.Layer`: ascending vertex tuples, values, cohomology order = value ascending then
   colex ascending) and the cohomology engine reads them without a `Simplex`, a `cohomologyOrder` pass or a second read.
-  The default Vietoris-Rips value (`filtrationIsDefault`, so also the lazy witness complex), DTM-Rips, Dowker and sparse
-  Rips have an array-level `FlatFiltration`; Cech and the general witness complex wrap their `Simplex` function
-  (`FlatFiltration.ofSimplices`: still faster, the ball is what is left). A `FlatFiltration` must equal the stream's
-  `filtrationValue` bit for bit; `FlatLayersSpec` compares every complex with itself built from cells (turn the hook off
+  The default Vietoris-Rips value (`filtrationIsDefault`, so also the lazy witness complex), DTM-Rips, Dowker, sparse
+  Rips and Cech have an array-level `FlatFiltration`; the general witness complex wraps its `Simplex` function
+  (`FlatFiltration.ofSimplices`). A `FlatFiltration` must equal the stream's `filtrationValue` bit for bit; `FlatLayersSpec`
+  compares every complex with itself built from cells (turn the hook off
   by overriding `flatFiltration` to `None`), so a new hook goes into its `pairs`. A `keepCriterion` other than
   `CofaceSimplexStream.keepAll` is asked about a `Simplex` per candidate, so the shared constant is the default of every
   coface stream: a literal `{ case _ => true }` default silently takes the slow path. A subclass that changes which
   values are kept overrides `keptValue`, not only `keptByThresholdAndCriterion` (Dowker: finite values only).
 - **Generator-backed layers (#190, `WORKLOG-flag-generator.md`)**: a coface stream that is the flag complex of a weighted
-  graph overrides `flatGenerator` (DTM-Rips, sparse Rips, Vietoris-Rips over an `EdgeCollapsedMetricSpace` by default): the
-  layers from dimension 1 come from `LayeredInorderSimplexStream.FlagGenerator` in order, nothing sorted, 2.2 to 7.5 times
-  faster to build. It must list the cells and values of the stream's `flatFiltration`; Sheehy's vanishing points are the
-  generator's per-vertex deadlines, checked where a vertex is added (a triangle can have live edges and a dead vertex).
-  `FlatLayersSpec` needs an input where the deadlines matter (`cloud(12, 2, 2L)`): a Sheehy generator without them passed
-  the older cases.
-- A flag-like hook gets the value of the simplex without its smallest vertex (`parentValue`) and only adds the edges of
-  that vertex; an edge ignores it (a DTM vertex is born at `2 f`, which the edge value never undercuts).
-- Left, filed in #206: Cech's ball and facet floor on arrays (needs a facet lookup in the previous layer, and a facet
-  missing from it for a reason other than the threshold changes the value), the Dowker value per parent instead of per
-  candidate, the JS `FiltrationCache`.
+  graph overrides `flatGenerator` (DTM-Rips, sparse Rips, Rips over an `EdgeCollapsedMetricSpace` by default): layers from
+  dimension 1 come from `LayeredInorderSimplexStream.FlagGenerator` in order, nothing sorted (2.2 to 7.5 times faster).
+  It must list the cells and values of `flatFiltration`. Sheehy's vanishing points are per-vertex deadlines, checked where
+  a vertex is added; `FlatLayersSpec` needs an input where they matter (`cloud(12, 2, 2L)`).
+- A flag-like hook gets the parent's value (`parentValue`) and only adds the new vertex's edges; an edge ignores it.
+- **State kept across a run of candidates** (`FlatFiltration.perRun`, `WORKLOG-flat-values.md`, #206): the candidates of one
+  parent come together, the parent's vertices after the new one. Dowker keeps the per-witness maxima over the parent's
+  rows (a candidate costs one row, 2.4 to 4.2 times faster layers). A hook that keeps state returns a fresh object from
+  `perRun` (the stream calls it once per task) and its `value` stays stateless.
+- **Cech's value cache is a `VertexSetValues`** (vertex array to value, 64 locked shards; never a `Simplex`-keyed map).
+  `CechFiltration.Values` serves the `Simplex` function and the array hook from ONE cache, because a value depends on
+  which facets are cached when it is first asked (the floor, the interior vertex reusing its facet's radius): two caches
+  would give ULP-different values. `CechValuesSpec` feeds the earlier `Simplex`-keyed formula the same calls, with faces
+  left out, and compares bits. About 4 times faster layers.
+- Left (#206): the general witness complex on arrays; Scala.js timings and the witness complexes' speed are unmeasured.
 
 ## Cech complexes
 
 `streams/CechStream.scala`, `WORKLOG-cech-complex.md`. Over `Simplex[Int]`, built on the VR coface machinery via
 `filtrationValueOverride` (valid because Cech is downward-closed). Radius = `MinimumEnclosingBall` (our own
-active-set solver, `WORKLOG-scalajs-numerics-spatial.md`). `CechFiltration` caches every radius and **clamps each to the max of
-its facets'** — a computed ball can be one ULP non-monotone. New-VR's pruning and packed Ripser (proven for diameter only) do **not** carry over; naive/chunks/
+active-set solver, `WORKLOG-scalajs-numerics-spatial.md`). `CechFiltration.Values` caches every radius and **clamps each to
+the max of its facets'** — a computed ball can be one ULP non-monotone. New-VR's pruning and packed Ripser (proven for diameter only) do **not** carry over; naive/chunks/
 cohomology only.
 
 ## Witness complexes
@@ -89,13 +91,12 @@ generic coface loop. `.fromBoolean` lifts an unfiltered relation (`true`→`0.0`
 
 **`keptByThresholdAndCriterion`'s `<=` admits `+Infinity <= +Infinity`** — safe elsewhere only because no other
 stream computes a genuinely infinite value; Dowker's boolean encoding does, on purpose ("never witnessed").
-`DowkerCofaceSimplexStream` overrides it to additionally require `.isFinite` — without it, an untruncated stream
-silently collapses to the complete simplex on every vertex (confirmed empirically).
+`DowkerCofaceSimplexStream` overrides it to also require `.isFinite`; without it an untruncated stream silently becomes
+the complete simplex.
 
-**Duality is the point** (`.dual` — the transpose relation): the functorial Dowker duality theorem (Chowdhury &
-Mémoli 2018) gives X-side/Y-side barcodes agreeing exactly **without zero-length bars** (the default; with
-`includeZeroLength = true` they differ) (a simplicial filtration records exactly one `H_0` birth per vertex, so `numLeft != numWitnesses` can't
-match bar-for-bar otherwise — confirmed on a hand-worked fixture, not just asserted from the theorem).
+**Duality is the point** (`.dual`, the transpose relation): X-side and Y-side barcodes agree exactly **without zero-length
+bars** (the default; with `includeZeroLength = true` they differ, as each vertex records one `H_0` birth and the sides
+have different vertex counts; Chowdhury and Mémoli 2018, confirmed on a hand-worked fixture).
 
 Own MATLAB/CLI entry point (`computeFromRelation`/`--input-format csv-relation`), not a `complex=` value — a
 relation doesn't fit the point-cloud/distance-matrix dispatch. `engine` defaults `cohomology`, refuses `ripser`/
@@ -122,10 +123,9 @@ vertices Rips can't).
 
 `streams/SheehyRipsStream.scala`, `WORKLOG-sheehy-rips.md`. `SheehyRipsSimplexStream` implements
 Cavanna-Jahanseir-Sheehy 2015 (arXiv:1506.03797) — the two papers' `epsilon` values are **not** comparable.
-Deliberately `O(n²)` (every pairwise `edgeBirth` materialized directly), not the paper's own `O(n log n)`
-neighbor-search — a smaller complex to *reduce*, not a faster one to *build*. Built on `LandmarkSelector.maxmin`
-run to full size. One memoized `filtrationValueOverride` handles every dimension ≥ 1 uniformly (the
-`min`-over-vertices `vanish` exclusion check needs every vertex at once).
+Deliberately `O(n²)` (every pairwise `edgeBirth` materialized), not the paper's `O(n log n)` neighbor search: a smaller
+complex to *reduce*, not a faster one to *build*. Built on `LandmarkSelector.maxmin` run to full size. One memoized
+`filtrationValueOverride` handles every dimension ≥ 1 (the `vanish` check needs every vertex at once).
 
 **CJS 2015's own Algorithm 3 omits a check Section 5.3's own definition requires** (a `min`-over-vertices
 `vanish` clamp) — `edgeBirth` here applies that clamp to every edge, pinned by a hand-derived triangle fixture.
@@ -145,11 +145,9 @@ EDGES, never vertices** (vertex domination = strong collapse, arXiv:1809.10945, 
 as `EdgeCollapsedMetricSpace` — drop-in for Enumerating/RipserCofaceSimplexStream; representatives transfer
 through inclusion free; `minimumEnclosingRadius` overridden to the collapse's own bound.
 
-**Faithful port of the reference's own single-pass, descending, live-mutating-state structure — not an
-independent redesign.** An independent "fixed-point iteration" draft was tried and PROVEN WRONG by barcode
-cross-validation (two bugs, each silently turning a real bar essential on a 5-point counterexample). Processing
-order is load-bearing — reread the reference before touching this.
+**A faithful port of the reference's single-pass, descending, live-mutating-state structure, not a redesign.** A
+"fixed-point iteration" draft was PROVEN WRONG by barcode cross-validation (two bugs, each silently turning a real bar
+essential on a 5-point counterexample). Processing order is load-bearing: reread the reference before touching this.
 
-Vertices never removed (enumeration cost doesn't drop uniformly); measured 73-76% edges removed, 43-47x
-reduction-phase speedup (`EdgeCollapseBenchmarkSpec`). Wired through `matlab.TDA4j`'s `edgeCollapse` option
-(`complex=vr` only) and `cli --edge-collapse`.
+Measured 73-76% edges removed, 43-47x reduction-phase speedup (`EdgeCollapseBenchmarkSpec`); the collapse itself is
+slow on dense input (#256). Wired through `matlab.TDA4j`'s `edgeCollapse` option (`complex=vr` only) and `cli --edge-collapse`.
