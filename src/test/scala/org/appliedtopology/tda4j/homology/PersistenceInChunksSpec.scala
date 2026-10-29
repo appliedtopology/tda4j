@@ -361,15 +361,13 @@ class PersistenceInChunksSpec extends mutable.Specification:
     given shc: PersistenceInChunksEngine[Int, Double] = PersistenceInChunksEngine(1)
     import shc.{*, given}
 
-    val threePointLine = EuclideanMetricSpace(Array(Array(0.0), Array(1.0), Array(3.0)))
-    // Explicit +Infinity: this test wants the raw, unthresholded graph's own cycle structure. threePointLine's
-    // own minimumEnclosingRadius (2.0, from the middle point) is less than the longest edge {0,2} (3.0) needed
-    // for the 3-cycle here, and EnumeratingCofaceSimplexStream now defaults to that radius (see
-    // CLAUDE.md/WORKLOG-mst-and-perf.md).
-    val stream = LimitedCofaceSimplexStream(
-      EnumeratingCofaceSimplexStream(threePointLine, maxFiltrationValue = Some(Double.PositiveInfinity)),
-      1
-    )
+    // The graph on threePointLine's points (0, 1 and 3 on a line), edges at their lengths, as an explicit complex: a
+    // `LimitedCofaceSimplexStream` of dimension 1 declares that degree 1 is a truncation artifact, which is not what
+    // this test is about.
+    val streamBuilder = ExplicitStreamBuilder[Int, Double]
+    streamBuilder.addAll(List(0, 1, 2).map(i => (0.0, ∆(i))))
+    streamBuilder.addAll(List((1.0, ∆(0, 1)), (2.0, ∆(1, 2)), (3.0, ∆(0, 2))))
+    val stream = explicitToStratifiedCellStream(streamBuilder)
     persistentHomology(stream).diagramAt(Double.PositiveInfinity) must containTheSameElementsAs(
       List(
         (0, 0.0, 1.0),

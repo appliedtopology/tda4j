@@ -475,9 +475,9 @@ object Persistence:
   ): PersistenceDiagram[Cube] =
     val coefficients = Coefficients(characteristic)
     import coefficients.given
-    val bars = FastCubicalHomologyEngine[coefficients.C]().persistentHomology(grid, includeZeroLength)
+    val bars = FastCubicalHomologyEngine[coefficients.C]().persistentHomology(grid, includeZeroLength, maxDimension)
     PersistenceDiagram[Cube, coefficients.C](
-      bars.filter(_.dim <= maxDimension),
+      bars,
       maxDimension,
       largestPixel(grid),
       None,

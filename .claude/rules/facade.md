@@ -115,6 +115,10 @@ once into a private `ComplexKind`/`EngineKind`/`CoefficientKind` enum before any
 - **Circular coordinates**: `h1Bars(points)`/`circularCoordinates(points, r[, cocycleIndex, prime])` →
   `CircularCoordinatesResult`. **Toroidal coordinates**: `toroidalCoordinates(points, r, cocycleIndices[, prime,
   reduce])` → `ToroidalCoordinatesResult` (separate class). Neither has a CLI mirror.
+- **Euler curve** (#248): `eulerCurveFrom{Points,DistanceMatrix}(.., options)` → `EulerCurveResult` (`scales`, `values`,
+  `at`, `sample`); options `maxSimplexDimension`, `maxFiltrationValue`, `threads`. JS `eulerCurve`/`eulerCurveFromDistances`
+  → `EulerCurve`. CLI `--euler-curve` (+ `--max-simplex-dimension`) is a mode like `--distance-to`: it refuses every flag
+  that would change a diagram, and `CliFull` leaves it without `--min-persistence 0`.
 - **Plots and saved results** (#63, `WORKLOG-facade-plots.md`). A result records its `ResultSource` (method, options,
   complex, cocycles, field, landmarks, points or ORIGINAL image values), attached LAST at the public entry points (the
   `dispatch*` wrappers do not all see the input: `dispatchCubical` sees negated values). `plot...` methods draw the

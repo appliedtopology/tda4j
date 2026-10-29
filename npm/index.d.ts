@@ -160,6 +160,33 @@ export function selectLandmarksFromDistances(distances: number[][], options?: Op
 /** The covering radius of any set of landmarks (point numbers from 0). */
 export function coveringRadius(points: number[][], landmarks: number[]): number;
 
+/** The options of `eulerCurve`. */
+export interface EulerCurveOptions {
+  /** The largest simplex dimension counted. Default 2. */
+  maxSimplexDimension?: number;
+  /** Stop the complex at this scale. Default: the enclosing radius. */
+  maxFiltrationValue?: number;
+  /** Worker threads (JavaScript runs one). */
+  threads?: number;
+}
+
+/** The Euler characteristic of a Vietoris-Rips complex as a function of the scale: a step function. */
+export class EulerCurve {
+  /** The scales where the curve changes, strictly increasing; the first is `0`, where the vertices appear. */
+  readonly scales: number[];
+  /** `values[i]` is the Euler characteristic from `scales[i]` up to (not including) `scales[i + 1]`. */
+  readonly values: number[];
+  /** The Euler characteristic at scale `t`; `0` below the first scale. */
+  at(t: number): number;
+  /** The curve at `resolution` evenly spaced scales across `[tMin, tMax]`, both ends included. */
+  sample(tMin: number, tMax: number, resolution: number): number[];
+}
+
+/** The Euler characteristic curve of a point cloud's Vietoris-Rips complex, counted without building the complex. */
+export function eulerCurve(points: number[][], options?: EulerCurveOptions): EulerCurve;
+/** `eulerCurve` for a finite metric space given as its full matrix of distances. */
+export function eulerCurveFromDistances(distances: number[][], options?: EulerCurveOptions): EulerCurve;
+
 /** The loops of a point cloud's Vietoris-Rips complex as `[birth, death]`, the most persistent first. */
 export function h1Bars(points: number[][]): number[][];
 

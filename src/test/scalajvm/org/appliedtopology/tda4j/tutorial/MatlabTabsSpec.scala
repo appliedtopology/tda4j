@@ -22,6 +22,26 @@ class MatlabTabsSpec extends Specification:
       .map(b => (b(0).toInt, math.round(b(1) * 1e6), if b(2).isInfinite then Long.MaxValue else math.round(b(2) * 1e6)))
       .sorted
 
+  "vectorization.md (MATLAB tab, the Euler characteristic curve)" should {
+    val circle = Array.tabulate(30)(i => Array(math.cos(i * 0.21), math.sin(i * 0.21)))
+    "agree with the Scala tab: the same steps, and the same value at 0.5 and over [0, 1]" in {
+      val matlabCurve = TDA4j.eulerCurveFromPoints(circle)
+      val scalaCurve = EulerCharacteristicCurve(circle)
+      (matlabCurve.scales().toList must beEqualTo(scalaCurve.scales.toList))
+        .and(matlabCurve.values().toList must beEqualTo(scalaCurve.values.toList))
+        .and(matlabCurve.at(0.5) must beEqualTo(scalaCurve(0.5)))
+        .and(matlabCurve.sample(0, 1, 50).toList must beEqualTo(scalaCurve.sample(0.0, 1.0, 50).toList))
+        .and(matlabCurve.scales().head must beEqualTo(0.0))
+        .and(matlabCurve.values().head must beEqualTo(30L))
+    }
+    "take the options the tab passes" in {
+      val limited = TDA4j.eulerCurveFromPoints(circle, Array("maxSimplexDimension", "3", "maxFiltrationValue", "1.0"))
+      val scalaCurve = EulerCharacteristicCurve(circle, maxSimplexDimension = 3, maxFiltrationValue = 1.0)
+      (limited.scales().toList must beEqualTo(scalaCurve.scales.toList))
+        .and(limited.values().toList must beEqualTo(scalaCurve.values.toList))
+    }
+  }
+
   "find-a-loop.md (MATLAB tab)" should {
     lazy val result = TDA4j.computeFromPoints(points)
     "report 61 bars, hide 3, and find the loop" in {

@@ -338,6 +338,22 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
   val yScale: ScallopOption[String] =
     opt[String](name = "y-scale", noshort = true, descr = "for 2-D --plot kinds: the y axis scale, as --x-scale")
 
+  // The Euler curve: a mode of its own, not a facade option. Declared last and without short flags, as above.
+  val eulerCurve: ScallopOption[Boolean] = opt[Boolean](
+    name = "euler-curve",
+    noshort = true,
+    default = Some(false),
+    descr = "instead of the diagram, write the Euler characteristic curve of the Vietoris-Rips complex of a point " +
+      "cloud or distance matrix: the vertices minus the edges plus the triangles, ... at each scale, one " +
+      "'scale,value' line for every scale where it changes (counted without building the complex). Takes " +
+      "--max-simplex-dimension, --max-filtration-value and --threads"
+  )
+  val maxSimplexDimension: ScallopOption[Int] = opt[Int](
+    name = "max-simplex-dimension",
+    noshort = true,
+    descr = "for --euler-curve: the largest simplex dimension counted (default: 2)"
+  )
+
   val input: ScallopOption[String] =
     trailArg[String](name = "input-file", descr = "input file", required = true)
 

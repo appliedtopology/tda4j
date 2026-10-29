@@ -6,7 +6,7 @@ package org.appliedtopology.tda4j.cli
   */
 private[tda4j] object CliFull:
   // Modes with no reported barcode (and so no threshold to turn off) are passed through untouched.
-  private val noBarcodeModes = Set("--select-landmarks", "--distance-to")
+  private val noBarcodeModes = Set("--select-landmarks", "--distance-to", "--euler-curve")
 
   def run(args: Seq[String], out: java.io.PrintStream): Int =
     if args.exists(noBarcodeModes) then TDA4jCLI.run(args, out)

@@ -4,8 +4,9 @@ import org.appliedtopology.tda4j.sset.*
 import org.specs2.mutable
 
 /** The naive engine capped at a homological degree (`persistentHomology(stream, k)`, #51): the bars and representatives
-  * of degrees `0 .. k` are the uncapped engine's, and a cell of dimension `k + 1` is reduced only while a class of
-  * degree `k` is open and keeps only the pairing.
+  * of degrees `0 .. k` are the uncapped engine's (the cursor on a stream with no declared degree limit), and a cell of
+  * dimension `k + 1` is reduced only while a class of degree `k` is open and keeps only the pairing. A stream with a
+  * declared limit is read up to it, whether the cap is given or not.
   */
 class NaiveCappedSpec extends mutable.Specification:
   val inf = Double.PositiveInfinity
@@ -13,6 +14,14 @@ class NaiveCappedSpec extends mutable.Specification:
   def cloud(seed: Int, n: Int, ambient: Int): Array[Array[Double]] =
     val rng = new scala.util.Random(seed.toLong)
     Array.fill(n)(Array.fill(ambient)(rng.nextDouble()))
+
+  // The same cells, order and values with no declared degree limit: what the whole-stream cursor reads to the top,
+  // where `VietorisRips(.., k)` itself is read up to degree k.
+  def unlimited(stream: StratifiedCellStream[Simplex[Int], Double]): StratifiedCellStream[Simplex[Int], Double] =
+    new StratifiedCellStream[Simplex[Int], Double] with DoubleFiltration[Simplex[Int]]:
+      def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = stream.iterateDimension
+      def filtrationOrdering: Ordering[Simplex[Int]] = stream.filtrationOrdering
+      def filtrationValue: PartialFunction[Simplex[Int], Double] = stream.filtrationValue
 
   // A lattice: every edge length and most triangle values tie.
   val grid: Array[Array[Double]] = Array.tabulate(16)(i => Array((i % 4).toDouble, (i / 4).toDouble))
@@ -37,7 +46,7 @@ class NaiveCappedSpec extends mutable.Specification:
           import field.given
           val vr = VietorisRips(EuclideanMetricSpace(pts), built)
           val engine = SimplicialHomologyEngine[Int, field.Fp, Double]()
-          val full = engine.persistentHomology(vr)
+          val full = engine.persistentHomology(unlimited(vr))
           full.advanceAll()
           val capped = engine.persistentHomology(vr, k)
           capped.advanceAll()
@@ -67,7 +76,7 @@ class NaiveCappedSpec extends mutable.Specification:
         val before = operations
         state.advanceOne()
         operations - before
-      val full = engine.persistentHomology(vr)
+      val full = engine.persistentHomology(unlimited(vr))
       val capped = engine.persistentHomology(vr, 1)
       val fullLast = operationsOfLastCell(full)
       val cappedLast = operationsOfLastCell(capped)
@@ -87,7 +96,7 @@ class NaiveCappedSpec extends mutable.Specification:
       given counting: (ff.Fp is Field) = countingField(ff)(() => operations += 1)
       val vr = VietorisRips(EuclideanMetricSpace(cloud(3, 18, 3)), 1)
       val engine = SimplicialHomologyEngine[Int, ff.Fp, Double]()
-      engine.persistentHomology(vr).advanceAll()
+      engine.persistentHomology(unlimited(vr)).advanceAll()
       val full = operations
       operations = 0
       engine.persistentHomology(vr, 1).advanceAll()
@@ -144,7 +153,7 @@ class NaiveCappedSpec extends mutable.Specification:
             .distinct
             .sorted
           val queries = values.zipWithIndex.collect { case (v, i) if i % 4 == 0 => v } :+ (values.last + 1.0)
-          val full = engine.persistentHomology(vr)
+          val full = engine.persistentHomology(unlimited(vr))
           val capped = engine.persistentHomology(vr, k)
           val failing = queries.filterNot { f =>
             // The same two cursors, queried in increasing order: each query leaves them part-way.
@@ -187,8 +196,8 @@ class NaiveCappedSpec extends mutable.Specification:
       import field.given
       val vr = VietorisRips(EuclideanMetricSpace(square), 1, 10.0)
       val engine = SimplicialHomologyEngine[Int, field.Fp, Double]()
-      val full = engine.persistentHomology(vr)
-      val capped = engine.persistentHomology(vr, Int.MaxValue)
+      val full = engine.persistentHomology(unlimited(vr))
+      val capped = engine.persistentHomology(unlimited(vr), Int.MaxValue)
       (capped.totalCells must beEqualTo(14)) and
         (capped.diagramAt(inf, includeZeroLength = true).sorted must beEqualTo(
           full.diagramAt(inf, includeZeroLength = true).sorted
@@ -254,7 +263,7 @@ class NaiveCappedSpec extends mutable.Specification:
           val field = FiniteField(p)
           import field.given
           val vr = VietorisRips(EuclideanMetricSpace(pts), k)
-          val full = SimplicialHomologyEngine[Int, field.Fp, Double]().persistentHomology(vr)
+          val full = SimplicialHomologyEngine[Int, field.Fp, Double]().persistentHomology(unlimited(vr))
           full.advanceAll()
           val cycles = sameMultiset(
             full.barcodeAt(inf, includeZeroLength = true).filter(_.dim <= k),

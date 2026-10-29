@@ -87,6 +87,7 @@ abstract class Lab(characteristic: Int, precision: Double = 1e-9):
     EpsilonFactor,
     Erf,
     EuclideanMetricSpace,
+    EulerCharacteristicCurve,
     ExplicitCubicalStream,
     ExplicitMetricSpace,
     ExplicitStream,

@@ -539,6 +539,13 @@ perfect matching exists using only edges below a threshold), and `Hungarian.minC
 assignment and total cost of a minimum-cost perfect matching on a square matrix of finite costs, in `O(n³)` (the
 Wasserstein distance).
 
+`EulerCharacteristicCurve` (`streams/`) is the Euler characteristic of a filtered complex as a step function of the scale.
+For Vietoris-Rips it never builds the complex: the sorted edges are swept with bit rows of the edges seen so far, and the
+simplices that belong to an edge (it is their last edge in that order, so ties need no special case) are the edge joined
+with the cliques of its lens graph, counted by bitset intersection. Chunks of the sorted edges are independent (each
+replays the edges before it) and run through `Parallel.tasks`. `ofStream` counts the cells of any stream and is the
+reference the spec compares against, cell for cell on tie-heavy metrics.
+
 `TruncatedSimplexStream(stream, maxSimplexDimension)` cuts a stratified simplex stream off above a simplex dimension,
 keeping its order and values; the `Truncated` entry point takes a homological degree instead and is what you should
 call.

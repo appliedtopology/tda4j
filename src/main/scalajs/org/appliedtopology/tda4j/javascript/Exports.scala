@@ -1,6 +1,7 @@
 package org.appliedtopology.tda4j.javascript
 
 import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.matlab
 import org.appliedtopology.tda4j.matlab.{PersistenceResult, TDA4j}
 import org.appliedtopology.tda4j.plot
 
@@ -99,6 +100,25 @@ object Exports:
   @JSExportTopLevel("coveringRadius")
   def coveringRadius(points: js.Array[js.Array[Double]], landmarks: js.Array[Int]): Double =
     guarded(TDA4j.coveringRadiusFromPoints(matrix(points), landmarks.toArray))
+
+  /** The Euler characteristic curve of a point cloud's Vietoris-Rips complex: the vertices minus the edges plus the
+    * triangles, ... at each scale, counted without building the complex. Options: `maxSimplexDimension` (default 2),
+    * `maxFiltrationValue` (default: the enclosing radius) and `threads`.
+    */
+  @JSExportTopLevel("eulerCurve")
+  def eulerCurve(
+    points: js.Array[js.Array[Double]],
+    options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
+  ): EulerCurve =
+    guarded(EulerCurve(TDA4j.eulerCurveFromPoints(matrix(points), optionArray(options))))
+
+  /** [[eulerCurve]] for a finite metric space given as its full matrix of distances. */
+  @JSExportTopLevel("eulerCurveFromDistances")
+  def eulerCurveFromDistances(
+    distances: js.Array[js.Array[Double]],
+    options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
+  ): EulerCurve =
+    guarded(EulerCurve(TDA4j.eulerCurveFromDistanceMatrix(matrix(distances), optionArray(options))))
 
   /** The loops of the point cloud's Vietoris-Rips complex: `[birth, death]` for each persistent class of degree 1, the
     * most persistent first. Loop `i` is `cocycleIndex: i` of `circularCoordinates`; pick `r` between its birth and
@@ -261,6 +281,31 @@ object Exports:
     catch
       case e: js.JavaScriptException => throw e
       case e: Throwable => throw js.JavaScriptException(new js.Error(Option(e.getMessage).getOrElse(e.toString)))
+
+/** An Euler characteristic curve: a step function of the scale, kept as the scales where it steps and the value from
+  * each of them on.
+  */
+final class EulerCurve private[javascript] (underlying: matlab.EulerCurveResult):
+
+  /** The scales where the curve changes, strictly increasing; the first is `0`, where the vertices appear. */
+  @JSExport
+  def scales: js.Array[Double] = js.Array(underlying.scales()*)
+
+  /** `values[i]` is the Euler characteristic from `scales[i]` up to (not including) `scales[i + 1]`. */
+  @JSExport
+  def values: js.Array[Double] = js.Array(underlying.values().map(_.toDouble)*)
+
+  /** The Euler characteristic at scale `t`; `0` below the first scale. */
+  @JSExport
+  def at(t: Double): Double = Exports.guarded(underlying.at(t).toDouble)
+
+  /** The curve at `resolution` evenly spaced scales across `[tMin, tMax]`, both ends included. */
+  @JSExport
+  def sample(tMin: Double, tMax: Double, resolution: Int): js.Array[Double] =
+    Exports.guarded(js.Array(underlying.sample(tMin, tMax, resolution).map(_.toDouble)*))
+
+object EulerCurve:
+  private[javascript] def apply(underlying: matlab.EulerCurveResult): EulerCurve = new EulerCurve(underlying)
 
 /** The result of a computation: the bars, the representatives, and the plots. */
 final class Result private[javascript] (underlying: PersistenceResult):
