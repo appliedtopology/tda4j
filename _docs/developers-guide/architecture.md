@@ -318,7 +318,11 @@ These are **alternative implementations with the same output contract, not layer
   any weighted graph, with an optional deadline per vertex after which it joins no simplex. `DtmRipsSimplexStream`,
   `SheehyRipsSimplexStream` (deadlines are Sheehy's vanishing points) and the Vietoris-Rips stream of an
   `EdgeCollapsedMetricSpace` give one as `flatGenerator`, and `RipserCofaceSimplexStream` builds its dimensions from it
-  instead of the coface loop.
+  instead of the coface loop. So does `RipserCofaceSimplexStream` itself for the default value (the largest distance)
+  on up to 2^15 points, which is what `VietorisRips(...)` builds: its two bit matrices take `n^2 / 4` bytes, so beyond
+  that, or with a `keepCriterion`, the coface loop and a sort of each dimension build the layers. The runs of equal
+  value that the generator emits out of order are sorted by `sortIndices`, a merge sort that moves only the overlap of
+  neighbouring blocks, since on integer distances such runs are most of a dimension and nearly in order.
 - `IncrementalVietorisRipsSimplexStream` — a reference implementation of Antonio Rieser's New-VR algorithm
   (arXiv:2301.07191), meant as a cross-validation baseline rather than a speed-competitive engine.
 - `RecursiveStackVietorisRipsSimplexStream` — a third, independent coface-enumeration strategy built on a
