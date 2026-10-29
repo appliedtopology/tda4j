@@ -145,6 +145,43 @@ class SimplexIndexingSpec extends Specification with ScalaCheck:
       }
     }
 
+    /** The engine decodes a simplex once and hands the vertices to the cursors: they must walk exactly what the cursors
+      * given the index walk, leave the array alone, and the facet cursor says the place of the vertex it removes.
+      */
+    "CofacetCursor/FacetCursor over a decoded simplex walk what they walk from its index" >> {
+      val validCase = for
+        vertexCount <- Gen.chooseNum(2, 25)
+        size <- Gen.chooseNum(1, vertexCount)
+        idx <- Gen.chooseNum(0L, math.max(0L, binomial(vertexCount, size) - 1))
+      yield (vertexCount, size, idx)
+
+      "CofacetCursor" ==> forAll(validCase, Gen.oneOf(true, false)) { case ((vertexCount, size, idx), all) =>
+        val si = SimplexIndexing(vertexCount)
+        val vertices = si.decodeToArray(idx, size)
+        def walk(cur: si.CofacetCursor) =
+          Iterator
+            .unfold(())(_ => Option.when(cur.hasNext) { val r = (cur.vertex, cur.index); cur.advance(); (r, ()) })
+            .toList
+        (walk(si.cofacetCursor(idx, vertices, all)) must be_==(walk(si.cofacetCursor(idx, size, all))))
+          .and(vertices.toSeq must be_==(si.decodeToArray(idx, size).toSeq))
+      }
+
+      "FacetCursor" ==> forAll(validCase) { case (vertexCount, size, idx) =>
+        val si = SimplexIndexing(vertexCount)
+        val vertices = si.decodeToArray(idx, size)
+        def walk(cur: si.FacetCursor) =
+          Iterator
+            .unfold(())(_ =>
+              Option.when(cur.hasNext) { val r = (cur.vertex, cur.index, cur.position); cur.advance(); (r, ()) }
+            )
+            .toList
+        val byVertices = walk(si.facetCursor(idx, vertices))
+        (byVertices.map((v, i, _) => (v, i)) must be_==(walk(si.facetCursor(idx, size)).map((v, i, _) => (v, i))))
+          .and(byVertices.forall((v, _, position) => vertices(position) == v) must beTrue)
+          .and(vertices.toSeq must be_==(si.decodeToArray(idx, size).toSeq))
+      }
+    }
+
     /** Backs an early-exit optimization in `zeroPivotCofacet`/`zeroPivotFacet` (both engines,
       * `Homology.scala`/`PackedRipserCohomology.scala`): those methods want the cofacet with the MAXIMUM index (resp.
       * facet with the MINIMUM index) among candidates tied at the target diameter, and previously found it by sweeping

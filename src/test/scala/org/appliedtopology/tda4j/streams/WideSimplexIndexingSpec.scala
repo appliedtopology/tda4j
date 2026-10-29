@@ -125,6 +125,35 @@ class WideSimplexIndexingSpec extends Specification with ScalaCheck:
       }
     }
 
+    "walk the cofacets and facets of a decoded simplex as they are walked from its index, and say where a facet's vertex was" >> {
+      given Parameters = Parameters(minTestsOk = TestPlatform.propertyCases(200))
+      forAll(wideCase, Gen.oneOf(true, false)) { case ((vertexCount, vertices), all) =>
+        val wsi = WideSimplexIndexing(vertexCount)
+        val (h, l) = words(oracle(vertices.toSeq))
+        val decoded = wsi.decodeToArray(h, l, vertices.length)
+        def cofacets(cur: wsi.CofacetCursor) =
+          Iterator
+            .unfold(())(_ =>
+              Option.when(cur.hasNext) { val r = (cur.vertex, cur.high, cur.low); cur.advance(); (r, ()) }
+            )
+            .toList
+        def facets(cur: wsi.FacetCursor) =
+          Iterator
+            .unfold(())(_ =>
+              Option.when(cur.hasNext) { val r = (cur.vertex, cur.high, cur.low, cur.position); cur.advance(); (r, ()) }
+            )
+            .toList
+        val byIndex = facets(wsi.facetCursor(h, l, vertices.length))
+        val byVertices = facets(wsi.facetCursor(h, l, decoded))
+        (cofacets(wsi.cofacetCursor(h, l, decoded, all)) must be_==(
+          cofacets(wsi.cofacetCursor(h, l, vertices.length, all))
+        ))
+          .and(byVertices must be_==(byIndex))
+          .and(byVertices.forall((v, _, _, position) => decoded(position) == v) must beTrue)
+          .and(decoded.toSeq must be_==(vertices.toSeq))
+      }
+    }
+
     "find from neighbour lists the cofacets the full cursor finds whose added vertex neighbours every vertex" >> {
       given Parameters = Parameters(minTestsOk = TestPlatform.propertyCases(100))
       val n = 300 // C(300, 13) is about 2^70

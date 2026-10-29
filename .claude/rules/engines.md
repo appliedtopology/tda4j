@@ -36,20 +36,20 @@ Over a field, cohomology and homology bars coincide.
    (`WORKLOG-union-find-robustness.md`). `barcodeAt` via memoized `vcolOf` (a second full naive engine was **rejected by
    the project lead**, don't revive: `WORKLOG-chunks-representatives-incremental.md`). Invariants: a paired cell never
    becomes a pivot; `compress` runs to a fixpoint; "in limbo" cells are resolved first (`WORKLOG-chunks-pairing-bug.md`).
-   `advanceAll` runs the reduction ONCE. At `maxDimension = 1` triangles go in filtration order against a count of open
+   At `maxDimension = 1` triangles go in filtration order against a count of open
    degree-1 classes (`reduceTrianglesInOrder`) and one entering while none is open is skipped; from 2 every top cell is
    reduced (#91). Cells are compared by RANK (`CellRanks`, shared with naive), only if EVERY cell has a filtration value
    (`ranked`; #88); a fresh cell from `boundary` goes through `boundaryChain`. `WORKLOG-chunks-top-cells.md`.
 3. **`RipserCohomologyEngine`** — Bauer's Ripser (arXiv:1908.02518) on `Simplex[Int]` VR, one-shot. **Test/
-   reference oracle only** — production uses `PackedRipserCohomologyEngine`. Clearing required for correctness;
+   reference oracle only** — production uses `PackedRipserCohomologyEngine`. Clearing is required;
    apparent pairs with lazy substitution; no emergent pairs (Def 3.11, only in engine 4); `memoizeFiltrationValue`
-   defaults **false** (project lead: memory over speed) (`WORKLOG-ripser-profiling.md`,
-   `WORKLOG-packed-ripser-engine.md`).
+   defaults **false** (project lead: memory over speed) (`WORKLOG-packed-ripser-engine.md`).
    The PACKED engine numbers simplices with one `Long` or, past 2^63 (C(n + maxDim + 2, maxDim + 2)), two words
    (`WideSimplexIndexing`, `usesWideIndices`, `WideKeys` for the maps keyed by index); the second word exists only in a
    two-word run, every new index-keyed structure carries it, and `WideIndicesSpec` / `WideIndicesPastLongSpec` hold both
    paths equal (`WORKLOG-two-word-indices.md`).
-   The PACKED engine reduces on a primitive-array heap, expands cocycles lazily from reduction logs (only for reported
+   The PACKED engine's apparent-pair test decodes a column once (`WORKLOG-ripser-decode-once.md`, #194; its pair count
+   equals the reference engine's: `EmergentPairsSpec`). It reduces on a primitive-array heap, expands cocycles lazily from reduction logs (only for reported
    bars) and derives cycles with its own copy of `Involution.cycles`. It must equal the `Chain`-based engine in the test
    tree (`ChainPackedRipserReference`) term for term, essentials included (`PackedWorkingColumnSpec`): re-run it after any
    change to the reduction (`WORKLOG-vr-working-column.md`). The heap needs ONE diameter per simplex: non-trusted metrics
@@ -83,8 +83,8 @@ Over a field, cohomology and homology bars coincide.
 
 **Cycles from cohomology (`Involution`, `homology/Involution.scala`)**: both cohomology engines expose
 `pairedCohomology` (bars + birth/death cells, zero-length pairs INCLUDED: their columns are pivots) and
-`persistentHomology` (same bars, cycles). Only death columns are reduced, under the engine's own order reversed
-(youngest = `Chain` leading term); a pivot that is not the paired birth cell throws (a pairing/order mismatch is a
+`persistentHomology` (same bars, cycles). Only death columns are reduced, under the engine's own order reversed;
+a pivot that is not the paired birth cell throws (a pairing/order mismatch is a
 bug, never fall back). Finite bar cycle = `R_τ`; essential = `V_σ`. The dual direction (`Involution.cocycles`) starts
 from a homology pairing (naive/chunks, identical, union-find included: `InvolutionSpec`) and reduces only birth cells'
 coboundaries (`coboundariesOf`), youngest first. Fast cubical's union-find ties by value, not the stream order: no dual path, image cocycles go
@@ -94,7 +94,7 @@ cycles: never compare representatives cell for cell across engines (`InvolutionS
 Every engine takes `includeZeroLength` (default `false`) on its bar-returning methods and drops `birth == death` pairs
 from the pairing itself (`PersistenceBar.dropZeroLength`). Naive and chunks `diagramAt(f)` report a class alive at `f` as
 `[birth, f]` (closed end), so a class born exactly at `f` survives the filter; a finished bar is `[b, d)`. Fast
-cubical/alpha drop equal-value pairs at construction (a pair at `+Inf, +Inf` looks like an essential class).
+cubical/alpha drop equal-value pairs at construction.
 `ZeroLengthBarsSpec`.
 
 `Chain.reduceBy`/`reduceByUntil` throw (`IllegalStateException`) when the pivot moves back or stays put for 64 steps (a

@@ -130,6 +130,26 @@ class EmergentPairsSpec extends mutable.Specification:
     failures.take(3) must beEmpty
   }
 
+  /** The apparent pairs change no output, so only their number can tell that the test for them is right: the packed
+    * engine, which finds the youngest facet of a cofacet from its longest edges, pairs as many simplices as the
+    * reference engine, which compares the diameter of every facet. Points that coincide give zero-length edges, whose
+    * facets all tie.
+    */
+  "The packed engine finds as many apparent pairs as the reference engine" >> {
+    val field = FiniteField(17)
+    import field.given
+    val failures = for
+      seed <- seeds(jvm = 12L, js = 3L)
+      space <- clouds(seed)
+      threshold <- Seq(Some(0.3), None)
+      packed = PackedRipserCohomologyEngine[field.Fp](space, 2, maxFiltrationValue = threshold)
+      reference = RipserCohomologyEngine[field.Fp](space, 2, maxFiltrationValue = threshold)
+      _ = (packed.persistentCohomology(true), reference.persistentCohomology(true))
+      if packed.apparentPairCount != reference.apparentPairCount
+    yield (seed, threshold, packed.apparentPairCount, reference.apparentPairCount)
+    failures.take(3) must beEmpty
+  }
+
   /** Whether the simplices of dimension at most 2 are the bars (zero-length ones included) plus the finite bars of
     * degrees 0 and 1: each simplex is the birth of a bar or the death of a bar of the degree below (its column is
     * cleared).
