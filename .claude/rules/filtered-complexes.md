@@ -92,10 +92,9 @@ stream computes a genuinely infinite value; Dowker's boolean encoding does, on p
 `DowkerCofaceSimplexStream` overrides it to additionally require `.isFinite` — without it, an untruncated stream
 silently collapses to the complete simplex on every vertex (confirmed empirically).
 
-**Duality is the point** (`.dual` — the transpose relation): the functorial Dowker duality theorem (Chowdhury &
-Mémoli 2018) gives X-side/Y-side barcodes agreeing exactly **without zero-length bars** (the default; with
-`includeZeroLength = true` they differ) (a simplicial filtration records exactly one `H_0` birth per vertex, so `numLeft != numWitnesses` can't
-match bar-for-bar otherwise — confirmed on a hand-worked fixture, not just asserted from the theorem).
+**Duality is the point** (`.dual`, the transpose relation): X-side and Y-side barcodes agree exactly **without zero-length
+bars** (the default; with `includeZeroLength = true` they differ, as each vertex records one `H_0` birth and the sides
+have different vertex counts; Chowdhury and Mémoli 2018, confirmed on a hand-worked fixture).
 
 Own MATLAB/CLI entry point (`computeFromRelation`/`--input-format csv-relation`), not a `complex=` value — a
 relation doesn't fit the point-cloud/distance-matrix dispatch. `engine` defaults `cohomology`, refuses `ripser`/
@@ -115,8 +114,7 @@ coface stream with nonzero distinct vertex filtration values (overrides `case 0`
 `maxFiltrationValue` defaults to `minimumEnclosingRadius`. Refuses `engine=ripser`.
 
 **`AlphaComplexDQP.dtm`**: `weight(i)=-f(i)²`, derived not copied. Cross-checked against
-`DtmRipsSimplexStream(p=2)`'s H0 via the persistent nerve lemma, not bar-for-bar (alpha correctly delays/omits
-vertices Rips can't).
+`DtmRipsSimplexStream(p=2)`'s H0 via the persistent nerve lemma, not bar-for-bar (alpha delays/omits vertices Rips can't).
 
 ## Sheehy's sparse/approximate Vietoris-Rips filtration
 
@@ -150,6 +148,7 @@ independent redesign.** An independent "fixed-point iteration" draft was tried a
 cross-validation (two bugs, each silently turning a real bar essential on a 5-point counterexample). Processing
 order is load-bearing — reread the reference before touching this.
 
-Vertices never removed (enumeration cost doesn't drop uniformly); measured 73-76% edges removed, 43-47x
-reduction-phase speedup (`EdgeCollapseBenchmarkSpec`). Wired through `matlab.TDA4j`'s `edgeCollapse` option
+Measured 73-76% edges removed, 43-47x reduction-phase speedup (`EdgeCollapseBenchmarkSpec`). Up to 4,096 points the
+collapse runs on an `n x n` matrix and bit sets, above on sorted maps (the reference: `EdgeCollapseDenseSpec` holds the
+two equal bit for bit); cost ~ edges x common neighbours (`WORKLOG-edge-collapse-dense.md`, #256). Wired through `matlab.TDA4j`'s `edgeCollapse` option
 (`complex=vr` only) and `cli --edge-collapse`.

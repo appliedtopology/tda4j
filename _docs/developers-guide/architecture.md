@@ -488,6 +488,14 @@ The resulting `EdgeCollapsedMetricSpace` implements `FiniteMetricSpace[Int]`,
 so existing Vietoris-Rips streams and persistence engines can consume the
 collapsed graph without special handling.
 
+Up to 4,096 points the collapse keeps the graph as an `n x n` matrix of values with a bit set of neighbours per vertex,
+so the common neighbours of an edge are the AND of two rows of bits and every value is one array read; above that, in a
+sorted map per vertex (memory proportional to the edges). Each edge is decided against the candidate times in order,
+and the vertex that dominated at one time is tested only against the vertices that joined the active set since. The
+cost is about the edges times their common neighbours, so a dense graph (a large radius) is the expensive case: 1,200
+points in R^3 at the enclosing radius take about ten seconds. The result is stored in rows of sorted neighbours, the
+surviving edges only. Both forms take every decision the same way (`EdgeCollapseDenseSpec`).
+
 ### Metric spaces
 
 `FiniteMetricSpace.scala` abstracts "distance + finite point set": `ExplicitMetricSpace` (raw distance
