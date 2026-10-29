@@ -55,13 +55,40 @@ already defaulted `maxFiltrationValue` to the enclosing radius, so the radius wa
 The facade default, `engine=ripser` (one thread), on the same clouds: 100 points JS 0.40 s, JVM 0.15 s; 300 points JS
 9.0 s, JVM 2.8 s: 2.7 to 3.2 times, the same ratio. Alpha and the other complexes on JS: #233.
 
-## 4. Forwarding `keepCriterion` to the generator: not done
+## 4. Forwarding `keepCriterion` to the generator: done, at Mikael's request
 
-No entry point (`Persistence`, MATLAB, CLI) takes a `keepCriterion`; only code that subclasses or constructs a
-`RipserCofaceSimplexStream` does. The coface loop and the generator choose different generating facets, so they agree
-only for a criterion that keeps every face of what it keeps (downward closed). Forwarding would make the stream's
-result depend on a property of the criterion it cannot check, to speed up a path nobody reaches from the verbs. The
-streams that do carry criteria already reach the generator through the route that needs only the edges:
-`DtmRipsSimplexStream` and `SheehyRipsSimplexStream` (`SparseRips`) give a `flatGenerator` built on `FlagGenerator`,
-and Dowker and Cech have their own array constructions (#259). If an entry point takes a criterion, that edge-list
-route is the shape to extend, not the criterion on higher simplices.
+First decided against (no entry point takes a criterion; the coface loop and the generator choose different generating
+facets, so they agree only for a criterion closed under faces, which a stream cannot check). Mikael asked for it anyway
+(2026-10-29): tda4j is a lab and experiments platform, and a restricted complex should keep the fast path, the way a
+new idea like the apparent pairs needs a place to be tried. He also settled the contract: closure under faces is a
+written-out contract, not a regular test (a check costs a facet lookup per simplex), and breaking it gives results
+nobody can predict.
+
+What was done. `RipserCofaceSimplexStream` no longer requires `keepsEverything` to use `flatGenerator`; each generated
+layer (edges, then every cofacet layer) is cut by the criterion in the same order, with the `root` of each kept simplex,
+before the next layer is generated from it (`pruned`, also on the rebuild path for dimensions asked out of order). With
+a criterion closed under faces a simplex's first full-diameter facet, which generates it, is kept, so the cut layers
+generate exactly the kept simplices, in the order of the full complex. Candidates still come from the balls of all edges
+within the threshold, so a rejected edge is not used to prune candidates (the final test rejects what contains it).
+
+Found on the way, fixed here: `EnumeratingCofaceSimplexStream` and the cell listing of `RipserCofaceSimplexStream`
+ignored the criterion for vertices (and Enumerating for edges), while the array layers applied it; the reference stream
+could not serve as an oracle for a criterion that removes a vertex or an edge. `FlatLayersSpec`'s criterion
+(`size <= 2 || min is even`) was not closed under faces (it keeps `{0,1,2,3}` and rejects its face `{1,2,3}`; the coface
+loop's answer differs from the generator's by geometry); it is now `size <= 2 || all vertices even`.
+
+Checks. `LayeredInorderSimplexStreamSpec`: five closed criteria (a forbidden pair, a window, a removed vertex, a
+dimension cap, odd vertices only in edges) against the enumerating stream and against the coface loop, cell for cell,
+values and order, on random clouds, the octagon, a grid and a three-valued metric, with the generator asserted to have
+been used; and equal bars from the Cohomology engine. Mutations caught: generator gated off, layers not cut, roots of
+the wrong simplices.
+
+Timing, generator route against the coface loop with a window criterion (3-D uniform clouds, median of the last trials,
+sandbox noise +-20%): n=600, 20k cells: 25-35 ms against 50-60 ms (slower, fixed cost of the edge pass); n=2000, 11k
+cells: 70-150 ms against 70 ms; n=2000, 533k edges: 340-440 ms against 300-330 ms; n=1500, 6.2 million cells with a
+criterion that keeps all: 2.0-2.1 s against 1.5-1.8 s (1.2x). The criterion is called with a `Simplex` per candidate in
+both routes and dominates both, so the gain is small. Forwarding is for what it keeps (the same machinery and order as
+the unrestricted stream, a base for criterion-aware generation), not for speed.
+
+Not done: `filtrationValueOverride` stays on the coface loop (the first half of #184 was this criterion; the second is a
+value function that the generator cannot read from edges).

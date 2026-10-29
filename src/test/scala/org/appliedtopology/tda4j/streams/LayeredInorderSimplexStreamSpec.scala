@@ -51,6 +51,74 @@ class LayeredInorderSimplexStreamSpec extends Specification with ScalaCheck:
     Seq.tabulate(9, 9)((i, j) => if i == j then 0.0 else 1.0 + ((i * 7 + j * 7 + i * j) % 3))
   )
 
+  // Criteria closed under faces (every face of a simplex they keep is kept), which `keepCriterion` must be; each cuts the
+  // complex at a different dimension.
+  private val closedCriteria: Seq[(String, PartialFunction[Simplex[Int], Boolean])] = Seq(
+    "the vertices 0 and 1 never together" -> { case s => !(s.underlying.contains(0) && s.underlying.contains(1)) },
+    "a window of five vertices" -> { case s => s.underlying.last - s.underlying.head < 5 },
+    "without the vertex 3" -> { case s => !s.underlying.contains(3) },
+    "up to dimension 2" -> { case s => s.dim <= 2 },
+    "an odd vertex only in an edge or a vertex" -> { case s => s.dim <= 1 || s.underlying.forall(_ % 2 == 0) }
+  )
+
+  // The Ripser coface stream with `criterion`, and whether it built its layers with the generator.
+  private def withCriterion(
+    metricSpace: FiniteMetricSpace[Int],
+    criterion: PartialFunction[Simplex[Int], Boolean],
+    threshold: Option[Double],
+    generated: Boolean
+  ): (RipserCofaceSimplexStream, () => Boolean) =
+    var generatorAsked = false
+    val stream = new RipserCofaceSimplexStream(metricSpace, criterion, threshold):
+      override protected def flatGenerator =
+        val g = if generated then super.flatGenerator else None
+        generatorAsked = g.isDefined
+        g
+    (stream, () => generatorAsked)
+
+  private def criterionAgrees(
+    metricSpace: FiniteMetricSpace[Int],
+    criterion: PartialFunction[Simplex[Int], Boolean],
+    threshold: Option[Double]
+  ): Result =
+    val (viaGenerator, usedGenerator) = withCriterion(metricSpace, criterion, threshold, generated = true)
+    val (viaCofaceLoop, _) = withCriterion(metricSpace, criterion, threshold, generated = false)
+    val enumerating = EnumeratingCofaceSimplexStream(metricSpace, criterion, threshold)
+    Result
+      .foreach(0 to math.min(topDimension, metricSpace.size - 1)) { d =>
+        val expected = listing(enumerating, d)
+        firstDifference(listing(viaGenerator, d), expected).orElse(firstDifference(listing(viaCofaceLoop, d), expected)) must
+          beNone
+      }
+      .and(usedGenerator() must beTrue)
+
+  "RipserCofaceSimplexStream with a keepCriterion" should {
+    // The criterion is asked of each generated dimension, which is cut before the next is generated from it. The
+    // enumerating stream asks it of every vertex set, so it is the reference that does not depend on how a simplex is
+    // reached, and the coface loop (generator off) the stream as it was.
+    "list the cells, values and order of the enumerating stream, from the generator, on points in general position" in
+      forAll(matrixGen(Gen.double, Gen.chooseNum(2, 5), Gen.chooseNum(7, 12))) { pts =>
+        val space = EuclideanMetricSpace(pts)
+        Result.foreach(closedCriteria) { (_, criterion) =>
+          Result.foreach(Seq(None, Some(0.6 * space.minimumEnclosingRadius)))(criterionAgrees(space, criterion, _))
+        }
+      }.set(minTestsOk = TestPlatform.propertyCases(25))
+
+    "list the same cells on the tie-heavy metrics" in
+      Result.foreach(Seq(octagon, grid, threeValues)) { space =>
+        Result.foreach(closedCriteria)((_, criterion) => criterionAgrees(space, criterion, None))
+      }
+
+    "give the same bars as the coface loop" in {
+      val (viaGenerator, _) = withCriterion(octagon, closedCriteria(1)._2, None, generated = true)
+      val (viaCofaceLoop, _) = withCriterion(octagon, closedCriteria(1)._2, None, generated = false)
+      def bars(stream: CofaceSimplexStream[Int, Double]) =
+        Persistence(Truncated.ofCofaces(stream, 2), maxDimension = 2, engine = Persistence.Engine.Cohomology).bars
+          .map(b => (b.dim, b.lower, b.upper))
+      (bars(viaGenerator) must not(beEmpty)).and(bars(viaGenerator) === bars(viaCofaceLoop))
+    }
+  }
+
   "LayeredInorderSimplexStream" should {
     "list the same cells, values and order as EnumeratingCofaceSimplexStream on points in general position" in
       forAll(matrixGen(Gen.double, Gen.chooseNum(2, 5), Gen.chooseNum(6, 13))) { pts =>

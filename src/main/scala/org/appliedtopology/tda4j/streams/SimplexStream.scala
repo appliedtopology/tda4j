@@ -309,13 +309,20 @@ trait CofaceSimplexStream[VertexT: Ordering, FiltrationT: Filterable]
 
   def currentDimensionCache: Seq[Simplex[VertexT]]
 
+  /** Which simplices the stream keeps, besides the threshold: a vertex, an edge or a higher simplex is kept when this
+    * returns `true` (a simplex it is not defined at is kept).
+    *
+    * '''The criterion must be closed under faces''': every face of a simplex it keeps, a vertex or an edge among them,
+    * is kept too. That is what makes the kept simplices a simplicial complex, which every engine needs for `∂∂ = 0`.
+    * It is not checked, and a criterion that breaks it gives a stream whose cells, order and bars are not defined.
+    */
   def keepCriterion: PartialFunction[Simplex[VertexT], Boolean]
 
 object CofaceSimplexStream:
 
   /** The `keepCriterion` that keeps every simplex, and the default of the coface streams. A stream whose criterion is
-    * this very function builds its dimensions as arrays ([[FlatLayerStream]]); any other criterion is asked about each
-    * candidate as a [[Simplex]].
+    * this very function builds its dimensions as arrays ([[FlatLayerStream]]) without asking about any simplex; any
+    * other criterion is asked about each candidate as a [[Simplex]].
     */
   val keepAll: PartialFunction[Simplex[Int], Boolean] = { case _ => true }
 
@@ -386,7 +393,9 @@ open class EnumeratingCofaceSimplexStream(
     i <- metricSpace.elements
     j <- metricSpace.elements
     if i < j && metricSpace.distance(i, j) <= resolvedMaxFiltrationValue
-  yield Simplex(i, j)
+    edge = Simplex(i, j)
+    if criterionKeeps(edge)
+  yield edge
 
   // -1, not 0: subclasses' iterateDimension overrides (RipserCofaceSimplexStream and its own subclasses) use
   // `currentDimension != d - 1` to decide whether currentDimensionCache is fresh enough to reuse as dimension
@@ -531,7 +540,7 @@ open class EnumeratingCofaceSimplexStream(
   // eventually staying false (an unbounded catch-all here was the actual root cause of the "some engines' .iterator
   // hangs / eventually crashes" bug, see StratifiedCellStream's doc).
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
-    case 0                                   => metricSpace.elements.map(v => Simplex(v)).iterator
+    case 0                                   => metricSpace.elements.map(v => Simplex(v)).filter(criterionKeeps).iterator
     case 1                                   => sortedByFiltration(edges).iterator
     case d if d >= 0 && d < metricSpace.size =>
       // first, generate all simplices of this dimension
@@ -545,8 +554,10 @@ open class EnumeratingCofaceSimplexStream(
 
 /** Vietoris-Rips, or any filtration monotone along faces given as `filtrationValueOverride`, built dimension by
   * dimension from the cofaces of the simplices kept in the dimension below (the loop [[Cech]], [[Witness]], [[Dowker]],
-  * [[DtmRips]] and [[SparseRips]] reuse). `keepCriterion` and `maxFiltrationValue` decide what is kept; a simplex is
-  * only offered once all its edges are kept, so `keepCriterion` must keep the edges of every simplex it keeps.
+  * [[DtmRips]] and [[SparseRips]] reuse). `keepCriterion` and `maxFiltrationValue` decide what is kept; the criterion
+  * must be closed under faces (see [[CofaceSimplexStream.keepCriterion]]). It is asked about each candidate that has a
+  * kept facet, whether the stream builds its dimensions with the coface loop or with [[flatGenerator]], which cuts each
+  * dimension to what the criterion keeps before generating the next from it.
   */
 open class RipserCofaceSimplexStream(
   metricSpace: FiniteMetricSpace[Int],
@@ -577,8 +588,8 @@ open class RipserCofaceSimplexStream(
   /** The generator that builds this stream's dimensions from the edges up, in filtration order and without sorting
     * ([[LayeredInorderSimplexStream.FlagGenerator]]), for a stream that is the flag complex of a weighted graph: a
     * simplex is a set of vertices whose pairs are all edges, and its value is the largest weight. It is used instead of
-    * the coface loop when `keepCriterion` keeps everything and the vertices are `0 until n`; `None` (the default) is
-    * the coface loop. A stream that gives one must give, for every simplex, the cell and the value of its
+    * the coface loop when the vertices are `0 until n`, with `keepCriterion` applied to each generated dimension;
+    * `None` (the default) is the coface loop. A stream that gives one must give, for every simplex, the cell and the value of its
     * [[flatFiltration]] (the stream's tests compare the two). A fresh generator is asked for once per stream. The
     * default gives one for the edge-collapsed graph of an [[EdgeCollapsedMetricSpace]] with the default filtration,
     * from its surviving edges, so that the pairs the collapse removed are never scanned, and for any other metric space
@@ -610,7 +621,7 @@ open class RipserCofaceSimplexStream(
     case _ => None
 
   private lazy val generator: Option[LayeredInorderSimplexStream.FlagGenerator] =
-    if keepsEverything && java.util.Arrays.equals(vertexIds, Array.range(0, vertexIds.length)) then flatGenerator
+    if java.util.Arrays.equals(vertexIds, Array.range(0, vertexIds.length)) then flatGenerator
     else None
 
   // The dimension built last by the generator and its `root` (the first longest edge of each simplex, in the generator's
@@ -640,10 +651,30 @@ open class RipserCofaceSimplexStream(
   // Dimension `d >= 1` from the generator, as a flat layer: its tied runs, which it lists colexicographically descending,
   // are reversed to the order a layer is in (ascending).
   private def generatedLayer(g: LayeredInorderSimplexStream.FlagGenerator, d: Int): FlatLayerStream.Layer =
-    val raw = if d == 1 then g.edges else g.cofacets(generatorLayer(g, d - 1))
+    val raw = pruned(if d == 1 then g.edges else g.cofacets(generatorLayer(g, d - 1)))
     generatedRoots = Some((d, raw.root))
     val values = Array.tabulate(raw.size)(g.diameter(raw, _))
     FlatLayerStream.Layer(d, reversedTies(raw.vertices, values, d + 1), values)
+
+  // `layer` without the simplices `keepCriterion` rejects, in the same order. The next dimension is generated from what
+  // is left, which is the whole next dimension when the criterion is closed under faces (every face of a simplex it
+  // keeps is kept): a simplex is generated by its first full-diameter facet, which is then kept.
+  private def pruned(layer: LayeredInorderSimplexStream.Layer): LayeredInorderSimplexStream.Layer =
+    if keepsEverything then layer else criterionKept(layer)
+
+  private def criterionKept(layer: LayeredInorderSimplexStream.Layer): LayeredInorderSimplexStream.Layer =
+    val width = layer.dim + 1
+    val vertices = new mutable.ArrayBuilder.ofInt
+    val roots = new mutable.ArrayBuilder.ofInt
+    var kept = 0
+    var i = 0
+    while i < layer.size do
+      if criterionKeeps(FlatLayerStream.simplexOf(layer.vertices, i * width, width)) then
+        vertices.addAll(layer.vertices, i * width, width)
+        roots += layer.root(i)
+        kept += 1
+      i += 1
+    LayeredInorderSimplexStream.Layer(layer.dim, kept, vertices.result(), roots.result())
 
   // The generator's layer of dimension `d`: from the flat layer and roots kept, or built again from the edges (when
   // dimensions are asked for out of order).
@@ -652,7 +683,7 @@ open class RipserCofaceSimplexStream(
       (dim, root) <- generatedRoots if dim == d
       flat <- flatCurrent if flat.dim == d
     yield LayeredInorderSimplexStream.Layer(d, flat.size, reversedTies(flat.vertices, flat.values, d + 1), root)
-    kept.getOrElse((2 to d).foldLeft(g.edges)((layer, _) => g.cofacets(layer)))
+    kept.getOrElse((2 to d).foldLeft(pruned(g.edges))((layer, _) => pruned(g.cofacets(layer))))
 
   // `vertices`, `width` to a simplex, with every run of equal `values` in the reverse order: its own inverse.
   private def reversedTies(vertices: Array[Int], values: Array[Double], width: Int): Array[Int] =
@@ -835,7 +866,7 @@ open class RipserCofaceSimplexStream(
 
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] =
     val vertices: PartialFunction[Int, Iterator[Simplex[Int]]] = { case 0 =>
-      currentDimensionCache = metricSpace.elements.map(v => Simplex(v)).to(immutable.Queue)
+      currentDimensionCache = metricSpace.elements.map(v => Simplex(v)).filter(criterionKeeps).to(immutable.Queue)
       currentDimension = 0
       lastDimensionCache = IndexedSeq.empty[Simplex[Int]]
       currentDimensionCache.iterator

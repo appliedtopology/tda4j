@@ -39,7 +39,7 @@ comparisons must be cheap: `EnumeratingCofaceSimplexStream`/`CubicalGridStream` 
 
 **VR constructions** (same output contract, alternate engines): `RipserCofaceSimplexStream` (+ `SimplexIndexing`), what
 `VietorisRips(...)` builds by default (project lead: Enumerating is a last resort; the exclusion hooks `keepCriterion` and
-`filtrationValueOverride` come with it, from the base class; `LayeredInorderSimplexStream` does not forward them: no entry point takes a criterion, `WORKLOG-vr-leftovers.md`, #268),
+`filtrationValueOverride` come with it, from the base class; `keepCriterion` is forwarded to `LayeredInorderSimplexStream`'s generator, `filtrationValueOverride` is not yet, #184),
 `EnumeratingCofaceSimplexStream` (the reference the others are checked against),
 `RecursiveStackVietorisRipsSimplexStream`, `IncrementalVietorisRipsSimplexStream` (Rieser's New-VR, arXiv:2301.07191
 — cross-validation baseline, not a fast engine); `CofacetIterator` for lazy coboundaries. `LayeredInorderSimplexStream` (what
@@ -50,7 +50,7 @@ order. The old `InorderCofaceSimplexStream` (tie order broken, duplicates on tie
 Its generator reads only a sorted weighted edge list (`FlagGenerator.ofEdges`, optional per-vertex deadlines), so a
 coface stream that is the flag complex of a graph can build its flat layers from it (`flatGenerator`: DTM-Rips, sparse
 Rips, edge-collapsed Rips; `filtered-complexes.md`, #190), and so does the default `RipserCofaceSimplexStream` (default
-value, keep-all, <= 2^15 points: `WORKLOG-cohomology-stream-sort.md`, #251); the stream keeps the generator's `root`s
+value, <= 2^15 points: `WORKLOG-cohomology-stream-sort.md`, #251); the stream keeps the generator's `root`s
 (4 bytes a simplex of the top layer) and rebuilds the generator's order from its flat layer by reversing tied runs. `WORKLOG-layered-inorder.md`, `WORKLOG-flag-generator.md`. `FiniteMetricSpace` has
 a VP-tree impl (`VantagePointTree`, `VantagePointQuery`; `WORKLOG-scalajs-numerics-spatial.md`) and `SparseMetricSpace` (+∞ past its cutoff rather than excluding — don't use it as a
 thresholded oracle).
@@ -91,6 +91,13 @@ stream holds cells up to dimension `k + 1`, so its degree-`(k + 1)` "classes" ar
 looks essential). `Persistence(stream)` defaults to that `k` and throws for a larger `maxDimension`; complete complexes
 (`ExplicitStream`, cubical, alpha, simplicial sets) report `None`. A new truncating wrapper must override it (taking
 the min with the wrapped stream's). `PersistenceVerbSpec`, `WORKLOG-default-degree-2.md`.
+
+**`keepCriterion` must be closed under faces** (project lead, 2026-10-29): every face of a simplex it keeps, vertices and
+edges included, is kept. The generator route cuts each generated dimension by the criterion and generates the next from
+what is left, which is the coface loop's answer exactly when the criterion is closed; it is a documented contract, not a
+checked one (a check costs a facet lookup per simplex), and a criterion that breaks it gives unpredictable cells and
+bars. Vertices and edges obey it in every stream. Timing with a criterion: about 1.2x on 6 million cells, equal to some
+tens of ms slower on small complexes (the criterion call per candidate dominates both routes), `WORKLOG-vr-leftovers.md`, #268.
 
 **Distance matrices are read from the lower triangle** (project lead, matching ripser.cpp and GUDHI):
 `ExplicitMetricSpace.distance(x, y)` is `dist(max)(min)`, and the packed Ripser engine reads any metric that is not
