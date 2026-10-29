@@ -4796,7 +4796,11 @@ node6 -> node2;
             <div class="cover">
              <div class="doc">
               <p>Produces a iterator containing cumulative results of applying the operator going left to right, including the initial value.</p>
-              <p>$willNotTerminateInf $orderDependent</p>
+              <pre><code>        Note: will not terminate for infinite-sized collections.
+
+
+        Note: might return different results for different runs, unless the underlying collection type is ordered.
+</code></pre>
              </div>
              <h2 class="h200">Type parameters</h2>
              <dl class="attributes attributes-small">

@@ -188,7 +188,7 @@
   <ul>
    <li><code>rankTolerance</code> defaults to <code>1e-6</code>; smaller tolerances can destabilize the active-set Cholesky updates, while substantially larger values can reject valid directions.</li>
    <li>Ratio-test ties use the constraint's global index (Bland-style ordering).</li>
-   <li>When a small Schur complement cannot be handled safely, <code>DualQP.solve</code> conservatively rejects that candidate simplex rather than risking non-termination.</li>
+   <li>When a small Schur complement cannot be handled safely, <code>DualQP.solve</code> does not commit to it. Valid simplices of large circumradius, which are common in high ambient dimension, have such pivots, so the candidate is solved again with <code>rescueRankTolerance</code> (default <code>1e-11</code>) and kept only if the multipliers it ends with satisfy the optimality conditions of the dual against the data (a garbage answer from a poisoned factor fails them). The cells then agree with Helix's within the radius, up to a circumradius of about a hundred times the point spacing; past that the values are approximate, so give <code>maxRadius</code> (or use <code>upToEnclosingRadius</code>) rather than building the whole complex with DQP.</li>
    <li>Vertex filtration values must use <code>space.weight(x)</code>; hard-coding <code>0.0</code> breaks weighted alpha filtrations.</li>
   </ul>
  </section>
