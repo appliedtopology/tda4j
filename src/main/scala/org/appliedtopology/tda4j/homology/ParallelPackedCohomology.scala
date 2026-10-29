@@ -680,7 +680,7 @@ object ParallelPackedCohomology:
     def within(from: Int, until: Int): Unit =
       var b = from
       while b < until do
-        java.util.Arrays.sort(keys, start(b), start(b + 1))
+        Parallel.sortLongs(keys, start(b), start(b + 1))
         b += 1
     if threads > 1 then Parallel.ranges(blockCount, 16)(within) else within(0, blockCount)
 

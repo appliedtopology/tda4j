@@ -49,7 +49,7 @@ generated `LibraryVersion`); no `.par` (use `Parallel`); no `Path` in a public s
 `PersistenceResult.save` return the absolute path as a `String`). Never test the runtime class of a number
 (`rules/algebra.md`). `Long` is emulated on Scala.js and slow: the packed engines run, not fast. `java.util.Arrays.sort(a, from, to)` allocates a scratch
 array as long as the WHOLE `a` on every call (merge sort over boxing accessors), so a loop of range sorts is quadratic: sort a range
-with `Parallel.sortInts`, or keep the keys in `Int` (`WORKLOG-js-scaling.md`). A JS-versus-JVM benchmark compares the same
+with `Parallel.sortInts` (`sortLongs(a, from, to)` for `Long` keys: `ParallelPackedCohomology`'s block sort), or keep the keys in `Int` (`WORKLOG-js-scaling.md`). A JS-versus-JVM benchmark compares the same
 entry point on both (facade with facade, verb with verb); the npm API is the facade.
 
 ## The seams
