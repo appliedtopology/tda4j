@@ -894,6 +894,12 @@ object RipserCofaceSimplexStream:
       */
     def value(vertices: Array[Int], from: Int, width: Int, parentValue: Double): Double
 
+    /** The filtration to call for one run of candidates, from one thread at a time: the candidates of one parent come
+      * together, parent's vertices after the new smallest one, so a filtration may keep what it computed for the parent
+      * between two calls. The default is the filtration itself, which must then keep nothing.
+      */
+    def perRun: FlatFiltration = this
+
   object FlatFiltration:
 
     /** `function` asked about a `Simplex` built for each candidate (`+Infinity` where it is not defined): no faster
@@ -934,9 +940,10 @@ object RipserCofaceSimplexStream:
     parallel: Boolean
   ): Unit =
     def run(from: Int, until: Int): Unit =
+      val g = f.perRun
       var c = from
       while c < until do
-        values(c) = f.value(candidates, c * width, width, parentValues(c))
+        values(c) = g.value(candidates, c * width, width, parentValues(c))
         c += 1
     if parallel && count >= 4 * ParallelPart then
       Parallel.foreach((0 until count by ParallelPart).map(from => (from, math.min(count, from + ParallelPart)))) {
