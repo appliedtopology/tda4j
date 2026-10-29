@@ -21,10 +21,10 @@ import scala.util.hashing.MurmurHash3
   * on the subcomplex before the death. `coboundaryOfChain` checks either.
   *
   * Simplices with `Int` vertices (every complex the library builds: alpha, Čech, witness, Dowker, explicit streams) are
-  * reduced on flat arrays: each dimension's vertex tuples, a hash table from a tuple to its cell, and each coboundary
-  * block as compressed columns of signs. Only a column that needs an addition becomes a `Chain`, and only the cells of
-  * the representatives returned are looked up again. The bars and representatives are exactly those of reducing the
-  * cells themselves.
+  * reduced on flat arrays: each dimension's vertex tuples, a table from a tuple to its cell (the vertices side by side
+  * in one `Long` when they fit, else a hash of them), and each coboundary block as compressed columns of signs. Only a
+  * column that needs an addition becomes a `Chain`, and only the cells of the representatives returned are looked up
+  * again. The bars and representatives are exactly those of reducing the cells themselves.
   *
   * @param packSimplices
   *   reduce simplices with `Int` vertices on flat arrays (see above). `false` reduces the cells themselves, with the
@@ -62,7 +62,7 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
     val theStream = stream
     lazy val cells = readCells(theStream)
     val limit = degreeLimit(theStream)
-    packed(theStream, cells) match
+    packed(theStream, cells, limit) match
       case Some(p) => p.cocycleBars(limit, includeZeroLength)
       case None    =>
         PersistenceBar.dropZeroLength(paired(theStream, cells, limit)._1.map(_._1), includeZeroLength)
@@ -94,7 +94,7 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
     // are never pivots, so leaving them out changes no other cycle.
     val limit = degreeLimit(theStream)
     lazy val cells = readCells(theStream)
-    packed(theStream, cells)
+    packed(theStream, cells, limit)
       .map(_.cycleBars(limit, includeZeroLength))
       .getOrElse:
         cellHomology(theStream, cells, limit, includeZeroLength)
@@ -135,7 +135,7 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
   ): (List[(PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]], Involution.Pair[CellT])], Ordering[CellT]) =
     val theStream = stream
     lazy val cells = readCells(theStream)
-    packed(theStream, cells).map(_.pairs).getOrElse(paired(theStream, cells, Int.MaxValue))
+    packed(theStream, cells, Int.MaxValue).map(_.pairs).getOrElse(paired(theStream, cells, Int.MaxValue))
 
   private def paired(
     theStream: CellStream[CellT, FiltrationT],
@@ -286,6 +286,13 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
     // the top dimension's cells). A cell listed twice keeps its last number, as `numberCells` does.
     private var slots: Array[Int] = null
     private var mask = 0
+    // When the vertices, all non-negative, fit side by side in a `Long` with a number to spare, a slot holds the cell's
+    // vertices and its number + 1 in one `Long` (`keys`, 0 when empty): a lookup reads one slot, not a slot and then
+    // the cell's vertices. `keyBits` is the bits of a vertex, `idBits` those of a number + 1.
+    private var keys: Array[Long] = null
+    private var keyBits = 0
+    private var idBits = 0
+    private var largestVertex = 0
 
     private def hash(src: Array[Int], from: Int, length: Int, skip: Int): Int =
       var h = 0x3c074a61
@@ -314,24 +321,75 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
     private def index(): Unit =
       var capacity = 4
       while capacity < 2 * size do capacity <<= 1
-      slots = new Array[Int](capacity)
       mask = capacity - 1
-      var i = 0
-      while i < size do
-        slots(slotOf(vertices, i * width, width, -1)) = i + 1
-        i += 1
+      var smallest = 0
+      var largest = 0
+      var k = 0
+      while k < size * width do
+        smallest = math.min(smallest, vertices(k))
+        largest = math.max(largest, vertices(k))
+        k += 1
+      val vertexBits = 32 - Integer.numberOfLeadingZeros(largest)
+      val numberBits = 32 - Integer.numberOfLeadingZeros(size)
+      if smallest == 0 && width * math.max(vertexBits, 1) + numberBits <= 63 then
+        keyBits = math.max(vertexBits, 1)
+        idBits = numberBits
+        largestVertex = largest
+        val table = new Array[Long](capacity)
+        var i = 0
+        while i < size do
+          val key = keyOf(vertices, i * width, width, -1)
+          var slot = keySlot(key)
+          while table(slot) != 0L && (table(slot) >>> idBits) != key do slot = (slot + 1) & mask
+          table(slot) = (key << idBits) | (i + 1).toLong
+          i += 1
+        keys = table
+      else
+        val table = new Array[Int](capacity)
+        slots = table
+        var i = 0
+        while i < size do
+          table(slotOf(vertices, i * width, width, -1)) = i + 1
+          i += 1
+
+    // The vertices of `src(from until from + length)` without the one at `from + skip`, `keyBits` each, the first on top;
+    // -1 if one is not a vertex of this level.
+    private def keyOf(src: Array[Int], from: Int, length: Int, skip: Int): Long =
+      var key = 0L
+      var r = 0
+      while r < length && key >= 0L do
+        if r != skip then
+          val v = src(from + r)
+          key = if v < 0 || v > largestVertex then -1L else (key << keyBits) | v.toLong
+        r += 1
+      key
+
+    private def keySlot(key: Long): Int = ((key * 0x9e3779b97f4a7c15L) >>> 32).toInt & mask
 
     /** Builds the index `face` reads, which it would build at its first call: call it before lookups from several
       * threads.
       */
-    def prepare(): Unit = if slots == null then index()
+    def prepare(): Unit = if slots == null && keys == null then index()
 
     /** The number of the cell whose vertices are `src(from until from + dim + 2)` without the one at `from + skip`, or
       * -1 if there is none.
       */
     def face(src: Array[Int], from: Int, skip: Int): Int =
-      if slots == null then index()
-      slots(slotOf(src, from, width + 1, skip)) - 1
+      if slots == null && keys == null then index()
+      if keys != null then
+        val key = keyOf(src, from, width + 1, skip)
+        if key < 0L then -1
+        else
+          var slot = keySlot(key)
+          var found = -1
+          var entry = keys(slot)
+          while entry != 0L && found < 0 do
+            if (entry >>> idBits) == key then found = (entry & ((1L << idBits) - 1L)).toInt - 1
+            else
+              slot = (slot + 1) & mask
+              entry = keys(slot)
+          found
+      else slots(slotOf(src, from, width + 1, skip)) - 1
 
     def cell(i: Int): CellT =
       if cells != null then cells(i).asInstanceOf[CellT]
@@ -471,15 +529,24 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
           new PackedCells(d, order.length, tuples, order.map(cs(_)), order.map(vs(_)), null)
         })
 
-  private def packed(theStream: CellStream[CellT, FiltrationT], cells: => Vector[CellT]): Option[PackedReduction] =
-    packedLevels(theStream, cells).map(new PackedReduction(theStream, _))
+  private def packed(
+    theStream: CellStream[CellT, FiltrationT],
+    cells: => Vector[CellT],
+    limit: Int
+  ): Option[PackedReduction] =
+    packedLevels(theStream, cells).map(new PackedReduction(theStream, _, limit))
 
   /** The reduction on levels. Bars are numbered in the order they are found (degree ascending, youngest birth first),
     * as `reduction` lists them: bar `e` is born at cell `births(e)` of dimension `dims(e)` and dies at `deaths(e)` one
     * dimension up (-1: essential). A bar whose column needed no addition has the V-column of its own cell alone;
-    * `cocycles` holds the others.
+    * `cocycles` holds the others. Only the degrees up to `limit` are reduced: a bar of a higher degree needs no degree
+    * below it, and the cells of the top dimension of a truncated stream are most of the stream.
     */
-  private final class PackedReduction(theStream: CellStream[CellT, FiltrationT], levels: Array[PackedCells]):
+  private final class PackedReduction(
+    theStream: CellStream[CellT, FiltrationT],
+    levels: Array[PackedCells],
+    limit: Int
+  ):
     private val fr = summon[CoefficientT is Field]
     private val one = fr.one
     private val minusOne = fr.negate(fr.one)
@@ -528,35 +595,45 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
           youngest(j) = y
           j += 1
       }
-      // ... and counted per column.
-      var j = 0
-      while j < upper.size * width do
-        val f = faces(j)
-        if f >= 0 && !cleared(f) then offsets(f + 1) += 1
-        j += 1
       youngestFacet(d + 1) = youngest
+      // ... and counted per column, then written into their columns. A task takes a range of columns and reads every
+      // face in order, so the tasks write to disjoint places and each column lists its cofacets in ascending order,
+      // however many tasks there are (a pass that reads everything costs far less than scattering writes from one).
+      val parts = if faces.length < (1 << 12) then 1 else math.min(Parallel.threads, 8)
+      val bounds = Array.tabulate(parts + 1)(p => (lower.size.toLong * p / parts).toInt)
+      Parallel.tasks(parts) { p =>
+        val (low, high) = (bounds(p), bounds(p + 1))
+        var j = 0
+        while j < faces.length do
+          val f = faces(j)
+          if f >= low && f < high && !cleared(f) then offsets(f + 1) += 1
+          j += 1
+      }
       var i = 0
       while i < lower.size do
         offsets(i + 1) += offsets(i)
         i += 1
       val rows = new Array[Int](offsets(lower.size))
       val next = offsets.clone()
-      j = 0
-      while j < upper.size do
-        var r = 0
-        while r < width do
-          val f = faces(j * width + r)
-          if f >= 0 && !cleared(f) then
-            rows(next(f)) = (j << 1) | (r & 1)
-            next(f) += 1
-          r += 1
-        j += 1
+      Parallel.tasks(parts) { p =>
+        val (low, high) = (bounds(p), bounds(p + 1))
+        var j = 0
+        while j < upper.size do
+          var r = 0
+          while r < width do
+            val f = faces(j * width + r)
+            if f >= low && f < high && !cleared(f) then
+              rows(next(f)) = (j << 1) | (r & 1)
+              next(f) += 1
+            r += 1
+          j += 1
+      }
       (offsets, rows)
 
     locally:
       val idOrdering: Ordering[Int] = Ordering.Int // ascending number = oldest first = a column's leading term
       var cleared = new Array[Boolean](levels(0).size)
-      for d <- 0 to topDim do
+      for d <- 0 to math.min(topDim, limit) do
         val size = levels(d).size
         val (offsets, rows) =
           if d < topDim then coboundaries(d, cleared) else (new Array[Int](size + 1), Array.empty[Int])

@@ -199,10 +199,11 @@ interval.
 
 **Simplices on flat arrays.** When the cells are simplices with `Int` vertices and the cell instance is the library's
 own (`simplexIsOrderedCell`, which every complex the library builds uses), the engine works on arrays instead of
-`Simplex` objects: each dimension's vertex tuples in the engine's order, a hash table from a tuple to its cell number,
-and each coboundary block as compressed columns of signs. A column whose first row is free is paired without building
-anything. A column that needs an addition is reduced by `Chain.reduceBy` as before, with the columns it adds built on
-demand, so the bars and representatives are exactly those of reducing the cells. Cycles take the same route: a death
+`Simplex` objects: each dimension's vertex tuples in the engine's order, a table from a tuple to its cell number (the
+vertices side by side in one `Long` when they fit, else a hash of them), and each coboundary block as compressed
+columns of signs, found and laid out on all threads. Degrees above the stream's `homologyDegreeLimit` are not reduced.
+A column whose first row is free is paired without building anything. A column that needs an addition is reduced by
+`Chain.reduceBy` as before, with the columns it adds built on demand, so the bars and representatives are exactly those of reducing the cells. Cycles take the same route: a death
 cell whose youngest face is its birth cell needs no reduction, and only the representatives returned are turned back
 into `Simplex` objects. `CellularCohomologyEngine(packSimplices = false)` reduces the cells themselves, and
 `reducesPacked(stream)` says which a stream gets. Other vertex types, a vertex order other than `Int`'s and a cell
