@@ -301,10 +301,12 @@ These are **alternative implementations with the same output contract, not layer
   expands cofaces reachable from the previous dimension's survivors rather than re-enumerating a whole dimension from
   scratch. `CechStream`'s
   `CechCofaceSimplexStream` is built directly on top of this class (see below). When the stream has a
-  `RipserCofaceSimplexStream.FlatFiltration` (the Vietoris-Rips value, DTM-Rips, Dowker, sparse Rips and the Cech and
-  witness functions through an adapter) it builds each dimension on arrays, as a `FlatLayerStream.Layer`: the candidate
-  vertices are read off a bitset table of the kept edges, their values come from the array-level function, and the
-  layer is sorted on primitives. The cohomology engine reduces such a stream from the layers and builds a `Simplex`
+  `RipserCofaceSimplexStream.FlatFiltration` (the Vietoris-Rips value, DTM-Rips, Dowker, sparse Rips and Cech, and the
+  general witness function through an adapter) it builds each dimension on arrays, as a `FlatLayerStream.Layer`: the
+  candidate vertices are read off a bitset table of the kept edges, their values come from the array-level function
+  (candidates of one parent are valued together, so a filtration can keep what it computed for the parent: Dowker keeps
+  the largest entry of each witness over the parent's rows, and Cech reads its facets' values from a table keyed by
+  the vertices, the same table its `Simplex` function uses), and the layer is sorted on primitives. The cohomology engine reduces such a stream from the layers and builds a `Simplex`
   only for the cells of the representatives it returns; the cell listing (`iterator`) is derived from the same layers.
   A stream without a `FlatFiltration` builds `Simplex` cells as before.
 - `LayeredInorderSimplexStream` — what `VietorisRips.Implementation.Inorder` builds: each dimension from the one below,
@@ -418,7 +420,10 @@ collapse are on their own page: [Nerves and group homology](nerves.md).
 minimum-enclosing-ball radius (`MinimumEnclosingBall`, the library's own, so it also builds for Scala.js), not the Delaunay/QP machinery alpha shapes use —
 Cech membership depends only on a simplex's own vertices, not on every other point in the cloud.
 `CechFiltration` caches each simplex's radius and clamps it to the max of its own facets' cached radii,
-since a raw ball computation can violate monotonicity by a floating-point ULP on near-degenerate input.
+since a raw ball computation can violate monotonicity by a floating-point ULP on near-degenerate input. The cache is
+keyed by the sorted vertex arrays, not by `Simplex` values, and serves both the `Simplex` function and the array-level
+value the stream's flat layers ask for; a simplex's value depends on which of its facets are cached when it is first
+asked for, so the stream asks dimension by dimension.
 
 Because Cech is not a flag complex, VR-specific packed/coface optimizations do
 not apply. It is consumed by the generic homology engines.
@@ -491,6 +496,14 @@ Vietoris-Rips filtration while preserving persistent homology.
 The resulting `EdgeCollapsedMetricSpace` implements `FiniteMetricSpace[Int]`,
 so existing Vietoris-Rips streams and persistence engines can consume the
 collapsed graph without special handling.
+
+Up to 4,096 points the collapse keeps the graph as an `n x n` matrix of values with a bit set of neighbours per vertex,
+so the common neighbours of an edge are the AND of two rows of bits and every value is one array read; above that, in a
+sorted map per vertex (memory proportional to the edges). Each edge is decided against the candidate times in order,
+and the vertex that dominated at one time is tested only against the vertices that joined the active set since. The
+cost is about the edges times their common neighbours, so a dense graph (a large radius) is the expensive case: 1,200
+points in R^3 at the enclosing radius take about ten seconds. The result is stored in rows of sorted neighbours, the
+surviving edges only. Both forms take every decision the same way (`EdgeCollapseDenseSpec`).
 
 ### Metric spaces
 
