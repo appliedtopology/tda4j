@@ -227,6 +227,9 @@ object LayeredInorderSimplexStream:
       val outVertices = IntBuffer()
       val outRoot = IntBuffer()
       val found = IntBuffer() // NeighbourLists: candidate w, then the position it is inserted at
+      // The rows once, not through the lazy vals' accessors on each read of the candidates' loops.
+      val closed = if candidates == Candidates.Bitsets then closedRows else null
+      val open = if candidates == Candidates.Bitsets then openRows else null
       resetSweep()
 
       def emit(o: Int, w: Int, at: Int, r: Int): Unit =
@@ -253,7 +256,7 @@ object LayeredInorderSimplexStream:
             var m = -1L
             var j = 0
             while j <= k && m != 0L do
-              val rows = if caseNo == 1 || (caseNo == 2 && j == 0) then closedRows else openRows
+              val rows = if caseNo == 1 || (caseNo == 2 && j == 0) then closed else open
               m &= rows(vs(o + j) * words + wi)
               j += 1
             if wi == (hi - 1) >>> 6 then
@@ -436,27 +439,66 @@ object LayeredInorderSimplexStream:
         Array.emptyDoubleArray
       )
 
-  /** `0 until count` stably sorted by `compare`: a merge sort on primitive indices. */
-  def sortIndices(count: Int, compare: (Int, Int) => Int): Array[Int] =
+  // Runs of this many indices are sorted by insertion before the merging starts.
+  private val InsertionBlock = 16
+
+  /** `0 until count` stably sorted by `compare`: a merge sort on primitive indices, over insertion-sorted blocks, whose
+    * merge of two neighbours moves only the part of each that overlaps the other. A sequence that is nearly in order,
+    * as the runs of equal diameter the generator emits are, costs little more at a block size above its disorder than
+    * the comparisons that find the overlap.
+    */
+  inline def sortIndices(count: Int, inline compare: (Int, Int) => Int): Array[Int] =
     var src = Array.range(0, count)
+    var from = 0
+    while from < count do
+      val until = math.min(from + InsertionBlock, count)
+      var i = from + 1
+      while i < until do
+        val x = src(i)
+        var j = i - 1
+        while j >= from && compare(src(j), x) > 0 do
+          src(j + 1) = src(j)
+          j -= 1
+        src(j + 1) = x
+        i += 1
+      from = until
     var dst = new Array[Int](count)
-    var width = 1
+    var width = InsertionBlock
     while width < count do
       var lo = 0
       while lo < count do
         val mid = math.min(lo + width, count)
         val hi = math.min(lo + 2 * width, count)
-        var i = lo
+        // Only the left elements above the right half's first and the right elements below the left half's last
+        // change places: `from` is the first of the former and `until` one past the last of the latter.
+        var from = mid
+        var until = mid
+        if mid < hi then
+          var a = lo
+          var b = mid
+          while a < b do // the first left element above src(mid)
+            val m = (a + b) >>> 1
+            if compare(src(m), src(mid)) > 0 then b = m else a = m + 1
+          from = a
+          a = mid
+          b = hi
+          while a < b do // one past the last right element below src(mid - 1)
+            val m = (a + b) >>> 1
+            if compare(src(m), src(mid - 1)) < 0 then a = m + 1 else b = m
+          until = a
+        System.arraycopy(src, lo, dst, lo, from - lo)
+        var i = from
         var j = mid
-        var t = lo
-        while t < hi do
-          if i < mid && (j >= hi || compare(src(i), src(j)) <= 0) then
+        var t = from
+        while t < until do
+          if i < mid && (j >= until || compare(src(i), src(j)) <= 0) then
             dst(t) = src(i)
             i += 1
           else
             dst(t) = src(j)
             j += 1
           t += 1
+        System.arraycopy(src, until, dst, until, hi - until)
         lo = hi
       val swap = src
       src = dst

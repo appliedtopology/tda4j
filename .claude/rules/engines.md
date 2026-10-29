@@ -16,18 +16,18 @@ the stream constructors differ (`IncrementalVietorisRipsSimplexStream.maxDimensi
 streams have none): use `VietorisRips` (`DESIGN-stream-naming.md`, `WORKLOG-maxdim-semantics-fix.md`).
 `CellularCohomologyEngine` has no such param: callers truncate via a stream with a `homologyDegreeLimit`
 (`VietorisRips(.., k)`, `Truncated`), and `persistentCohomology` (and the packed cubical engine's) leaves out the bars
-above it before building any representative (`CohomologyDegreeLimitSpec`; once 8.2M bars). **Every engine that reads a stream stops at its declared limit**, whatever degree it was asked for (`min(asked, limit)`):
+above it before building any representative (`CohomologyDegreeLimitSpec`, `WORKLOG-generic-engine-profile.md`). **Every engine that reads a stream stops at its declared limit**, whatever degree it was asked for (`min(asked, limit)`):
 naive (both cursors), chunks, cohomology, `Involution`. A hand-built complex that wants its top degree must not be a
 `Truncated`/`LimitedCofaceSimplexStream` (use `ExplicitStreamBuilder`). `TruncatedTopDegreeSpec` runs every way (factories,
 direct engines, the verb with each engine and representative kind, images, alpha) against the longer stream's bars up to
 the limit; `FastCubicalHomologyEngine`/`FastAlphaHomologyEngine` take `maxDimension` and skip the dual graph below the top.
 
 1. **Naive** (`CellularHomologyEngine`/`SimplicialHomologyEngine`) — single-pivot-table reduction, no clearing; the
-   reference baseline. Incremental (`advanceOne`/`advanceTo`/`advanceAll`); a raw-UnionFind fast path was rejected.
+   reference baseline. Incremental; a raw-UnionFind fast path was rejected.
    `persistentHomology(stream, k)` CAPS it at degree `k` (the verb and `PersistenceEngine.naive`/`naiveCocycles` too, at
    the stream's `homologyDegreeLimit`): cells above dimension `k + 1` are not read, and a `k + 1` cell keeps only its
    pairing and is not reduced while no class of degree `k` is open. The one-argument cursor reads a stream with no
-   declared limit whole (the reference: `NaiveCappedSpec` wraps a stream in a view without the limit). Cells are compared
+   declared limit whole (`NaiveCappedSpec`'s reference). Cells are compared
    by rank (`CellRanks`; `WORKLOG-naive-cap-review-2026-10-15.md`).
 2. **Chunks** (`CellularPersistenceInChunksEngine`) — clear-and-compress chunked algorithm, walks `0..maxDim+1`,
    filters essentials to `<=maxDim`. Dims 0/1 via raw union-find (`unionFindDim01`, `DESIGN-unionfind-in-chunks.md`): a
@@ -77,7 +77,9 @@ the limit; `FastCubicalHomologyEngine`/`FastAlphaHomologyEngine` take `maxDimens
    equal this engine there (`rules/cubical.md`). `Int`-vertex simplices under `simplexIsOrderedCell` (marked
    `StandardSimplexBoundary`) are reduced on flat arrays inside this class and must equal `packSimplices = false` term for
    term (`PackedSimplexCohomologySpec`); a column needing an addition still goes through `Chain.reduceBy` (#193,
-   `WORKLOG-layered-inorder.md`).
+   `WORKLOG-layered-inorder.md`). `PackedCells` finds a face by its vertices packed in one `Long` when they fit (a vertex
+   above the level's largest is rejected, never wrapped), else by hash; the coboundary is transposed in column ranges on
+   all threads; degrees above the stream's limit are not reduced (`WORKLOG-cohomology-face-lookup.md`, #251).
 
 **Cycles from cohomology (`Involution`, `homology/Involution.scala`)**: both cohomology engines expose
 `pairedCohomology` (bars + birth/death cells, zero-length pairs INCLUDED: their columns are pivots) and
@@ -86,7 +88,7 @@ a pivot that is not the paired birth cell throws (a pairing/order mismatch is a
 bug, never fall back). Finite bar cycle = `R_τ`; essential = `V_σ`. The dual direction (`Involution.cocycles`) starts
 from a homology pairing (naive/chunks, identical, union-find included: `InvolutionSpec`) and reduces only birth cells'
 coboundaries (`coboundariesOf`), youngest first. Fast cubical's union-find ties by value, not the stream order: no dual path, image cocycles go
-through the cohomology engine. The native kind is faster (cycles ~1.1-2.5x, cocycles 2.5-3x; `WORKLOG-involution.md`). Engines report different valid
+through the cohomology engine. The native kind is faster (`WORKLOG-involution.md`). Engines report different valid
 cycles: never compare representatives cell for cell across engines (`InvolutionSpec` checks validity).
 
 Every engine takes `includeZeroLength` (default `false`) on its bar-returning methods and drops `birth == death` pairs
@@ -94,8 +96,6 @@ from the pairing itself (`PersistenceBar.dropZeroLength`). Naive and chunks `dia
 `[birth, f]` (closed end), so a class born exactly at `f` survives the filter; a finished bar is `[b, d)`. Fast
 cubical/alpha drop equal-value pairs at construction.
 `ZeroLengthBarsSpec`.
-
-The opt-in pairing checks (`totalBarsAccountForAllCells`, `includeZeroLength = true`) stay in the engine specs.
 
 `Chain.reduceBy`/`reduceByUntil` throw (`IllegalStateException`) when the pivot moves back or stays put for 64 steps (a
 basis column whose leading cell is not its key, or an order mismatch; `WORKLOG-compact-representatives.md`).
@@ -112,8 +112,7 @@ images. `matlab.PersistenceResult` exposes both; CLI `--distance-to` only distan
 
 ## Cross-engine benchmark
 
-`EngineComparisonBenchmarkSpec` times every (construction x engine) pairing over point count, dimension and `maxDim`
-(construction and reduction apart, per-cell timeout); alpha and VR bar counts are never compared (radius vs diameter).
+`EngineComparisonBenchmarkSpec` times every (construction x engine) pairing over point count, dimension and `maxDim`; alpha and VR bar counts are never compared (radius vs diameter).
 
 **Benchmark specs** (`*BenchmarkSpec`, `ProfilingSpec` in `homology`) print timing tables; only an exception fails. All
 `skipAll` unless `-DrunBenchmarks=true` (a JVM property); scope with `testOnly` (`EngineComparisonBenchmarkSpec`: 15+
@@ -126,5 +125,5 @@ enumerated by the constructions (`WORKLOG-chunks-top-cells.md`).
 **Query contract (naive + chunks, `DiagramQuerySpec`, `WORKLOG-cursor-and-verb.md`)**: `diagramAt(f)`/`barcodeAt(f)`/
 `diagramWithGeneratorsAt(f)` give the diagram truncated at `f` (bars born `<= f`, deaths capped at `f`, a class alive at
 `f` dying at `f` unless no cell enters after `f`, then essential) wherever the cursor is. The cursor is kept on purpose
-(project lead): long runs stay inspectable and keep their output if they die; `advanceFor(budget)` runs time slices,
+(project lead): `advanceFor(budget)` runs time slices,
 `processedCells`/`totalCells` report progress.

@@ -31,6 +31,28 @@ class PackedSimplexCohomologySpec extends Specification:
       def filtrationOrdering = s.filtrationOrdering
       def iterator = cells.iterator
 
+  // The same cells with `offset` added to every vertex (the order of the vertices is kept): the engine finds a cell from
+  // its vertices side by side in a `Long` when they fit, and by a hash of them when they do not.
+  private def relabelled(s: CellStream[Simplex[Int], Double], offset: Int): CellStream[Simplex[Int], Double] =
+    def shift(c: Simplex[Int]) = Simplex.from(c.iterator.map(_ + offset).toList)
+    def unshift(c: Simplex[Int]) = Simplex.from(c.iterator.map(_ - offset).toList)
+    new CellStream[Simplex[Int], Double] with DoubleFiltration[Simplex[Int]]:
+      def filtrationValue = { case c if s.filtrationValue.isDefinedAt(unshift(c)) => s.filtrationValue(unshift(c)) }
+      def filtrationOrdering = Ordering.by[Simplex[Int], Simplex[Int]](unshift)(using s.filtrationOrdering)
+      def iterator = s.iterator.map(shift)
+
+  // The cells without the edges at the last vertex: its triangles have faces that are not in the stream, and a vertex
+  // that no edge has. Not a complex (the cycles of the Involution assume one), so only its cohomology is compared.
+  private def withoutEdgesAtLastVertex(
+    s: CellStream[Simplex[Int], Double],
+    last: Int
+  ): CellStream[Simplex[Int], Double] =
+    val cells = s.iterator.filterNot(c => c.dim == 1 && c.iterator.contains(last)).toVector
+    new CellStream[Simplex[Int], Double] with DoubleFiltration[Simplex[Int]]:
+      def filtrationValue = s.filtrationValue
+      def filtrationOrdering = s.filtrationOrdering
+      def iterator = cells.iterator
+
   private def streams(seed: Long): Seq[(String, CellStream[Simplex[Int], Double])] =
     val euclideanGrid = EuclideanMetricSpace(grid)
     Seq(
@@ -46,7 +68,13 @@ class PackedSimplexCohomologySpec extends Specification:
         rp2Triangles.zipWithIndex.map((t, i) => (i.toDouble, t))
       ),
       "alpha in R^3, shuffled" -> shuffled(AlphaShapes(cloud(14, 3, seed)), seed),
-      "Vietoris-Rips of a grid, shuffled" -> shuffled(VietorisRips(euclideanGrid, maxDimension = 2), seed)
+      "Vietoris-Rips of a grid, shuffled" -> shuffled(VietorisRips(euclideanGrid, maxDimension = 2), seed),
+      "Vietoris-Rips of a grid, vertices from 2^20 (edges keyed, triangles hashed)" ->
+        relabelled(VietorisRips(euclideanGrid, maxDimension = 2), 1 << 20),
+      "Vietoris-Rips of a grid, vertices from 2^28 (all hashed)" ->
+        relabelled(VietorisRips(euclideanGrid, maxDimension = 2), 1 << 28),
+      "Vietoris-Rips of a grid, vertices from -5 (hashed)" ->
+        relabelled(VietorisRips(euclideanGrid, maxDimension = 2), -5)
     )
 
   // Everything the engine returns for `stream`: the pairing with its cocycles, the order it was computed under, and the
@@ -88,6 +116,62 @@ class PackedSimplexCohomologySpec extends Specification:
           import ff.given; difference[ff.Fp](s"$name (seed $seed, F_${ff.p})", stream)
       yield failure
       failures.take(3) must beEmpty
+    }
+
+    "give the same on one thread and on several, on a stream whose coboundary blocks are split between them" in {
+      val ff = FiniteField(17)
+      import ff.given
+      val stream = VietorisRips(EuclideanMetricSpace(cloud(40, 3, 9L)), maxDimension = 2)
+      // Each thread count cuts the columns at other places, and only a column that is added to another shows what was
+      // wrong with its entries, so the cuts are moved around.
+      val sequential = Parallel.sequentially(results[ff.Fp](stream, packed = true))
+      val threaded = Seq(2, 3, 5, 8).map(n => n -> Parallel.withThreads(n)(results[ff.Fp](stream, packed = true)))
+      (sequential.head.size must beGreaterThan(30)).and(
+        threaded.filter((_, r) => r != sequential).map(_._1) must beEmpty
+      )
+    }
+
+    "skip the faces that are not in the stream, as the cells do, even those with a vertex no cell of their dimension has" in {
+      val ff = FiniteField(3)
+      import ff.given
+      val stream = withoutEdgesAtLastVertex(VietorisRips(EuclideanMetricSpace(grid), maxDimension = 2), 11)
+      def cohomology(packed: Boolean) =
+        val engine = CellularCohomologyEngine[Simplex[Int], ff.Fp, Double](packSimplices = packed)
+        val (paired, order) = engine.pairedCohomology(stream)
+        (
+          paired.map((b, p) => (b.dim, b.lower, b.upper, p, b.representative.terms)),
+          engine.persistentCohomology(stream).map(b => (b.dim, b.lower, b.upper, b.representative.terms))
+        )
+      (CellularCohomologyEngine[Simplex[Int], ff.Fp, Double]().reducesPacked(stream) must beTrue)
+        .and(cohomology(packed = true) must beEqualTo(cohomology(packed = false)))
+    }
+
+    "not take a face for another when a vertex has more bits than the vertices of the level below" in {
+      // The edges are the pairs of 0 to 15 (four bits a vertex); the triangle {0, 1, 21} has the face {0, 1} and, of
+      // the others, {0, 21}, whose 21 = 16 + 5 would carry into the 0 and read as the edge {1, 5} if the vertices were
+      // packed without a check.
+      val ff = FiniteField(3)
+      import ff.given
+      val edges = for b <- 1 until 16; a <- 0 until b yield Simplex(a, b)
+      val triangle = Simplex(0, 1, 21)
+      val values: Map[Simplex[Int], Double] =
+        (Simplex(21) +: (0 until 16).map(Simplex(_)) ++: edges :+ triangle).map {
+          case c if c.dim == 0 => c -> 0.0
+          case c if c.dim == 1 => c -> (1.0 + c.iterator.sum / 100.0)
+          case c               => c -> 5.0
+        }.toMap
+      val stream = new CellStream[Simplex[Int], Double] with DoubleFiltration[Simplex[Int]]:
+        def filtrationValue = { case c if values.contains(c) => values(c) }
+        def filtrationOrdering =
+          Ordering.by[Simplex[Int], (Double, Int, Long)](c =>
+            (values(c), c.dim, c.iterator.foldLeft(0L)((k, v) => k * 64 + v))
+          )
+        def iterator = values.keysIterator
+      def cohomology(packed: Boolean) =
+        val engine = CellularCohomologyEngine[Simplex[Int], ff.Fp, Double](packSimplices = packed)
+        engine.pairedCohomology(stream)._1.map((b, p) => (b.dim, b.lower, b.upper, p, b.representative.terms))
+      (CellularCohomologyEngine[Simplex[Int], ff.Fp, Double]().reducesPacked(stream) must beTrue)
+        .and(cohomology(packed = true) must beEqualTo(cohomology(packed = false)))
     }
 
     "and over the reals" in {
