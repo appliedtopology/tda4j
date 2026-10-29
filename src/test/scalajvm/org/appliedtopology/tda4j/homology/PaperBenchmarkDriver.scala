@@ -25,9 +25,10 @@ import scala.jdk.CollectionConverters.ListHasAsScala
   *     homology and 2^d times the top cells.
   *   - `task=alpha`: points; filtration values are circumradii. `backend=default` (Bowyer-Watson up to 4 dimensions,
   *     Helix above, DQP when `threshold` is small enough), `bowyer-watson`, `helix` or `dqp`. `threshold` is the
-  *     largest radius: bars alive at it are essential, and DQP builds only what lies within it. `engine=fastalpha` runs
-  *     on the backend's triangulation up to degree `dim` and takes no threshold; `engine=fastalpha-top` gives only the
-  *     top degree d - 1 (one union-find pass, `dim` ignored).
+  *     largest radius: bars alive at it are essential, and DQP builds only what lies within it; without one every
+  *     backend stops at the enclosing radius, as the default row does. `engine=fastalpha` runs on the backend's
+  *     triangulation up to degree `dim` and takes no threshold; `engine=fastalpha-top` gives only the top degree d - 1
+  *     (one union-find pass, `dim` ignored).
   *   - `task=cech`: points; filtration values are radii (the same barcode as alpha in general position).
   *   - `task=vr engine=parallel [threads=N]`: the block-parallel experiment `ParallelPackedCohomology` (implicit
   *     coboundaries) instead of `Persistence`, bars only (no representatives), on `threads` threads (default: every
@@ -229,11 +230,11 @@ object PaperBenchmarkDriver:
           require(threshold.isEmpty, s"engine=$engineName takes no threshold: it needs the whole triangulation")
           () => fastAlpha(pts, backend, dim, p, topOnly = engineName == "fastalpha-top")
         else if backend != AlphaBackend.Default then
-          // With a threshold the radius reaches the backend: DQP only builds the simplices within it (without one it
-          // is the untruncated DQP), the triangulations are filtered.
+          // The radius reaches the backend: DQP only builds the simplices within it, the triangulations are filtered.
+          // Without a threshold it is the enclosing radius, as for the default row.
           () =>
             Persistence(
-              Truncated(AlphaShapes(pts, backend, maxRadius = threshold, maxDimension = dim), dim),
+              Truncated(AlphaShapes.upToEnclosingRadius(pts, backend, maxRadius = threshold, maxDimension = dim), dim),
               characteristic = p,
               engine = engine,
               representatives = reps

@@ -162,8 +162,15 @@ maxRadius, maxDimension, settings)` directly.
   valid directions.
 - Ratio-test ties use the constraint's global index (Bland-style ordering).
 - When a small Schur complement cannot be handled safely, `DualQP.solve`
-  conservatively rejects that candidate simplex rather than risking
-  non-termination.
+  does not commit to it. Valid simplices of large circumradius, which are
+  common in high ambient dimension, have such pivots, so the candidate is solved
+  again with `rescueRankTolerance` (default `1e-11`) and kept only if the
+  multipliers it ends with satisfy the optimality conditions of the dual
+  against the data (a garbage answer from a poisoned factor fails them). The
+  cells then agree with Helix's within the radius, up to a circumradius of
+  about a hundred times the point spacing; past that the values are
+  approximate, so give `maxRadius` (or use `upToEnclosingRadius`) rather
+  than building the whole complex with DQP.
 - Vertex filtration values must use `space.weight(x)`; hard-coding `0.0`
   breaks weighted alpha filtrations.
 
