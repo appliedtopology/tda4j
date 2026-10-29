@@ -52,6 +52,28 @@ class FlatLayersSpec extends Specification:
         )
       )
 
+    // The collapsed graph (Boissonnat-Pritam): edges postponed or removed, so the stream is the flag complex of a graph
+    // that is not complete, built from its edge list.
+    val edgeCollapsed = for
+      (name, metric) <- metrics
+      max <- thresholds
+      keep <- criteria
+    yield s"edge-collapsed Vietoris-Rips of the $name, threshold $max, ${
+        if keep eq evenOrSmall then "criterion" else "keep all"
+      }" ->
+      (() =>
+        val collapsed = EdgeCollapse.collapse(metric, max)
+        (
+          Truncated.ofCofaces(new RipserCofaceSimplexStream(collapsed, keep, max), 2),
+          Truncated.ofCofaces(
+            new RipserCofaceSimplexStream(collapsed, keep, max):
+              override protected def flatFiltration = None
+            ,
+            2
+          )
+        )
+      )
+
     val cech = for
       (name, metric) <- metrics
       max <- thresholds
@@ -147,6 +169,29 @@ class FlatLayersSpec extends Specification:
         )
       )
 
+    // A planar cloud where, at these epsilons, a point leaves the complex while edges at it are alive, so simplices
+    // are past a vertex's deadline: the layers must leave them out (a generator that ignored the deadlines lists
+    // 4 to 11 more simplices here).
+    val sparseDeadlines = for
+      epsilon <- Seq(0.15, 0.3)
+      max <- thresholds
+    yield s"sparse Rips (epsilon $epsilon) of a planar cloud with vanishing points, threshold $max" ->
+      (() =>
+        val metric = EuclideanMetricSpace(cloud(12, 2, 2L))
+        val selection = LandmarkSelector.maxmin(metric, metric.size, 0)
+        val permutation = GreedyPermutation(selection.landmarks, selection.insertionRadius)
+        val keep = CofaceSimplexStream.keepAll
+        (
+          Truncated.ofCofaces(new SheehyRipsSimplexStream(metric, permutation, epsilon, keep, max), 2),
+          Truncated.ofCofaces(
+            new SheehyRipsSimplexStream(metric, permutation, epsilon, keep, max):
+              override protected def flatFiltration = None
+            ,
+            2
+          )
+        )
+      )
+
     val witness = for
       (name, metric) <- metrics
       nu <- 0 to 2
@@ -178,7 +223,9 @@ class FlatLayersSpec extends Specification:
         )
       )
 
-    vietorisRips ++ cech ++ Seq(cechParallel) ++ dtm ++ dowker ++ sparse ++ witness ++ generalWitness
+    vietorisRips ++ edgeCollapsed ++ cech ++ Seq(
+      cechParallel
+    ) ++ dtm ++ dowker ++ sparse ++ sparseDeadlines ++ witness ++ generalWitness
 
   private def bits(x: Double): Long = java.lang.Double.doubleToLongBits(x)
 

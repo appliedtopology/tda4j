@@ -57,6 +57,11 @@ open class DtmRipsSimplexStream(
 
   override protected def flatFiltration: Option[RipserCofaceSimplexStream.FlatFiltration] = Some(flat)
 
+  // The flag complex of the weighted distances: an edge is `reified.distance`, a vertex is born at `2 f(v)`, which no
+  // edge at it undercuts, so the layers from dimension 1 on are those of Vietoris-Rips over `reified`.
+  override protected def flatGenerator: Option[LayeredInorderSimplexStream.FlagGenerator] =
+    Some(LayeredInorderSimplexStream.Generator(reified.size, reified.distance(_, _), resolvedMaxFiltrationValue))
+
   // The base class's own case 0 (inherited from EnumeratingCofaceSimplexStream/RipserCofaceSimplexStream) emits
   // metricSpace.elements unsorted and unfiltered -- see the class doc's "ordering contract" paragraph for why
   // that's only safe when every vertex ties at filtration 0, which is never true here.

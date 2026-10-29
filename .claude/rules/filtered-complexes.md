@@ -43,6 +43,13 @@ not reducing them, was about 90 % of their time** (the reduction ~10 %; Cech's b
   `CofaceSimplexStream.keepAll` is asked about a `Simplex` per candidate, so the shared constant is the default of every
   coface stream: a literal `{ case _ => true }` default silently takes the slow path. A subclass that changes which
   values are kept overrides `keptValue`, not only `keptByThresholdAndCriterion` (Dowker: finite values only).
+- **Generator-backed layers (#190, `WORKLOG-flag-generator.md`)**: a coface stream that is the flag complex of a weighted
+  graph overrides `flatGenerator` (DTM-Rips, sparse Rips, Vietoris-Rips over an `EdgeCollapsedMetricSpace` by default): the
+  layers from dimension 1 come from `LayeredInorderSimplexStream.FlagGenerator` in order, nothing sorted, 2.2 to 7.5 times
+  faster to build. It must list the cells and values of the stream's `flatFiltration`; Sheehy's vanishing points are the
+  generator's per-vertex deadlines, checked where a vertex is added (a triangle can have live edges and a dead vertex).
+  `FlatLayersSpec` needs an input where the deadlines matter (`cloud(12, 2, 2L)`): a Sheehy generator without them passed
+  the older cases.
 - A flag-like hook gets the value of the simplex without its smallest vertex (`parentValue`) and only adds the edges of
   that vertex; an edge ignores it (a DTM vertex is born at `2 f`, which the edge value never undercuts).
 - Left, filed in #206: Cech's ball and facet floor on arrays (needs a facet lookup in the previous layer, and a facet
