@@ -93,6 +93,10 @@ export class Result {
   wassersteinDistance(other: Result, dimension: number, order?: number): number;
   /** `landscape[k][j]` is level `k` of the persistence landscape at sample `j` of `[tMin, tMax]`. */
   landscape(dimension: number, numLevels: number, tMin: number, tMax: number, resolution: number): number[][];
+  /** An optimal matching of the bars of degree `dimension` with those of `other` for the `order`-Wasserstein distance (default 1): `[i, j]` pairs bar `i` here with bar `j` there, `[i, -1]` sends a bar here to the diagonal and `[-1, j]` one there. Empty when the numbers of essential bars differ. */
+  wassersteinMatching(other: Result, dimension: number, order?: number): number[][];
+  /** As `wassersteinMatching`, for the bottleneck distance. */
+  bottleneckMatching(other: Result, dimension: number): number[][];
   /** The number of bars of degree `dimension` alive at each of `resolution` samples of `[tMin, tMax]`: a bar `[birth, death)` is alive at `t` when `birth <= t < death`. */
   bettiCurve(dimension: number, tMin: number, tMax: number, resolution: number): number[];
   /** The persistence silhouette of the bars of degree `dimension`: the average of their tents weighted by persistence to the power `power` (default 1). Essential bars are left out. */
@@ -194,6 +198,39 @@ export class EulerCurve {
 export function eulerCurve(points: number[][], options?: EulerCurveOptions): EulerCurve;
 /** `eulerCurve` for a finite metric space given as its full matrix of distances. */
 export function eulerCurveFromDistances(distances: number[][], options?: EulerCurveOptions): EulerCurve;
+
+/** Options of `bootstrapBand`. */
+export interface BootstrapBandOptions {
+  /** The degree of the bars (default 1). */
+  dimension?: number;
+  /** How many resamples (default 100). */
+  rounds?: number;
+  /** The band covers `1 - alpha` of the resamples (default 0.05). */
+  alpha?: number;
+  seed?: number;
+  /** Draw this many points without replacement; by default draw all the points with replacement. */
+  subsampleSize?: number;
+  prime?: number;
+  maxFiltrationValue?: number;
+  threads?: number;
+}
+
+/** The resampling confidence band of the bars of one degree of a point cloud. */
+export interface BootstrapBand {
+  /** The `1 - alpha` quantile of the bottleneck distances from the resamples' diagrams to the original. */
+  width: number;
+  /** Twice the width: a bar that persists longer than this survives the resampling. */
+  threshold: number;
+  alpha: number;
+  distances: number[];
+}
+
+/** The resampling confidence band of the bars of one degree of a point cloud (Fasy et al. 2014). */
+export function bootstrapBand(points: number[][], options?: BootstrapBandOptions): BootstrapBand;
+/** The ToMATo cluster of every point (0 for the highest peak): `k` nearest neighbours give the graph and the density, and two peaks merge when the valley between them is shallower than `tau`. */
+export function tomatoClusters(points: number[][], k: number, tau: number): number[];
+/** The valleys between the density peaks used by `tomatoClusters` as `[birth, death]`; a bar's persistence is the depth of its valley. */
+export function tomatoDiagram(points: number[][], k: number): number[][];
 
 /** The loops of a point cloud's Vietoris-Rips complex as `[birth, death]`, the most persistent first. */
 export function h1Bars(points: number[][]): number[][];

@@ -39,6 +39,22 @@ class ExportsSpec extends Specification:
     }
   }
 
+  "bootstrapBand, tomatoClusters and tomatoDiagram" should {
+    "return the band as a plain object and cluster two separated blobs" >> {
+      val band = dynamic(Exports.bootstrapBand(circle(30), options("rounds" -> 6, "seed" -> 2)))
+      val blobs =
+        js.Array((0 until 20).map(i => js.Array(0.1 * i, 0.0)) ++ (0 until 20).map(i => js.Array(50.0 + 0.1 * i, 0.0))*)
+      (band.threshold.asInstanceOf[Double] must beEqualTo(2.0 * band.width.asInstanceOf[Double])) and
+        (band.distances.asInstanceOf[js.Array[Double]].length must beEqualTo(6)) and
+        (Exports.tomatoClusters(blobs, 4, 100.0).toSet.size must beEqualTo(2)) and
+        (Exports.tomatoDiagram(blobs, 4).count(_(1).isInfinite) must beEqualTo(2))
+    }
+    "match a result with itself" >> {
+      val result = Exports.persistence(circle(20), options("maxDimension" -> 1))
+      result.wassersteinMatching(result, 1).forall(row => row(0) == row(1)) must beTrue
+    }
+  }
+
   "eulerCurve" should {
     "give the unit square's steps: four vertices, then four edges close a loop, then the diagonals fill it" >> {
       val square = js.Array(js.Array(0.0, 0.0), js.Array(1.0, 0.0), js.Array(1.0, 1.0), js.Array(0.0, 1.0))

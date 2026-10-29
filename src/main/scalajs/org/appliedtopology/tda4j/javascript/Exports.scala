@@ -120,6 +120,42 @@ object Exports:
   ): EulerCurve =
     guarded(EulerCurve(TDA4j.eulerCurveFromDistanceMatrix(matrix(distances), optionArray(options))))
 
+  /** The resampling confidence band of the bars of one degree of a point cloud (Fasy et al. 2014): resample the points,
+    * compute each resample's diagram and measure its bottleneck distance to the original. Options: `dimension` (default
+    * 1), `rounds` (100), `alpha` (0.05), `seed` (0), `subsampleSize` (draw that many points without replacement; by
+    * default draw with replacement), `prime`, `maxFiltrationValue` and `threads`. Returns `{ width, threshold, alpha,
+    * distances }`: a bar that persists longer than `threshold` (twice the width) survives the resampling.
+    */
+  @JSExportTopLevel("bootstrapBand")
+  def bootstrapBand(
+    points: js.Array[js.Array[Double]],
+    options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
+  ): js.Object = guarded {
+    val result = TDA4j.bootstrapBand(matrix(points), optionArray(options))
+    js.Dynamic
+      .literal(
+        width = result.width(),
+        threshold = result.threshold(),
+        alpha = result.alpha(),
+        distances = js.Array(result.distances()*)
+      )
+      .asInstanceOf[js.Object]
+  }
+
+  /** The ToMATo cluster of every point of a cloud (0 for the cluster of the highest peak): the graph and the density
+    * come from the `k` nearest neighbours, and two peaks merge when the valley between them is shallower than `tau`.
+    */
+  @JSExportTopLevel("tomatoClusters")
+  def tomatoClusters(points: js.Array[js.Array[Double]], k: Int, tau: Double): js.Array[Int] =
+    guarded(js.Array(TDA4j.tomatoClusters(matrix(points), k, tau)*))
+
+  /** The valleys between the density peaks used by `tomatoClusters`: `[birth, death]` per bar, with death `Infinity`
+    * for the highest peak of each component. A bar's persistence is the depth of its valley: choose `tau` in a gap.
+    */
+  @JSExportTopLevel("tomatoDiagram")
+  def tomatoDiagram(points: js.Array[js.Array[Double]], k: Int): js.Array[js.Array[Double]] =
+    guarded(grid(TDA4j.tomatoDiagram(matrix(points), k)))
+
   /** The loops of the point cloud's Vietoris-Rips complex: `[birth, death]` for each persistent class of degree 1, the
     * most persistent first. Loop `i` is `cocycleIndex: i` of `circularCoordinates`; pick `r` between its birth and
     * death.
@@ -346,6 +382,29 @@ final class Result private[javascript] (underlying: PersistenceResult):
   @JSExport
   def wassersteinDistance(other: Result, dimension: Int, order: js.UndefOr[Double] = js.undefined): Double =
     Exports.guarded(underlying.wassersteinDistance(other.wrapped, dimension, order.getOrElse(1.0)))
+
+  /** An optimal matching of the dimension-`dimension` bars with those of `other` for the `order`-Wasserstein distance
+    * (default 1): `[i, j]` pairs bar `i` here with bar `j` there, `[i, -1]` sends a bar here to the diagonal and
+    * `[-1, j]` one there. Empty when the numbers of essential bars differ.
+    */
+  @JSExport
+  def wassersteinMatching(
+    other: Result,
+    dimension: Int,
+    order: js.UndefOr[Double] = js.undefined
+  ): js.Array[js.Array[Int]] =
+    Exports.guarded(
+      js.Array(
+        underlying.wassersteinMatching(other.wrapped, dimension, order.getOrElse(1.0)).map(row => js.Array(row*))*
+      )
+    )
+
+  /** As `wassersteinMatching`, for the bottleneck distance. */
+  @JSExport
+  def bottleneckMatching(other: Result, dimension: Int): js.Array[js.Array[Int]] =
+    Exports.guarded(
+      js.Array(underlying.bottleneckMatching(other.wrapped, dimension).map(row => js.Array(row*))*)
+    )
 
   /** The first `numLevels` persistence landscapes of the dimension-`dimension` bars, `resolution` samples of
     * `[tMin, tMax]` each: `landscape[k][j]` is level `k` at sample `j`.

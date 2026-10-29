@@ -40,7 +40,7 @@ other interfaces: `result.allBars` has every bar, and `result.hiddenCount` says 
 | `persistenceFromGrid(shape, values, options)` | an image or voxel grid of any dimension, values in row-major order |
 
 A `Result` also has `bottleneckDistance(other, dimension)`, `wassersteinDistance(other, dimension, order)`,
-`slicedWassersteinDistance(other, dimension, directions)`, `landscape(dimension, numLevels, tMin, tMax, resolution)`,
+`slicedWassersteinDistance(other, dimension, directions)`, `wassersteinMatching(other, dimension, order)`, `bottleneckMatching(other, dimension)`, `landscape(dimension, numLevels, tMin, tMax, resolution)`,
 `bettiCurve(dimension, tMin, tMax, resolution)`, `silhouette(dimension, tMin, tMax, resolution, power)`,
 `persistenceEntropy(dimension, normalized)` and the plots `plotBarcode()`, `plotDiagram()`,
 `plotComplex(at)` and `plotRepresentative(i, at)`. A plot has `svg()` and `html()` for the text of a picture or a page,
@@ -59,6 +59,8 @@ Landmarks, circular coordinates and the text of files have functions of their ow
 | `persistenceFromLandmarks(points, landmarks, options)` | a `Result` on the witness complex of the landmarks; `persistenceFromDistancesAndLandmarks` for a distance matrix |
 | `coveringRadius(points, landmarks)` | the covering radius of any landmarks |
 | `eulerCurve(points, { maxSimplexDimension, maxFiltrationValue })` | the [Euler characteristic curve](vectorization.md#the-euler-characteristic-curve) of the Vietoris-Rips complex: an object with `scales`, `values`, `at(t)` and `sample(tMin, tMax, resolution)`; `eulerCurveFromDistances` for a distance matrix |
+| `bootstrapBand(points, { dimension, rounds, alpha, seed, subsampleSize })` | the [resampling band](noise-and-clusters.md) of the bars of one degree: `{ width, threshold, alpha, distances }`; a bar that persists longer than `threshold` survives the resampling |
+| `tomatoClusters(points, k, tau)`, `tomatoDiagram(points, k)` | [ToMATo](noise-and-clusters.md) clustering: the cluster of every point (0 for the highest peak), and `[birth, death]` for the valleys between peaks |
 | `h1Bars(points)` | the loops of the Vietoris-Rips complex as `[birth, death]`, most persistent first |
 | `circularCoordinates(points, r, { cocycleIndex, prime })` | `{ theta, birth, death, r, prime }`: one angle in [0, 1) per point for loop `cocycleIndex` of `h1Bars`, with `r` between its birth and death |
 | `toroidalCoordinates(points, r, cocycleIndices, { prime, reduce })` | `{ theta, cocycleIndices, basisChange, originalGram, reducedGram, r, prime }`: `theta[c][i]` is coordinate `c` of point `i` |

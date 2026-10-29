@@ -69,3 +69,9 @@ The density can be any function on the vertices and the graph any graph: `ToMATo
 takes a vector of values and a function from a vertex to its neighbours. With `tau = 0` every local maximum is a
 cluster, and with an infinite `tau` every connected component is one. The bars use the library's sublevel convention for
 a superlevel filtration (a peak of height `h` is born at `-h`), so `Plot.barcode` draws them as it draws any other bars.
+
+### From MATLAB and JavaScript
+
+MATLAB has `TDA4j.bootstrapBand(points, {'dimension', '1', 'rounds', '100'})`, whose result has `threshold()`, and
+`TDA4j.tomatoClusters(points, k, tau)` and `TDA4j.tomatoDiagram(points, k)`. JavaScript has `bootstrapBand`,
+`tomatoClusters` and `tomatoDiagram` with the same arguments.

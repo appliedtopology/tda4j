@@ -16,4 +16,6 @@
   `diagram.longerThan(band.threshold)` keeps the bars beyond it.
 - `ToMATo`: persistence-based clustering (Chazal, Guibas, Oudot and Skraba 2013) on any graph with a density, or on a
   point cloud through its nearest-neighbour graph, with the valley depths as a diagram to choose the merging depth from.
+- MATLAB and JavaScript: `bootstrapBand`, `tomatoClusters`, `tomatoDiagram`, and `wassersteinMatching` and
+  `bottleneckMatching` on a result.
 - The user guide page "Telling features from noise, and clustering".

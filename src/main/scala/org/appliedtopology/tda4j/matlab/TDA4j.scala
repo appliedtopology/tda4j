@@ -394,6 +394,57 @@ object TDA4j:
       new EulerCurveResult(EulerCharacteristicCurve.vietorisRips(metricSpace, maxSimplexDimension, maxFiltrationValue))
     }
 
+  private val bootstrapBandKeys =
+    Set("dimension", "rounds", "alpha", "seed", "subsamplesize", "prime", "maxfiltrationvalue", "threads")
+
+  /** The resampling confidence band of the degree-`dimension` bars of a point cloud: see [[BootstrapBandResult]] and
+    * `BootstrapBand`. Options `dimension` (default `1`), `rounds` (default `100`), `alpha` (default `0.05`), `seed`
+    * (default `0`), `subsampleSize` (resample that many points without replacement; by default the points are drawn
+    * with replacement), `prime`, `maxFiltrationValue` and `threads`, and no others.
+    */
+  def bootstrapBand(points: Array[Array[Double]], options: Array[String]): BootstrapBandResult =
+    validatePoints(points)
+    val opts = parseOptionsWithKeys(options, bootstrapBandKeys)
+    val resampling = opts.get("subsamplesize") match
+      case Some(raw) => BootstrapBand.Resampling.Subsample(parseIntOption("subsampleSize", raw))
+      case None      => BootstrapBand.Resampling.Bootstrap
+    withThreads(opts) {
+      new BootstrapBandResult(
+        BootstrapBand(
+          PointCloud(points),
+          dimension = opts.get("dimension").fold(1)(parseIntOption("dimension", _)),
+          rounds = opts.get("rounds").fold(100)(parseIntOption("rounds", _)),
+          alpha = opts.get("alpha").fold(0.05)(parseDoubleOption("alpha", _)),
+          resampling = resampling,
+          seed = opts.get("seed").fold(0L)(raw => parseIntOption("seed", raw).toLong),
+          maxFiltrationValue = opts.get("maxfiltrationvalue").map(parseDoubleOption("maxFiltrationValue", _)),
+          characteristic = opts.get("prime").fold(FiniteField.DefaultPrime)(parseIntOption("prime", _))
+        )
+      )
+    }
+
+  def bootstrapBand(points: Array[Array[Double]]): BootstrapBandResult =
+    bootstrapBand(points, Array.empty[String])
+
+  /** The ToMATo cluster (`0` for the cluster of the highest peak, numbered by decreasing peak height) of every point:
+    * see `ToMATo.cluster`. `k` nearest neighbours define the graph and the density, `tau` is the depth below which two
+    * peaks merge.
+    */
+  def tomatoClusters(points: Array[Array[Double]], k: Int, tau: Double): Array[Int] =
+    validatePoints(points)
+    ToMATo.cluster(PointCloud(points), k, tau).labels.toArray
+
+  /** The valleys between the peaks of the ToMATo density of a point cloud: one row `(birth, death)` per bar, `death`
+    * `Inf` for the highest peak of each component. Its persistence is the depth of the valley: pick `tau` in a gap.
+    */
+  def tomatoDiagram(points: Array[Array[Double]], k: Int): Array[Array[Double]] =
+    validatePoints(points)
+    val cloud = PointCloud(points)
+    ToMATo
+      .diagram(ToMATo.density(cloud, k), ToMATo.neighbourGraph(cloud, k))
+      .map(b => Array(b.birth, b.death))
+      .toArray
+
   /** The loops of the point cloud's Vietoris-Rips complex: one row `(birth, death)` per persistent H¹ class, most
     * persistent first. Row `i` is `cocycleIndex = i` of [[circularCoordinates]]; pick `r` between its birth and death.
     */

@@ -176,6 +176,27 @@ final class PersistenceResult private[matlab] (
       toGroundNorm(groundNorm)
     )
 
+  private def matchingRows(matching: Option[BarcodeDistance.Matching]): Array[Array[Int]] =
+    matching.fold(Array.empty[Array[Int]]) { m =>
+      (m.pairs.map((i, j) => Array(i, j)) ++ m.leftToDiagonal.map(i => Array(i, -1)) ++
+        m.rightToDiagonal.map(j => Array(-1, j))).toArray
+    }
+
+  /** An optimal matching of the dimension-`dimension` bars of this result with those of `other` for the Wasserstein
+    * distance of order `order`: one row `[i j]` per matched pair of bars, `[i -1]` for a bar of this result matched to
+    * the diagonal and `[-1 j]` for one of `other`. The bars are numbered from 0 in the order of [[toArrayUnfiltered]]
+    * restricted to that dimension. No rows if the numbers of essential bars differ (the distance is `Inf` then). See
+    * `BarcodeDistance.wassersteinMatching`.
+    */
+  def wassersteinMatching(other: PersistenceResult, dimension: Int, order: Double): Array[Array[Int]] =
+    matchingRows(
+      BarcodeDistance.wassersteinMatching(barsOfDimension(dimension), other.barsOfDimension(dimension), order)
+    )
+
+  /** As [[wassersteinMatching]], for the bottleneck distance. */
+  def bottleneckMatching(other: PersistenceResult, dimension: Int): Array[Array[Int]] =
+    matchingRows(BarcodeDistance.bottleneckMatching(barsOfDimension(dimension), other.barsOfDimension(dimension)))
+
   /** The first `numLevels` persistence landscapes of the dimension-`dimension` bars, sampled at `resolution` points of
     * `[tMin, tMax]`: `levels(k)(j)` is level `k` (`0` the outermost) at point `j`. See `Vectorization.landscape`.
     */
