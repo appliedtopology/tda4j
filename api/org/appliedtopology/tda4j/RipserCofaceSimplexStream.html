@@ -15,7 +15,7 @@
 </div>
 <div class="cover">
  <div class="doc">
-  <p>Vietoris-Rips, or any filtration monotone along faces given as <code>filtrationValueOverride</code>, built dimension by dimension from the cofaces of the simplices kept in the dimension below (the loop <a href="Cech$.html">Cech</a>, <a href="Witness$.html">Witness</a>, <a href="Dowker$.html">Dowker</a>, <a href="DtmRips$.html">DtmRips</a> and <a href="SparseRips$.html">SparseRips</a> reuse). <code>keepCriterion</code> and <code>maxFiltrationValue</code> decide what is kept; a simplex is only offered once all its edges are kept, so <code>keepCriterion</code> must keep the edges of every simplex it keeps.</p>
+  <p>Vietoris-Rips, or any filtration monotone along faces given as <code>filtrationValueOverride</code>, built dimension by dimension from the cofaces of the simplices kept in the dimension below (the loop <a href="Cech$.html">Cech</a>, <a href="Witness$.html">Witness</a>, <a href="Dowker$.html">Dowker</a>, <a href="DtmRips$.html">DtmRips</a> and <a href="SparseRips$.html">SparseRips</a> reuse). <code>keepCriterion</code> and <code>maxFiltrationValue</code> decide what is kept; the criterion must be closed under faces (see <a href="CofaceSimplexStream.html#keepCriterion-0">CofaceSimplexStream.keepCriterion</a>). It is asked about each candidate that has a kept facet, whether the stream builds its dimensions with the coface loop or with <span data-unresolved-link="">flatGenerator</span>, which cuts each dimension to what the criterion keeps before generating the next from it.</p>
  </div>
  <section id="attributes">
   <h2 class="h500">Attributes</h2>
@@ -36,7 +36,7 @@
     Source
    </dt>
    <dd class="body-medium">
-    <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L551" target="_blank">SimplexStream.scala</a>
+    <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L562" target="_blank">SimplexStream.scala</a>
    </dd>
    <dt class="body-small">
     Graph
@@ -236,7 +236,7 @@ node19 -> node0;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L617" target="_blank">SimplexStream.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L632" target="_blank">SimplexStream.scala</a>
               </dd>
              </dl>
             </div>
@@ -279,7 +279,7 @@ node19 -> node0;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L832" target="_blank">SimplexStream.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L867" target="_blank">SimplexStream.scala</a>
               </dd>
              </dl>
             </div>
@@ -512,7 +512,7 @@ node19 -> node0;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L401" target="_blank">SimplexStream.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L410" target="_blank">SimplexStream.scala</a>
               </dd>
              </dl>
             </div>
@@ -548,7 +548,7 @@ node19 -> node0;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L405" target="_blank">SimplexStream.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L414" target="_blank">SimplexStream.scala</a>
               </dd>
              </dl>
             </div>
@@ -584,7 +584,7 @@ node19 -> node0;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L385" target="_blank">SimplexStream.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L392" target="_blank">SimplexStream.scala</a>
               </dd>
              </dl>
             </div>
@@ -625,7 +625,7 @@ node19 -> node0;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L448" target="_blank">SimplexStream.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L457" target="_blank">SimplexStream.scala</a>
               </dd>
              </dl>
             </div>
@@ -661,7 +661,7 @@ node19 -> node0;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L435" target="_blank">SimplexStream.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L444" target="_blank">SimplexStream.scala</a>
               </dd>
              </dl>
             </div>
@@ -733,7 +733,7 @@ node19 -> node0;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L403" target="_blank">SimplexStream.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L412" target="_blank">SimplexStream.scala</a>
               </dd>
              </dl>
             </div>
@@ -769,7 +769,7 @@ node19 -> node0;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L451" target="_blank">SimplexStream.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L460" target="_blank">SimplexStream.scala</a>
               </dd>
              </dl>
             </div>

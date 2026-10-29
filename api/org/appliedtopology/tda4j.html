@@ -3181,7 +3181,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L314" target="_blank">SimplexStream.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L321" target="_blank">SimplexStream.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -6343,7 +6343,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L363" target="_blank">SimplexStream.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L370" target="_blank">SimplexStream.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -10426,7 +10426,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L1086" target="_blank">SimplexStream.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L1121" target="_blank">SimplexStream.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -11556,7 +11556,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L325" target="_blank">SimplexStream.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L332" target="_blank">SimplexStream.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -14606,11 +14606,11 @@
            <div class="originInfo"></div>
            <div class="memberDocumentation">
             <div class="documentableBrief doc">
-             <p>Vietoris-Rips, or any filtration monotone along faces given as <code>filtrationValueOverride</code>, built dimension by dimension from the cofaces of the simplices kept in the dimension below (the loop <a href="tda4j/Cech$.html">Cech</a>, <a href="tda4j/Witness$.html">Witness</a>, <a href="tda4j/Dowker$.html">Dowker</a>, <a href="tda4j/DtmRips$.html">DtmRips</a> and <a href="tda4j/SparseRips$.html">SparseRips</a> reuse). <code>keepCriterion</code> and <code>maxFiltrationValue</code> decide what is kept; a simplex is only offered once all its edges are kept, so <code>keepCriterion</code> must keep the edges of every simplex it keeps.</p>
+             <p>Vietoris-Rips, or any filtration monotone along faces given as <code>filtrationValueOverride</code>, built dimension by dimension from the cofaces of the simplices kept in the dimension below (the loop <a href="tda4j/Cech$.html">Cech</a>, <a href="tda4j/Witness$.html">Witness</a>, <a href="tda4j/Dowker$.html">Dowker</a>, <a href="tda4j/DtmRips$.html">DtmRips</a> and <a href="tda4j/SparseRips$.html">SparseRips</a> reuse). <code>keepCriterion</code> and <code>maxFiltrationValue</code> decide what is kept; the criterion must be closed under faces (see <a href="tda4j/CofaceSimplexStream.html#keepCriterion-0">CofaceSimplexStream.keepCriterion</a>). It is asked about each candidate that has a kept facet, whether the stream builds its dimensions with the coface loop or with <span data-unresolved-link="">flatGenerator</span>, which cuts each dimension to what the criterion keeps before generating the next from it.</p>
             </div>
             <div class="cover">
              <div class="doc">
-              <p>Vietoris-Rips, or any filtration monotone along faces given as <code>filtrationValueOverride</code>, built dimension by dimension from the cofaces of the simplices kept in the dimension below (the loop <a href="tda4j/Cech$.html">Cech</a>, <a href="tda4j/Witness$.html">Witness</a>, <a href="tda4j/Dowker$.html">Dowker</a>, <a href="tda4j/DtmRips$.html">DtmRips</a> and <a href="tda4j/SparseRips$.html">SparseRips</a> reuse). <code>keepCriterion</code> and <code>maxFiltrationValue</code> decide what is kept; a simplex is only offered once all its edges are kept, so <code>keepCriterion</code> must keep the edges of every simplex it keeps.</p>
+              <p>Vietoris-Rips, or any filtration monotone along faces given as <code>filtrationValueOverride</code>, built dimension by dimension from the cofaces of the simplices kept in the dimension below (the loop <a href="tda4j/Cech$.html">Cech</a>, <a href="tda4j/Witness$.html">Witness</a>, <a href="tda4j/Dowker$.html">Dowker</a>, <a href="tda4j/DtmRips$.html">DtmRips</a> and <a href="tda4j/SparseRips$.html">SparseRips</a> reuse). <code>keepCriterion</code> and <code>maxFiltrationValue</code> decide what is kept; the criterion must be closed under faces (see <a href="tda4j/CofaceSimplexStream.html#keepCriterion-0">CofaceSimplexStream.keepCriterion</a>). It is asked about each candidate that has a kept facet, whether the stream builds its dimensions with the coface loop or with <span data-unresolved-link="">flatGenerator</span>, which cuts each dimension to what the criterion keeps before generating the next from it.</p>
              </div>
              <h2 class="h200">Attributes</h2>
              <dl class="attributes attributes-small">
@@ -14630,7 +14630,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L551" target="_blank">SimplexStream.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L562" target="_blank">SimplexStream.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -14743,7 +14743,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L892" target="_blank">SimplexStream.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/SimplexStream.scala#L927" target="_blank">SimplexStream.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
