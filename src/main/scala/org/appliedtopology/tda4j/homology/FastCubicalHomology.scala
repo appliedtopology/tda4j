@@ -27,14 +27,17 @@ open class FastCubicalHomologyEngine[CoefficientT: Field]:
   private val fr = summon[CoefficientT is Field]
   given Ordering[Cube] = cubeOrdering
 
-  /** Every bar of the image's sublevel (or superlevel) filtration, with representatives; zero-length bars (a plateau's
-    * cells pairing off at one value) only if `includeZeroLength`.
+  /** Every bar of the image's sublevel (or superlevel) filtration up to degree `maxDimension` (default: all, up to
+    * `d - 1`), with representatives; zero-length bars (a plateau's cells pairing off at one value) only if
+    * `includeZeroLength`. Below the top degree only the cells of dimension `maxDimension + 1` and lower are built, as
+    * for any other engine, and the dual graph is walked only when the top degree is asked for.
     */
   def persistentHomology(
     stream: CubicalGridStream,
-    includeZeroLength: Boolean = false
+    includeZeroLength: Boolean = false,
+    maxDimension: Optional[Int] = Optional.empty
   ): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
-    compute(stream, includeZeroLength, representatives = true)
+    compute(stream, includeZeroLength, representatives = true, maxDimension)
 
   // `private[tda4j]` on purpose: every public way to compute persistence returns a representative with every bar (the
   // library's design principle), and this measurement hook does not.
@@ -50,24 +53,23 @@ open class FastCubicalHomologyEngine[CoefficientT: Field]:
   private def compute(
     stream: CubicalGridStream,
     includeZeroLength: Boolean,
-    representatives: Boolean
+    representatives: Boolean,
+    maxDimension: Optional[Int] = Optional.empty
   ): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
     require(
       stream.ambientDim >= 2,
       s"FastCubicalHomologyEngine requires ambient dimension >= 2, got ${stream.ambientDim}"
     )
+    val top = stream.ambientDim - 1
+    val cap = math.min(maxDimension.getOrElse(top), top)
+    require(cap >= 0, s"maxDimension must be at least 0, got $cap")
     val grid = GridRanks(stream.shape, stream.topCellValues)
     // Representatives are packed on every grid whose cells have Int indices (every grid that fits in memory); one
     // decoder per run, shared by all of them.
     val cubes = Option.when(GridCubes.fits(grid.shape))(GridCubes(grid.shape))
-    val bars =
-      if stream.ambientDim == 2 then
-        computeH0(grid, includeZeroLength, cubes) ++
-          computeDualTopDimension(grid, includeZeroLength, representatives, cubes)
-      else
-        computeMiddleDimensions(stream, grid, includeZeroLength) ++
-          computeDualTopDimension(grid, includeZeroLength, representatives, cubes)
-    bars
+    val dual = if cap == top then computeDualTopDimension(grid, includeZeroLength, representatives, cubes) else Nil
+    if stream.ambientDim == 2 then computeH0(grid, includeZeroLength, cubes) ++ dual
+    else computeMiddleDimensions(stream, grid, includeZeroLength, math.min(cap, top - 1)) ++ dual
 
   // -------------------------------------------------------------------------------------------------------------
   // d >= 3's "middle" degrees (1 <= k <= d-2) have no duality shortcut. They go to cohomology on the grid without its
@@ -81,11 +83,12 @@ open class FastCubicalHomologyEngine[CoefficientT: Field]:
   private def computeMiddleDimensions(
     stream: CubicalGridStream,
     grid: GridRanks,
-    includeZeroLength: Boolean
+    includeZeroLength: Boolean,
+    upTo: Int
   ): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
-    new PackedCubicalCohomologyEngine[CoefficientT](stream, stream.ambientDim - 1, grid)
+    new PackedCubicalCohomologyEngine[CoefficientT](stream, upTo + 1, grid)
       .persistentHomology(includeZeroLength)
-      .filter(_.dim <= stream.ambientDim - 2)
+      .filter(_.dim <= upTo)
 
   private def endpoint(lower: Boolean)(v: Double): BarcodeEndpoint[Double] =
     if !lower && v == Double.PositiveInfinity then PositiveInfinity()
