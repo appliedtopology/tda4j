@@ -405,3 +405,37 @@ script so the explicit tools skip it.
 Barcodes identical at every thread count on all four (cube10_40: 81 bars, as ripser.cpp's). Sequentially the experiment
 is 2.3x slower than ripser.cpp on fractal-r and 2-2.5x faster on random16 and cube10_40. Not verified: anything above 4
 threads, `giotto-ph-mt` and `dipha-mt` in the sweep (not installed here), the GUDHI distance column.
+
+## Addendum 2026-10-28: the lens-graph identities in the library (#187, #191)
+
+Point-in-time snapshot (thread "Work through issues #187 to #206").
+
+**#187, the oracle.** `LensGraphOracleSpec` (shared by JVM and JS) checks the two identities of #187 against `Engine.Chunks`,
+`Naive`, `Cohomology`, `Ripser` and `ParallelRipser` over F_2, F_3 and F_17 on random clouds (n = 6..12 in R^2..R^4, three
+thresholds), against `Ripser` and `ParallelRipser` on eight clouds of n = 40..60 (two on JS), and on two hand-counted
+clouds (a perturbed square, a perturbed octahedron). The oracle (`LensGraphOracleSpec.counts`) is O(edges * lens^2) with
+a union-find per lens and never computes persistence. It requires all distances distinct (`distinctDistances`); a grid is
+asserted to fail that check, because with ties an edge's lens graph misses the simplices its tied edges share.
+All engines agree with the oracle today. Sanity mutation: `includeZeroLength = true` made the engines throw rather than
+disagree, so that run says nothing about detection; the discriminating power is the two hand counts plus the 64 expectations
+that held on every engine.
+
+**#191, the curve.** `EulerCharacteristicCurve` (`streams/`): a simplex belongs to its last edge in the sorted edge list
+(any fixed order refining length), and the simplices of an edge `ab` are `ab` joined with the cliques of the graph on
+the points joined to both `a` and `b` by EARLIER edges, joined to each other when their edge is earlier. Using the
+sorted-edge index instead of the length for "earlier" makes the identity exact on tied distances too: tied edges are just
+taken in the sorted order and their jumps add at the shared scale. So the curve steps at length(ab) by
+`-1 + c_1 - c_2 + ...` with `c_j` the `j`-vertex cliques of that graph; the sweep holds one bit row per vertex
+(`n^2/8` bytes per chunk). Chunks of the sorted edges are independent given the edges before them (each replays its
+prefix with bit sets, cheap next to clique counting) and run through `Parallel.tasks`, last chunk first because the lens
+graphs grow along the sweep.
+- Checked cell for cell against `ofStream(LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream))` for simplex
+  dimension 0..4 on random clouds, the octagon, a grid, the three-value metric and random integer metrics, at threshold
+  None, infinity and 0.6 of the enclosing radius, and against the alternating sum of the Betti numbers of the full
+  7-point complex (`Persistence`, no simplex count). Sign mutation fails 6 of 8 examples.
+- Steps where the value does not change are not steps (the right triangle's edge of length 5 and its triangle cancel).
+- Timing, one run each, this container (4 cores), not an A/B: n = 1,000 in R^3, threshold 0.3, simplices to dimension 3:
+  45 ms (36,172 steps); n = 300 to dimension 2: 7 ms against 300 ms for counting the Ripser stream; n = 100 in R^8, every
+  edge, simplices to dimension 6: 14.6 s on one thread, 7.1 s on four (about 2x; why not more is not looked into).
+- Not done: MATLAB, CLI and JavaScript wrappers (follow-up issue), a curve from a persistence diagram (the Betti-number
+  alternating sum of a diagram is the curve of the complex only when the diagram is not truncated).

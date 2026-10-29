@@ -135,6 +135,33 @@ bar, whatever the threshold.
 | `--distance-order` | the order of the Wasserstein distance; default `1.0` |
 | `--distance-ground-norm` | the ground norm on the birth-death plane: a finite `p >= 1`; default `L∞` |
 
+## The Euler characteristic curve
+
+`--euler-curve` writes the [Euler characteristic curve](vectorization.md#the-euler-characteristic-curve) of the
+Vietoris-Rips complex of a point cloud or a distance matrix instead of a diagram: a `scale,value` line for each scale
+where the curve steps, after a header line.
+
+```
+$ tda4j --euler-curve circle.csv        # 30 points on a circle, as in the Scala example
+scale,value
+0.0,30
+0.1928850396070111,29
+0.20961433765776488,27
+...
+```
+
+| flag | meaning |
+|---|---|
+| `--euler-curve` | write the curve instead of the diagram |
+| `--max-simplex-dimension` | the largest simplex dimension counted; default `2` |
+| `--max-filtration-value` | the largest scale; default the minimum enclosing radius |
+| `--threads` | as for a diagram |
+| `--output` | the file to write; default standard output |
+
+A flag that would change a diagram (`--complex`, `--max-dimension`, `--engine`, `--field`, ...), `--plot`,
+`--distance-to`, `--save-result` and the landmark flags are rejected with `--euler-curve`, as are images, relations and
+saved results as input.
+
 ## Saved results
 
 `--save-result result.json` also saves the whole result: every bar, the reported bars' representatives, the input and how

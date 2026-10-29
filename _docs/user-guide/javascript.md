@@ -56,6 +56,7 @@ Landmarks, circular coordinates and the text of files have functions of their ow
 | `selectLandmarks(points, { numLandmarks })` | `{ landmarks, coveringRadius }`; `selectLandmarksFromDistances` for a distance matrix |
 | `persistenceFromLandmarks(points, landmarks, options)` | a `Result` on the witness complex of the landmarks; `persistenceFromDistancesAndLandmarks` for a distance matrix |
 | `coveringRadius(points, landmarks)` | the covering radius of any landmarks |
+| `eulerCurve(points, { maxSimplexDimension, maxFiltrationValue })` | the [Euler characteristic curve](vectorization.md#the-euler-characteristic-curve) of the Vietoris-Rips complex: an object with `scales`, `values`, `at(t)` and `sample(tMin, tMax, resolution)`; `eulerCurveFromDistances` for a distance matrix |
 | `h1Bars(points)` | the loops of the Vietoris-Rips complex as `[birth, death]`, most persistent first |
 | `circularCoordinates(points, r, { cocycleIndex, prime })` | `{ theta, birth, death, r, prime }`: one angle in [0, 1) per point for loop `cocycleIndex` of `h1Bars`, with `r` between its birth and death |
 | `toroidalCoordinates(points, r, cocycleIndices, { prime, reduce })` | `{ theta, cocycleIndices, basisChange, originalGram, reducedGram, r, prime }`: `theta[c][i]` is coordinate `c` of point `i` |
