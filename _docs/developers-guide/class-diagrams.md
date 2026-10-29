@@ -341,7 +341,7 @@ classDiagram
         bars: List~PersistenceBar~
         representatives: Option~Representatives~
         dim(k), at(f), longerThan(x)
-        significant(), bettiNumbers
+        longerThanFraction(), bettiNumbers
     }
     class Coefficients {
         <<trait>>

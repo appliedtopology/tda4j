@@ -28,7 +28,7 @@ non-finite → the barcode's own finite range), in the units the complex reports
 the scale is passed by-name and only computed when a fraction of it is needed. Options `minPersistence` (absolute) / `minPersistenceFraction` (default `0.01`),
 at most one; **`0` keeps every bar of positive length**; CLI `--min-persistence`/`--min-persistence-fraction`
 (mirrored, no Scallop default; stderr note when bars were hidden; rejected with `--select-landmarks`/`--distance-to`).
-Logic lives in `PersistenceFilter` (opt-in for Scala callers: `PersistenceFilter.significant`). Invariants:
+Logic lives in `PersistenceFilter` (opt-in for Scala callers: `PersistenceFilter.longerThanFraction`). Invariants:
 filter is post-hoc, applied by the thin `dispatch*` wrappers (validated before computing); `PersistenceResult` keeps
 the FULL arrays + a `visible` index, and **distances/landscapes/persistence images and `--distance-to` always use the
 complete barcode**; new facade option keys must go in every strict allowlist except `landmarkSelectionKeys`.

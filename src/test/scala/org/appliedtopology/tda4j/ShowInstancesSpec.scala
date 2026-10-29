@@ -92,13 +92,13 @@ class ShowInstancesSpec extends mutable.Specification:
       h1.size must beEqualTo(1)
       lines.last must beEqualTo(s"  1: [${1.0}, ${math.sqrt(2.0)})  ${h1.head.representative.show}")
     }
-    "be found for the refined diagram types dim, at and significant return" in {
+    "be found for the refined diagram types dim, at and longerThanFraction return" in {
       d.dim(1).show must beEqualTo(
         s"PersistenceDiagram(1 bar, degrees 0..1)\n  1: [${1.0}, ${math.sqrt(2.0)})  " +
           d.bars.filter(_.dim == 1).head.representative.show
       )
       d.at(1.2).show must contain(s"1: [${1.0}, ${1.2}]")
-      d.significant().show must startWith("PersistenceDiagram(")
+      d.longerThanFraction().show must startWith("PersistenceDiagram(")
     }
     "show a cubical diagram, whose cells are cubes" in {
       val img = Image(IndexedSeq(0.0, 1.0, 0.0, 1.0, 2.0, 1.0, 0.0, 1.0, 0.0), IndexedSeq(3, 3))

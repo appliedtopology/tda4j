@@ -133,7 +133,7 @@ that line a plain downstream project needs nothing else, `into` conversions incl
 **`Persistence(input, maxDimension = 2, maxFiltrationValue, complex = VietorisRips, characteristic = 17, engine = Auto)`**
 (`homology/Persistence.scala`) is the one-call verb: points/metric space/`Image`/any stream in, an immutable
 `PersistenceDiagram` (bars + representatives; coefficient type is a member, `import d.given`; `dim`, `at(f)`,
-`longest`, `longerThan(x)`, `significant()`, `bettiNumbers`) out. **Default: degrees 0..2, cycles**;
+`longest`, `longerThan(x)`, `longerThanFraction()`, `bettiNumbers`) out. **Default: degrees 0..2, cycles**;
 `representatives = Representatives.Cycles | Cocycles` (MATLAB `representativeType`, CLI `--representative-type`).
 `Auto` = Ripser for `VietorisRips` on points/metric space, `FastCubical` for images of dimension >= 2 (cycles only),
 `Cohomology` otherwise. Every engine but the fast ones gives both kinds, the non-native one derived from its pairing

@@ -93,6 +93,14 @@ export class Result {
   wassersteinDistance(other: Result, dimension: number, order?: number): number;
   /** `landscape[k][j]` is level `k` of the persistence landscape at sample `j` of `[tMin, tMax]`. */
   landscape(dimension: number, numLevels: number, tMin: number, tMax: number, resolution: number): number[][];
+  /** The number of bars of degree `dimension` alive at each of `resolution` samples of `[tMin, tMax]`: a bar `[birth, death)` is alive at `t` when `birth <= t < death`. */
+  bettiCurve(dimension: number, tMin: number, tMax: number, resolution: number): number[];
+  /** The persistence silhouette of the bars of degree `dimension`: the average of their tents weighted by persistence to the power `power` (default 1). Essential bars are left out. */
+  silhouette(dimension: number, tMin: number, tMax: number, resolution: number, power?: number): number[];
+  /** The persistence entropy of the bars of degree `dimension` (in `[0, 1]` when `normalized`). Essential bars are left out. */
+  persistenceEntropy(dimension: number, normalized?: boolean): number;
+  /** The sliced Wasserstein distance between the bars of degree `dimension` of two results, averaged over `directions` directions (default 50). Essential bars are left out. */
+  slicedWassersteinDistance(other: Result, dimension: number, directions?: number): number;
   /**
    * `image[i][j]` is the pixel of the persistence image of the bars of degree `dimension` at birth sample `i` and
    * persistence sample `j`, over `[birthMin, birthMax] x [persistenceMin, persistenceMax]`, with a Gaussian of width

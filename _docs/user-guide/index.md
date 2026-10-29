@@ -34,6 +34,7 @@ spaces are an add-on with one more import, `import org.appliedtopology.tda4j.sse
   the [fast cubical](homology-computation/fast-cubical.md) and [fast alpha](homology-computation/fast-alpha-complexes.md)
   engines.
 * **Using the results**: [distances and vectorizations](vectorization.md),
+  [telling features from noise, and clustering](noise-and-clusters.md),
   [circular and toroidal coordinates](circular-coordinates.md), the [boundary matrix](boundary-matrix.md).
 * [Files](input-output.md): CSV, Ripser, DIPHA, GUDHI and Perseus formats.
 * [Maps between barcodes](barcode-algebra.md): image, kernel and cokernel of a map of persistence modules.

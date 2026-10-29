@@ -60,7 +60,7 @@ class PersistenceFilterSpec extends Specification:
     }
   }
 
-  "significant" should {
+  "longerThanFraction" should {
     val bars = List(
       PersistenceBar[Double, String](0, ClosedEndpoint(0.0), OpenEndpoint(0.001), Some("noise")),
       PersistenceBar[Double, String](0, ClosedEndpoint(0.0), OpenEndpoint(1.0), Some("merge")),
@@ -68,18 +68,18 @@ class PersistenceFilterSpec extends Specification:
     )
 
     "drop the short bar by default, preserving order and annotations" >> {
-      PersistenceFilter.significant(bars).flatMap(_.annotation) must beEqualTo(List("merge", "essential"))
+      PersistenceFilter.longerThanFraction(bars).flatMap(_.annotation) must beEqualTo(List("merge", "essential"))
     }
 
     "keep everything when asked for no threshold" >> {
-      (PersistenceFilter.significant(bars, Some(0.0)).size must beEqualTo(3)) and
-        (PersistenceFilter.significant(bars, None, 0.0).size must beEqualTo(3))
+      (PersistenceFilter.longerThanFraction(bars, Some(0.0)).size must beEqualTo(3)) and
+        (PersistenceFilter.longerThanFraction(bars, None, 0.0).size must beEqualTo(3))
     }
 
     "use the supplied scale, else the bars' own finite range" >> {
       // finite range of these bars is 1.0, so by default the cut is 0.01 and the 0.001 bar goes; with scale 0.05 the
       // cut is 0.0005 and it stays
-      (PersistenceFilter.significant(bars).size must beEqualTo(2)) and
-        (PersistenceFilter.significant(bars, scale = Some(0.05)).size must beEqualTo(3))
+      (PersistenceFilter.longerThanFraction(bars).size must beEqualTo(2)) and
+        (PersistenceFilter.longerThanFraction(bars, scale = Some(0.05)).size must beEqualTo(3))
     }
   }

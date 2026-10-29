@@ -62,4 +62,5 @@ subsection:
       - page: user-guide/barcode-algebra.md
       - page: user-guide/utilities.md
       - page: user-guide/vectorization.md
+      - page: user-guide/noise-and-clusters.md
       - page: user-guide/plotting.md

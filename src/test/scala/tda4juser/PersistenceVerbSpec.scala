@@ -106,10 +106,10 @@ class PersistenceVerbSpec extends Specification:
         .and(norm(auto.triples) must beEqualTo(norm(chunks.triples)))
         .and(triangles.forall(t => fieldOps.isEqual(onBoundary(t), fieldOps.zero)) must beTrue)
     }
-    "report bettiNumbers and hide nothing until asked: significant() drops the short bars" in {
+    "report bettiNumbers and hide nothing until asked: longerThanFraction() drops the short bars" in {
       val d = Persistence(circle(16, noise = 0.02), maxFiltrationValue = 2.0)
       (d.bettiNumbers must beEqualTo(Vector(1, 0, 0)))
-        .and(d.significant().size must beLessThanOrEqualTo(d.size))
+        .and(d.longerThanFraction().size must beLessThanOrEqualTo(d.size))
     }
     "build Cech and alpha complexes, and say what to do when alpha gets a threshold" in {
       val pts = circle(12, noise = 0.05, seed = 2)
@@ -218,7 +218,7 @@ class PersistenceVerbSpec extends Specification:
       val ring = Array.tabulate(7, 7)((i, j) => if math.abs(math.hypot(i - 3, j - 3) - 2.2) < 0.8 then 0.0 else 1.0)
       val d = Persistence(Image(ring))
       (d.bettiNumbers must beEqualTo(Vector(1, 0, 0)))
-        .and(d.dim(1).significant().triples must beEqualTo(List((1, 0.0, 1.0))))
+        .and(d.dim(1).longerThanFraction().triples must beEqualTo(List((1, 0.0, 1.0))))
     }
   }
 

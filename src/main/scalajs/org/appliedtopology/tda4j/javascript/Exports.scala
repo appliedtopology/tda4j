@@ -360,6 +360,40 @@ final class Result private[javascript] (underlying: PersistenceResult):
   ): js.Array[js.Array[Double]] =
     Exports.guarded(grid(underlying.landscape(dimension, numLevels, tMin, tMax, resolution)))
 
+  /** The number of dimension-`dimension` bars alive at each of `resolution` samples of `[tMin, tMax]`: a bar `[birth,
+    * death)` is alive at `t` when `birth <= t < death`.
+    */
+  @JSExport
+  def bettiCurve(dimension: Int, tMin: Double, tMax: Double, resolution: Int): js.Array[Int] =
+    Exports.guarded(js.Array(underlying.bettiCurve(dimension, tMin, tMax, resolution)*))
+
+  /** The persistence silhouette of the dimension-`dimension` bars at `resolution` samples of `[tMin, tMax]`: the
+    * average of the bars' tents weighted by persistence to the power `power` (default 1). Essential bars are left out.
+    */
+  @JSExport
+  def silhouette(
+    dimension: Int,
+    tMin: Double,
+    tMax: Double,
+    resolution: Int,
+    power: js.UndefOr[Double] = js.undefined
+  ): js.Array[Double] =
+    Exports.guarded(js.Array(underlying.silhouette(dimension, power.getOrElse(1.0), tMin, tMax, resolution)*))
+
+  /** The persistence entropy of the dimension-`dimension` bars, in `[0, 1]` when `normalized`. Essential bars are left
+    * out.
+    */
+  @JSExport
+  def persistenceEntropy(dimension: Int, normalized: js.UndefOr[Boolean] = js.undefined): Double =
+    Exports.guarded(underlying.persistenceEntropy(dimension, normalized.getOrElse(false)))
+
+  /** The sliced Wasserstein distance to `other` between the dimension-`dimension` bars, averaged over `directions`
+    * directions (default 50). Essential bars are left out.
+    */
+  @JSExport
+  def slicedWassersteinDistance(other: Result, dimension: Int, directions: js.UndefOr[Int] = js.undefined): Double =
+    Exports.guarded(underlying.slicedWassersteinDistance(other.wrapped, dimension, directions.getOrElse(50)))
+
   /** The persistence image of the dimension-`dimension` bars over `[birthMin, birthMax] x [persistenceMin,
     * persistenceMax]`, `birthResolution` by `persistenceResolution` pixels with a Gaussian of width `sigma`:
     * `image[i][j]` is the pixel at birth sample `i` and persistence sample `j`. Essential bars are left out; the weight

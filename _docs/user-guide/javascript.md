@@ -40,7 +40,9 @@ other interfaces: `result.allBars` has every bar, and `result.hiddenCount` says 
 | `persistenceFromGrid(shape, values, options)` | an image or voxel grid of any dimension, values in row-major order |
 
 A `Result` also has `bottleneckDistance(other, dimension)`, `wassersteinDistance(other, dimension, order)`,
-`landscape(dimension, numLevels, tMin, tMax, resolution)` and the plots `plotBarcode()`, `plotDiagram()`,
+`slicedWassersteinDistance(other, dimension, directions)`, `landscape(dimension, numLevels, tMin, tMax, resolution)`,
+`bettiCurve(dimension, tMin, tMax, resolution)`, `silhouette(dimension, tMin, tMax, resolution, power)`,
+`persistenceEntropy(dimension, normalized)` and the plots `plotBarcode()`, `plotDiagram()`,
 `plotComplex(at)` and `plotRepresentative(i, at)`. A plot has `svg()` and `html()` for the text of a picture or a page,
 `show()` to put it in the page (in a browser) or open it in the default browser (from Node.js), and `save(path)`.
 

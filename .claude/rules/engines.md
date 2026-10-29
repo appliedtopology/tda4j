@@ -104,11 +104,12 @@ Testing lessons: F2 hides sign errors; signed-field fixtures need ≥5 vertices 
 elements, `SignedFieldBarcodeSpec`). Two engines agreeing isn't proof if they share a code path: hand-derived fixtures
 are the real oracle.
 
-**`BarcodeDistance`/`Vectorization`**: bottleneck/Wasserstein distance and persistence landscapes/images on
-`PersistenceBar[Double,_]`. Ground norm and aggregation match Hera/GUDHI; persistence images match `scikit-tda/persim`.
-Essential bars: matched by sorted birth for distance (count mismatch → `+Infinity`); included by landscapes, dropped by
-images. `matlab.PersistenceResult` exposes both; CLI `--distance-to` only distance.
-`WORKLOG-bottleneck-wasserstein-vectorizations.md`.
+**`BarcodeDistance`/`Vectorization`/`BootstrapBand`/`ToMATo`**: distances (matchings are `None` on an essential-count
+mismatch), sliced Wasserstein, landscapes, images, Betti curves (`birth <= t < death`), silhouettes, entropy on
+`PersistenceBar[Double,_]`. Ground norm matches Hera/GUDHI, images `persim`. Essential bars: matched by birth for distance
+(mismatch → `+Infinity`); kept by landscapes and Betti curves, dropped by the rest. `longerThanFraction` is a display rule,
+not a test; `BootstrapBand.threshold` (2 x width, Fasy 2014) is the estimate. `matlab.PersistenceResult` and the JS result
+expose the vectorizations; the CLI only `--distance-to`. `WORKLOG-diagram-statistics.md`.
 
 ## Cross-engine benchmark
 

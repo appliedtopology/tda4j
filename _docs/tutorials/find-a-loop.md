@@ -52,11 +52,11 @@ Many bars in degree 0 are short: points that are close to each other merge early
 the spacing of your sample, not its shape. Two ways to set them aside:
 
 ```scala sc:nocompile
-diagram.longerThan(0.1).size     // 24 bars: everything that lives longer than 0.1
-diagram.significant().size       // 61 bars: longer than 1% of the point cloud's enclosing radius (1.95)
+diagram.longerThan(0.1).size              // 24 bars: everything that lives longer than 0.1
+diagram.longerThanFraction().size         // 61 bars: longer than 1% of the point cloud's enclosing radius (1.95)
 ```
 
-`longerThan` takes a threshold in the units of the diagram; `significant()` takes a fraction of the data's own scale, which
+`longerThan` takes a threshold in the units of the diagram; `longerThanFraction()` takes a fraction of the data's own scale, which
 is what the command line and MATLAB show by default.
 
 ## Seeing the loop itself
@@ -113,7 +113,7 @@ val diagram = Persistence(points)
 val loop = diagram.dim(1).longest.get
 val longestGap = diagram.dim(0).bars.map(_.persistence).filter(_.isFinite).max
 val longerThanATenth = diagram.longerThan(0.1)
-val significant = diagram.significant()
+val longerThanAPercent = diagram.longerThanFraction()
 
 val cycle = loop.representative
 val withCocycles = Persistence(points, representatives = Representatives.Cocycles)
@@ -157,7 +157,7 @@ shortBars(shortBars(:,1) == 1, :)      % [1 0.595 Inf]: born, not dead by the cu
 </div>
 </div>
 
-The MATLAB tab makes the same calls through the `TDA4j` facade. It shows the bars `significant()` keeps (pass
+The MATLAB tab makes the same calls through the `TDA4j` facade. It shows the bars `longerThanFraction()` keeps (pass
 `'minPersistence', '0'` for all of them), and it counts bars from 0, so `cycleVertices(k)` takes the bar's row number
 minus 1.
 

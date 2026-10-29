@@ -1,8 +1,12 @@
 package org.appliedtopology.tda4j
 
-/** Dropping short bars, relative to the scale of the input: the policy behind `diagram.significant()`,
-  * `bars.significant()` and the MATLAB/CLI default. (Zero-length bars are already gone: engines leave them out unless
-  * asked. For a fixed threshold, `longerThan(eps)` is simpler.)
+/** Dropping short bars, relative to the scale of the input: the policy behind `diagram.longerThanFraction()`,
+  * `bars.longerThanFraction()` and the MATLAB/CLI default. (Zero-length bars are already gone: engines leave them out
+  * unless asked. For a fixed threshold, `longerThan(eps)` is simpler.)
+  *
+  * This is a rule of thumb for what to show, not a statistical test: it keeps a bar because it is long compared with
+  * the data's scale, not because it is unlikely to be noise. For a threshold that comes from the sample itself, see
+  * [[BootstrapBand]].
   *
   * '''The scale.''' A bar is judged against a scale the caller supplies: for a point cloud or distance matrix,
   * `metricSpace.minimumEnclosingRadius` (Ripser's enclosing radius: past it the Vietoris-Rips complex is a cone and
@@ -81,7 +85,7 @@ object PersistenceFilter:
     * `0` (`minPersistence = Some(0.0)` or `fraction = 0.0`) keeps everything. Order and annotations (representative
     * chains) are preserved.
     */
-  def significant[A](
+  def longerThanFraction[A](
     bars: List[PersistenceBar[Double, A]],
     minPersistence: Optional[Double] = Optional.empty,
     fraction: Double = DefaultFraction,

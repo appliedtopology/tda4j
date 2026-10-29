@@ -21,7 +21,7 @@ class ImagesSpec extends Specification:
     "count the cells and bars" in
       (page.stream.iterator.size must beEqualTo(57 * 57))
         .and(page.dark.size must beEqualTo(221))
-        .and(page.dark.significant().size must beEqualTo(170))
+        .and(page.dark.longerThanFraction().size must beEqualTo(170))
     "agree between Persistence and the fast cubical engine, bar for bar" in {
       rounded(page.dark.triples) must beEqualTo(rounded(page.fastBars.map(_.toTriple)))
     }

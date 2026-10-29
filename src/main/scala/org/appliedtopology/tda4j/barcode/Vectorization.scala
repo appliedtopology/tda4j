@@ -1,10 +1,12 @@
 package org.appliedtopology.tda4j
 
-/** Persistence landscapes (Bubenik 2013) and persistence images (Adams et al. 2017): fixed-size arrays of numbers from
-  * a barcode, for statistics and machine learning.
+/** Fixed-size arrays of numbers from a barcode, for statistics and machine learning: persistence landscapes (Bubenik
+  * 2013), persistence images (Adams et al. 2017), Betti curves, persistence silhouettes (Chazal et al. 2014) and
+  * persistence entropy (Rucco et al. 2016).
   *
-  * Essential bars count in [[landscape]] (their tent is the ramp `t - birth`, finite on any grid) and are dropped by
-  * [[persistenceImage]] (a Gaussian at infinite persistence has no mass on a finite grid).
+  * Essential bars count in [[landscape]] (their tent is the ramp `t - birth`, finite on any grid) and in [[bettiCurve]]
+  * (alive from their birth on); [[persistenceImage]], [[silhouette]] and [[persistenceEntropy]] drop them (a Gaussian,
+  * a weight or a share of the total length at infinite persistence is not a number).
   */
 object Vectorization:
 
@@ -102,3 +104,66 @@ object Vectorization:
           if bMass != 0.0 then
             for c <- 0 until persistenceResolution do image(r)(c) += w * bMass * (pCdf(c + 1) - pCdf(c))
     image
+
+  /** The Betti curve of `diagram`: the number of bars alive at each of `resolution` evenly-spaced points of `[tMin,
+    * tMax]` (both ends included). A bar `[birth, death)` is alive at `t` when `birth <= t < death`, so a bar that ends
+    * exactly at a sample is already gone there; an essential bar is alive from its birth on. The curve of one degree is
+    * `Vectorization.bettiCurve(diagram.dim(k).bars, ...)`; of a whole diagram, the total number of alive bars.
+    */
+  def bettiCurve(
+    diagram: Seq[PersistenceBar[Double, ?]],
+    tMin: Double,
+    tMax: Double,
+    resolution: Int
+  ): Array[Int] =
+    require(resolution >= 2, s"bettiCurve requires resolution >= 2, got $resolution")
+    require(tMax > tMin, s"bettiCurve requires tMax > tMin, got tMin=$tMin, tMax=$tMax")
+    val points = diagram.map(DiagramPoint.of)
+    Array.tabulate(resolution) { j =>
+      val t = tMin + j * (tMax - tMin) / (resolution - 1)
+      points.count(p => p.birth <= t && t < p.death)
+    }
+
+  /** The persistence silhouette of `diagram` (Chazal, Fasy, Lecci, Rinaldo, Wasserman 2014): at each of `resolution`
+    * evenly-spaced points of `[tMin, tMax]`, the average of the bars' tent functions (the ones [[landscape]] takes the
+    * order statistics of), each weighted by its persistence to the power `power`. `power = 1.0` (the default) weights
+    * long bars more than short ones; a small `power` approaches the plain average of the tents, a large one the outline
+    * of the longest bar. Essential bars are dropped. An empty diagram has the zero silhouette.
+    */
+  def silhouette(
+    diagram: Seq[PersistenceBar[Double, ?]],
+    tMin: Double,
+    tMax: Double,
+    resolution: Int,
+    power: Double = 1.0
+  ): Array[Double] =
+    require(resolution >= 2, s"silhouette requires resolution >= 2, got $resolution")
+    require(tMax > tMin, s"silhouette requires tMax > tMin, got tMin=$tMin, tMax=$tMax")
+    require(power > 0.0 && power.isFinite, s"silhouette requires a finite power > 0, got $power")
+    val points = diagram.map(DiagramPoint.of).filterNot(DiagramPoint.isEssential).filter(_.persistence > 0.0)
+    val weights = points.map(p => math.pow(p.persistence, power))
+    val total = weights.sum
+    Array.tabulate(resolution) { j =>
+      val t = tMin + j * (tMax - tMin) / (resolution - 1)
+      if total == 0.0 then 0.0
+      else
+        points
+          .zip(weights)
+          .map((p, w) => w * math.max(0.0, math.min(t - p.birth, p.death - t)))
+          .sum / total
+    }
+
+  /** The persistence entropy of `diagram` (Rucco, Castiglione, Merelli, Pettini 2016): with `l_i` the persistence of
+    * finite bar `i` and `p_i = l_i / sum l`, the Shannon entropy `-sum p_i ln p_i`. It is `0` for one bar and `ln n`
+    * for `n` bars of equal length, so a diagram dominated by a few long bars scores low and one made of many bars of
+    * similar length scores high. With `normalized`, divided by `ln n` (the largest value for `n` bars), so it lies in
+    * `[0, 1]`; a diagram with fewer than two finite bars of positive length has entropy `0`. Essential bars are
+    * dropped.
+    */
+  def persistenceEntropy(diagram: Seq[PersistenceBar[Double, ?]], normalized: Boolean = false): Double =
+    val lengths = diagram.map(DiagramPoint.of).filterNot(DiagramPoint.isEssential).map(_.persistence).filter(_ > 0.0)
+    val total = lengths.sum
+    if lengths.size < 2 then 0.0
+    else
+      val entropy = -lengths.map(l => (l / total) * math.log(l / total)).sum
+      if normalized then entropy / math.log(lengths.size.toDouble) else entropy

@@ -116,6 +116,12 @@ class ExportsSpec extends Specification:
 
   "a Result" should {
     val result = Exports.persistence(circle(30), options("maxDimension" -> 1))
+    "give a Betti curve, a silhouette, an entropy and a sliced Wasserstein distance" >> {
+      val curve = result.bettiCurve(1, 0.0, 2.0, 11)
+      (curve.length must beEqualTo(11)) and (result.silhouette(1, 0.0, 2.0, 11).length must beEqualTo(11)) and
+        (result.persistenceEntropy(0, true) must beBetween(0.0, 1.0)) and
+        (result.slicedWassersteinDistance(result, 1) must beEqualTo(0.0))
+    }
     "give the persistence image of its bars" >> {
       val image = result.persistenceImage(1, 0.1, 0.0, 1.0, 0.0, 2.0, 5, 6)
       (image.length must beEqualTo(5)) and (image.forall(_.length == 6) must beTrue) and

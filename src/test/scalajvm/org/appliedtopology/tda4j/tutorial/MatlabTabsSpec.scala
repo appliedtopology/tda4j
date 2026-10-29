@@ -121,7 +121,7 @@ class MatlabTabsSpec extends Specification:
       val signal = if ring >= 6.0 && ring <= 8.0 then 1.0 else if blob <= 2.5 then 0.8 else 0.0
       signal + 0.1 * random.nextDouble()
     }
-    def significant(sublevel: String, engine: String) =
+    def longerThanFraction(sublevel: String, engine: String) =
       rows(
         TDA4j
           .computeFromImage(pixels, Array("sublevel", sublevel, "engine", engine, "minPersistence", "0.3"))

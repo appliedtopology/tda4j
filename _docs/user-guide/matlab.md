@@ -126,9 +126,9 @@ result.toArrayUnfiltered()       % all bars, the same layout as toArray()
 ```
 
 Zero-length bars (`birth == death`) are not computed into the result at all unless `includeZeroLength` is `true`.
-Distances, landscapes and persistence images (`bottleneckDistance`, `wassersteinDistance`, `landscape`,
-`persistenceImage`, see [vectorization](vectorization.md)) always use every bar of the result, so they do not depend on
-its threshold.
+Distances and vectorizations (`bottleneckDistance`, `wassersteinDistance`, `slicedWassersteinDistance`, `landscape`,
+`persistenceImage`, `bettiCurve`, `silhouette`, `persistenceEntropy`, see [vectorization](vectorization.md)) always use
+every bar of the result, so they do not depend on its threshold.
 
 ### Representatives
 
@@ -156,13 +156,17 @@ Bars are indexed from 0 in the order of `toArray()`: the reported bars only, as 
 | `mostPersistentBar(dimension)` | the index of the reported bar of that dimension with the largest persistence (an essential bar first) |
 | `bottleneckDistance(other, dimension)`, `(other, dimension, groundNorm)` | the bottleneck distance between the bars of that dimension of two results; `groundNorm` is `Inf` (the default) or a finite `p >= 1`. `Inf` if the numbers of essential bars differ |
 | `wassersteinDistance(other, dimension)`, `(…, order)`, `(…, order, groundNorm)` | the Wasserstein distance; `order` defaults to `1` |
+| `slicedWassersteinDistance(other, dimension, directions)` | the sliced Wasserstein distance, averaged over `directions` directions; essential bars are left out |
 | `landscape(dimension, numLevels, tMin, tMax, resolution)` | the first `numLevels` persistence landscapes sampled at `resolution` points of `[tMin, tMax]`; row `k` is level `k` |
+| `bettiCurve(dimension, tMin, tMax, resolution)` | the number of bars of that dimension alive at each of `resolution` points of `[tMin, tMax]` |
+| `silhouette(dimension, power, tMin, tMax, resolution)` | the persistence silhouette, weighted by persistence to the power `power`; essential bars are left out |
+| `persistenceEntropy(dimension, normalized)` | the entropy of the bar lengths, in `[0, 1]` when `normalized` is `true` |
 | `persistenceImage(dimension, sigma, birthMin, birthMax, persistenceMin, persistenceMax, birthResolution, persistenceResolution)`, and the same with a final `weightCap` | the persistence image; the weight rises to 1 at the largest persistence, or at `weightCap` |
 | `numCells()`, `boundaryRows()`, `boundaryCols()`, `boundaryValues()`, `columnDimension(j)`, `columnVertices(j)`, `columnFiltrationValue(j)` | the boundary matrix of the complex, see [boundary-matrix export](boundary-matrix.md) |
 | `save(path)` | writes the result as JSON and returns its absolute path |
 | `plot...` | figures, see below |
 
-Distances, landscapes and images use every bar of the result, reported or not. See [vectorization](vectorization.md).
+Distances and vectorizations use every bar of the result, reported or not. See [vectorization](vectorization.md).
 
 **Plots.** Each method returns a figure (or, in 3-D, a scene) that you `view()` in the browser or `save(path)` as `.svg` or
 `.html`, and restyle with the methods of [plotting](plotting.md#from-matlab-and-the-command-line).

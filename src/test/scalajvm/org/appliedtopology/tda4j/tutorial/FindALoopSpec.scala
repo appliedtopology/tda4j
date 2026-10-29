@@ -30,9 +30,9 @@ class FindALoopSpec extends Specification:
         .and(page.longestGap must beCloseTo(0.484, 0.001))
         .and(page.loop.persistence must beCloseTo(1.11, 0.005))
         .and(page.loop.persistence must beGreaterThan(2 * page.longestGap))
-    "keep 24 bars longer than 0.1 and 61 significant ones (1% of the enclosing radius 1.95)" in
+    "keep 24 bars longer than 0.1 and 61 longer than 1% of the enclosing radius 1.95" in
       (page.longerThanATenth.size must beEqualTo(24))
-        .and(page.significant.size must beEqualTo(61))
+        .and(page.longerThanAPercent.size must beEqualTo(61))
         .and(EuclideanMetricSpace(page.points).minimumEnclosingRadius must beCloseTo(1.95, 0.005))
     "come with a cycle of 18 edges by default and a cocycle of 121 edges on request, for the same loop" in
       (page.cycle.cells.size must beEqualTo(18))

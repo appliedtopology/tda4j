@@ -170,17 +170,17 @@ object PersistenceBar:
   /** Filtering a list of bars (no import needed: these are found through the bar type's companion).
     *
     *   - `bars.longerThan(0.1)`: essential bars and bars with persistence strictly greater than `0.1`.
-    *   - `bars.significant()`: the same, with the threshold 1% of the bars' own filtration range (the MATLAB/CLI
+    *   - `bars.longerThanFraction()`: the same, with the threshold 1% of the bars' own filtration range (the MATLAB/CLI
     *     default policy; see [[PersistenceFilter]] for the scale to pass).
     */
   extension [A](bars: List[PersistenceBar[Double, A]])
     def longerThan(minPersistence: Double): List[PersistenceBar[Double, A]] =
       bars.filter(b => b.death.isPosInfinity || b.persistence > minPersistence)
-    def significant(
+    def longerThanFraction(
       fraction: Double = PersistenceFilter.DefaultFraction,
       scale: Optional[Double] = Optional.empty
     ): List[PersistenceBar[Double, A]] =
-      PersistenceFilter.significant(bars, fraction = fraction, scale = scale)
+      PersistenceFilter.longerThanFraction(bars, fraction = fraction, scale = scale)
 
   /** `bars` without the zero-length ones, unless `includeZeroLength`: what every engine applies to its output. */
   def dropZeroLength[F, A](

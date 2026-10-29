@@ -85,12 +85,12 @@ import org.appliedtopology.tda4j.*
 val points = Array(Array(0.0, 0.0), Array(0.001, 0.0), Array(1.0, 0.0), Array(0.5, 0.9))
 val diagram = Persistence(points)
 diagram.longerThan(0.1)         // essential bars, and bars that persist for more than 0.1
-diagram.significant()           // longer than 1% of the point cloud's scale, its minimum enclosing radius
-diagram.significant(0.1)        // longer than 10% of it
+diagram.longerThanFraction()    // longer than 1% of the point cloud's scale, its minimum enclosing radius
+diagram.longerThanFraction(0.1) // longer than 10% of it
 ```
 
-`significant()` is what the command line and MATLAB show by default. The same two calls work on any list of bars an
-engine returns: `bars.longerThan(0.1)`, `bars.significant()`.
+`longerThanFraction()` is what the command line and MATLAB show by default. The same two calls work on any list of bars an
+engine returns: `bars.longerThan(0.1)`, `bars.longerThanFraction()`.
 
 ### Representatives
 

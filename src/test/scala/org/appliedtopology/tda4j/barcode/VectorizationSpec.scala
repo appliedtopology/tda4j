@@ -200,3 +200,71 @@ class VectorizationSpec extends Specification with ScalaCheck:
       Vectorization.persistenceImage(diagram, 1.0, (0.0, 1.0), (0.0, 1.0), 0, 5) must throwA[IllegalArgumentException]
     }
   }
+
+  "bettiCurve" >> {
+    "counts the bars alive at each sample, a bar ending exactly at a sample already gone there" >> {
+      // [0,1), [0.5,2), [1,inf) sampled at 0, 0.5, 1, 1.5, 2: the first bar is gone at t = 1 (half-open), the second
+      // is gone at t = 2, the essential one stays.
+      val diagram = List(bar(1, 0.0, 1.0), bar(1, 0.5, 2.0), essentialBar(1, 1.0))
+      Vectorization.bettiCurve(diagram, 0.0, 2.0, 5).toSeq must beEqualTo(Seq(1, 2, 2, 2, 1))
+    }
+
+    "integrates to the total persistence of the finite bars (a computed circle)" >> {
+      val circle = (0 until 12).map(i => Array(math.cos(i * math.Pi / 6), math.sin(i * math.Pi / 6))).toArray
+      val bars = Persistence(circle, maxDimension = 1).bars.filter(!_.death.isPosInfinity)
+      val top = bars.map(_.death).max * 1.01
+      val grid = 20001
+      val curve = Vectorization.bettiCurve(bars, 0.0, top, grid)
+      val step = top / (grid - 1)
+      val integral = step * curve.map(_.toDouble).sum
+      // a piecewise-constant curve sampled on a grid is off by less than one step per jump (two per bar)
+      integral must beCloseTo(bars.map(_.persistence).sum, 2 * bars.size * step)
+    }
+
+    "rejects a degenerate grid" >> {
+      Vectorization.bettiCurve(Nil, 1.0, 0.0, 5) must throwA[IllegalArgumentException]
+      Vectorization.bettiCurve(Nil, 0.0, 1.0, 1) must throwA[IllegalArgumentException]
+    }
+  }
+
+  "silhouette" >> {
+    "is the weighted average of the tents: weights are persistence to the power" >> {
+      // bars [0,2) and [0,4): tents rise to 1 at t = 1 and to 2 at t = 2 (the longer bar), weights 2 and 4.
+      val diagram = List(bar(0, 0.0, 2.0), bar(0, 0.0, 4.0))
+      val s = Vectorization.silhouette(diagram, 0.0, 4.0, 5) // t = 0, 1, 2, 3, 4
+      // t = 1: (2*1 + 4*1)/6 = 1;  t = 2: (2*0 + 4*2)/6;  t = 3: (2*0 + 4*1)/6
+      s(1) must beCloseTo(1.0, 1e-12)
+      s(2) must beCloseTo(8.0 / 6.0, 1e-12)
+      s(3) must beCloseTo(4.0 / 6.0, 1e-12)
+    }
+
+    "power 2 weights by squared persistence, so it differs from power 1" >> {
+      val diagram = List(bar(0, 0.0, 2.0), bar(0, 0.0, 4.0))
+      val s = Vectorization.silhouette(diagram, 0.0, 4.0, 5, power = 2.0)
+      s(2) must beCloseTo((4.0 * 0.0 + 16.0 * 2.0) / 20.0, 1e-12)
+    }
+
+    "drops essential bars and is zero for an empty diagram" >> {
+      Vectorization.silhouette(List(essentialBar(0, 1.0)), 0.0, 4.0, 5).toSeq must beEqualTo(Seq.fill(5)(0.0))
+      Vectorization.silhouette(Nil, 0.0, 4.0, 5).toSeq must beEqualTo(Seq.fill(5)(0.0))
+    }
+
+    "rejects a non-positive power" >> {
+      Vectorization.silhouette(List(bar(0, 0.0, 1.0)), 0.0, 1.0, 5, power = 0.0) must throwA[IllegalArgumentException]
+    }
+  }
+
+  "persistenceEntropy" >> {
+    "is ln n for n bars of equal length and 0 for one bar" >> {
+      val equal = List.tabulate(5)(i => bar(1, i.toDouble, i + 2.0))
+      Vectorization.persistenceEntropy(equal) must beCloseTo(math.log(5.0), 1e-12)
+      Vectorization.persistenceEntropy(equal, normalized = true) must beCloseTo(1.0, 1e-12)
+      Vectorization.persistenceEntropy(List(bar(1, 0.0, 3.0))) must beEqualTo(0.0)
+    }
+
+    "matches the hand-computed value for lengths 1, 1, 2 and ignores essential bars" >> {
+      val diagram = List(bar(1, 0.0, 1.0), bar(1, 0.0, 1.0), bar(1, 0.0, 2.0), essentialBar(1, 0.0))
+      val expected = -(2 * 0.25 * math.log(0.25) + 0.5 * math.log(0.5))
+      Vectorization.persistenceEntropy(diagram) must beCloseTo(expected, 1e-12)
+    }
+  }

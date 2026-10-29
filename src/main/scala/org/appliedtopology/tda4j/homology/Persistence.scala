@@ -42,9 +42,9 @@ object Image:
   * `representatives = Representatives.Cocycles` gives '''cocycles''' instead (a loop's cocycle cuts across it; circular
   * coordinates are built from cocycles). The pairing is computed by cohomology either way, which is fast in degree 2;
   * cycles then cost one more reduction, of the boundaries of the cells that end bars. Zero-length bars are left out;
-  * short ones are one call away (`diagram.longerThan(0.05)`, `diagram.significant()`). This runs the computation to the
-  * end; for a long run you want to inspect while it goes (or keep if it dies), build an engine and use its cursor
-  * (`advanceFor`, `diagramAt`) instead.
+  * short ones are one call away (`diagram.longerThan(0.05)`, `diagram.longerThanFraction()`). This runs the computation
+  * to the end; for a long run you want to inspect while it goes (or keep if it dies), build an engine and use its
+  * cursor (`advanceFor`, `diagramAt`) instead.
   *
   * @param input
   *   points (`Array[Array[Double]]`, `Seq[Seq[Double]]`, `Seq[Array[Double]]`), a `FiniteMetricSpace[Int]`, an
@@ -125,7 +125,9 @@ object Persistence:
       complex: PointCloudComplex
     ): StratifiedCellStream[CellT, Double]
 
-    /** The scale `significant()` measures persistence against (a point cloud's minimum enclosing radius), if any. */
+    /** The scale `longerThanFraction()` measures persistence against (a point cloud's minimum enclosing radius), if
+      * any.
+      */
     def scale: Option[Double]
 
     /** The cell type's boundary and order. */

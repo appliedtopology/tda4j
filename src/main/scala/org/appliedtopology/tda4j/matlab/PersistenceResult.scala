@@ -227,6 +227,34 @@ final class PersistenceResult private[matlab] (
       weightCap
     )
 
+  /** The number of bars of the dimension-`dimension` bars alive at each of `resolution` points of `[tMin, tMax]` (a bar
+    * `[birth, death)` is alive at `t` when `birth <= t < death`). See `Vectorization.bettiCurve`.
+    */
+  def bettiCurve(dimension: Int, tMin: Double, tMax: Double, resolution: Int): Array[Int] =
+    Vectorization.bettiCurve(barsOfDimension(dimension), tMin, tMax, resolution)
+
+  /** The persistence silhouette of the dimension-`dimension` bars, weighted by persistence to the power `power`,
+    * sampled at `resolution` points of `[tMin, tMax]`. Essential bars are left out. See `Vectorization.silhouette`.
+    */
+  def silhouette(dimension: Int, power: Double, tMin: Double, tMax: Double, resolution: Int): Array[Double] =
+    Vectorization.silhouette(barsOfDimension(dimension), tMin, tMax, resolution, power)
+
+  /** The persistence entropy of the dimension-`dimension` bars; essential bars are left out. With `normalized`, divided
+    * by the logarithm of the number of bars, so that it lies in `[0, 1]`. See `Vectorization.persistenceEntropy`.
+    */
+  def persistenceEntropy(dimension: Int, normalized: Boolean): Double =
+    Vectorization.persistenceEntropy(barsOfDimension(dimension), normalized)
+
+  /** The sliced Wasserstein distance between the dimension-`dimension` bars of this result and `other`, averaged over
+    * `directions` directions. Essential bars are left out. See `BarcodeDistance.slicedWassersteinDistance`.
+    */
+  def slicedWassersteinDistance(other: PersistenceResult, dimension: Int, directions: Int): Double =
+    BarcodeDistance.slicedWassersteinDistance(
+      barsOfDimension(dimension),
+      other.barsOfDimension(dimension),
+      directions
+    )
+
   /** Built on first use, then cached. */
   private lazy val boundaryMatrixData: BoundaryMatrixData = boundaryMatrixProvider()
 
