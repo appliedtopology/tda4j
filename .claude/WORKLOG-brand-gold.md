@@ -36,3 +36,10 @@ a decision of its own (#253), not a side effect of this one.
 
 Print: nothing here was printed. The text of the badges is still live `<text>` (outline it before sending to a printer,
 as `DECISIONS.md` says).
+
+## Addendum (2026-10-29, same PR, before merge)
+
+The project lead on the cream question: cream is fine as a display choice; a plot deployed elsewhere should have a
+transparent background. `Style(transparent = true)` (`Style.clear`, `Figure.withTransparentBackground()`) draws no
+background rect, but it is off by default, so a saved `.svg` of `Palette.brand` still has the cream rect. Whether saved
+files should default to transparent is the open question of #253 (renamed). `DECISIONS.md` states the rule.

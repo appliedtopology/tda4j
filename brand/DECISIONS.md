@@ -30,9 +30,10 @@ any future palette doc, or the tiers will drift back together the first time som
 
 Solid gold field (the gold sticker): `#f2b705`.
 
-Surfaces: white `#ffffff` for everything printed or published (stickers, badges, PNG icons, papers, benchmark
-graphs, `Palette.print`), cream `#f8f7f4` only for the docs site and the live viewer's page, blue-black `#161b1e` for
-dark mode. Contrast: UI teal 7.6:1 on white (7.1:1 on cream), dark teal 8.5:1 on `#161b1e`, mark teal 5.3:1 on white
+Surfaces: white `#ffffff` for things that are printed (stickers, badges, PNG icons, `Palette.print`), cream `#f8f7f4`
+for display (the docs site, the live viewer and `Palette.brand`'s figures), blue-black `#161b1e` for dark mode. A plot
+deployed elsewhere (a paper, a slide, another page) has a transparent background, so it takes the page's color;
+`fam_colors` is checked on white, the page it will most often meet. Contrast: UI teal 7.6:1 on white (7.1:1 on cream), dark teal 8.5:1 on `#161b1e`, mark teal 5.3:1 on white
 (5.0:1 on cream), chart gold 3.3:1 on white (3.07:1 on cream).
 
 **Revision, Slate → Teal (2026-10-23, project lead)**: the slate brand-mark `#456f87` has OKLCH chroma 0.06, below the
@@ -167,8 +168,9 @@ looks right, and a botched auto-outline is worse than an honest gap.
 
 - The plot defaults (`Palette.brand`, the live viewer's accent) use the same teal and gold, stepped for charts: light
   series 0 is the brand-mark teal `#1a729b`, series 1 the chart gold `#b58605`, secondary ink the UI-safe `#205976`,
-  dark secondary ink `#81bde0`. `Palette.brand`'s light surface is still the cream; a figure for a paper is
-  `Palette.print` or `Palette.brand.withSurface("#ffffff")`.
+  dark secondary ink `#81bde0`. `Palette.brand`'s light surface is the cream, a display choice. A figure deployed
+  elsewhere has no background: `fig.withTransparentBackground()`, `Style(transparent = true)` or `--style clear` (that
+  style is not on by default, and `Palette.clear`, its pair, is black and white, not the brand colors).
 - Benchmark graphs color tool families with `fam_colors`; `a` is tda4j (brand teal) and `b` is tda4j-js (brand gold).
   Light (white background; every pair at least 8.7 ΔE under protanopia/deuteranopia and 16.7 normally, 3:1 contrast):
 
