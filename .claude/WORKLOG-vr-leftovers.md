@@ -52,7 +52,8 @@ values in the same order (`VietorisRipsDispatcherSpec`), so bars and representat
 the facade's cohomology and naive bars and representative cells against `Persistence` on a seeded cloud. The streams
 already defaulted `maxFiltrationValue` to the enclosing radius, so the radius was not part of the gap.
 
-Not measured here: JS `Engine.Ripser` (the facade default), `Cech`/`Alpha` on JS beyond #233.
+The facade default, `engine=ripser` (one thread), on the same clouds: 100 points JS 0.40 s, JVM 0.15 s; 300 points JS
+9.0 s, JVM 2.8 s: 2.7 to 3.2 times, the same ratio. Alpha and the other complexes on JS: #233.
 
 ## 4. Forwarding `keepCriterion` to the generator: not done
 
