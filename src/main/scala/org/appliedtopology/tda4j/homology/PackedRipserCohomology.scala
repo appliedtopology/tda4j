@@ -578,9 +578,10 @@ open class PackedRipserCohomologyEngine[CoefficientT: Field](
   /** One cycle per `reported` row, as [[Involution.cycles]] computes them under `packedOrdering.reverse`: death columns
     * reduced on a heap working column, oldest death first per dimension; a finite bar's cycle is its reduced column.
     * Every death column is reduced and every pivot checked, zero-length ones included (they are pivots for the others),
-    * but an apparent pair's column is not kept: its boundary is already reduced, so it is rebuilt from the death
-    * simplex when another column needs it. The V-columns are needed only for essential bars, so only non-empty
-    * reduction logs are kept, and a V-column is expanded when an essential bar refers to it.
+    * except an apparent pair that is not reported: its boundary is already reduced, so it is recorded as a row and
+    * rebuilt from the death simplex when another column needs it. An apparent pair that is reported is reduced, but its
+    * column is not kept. The V-columns are needed only for essential bars, so only non-empty reduction logs are kept,
+    * and a V-column is expanded when an essential bar refers to it.
     */
   private def involutedCycles(
     rows: Pairing,
@@ -656,28 +657,32 @@ open class PackedRipserCohomologyEngine[CoefficientT: Field](
         val row = finite(o)
         val sigma = rows.birth(row)
         val sigmaKey = newKey(keys, sigma.index, sigma.high)
-        val tau = rows.death(row).get
-        val log = reduce(tau, deathDim)
-        if !working.pivot() || working.pivotIndex != sigma.index || working.pivotHigh != sigma.high then
-          throw new IllegalStateException(
-            s"Involution: the boundary of $tau does not reduce to its paired birth cell $sigma " +
-              "(the pairing and the order disagree)"
-          )
-        val column = working.drain()
-        if !rows.apparent(row) || log.nonEmpty then basis(sigmaKey) = column
-        byBirth(sigmaKey) = row
-        if log.nonEmpty then logs(sigmaKey) = log
-        if reported(row) then
-          val cycle = Chain.from(
-            column.indices.indices.map(k =>
-              (
-                DiameterIndex(column.diameters(k), column.indices(k), if wide then column.highs(k) else 0L),
-                column.coefficients(k).asInstanceOf[CoefficientT]
+        // An apparent pair's boundary is its own reduced column (sigma is its youngest facet, so nothing is subtracted
+        // and its log is empty): a zero-length one nobody reports is only recorded, as a row to rebuild on demand.
+        if rows.apparent(row) && !reported(row) then byBirth(sigmaKey) = row
+        else
+          val tau = rows.death(row).get
+          val log = reduce(tau, deathDim)
+          if !working.pivot() || working.pivotIndex != sigma.index || working.pivotHigh != sigma.high then
+            throw new IllegalStateException(
+              s"Involution: the boundary of $tau does not reduce to its paired birth cell $sigma " +
+                "(the pairing and the order disagree)"
+            )
+          val column = working.drain()
+          if !rows.apparent(row) || log.nonEmpty then basis(sigmaKey) = column
+          byBirth(sigmaKey) = row
+          if log.nonEmpty then logs(sigmaKey) = log
+          if reported(row) then
+            val cycle = Chain.from(
+              column.indices.indices.map(k =>
+                (
+                  DiameterIndex(column.diameters(k), column.indices(k), if wide then column.highs(k) else 0L),
+                  column.coefficients(k).asInstanceOf[CoefficientT]
+                )
               )
             )
-          )
-          cycle.collapseAll()
-          result(row.toLong) = cycle
+            cycle.collapseAll()
+            result(row.toLong) = cycle
 
     for row <- 0 until rows.size if rows.deathI(row) < 0 && reported(row) do
       val dim = rows.dims(row)

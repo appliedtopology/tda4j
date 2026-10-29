@@ -16,13 +16,11 @@ the stream constructors differ (`IncrementalVietorisRipsSimplexStream.maxDimensi
 streams have none): use `VietorisRips` (`DESIGN-stream-naming.md`, `WORKLOG-maxdim-semantics-fix.md`).
 `CellularCohomologyEngine` has no such param: callers truncate via a stream with a `homologyDegreeLimit`
 (`VietorisRips(.., k)`, `Truncated`), and `persistentCohomology` (and the packed cubical engine's) leaves out the bars
-above it before building any representative (`CohomologyDegreeLimitSpec`, `WORKLOG-generic-engine-profile.md`: those
-cells were once 8.2M bars). **Every engine that reads a stream stops at its declared limit**, whatever degree it was asked for (`min(asked, limit)`):
+above it before building any representative (`CohomologyDegreeLimitSpec`; once 8.2M bars). **Every engine that reads a stream stops at its declared limit**, whatever degree it was asked for (`min(asked, limit)`):
 naive (both cursors), chunks, cohomology, `Involution`. A hand-built complex that wants its top degree must not be a
 `Truncated`/`LimitedCofaceSimplexStream` (use `ExplicitStreamBuilder`). `TruncatedTopDegreeSpec` runs every way (factories,
 direct engines, the verb with each engine and representative kind, images, alpha) against the longer stream's bars up to
 the limit; `FastCubicalHomologyEngine`/`FastAlphaHomologyEngine` take `maxDimension` and skip the dual graph below the top.
-Over a field, cohomology and homology bars coincide.
 
 1. **Naive** (`CellularHomologyEngine`/`SimplicialHomologyEngine`) — single-pivot-table reduction, no clearing; the
    reference baseline. Incremental (`advanceOne`/`advanceTo`/`advanceAll`); a raw-UnionFind fast path was rejected.
@@ -51,7 +49,8 @@ Over a field, cohomology and homology bars coincide.
    paths equal (`WORKLOG-two-word-indices.md`).
    The PACKED engine's apparent-pair test decodes a column once (`WORKLOG-ripser-decode-once.md`, #194; its pair count
    equals the reference engine's: `EmergentPairsSpec`). It reduces on a primitive-array heap, expands cocycles lazily from reduction logs (only for reported
-   bars) and derives cycles with its own copy of `Involution.cycles`. It must equal the `Chain`-based engine in the test
+   bars) and derives cycles with its own copy of `Involution.cycles`, which does not reduce an apparent pair nobody reports
+   (`WORKLOG-involution-apparent-skip.md`). It must equal the `Chain`-based engine in the test
    tree (`ChainPackedRipserReference`) term for term, essentials included (`PackedWorkingColumnSpec`): re-run it after any
    change to the reduction (`WORKLOG-vr-working-column.md`). The heap needs ONE diameter per simplex: non-trusted metrics
    are read as `d(max, min)` (else an asymmetric one grows the column until OOM); Euclidean/Explicit are read as given
