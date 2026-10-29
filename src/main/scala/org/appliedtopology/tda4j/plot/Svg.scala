@@ -49,9 +49,10 @@ object Svg:
     if r == r.toLong then r.toLong.toString else r.toString
 
   /** The title of a board, as an `<svg>` of `width` pixels to put above its panels, and its height: the text is set as
-    * the title of `first`, the board's first panel (its font, size, weight, color and alignment, in its palette).
+    * the title of `first`, the board's first panel (its font, size, weight, color and alignment, in its palette). With
+    * `saved`, the heading of a file, which draws no background unless the style asks for one.
     */
-  private[plot] def heading(first: Figure, text: String, width: Int, theme: Theme): (String, Int) =
+  private[plot] def heading(first: Figure, text: String, width: Int, theme: Theme, saved: Boolean): (String, Int) =
     val id = s"tda4j${counter.incrementAndGet()}"
     val ts = first.style.textScale
     val face = first.elements.face(TextRole.Title)
@@ -74,7 +75,7 @@ object Svg:
       )}" role="img">"""
     if theme == Theme.Auto then svg ++= s"<style>${pal.cssVariables(s"#$id")}</style>"
     svg ++= s"<title>${escape(text)}</title>"
-    if !first.style.transparent then
+    if first.style.hasBackground(saved) then
       svg ++= s"""<rect width="$width" height="$height" style="fill:${ink(Paint.Surface)}"/>"""
     svg ++= s"""<text x="${fmt(x)}" y="${fmt(9.0 + size)}"$anchor style="fill:${ink(face.paint)}" font-size="${fmt(
         size
@@ -234,7 +235,10 @@ object Svg:
     val ext = extent(fig.marks, xt, yt, zeroOk(fig.x, xt), zeroOk(fig.y, yt))
     (ext.zeroX, ext.zeroY)
 
-  def render(fig: Figure, theme: Theme): String =
+  /** `fig` as an `<svg>`. With `saved`, the figure of a file, which draws no background unless its style asks for one
+    * (see [[Style.transparent]]).
+    */
+  def render(fig: Figure, theme: Theme, saved: Boolean = false): String =
     val id = s"tda4j${counter.incrementAndGet()}"
     val style = fig.style
     val ts = style.textScale
@@ -527,7 +531,7 @@ object Svg:
     if theme == Theme.Auto then sb ++= s"<style>${pal.cssVariables(s"#$id")}</style>"
     if fig.title.nonEmpty then sb ++= s"<title>${escape(fig.title)}</title>"
     if fig.description.nonEmpty then sb ++= s"<desc>${escape(fig.description)}</desc>"
-    if !style.transparent then
+    if style.hasBackground(saved) then
       sb ++= s"""<rect width="${fig.width}" height="${fig.height}" style="fill:${paint(Paint.Surface)}"/>"""
     sb ++= s"""<defs><clipPath id="$id-clip"><rect x="${fmt(left)}" y="${fmt(top)}" width="${fmt(w)}" height="${fmt(
         h

@@ -149,9 +149,13 @@ class PlotLayoutSpec extends Specification:
       titled.fragment(Theme.Light) must contain("Noisy circle")
       grid.fragment(Theme.Light) must not(contain("Noisy circle"))
     }
-    "keep its background unless every panel has none" in {
-      elements(grid.svgFile(Theme.Light), "rect").head.getAttribute("width") must beEqualTo("1000")
-      elements((grid + Style.clear).svgFile(Theme.Light), "rect").filter(_.getAttribute("width") == "1000") must beEmpty
+    "keep its background unless every panel has none, which a saved file has by default" in {
+      def wide(b: Board) = elements(b.svgFile(Theme.Light), "rect").filter(_.getAttribute("width") == "1000")
+      wide(grid) must beEmpty // neither the board nor its full-width panel
+      wide(grid + Style.clear) must beEmpty
+      wide(grid + Style(transparent = false)).size must beGreaterThan(0)
+      elements((grid + Style(transparent = false)).svgFile(Theme.Light), "rect").head.getAttribute("width") must
+        beEqualTo("1000") // the board's own, drawn first
     }
   }
 

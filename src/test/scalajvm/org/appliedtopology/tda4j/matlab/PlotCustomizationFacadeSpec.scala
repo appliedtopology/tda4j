@@ -73,6 +73,7 @@ class PlotCustomizationFacadeSpec extends Specification:
       fig.withLegend("bottom") must beEqualTo(fig + fig.style.copy(legend = LegendPosition.Bottom))
       fig.withoutGrid() must beEqualTo(fig + fig.style.copy(grid = false))
       fig.withTransparentBackground() must beEqualTo(fig + fig.style.copy(transparent = true))
+      fig.withOpaqueBackground() must beEqualTo(fig + fig.style.copy(transparent = false))
     }
     "have, for each name the user guide lists, an overload that takes only what MATLAB can pass" in {
       val plain = Set[Class[?]](classOf[String], classOf[Int], classOf[Double])
@@ -108,7 +109,8 @@ class PlotCustomizationFacadeSpec extends Specification:
         "withLegendBox",
         "withLegendColumns",
         "withoutGrid",
-        "withTransparentBackground"
+        "withTransparentBackground",
+        "withOpaqueBackground"
       )
       val sceneNames = Seq(
         "withTitle",
@@ -121,7 +123,8 @@ class PlotCustomizationFacadeSpec extends Specification:
         "withDegreeColor",
         "withTextScale",
         "withMarkScale",
-        "withTransparentBackground"
+        "withTransparentBackground",
+        "withOpaqueBackground"
       )
       figureNames.filterNot(callable(classOf[Figure], _)) must beEmpty
       sceneNames.filterNot(callable(classOf[Scene], _)) must beEmpty

@@ -74,7 +74,9 @@ object LegendPosition:
   *   where the legend goes; unset, a plot has its own place (beside the plot, or at the lower right of a persistence
   *   diagram)
   * @param transparent
-  *   `true` to draw no background: the figure takes the color of the page behind it
+  *   `true` to draw no background anywhere, so that the figure takes the color of the page behind it; `false` to draw
+  *   the palette's surface everywhere; unset, a figure shown on a page or in the viewer has it (cream, for the default
+  *   palette) and a saved `.svg` has none, as a figure deployed elsewhere should take the color of its new page
   */
 final case class Style(
   font: String = Style.DefaultFont,
@@ -82,11 +84,14 @@ final case class Style(
   markScale: Double = 1.0,
   grid: Boolean = true,
   legend: Optional[LegendPosition] = Optional.empty,
-  transparent: Boolean = false
+  transparent: Optional[Boolean] = Optional.empty
 ) extends Tweak:
   require(textScale > 0 && textScale.isFinite, s"Style.textScale must be a positive number, not $textScale")
   require(markScale > 0 && markScale.isFinite, s"Style.markScale must be a positive number, not $markScale")
   require(font.nonEmpty && !font.contains('<'), "Style.font must be a CSS font-family list, such as \"Georgia, serif\"")
+
+  /** Whether a figure in this style draws its background, in a saved file (`saved`) or on a page. */
+  def hasBackground(saved: Boolean): Boolean = !transparent.toOption.getOrElse(saved)
 
   def onFigure(f: Figure): Figure = f.copy(style = this)
   override def onScene(s: Scene): Scene = s.copy(style = this)
@@ -95,7 +100,7 @@ object Style:
   /** The font stack of the default style: the reader's system font. */
   val DefaultFont: String = "system-ui,-apple-system,'Segoe UI',sans-serif"
 
-  /** What a figure has unless given another. */
+  /** What a figure has unless given another: a background on a page, none in a saved `.svg`. */
   val default: Style = Style()
 
   /** For a projector or a slide: text and marks 30% larger. Pair it with a bigger `Size` for a full-slide figure. */
@@ -104,12 +109,12 @@ object Style:
   /** The font stack of [[print]] and [[clear]]: families a converter or a publisher's pipeline knows by name. */
   val PrintFont: String = "Helvetica, Arial, 'Liberation Sans', sans-serif"
 
-  /** For a paper, where the figure has a white background of its own: a font stack that names real families
-    * (`system-ui`, the default's first choice, is a browser keyword that other SVG tools do not know). Pair it with
-    * [[Palette.print]], whose surface is exactly white and whose elements are black. For a serif face to match the
+  /** For a paper, where the figure has a white background of its own, in a saved file too: a font stack that names real
+    * families (`system-ui`, the default's first choice, is a browser keyword that other SVG tools do not know). Pair it
+    * with [[Palette.print]], whose surface is exactly white and whose elements are black. For a serif face to match the
     * text, `Style.print.copy(font = "'Times New Roman', Times, serif")`.
     */
-  val print: Style = Style(font = PrintFont)
+  val print: Style = Style(font = PrintFont, transparent = false)
 
   /** For a figure that goes onto a page, a slide or a plot of its own, with no background, so that it takes the color
     * of what is behind it, and the fonts of [[print]]. Pair it with [[Palette.clear]], whose elements are black for a

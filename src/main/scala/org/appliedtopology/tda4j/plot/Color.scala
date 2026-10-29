@@ -197,8 +197,8 @@ object Palette:
     * so it survives a grayscale printer), the diverging pair is blue against vermillion.
     *
     * Paper has one look: the dark mode is the light one, so `Theme.Dark` draws the same figure. It is for a figure that
-    * has its own white background, [[Style.print]] being the fonts to go with it; for a figure that sits on a page of
-    * either color, see [[Palette.clear]].
+    * has its own white background, in a saved file too, [[Style.print]] being the fonts to go with it; for a figure
+    * that sits on a page of either color, see [[Palette.clear]].
     */
   val print: Palette =
     val chrome = Chrome("#ffffff", "#000000", "#333333", "#595959", "#dddddd", "#000000")
@@ -287,8 +287,8 @@ object Palette:
     * a light page and the brand's dark steps on a dark one, each validated on its own surface (pure white, pure black:
     * the first three on all pairs, all eight on adjacent pairs); the heatmap ramps are [[print]]'s.
     *
-    * It is [[print]] with a dark mode of its own; with no [[Style.clear]], the figure has the white or the black
-    * background of its mode.
+    * It is [[print]] with a dark mode of its own; with no [[Style.clear]], a figure shown on a page has the white or
+    * the black background of its mode (a saved `.svg` has none either way, unless its style asks for one).
     */
   val clear: Palette =
     Palette(
