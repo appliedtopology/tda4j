@@ -544,6 +544,10 @@ matrix), `EuclideanMetricSpace` (coordinate array, on-demand Euclidean distance,
 query), `IntMetricSpace` (reindexes to contiguous `0 until size`), `SparseMetricSpace` (reports `+Infinity`
 beyond a fixed diameter cutoff, bounding Vietoris-Rips construction to a finite neighborhood per point).
 
+`EuclideanMetricSpace` copies its coordinates on construction and rejects ragged rows and NaN or infinite entries, so
+its distances, radius and `neighbors` tree cannot change under a caller's feet. `pts` and `point(i)` hand out copies;
+library code that reads one point per step (the Cech stream) uses the package-private `pointAt`, which does not copy.
+
 `EuclideanMetricSpace` caches every pairwise distance only up to 8192 points;
 above that, or with `cacheDistances = false`, it computes them on demand. A loop over all pairs `a < b` asks for
 `distance(b, a)`: that walks one row of the cache and reads the lower triangle of an `ExplicitMetricSpace`.
