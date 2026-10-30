@@ -148,12 +148,14 @@ open class WideSimplexIndexing(val vertexCount: Int):
   /** [[SimplexIndexing.CofacetCursor]] with two-word indices: read `vertex` (the added vertex), `high` and `low` (the
     * cofacet's index), then `advance()`.
     */
-  class CofacetCursor(startHigh: Long, startLow: Long, size: Int, allCofacets: Boolean):
-    private val vertices: Array[Int] = decodeToArray(startHigh, startLow, size)
+  class CofacetCursor(startHigh: Long, startLow: Long, vertices: Array[Int], allCofacets: Boolean):
+    /** The cursor over the simplex of `size` vertices at `(startHigh, startLow)`, which it decodes. */
+    def this(startHigh: Long, startLow: Long, size: Int, allCofacets: Boolean) =
+      this(startHigh, startLow, decodeToArray(startHigh, startLow, size), allCofacets)
     private val sums = Sums(startHigh, startLow)
-    private var k: Int = size
+    private var k: Int = vertices.length
     private var j: Int = vertexCount - 1
-    private var above: Int = size - 1 // the largest vertex of the simplex not yet passed
+    private var above: Int = vertices.length - 1 // the largest vertex of the simplex not yet passed
     private var _vertex: Int = -1
     private var havePending: Boolean = false
     private var done: Boolean = false
@@ -187,6 +189,12 @@ open class WideSimplexIndexing(val vertexCount: Int):
 
   def cofacetCursor(high: Long, low: Long, size: Int, allCofacets: Boolean = true): CofacetCursor =
     new CofacetCursor(high, low, size, allCofacets)
+
+  /** [[cofacetCursor]] for a caller that has decoded the simplex already: `vertices` are the simplex at `(high, low)`,
+    * ascending (the cursor reads, never changes, the array).
+    */
+  def cofacetCursor(high: Long, low: Long, vertices: Array[Int], allCofacets: Boolean): CofacetCursor =
+    new CofacetCursor(high, low, vertices, allCofacets)
 
   /** [[SimplexIndexing.SparseCofacetCursor]] with two-word indices: the cofacets whose added vertex is a neighbour of
     * every vertex of the simplex, from the neighbour lists.
@@ -269,11 +277,14 @@ open class WideSimplexIndexing(val vertexCount: Int):
   /** [[SimplexIndexing.FacetCursor]] with two-word indices: `vertex` is the vertex removed to reach the facet at
     * `(high, low)`; the indices increase.
     */
-  class FacetCursor(startHigh: Long, startLow: Long, size: Int):
-    private val vertices: Array[Int] = decodeToArray(startHigh, startLow, size)
+  class FacetCursor(startHigh: Long, startLow: Long, vertices: Array[Int]):
+    /** The cursor over the simplex of `size` vertices at `(startHigh, startLow)`, which it decodes. */
+    def this(startHigh: Long, startLow: Long, size: Int) =
+      this(startHigh, startLow, decodeToArray(startHigh, startLow, size))
     private val sums = Sums(startHigh, startLow)
-    private var k: Int = size - 1
+    private var k: Int = vertices.length - 1
     private var _vertex: Int = -1
+    private var _position: Int = -1
     private var havePending: Boolean = false
 
     private def step(): Unit =
@@ -283,6 +294,7 @@ open class WideSimplexIndexing(val vertexCount: Int):
         // The facet's index is b + a with a from before this vertex's own term.
         sums.total(0, 1) // C(0, 1) = 0
         _vertex = v
+        _position = k
         sums.addA(v, k)
         k -= 1
         havePending = true
@@ -292,12 +304,21 @@ open class WideSimplexIndexing(val vertexCount: Int):
 
     def hasNext: Boolean = havePending
     def vertex: Int = _vertex
+
+    /** The place of `vertex` among the simplex's vertices, ascending from 0. */
+    def position: Int = _position
     def high: Long = sums.resultHigh
     def low: Long = sums.resultLow
     def advance(): Unit = step()
 
   def facetCursor(high: Long, low: Long, size: Int): FacetCursor =
     new FacetCursor(high, low, size)
+
+  /** [[facetCursor]] for a caller that has decoded the simplex already: `vertices` are the simplex at `(high, low)`,
+    * ascending (the cursor reads, never changes, the array).
+    */
+  def facetCursor(high: Long, low: Long, vertices: Array[Int]): FacetCursor =
+    new FacetCursor(high, low, vertices)
 
 object WideSimplexIndexing:
   /** The low word's 63 bits. */

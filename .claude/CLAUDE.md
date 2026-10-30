@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **How this file works.** Each entry is a current rule, invariant, or known limitation, plus a pointer to the
 `.claude/WORKLOG-*.md`/`DESIGN-*.md` that holds its derivation (what was tried, measurements, repros). Derivations
 go in the worklog, not here. Detail that matters for one subsystem only is in `.claude/rules/` (see "Subsystem notes").
-Last condensed 2026-10-17; earlier, longer versions: `git show e5e86ec:.claude/CLAUDE.md`.
+Last condensed 2026-10-27; earlier, longer versions: `git show e5e86ec:.claude/CLAUDE.md`.
 
 ## What this is
 
@@ -66,8 +66,9 @@ needed, see "Givens"). The core's source directories are **file organization onl
 - **two platforms**: sbt 2's project matrix builds the JVM (`tda4j`) and Scala.js (`tda4jJS`); JS-only code is in
   `src/*/scalajs`, JVM-only in `src/*/scalajvm`, and `src/{main,test}/scala` compiles for BOTH (no JVM-only library, no
   `java.nio.file`/`java.io.File`/threads there). Seams, limits: `rules/scalajs.md`.
-- `demo/` (not a package): a SEPARATE sbt build for a talk's REPL jar with the library inside (`demo/README.md`,
-  `WORKLOG-demo-jar.md`, `WORKLOG-demo-release.md`); the root build neither builds nor sees it, `release.yml` attaches it.
+- `python/` (the `tda4j` wheel, not a package): JPype over the `matlab` facade.
+- `demo/` (not a package): a SEPARATE sbt build for a talk's REPL jar (`demo/README.md`, `WORKLOG-demo-jar.md`,
+  `WORKLOG-demo-release.md`); the root build neither builds nor sees it, `release.yml` attaches it.
 - Tests mirror this. `src/test/scala/tda4juser/` is deliberately OUTSIDE the package: it checks what a user's code
   sees (`UserImportsSpec`, `TDAlabAloneSpec`); the `tutorial` specs and generated page scripts are INSIDE it, so only
   `sbt doc` checks that doc fences resolve from outside.
@@ -75,9 +76,9 @@ needed, see "Givens"). The core's source directories are **file organization onl
 Every file in a subpackage (`sset`, `matlab`, `cli`, `tutorial`) starts with an explicit `import
 org.appliedtopology.tda4j.*`, not just the chained `package` clause. **Flat-package name-binding hazard**: a wildcard
 import of an external library (`import cats.syntax.all.*`) silently BEATS a same-named definition from another file of
-this package (no error, no warning). Import external libraries by name in core files; when adding a top-level name to
-the core, re-run the audit (inject `import org.appliedtopology.tda4j.*` next to each file-level external wildcard and
-compile: ambiguity errors are the hits; `WORKLOG-package-flatten.md`).
+this package. Import external libraries by name in core files; after adding a top-level name, re-run the audit (inject
+`import org.appliedtopology.tda4j.*` next to each file-level external wildcard and compile: ambiguity errors are the
+hits; `WORKLOG-package-flatten.md`).
 
 ### Givens: the rule the flat layout depends on
 
@@ -95,11 +96,11 @@ has one in its companion; cats' `Show` is invariant, so a hierarchy's instance i
 
 ## Commands
 
-Java 21, Scala 3.9.0 LTS (`WORKLOG-scala-3.9-lts-upgrade.md`). `.jvmopts` sets `-Xmx2G` (sbt's own 1024MB default caused
-the old test-suite OOMs: `WORKLOG-test-suite-memory-and-benchmark-gating.md`). Node >= 20.16 for the Scala.js tests.
+Java 21, Scala 3.9.0 LTS (`WORKLOG-scala-3.9-lts-upgrade.md`). `.jvmopts` sets `-Xmx2G` (the 1024MB default caused test-suite OOMs:
+`WORKLOG-test-suite-memory-and-benchmark-gating.md`). Node >= 20.16 for the Scala.js tests.
 
 ```
-sbt tda4j/testFull              # JVM specs (plain `test` is incremental+disk-cached in sbt 2 and can run 0 specs; CI's fresh runner is fine)
+sbt tda4j/testFull              # JVM specs (plain `test` is disk-cached in sbt 2 and can run 0 specs)
 sbt tda4jJS/test                # Scala.js specs, on Node >= 20.16
 sbt "tda4j/testOnly *SimplexSpec"   # single specs2 spec (glob ok)
 sbt scalafmtAll                 # format everything — run before committing
@@ -111,14 +112,12 @@ sbt tda4jJS/npmPack             # the npm package, target/npm/tda4j-<version>.tg
 sbt -DrunBenchmarks=true tda4j/test   # also run benchmark/profiling specs — NOT what CI runs
 ```
 
-No `sbt` on `PATH`: `.claude/scripts/install-sbt.sh` (paced around Maven Central's cold-cache 429s). A cloud Setup script
-should hold `.claude/scripts/cloud-setup-script.sh` (installer plus warmed dependencies); without it a session starts cold (~1 h).
+No `sbt` on `PATH`: `.claude/scripts/install-sbt.sh`. A cloud Setup script
+should hold `.claude/scripts/cloud-setup-script.sh` (installer plus warmed dependencies), else a session starts cold (~1 h).
 
-No linter beyond scalafmt; tests are specs2. CI jobs (`test` with a fat-jar smoke run, `test-js`, `npm-package`,
-`docs-build`, `mima`, `lint`) and their local equivalents: steward skill; a weekly `coverage.yml` maps coverage. A deliberate binary break is
-a commented `mimaBinaryIssueFilters` entry (project lead: not a strong requirement before 1.0). The ~319 `-Wunused:all` warnings stay
-(`WORKLOG-compiler-warnings.md`). Docs build with 3.8.4 (only a FRESH sbt server sees `TDA4J_SCALA_VERSION`: `rules/docs-and-tutorials.md`). After `sbt package` or a docs build a test compile can miss main classes ("Not found:
-TDAlab"): `sbt clean`. **scalafmt only sees git-tracked files**: `git add` a new file before `scalafmtAll`.
+No linter beyond scalafmt; tests are specs2. CI jobs (`test.yml`, `lint.yml`) and their local equivalents: steward skill; a weekly `coverage.yml` maps coverage. The ~319 `-Wunused:all` warnings stay
+(`WORKLOG-compiler-warnings.md`). Docs build with 3.8.4 (a FRESH sbt server only: `rules/docs-and-tutorials.md`). After
+`sbt package` or a docs build a test compile can miss main classes ("Not found: TDAlab"): `sbt clean`. **scalafmt only sees git-tracked files**: `git add` a new file before `scalafmtAll`.
 
 **Never run two `sbt` invocations against this checkout at once**: one process reads the other's half-written class
 files, and the `NoClassDefFoundError` looks like a regression until a clean, sequential rerun.
@@ -128,12 +127,12 @@ files, and the `NoClassDefFoundError` looks like a regression until a clean, seq
 **Every user file needs `import scala.language.experimental.modularity`** (or `-experimental`): every definition of the
 library is `@experimental` (the `Self`-member context bounds `C: Field` need the flag; ~100 errors without it). With
 that line a plain downstream project needs nothing else, `into` conversions included (packaged jar checked,
-`WORKLOG-cursor-and-verb.md`). Doc fences include the line although the docs build would not need it.
+`WORKLOG-cursor-and-verb.md`).
 
 **`Persistence(input, maxDimension = 2, maxFiltrationValue, complex = VietorisRips, characteristic = 17, engine = Auto)`**
 (`homology/Persistence.scala`) is the one-call verb: points/metric space/`Image`/any stream in, an immutable
 `PersistenceDiagram` (bars + representatives; coefficient type is a member, `import d.given`; `dim`, `at(f)`,
-`longest`, `longerThan(x)`, `significant()`, `bettiNumbers`) out. **Default: degrees 0..2, cycles**;
+`longest`, `longerThan(x)`, `longerThanFraction()`, `bettiNumbers`) out. **Default: degrees 0..2, cycles**;
 `representatives = Representatives.Cycles | Cocycles` (MATLAB `representativeType`, CLI `--representative-type`).
 `Auto` = Ripser for `VietorisRips` on points/metric space, `FastCubical` for images of dimension >= 2 (cycles only),
 `Cohomology` otherwise. Every engine but the fast ones gives both kinds, the non-native one derived from its pairing
@@ -147,11 +146,10 @@ the verb, MATLAB and the CLI take `includeZeroLength` (default `false`; `rules/e
 lead: never F₂ by default -- it hides signs and odd torsion); also the MATLAB/CLI default. The verb runs to the end;
 long runs use an engine's **cursor**, which is kept on purpose: `advanceFor(budget)`, `processedCells`/`totalCells`,
 `diagramAt(f)` exact at any `f` wherever the cursor is, `snapshotAt(f)` (`rules/engines.md` query contract).
-Engines also have inferring companion forms: `SimplicialHomologyEngine.persistentHomology(stream)`.
 
 **`into` parameter types** (`Optional[Double]`, `PointCloud`): public numeric options take `2.0`, `2`, `Some(2.0)` or
 `None`; point inputs take `Array[Array[Double]]`, `Seq[Seq[Double]]`, `Seq[Array[Double]]`. Use them for new public
-signatures instead of `Option[Double]` / a fixed collection type. `AlphaBackend` (enum) replaced string dispatch.
+signatures instead of `Option[Double]` / a fixed collection type.
 
 ### TDAlab and the other labs (detail: `rules/labs.md`)
 
@@ -185,26 +183,25 @@ every homology implementation should (a) be generic over `Field` coefficients an
 real chain witnessing each bar). An optimization that abandons representatives is probably not worth it. Every
 public interface (MATLAB facade included) should expose representatives; anywhere that doesn't is incomplete.
 **Current gaps**: every engine records a representative for every bar (`PackedRipserCohomologyEngine`'s apparent pairs
-too), and so does `ClassifyingSpace.persistentGroupHomology`. The two block-parallel experiments (`BlockParallelReduction`,
-`ParallelPackedCohomology`: JVM only, not reachable from `Persistence`) give bars only (#192, #194).
+too), and so does `ClassifyingSpace.persistentGroupHomology`. `BlockParallelReduction` (JVM only, not reachable from
+`Persistence`) gives bars only (#192); `ParallelPackedCohomology` is `Engine.ParallelRipser` (`rules/engines.md`).
 
 **Openness principle (project lead, foundational: the library is a platform for experiments and research)**: public
 and extensible by default. Access modifiers are not documentation: "not the entry point" is said in scaladoc ("what
 `VietorisRips` builds"), never by hiding the class. A restriction (`private[tda4j]`, `sealed`, `final` on a class)
 carries a `//` comment naming one of these reasons:
 1. Invariant-bearing mutable state or an unchecked constructor: restrict it, and expose a read-only view or a checked
-   factory (`CubicalGridStream.topValues` over `protected[tda4j] topCellValues`; `EdgeCollapsedMetricSpace.edges`).
+   factory (`CubicalGridStream.topValues`).
 2. A library-wide guarantee: nothing public drops representatives (`barsWithoutTopRepresentatives`).
 3. The flat namespace: a public top-level name joins every user's wildcard import and silently shadows their own
-   same-named definition, so generic helpers (`Level`, `LongIntMap`, top-level defs) stay restricted or move into a
-   companion object first.
+   same-named definition, so generic helpers (`Level`, `LongIntMap`, `Parallel`) stay restricted or move into a companion.
 4. Facade leaves (`matlab`, `cli`): their contract is strings and Java arrays; what they dispatch to is public.
 5. Public another way (`sset.Constructions` behind `FiniteSimplicialSet`'s methods).
-Plain `private` is for an algorithm's own scratch types, state and helpers (no comment); promote a member to `protected`
-when a subclass needs it as a hook, to public when it computes something a caller wants (a pairing, a validity check).
+Plain `private` is for an algorithm's own scratch types, state and helpers (no comment); `protected` when a subclass
+needs it as a hook, public when it computes something a caller wants (a pairing, a validity check).
 `sealed` only for a closed mathematical classification matched exhaustively (`BarcodeEndpoint`). `final` only on value
 types (case classes: subclassing breaks equality), where library fast paths match on the concrete class (`HeapChain`,
-`PackedChain`), and on `@tailrec` defs; not for speed without an A/B (devirtualization is expected, not measured).
+`PackedChain`), and on `@tailrec` defs; not for speed without an A/B.
 Concrete public classes are `open`: users lack `-language:adhocExtensions`, so extending a non-`open` class warns under
 `-source:future -feature`. Not reasons: a small API surface, "users should not need it", "it might change" (pre-1.0,
 anything may). `WORKLOG-openness-audit.md`.
@@ -213,9 +210,8 @@ anything may). `WORKLOG-openness-audit.md`.
 
 Everything downstream is generic over `Field` (`Fp` is an opaque type per prime). **Never test the runtime class of a
 generic coefficient** (`case d: Double`): on Scala.js every boxed number is a `Double`, so an `Fp` matches. Ask the field
-(`Field.toDouble`, #80; `WORKLOG-release-prep-2026-10-14.md`). `Chain` is abstract and OPEN (a place for the community to
-experiment) and has `equals` without a matching `hashCode` (#58): never a `Set`/`Map` key. `Cocell`/`OrderedCocell` were
-**removed on purpose**: don't reintroduce (`DESIGN-generic-cohomology.md`).
+(`Field.toDouble`, #80). `Chain` is abstract and OPEN; its `equals` and `hashCode` are those of the formal sum (#58).
+`Cocell`/`OrderedCocell` were **removed on purpose**: don't reintroduce (`DESIGN-generic-cohomology.md`).
 **Generic-`given` capture gotcha**: a `given` like `chainRM` fixes its `Ordering[CellT]` where it is summoned; at
 class scope (before the stream's ordering exists) it silently pivots on the cell's intrinsic order. Summon it where
 the per-stream ordering is in scope (`WORKLOG-naive-homology.md`). The intrinsic order is opt-in (`import
@@ -237,16 +233,20 @@ file before changing that subsystem; this table is the index, in case a rule did
 
 | file | covers | loads for |
 |---|---|---|
-| `rules/streams.md` | the ordering contract every stream must satisfy (the #1 historical bug source), VR constructions, `maxFiltrationValue` default, `ExplicitStreamBuilder` | `streams/` |
-| `rules/engines.md` | the four persistence engines, `BarcodeDistance`/`Vectorization`, circular and toroidal coordinates, benchmark specs | `homology/`, `barcode/` |
+| `rules/streams.md` | the ordering contract every stream must satisfy (the #1 bug source), VR constructions, `maxFiltrationValue` default, `ExplicitStreamBuilder` | `streams/` |
+| `rules/engines.md` | the four persistence engines, `BarcodeDistance`/`Vectorization`, benchmark specs | `homology/`, `barcode/` |
+| `rules/module-maps.md` | maps of barcodes: `MapAlgebra`, `PersistenceMap`, their oracle | `MapAlgebra`, `PersistenceMap` |
+| `rules/morse-and-zigzag.md` | discrete Morse theory, zigzag persistence | `DiscreteMorse`, `MorseCell`, `Zigzag*` |
+| `rules/circular-coordinates.md` | circular and toroidal coordinates, from points or a diagram | those files |
 | `rules/cubical.md` | cubical complexes, `FastCubicalHomologyEngine` | cubical files |
 | `rules/simplicial-sets.md` | the `sset` add-on: simplicial sets, the Sage-parity layer, group classifying spaces | `sset/` |
 | `rules/filtered-complexes.md` | Cech, witness, Dowker, DTM, sparse Rips, edge collapse | those files |
 | `rules/alpha.md` | alpha complexes (DQP, Helix, fast alpha) | `alpha/`, alpha files |
 | `rules/facade.md` | MATLAB facade, CLI, file I/O, the persistence threshold (which bars are reported) | `matlab/`, `cli/`, `io/` |
-| `rules/scalajs.md` | the Scala.js build: platform seams, what to avoid in shared code, the JS API and npm package, limits | `scalajs/`, `scalajvm/`, `build.sbt`, `npm/` |
+| `rules/python.md` | the Python package: facade mirror, options, wheel, CI | `python/` |
+| `rules/scalajs.md` | the Scala.js build: platform seams, shared-code limits, the JS API and npm package | `scalajs/`, `scalajvm/`, `build.sbt`, `npm/` |
 | `rules/docs-and-tutorials.md` | docs site, tutorial pages (the docs are the tests), language tabs | `_docs/`, tutorial specs, `build.sbt` |
-| `rules/plotting.md` | the `plot` subpackage: scene model, the tweak grammar, looks, live viewer, gallery screenshots | `plot/` (main and test) |
+| `rules/plotting.md` | the `plot` subpackage: scene model, tweaks, looks, live viewer, gallery | `plot/` (main and test) |
 | `rules/algebra.md` | fields, chains and cells: `RingModule`, `Field`, `Chain`, `Cell` | `algebra/`, `cells/` |
 | `rules/testing.md` | writing specs: shared generators, specs2 traps | `src/test/**` |
 | `rules/scala-style.md` | the Scala 3 idioms used throughout, opaque-type and extension-method hazards | `src/**/*.scala` |
@@ -255,29 +255,30 @@ file before changing that subsystem; this table is the index, in case a rule did
 
 - **Write a `.claude/WORKLOG-<topic>.md` by default** for any substantial investigation, debugging, or
   profiling arc, without being asked. Worklogs are point-in-time snapshots, never retroactively edited. At the
-  end of the arc, update this file, or the matching `.claude/rules/` file for a single subsystem, with **only the resulting
-  rule/invariant/limitation plus a worklog pointer** — no narrative, measurements, or repros there. This file loads in
+  end of the arc, update this file (or the matching `.claude/rules/` file, for one subsystem) with **only the resulting
+  rule/invariant/limitation plus a worklog pointer**: no narrative, measurements or repros. This file loads in
   every session: keep it under ~25k characters (and each rule file under ~12k); when one drifts past that, condense it
   the same way (strip narrative to worklog pointers, move single-subsystem detail into a rule file) and note the new
   condensing date/commit at top.
 - **Docs carry the contract, worklogs carry the history.** Scaladoc, user guide and tutorials say what the code does and
-  what to call (Li Haoyi's "easy": one import, defaults, errors that say what to do); no "used to", "fixed in session
-  X", "confirmed by", worklog pointers or measurements there -- those go in `.claude/`. `//` implementation comments
+  what to call; no "used to", "fixed in session X", "confirmed by", worklog pointers or measurements there -- those go
+  in `.claude/`. `//` implementation comments
   MAY carry history and worklog pointers (project lead, 2026-10-03), as long as none of it moves into scaladoc. Error
   messages and `--help` never name `.claude/` files or private classes. **The Developer's Guide is kept current with the
   code like the other docs** (project lead, 2026-10-17): a change to a subsystem updates that subsystem's page, under the
   same rule, and a fact the code contradicts is fixed in the change that makes it false.
 - **Never revert the formatter's output.** If `scalafmtAll` touches files outside your change, commit that in its OWN
-  commit ("Format: ... formatter output only, no behavior change") and say so — reverting only hides the debt, and a
-  clean lint beats a minimal diff. Run all three lint checks (Commands) before pushing.
+  commit ("Format: ... formatter output only, no behavior change") and say so: a clean lint beats a minimal diff. Run
+  all three lint checks (Commands) before pushing.
 - Performance claims need isolated A/B measurement (`git stash` A/B, median of trials, one engine per JVM);
   machine noise here often exceeds small effects — report unconfirmed effects as unconfirmed.
-- **Finalizing a user-visible capability** (new complex, engine, or option) means checking four surfaces each
-  session that lands a chunk of it: `matlab.TDA4j`, `cli.TDA4jConf` (1:1 mirror), `_docs/developers-guide/`,
-  `_docs/user-guide/`. Internal refactors and bug fixes with no new surface are exempt.
+- **A new user-visible capability** (complex, engine, option): each session that lands a chunk of it checks
+  `matlab.TDA4j`, `cli.TDA4jConf` (1:1 mirror), `python/` (a gap fails `test_facade_coverage.py`), `_docs/developers-guide/`, `_docs/user-guide/`. Refactors and bug fixes
+  with no new surface are exempt.
 - **Open items are GitHub issues** (project lead, 2026-10-11; labels and workflow in `CONTRIBUTING.md`): a question,
   limitation or unverified claim a session leaves gets an issue, linked from its worklog and PR; a user-visible change
-  gets a `CHANGELOG.md` line under Unreleased.
+  gets a `changelog.d/<topic>.md` fragment, never a `CHANGELOG.md` line (PRs that add to it conflict and drop out of the
+  merge queue; `changelog.d/README.md`, `WORKLOG-changelog-fragments.md`).
 - A cloud session (working on its own `claude/...` branch) may commit and push its own work to that branch at
   will, without asking first — the branch is disposable/session-scoped, not shared history. A local/interactive
   session working directly on a shared branch still waits to be asked; the project lead commits that work.

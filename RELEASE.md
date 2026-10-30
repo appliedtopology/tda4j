@@ -28,6 +28,7 @@ the docs steps set `TDA4J_SCALA_VERSION=3.8.4` (read by `scalaVersion` in `build
 | Library jar | `sbt tda4j/package` (part of `publishSigned`): `tda4j_3`, plots included (`org.appliedtopology.tda4j.plot`) | Maven Central |
 | Scala.js library | `tda4jJS/package` (part of `publishSigned`): `tda4j_sjs1_3`, the same sources linked by Scala.js users' builds; no MiMa check until a second release of the series exists | Maven Central |
 | npm package | `sbt tda4jJS/npmPack` → `target/npm/tda4j-<version>.tgz`: the optimized link as ES modules, `npm/package.json` with the version filled in, `npm/index.d.ts`, `npm/README.md`; the `test.yml` job `npm-package` installs it into an empty project and runs the library and the `tda4j` command | npm (`release.yml`, once `NPM_TOKEN` exists, see "npm" below) + GitHub Release |
+| Python wheel | `python/scripts/bundle-jar.sh` puts the fat jar into `python/`, `python/scripts/set_version.py X.Y.Z` writes the PEP 440 version, `python -m build --wheel python` → `python/dist/tda4j-<version>-py3-none-any.whl` (about 30 MB, the jar inside); the `test.yml` job `python-package` installs it on Python 3.10 and 3.13 and runs `python/tests` against the installed package | PyPI (`release.yml`, once the repository variable `PUBLISH_TO_PYPI` is `true`, see "PyPI" below) + GitHub Release |
 | Sources jar | `publishMavenStyle := true` + sbt's default `publishArtifact` behavior (`Compile / packageSrc`) | Maven Central + GitHub Release |
 | Scaladoc jar | sbt's default `Compile / packageDoc` | Maven Central + GitHub Release |
 | Fat jar (CLI/MATLAB) | `sbt tda4j/assembly` → `target/out/jvm/scala-3.9.0/tda4j/tda4j-<version>-assembly.jar` (name from `assembly / assemblyJarName` in `build.sbt`); CI's `test` job builds it and runs it on a sample for every pull request | GitHub Release only (not published to Maven — fat jars with bundled deps are a poor Maven citizen) |
@@ -56,6 +57,47 @@ remove `publishSigned`/`sonaUpload`/`sonaRelease` from `release.sbt`'s `releaseP
 the local sequence and a CI sequence against the same tag will make the second one fail against an
 already-released coordinate.
 
+## Snapshots
+
+`.github/workflows/snapshot.yml` publishes the `scala` branch, as the `-SNAPSHOT` version `version.sbt` holds, to Central's
+snapshot repository (`https://central.sonatype.com/repository/maven-snapshots/`) at 03:17 UTC every day. Both Maven
+artifacts go, `tda4j_3` and `tda4j_sjs1_3`, each with its jar, sources jar, scaladoc jar and POM. Snapshots are not signed
+and Central validates nothing in them. A new publish replaces the files of the same `-SNAPSHOT` version, and Central deletes
+a snapshot after 90 days.
+
+- **When it publishes:** when HEAD of `scala` is not the commit of the last successful run of the workflow (the workflow
+  asks GitHub for that run; a failed run does not count, so the next day tries again). A day without a new commit ends in
+  a green run that says "no commit since the last snapshot". Run it by hand from the Actions tab to publish now: on `scala`,
+  with `force` it publishes even without a new commit. It does not run the tests: CI has run them on every commit that
+  reached `scala`.
+- **Dry run:** a manual run on any other branch, and every pull request that changes `snapshot.yml` or `sonatype.sbt`
+  (the `dry-run` job), builds both artifacts and publishes them into `target/dry-run-repo` of the runner instead, then checks
+  that the four files of each exist and lists them in the run's summary. It needs no secrets and cannot reach Central.
+- **A local publish** of a snapshot (`sbt tda4j/publish tda4jJS/publish`) uses the credentials file of
+  [Credentials](#2-credentials-and-secrets), or `SONATYPE_USERNAME` and `SONATYPE_PASSWORD` when both are set in the
+  environment (they win over the file). Central answers a snapshot upload with the realm `Sonatype Nexus Repository
+  Manager`, and sbt sends a token only to the realm it was made for, so a credential for the file's `realm=Sonatype
+  Central` alone gets a 401; `sonatype.sbt` registers the token, from the variables or the file, under the Nexus realm.
+- **Using a snapshot:**
+
+  ```scala
+  resolvers += "Central Snapshots" at "https://central.sonatype.com/repository/maven-snapshots/"
+  libraryDependencies += "org.appliedtopology" %% "tda4j" % "0.7.0-SNAPSHOT"
+  ```
+
+**Once, before the first run** (a person with access to the Central Portal account that owns `org.appliedtopology`):
+
+1. In the [Central Portal](https://central.sonatype.com/publishing/namespaces), open the namespace's menu, choose "Enable
+   SNAPSHOTs" and confirm; the namespace then shows a "SNAPSHOTs enabled" badge. Central takes snapshot uploads only for a
+   namespace that has it.
+2. Generate a user token on the [account page](https://central.sonatype.com/account) ("Generate User Token"). Add its user
+   name as the secret `SONATYPE_USERNAME` and its password as `SONATYPE_PASSWORD` of the GitHub environment `sonatype`
+   (Settings, Environments). Until both exist the scheduled run fails, with a message that names them. Only the `publish` job
+   is in that environment, so its protection rules (a branch restriction, a required reviewer) apply to a publish and not to
+   the dry runs of pull requests; a required reviewer would hold every daily run until it is approved.
+3. Run the workflow once from the Actions tab on `scala` with `force`, and look at
+   `https://central.sonatype.com/repository/maven-snapshots/org/appliedtopology/tda4j_3/`.
+
 ## Release steps
 
 ### 1. Pre-flight
@@ -65,8 +107,10 @@ already-released coordinate.
   tda4jJS/npmPack` all green — same as CI (`test.yml`), run locally first so the interactive `sbt-release` sequence
   doesn't fail partway through.
 - `sbt scalafmtCheck scalafmtSbtCheck` clean (`lint.yml`'s own check).
-- **The changelog.** In `CHANGELOG.md`, rename the `Unreleased` section to `X.Y.Z (YYYY-MM-DD)`, read it over
-  (breaking changes first, each with what to write instead), and commit that before `sbt release`. It is the release
+- **The changelog.** `python3 changelog.d/assemble.py release X.Y.Z` folds the fragments of `changelog.d/` into the
+  entries under `Unreleased` in `CHANGELOG.md`, writes them as `## X.Y.Z (today's date)` (`--date YYYY-MM-DD` for another),
+  deletes the fragments and leaves `Unreleased` empty. Read `git diff CHANGELOG.md` over (breaking changes first, each with
+  what to write instead) and commit the diff and the deleted fragments before `sbt release`. The section is the release
   notes: `release.yml`'s `gh release create --generate-notes` lists only the merged pull requests, so paste the
   section into the GitHub Release's description once the workflow has created it.
 - **Open issues.** Skim the [issues](https://github.com/appliedtopology/tda4j/issues) for anything that should block
@@ -96,9 +140,9 @@ already-released coordinate.
   user=<token user>
   password=<token password>
   ```
-  Nothing in this project's own build files references that path — sbt's built-in Central support and sbt-pgp pick it up through
-  their own default credential discovery, the same way for every project on the machine, not something wired
-  up here; no environment variables are involved. `host` must say `central.sonatype.com`
+  `sonatype.sbt` reads that file, so `sonaUpload`, `sonaRelease` and a snapshot publish find the token there. If the
+  environment variables `SONATYPE_USERNAME` and `SONATYPE_PASSWORD` are both set, they are used instead of the file (that
+  is how `snapshot.yml` has it, see [Snapshots](#snapshots)). `host` must say `central.sonatype.com`
   exactly (a file left over from before the Central Portal migration may still say the old OSSRH host, which
   won't match and leaves the build effectively uncredentialed). This is a different file and format from
   Maven's own `~/.m2/settings.xml` — sbt doesn't read that XML format, so a token stored only there isn't
@@ -120,9 +164,20 @@ already-released coordinate.
   tarball, attaches it to the GitHub Release and skips the publish step; `npm publish --access public` of that tarball
   by hand does the same.
 
-Nothing else is required in CI today. If Maven publishing is later moved into CI (see the note above), add
-`SONATYPE_USERNAME`/`SONATYPE_PASSWORD`/`PGP_PASSPHRASE` (plus the PGP private key itself, e.g. base64 in a
-`PGP_SECRET` secret, imported with `gpg --import` before `publishSigned` runs) as repo secrets at that point.
+- **PyPI** (optional until the first Python release): no secret, PyPI's Trusted Publishing. Once, on [pypi.org](https://pypi.org/manage/account/publishing/),
+  add a *pending publisher* for the project name `tda4j` (check first that the name is free): owner `appliedtopology`, repository `tda4j`,
+  workflow `release.yml`, no environment. Then set the repository *variable* (not secret) `PUBLISH_TO_PYPI` to `true`. Until both
+  are done, `release.yml` builds the wheel, installs it into an empty environment and runs it, attaches it to the GitHub Release and
+  skips the publish step; `twine upload python/dist/*.whl` of that wheel by hand does the same. A version with a suffix becomes
+  a PEP 440 pre-release (`0.8.0-RC1` is `0.8.0rc1`, `-SNAPSHOT` or any other suffix `.dev0`), which `pip` does not install without `--pre`.
+
+- **`SONATYPE_USERNAME`** and **`SONATYPE_PASSWORD`** (secrets of the environment `sonatype`, for `snapshot.yml` only): the
+  user name and password of a Central Portal user token (not the account's own login), as in the credentials file above.
+  [Snapshots](#snapshots) says where to make the token and what else to switch on once.
+
+Nothing else is required in CI today. If release publishing is later moved into CI (see the note above), add
+`PGP_PASSPHRASE` (plus the PGP private key itself, e.g. base64 in a `PGP_SECRET` secret, imported with `gpg --import`
+before `publishSigned` runs) as secrets at that point; the two Sonatype secrets are already there (a job that releases would use the `sonatype` environment too).
 
 ### 3. Run the release
 
@@ -154,16 +209,18 @@ The tag push from step 3 triggers `.github/workflows/release.yml`, which:
    name the fat jar and pack the npm package under the tag's version, the one the demo build and the release globs ask for.
    Builds the demo REPL jar (`sbt assembly` in `demo/`, with `TDA4J_VERSION` the tag's version and sbt's disk cache off) against that local
    publish, so it does not wait for Maven Central to serve the version `sbt release` has just published, and runs it on
-   a four-point square, checking for the five bars.
+   a four-point square, checking for the five bars. Builds the Python wheel around the fat jar (`python/scripts/set_version.py`
+   sets the version), installs it into an empty environment and checks that the unit square has one loop.
 3. Commits the freshly-built docs directly into a `gh-pages` worktree, under `/X.Y.Z/`, alongside whatever's already
    there (the site root is `docs.yml`'s build of `scala`), and pushes.
 4. Zips this version's docs (`target/out/jvm/scala-3.8.4/tda4j/api`, the site step 3 just published) into
    `docs-X.Y.Z.zip`.
 5. Runs `gh release create` on the pushed tag, title `TDA4j X.Y.Z`, `--generate-notes`, `--prerelease` while
-   the version is still `0.x`, with the fat jar, sources jar, scaladoc jar, npm tarball, demo REPL jar, and docs zip
+   the version is still `0.x`, with the fat jar, sources jar, scaladoc jar, npm tarball, Python wheel, demo REPL jar, and docs zip
    attached.
 6. Publishes the npm tarball with `npm publish --access public` when the `NPM_TOKEN` secret exists (a version with a
    suffix, such as `0.8.0-RC1`, under the tag `next`, so `npm install @appliedtopology/tda4j` keeps giving the last full release).
+7. Publishes the Python wheel to PyPI when the repository variable `PUBLISH_TO_PYPI` is `true`.
 
 If it fails partway (e.g. a transient GitHub API error), it's safe to just re-run the workflow from the
 Actions tab — nothing it does touches Maven, and `gh release create`/the docs `git push` are both safe to
@@ -184,4 +241,5 @@ instead, replicate steps 1–4 locally; the commands are in the workflow file.
   "@appliedtopology/tda4j"` (skip until the package has been published once).
 - Confirm `release.yml` finished green in the Actions tab and the GitHub Release looks right (all six files
   attached, the changelog section pasted into its description) before announcing the release anywhere.
-- Add a new, empty `## Unreleased` section at the top of `CHANGELOG.md` if the release commit did not.
+- `CHANGELOG.md` has an empty `## Unreleased` section above the new version's (the script writes it) and `changelog.d/`
+  holds only its `README.md`.

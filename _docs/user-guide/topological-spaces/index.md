@@ -29,6 +29,10 @@ Persistence(SparseRips(EuclideanMetricSpace(points), epsilon = 0.5, maxDimension
 | Dowker | a relation (a matrix, any shape) | when a column relates to all its rows | [Dowker](dowker-complexes.md) |
 | cubical | an image or a voxel grid | the pixel values | [cubical](cubical-complexes.md) |
 | simplicial set | a space you build | your choice | [simplicial sets](simplicial-sets.md) |
+| time series | a signal, as sliding windows | the Vietoris-Rips diameter of the windows | [series, graphs, functions](series-graphs-functions.md) |
+| graph | weighted edges | its heaviest edge, or its shortest-path distance | [series, graphs, functions](series-graphs-functions.md#a-graph-that-stays-a-graph) |
+| lower star | a function on a mesh or graph | the largest value of its vertices | [series, graphs, functions](series-graphs-functions.md#a-function-on-a-graph-or-a-mesh-lower-star-filtrations) |
+| directed flag | a directed graph | its heaviest edge | [series, graphs, functions](series-graphs-functions.md#a-directed-network-ordered-cliques) |
 
 **Units.** Vietoris-Rips and its variants report diameters; Čech and alpha report radii. Bars from different complexes
 are compared by their shape, not their endpoints.

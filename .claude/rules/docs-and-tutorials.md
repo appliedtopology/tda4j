@@ -50,7 +50,7 @@ Narrative fences are `scala sc:nocompile` (they share values, and the snippet co
 with a "whole script" fence that IS compiled by the docs build. Shared point clouds live in `_docs/tutorials/data/`, written by the seeded `tutorial/TutorialData` (change the generator, run
 `sbt "Test/runMain org.appliedtopology.tda4j.tutorial.TutorialData"`; `TutorialDataSpec` guards drift). Style (Li Haoyi's "easy"): the page's imports are `scala.language.experimental.modularity` and
 `org.appliedtopology.tda4j.*` (+ `.sset.*` for simplicial sets), and the computation is the `Persistence` verb returning a
-`PersistenceDiagram` (`dim`, `longest`, `significant()`, `longerThan`); reach for a stream + engine only where the page is
+`PersistenceDiagram` (`dim`, `longest`, `longerThanFraction()`, `longerThan`); reach for a stream + engine only where the page is
 about them (cursor, engine choice), and for a lab (`import TDAlab.F17.{*, given}`) only where hand-written chain algebra
 is the point. Representatives are cocycles by default: a page that shows WHERE a feature is uses
 `engine = Persistence.Engine.Chunks, maxDimension = 1` and says why (find-a-loop explains the choice; link there). No implementation history, worklog pointers or "we fixed X" in pages -- state what the library does.

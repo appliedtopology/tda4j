@@ -21,6 +21,10 @@ Delaunay triangulation (the Bowyer-Watson or Helix backend), by union-find on th
 graph of the top-dimensional simplices (the top degree). In the plane those two cover everything; in 3-D and above,
 the cohomology engine computes the degrees in between. It does not work with the DQP backend, which builds no triangulation.
 
+`persistentHomology(delaunay, maxDimension = 2)` stops at that degree: only the simplices up to dimension
+`maxDimension + 1` are built and the dual graph is walked only when `maxDimension` reaches the top degree `d - 1`.
+`persistentHomologyTopDegree(delaunay)` gives the top degree alone, by the dual union-find with no matrix reduction.
+
 It relies on the triangulation being valid. Bowyer-Watson's exact predicates guarantee it. Helix checks every
 triangulation it builds and repairs one that fails (it moves the points slightly, triangulates again, and recomputes
 every radius from the original coordinates). If a triangulation is still invalid, the engine throws a

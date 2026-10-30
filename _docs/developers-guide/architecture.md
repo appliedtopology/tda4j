@@ -19,10 +19,12 @@ Its source directories are file organization only (they are not packages), and e
 - **`algebra/`** — `RingModule`, `Field`, `FiniteField`, `Chain` (including the `Cell`/`OrderedCell`/`OrderedBasis`
   contracts), `LinearAlgebra`. The typeclasses and formal-sum machinery everything else builds on.
 - **`cells/`** — `Simplex` and `Cube`, the concrete `OrderedCell` instances, with their default instances in their
-  companions.
+  companions, and `RelativeCell`, a cell of a quotient.
 - **`streams/`** — everything that produces cells in filtration order: `SimplexStream`/`CellStream`, the
   Vietoris-Rips family, `FiniteMetricSpace`, `CubicalStream`/`CubicalImage`, `CechStream`, `WitnessStream`,
-  `DowkerStream`, `UnionFind`, and the dispatchers (`VietorisRips`, `Cech`, `Witness`, `Dowker`, ...).
+  `DowkerStream`, `UnionFind`, and the dispatchers (`VietorisRips`, `Cech`, `Witness`, `Dowker`, ...). Other inputs:
+  `TakensEmbedding`, `GraphMetric`, `WeightedGraph`/`FlagComplex`, `LowerStar`, `DirectedFlagStream`, and `Relative`
+  for the quotient by a subcomplex.
 - **`homology/`** — the persistence algorithms (`Homology.scala`, `PackedRipserCohomology.scala`, `Cohomology.scala`,
   the fast cubical/alpha engines) and circular coordinates.
 - **`barcode/`** — `Barcode`, `PersistenceBar`, `BarcodeEndpoint`, distances and vectorizations.
@@ -158,6 +160,11 @@ survives a reduction step. `FiniteField.scala` gives exact, non-approximate coef
 distinct, incompatible types), with exact arithmetic via a precomputed inverse table and products in `Long`,
 so large primes stay exact.
 
+`Field.hash(x)` is the one member with a default: a hash of an element that agrees with `isEqual`, which `Chain.hashCode`
+combines with the cell's hash. The default, `0` for every element, is right for any field (a chain is then hashed by its
+cells alone, as over `DoubleApproximated`, whose tolerance admits no finer hash). `Fp` hashes its residue in `0 until p`;
+an exact field of your own should override it with a hash of its canonical form.
+
 ### `Cell`, `OrderedCell`, and what `boundary` returns
 
 ```scala sc:nocompile
@@ -202,7 +209,8 @@ nothing else. The library has two storages (both `final`: the reductions match o
   arithmetic on it returns a `HeapChain`.
 
 - Equality compares formal sums: the same cells, each with coefficients equal by the field's own `isEqual` (a
-  field element can have several representations), whatever the order or the storage.
+  field element can have several representations), whatever the order or the storage. `hashCode` agrees with it
+  (each nonzero term's cell with `Field.hash` of its coefficient), so chains can be keys of a `Set` or `Map`.
 - `collapseHead()`/`collapseAll()` merge duplicate-cell entries, dropping exact zeros. Naive `+`/`-`/`⊠`
   only lazily collapse the head, so a hand-rolled reduction loop built out of raw `Chain` arithmetic
   accumulates an ever-growing backlog of uncollapsed duplicates — see
@@ -288,14 +296,19 @@ These are **alternative implementations with the same output contract, not layer
 `iterateDimension`/`iterator` implementation is in play before reasoning about a bug:
 
 - `EnumeratingCofaceSimplexStream` — generates each dimension explicitly via `SimplexIndexing`'s
-  combinatorial-number-system enumeration, filtered by an optional `keepCriterion`.
-- `RipserCofaceSimplexStream` — a coface-generation variant that only expands cofaces reachable from the
-  previous dimension's survivors rather than re-enumerating a whole dimension from scratch. `CechStream`'s
+  combinatorial-number-system enumeration, filtered by an optional `keepCriterion`. The slowest construction, and the
+  reference the others are checked against. It declares the exclusion hooks (`keepCriterion`, `filtrationValueOverride`)
+  that its subclasses inherit; `LayeredInorderSimplexStream` does not forward them yet.
+- `RipserCofaceSimplexStream` — what `VietorisRips(...)` builds by default. A coface-generation variant that only
+  expands cofaces reachable from the previous dimension's survivors rather than re-enumerating a whole dimension from
+  scratch. `CechStream`'s
   `CechCofaceSimplexStream` is built directly on top of this class (see below). When the stream has a
-  `RipserCofaceSimplexStream.FlatFiltration` (the Vietoris-Rips value, DTM-Rips, Dowker, sparse Rips and the Cech and
-  witness functions through an adapter) it builds each dimension on arrays, as a `FlatLayerStream.Layer`: the candidate
-  vertices are read off a bitset table of the kept edges, their values come from the array-level function, and the
-  layer is sorted on primitives. The cohomology engine reduces such a stream from the layers and builds a `Simplex`
+  `RipserCofaceSimplexStream.FlatFiltration` (the Vietoris-Rips value, DTM-Rips, Dowker, sparse Rips and Cech, and the
+  general witness function through an adapter) it builds each dimension on arrays, as a `FlatLayerStream.Layer`: the
+  candidate vertices are read off a bitset table of the kept edges, their values come from the array-level function
+  (candidates of one parent are valued together, so a filtration can keep what it computed for the parent: Dowker keeps
+  the largest entry of each witness over the parent's rows, and Cech reads its facets' values from a table keyed by
+  the vertices, the same table its `Simplex` function uses), and the layer is sorted on primitives. The cohomology engine reduces such a stream from the layers and builds a `Simplex`
   only for the cells of the representatives it returns; the cell listing (`iterator`) is derived from the same layers.
   A stream without a `FlatFiltration` builds `Simplex` cells as before.
 - `LayeredInorderSimplexStream` — what `VietorisRips.Implementation.Inorder` builds: each dimension from the one below,
@@ -303,6 +316,23 @@ These are **alternative implementations with the same output contract, not layer
   arXiv:2411.05495). Each simplex is generated by its first full-diameter facet and carries its first longest edge,
   which its cofacets inherit and which decides the vertices it may add. Dimensions are kept as primitive arrays
   (`LayeredInorderSimplexStream.Layer`); candidates come from bitset balls updated by a sweep over the sorted edges.
+  The edges are read through `LayeredInorderSimplexStream.distanceOf(space)`, which hands the `Int` pair of a
+  `EuclideanMetricSpace` or an `ExplicitMetricSpace` to its own `distance(Int, Int)` instead of through the generic
+  `distance(VertexT, VertexT)`, which boxes both arguments once per pair; the loop asks for the larger vertex first
+  (a row of the distance cache, the lower-triangle entry of an explicit matrix), as `ParallelRipser` and Ripser do.
+  The generator only reads the sorted edge list, so `FlagGenerator.ofEdges` builds the layers of the flag complex of
+  any weighted graph, with an optional deadline per vertex after which it joins no simplex. `DtmRipsSimplexStream`,
+  `SheehyRipsSimplexStream` (deadlines are Sheehy's vanishing points) and the Vietoris-Rips stream of an
+  `EdgeCollapsedMetricSpace` give one as `flatGenerator`, and `RipserCofaceSimplexStream` builds its dimensions from it
+  instead of the coface loop. So does `RipserCofaceSimplexStream` itself for the default value (the largest distance)
+  on up to 2^15 points, which is what `VietorisRips(...)` builds: its two bit matrices take `n^2 / 4` bytes, so beyond
+  that the coface loop and a sort of each dimension build the layers. A `keepCriterion` is asked of each generated
+  dimension, which is cut to what it keeps before the next is generated from it, in the same order; the criterion
+  must be closed under faces (every face of a simplex it keeps is kept, vertices and edges included), so that the
+  simplex's first full-diameter facet, which generates it, is kept. That is the contract of a stream's `keepCriterion`
+  and is not checked: a criterion that breaks it does not give a complex, and no engine's answer on it is defined. The
+  runs of equal value that the generator emits out of order are sorted by `sortIndices`, a merge sort that moves only
+  the overlap of neighbouring blocks, since on integer distances such runs are most of a dimension and nearly in order.
 - `IncrementalVietorisRipsSimplexStream` — a reference implementation of Antonio Rieser's New-VR algorithm
   (arXiv:2301.07191), meant as a cross-validation baseline rather than a speed-competitive engine.
 - `RecursiveStackVietorisRipsSimplexStream` — a third, independent coface-enumeration strategy built on a
@@ -313,7 +343,8 @@ These are **alternative implementations with the same output contract, not layer
 not `Double.PositiveInfinity` — past that radius every vertex is within range of a common apex, so the
 complex is a cone from there on and provably contributes no further homology (real `ripser.cpp` uses the
 same default). Pass `maxFiltrationValue = Some(Double.PositiveInfinity)` for the whole complex. `RecursiveStackVietorisRipsSimplexStream` and the alpha-complex backends keep their own,
-always-untruncated default (see [Alpha complex](alpha-complex.md)).
+always-untruncated default; `AlphaShapes.fromPoints`, which `Persistence` calls, cuts the alpha complex at the same
+radius (see [Alpha complex](alpha-complex.md)).
 
 `SimplexIndexing` (inside `SimplexIndexing.scala`) is the piece every Ripser-flavored part of this codebase
 depends on: it encodes/decodes a `d`-subset of `{0, ..., vertexCount-1}` to/from a single integer index via
@@ -399,7 +430,10 @@ collapse are on their own page: [Nerves and group homology](nerves.md).
 minimum-enclosing-ball radius (`MinimumEnclosingBall`, the library's own, so it also builds for Scala.js), not the Delaunay/QP machinery alpha shapes use —
 Cech membership depends only on a simplex's own vertices, not on every other point in the cloud.
 `CechFiltration` caches each simplex's radius and clamps it to the max of its own facets' cached radii,
-since a raw ball computation can violate monotonicity by a floating-point ULP on near-degenerate input.
+since a raw ball computation can violate monotonicity by a floating-point ULP on near-degenerate input. The cache is
+keyed by the sorted vertex arrays, not by `Simplex` values, and serves both the `Simplex` function and the array-level
+value the stream's flat layers ask for; a simplex's value depends on which of its facets are cached when it is first
+asked for, so the stream asks dimension by dimension.
 
 Because Cech is not a flag complex, VR-specific packed/coface optimizations do
 not apply. It is consumed by the generic homology engines.
@@ -473,6 +507,36 @@ The resulting `EdgeCollapsedMetricSpace` implements `FiniteMetricSpace[Int]`,
 so existing Vietoris-Rips streams and persistence engines can consume the
 collapsed graph without special handling.
 
+Up to 4,096 points the collapse keeps the graph as an `n x n` matrix of values with a bit set of neighbours per vertex,
+so the common neighbours of an edge are the AND of two rows of bits and every value is one array read; above that, in a
+sorted map per vertex (memory proportional to the edges). Each edge is decided against the candidate times in order,
+and the vertex that dominated at one time is tested only against the vertices that joined the active set since. The
+cost is about the edges times their common neighbours, so a dense graph (a large radius) is the expensive case: 1,200
+points in R^3 at the enclosing radius take about ten seconds. The result is stored in rows of sorted neighbours, the
+surviving edges only. Both forms take every decision the same way (`EdgeCollapseDenseSpec`).
+
+### Time series, graphs, functions and directed networks
+
+These are ways into the engines, not new engines. `TakensEmbedding` returns a `PointCloud` (windows of the series), and
+`GraphMetric.geodesic` an `ExplicitMetricSpace` (Dijkstra from every vertex, `n^2` entries; `Infinity` between
+components), so both go through the Vietoris-Rips path unchanged.
+
+`WeightedGraph` is a `FiniteMetricSpace` held as sorted neighbour lists (`n + 2m` numbers), with `Infinity` for a
+non-edge. `Persistence(graph)` does not give it to the Ripser engines, which index a dense matrix, nor to
+`VietorisRips`, whose generators build `n x n` tables; `Input.ofMetricSpace` hands it to `FlagComplex`, which grows
+cliques from the neighbour lists. A clique grows by one vertex above its largest, from the common neighbours of all its
+vertices; each candidate carries the heaviest weight from it to the clique, so a simplex's value is the larger of its
+parent's value and that weight, and two sorted lists are merged per step. `FlagComplexSpec` checks it cell for cell and
+value for value against `VietorisRips` on the dense matrix, and against the Ripser engine's barcode. The engine is
+`Cohomology`.
+
+`LowerStar` lists every face with its value (the largest of its vertices) to `ExplicitStreamBuilder.fromFilteredFacets`
+and with `superlevel` negates the values. `DirectedFlagStream` enumerates ordered cliques depth first into one stream
+whose cells are `DirectedSimplex` (an ordered vertex tuple, boundary by deleting a position with sign `(-1)^i`); its
+oracle is the complex of injective words, whose Betti numbers are known (`DirectedFlagStreamSpec`). Both sort each
+dimension after the values are complete: the sort reads the values through the stream's own ordering, and sorting inside
+the lazy value that builds them would never return.
+
 ### Metric spaces
 
 `FiniteMetricSpace.scala` abstracts "distance + finite point set": `ExplicitMetricSpace` (raw distance
@@ -481,7 +545,8 @@ query), `IntMetricSpace` (reindexes to contiguous `0 until size`), `SparseMetric
 beyond a fixed diameter cutoff, bounding Vietoris-Rips construction to a finite neighborhood per point).
 
 `EuclideanMetricSpace` caches every pairwise distance only up to 8192 points;
-above that, or with `cacheDistances = false`, it computes them on demand.
+above that, or with `cacheDistances = false`, it computes them on demand. A loop over all pairs `a < b` asks for
+`distance(b, a)`: that walks one row of the cache and reads the lower triangle of an `ExplicitMetricSpace`.
 Never collect every pairwise distance into a collection: at 50,000 points that
 is over a billion values.
 
@@ -489,14 +554,23 @@ is over a billion values.
 > thresholded neighbor oracle. Code that queries it expecting "unreachable" to mean "absent" will instead get
 > back a real (if unusable) `Double` value; check `.isFinite` explicitly rather than assuming exclusion.
 
-### Opt-in parallelism
+### Parallelism
 
-A few of the more expensive per-cell computations can run on the common `ForkJoinPool`, opt-in via a
-constructor flag defaulting to `false`, with output that is deterministic either way:
-`AlphaDQPSettings.parallel` (the per-vertex QP solve), `CubicalGridStream.parallelFiltrationValue`, and
-`CechCofaceSimplexStream.parallelFiltrationValue`. These are worth reaching for on large inputs where the
-per-cell cost is real (a QP solve, a minimum enclosing ball). On Scala.js the flags are accepted and the work runs on
-the one thread, giving the same answer.
+The per-cell computations that cost something run on the common `ForkJoinPool` through the internal `Parallel` object
+(`threads`, `foreach`, `map`, `ranges`, `both`, `sort`, `sequentially`; the Scala.js build has the same object and runs
+everything in order). Every use gives the same answer however many threads there are: a step may be faster, never
+different. The flags `AlphaDQPSettings.parallel` (the per-vertex QP solve) and `parallelFiltrationValue` of the Cech,
+DTM-Rips, sparse Rips and witness streams default to on where there are threads; the cubical image's pixel reads stay
+opt-in, being too cheap to share. Also shared: the alpha triangulation and face tables (see the alpha complex page),
+the sort of each dimension of a flat-array stream, the build of the cohomology engine's coboundary blocks, and the
+reduction of the death dimensions in the cycle representatives. `Parallel.sequentially { ... }` runs everything called
+from the current thread on that thread: the reference run of a test, and `sequential=true` of the benchmark drivers.
+`-Djava.util.concurrent.ForkJoinPool.common.parallelism=N` sets the number of workers for the whole library; `0` is
+sequential. `Parallel.withThreads(n) { ... }` runs its body on a fork-join pool of `n` threads instead (`1` is
+`sequentially`), which is what the `threads` option of `Persistence`, the MATLAB facade and the CLI call: `Parallel.threads`
+inside it is `n`, and work that outlives the call (a representative built when first read) carries the count with
+`Parallel.limit` and `Parallel.limited`. A body that already runs on a fork-join pool of `n` threads just runs. Scala.js
+has the same names and runs the body.
 
 ## `Barcode.scala`: representing the output
 
@@ -515,9 +589,22 @@ perfect matching exists using only edges below a threshold), and `Hungarian.minC
 assignment and total cost of a minimum-cost perfect matching on a square matrix of finite costs, in `O(n³)` (the
 Wasserstein distance).
 
+`EulerCharacteristicCurve` (`streams/`) is the Euler characteristic of a filtered complex as a step function of the scale.
+For Vietoris-Rips it never builds the complex: the sorted edges are swept with bit rows of the edges seen so far, and the
+simplices that belong to an edge (it is their last edge in that order, so ties need no special case) are the edge joined
+with the cliques of its lens graph, counted by bitset intersection. Chunks of the sorted edges are independent (each
+replays the edges before it) and run through `Parallel.tasks`. `ofStream` counts the cells of any stream and is the
+reference the spec compares against, cell for cell on tie-heavy metrics.
+
 `TruncatedSimplexStream(stream, maxSimplexDimension)` cuts a stratified simplex stream off above a simplex dimension,
 keeping its order and values; the `Truncated` entry point takes a homological degree instead and is what you should
 call.
+
+`Relative(stream, inSubcomplex)` is the pair `(X, A)` as a stream: the cells of `X` outside `A`, each wrapped in a
+`RelativeCell` that knows `A` and the cell structure of `X`, with a boundary that drops the faces in `A`, the value and
+order of the cell of `X`, and the degree limit of the stream. Every engine then computes the relative homology without
+change. `A` has to be closed under faces; that is documented, not checked. `RelativeSpec` compares the barcode with the
+ranks of `H(X_s, A_s) -> H(X_t, A_t)` from the relative chain groups, at every pair of filtration values.
 
 ### Circular coordinates
 

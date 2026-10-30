@@ -49,26 +49,32 @@ private enum EngineKind:
 
 private object EngineKind:
   def parse(raw: String): EngineKind = raw.toLowerCase match
-    case "ripser"       => Ripser
-    case "naive"        => Naive
-    case "chunks"       => Chunks
-    case "cohomology"   => Cohomology
-    case "fast-cubical" => FastCubical
-    case "fast-alpha"   => FastAlpha
-    case other          =>
+    case "ripser"          => Ripser
+    case "naive"           => Naive
+    case "chunks"          => Chunks
+    case "cohomology"      => Cohomology
+    case "fast-cubical"    => FastCubical
+    case "fast-alpha"      => FastAlpha
+    case "parallel-ripser" =>
       throw new IllegalArgumentException(
-        s"unrecognized engine '$other'; expected 'ripser', 'naive', 'chunks', 'cohomology', 'fast-cubical', or " +
-          "'fast-alpha'"
+        "engine=parallel-ripser is only offered for complex=vr, from points or a distance matrix; use " +
+          "engine=ripser, or leave engine unset, here"
+      )
+    case other =>
+      throw new IllegalArgumentException(
+        s"unrecognized engine '$other'; expected 'ripser', 'parallel-ripser', 'naive', 'chunks', 'cohomology', " +
+          "'fast-cubical', or 'fast-alpha'"
       )
 
 private enum CoefficientKind:
-  case Z, R
+  case Z, R, Q
 
 private object CoefficientKind:
   def parse(raw: String): CoefficientKind = raw.toLowerCase match
     case "z"   => Z
     case "r"   => R
-    case other => throw new IllegalArgumentException(s"unrecognized field '$other'; expected 'Z' or 'R'")
+    case "q"   => Q
+    case other => throw new IllegalArgumentException(s"unrecognized field '$other'; expected 'Z', 'R' or 'Q'")
 
 /** TDA4j for MATLAB (through its built-in Java support) and plain Java: every method takes and returns only `int`,
   * `double`, `String`, arrays of those, and result objects ([[PersistenceResult]], [[LandmarkSelectionResult]],
@@ -106,6 +112,113 @@ object TDA4j:
   // The plots of a result find this where the Scala API finds a `given Look`. A given that takes a context parameter
   // is a method, so the session's look is read when a plot is made, not once when a result is created.
   private[matlab] given sessionLook: DummyImplicit => plot.Look = plotLook.get
+
+  // Boards. A figure a result returns (`result.plotBarcode()`) can be put beside others in a board, which has the same
+  // `save(path)` and the plain-argument methods `place`, `tagged`, `shared`, `sharedColumns`, `sharedRows`, `withTitle`,
+  // `withPalette`, `withStyle`, `withTextScale` and `withSetting`. MATLAB cannot build a Scala `Seq`, so a board is
+  // made here.
+
+  /** The figures in one row, as one plot: `board = TDA4j.side(result.plotBarcode(), result.plotDiagram())`. */
+  def side(first: plot.Figure, second: plot.Figure): plot.Board = plot.Plot.side(first, second)
+
+  /** Three figures in one row. */
+  def side(first: plot.Figure, second: plot.Figure, third: plot.Figure): plot.Board =
+    plot.Plot.side(first, second, third)
+
+  /** The figures of a Java array in one row. */
+  def side(figures: Array[plot.Figure]): plot.Board = plot.Plot.side(figures.toSeq*)
+
+  /** An empty board of `rows` by `cols` cells, 960 by 600 pixels, to fill with `place(figure, row, col)`. */
+  def layout(rows: Int, cols: Int): plot.Board = plot.Plot.layout(rows, cols)
+
+  /** An empty board of `rows` by `cols` cells in a drawing `width` by `height` pixels. */
+  def layout(rows: Int, cols: Int, width: Int, height: Int): plot.Board = plot.Plot.layout(rows, cols, width, height)
+
+  /** An empty board with `gap` pixels between cells; the columns share the width in proportion to `widths`, the rows
+    * the height in proportion to `heights` (an empty array for equal ones).
+    */
+  def layout(
+    rows: Int,
+    cols: Int,
+    width: Int,
+    height: Int,
+    gap: Int,
+    widths: Array[Double],
+    heights: Array[Double]
+  ): plot.Board = plot.Plot.layout(rows, cols, width, height, gap, widths.toSeq, heights.toSeq)
+
+  /** The complex a result was computed from, up to dimension 2 at the scale `scale`, as a plot draws it: its cells'
+    * vertices number the input's points. `stoppedAt` is the `maxFiltrationValue` that cut the computation short of the
+    * scale asked.
+    */
+  private[matlab] final class DrawnComplex(
+    val stream: CellStream[Simplex[Int], Double],
+    val ball: Option[Double],
+    val name: String,
+    val scale: Double,
+    val stoppedAt: Option[Double]
+  )
+
+  /** The complex of a result with these `options` and `complex` over `ps` at `at` (but no later than the result's own
+    * `maxFiltrationValue`), from the options that built it: its alpha backend, its landmarks, its DTM and sparse
+    * parameters.
+    */
+  private[matlab] def drawnComplex(
+    options: Array[String],
+    complex: String,
+    ps: Array[Array[Double]],
+    landmarks: Array[Int],
+    at: Double
+  ): DrawnComplex =
+    val opts = parseOptions(options)
+    val stop = opts.get("maxfiltrationvalue").map(parseDoubleOption("maxFiltrationValue", _))
+    val r = stop.fold(at)(math.min(at, _))
+    val stoppedAt = stop.filter(_ < at)
+    val space = EuclideanMetricSpace(ps)
+    def upToTriangles(stream: CofaceSimplexStream[Int, Double]): CellStream[Simplex[Int], Double] =
+      LimitedCofaceSimplexStream(stream, 2)
+    def result(stream: CellStream[Simplex[Int], Double], ball: Option[Double], name: String) =
+      DrawnComplex(stream, ball, name, r, stoppedAt)
+    ComplexKind.parse(complex) match
+      case ComplexKind.VR =>
+        result(VietorisRips.fromPoints(ps, 1, Some(r)), Some(r / 2), "Vietoris-Rips")
+      case ComplexKind.Cech =>
+        result(Cech.fromPoints(ps, 1, Some(r)), Some(r), "Cech")
+      case ComplexKind.Alpha =>
+        val requireValid =
+          opts.get("requirevalidtriangulation").exists(parseBooleanOption("requireValidTriangulation", _))
+        val backend = AlphaBackend.parse(opts.getOrElse("alphabackend", "default"))
+        result(AlphaShapes(ps.toIndexedSeq, backend, requireValid, Some(r)), Some(r), "Alpha")
+      case ComplexKind.Witness =>
+        val chosen =
+          if landmarks.nonEmpty then landmarks.toIndexedSeq else resolveLandmarkSelection(opts, space).landmarks
+        val stream = resolveWitnessVariant(opts) match
+          case WitnessVariantKind.Lazy =>
+            upToTriangles(LazyWitnessSimplexStream(space, chosen, resolveWitnessNu(opts), maxFiltrationValue = Some(r)))
+          case WitnessVariantKind.General =>
+            upToTriangles(WitnessCofaceSimplexStream(WitnessGeometry(space, chosen), r))
+        // the stream's vertices are landmark numbers: name them by the points they are, as the representatives do
+        val builder = ExplicitStreamBuilder[Int, Double]()
+        stream.iterator.foreach(c => builder += (stream.filtrationValue(c) -> Simplex.from(c.toIndexedSeq.map(chosen))))
+        result(builder.result(), None, s"Witness (${chosen.size} landmarks)")
+      case ComplexKind.DtmRips =>
+        val k = parseIntOption("dtmK", opts.getOrElse("dtmk", "1"))
+        val q = opts.get("dtmq").map(parseDoubleOption("dtmQ", _)).getOrElse(2.0)
+        val p = opts.get("dtmp").map(parseDoubleOption("dtmP", _)).getOrElse(1.0)
+        val weight = DistanceToMeasure(space, k, q)
+        result(upToTriangles(DtmRipsSimplexStream(space, weight, p, maxFiltrationValue = Some(r))), None, "DTM-Rips")
+      case ComplexKind.DtmAlpha =>
+        val k = parseIntOption("dtmK", opts.getOrElse("dtmk", "1"))
+        val q = opts.get("dtmq").map(parseDoubleOption("dtmQ", _)).getOrElse(2.0)
+        val ac = AlphaComplexDQP.dtm(ps, k, Double.PositiveInfinity, ps.headOption.map(_.length).getOrElse(0), q)
+        result(AlphaComplexDQPStream(ps, ac), None, "DTM-alpha")
+      case ComplexKind.SparseRips =>
+        val epsilon = parseDoubleOption("sparseEpsilon", opts.getOrElse("sparseepsilon", "0.5"))
+        result(
+          upToTriangles(SheehyRipsSimplexStream(space, epsilon, maxFiltrationValue = Some(r))),
+          None,
+          "Sparse Rips"
+        )
 
   def computeFromPoints(points: Array[Array[Double]]): PersistenceResult =
     computeFromPoints(points, Array.empty[String])
@@ -153,6 +266,212 @@ object TDA4j:
     dispatchDowker(opts, relation).withSource(
       ResultSource("computeFromRelation", options, opts, "dowker", ResultInput.Abstract("relation"))
     )
+
+  private val relativeKeys = Set(
+    "engine",
+    "representativetype",
+    "maxdimension",
+    "maxfiltrationvalue",
+    "field",
+    "prime",
+    "epsilon",
+    "minpersistence",
+    "minpersistencefraction",
+    "includezerolength",
+    "threads"
+  )
+
+  /** Relative persistent homology of the Vietoris-Rips complex of a point cloud modulo the subcomplex on some of its
+    * points: the bars of `H(X_t, A_t)`, where `X` is the complex and `A` the simplices all of whose vertices are among
+    * `subcomplex` (0-based row numbers). Two cases to know: modulo the whole cloud there is nothing, and modulo one
+    * point of a connected cloud, whose points all enter together, the result is the reduced homology (the one bar of
+    * the whole complex in degree 0 is gone). Options: `engine` (`cohomology`, the default, `naive` or `chunks`),
+    * `maxDimension` (default 2), `maxFiltrationValue`, `field`, `prime`, `epsilon`, `representativeType`, the bar
+    * options and `threads`, and no others. The representatives and the cells of the bars are cells of `X` outside `A`.
+    */
+  def computeRelativeFromPoints(
+    points: Array[Array[Double]],
+    subcomplex: Array[Int],
+    options: Array[String]
+  ): PersistenceResult =
+    validatePoints(points)
+    val metricSpace = EuclideanMetricSpace(points)
+    validateSubcomplex(subcomplex, metricSpace.size)
+    val opts = parseOptionsWithKeys(options, relativeKeys)
+    dispatchRelative(opts, metricSpace, subcomplex).withSource(
+      ResultSource(
+        "computeRelativeFromPoints",
+        options,
+        opts,
+        "vr",
+        ResultInput.Points(points.map(_.clone())),
+        relativeTo = subcomplex
+      )
+    )
+
+  def computeRelativeFromPoints(points: Array[Array[Double]], subcomplex: Array[Int]): PersistenceResult =
+    computeRelativeFromPoints(points, subcomplex, Array.empty[String])
+
+  /** [[computeRelativeFromPoints]] for a square, symmetric distance matrix. */
+  def computeRelativeFromDistanceMatrix(
+    distances: Array[Array[Double]],
+    subcomplex: Array[Int],
+    options: Array[String]
+  ): PersistenceResult =
+    validateSquare(distances)
+    validateSubcomplex(subcomplex, distances.length)
+    val opts = parseOptionsWithKeys(options, relativeKeys)
+    dispatchRelative(opts, explicitMetricSpace(distances), subcomplex).withSource(
+      ResultSource(
+        "computeRelativeFromDistanceMatrix",
+        options,
+        opts,
+        "vr",
+        ResultInput.Abstract("distance-matrix"),
+        relativeTo = subcomplex
+      )
+    )
+
+  def computeRelativeFromDistanceMatrix(distances: Array[Array[Double]], subcomplex: Array[Int]): PersistenceResult =
+    computeRelativeFromDistanceMatrix(distances, subcomplex, Array.empty[String])
+
+  private val mapKeys = Set("engine", "maxdimension", "maxfiltrationvalue", "prime", "threads")
+
+  /** The map on persistent homology induced by the simplicial map of Vietoris-Rips complexes that sends point `i` of
+    * `sourcePoints` to point `vertexMap(i)` of `targetPoints`, with its image, kernel and cokernel as barcodes: see
+    * [[PersistenceMapResult]]. The map has to preserve the filtration -- never increase a distance, as an inclusion of
+    * a subsample does not -- or the computation says so. Options: `engine` (`ripser`, the default, or `cohomology`),
+    * `maxDimension` (default 2), `maxFiltrationValue` (shared by both complexes; by default the target's minimum
+    * enclosing radius), `prime` (default 17) and `threads`.
+    */
+  def computeMapFromPoints(
+    sourcePoints: Array[Array[Double]],
+    targetPoints: Array[Array[Double]],
+    vertexMap: Array[Int],
+    options: Array[String]
+  ): PersistenceMapResult =
+    validatePoints(sourcePoints)
+    validatePoints(targetPoints)
+    mapBetween(
+      EuclideanMetricSpace(sourcePoints),
+      EuclideanMetricSpace(targetPoints),
+      vertexMap,
+      parseOptionsWithKeys(options, mapKeys)
+    )
+
+  def computeMapFromPoints(
+    sourcePoints: Array[Array[Double]],
+    targetPoints: Array[Array[Double]],
+    vertexMap: Array[Int]
+  ): PersistenceMapResult = computeMapFromPoints(sourcePoints, targetPoints, vertexMap, Array.empty[String])
+
+  /** [[computeMapFromPoints]] for two finite metric spaces given as full matrices of distances. */
+  def computeMapFromDistanceMatrices(
+    sourceDistances: Array[Array[Double]],
+    targetDistances: Array[Array[Double]],
+    vertexMap: Array[Int],
+    options: Array[String]
+  ): PersistenceMapResult =
+    validateSquare(sourceDistances)
+    validateSquare(targetDistances)
+    mapBetween(
+      explicitMetricSpace(sourceDistances),
+      explicitMetricSpace(targetDistances),
+      vertexMap,
+      parseOptionsWithKeys(options, mapKeys)
+    )
+
+  /** The map induced by the inclusion of the Vietoris-Rips complex of a subsample, the points of `points` numbered by
+    * `subsample` (0-based), into that of all of them: what survives from the subsample in the whole sample, and what
+    * only the whole sample sees. Options as in [[computeMapFromPoints]].
+    */
+  def computeInclusionFromPoints(
+    points: Array[Array[Double]],
+    subsample: Array[Int],
+    options: Array[String]
+  ): PersistenceMapResult =
+    validatePoints(points)
+    validateSubsample(subsample, points.length)
+    computeMapFromPoints(subsample.map(points), points, subsample, options)
+
+  def computeInclusionFromPoints(points: Array[Array[Double]], subsample: Array[Int]): PersistenceMapResult =
+    computeInclusionFromPoints(points, subsample, Array.empty[String])
+
+  /** [[computeInclusionFromPoints]] for a full matrix of distances. */
+  def computeInclusionFromDistanceMatrix(
+    distances: Array[Array[Double]],
+    subsample: Array[Int],
+    options: Array[String]
+  ): PersistenceMapResult =
+    validateSquare(distances)
+    validateSubsample(subsample, distances.length)
+    computeMapFromDistanceMatrices(
+      subsample.map(i => subsample.map(j => distances(i)(j))),
+      distances,
+      subsample,
+      options
+    )
+
+  private def mapBetween(
+    source: FiniteMetricSpace[Int],
+    target: FiniteMetricSpace[Int],
+    vertexMap: Array[Int],
+    opts: Map[String, String]
+  ): PersistenceMapResult =
+    if vertexMap.length != source.size then
+      throw new IllegalArgumentException(
+        s"vertexMap has ${vertexMap.length} entries, and the source has ${source.size} points: one for each"
+      )
+    vertexMap.foreach { v =>
+      if v < 0 || v >= target.size then
+        throw new IllegalArgumentException(
+          s"vertexMap sends a point to $v, outside the target's 0 to ${target.size - 1}"
+        )
+    }
+    val engine = opts.getOrElse("engine", "ripser").toLowerCase match
+      case "ripser"     => Persistence.Engine.Ripser
+      case "cohomology" => Persistence.Engine.Cohomology
+      case other        =>
+        throw new IllegalArgumentException(
+          s"engine=$other is not offered for a map: it reads the cycles that die with their bars, which ripser " +
+            "(the default) and cohomology give"
+        )
+    val maxDimension = opts.get("maxdimension").map(parseIntOption("maxDimension", _)).getOrElse(2)
+    val prime = opts.get("prime").map(parseIntOption("prime", _)).getOrElse(FiniteField.DefaultPrime)
+    val limit = opts.get("maxfiltrationvalue").map(parseDoubleOption("maxFiltrationValue", _))
+    withThreads(opts) {
+      // One value for both: the bars are cut off at the same scale, and the target keeps the bars that never exist,
+      // whose representatives the map is read from.
+      def diagram(space: FiniteMetricSpace[Int]) =
+        Persistence(
+          space,
+          maxDimension = maxDimension,
+          maxFiltrationValue = limit.getOrElse(target.minimumEnclosingRadius),
+          characteristic = prime,
+          engine = engine,
+          includeZeroLength = true
+        )
+      val from = diagram(source)
+      val to = diagram(target)
+      val map = PersistenceMap.simplicial(from, to)(i => vertexMap(i))
+      import from.given
+      val field = summon[from.Coefficient is Field]
+      def rows[A](bars: List[PersistenceBar[Double, A]]): Array[Array[Double]] =
+        bars.map(b => Array(b.birth, b.death)).toArray
+      new PersistenceMapResult(
+        prime,
+        (0 to map.maxDimension).map { k =>
+          PersistenceMapResult.Degree(
+            rows(map.sourceBars(k)),
+            rows(map.targetBars(k)),
+            map.entries(k).map((i, j, c) => Array(i.toDouble, j.toDouble, field.toDouble(c))).toArray,
+            rows(map.image(k)),
+            rows(map.kernel(k)),
+            rows(map.cokernel(k))
+          )
+        }
+      )
+    }
 
   /** A result saved by `PersistenceResult.save` (or `tda4j --save-result`), with its bars, threshold, reported
     * representatives and input, so it plots like the result it was. Its boundary matrix is not saved.
@@ -252,6 +571,329 @@ object TDA4j:
     val metricSpace = explicitMetricSpace(distances)
     validateLandmarks(landmarks, metricSpace.size)
     LandmarkSelector.coveringRadius(metricSpace, landmarks.toIndexedSeq)
+
+  /** The Euler characteristic curve of the Vietoris-Rips complex of a point cloud, one row per point, with Euclidean
+    * distances: see [[EulerCurveResult]]. Options `maxSimplexDimension` (the largest simplices counted, default `2`),
+    * `maxFiltrationValue` (the largest scale, default the minimum enclosing radius) and `threads`, and no others.
+    */
+  def eulerCurveFromPoints(points: Array[Array[Double]], options: Array[String]): EulerCurveResult =
+    validatePoints(points)
+    eulerCurve(EuclideanMetricSpace(points), options)
+
+  def eulerCurveFromPoints(points: Array[Array[Double]]): EulerCurveResult =
+    eulerCurveFromPoints(points, Array.empty[String])
+
+  /** As [[eulerCurveFromPoints]], from a distance matrix. */
+  def eulerCurveFromDistanceMatrix(distances: Array[Array[Double]], options: Array[String]): EulerCurveResult =
+    validateSquare(distances)
+    eulerCurve(explicitMetricSpace(distances), options)
+
+  def eulerCurveFromDistanceMatrix(distances: Array[Array[Double]]): EulerCurveResult =
+    eulerCurveFromDistanceMatrix(distances, Array.empty[String])
+
+  private val eulerCurveKeys = Set("maxsimplexdimension", "maxfiltrationvalue", "threads")
+
+  private def eulerCurve(metricSpace: FiniteMetricSpace[Int], options: Array[String]): EulerCurveResult =
+    val opts = parseOptionsWithKeys(options, eulerCurveKeys)
+    val maxSimplexDimension = opts.get("maxsimplexdimension").fold(2)(parseIntOption("maxSimplexDimension", _))
+    val maxFiltrationValue = opts.get("maxfiltrationvalue").map(parseDoubleOption("maxFiltrationValue", _))
+    withThreads(opts) {
+      new EulerCurveResult(EulerCharacteristicCurve.vietorisRips(metricSpace, maxSimplexDimension, maxFiltrationValue))
+    }
+
+  /** The persistent Laplacian of the Vietoris-Rips complex of a point cloud, on the simplices of dimension `dimension`
+    * that have entered by `from`, for the complex at `to` (`from <= to`; the filtration value is the scale, the larger
+    * of the distances in a simplex): see [[PersistentLaplacianResult]] and `PersistentLaplacian`.
+    */
+  def persistentLaplacianFromPoints(
+    points: Array[Array[Double]],
+    dimension: Int,
+    from: Double,
+    to: Double
+  ): PersistentLaplacianResult =
+    validatePoints(points)
+    persistentLaplacian(EuclideanMetricSpace(points), dimension, from, to)
+
+  /** [[persistentLaplacianFromPoints]] for a finite metric space given as its full matrix of distances. */
+  def persistentLaplacianFromDistanceMatrix(
+    distances: Array[Array[Double]],
+    dimension: Int,
+    from: Double,
+    to: Double
+  ): PersistentLaplacianResult =
+    validateSquare(distances)
+    persistentLaplacian(explicitMetricSpace(distances), dimension, from, to)
+
+  private def persistentLaplacian(
+    metricSpace: FiniteMetricSpace[Int],
+    dimension: Int,
+    from: Double,
+    to: Double
+  ): PersistentLaplacianResult =
+    require(dimension >= 0, s"persistentLaplacian: dimension must be 0 or more, got $dimension")
+    // The complex needs no simplex that enters after `to`.
+    val complex = VietorisRips(metricSpace, maxDimension = dimension, maxFiltrationValue = to)
+    new PersistentLaplacianResult(PersistentLaplacian(complex, dimension, from, to))
+
+  private val zigzagStepKeys = Set("maxdimension", "prime")
+  private val zigzagComplexKeys = Set("maxdimension", "prime", "link")
+
+  /** The zigzag persistent homology of a sequence of complexes given by steps from the complex `initial` (simplices as
+    * arrays of vertex numbers): step `k` adds the simplex `simplices(k)` if `additions(k)` is true and removes it
+    * otherwise. A simplex is added after its facets and removed before the simplices it is a facet of. Options
+    * `maxDimension` (the top degree of the bars, default `2`) and `prime` (default 17), and no others. See
+    * [[ZigzagResult]] and `ZigzagPersistence`.
+    */
+  def zigzagFromSteps(
+    initial: Array[Array[Int]],
+    simplices: Array[Array[Int]],
+    additions: Array[Boolean],
+    options: Array[String]
+  ): ZigzagResult =
+    require(
+      simplices.length == additions.length,
+      s"zigzagFromSteps: ${simplices.length} simplices but ${additions.length} additions"
+    )
+    val opts = parseOptionsWithKeys(options, zigzagStepKeys)
+    val steps = simplices.zip(additions).toSeq.map { (vertices, add) =>
+      if add then ZigzagStep.Add(simplexOf(vertices)) else ZigzagStep.Remove(simplexOf(vertices))
+    }
+    zigzagResult(
+      ZigzagPersistence(
+        steps,
+        initial = initial.toSeq.map(simplexOf),
+        maxDimension = opts.get("maxdimension").fold(2)(parseIntOption("maxDimension", _)),
+        characteristic = opts.get("prime").fold(FiniteField.DefaultPrime)(parseIntOption("prime", _))
+      )
+    )
+
+  def zigzagFromSteps(
+    initial: Array[Array[Int]],
+    simplices: Array[Array[Int]],
+    additions: Array[Boolean]
+  ): ZigzagResult = zigzagFromSteps(initial, simplices, additions, Array.empty[String])
+
+  /** The zigzag persistent homology of a list of complexes (each an array of simplices, as arrays of vertex numbers),
+    * each included in the next or the next in it, or joined through the union (option `link` `union`) or the
+    * intersection (`intersection`) of two consecutive complexes, which then takes a position of its own. Options
+    * `maxDimension`, `prime` and `link` (`none`, the default, `union` or `intersection`), and no others.
+    */
+  def zigzagFromComplexes(complexes: Array[Array[Array[Int]]], options: Array[String]): ZigzagResult =
+    val opts = parseOptionsWithKeys(options, zigzagComplexKeys)
+    val link = opts.get("link").map(_.toLowerCase) match
+      case None | Some("none")  => ZigzagPersistence.Link.None
+      case Some("union")        => ZigzagPersistence.Link.Union
+      case Some("intersection") => ZigzagPersistence.Link.Intersection
+      case Some(other)          =>
+        throw new IllegalArgumentException(
+          s"option 'link' must be 'none', 'union' or 'intersection', got '$other'"
+        )
+    zigzagResult(
+      ZigzagPersistence.ofComplexes(
+        complexes.toSeq.map(_.toSeq.map(simplexOf)),
+        link = link,
+        maxDimension = opts.get("maxdimension").fold(2)(parseIntOption("maxDimension", _)),
+        characteristic = opts.get("prime").fold(FiniteField.DefaultPrime)(parseIntOption("prime", _))
+      )
+    )
+
+  def zigzagFromComplexes(complexes: Array[Array[Array[Int]]]): ZigzagResult =
+    zigzagFromComplexes(complexes, Array.empty[String])
+
+  private def simplexOf(vertices: Array[Int]): Simplex[Int] =
+    require(vertices.nonEmpty, "a simplex needs at least one vertex")
+    Simplex.from(vertices.toList)
+
+  private def zigzagResult(diagram: PersistenceDiagram[Simplex[Int]]): ZigzagResult =
+    import diagram.given
+    val field = summon[diagram.Coefficient is Field]
+    val bars = diagram.bars
+    new ZigzagResult(
+      bars.map(b => Array(b.dim.toDouble, b.birth, b.death)).toArray,
+      bars.map { bar =>
+        val terms = bar.representative.terms
+        (terms.map((cell, _) => cell.toList.toArray).toArray, terms.map((_, k) => field.toDouble(k)).toArray)
+      }.toArray,
+      diagram.lastFiltrationValue.toInt
+    )
+
+  private val morseKeys = Set("maxdimension", "maxfiltrationvalue", "strategy", "prime", "threads")
+
+  /** The discrete Morse reduction of the Vietoris-Rips complex of a point cloud: see [[MorseReductionResult]] and
+    * `DiscreteMorse`. Options `maxDimension` (the top degree of the bars, default `2`), `maxFiltrationValue`,
+    * `strategy` (`reduction`, the default, or `coreduction`), `prime` (the default is 17) and `threads`, and no others.
+    */
+  def morseReductionFromPoints(points: Array[Array[Double]], options: Array[String]): MorseReductionResult =
+    validatePoints(points)
+    morseReduction(EuclideanMetricSpace(points), options)
+
+  def morseReductionFromPoints(points: Array[Array[Double]]): MorseReductionResult =
+    morseReductionFromPoints(points, Array.empty[String])
+
+  /** [[morseReductionFromPoints]] for a finite metric space given as its full matrix of distances. */
+  def morseReductionFromDistanceMatrix(distances: Array[Array[Double]], options: Array[String]): MorseReductionResult =
+    validateSquare(distances)
+    morseReduction(explicitMetricSpace(distances), options)
+
+  def morseReductionFromDistanceMatrix(distances: Array[Array[Double]]): MorseReductionResult =
+    morseReductionFromDistanceMatrix(distances, Array.empty[String])
+
+  private def morseReduction(metricSpace: FiniteMetricSpace[Int], options: Array[String]): MorseReductionResult =
+    val opts = parseOptionsWithKeys(options, morseKeys)
+    val maxDimension = opts.get("maxdimension").fold(2)(parseIntOption("maxDimension", _))
+    require(maxDimension >= 0, s"option 'maxDimension' must be 0 or more, got '$maxDimension'")
+    val strategy = opts.get("strategy").map(_.toLowerCase) match
+      case None | Some("reduction") => DiscreteMorse.Strategy.Reduction
+      case Some("coreduction")      => DiscreteMorse.Strategy.Coreduction
+      case Some(other)              =>
+        throw new IllegalArgumentException(s"option 'strategy' must be 'reduction' or 'coreduction', got '$other'")
+    val prime = opts.get("prime").fold(FiniteField.DefaultPrime)(parseIntOption("prime", _))
+    withThreads(opts) {
+      val complex = VietorisRips(
+        metricSpace,
+        maxDimension = maxDimension,
+        maxFiltrationValue = opts.get("maxfiltrationvalue").map(parseDoubleOption("maxFiltrationValue", _))
+      )
+      val morse = DiscreteMorse(complex, strategy)
+      val cells = complex.iterator.toVector
+      val top = cells.map(_.dim).max
+      val bars = Persistence(morse.stream, maxDimension = maxDimension, characteristic = prime).bars
+      new MorseReductionResult(
+        Array.tabulate(top + 1)(k => cells.count(_.dim == k)),
+        Array.tabulate(top + 1)(morse.criticalCount),
+        morse.pairs.size,
+        morse.critical.map(_.toList.toArray).toArray,
+        bars.map(b => Array(b.dim.toDouble, b.birth, b.death)).toArray
+      )
+    }
+
+  private val bootstrapBandKeys =
+    Set("dimension", "rounds", "alpha", "seed", "subsamplesize", "prime", "maxfiltrationvalue", "threads")
+
+  /** The resampling confidence band of the degree-`dimension` bars of a point cloud: see [[BootstrapBandResult]] and
+    * `BootstrapBand`. Options `dimension` (default `1`), `rounds` (default `100`), `alpha` (default `0.05`), `seed`
+    * (default `0`), `subsampleSize` (resample that many points without replacement; by default the points are drawn
+    * with replacement), `prime`, `maxFiltrationValue` and `threads`, and no others.
+    */
+  def bootstrapBand(points: Array[Array[Double]], options: Array[String]): BootstrapBandResult =
+    validatePoints(points)
+    val opts = parseOptionsWithKeys(options, bootstrapBandKeys)
+    val resampling = opts.get("subsamplesize") match
+      case Some(raw) => BootstrapBand.Resampling.Subsample(parseIntOption("subsampleSize", raw))
+      case None      => BootstrapBand.Resampling.Bootstrap
+    withThreads(opts) {
+      new BootstrapBandResult(
+        BootstrapBand(
+          PointCloud(points),
+          dimension = opts.get("dimension").fold(1)(parseIntOption("dimension", _)),
+          rounds = opts.get("rounds").fold(100)(parseIntOption("rounds", _)),
+          alpha = opts.get("alpha").fold(0.05)(parseDoubleOption("alpha", _)),
+          resampling = resampling,
+          seed = opts.get("seed").fold(0L)(raw => parseIntOption("seed", raw).toLong),
+          maxFiltrationValue = opts.get("maxfiltrationvalue").map(parseDoubleOption("maxFiltrationValue", _)),
+          characteristic = opts.get("prime").fold(FiniteField.DefaultPrime)(parseIntOption("prime", _))
+        )
+      )
+    }
+
+  def bootstrapBand(points: Array[Array[Double]]): BootstrapBandResult =
+    bootstrapBand(points, Array.empty[String])
+
+  /** The ToMATo cluster (`0` for the cluster of the highest peak, numbered by decreasing peak height) of every point:
+    * see `ToMATo.cluster`. `k` nearest neighbours define the graph and the density, `tau` is the depth below which two
+    * peaks merge.
+    */
+  def tomatoClusters(points: Array[Array[Double]], k: Int, tau: Double): Array[Int] =
+    validatePoints(points)
+    ToMATo.cluster(PointCloud(points), k, tau).labels.toArray
+
+  /** The valleys between the peaks of the ToMATo density of a point cloud: one row `(birth, death)` per bar, `death`
+    * `Inf` for the highest peak of each component. Its persistence is the depth of the valley: pick `tau` in a gap.
+    */
+  def tomatoDiagram(points: Array[Array[Double]], k: Int): Array[Array[Double]] =
+    validatePoints(points)
+    val cloud = PointCloud(points)
+    ToMATo
+      .diagram(ToMATo.density(cloud, k), ToMATo.neighbourGraph(cloud, k))
+      .map(b => Array(b.birth, b.death))
+      .toArray
+
+  /** The sliding-window (Takens) embedding of a time series: one point for every `stride`-th start `t`, the window
+    * `(x_t, x_{t+delay}, ..., x_{t+(dimension-1) delay})`. See `TakensEmbedding`.
+    */
+  def takensEmbedding(series: Array[Double], dimension: Int, delay: Int, stride: Int): Array[Array[Double]] =
+    TakensEmbedding(series.toSeq, dimension, delay, stride).points
+
+  def takensEmbedding(series: Array[Double], dimension: Int, delay: Int): Array[Array[Double]] =
+    takensEmbedding(series, dimension, delay, 1)
+
+  /** The same for a series of vectors, one row per time step: a point is the `dimension` rows of a window, one after
+    * the other.
+    */
+  def takensEmbeddingOfVectors(
+    series: Array[Array[Double]],
+    dimension: Int,
+    delay: Int,
+    stride: Int
+  ): Array[Array[Double]] =
+    TakensEmbedding.multivariate(series.map(_.toSeq).toSeq, dimension, delay, stride).points
+
+  def takensEmbeddingOfVectors(series: Array[Array[Double]], dimension: Int, delay: Int): Array[Array[Double]] =
+    takensEmbeddingOfVectors(series, dimension, delay, 1)
+
+  /** The first lag in `1 to maxLag` at which the autocorrelation of the series is zero or negative: a first guess for
+    * the `delay` of [[takensEmbedding]] (a quarter of the period for a sinusoid).
+    */
+  def delayByAutocorrelation(series: Array[Double], maxLag: Int): Int =
+    TakensEmbedding.delayByAutocorrelation(series.toSeq, maxLag)
+
+  // Bars as rows (dimension, birth, death), `Inf` for a bar that never dies: what `PersistenceResult.bars` returns.
+  private def barsOf(name: String, rows: Array[Array[Double]]): List[PersistenceBar[Double, Nothing]] =
+    rows.toList.zipWithIndex.map { (row, i) =>
+      require(
+        row.length == 3 && row(0) == math.rint(row(0)) && row(0) >= 0 && !row(1).isNaN && !row(2).isNaN,
+        s"$name: row $i must be (dimension, birth, death) with a whole dimension from 0, got ${row.mkString("(", ", ", ")")}"
+      )
+      if row(2).isPosInfinity then PersistenceBar[Double](row(0).toInt, row(1))
+      else PersistenceBar[Double](row(0).toInt, row(1), row(2))
+    }
+
+  private def rowsOf(bars: Seq[PersistenceBar[Double, ?]]): Array[Array[Double]] =
+    bars.map(b => Array(b.dim.toDouble, b.birth, b.death)).toArray
+
+  /** The barcode of the homology of the product of two filtered complexes from the barcodes of the two factors (rows
+    * `(dimension, birth, death)`, as `PersistenceResult.bars` returns them, every dimension of each): a cell of the
+    * product enters at the larger (`filtration` = `max`, the default) or the sum (`sum`) of the values of its two
+    * factors. Right in the dimensions below the highest dimension both barcodes were computed to. See
+    * `Barcode.kunneth`.
+    */
+  def productBars(first: Array[Array[Double]], second: Array[Array[Double]], filtration: String): Array[Array[Double]] =
+    val combine = filtration.toLowerCase match
+      case "max" => ProductComplex.Combine.Max
+      case "sum" => ProductComplex.Combine.Sum
+      case other => throw new IllegalArgumentException(s"filtration must be max or sum, got '$other'")
+    rowsOf(Barcode.kunneth(barsOf("productBars", first), barsOf("productBars", second), combine))
+
+  def productBars(first: Array[Array[Double]], second: Array[Array[Double]]): Array[Array[Double]] =
+    productBars(first, second, "max")
+
+  /** The internal Hom of two barcodes (rows `(dimension, birth, death)`): the module of maps from the first to the
+    * second shifted by `t`, its bars in dimension `q - p` for a bar of dimension `p` and one of dimension `q`. See
+    * `Barcode.hom`.
+    */
+  def homBars(first: Array[Array[Double]], second: Array[Array[Double]]): Array[Array[Double]] =
+    rowsOf(Barcode.hom(barsOf("homBars", first), barsOf("homBars", second)))
+
+  /** The dimension of the space of maps of persistence modules, degree by degree, between two barcodes. */
+  def homDimension(first: Array[Array[Double]], second: Array[Array[Double]]): Int =
+    Barcode.homDimension(barsOf("homDimension", first), barsOf("homDimension", second))
+
+  /** The dual of a barcode: the row `(dimension, birth, death)` of `[b, d)` is `(dimension, -d, -b)`, the interval
+    * `(-d, -b]` of the persistence module `t -> (M_{-t})*`. `-Inf` as the first end for a bar that never dies. See
+    * `Barcode.dual`.
+    */
+  def dualBars(bars: Array[Array[Double]]): Array[Array[Double]] =
+    rowsOf(Barcode.dual(barsOf("dualBars", bars)))
 
   /** The loops of the point cloud's Vietoris-Rips complex: one row `(birth, death)` per persistent H¹ class, most
     * persistent first. Row `i` is `cocycleIndex = i` of [[circularCoordinates]]; pick `r` between its birth and death.
@@ -385,7 +1027,8 @@ object TDA4j:
     "requirevalidtriangulation",
     "minpersistence",
     "minpersistencefraction",
-    "includezerolength"
+    "includezerolength",
+    "threads"
   )
 
   /** The options of landmark selection (step 1 of the two-step witness complex), and no others: a landmark option
@@ -410,7 +1053,8 @@ object TDA4j:
       "epsilon",
       "minpersistence",
       "minpersistencefraction",
-      "includezerolength"
+      "includezerolength",
+      "threads"
     )
 
   /** The options of `computeFromRelation`: a relation has no `complex`, landmarks or alpha backend. */
@@ -425,7 +1069,8 @@ object TDA4j:
     "epsilon",
     "minpersistence",
     "minpersistencefraction",
-    "includezerolength"
+    "includezerolength",
+    "threads"
   )
 
   private def parseOptionsWithKeys(options: Array[String], allowedKeys: Set[String]): Map[String, String] =
@@ -475,6 +1120,25 @@ object TDA4j:
         "landmarks must not contain duplicate indices (WitnessGeometry would silently treat a repeated index " +
           "as two distinct landmarks at distance zero from each other)"
       )
+
+  private def validateSubsample(subsample: Array[Int], n: Int): Unit =
+    if subsample.isEmpty then throw new IllegalArgumentException("the subsample must have at least one point")
+    subsample.foreach { v =>
+      if v == n then
+        throw new IllegalArgumentException(
+          s"subsample point $v is out of range [0, $n) -- indices are 0-based; did you pass a 1-based index?"
+        )
+      if v < 0 || v >= n then throw new IllegalArgumentException(s"subsample point $v is out of range [0, $n)")
+    }
+
+  private def validateSubcomplex(vertices: Array[Int], n: Int): Unit =
+    vertices.foreach { v =>
+      if v == n then
+        throw new IllegalArgumentException(
+          s"subcomplex vertex $v is out of range [0, $n) -- indices are 0-based; did you pass a 1-based index?"
+        )
+      if v < 0 || v >= n then throw new IllegalArgumentException(s"subcomplex vertex $v is out of range [0, $n)")
+    }
 
   private def validatePoints(points: Array[Array[Double]]): Unit =
     if points.isEmpty then throw new IllegalArgumentException("points must have at least one row")
@@ -605,6 +1269,9 @@ object TDA4j:
         val epsilon = opts.get("epsilon").map(parseDoubleOption("epsilon", _)).getOrElse(1e-9)
         given Double is Field = Field.DoubleApproximated(epsilon)
         compute[Double](identity)
+      case CoefficientKind.Q =>
+        import Coefficients.Rationals.given
+        compute[Coefficients.Rational](_.toDouble)
 
   /** The persistence threshold, resolved from `minPersistence`/`minPersistenceFraction` -- validated BEFORE any
     * computation starts (a typo should not cost a long Vietoris-Rips run), applied to the finished result by the thin
@@ -627,6 +1294,13 @@ object TDA4j:
     val finite = values.filter(v => !v.isInfinite && !v.isNaN).toArray
     if finite.isEmpty then 0.0 else finite.max - finite.min
 
+  /** Whether the zero-length bars are asked for. Off by default, and then the engines never build them (a noisy image
+    * has several times more of them than bars it reports, each with a representative); `ThresholdSpec` leaves them out
+    * of the result as well.
+    */
+  private def wantsZeroLength(opts: Map[String, String]): Boolean =
+    opts.get("includezerolength").exists(v => parseBooleanOption("includeZeroLength", v))
+
   private def parseThresholdSpec(opts: Map[String, String]): ThresholdSpec =
     val absolute = opts.get("minpersistence").map(parseDoubleOption("minPersistence", _))
     val fraction = opts.get("minpersistencefraction").map(parseDoubleOption("minPersistenceFraction", _))
@@ -643,11 +1317,7 @@ object TDA4j:
       if !(f >= 0.0) || f.isInfinite then
         throw new IllegalArgumentException(s"option 'minPersistenceFraction' must be a finite number >= 0, got '$f'")
     )
-    ThresholdSpec(
-      absolute,
-      fraction.getOrElse(PersistenceFilter.DefaultFraction),
-      opts.get("includezerolength").exists(v => parseBooleanOption("includeZeroLength", v))
-    )
+    ThresholdSpec(absolute, fraction.getOrElse(PersistenceFilter.DefaultFraction), wantsZeroLength(opts))
 
   private def dispatch(
     opts: Map[String, String],
@@ -655,14 +1325,21 @@ object TDA4j:
     points: Option[Array[Array[Double]]]
   ): PersistenceResult =
     val threshold = parseThresholdSpec(opts)
-    threshold(dispatchFull(opts, metricSpace, points), metricSpace.minimumEnclosingRadius)
+    withThreads(opts)(threshold(dispatchFull(opts, metricSpace, points), metricSpace.minimumEnclosingRadius))
 
   private def dispatchFull(
-    opts: Map[String, String],
+    userOpts: Map[String, String],
     metricSpace: FiniteMetricSpace[Int],
     points: Option[Array[Array[Double]]]
   ): PersistenceResult =
+    // `engine=parallel-ripser` is `ripser` with the block-parallel engine; the rest of this method knows `ripser`.
+    val parallelRequested = userOpts.get("engine").exists(_.equalsIgnoreCase("parallel-ripser"))
+    val opts = if parallelRequested then userOpts.updated("engine", "ripser") else userOpts
     val complex = ComplexKind.parse(opts.getOrElse("complex", "vr"))
+    if parallelRequested && complex != ComplexKind.VR then
+      throw new IllegalArgumentException(
+        s"engine=parallel-ripser is only offered for complex=vr -- got complex=${opts.getOrElse("complex", "vr")}"
+      )
 
     // Parsed BEFORE the engine default below, since complex=witness's own default depends on it (lazy behaves
     // like complex=vr -- a flag complex, defaults to ripser; general behaves like complex=alpha/cech -- not a
@@ -792,28 +1469,172 @@ object TDA4j:
         )
       else 0.0 // unused for any other complex
 
+    val includeZeroLength = wantsZeroLength(opts)
+    val overZ = CoefficientKind.parse(opts.getOrElse("field", "z")) == CoefficientKind.Z
+    val prime = opts.get("prime").map(parseIntOption("prime", _)).getOrElse(FiniteField.DefaultPrime)
+    // The block-parallel Ripser engine computes the same bars as `ripser` where it applies; `engine` unset takes it
+    // when there are several threads, `engine=ripser` never does (as `Persistence`'s `Engine.Auto` and `Ripser`).
+    val parallelFits = complex == ComplexKind.VR && engine == EngineKind.Ripser && overZ && !includeZeroLength &&
+      !edgeCollapse && ParallelRipser.supports(metricSpace.size, maxDimension, prime, cycles)
+    if parallelRequested && !parallelFits then
+      throw new IllegalArgumentException(
+        "engine=parallel-ripser needs complex=vr, field=Z, includeZeroLength=false, edgeCollapse=false, a prime up " +
+          s"to 46000 and fewer than 46341 points whose simplex indices fit 63 bits (got ${metricSpace.size} points, " +
+          s"maxDimension $maxDimension, prime $prime); use engine=ripser"
+      )
+    if parallelFits && (parallelRequested || (!userOpts.contains("engine") && Parallel.threads > 1)) then
+      parallelVR(metricSpace, maxDimension, maxFiltrationValue, prime, cycles)
+    else
+      dispatchByField(opts) { [C] => (toDouble: C => Double) =>
+        computeGeneric[C](
+          metricSpace,
+          points,
+          complex,
+          engine,
+          cycles,
+          alphaBackend,
+          requireValidTriangulation,
+          maxDimension,
+          maxFiltrationValue,
+          witnessVariant,
+          witnessLandmarks,
+          witnessNu,
+          dtmK,
+          dtmQ,
+          dtmP,
+          sparseEpsilon,
+          edgeCollapse,
+          includeZeroLength,
+          toDouble
+        )
+      }
+
+  private def dispatchRelative(
+    opts: Map[String, String],
+    metricSpace: FiniteMetricSpace[Int],
+    subcomplex: Array[Int]
+  ): PersistenceResult =
+    val threshold = parseThresholdSpec(opts)
+    withThreads(opts)(threshold(computeRelative(opts, metricSpace, subcomplex), metricSpace.minimumEnclosingRadius))
+
+  private def computeRelative(
+    opts: Map[String, String],
+    metricSpace: FiniteMetricSpace[Int],
+    subcomplex: Array[Int]
+  ): PersistenceResult =
+    val engine = EngineKind.parse(opts.getOrElse("engine", "cohomology"))
+    if engine != EngineKind.Naive && engine != EngineKind.Chunks && engine != EngineKind.Cohomology then
+      throw new IllegalArgumentException(
+        s"engine=${opts("engine")} is not offered for a relative computation, which reads the pair as a stream of " +
+          "cells: use engine=cohomology (the default), engine=naive or engine=chunks"
+      )
+    val cycles = wantsCycles(opts, engine)
+    val maxDimension = opts.get("maxdimension").map(parseIntOption("maxDimension", _)).getOrElse(2)
+    val maxFiltrationValue = opts.get("maxfiltrationvalue").map(parseDoubleOption("maxFiltrationValue", _))
+    val includeZeroLength = wantsZeroLength(opts)
     dispatchByField(opts) { [C] => (toDouble: C => Double) =>
-      computeGeneric[C](
+      computeRelativeGeneric[C](
         metricSpace,
-        points,
-        complex,
+        subcomplex.toSet,
         engine,
         cycles,
-        alphaBackend,
-        requireValidTriangulation,
         maxDimension,
         maxFiltrationValue,
-        witnessVariant,
-        witnessLandmarks,
-        witnessNu,
-        dtmK,
-        dtmQ,
-        dtmP,
-        sparseEpsilon,
-        edgeCollapse,
+        includeZeroLength,
         toDouble
       )
     }
+
+  private def computeRelativeGeneric[C](
+    metricSpace: FiniteMetricSpace[Int],
+    subcomplex: Set[Int],
+    engine: EngineKind,
+    cycles: Boolean,
+    maxDimension: Int,
+    maxFiltrationValue: Option[Double],
+    includeZeroLength: Boolean,
+    toDouble: C => Double
+  )(using C is Field): PersistenceResult =
+    // The cells one dimension above the top degree reported are the scaffolding that tells a cycle from a boundary, as
+    // for the Vietoris-Rips complex itself.
+    val stream =
+      Relative.ofVertices(vrStream(metricSpace, maxFiltrationValue, maxDimension + 1), subcomplex)
+    // A cell of the pair is a cell of the complex outside the subcomplex: its vertices are the simplex's.
+    val cellVertices: (Int, RelativeCell[Simplex[Int]]) => Array[Int] = (_, relative) =>
+      relative.cell.underlying.toArray
+    val boundaryMatrixOf =
+      () =>
+        buildBoundaryMatrix[RelativeCell[Simplex[Int]], C](
+          stream.iterator.toIndexedSeq,
+          cellVertices,
+          toDouble,
+          stream.filtrationValue
+        )
+    val bars = engine match
+      case EngineKind.Naive =>
+        naiveFor[RelativeCell[Simplex[Int]], C](cycles).barcode(stream, includeZeroLength = includeZeroLength)
+      case EngineKind.Chunks =>
+        chunksFor[RelativeCell[Simplex[Int]], C](maxDimension, cycles)
+          .barcode(stream, includeZeroLength = includeZeroLength)
+      case _ =>
+        cohomologyFor[RelativeCell[Simplex[Int]], C](cycles).barcode(stream, includeZeroLength = includeZeroLength)
+    fromBars[RelativeCell[Simplex[Int]], C](bars, cellVertices, toDouble, maxDimension, boundaryMatrixOf)
+
+  /** The Vietoris-Rips complex of `space` as the engines other than Ripser read it: cells to dimension
+    * `maxDimension + 1`, the scaffolding the boundary matrix and the dimension-capped engines need. Built as
+    * `Persistence` builds it (`VietorisRips`' default implementation), so `engine=cohomology` here runs on the stream
+    * the verb's does.
+    */
+  private def vrStream(
+    space: FiniteMetricSpace[Int],
+    maxFiltrationValue: Option[Double],
+    maxDimension: Int
+  ): LevelwiseSimplexStream[Int, Double] =
+    Truncated.ofCofaces(RipserCofaceSimplexStream(space, maxFiltrationValue = maxFiltrationValue), maxDimension)
+
+  /** `engine=ripser` for the Vietoris-Rips complex over `Z/prime` by the block-parallel engine: the same bars, with
+    * representatives built when a bar's cycle is first read.
+    */
+  private def parallelVR(
+    metricSpace: FiniteMetricSpace[Int],
+    maxDimension: Int,
+    maxFiltrationValue: Option[Double],
+    prime: Int,
+    cycles: Boolean
+  ): PersistenceResult =
+    val diagram = Persistence(
+      metricSpace,
+      maxDimension = maxDimension,
+      maxFiltrationValue = maxFiltrationValue,
+      characteristic = prime,
+      engine = Persistence.Engine.ParallelRipser,
+      representatives = if cycles then Representatives.Cycles else Representatives.Cocycles,
+      computeAllRepresentatives = false
+    )
+    import diagram.given
+    val toDouble: diagram.Coefficient => Double = summon[diagram.Coefficient is Field].toDouble(_)
+    val stream = vrStream(metricSpace, maxFiltrationValue, maxDimension)
+    fromBars[Simplex[Int], diagram.Coefficient](
+      diagram.bars,
+      (_, cell) => cell.underlying.toArray,
+      toDouble,
+      maxDimension,
+      () =>
+        buildBoundaryMatrix[Simplex[Int], diagram.Coefficient](
+          stream.iterator.toIndexedSeq,
+          (_, cell) => cell.underlying.toArray,
+          toDouble,
+          stream.filtrationValue
+        )
+    )
+
+  /** `body` on the number of threads the `threads` option names (checked before anything runs), else on all of them.
+    */
+  private def withThreads[T](opts: Map[String, String])(body: => T): T =
+    opts.get("threads").map(parseIntOption("threads", _)) match
+      case Some(n) if n < 1 => throw new IllegalArgumentException(s"option 'threads' must be at least 1, got '$n'")
+      case Some(n)          => Parallel.withThreads(n)(body)
+      case None             => body
 
   private def parseIntOption(name: String, raw: String): Int =
     raw.toIntOption.getOrElse(throw new IllegalArgumentException(s"option '$name' must be an integer, got '$raw'"))
@@ -870,6 +1691,7 @@ object TDA4j:
     dtmP: Double,
     sparseEpsilon: Double,
     edgeCollapse: Boolean,
+    includeZeroLength: Boolean,
     toDouble: C => Double
   )(using C is Field): PersistenceResult =
     complex match
@@ -897,11 +1719,7 @@ object TDA4j:
         // reduction algorithm ran over it, so it's built ONCE here (the same construction engine=Naive/Cohomology
         // already need below) and reused -- see `buildBoundaryMatrix`'s own doc.
         val vrCellVertices: (Int, Simplex[Int]) => Array[Int] = (_, cell) => cell.underlying.toArray
-        val vrStreamForBoundary =
-          LimitedCofaceSimplexStream(
-            EnumeratingCofaceSimplexStream(collapsedMetricSpace, maxFiltrationValue = maxFiltrationValue),
-            requestedMaxDimension + 1
-          )
+        val vrStreamForBoundary = vrStream(collapsedMetricSpace, maxFiltrationValue, requestedMaxDimension)
         val vrBoundaryMatrixOf =
           () =>
             buildBoundaryMatrix[Simplex[Int], C](
@@ -929,8 +1747,8 @@ object TDA4j:
             // `dim + 1` (vertex count) is exactly the `size` `vertices` needs -- known from the bar, not
             // guessed.
             fromBars[ctx.DiameterIndex, C](
-              if cycles then ctx.persistentHomology(includeZeroLength = true)
-              else ctx.persistentCohomology(includeZeroLength = true),
+              if cycles then ctx.persistentHomology(includeZeroLength = includeZeroLength)
+              else ctx.persistentCohomology(includeZeroLength = includeZeroLength),
               (dim, cell) => ctx.vertices(cell, dim + 1),
               toDouble,
               requestedMaxDimension,
@@ -942,7 +1760,7 @@ object TDA4j:
             // RipserCohomologySpec's own naiveBars helper uses. Reuses vrStreamForBoundary directly -- an
             // identical construction to what this branch built for itself before the boundary matrix existed.
             fromBars[Simplex[Int], C](
-              naiveFor[Simplex[Int], C](cycles).barcode(vrStreamForBoundary, includeZeroLength = true),
+              naiveFor[Simplex[Int], C](cycles).barcode(vrStreamForBoundary, includeZeroLength = includeZeroLength),
               vrCellVertices,
               toDouble,
               requestedMaxDimension,
@@ -958,7 +1776,7 @@ object TDA4j:
             val stream = EnumeratingCofaceSimplexStream(collapsedMetricSpace, maxFiltrationValue = maxFiltrationValue)
             fromBars[Simplex[Int], C](
               chunksFor[Simplex[Int], C](requestedMaxDimension, cycles)
-                .barcode(stream, includeZeroLength = true),
+                .barcode(stream, includeZeroLength = includeZeroLength),
               vrCellVertices,
               toDouble,
               requestedMaxDimension,
@@ -972,7 +1790,8 @@ object TDA4j:
             // own doc), so the cap lives entirely in the stream, exactly like engine=Naive. Reuses
             // vrStreamForBoundary directly, same as engine=Naive above.
             fromBars[Simplex[Int], C](
-              cohomologyFor[Simplex[Int], C](cycles).barcode(vrStreamForBoundary, includeZeroLength = true),
+              cohomologyFor[Simplex[Int], C](cycles)
+                .barcode(vrStreamForBoundary, includeZeroLength = includeZeroLength),
               vrCellVertices,
               toDouble,
               requestedMaxDimension,
@@ -982,11 +1801,11 @@ object TDA4j:
             // dispatch() already rejects both of these for complex=vr before computeGeneric is ever reached.
             throw new IllegalArgumentException(s"engine=$engine is not offered for complex=vr")
       case ComplexKind.Alpha =>
-        // No dimension cap is applied here at all, on purpose: an alpha complex's chain complex terminates on its
-        // own (bounded by ambient dimension, or higher under cosphericity -- see CLAUDE.md), it is never
-        // artificially cut off the way a VR complex is by `requestedMaxDimension` above, so its own top dimension
-        // is genuine information, not a truncation artifact -- nothing to drop. `requestedMaxDimension` is
-        // correctly ignored here (see the class doc).
+        // `requestedMaxDimension` is the top homological degree here too, as in the Persistence verb: the stream holds
+        // simplices up to one dimension above it (the scaffolding H_k needs), which `fromBars` drops, and DQP builds
+        // nothing higher. A complex of ambient dimension 10 has simplices to dimension 10, which nobody asking for
+        // degrees up to 2 should pay for. `engine=fast-alpha` takes the whole triangulation and keeps the degrees up
+        // to `requestedMaxDimension`.
         val pts = points.getOrElse(
           throw new IllegalArgumentException(
             "complex=alpha requires point coordinates -- use computeFromPoints, not computeFromDistanceMatrix"
@@ -999,35 +1818,45 @@ object TDA4j:
           )
         // With maxFiltrationValue, alphaBackend=default builds the complex up to that radius with whichever of a
         // triangulation and DQP is expected to be faster (AlphaShapes.prefersDQP); the same complex in general position.
+        // Without one: up to the minimum enclosing radius, past which nothing is born, as the Persistence verb does
+        // (Infinity gives the whole complex). engine=fast-alpha takes the whole triangulation.
+        val alphaPoints = pts.toIndexedSeq
         val alphaStream =
-          AlphaShapes(pts.toIndexedSeq, AlphaBackend.parse(alphaBackend), requireValidTriangulation, maxFiltrationValue)
+          if engine == EngineKind.FastAlpha then
+            AlphaShapes(alphaPoints, AlphaBackend.parse(alphaBackend), requireValidTriangulation, maxFiltrationValue)
+          else
+            AlphaShapes.upToEnclosingRadius(
+              alphaPoints,
+              AlphaBackend.parse(alphaBackend),
+              requireValidTriangulation,
+              maxFiltrationValue,
+              requestedMaxDimension
+            )
+        val alphaTruncated = Truncated(alphaStream, requestedMaxDimension)
         val alphaCellVertices: (Int, Simplex[Int]) => Array[Int] = (_, cell) => cell.underlying.toArray
         val alphaBoundaryMatrixOf =
           () =>
             buildBoundaryMatrix[Simplex[Int], C](
-              alphaStream.iterator.toIndexedSeq,
+              alphaTruncated.iterator.toIndexedSeq,
               alphaCellVertices,
               toDouble,
-              alphaStream.filtrationValue
+              alphaTruncated.filtrationValue
             )
         engine match
           case EngineKind.Naive =>
             fromBars[Simplex[Int], C](
-              naiveFor[Simplex[Int], C](cycles).barcode(alphaStream, includeZeroLength = true),
+              naiveFor[Simplex[Int], C](cycles).barcode(alphaTruncated, includeZeroLength = includeZeroLength),
               alphaCellVertices,
               toDouble,
-              Int.MaxValue,
+              requestedMaxDimension,
               alphaBoundaryMatrixOf
             )
           case EngineKind.Cohomology =>
-            // No stream-level dimension cap here either, for the same reason as engine=Naive above: an alpha
-            // complex's chain complex terminates on its own. CellularCohomologyEngine accepts `alphaStream`
-            // directly -- it's a LevelwiseSimplexStream[Int, Double], hence a CellStream[Simplex[Int], Double].
             fromBars[Simplex[Int], C](
-              cohomologyFor[Simplex[Int], C](cycles).barcode(alphaStream, includeZeroLength = true),
+              cohomologyFor[Simplex[Int], C](cycles).barcode(alphaTruncated, includeZeroLength = includeZeroLength),
               alphaCellVertices,
               toDouble,
-              Int.MaxValue,
+              requestedMaxDimension,
               alphaBoundaryMatrixOf
             )
           case EngineKind.FastAlpha =>
@@ -1049,10 +1878,14 @@ object TDA4j:
                 // for circularCoordinates -- catching and re-throwing a DIFFERENT exception here would only
                 // lose the original's own stack trace for no benefit.
                 fromBars[Simplex[Int], C](
-                  FastAlphaHomologyEngine[C]().persistentHomology(helix, includeZeroLength = true),
+                  FastAlphaHomologyEngine[C]().persistentHomology(
+                    helix,
+                    includeZeroLength = includeZeroLength,
+                    maxDimension = requestedMaxDimension
+                  ),
                   alphaCellVertices,
                   toDouble,
-                  Int.MaxValue,
+                  requestedMaxDimension,
                   alphaBoundaryMatrixOf
                 )
               case _ =>
@@ -1092,7 +1925,7 @@ object TDA4j:
         engine match
           case EngineKind.Naive =>
             fromBars[Simplex[Int], C](
-              naiveFor[Simplex[Int], C](cycles).barcode(cechStreamForBoundary, includeZeroLength = true),
+              naiveFor[Simplex[Int], C](cycles).barcode(cechStreamForBoundary, includeZeroLength = includeZeroLength),
               cechCellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1110,7 +1943,7 @@ object TDA4j:
             val stream = CechCofaceSimplexStream(euclideanMetricSpace, maxFiltrationValue = maxFiltrationValue)
             fromBars[Simplex[Int], C](
               chunksFor[Simplex[Int], C](requestedMaxDimension, cycles)
-                .barcode(stream, includeZeroLength = true),
+                .barcode(stream, includeZeroLength = includeZeroLength),
               cechCellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1121,7 +1954,8 @@ object TDA4j:
             // bounded, so the same "build one dimension higher via LimitedCofaceSimplexStream, drop it via
             // fromBars" dance applies, for the identical reason as complex=vr's own engine=Cohomology branch.
             fromBars[Simplex[Int], C](
-              cohomologyFor[Simplex[Int], C](cycles).barcode(cechStreamForBoundary, includeZeroLength = true),
+              cohomologyFor[Simplex[Int], C](cycles)
+                .barcode(cechStreamForBoundary, includeZeroLength = includeZeroLength),
               cechCellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1150,7 +1984,7 @@ object TDA4j:
         engine match
           case EngineKind.Naive =>
             fromBars[Simplex[Int], C](
-              naiveFor[Simplex[Int], C](cycles).barcode(dtmStreamForBoundary, includeZeroLength = true),
+              naiveFor[Simplex[Int], C](cycles).barcode(dtmStreamForBoundary, includeZeroLength = includeZeroLength),
               dtmCellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1159,7 +1993,7 @@ object TDA4j:
           case EngineKind.Chunks =>
             fromBars[Simplex[Int], C](
               chunksFor[Simplex[Int], C](requestedMaxDimension, cycles)
-                .barcode(dtmStream, includeZeroLength = true),
+                .barcode(dtmStream, includeZeroLength = includeZeroLength),
               dtmCellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1167,7 +2001,8 @@ object TDA4j:
             )
           case EngineKind.Cohomology =>
             fromBars[Simplex[Int], C](
-              cohomologyFor[Simplex[Int], C](cycles).barcode(dtmStreamForBoundary, includeZeroLength = true),
+              cohomologyFor[Simplex[Int], C](cycles)
+                .barcode(dtmStreamForBoundary, includeZeroLength = includeZeroLength),
               dtmCellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1197,7 +2032,7 @@ object TDA4j:
         engine match
           case EngineKind.Naive =>
             fromBars[Simplex[Int], C](
-              naiveFor[Simplex[Int], C](cycles).barcode(sparseStreamForBoundary, includeZeroLength = true),
+              naiveFor[Simplex[Int], C](cycles).barcode(sparseStreamForBoundary, includeZeroLength = includeZeroLength),
               sparseCellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1206,7 +2041,7 @@ object TDA4j:
           case EngineKind.Chunks =>
             fromBars[Simplex[Int], C](
               chunksFor[Simplex[Int], C](requestedMaxDimension, cycles)
-                .barcode(sparseStream, includeZeroLength = true),
+                .barcode(sparseStream, includeZeroLength = includeZeroLength),
               sparseCellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1214,7 +2049,8 @@ object TDA4j:
             )
           case EngineKind.Cohomology =>
             fromBars[Simplex[Int], C](
-              cohomologyFor[Simplex[Int], C](cycles).barcode(sparseStreamForBoundary, includeZeroLength = true),
+              cohomologyFor[Simplex[Int], C](cycles)
+                .barcode(sparseStreamForBoundary, includeZeroLength = includeZeroLength),
               sparseCellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1224,14 +2060,20 @@ object TDA4j:
             // dispatch() already rejects all of these for complex=sparse-rips before computeGeneric is ever reached.
             throw new IllegalArgumentException(s"engine=$engine is not offered for complex=sparse-rips")
       case ComplexKind.DtmAlpha =>
-        // No dimension cap applied, exactly like complex=alpha -- see that case's own comment.
+        // Built to one dimension above `requestedMaxDimension`, like complex=alpha -- see that case's own comment.
         val pts = points.getOrElse(
           throw new IllegalArgumentException(
             "complex=dtm-alpha requires point coordinates -- use computeFromPoints, not computeFromDistanceMatrix"
           )
         )
         val ac =
-          AlphaComplexDQP.dtm(pts, dtmK, Double.PositiveInfinity, pts.headOption.map(_.length).getOrElse(0), dtmQ)
+          AlphaComplexDQP.dtm(
+            pts,
+            dtmK,
+            Double.PositiveInfinity,
+            math.min(pts.headOption.map(_.length).getOrElse(0), requestedMaxDimension + 1),
+            dtmQ
+          )
         val dtmAlphaStream = AlphaComplexDQPStream(pts, ac)
         val dtmAlphaCellVertices: (Int, Simplex[Int]) => Array[Int] = (_, cell) => cell.underlying.toArray
         val dtmAlphaBoundaryMatrixOf = () =>
@@ -1244,18 +2086,18 @@ object TDA4j:
         engine match
           case EngineKind.Naive =>
             fromBars[Simplex[Int], C](
-              naiveFor[Simplex[Int], C](cycles).barcode(dtmAlphaStream, includeZeroLength = true),
+              naiveFor[Simplex[Int], C](cycles).barcode(dtmAlphaStream, includeZeroLength = includeZeroLength),
               dtmAlphaCellVertices,
               toDouble,
-              Int.MaxValue,
+              requestedMaxDimension,
               dtmAlphaBoundaryMatrixOf
             )
           case EngineKind.Cohomology =>
             fromBars[Simplex[Int], C](
-              cohomologyFor[Simplex[Int], C](cycles).barcode(dtmAlphaStream, includeZeroLength = true),
+              cohomologyFor[Simplex[Int], C](cycles).barcode(dtmAlphaStream, includeZeroLength = includeZeroLength),
               dtmAlphaCellVertices,
               toDouble,
-              Int.MaxValue,
+              requestedMaxDimension,
               dtmAlphaBoundaryMatrixOf
             )
           case EngineKind.Ripser | EngineKind.Chunks | EngineKind.FastCubical | EngineKind.FastAlpha =>
@@ -1271,6 +2113,7 @@ object TDA4j:
           witnessNu,
           requestedMaxDimension,
           maxFiltrationValue,
+          includeZeroLength,
           toDouble
         )
 
@@ -1288,6 +2131,7 @@ object TDA4j:
     nu: Int,
     requestedMaxDimension: Int,
     maxFiltrationValue: Option[Double],
+    includeZeroLength: Boolean,
     toDouble: C => Double
   )(using C is Field): PersistenceResult =
     val cellVertices: (Int, Simplex[Int]) => Array[Int] =
@@ -1317,8 +2161,8 @@ object TDA4j:
             val ctx =
               PackedRipserCohomologyEngine[C](wms, requestedMaxDimension, maxFiltrationValue = maxFiltrationValue)
             fromBars[ctx.DiameterIndex, C](
-              if cycles then ctx.persistentHomology(includeZeroLength = true)
-              else ctx.persistentCohomology(includeZeroLength = true),
+              if cycles then ctx.persistentHomology(includeZeroLength = includeZeroLength)
+              else ctx.persistentCohomology(includeZeroLength = includeZeroLength),
               (dim, cell) => ctx.vertices(cell, dim + 1).map(landmarks),
               toDouble,
               requestedMaxDimension,
@@ -1326,7 +2170,7 @@ object TDA4j:
             )
           case EngineKind.Naive =>
             fromBars[Simplex[Int], C](
-              naiveFor[Simplex[Int], C](cycles).barcode(lazyStreamForBoundary, includeZeroLength = true),
+              naiveFor[Simplex[Int], C](cycles).barcode(lazyStreamForBoundary, includeZeroLength = includeZeroLength),
               cellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1339,7 +2183,7 @@ object TDA4j:
             val stream = LazyWitnessSimplexStream(metricSpace, landmarks, nu, maxFiltrationValue = maxFiltrationValue)
             fromBars[Simplex[Int], C](
               chunksFor[Simplex[Int], C](requestedMaxDimension, cycles)
-                .barcode(stream, includeZeroLength = true),
+                .barcode(stream, includeZeroLength = includeZeroLength),
               cellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1347,7 +2191,8 @@ object TDA4j:
             )
           case EngineKind.Cohomology =>
             fromBars[Simplex[Int], C](
-              cohomologyFor[Simplex[Int], C](cycles).barcode(lazyStreamForBoundary, includeZeroLength = true),
+              cohomologyFor[Simplex[Int], C](cycles)
+                .barcode(lazyStreamForBoundary, includeZeroLength = includeZeroLength),
               cellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1377,7 +2222,8 @@ object TDA4j:
         engine match
           case EngineKind.Naive =>
             fromBars[Simplex[Int], C](
-              naiveFor[Simplex[Int], C](cycles).barcode(generalStreamForBoundary, includeZeroLength = true),
+              naiveFor[Simplex[Int], C](cycles)
+                .barcode(generalStreamForBoundary, includeZeroLength = includeZeroLength),
               cellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1385,7 +2231,8 @@ object TDA4j:
             )
           case EngineKind.Cohomology =>
             fromBars[Simplex[Int], C](
-              cohomologyFor[Simplex[Int], C](cycles).barcode(generalStreamForBoundary, includeZeroLength = true),
+              cohomologyFor[Simplex[Int], C](cycles)
+                .barcode(generalStreamForBoundary, includeZeroLength = includeZeroLength),
               cellVertices,
               toDouble,
               requestedMaxDimension,
@@ -1407,7 +2254,9 @@ object TDA4j:
     landmarks: IndexedSeq[Int]
   ): PersistenceResult =
     val threshold = parseThresholdSpec(opts)
-    threshold(dispatchWitnessFromLandmarksFull(opts, metricSpace, landmarks), metricSpace.minimumEnclosingRadius)
+    withThreads(opts)(
+      threshold(dispatchWitnessFromLandmarksFull(opts, metricSpace, landmarks), metricSpace.minimumEnclosingRadius)
+    )
 
   private def dispatchWitnessFromLandmarksFull(
     opts: Map[String, String],
@@ -1432,6 +2281,7 @@ object TDA4j:
         nu,
         maxDimension,
         maxFiltrationValue,
+        wantsZeroLength(opts),
         toDouble
       )
     }
@@ -1444,7 +2294,7 @@ object TDA4j:
 
   private def dispatchDowker(opts: Map[String, String], relation: Array[Array[Double]]): PersistenceResult =
     val threshold = parseThresholdSpec(opts)
-    threshold(dispatchDowkerFull(opts, relation), valueRange(relation.iterator.flatten))
+    withThreads(opts)(threshold(dispatchDowkerFull(opts, relation), valueRange(relation.iterator.flatten)))
 
   private def dispatchDowkerFull(opts: Map[String, String], relation: Array[Array[Double]]): PersistenceResult =
     val engine = EngineKind.parse(opts.getOrElse("engine", "cohomology"))
@@ -1474,7 +2324,16 @@ object TDA4j:
       opts.get("maxfiltrationvalue").map(parseDoubleOption("maxFiltrationValue", _))
     val dual = opts.get("dual").exists(v => parseBooleanOption("dual", v))
     dispatchByField(opts) { [C] => (toDouble: C => Double) =>
-      computeDowker[C](relation, engine, cycles, maxDimension, maxFiltrationValue, dual, toDouble)
+      computeDowker[C](
+        relation,
+        engine,
+        cycles,
+        maxDimension,
+        maxFiltrationValue,
+        dual,
+        wantsZeroLength(opts),
+        toDouble
+      )
     }
 
   /** The Dowker complex is not a flag complex, so the enclosing radius is no cutoff: an unset `maxFiltrationValue` is
@@ -1487,6 +2346,7 @@ object TDA4j:
     requestedMaxDimension: Int,
     maxFiltrationValue: Option[Double],
     dual: Boolean,
+    includeZeroLength: Boolean,
     toDouble: C => Double
   )(using C is Field): PersistenceResult =
     val geometry =
@@ -1508,7 +2368,7 @@ object TDA4j:
     engine match
       case EngineKind.Naive =>
         fromBars[Simplex[Int], C](
-          naiveFor[Simplex[Int], C](cycles).barcode(streamForBoundary, includeZeroLength = true),
+          naiveFor[Simplex[Int], C](cycles).barcode(streamForBoundary, includeZeroLength = includeZeroLength),
           cellVertices,
           toDouble,
           requestedMaxDimension,
@@ -1516,7 +2376,7 @@ object TDA4j:
         )
       case EngineKind.Cohomology =>
         fromBars[Simplex[Int], C](
-          cohomologyFor[Simplex[Int], C](cycles).barcode(streamForBoundary, includeZeroLength = true),
+          cohomologyFor[Simplex[Int], C](cycles).barcode(streamForBoundary, includeZeroLength = includeZeroLength),
           cellVertices,
           toDouble,
           requestedMaxDimension,
@@ -1538,7 +2398,7 @@ object TDA4j:
     valueRangeOfImage: => Double
   ): PersistenceResult =
     val threshold = parseThresholdSpec(opts)
-    threshold(dispatchCubicalFull(opts, stream), valueRangeOfImage)
+    withThreads(opts)(threshold(dispatchCubicalFull(opts, stream), valueRangeOfImage))
 
   private def dispatchCubicalFull(opts: Map[String, String], stream: CubicalGridStream): PersistenceResult =
     val engine =
@@ -1585,17 +2445,28 @@ object TDA4j:
         val prime = opts.get("prime").map(parseIntOption("prime", _)).getOrElse(FiniteField.DefaultPrime)
         val ff = new FiniteField(prime)
         import ff.given
-        computeCubicalGeneric[ff.Fp](stream, engine, cycles, maxDimension, _.toInt.toDouble)
+        computeCubicalGeneric[ff.Fp](stream, engine, cycles, maxDimension, wantsZeroLength(opts), _.toInt.toDouble)
       case CoefficientKind.R =>
         val epsilon = opts.get("epsilon").map(parseDoubleOption("epsilon", _)).getOrElse(1e-9)
         given Double is Field = Field.DoubleApproximated(epsilon)
-        computeCubicalGeneric[Double](stream, engine, cycles, maxDimension, identity)
+        computeCubicalGeneric[Double](stream, engine, cycles, maxDimension, wantsZeroLength(opts), identity)
+      case CoefficientKind.Q =>
+        import Coefficients.Rationals.given
+        computeCubicalGeneric[Coefficients.Rational](
+          stream,
+          engine,
+          cycles,
+          maxDimension,
+          wantsZeroLength(opts),
+          _.toDouble
+        )
 
   private def computeCubicalGeneric[C](
     stream: CubicalGridStream,
     engine: EngineKind,
     cycles: Boolean,
     maxDimension: Int,
+    includeZeroLength: Boolean,
     toDouble: C => Double
   )(using C is Field): PersistenceResult =
     // cellVertices reports a Cube's own doubled-coordinate encoding, not vertex indices -- see
@@ -1611,7 +2482,7 @@ object TDA4j:
         // artificially cut short the way a VR/Cech complex is -- nothing to build one dimension higher for.
         // CellularHomologyEngine[Cube, ...] has no maxDim of its own at all, same as Simplex[Int].
         fromBars[Cube, C](
-          naiveFor[Cube, C](cycles).barcode(stream, includeZeroLength = true),
+          naiveFor[Cube, C](cycles).barcode(stream, includeZeroLength = includeZeroLength),
           cellVertices,
           toDouble,
           maxDimension,
@@ -1623,7 +2494,7 @@ object TDA4j:
         // semantics-fix.md), so this can skip real work for a caller who only wants low-dimensional homology, not
         // just filter what's reported after the fact.
         fromBars[Cube, C](
-          chunksFor[Cube, C](maxDimension, cycles).barcode(stream, includeZeroLength = true),
+          chunksFor[Cube, C](maxDimension, cycles).barcode(stream, includeZeroLength = includeZeroLength),
           cellVertices,
           toDouble,
           maxDimension,
@@ -1634,7 +2505,7 @@ object TDA4j:
         // is already naturally bounded), CellularCohomologyEngine computes to that natural top dimension, and
         // maxDimension is applied purely as a post-hoc filter via fromBars.
         fromBars[Cube, C](
-          cohomologyFor[Cube, C](cycles).barcode(stream, includeZeroLength = true),
+          cohomologyFor[Cube, C](cycles).barcode(stream, includeZeroLength = includeZeroLength),
           cellVertices,
           toDouble,
           maxDimension,
@@ -1649,7 +2520,7 @@ object TDA4j:
         // for real filtering now that ambientDim >= 3 is possible here too (unlike the old ambientDim=2-only
         // engine, where the grid's own natural top dimension was always <= 1 and nothing was ever filtered).
         fromBars[Cube, C](
-          FastCubicalHomologyEngine[C]().persistentHomology(stream, includeZeroLength = true),
+          FastCubicalHomologyEngine[C]().persistentHomology(stream, includeZeroLength, maxDimension),
           cellVertices,
           toDouble,
           maxDimension,
@@ -1726,4 +2597,23 @@ object TDA4j:
             s"no representative chain was recorded for bar $i; every engine records one for every bar, so this " +
               "indicates a bug in the engine that produced this result, not an expected gap"
           )
-    new PersistenceResult(dims, births, deaths, cycleProvider, boundaryMatrixOf)
+    // The bar's cells: of its dimension (the Ripser engine's packed cells need it to be decoded), and one up.
+    val cellProvider: Int => (Array[Int], Array[Int]) = i =>
+      indexed(i).cells match
+        case Some(Involution.Pair(dim, born, died)) =>
+          (
+            cellVertices(dim, born.asInstanceOf[CellT]),
+            died.fold(Array.emptyIntArray)(cell => cellVertices(dim + 1, cell.asInstanceOf[CellT]))
+          )
+        case None => PersistenceResult.noCells(i)
+    new PersistenceResult(
+      dims,
+      births,
+      deaths,
+      cycleProvider,
+      boundaryMatrixOf,
+      Array.range(0, dims.length),
+      0.0,
+      None,
+      cellProvider
+    )

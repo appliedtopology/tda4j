@@ -87,7 +87,9 @@ class InvolutionSpec extends Specification:
       val grid = for i <- 0 until 4; j <- 0 until 3 yield Array(i.toDouble, j.toDouble)
       val vr = VietorisRips(EuclideanMetricSpace(grid.toArray), maxDimension = 1, maxFiltrationValue = 2.5)
       val engine = CellularCohomologyEngine[Simplex[Int], ff.Fp, Double]()
-      (engine.persistentCohomology(vr).exists(_.dim == 2) must beTrue)
+      // The pairing has degree-2 pairs (the top cells that kill nothing), and neither kind of representative reports them.
+      (engine.pairedCohomology(vr)._1.exists(_._2.dim == 2) must beTrue)
+        .and(engine.persistentCohomology(vr).exists(_.dim == 2) must beFalse)
         .and(engine.persistentHomology(vr).exists(_.dim == 2) must beFalse)
     }
     "reproduce the cohomology engine's own cocycles term for term from its pairing (same columns, same order)" in {

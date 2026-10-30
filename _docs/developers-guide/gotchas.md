@@ -60,8 +60,8 @@ more than one stream in this codebase's history for exactly that reason.
 
 The generic default tie-breaks on plain lexicographic vertex-set order. `EnumeratingCofaceSimplexStream`'s
 and `RipserCohomologyEngine`'s own orderings deliberately use **colexicographic** order instead, via
-`SimplexIndexing`'s own combinatorial-number-system index — the exact tie-break Ripser's Definition
-3.2/Proposition 3.9 (apparent pairs) are stated in terms of. Don't "simplify" a colex ordering to plain lex
+`SimplexIndexing.colexOrdering` — the order of `SimplexIndexing`'s combinatorial-number-system index, without its
+width limit — the exact tie-break Ripser's Definition 3.2/Proposition 3.9 (apparent pairs) are stated in terms of. Don't "simplify" a colex ordering to plain lex
 in code that touches `SimplexIndexing`/the Ripser engines; they need to agree with each other, not just each
 independently be a valid tie-break.
 
@@ -141,13 +141,7 @@ dies with an `InvalidPathException`. `∆` is therefore a `val` alias of
 `Simplex`'s companion, not an object of its own. Unicode extension methods and
 `val`s are fine.
 
-## 11. `Chain` equality has no matching `hashCode`
-
-Two chains are equal when they are the same formal sum: the same cells, with
-coefficients equal by the field's `isEqual`, in any order. `hashCode` is not
-consistent with this. Never use a `Chain` as a key of a `Set` or `Map`.
-
-## 12. Sign errors hide: test over a signed field, and mutate signs unevenly
+## 11. Sign errors hide: test over a signed field, and mutate signs unevenly
 
 Over `F_2` every sign is `+1`, so a sign error cannot change any answer. Test
 boundaries, representatives and reductions over `F_3` or another odd prime as

@@ -24,9 +24,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# Five independent jobs (they run in parallel, and each shows up as its own check on a pull request): `test` (the JVM
-# build), `test-js` (the Scala.js build, on Node.js), `npm-package` (the npm tarball, installed and run), `docs-build`
-# (named to differ from the deploying job `docs` in docs.yml) and `mima`. A branch rule for `scala` can require any of
+# Six independent jobs (they run in parallel, and each shows up as its own check on a pull request): `test` (the JVM
+# build), `test-js` (the Scala.js build, on Node.js), `npm-package` (the npm tarball, installed and run),
+# `python-package` (the Python wheel, installed and tested), `docs-build` (named to differ from the deploying job `docs`
+# in docs.yml) and `mima`. A branch rule for `scala` can require any of
 # them by job name. The sbt projects are `tda4j` (JVM) and `tda4jJS` (Scala.js): every command here names one.
 #
 # Every sbt call in every workflow runs with `--server`: sbt in the foreground, finished when its step is. Through sbt
@@ -155,6 +156,58 @@ jobs:
           printf '0,0\n1,0\n1,1\n0,1\n' > square.csv
           bars=$(npx tda4j --max-dimension 1 square.csv | grep -c '^1:')
           test "$bars" = 1 || { echo "expected one degree-1 bar from the command, got $bars"; exit 1; }
+
+  # The Python package the release attaches (and publishes to PyPI once that is set up, see release.yml and RELEASE.md): the
+  # wheel built around the fat jar, installed into clean virtual environments on the oldest and the newest Python it
+  # supports and tested from outside the checkout, so the tests import the installed package and its bundled jar, not
+  # the sources next to them. The tests are `python/tests`; the pure-Python ones (the release script) skip themselves there.
+  python-package:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Setup JDK
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Setup sbt launcher
+        uses: sbt/setup-sbt@v1
+      - name: Setup Python 3.13
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Build the fat jar and the wheel
+        run: |
+          set -e
+          sbt --server tda4j/assembly
+          python -m pip install build
+          python/scripts/bundle-jar.sh
+          python -m build --wheel python
+      - name: Test the wheel on Python 3.13
+        run: |
+          set -e
+          python -m venv "$RUNNER_TEMP/py313"
+          "$RUNNER_TEMP/py313/bin/pip" install python/dist/*.whl pytest
+          cp -r python/tests "$RUNNER_TEMP/py-tests"
+          cd "$RUNNER_TEMP" && "$RUNNER_TEMP/py313/bin/python" -m pytest py-tests -q
+      - name: Setup Python 3.10
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.10"
+      - name: Test the wheel on Python 3.10
+        run: |
+          set -e
+          python -m venv "$RUNNER_TEMP/py310"
+          "$RUNNER_TEMP/py310/bin/pip" install python/dist/*.whl pytest
+          cd "$RUNNER_TEMP" && "$RUNNER_TEMP/py310/bin/python" -m pytest py-tests -q
+      - name: Run the pure-Python tests of the sources
+        run: |
+          python -m pip install pytest numpy jpype1
+          PYTHONPATH="$PWD/python/src" TDA4J_JAR=$(ls "$PWD"/python/src/tda4j/jars/*-assembly.jar) python -m pytest python/tests/test_release_scripts.py -q
 
   # Compiles every Scala fence in `_docs`. The tutorial specs run the same fences inside `test`; this job is what catches a
   # broken fence in a page that has no spec, and a broken site build.

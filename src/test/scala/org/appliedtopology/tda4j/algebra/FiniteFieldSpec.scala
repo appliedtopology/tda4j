@@ -142,6 +142,18 @@ object FiniteFieldSpec extends mutable.Specification with ScalaCheck:
     }
   }
 
+  "The hash of an element agrees with the field's equality" >> {
+    val field = summon[Fp is Field]
+    "it is the residue in 0 until p, for any Int" >>
+      AsResult {
+        prop((x: Int) => field.hash(Fp(x)) === Math.floorMod(x, 17))
+      }
+    "the two Int forms of a residue hash alike, and the residues hash apart" >> {
+      ((0 until 17).forall(r => field.isEqual(Fp(r), Fp(r - 17)) && field.hash(Fp(r)) == field.hash(Fp(r - 17))) must
+        beTrue) and ((0 until 17).map(r => field.hash(Fp(r))).distinct.size must beEqualTo(17))
+    }
+  }
+
   "FiniteField(p) refuses a p that is not a prime, saying so" >>
     Seq(-3, 0, 1, 4, 9, 15)
       .map(p => (new FiniteField(p): Any) must SpecThrows.throwWith[IllegalArgumentException]("needs a prime number"))

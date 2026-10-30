@@ -76,9 +76,14 @@ class SimplicialSetStreamSpec extends s2mutable.Specification with ScalaCheck:
       val vrStream = LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(metricSpace), 2)
       val (betti, _) = ourBetti(vrStream)
 
+      // The 2-skeleton as a complex of its own: an explicit stream declares no degree limit, where the Limited one
+      // (cut for homology up to degree 1) would have the engine leave out the skeleton's degree 2.
+      val skeleton = LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(metricSpace), 2)
       val reference = SimplicialHomologyEngine[Int, Double, Double]()
       val theirs = reference
-        .persistentHomology(LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(metricSpace), 2))
+        .persistentHomology(
+          StreamFixtures.explicitStream(skeleton.iterator.map(s => skeleton.filtrationValue(s) -> s).toSeq)
+        )
         .diagramAt(Double.PositiveInfinity)
 
       betti === bettiFromReference(theirs)

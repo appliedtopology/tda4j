@@ -38,7 +38,7 @@ and interval objects by one call.
 | `Plex4.createLazyWitnessStream(selector, k + 1, maxDistance, numDivisions)` | `Witness(metricSpace, landmarks, maxDimension = k, maxFiltrationValue = maxDistance)`; `Witness.Variant.Lazy` is the default |
 | `Plex4.createWitnessStream(...)` | `Witness(..., variant = Witness.Variant.General)` |
 | `Plex4.createExplicitSimplexStream()`, `addVertex`, `addElement`, `finalizeStream()` | `ExplicitStreamBuilder.fromFacets(facets)` or `fromFilteredFacets(Seq((value, facet), ...))` |
-| `Plex4.getRationalSimplicialAlgorithm(...)` | `characteristic = 0`: floating point, not exact rationals |
+| `Plex4.getRationalSimplicialAlgorithm(...)` | `coefficients = Coefficients.Rationals` for exact rationals (`characteristic = 0` is floating point); MATLAB `'field', 'Q'` |
 | `Plex4.createBarcodePlot(intervals, caption, end)` | `Plot.barcode(diagram).save("barcode.svg")`; MATLAB `result.plotBarcode().save('barcode.svg')` |
 
 A JavaPlex discretization step is gone: there is no `numDivisions`, and the values in a barcode are the real filtration values.
@@ -58,6 +58,9 @@ tda4j implements Ripser's algorithm (clearing, cohomology, apparent pairs) as it
 | `ripser(X, maxdim=k, thresh=t, coeff=p)` (ripser.py) | `Persistence(X, maxDimension = k, maxFiltrationValue = t, characteristic = p)` |
 | `ripser(D, distance_matrix=True)` | `Persistence(ExplicitMetricSpace(rows))` |
 | `result['dgms'][d]` | `diagram.dim(d).triples` (degree, birth, death), death `Infinity` for an essential bar |
+
+In Python, [the `tda4j` package](python.md) takes the same arguments as keywords: `tda4j.persistence(X, max_dimension=k,
+max_filtration_value=t, prime=p).diagram(d)` is `ripser(X, maxdim=k, thresh=t, coeff=p)['dgms'][d]`.
 
 Beyond Ripser, tda4j returns a representative for every bar, so the bars from a Ripser-style run come with the cycles
 (or, with `representatives = Representatives.Cocycles`, the cocycles) that witness them. Write a diagram in a format
@@ -79,5 +82,8 @@ other tools read with `--output-format gudhi`, `dipha` or `csv`.
 | `gudhi.bottleneck_distance(a, b)`, `gudhi.wasserstein.wasserstein_distance` | `BarcodeDistance.bottleneckDistance(a.bars, b.bars)`, `BarcodeDistance.wassersteinDistance(a.bars, b.bars, order)`, see [vectorization](vectorization.md) |
 | `gudhi.representations` landscapes and images | `Vectorization.landscape`, `Vectorization.persistenceImage` |
 | `read_points_from_off_file`, persistence files | `Gudhi.readOff`, `Gudhi.readPersistenceDiagram` and `Gudhi.writePersistenceDiagram` ([files](input-output.md)) |
+
+In Python, `tda4j.persistence(X, max_dimension=k, prime=p).diagram(d)` is the Rips line above (`max_dimension` is `k`, not
+`k + 1`), and `tda4j.persistence(X, complex="alpha", max_dimension=k)` the alpha one ([Python](python.md)).
 
 Names and defaults change between versions of these libraries; check the ones you use against your version.

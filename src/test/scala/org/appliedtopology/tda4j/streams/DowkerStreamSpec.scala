@@ -175,6 +175,41 @@ class DowkerStreamSpec extends mutable.Specification with ScalaCheck:
     }
 
   // ---------------------------------------------------------------------------------------------------------
+  // The array-level value the flat layers use: a new row on top of a parent, with the parent's maxima kept.
+  // ---------------------------------------------------------------------------------------------------------
+
+  "the flat value of a candidate (a new smallest vertex on a parent) is the formula's value bit for bit, in the order " +
+    "the layers ask for it and in any other" >> {
+      def bits(x: Double) = java.lang.Double.doubleToLongBits(x)
+      def subsets(n: Int): Seq[Array[Int]] =
+        (1 until (1 << n)).map(mask => (0 until n).filter(i => (mask & (1 << i)) != 0).toArray)
+      val results = for
+        seed <- 0L until 4L
+        infinite <- Seq(false, true)
+      yield
+        val rng = new scala.util.Random(seed)
+        val relation = Array.fill(7, 5)(
+          if infinite then if rng.nextInt(3) == 0 then 0.0 else Double.PositiveInfinity else rng.nextInt(4).toDouble
+        )
+        val geometry = DowkerGeometry(relation)
+        class Exposed extends DowkerCofaceSimplexStream(geometry):
+          def exposed: RipserCofaceSimplexStream.FlatFiltration = flatFiltration.get
+        val flat = new Exposed
+        // Every simplex of two or more vertices, as the candidate it is: its smallest vertex on top of the rest.
+        val candidates = subsets(7).filter(_.length >= 2)
+        def agrees(order: Seq[Array[Int]]): Boolean =
+          val values = flat.exposed.perRun
+          order.forall(c =>
+            bits(values.value(c, 0, c.length, Double.NaN)) == bits(geometry.filtrationValue(c, 0, c.length))
+          )
+        // The layers' order: by width, and each parent's candidates together.
+        val grouped = candidates.sortBy(c => (c.length, c.tail.toSeq.map(_.toLong).foldLeft(0L)(_ * 8 + _)))
+        val shuffled = new scala.util.Random(seed + 100).shuffle(candidates)
+        agrees(grouped) && agrees(shuffled) && agrees(grouped.reverse)
+      results must contain(true).forall
+    }
+
+  // ---------------------------------------------------------------------------------------------------------
   // Constructor validation.
   // ---------------------------------------------------------------------------------------------------------
 

@@ -41,7 +41,7 @@ VietorisRips(metricSpace, maxDimension = 1).iterator.size   // 24711
 |---|---|---|
 | Vietoris-Rips | 24,711 | (0.595, 1.707) |
 | Čech | 36,050 | (0.297, 0.935) |
-| alpha | 325 | (0.297, 0.935) |
+| alpha | 313 | (0.297, 0.935) |
 | sparse Rips (ε = 0.5) | 1,730 | (0.708, 1.789) |
 | witness (15 landmarks) | 441 | (0.278, 0.742) |
 
@@ -68,7 +68,12 @@ complexes must not be compared by their endpoints, only by their shape: here, on
 
 The alpha complex is a subcomplex of the Delaunay triangulation of the points, chosen so that at each scale it has the same shape
 as the union of balls, which is to say the same shape as the Čech complex. So the two give **identical bars**, the same loop to
-six digits, from 325 simplices instead of 36,050. When you can use it, that is a hundredfold saving for nothing.
+six digits, from 313 simplices instead of 36,050. When you can use it, that is a hundredfold saving for nothing.
+
+Like the other complexes, `Persistence` runs alpha only up to the points' minimum enclosing radius, past which nothing is
+born, so the 313 leave out the long thin triangles along the hull of the triangulation. `AlphaShapes(points)`, the whole
+complex, has 325 simplices; pass `maxFiltrationValue = Double.PositiveInfinity` to `Persistence` (or `'maxFiltrationValue',
+'Infinity'` in MATLAB, `--max-filtration-value Infinity` in the CLI) to run on all of them. The bars are the same.
 
 You can use it when your points have coordinates in a low-dimensional space (the Delaunay triangulation is what limits it:
 fine in two or three dimensions, rapidly harder beyond). The `fast-alpha` engine, described in the
@@ -121,7 +126,7 @@ val loops = diagrams.map(_.dim(1).longest.get)
 val sizes = List(
   VietorisRips(metricSpace, maxDimension = 1),
   Cech(metricSpace, maxDimension = 1),
-  AlphaShapes(points),
+  AlphaShapes.upToEnclosingRadius(points),
   SparseRips(metricSpace, epsilon = 0.5, maxDimension = 1),
   Witness(metricSpace, landmarks, maxDimension = 1)
 ).map(_.iterator.size)

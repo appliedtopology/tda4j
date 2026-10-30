@@ -47,7 +47,7 @@ class UserImportsSpec extends Specification:
       val bars = SimplicialHomologyEngine.persistentHomology(stream).barcodeAt(2.0).filter(_.dim <= 1)
       (d.longerThan(1.0).size must beEqualTo(1)) and
         (bars.longerThan(1.0).map(_.dim) must beEqualTo(List(0))) and
-        (bars.significant().size must beLessThanOrEqualTo(bars.size))
+        (bars.longerThanFraction().size must beLessThanOrEqualTo(bars.size))
     }
   }
 

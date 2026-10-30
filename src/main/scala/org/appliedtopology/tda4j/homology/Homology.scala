@@ -341,23 +341,28 @@ open class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtr
       f: FiltrationT,
       includeZeroLength: Boolean = false
     ): List[(Int, FiltrationT, FiltrationT, Chain[CellT, CoefficientT])] =
-      truncatedAt(f, includeZeroLength).map((dim, l, u, rep, _) => (dim, l, u, rep))
+      truncatedAt(f, includeZeroLength).map((dim, l, u, rep, _, _) => (dim, l, u, rep))
 
-    /** `diagramWithGeneratorsAt`, plus whether each bar's death was capped at `f` (the class is alive at `f`). */
+    /** `diagramWithGeneratorsAt`, plus whether each bar's death was capped at `f` (the class is alive at `f`) and the
+      * cells that open and close it (the closing cell only if the bar finished by `f`).
+      */
     private def truncatedAt(
       f: FiltrationT,
       includeZeroLength: Boolean
-    ): List[(Int, FiltrationT, FiltrationT, Chain[CellT, CoefficientT], Boolean)] =
+    ): List[(Int, FiltrationT, FiltrationT, Chain[CellT, CoefficientT], Boolean, Involution.Pair[CellT])] =
       advanceTo(f)
-      val finished = barcode.toList.collect {
-        case (dim, lower, upper, rep) if lower <= f && (includeZeroLength || lower != upper) =>
-          if upper <= f then (dim, lower, upper, rep, false) else (dim, lower, f, rep, true)
+      val finished = barcode.toList.zipWithIndex.collect {
+        case ((dim, lower, upper, rep), i) if lower <= f && (includeZeroLength || lower != upper) =>
+          val (birthCell, deathCell) = pairedCells(i)
+          if upper <= f then (dim, lower, upper, rep, false, Involution.Pair(dim, birthCell, Some(deathCell)))
+          else (dim, lower, f, rep, true, Involution.Pair(dim, birthCell, None))
       }
       val essentialUpper: FiltrationT = lastFiltrationValue match
         case Some(last) if f < last => f
         case _                      => filtration.largest
       val alive = positives.toList.collect {
-        case (sigma, (birth, rep)) if birth <= f => (sigma.dim, birth, essentialUpper, rep, true)
+        case (sigma, (birth, rep)) if birth <= f =>
+          (sigma.dim, birth, essentialUpper, rep, true, Involution.Pair(sigma.dim, sigma, None))
       }
       finished ++ alive
 
@@ -386,28 +391,40 @@ open class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtr
       f: FiltrationT,
       includeZeroLength: Boolean = false
     ): List[PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]]] =
-      truncatedAt(f, includeZeroLength).map { (dim, l, u, rep, capped) =>
+      truncatedAt(f, includeZeroLength).map { (dim, l, u, rep, capped, cells) =>
         val lower: BarcodeEndpoint[FiltrationT] =
           if l == filtration.smallest then NegativeInfinity() else ClosedEndpoint(l)
         val upper: BarcodeEndpoint[FiltrationT] =
           if u == filtration.largest then PositiveInfinity()
           else if capped then ClosedEndpoint(u)
           else OpenEndpoint(u)
-        new PersistenceBar(dim, lower, upper, Some(rep))
+        new PersistenceBar(dim, lower, upper, Some(rep), Some(cells))
       }
 
+  /** The cursor for the whole stream. A stream that says it was cut off (`homologyDegreeLimit`, as `VietorisRips(..,
+    * maxDimension = k)` does) is read as `persistentHomology(stream, k)`: the cells above degree `k` close nothing, so
+    * they are not homology.
+    */
   def persistentHomology(stream: => CellStream[CellT, FiltrationT]): HomologyState =
-    start(stream, None)
+    val theStream = stream
+    start(theStream, declaredLimit(theStream))
 
-  /** The cursor for the degrees `0 .. maxDimension` only. The cells above dimension `maxDimension + 1` are neither
-    * sorted nor reduced, and the cells of dimension `maxDimension + 1`, which can only close a class of degree
-    * `maxDimension`, leave nothing but the pairing: no V-column, no class of degree `maxDimension + 1`, and no
-    * reduction at all while no class of degree `maxDimension` is open. The bars of degree `0 .. maxDimension` and their
-    * representatives are those of the uncapped cursor; there are no bars above `maxDimension`.
+  /** The cursor for the degrees `0 .. maxDimension` only (fewer for a stream cut off below that, see the whole-stream
+    * cursor). The cells above dimension `maxDimension + 1` are neither sorted nor reduced, and the cells of dimension
+    * `maxDimension + 1`, which can only close a class of degree `maxDimension`, leave nothing but the pairing: no
+    * V-column, no class of degree `maxDimension + 1`, and no reduction at all while no class of degree `maxDimension`
+    * is open. The bars of degree `0 .. maxDimension` and their representatives are those of the uncapped cursor; there
+    * are no bars above `maxDimension`.
     */
   def persistentHomology(stream: => CellStream[CellT, FiltrationT], maxDimension: Int): HomologyState =
     require(maxDimension >= 0, s"maxDimension must be >= 0, got $maxDimension")
-    start(stream, Some(maxDimension))
+    val theStream = stream
+    start(theStream, Some(declaredLimit(theStream).fold(maxDimension)(math.min(_, maxDimension))))
+
+  // The top degree whose bars are the stream's homology, when it says so (a stream built for degrees `0..k`).
+  private def declaredLimit(stream: CellStream[CellT, FiltrationT]): Option[Int] = stream match
+    case s: StratifiedCellStream[?, ?] => s.homologyDegreeLimit.filter(_ >= 0)
+    case _                             => None
 
   private def start(stream: => CellStream[CellT, FiltrationT], maxDegree: Option[Int]): HomologyState =
     HomologyState(
@@ -430,10 +447,7 @@ open class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: F
   val chainRM = summon[Chain[CellT, CoefficientT] is RingModule]
   import chainRM.*
 
-  // The real internal ceiling: one dimension higher than what's reported, so a class born AT maxDim can still be
-  // correctly killed by a genuine (maxDim + 1)-cell rather than looking essential purely because nothing above
-  // maxDim was ever considered. See the class doc above.
-  private val internalMaxDim: Int = maxDim + 1
+  private val requestedMaxDim: Int = maxDim
 
   class HomologyState(
     boundaries: mutable.Map[CellT, Chain[CellT, CoefficientT]],
@@ -452,6 +466,16 @@ open class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: F
   ):
 
     given Ordering[CellT] = ranks.ordering
+
+    // The degrees reported: the engine's `maxDim`, or fewer when the stream was cut off below it
+    // (`homologyDegreeLimit`): the cells above that degree close nothing, so their unpaired ones are not homology.
+    private val maxDim: Int =
+      stream.homologyDegreeLimit.filter(_ >= 0).fold(requestedMaxDim)(math.min(_, requestedMaxDim))
+
+    // The real internal ceiling: one dimension higher than what's reported, so a class born AT maxDim can still be
+    // correctly killed by a genuine (maxDim + 1)-cell rather than looking essential purely because nothing above
+    // maxDim was ever considered. See the class doc above.
+    private val internalMaxDim: Int = maxDim + 1
 
     // top-down state:
     //   cleared ------------- simplices paired as pivots (positive side); their column is implicitly zero
@@ -880,7 +904,10 @@ open class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: F
                   // path it closes (or, after union-find's fallback, its V-column), built on first request.
                   if dim == 1 then degreeOneRepresentative(pivot)
                   else vcolOf(pivot)
-              new PersistenceBar(dim, endpoint(true)(lower), deathAt(upper), Some(rep))
+              // The pivot is the birth cell; its killer is the death cell, unless the bar is cut off at `f`.
+              val birthCell = chain.leadingCell.get
+              val cells = Involution.Pair(dim, birthCell, if upper <= f then killer.get(birthCell) else None)
+              new PersistenceBar(dim, endpoint(true)(lower), deathAt(upper), Some(rep), Some(cells))
           }
         }
 
@@ -894,7 +921,13 @@ open class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: F
               else essentialRepresentatives.getOrElseUpdate(sigma, vcolOf(sigma))
             val upper: BarcodeEndpoint[Double] =
               if essentialUpperAt(f).isPosInfinity then PositiveInfinity() else ClosedEndpoint(f)
-            new PersistenceBar(sigma.dim, endpoint(true)(lower), upper, Some(rep))
+            new PersistenceBar(
+              sigma.dim,
+              endpoint(true)(lower),
+              upper,
+              Some(rep),
+              Some(Involution.Pair(sigma.dim, sigma, None))
+            )
           }
         }
 

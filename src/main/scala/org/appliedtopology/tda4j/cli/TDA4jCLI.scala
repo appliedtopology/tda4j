@@ -2,10 +2,12 @@ package org.appliedtopology.tda4j
 package cli
 
 import org.appliedtopology.tda4j.*
-import org.appliedtopology.tda4j.matlab.{LandmarkSelectionResult, PersistenceResult, TDA4j}
+import org.appliedtopology.tda4j.matlab.{LandmarkSelectionResult, PersistenceMapResult, PersistenceResult, TDA4j}
 import org.appliedtopology.tda4j.plot.{
+  Board,
   Figure,
   Labels,
+  Look,
   Palette,
   Plot,
   Scale,
@@ -44,11 +46,14 @@ object TDA4jCLI:
       val options = buildOptions(conf)
       val format = inputFormatOf(conf)
       checkPlotFlags(conf)
+      if conf.maxSimplexDimension.isSupplied && !conf.eulerCurve() then
+        throw new IllegalArgumentException("--max-simplex-dimension is for --euler-curve, which counts simplices")
       if conf.saveResult.isSupplied && conf.selectLandmarks() then
         throw new IllegalArgumentException(
           "--save-result is meaningless with --select-landmarks: there is no result here, only a landmark set"
         )
-      val resolved = resolveInput(format, conf.input())
+      checkModes(conf)
+      val resolved = applyTakens(conf, format, resolveInput(format, conf.input()), err)
 
       if conf.selectLandmarks() && conf.landmarksFile.isSupplied then
         throw new IllegalArgumentException(
@@ -81,6 +86,12 @@ object TDA4jCLI:
           "--include-zero-length is meaningless with --select-landmarks: there is no barcode here, only a landmark set"
         )
 
+      if conf.barCells() && conf.outputFormat() != "text" then
+        throw new IllegalArgumentException(
+          s"--bar-cells adds the cells to the text output, and --output-format=${conf.outputFormat()} has no place for " +
+            "them: use --output-format=text, or --save-result, which keeps them"
+        )
+
       if conf.distanceTo.isSupplied then
         if conf.selectLandmarks() then
           throw new IllegalArgumentException(
@@ -91,11 +102,43 @@ object TDA4jCLI:
             "--representatives is meaningless with --distance-to: a bottleneck/Wasserstein comparison has no " +
               "representative chains, only a distance per dimension"
           )
+        if conf.barCells() then
+          throw new IllegalArgumentException(
+            "--bar-cells is meaningless with --distance-to: a bottleneck/Wasserstein comparison has no cells, only " +
+              "a distance per dimension"
+          )
         if conf.outputFormat() != "text" then
           throw new IllegalArgumentException(
             s"--output-format=${conf.outputFormat()} is not supported with --distance-to -- only the default " +
               "text format is (one 'dim <k>: bottleneck=... wasserstein=...' line per dimension)"
           )
+
+      if conf.barcodeOp.isSupplied then
+        val op = conf.barcodeOp()
+        if !barcodeOps.contains(op) then
+          throw new IllegalArgumentException(
+            s"unrecognized --barcode-op '$op'; expected one of ${barcodeOps.mkString(", ")}"
+          )
+        if op != "dual" && !conf.barcodeWith.isSupplied then
+          throw new IllegalArgumentException(s"--barcode-op $op needs --barcode-with, the second barcode")
+        if op == "dual" && conf.barcodeWith.isSupplied then
+          throw new IllegalArgumentException("--barcode-op dual takes one barcode: --barcode-with does not go with it")
+        val others = Seq(
+          "--distance-to" -> conf.distanceTo.isSupplied,
+          "--select-landmarks" -> conf.selectLandmarks(),
+          "--representatives" -> conf.representatives(),
+          "--bar-cells" -> conf.barCells(),
+          "--plot" -> conf.plot.isSupplied,
+          "--min-persistence" -> conf.minPersistence.isSupplied,
+          "--min-persistence-fraction" -> conf.minPersistenceFraction.isSupplied,
+          "--output-format" -> (conf.outputFormat() != "text")
+        ).collect { case (flag, true) => flag }
+        if others.nonEmpty then
+          throw new IllegalArgumentException(
+            s"${others.mkString(", ")} cannot go with --barcode-op: it writes the bars of the barcode algebra, whole, as text"
+          )
+      else if conf.barcodeWith.isSupplied then
+        throw new IllegalArgumentException("--barcode-with goes with --barcode-op")
 
       // --complex is meaningless for a cubical grid (TDA4j.computeFromCubicalImage has no "complex" option at
       // all -- it would otherwise be silently ignored rather than validated, the exact "two flags can disagree
@@ -103,6 +146,24 @@ object TDA4jCLI:
       // reasoning for the two witness-recipe flags: a cubical grid/Dowker relation has no landmarks to select or
       // supply, and --complex is equally meaningless for a Dowker relation (TDA4j.computeFromRelation has its
       // own, separate, much smaller option set -- see that method's own doc).
+      if conf.relativeTo.isSupplied then
+        if conf.selectLandmarks() || conf.landmarksFile.isSupplied then
+          throw new IllegalArgumentException(
+            "--relative-to computes the pair of Vietoris-Rips complexes, which has no landmarks: " +
+              "--select-landmarks and --landmarks-file are for the witness complex"
+          )
+        resolved match
+          case ResolvedInput.Points(_) | ResolvedInput.Distances(_) => ()
+          case ResolvedInput.Result(_)                              =>
+            throw new IllegalArgumentException(
+              s"${conf.input()} is a saved result, computed already: --relative-to would change the computation. " +
+                "Compute again from the original input"
+            )
+          case _ =>
+            throw new IllegalArgumentException(
+              s"--relative-to takes a point cloud or a distance matrix (the Vietoris-Rips complex), not --input-format=$format"
+            )
+
       resolved match
         case ResolvedInput.Result(_) =>
           val flags = options.grouped(2).map(pair => flagName(pair(0))).toSeq ++
@@ -137,11 +198,33 @@ object TDA4jCLI:
           )
         case _ => ()
 
-      if conf.selectLandmarks() then
+      if conf.eulerCurve() then
+        writeEulerCurve(conf, options, format, resolved, out)
+        0
+      else if conf.persistentLaplacian() then
+        writePersistentLaplacian(conf, options, format, resolved, out)
+        0
+      else if conf.morseReduction() then
+        writeMorseReduction(conf, options, format, resolved, out)
+        0
+      else if conf.bootstrapBand() then
+        writeBootstrapBand(conf, options, format, resolved, out)
+        0
+      else if conf.tomato() then
+        writeTomato(conf, options, format, resolved, out)
+        0
+      else if conf.inclusionOf.isSupplied then
+        writeInclusion(conf, options, format, resolved, out)
+        0
+      else if conf.selectLandmarks() then
         if conf.representatives() then
           throw new IllegalArgumentException(
             "--representatives is meaningless with --select-landmarks: there is no barcode here, only a " +
               "landmark set"
+          )
+        if conf.barCells() then
+          throw new IllegalArgumentException(
+            "--bar-cells is meaningless with --select-landmarks: there is no barcode here, only a landmark set"
           )
         if conf.outputFormat() != "text" then
           throw new IllegalArgumentException(
@@ -161,6 +244,13 @@ object TDA4jCLI:
         0
       else
         val result = conf.landmarksFile.toOption match
+          case _ if conf.relativeTo.isSupplied =>
+            val subcomplex = parseVertexList("--relative-to", conf.relativeTo())
+            resolved match
+              case ResolvedInput.Points(points)       => TDA4j.computeRelativeFromPoints(points, subcomplex, options)
+              case ResolvedInput.Distances(distances) =>
+                TDA4j.computeRelativeFromDistanceMatrix(distances, subcomplex, options)
+              case _ => throw new IllegalStateException("unreachable: rejected by the --relative-to guard above")
           case Some(path) =>
             val landmarks = readLandmarksFile(path)
             resolved match
@@ -185,6 +275,7 @@ object TDA4jCLI:
         conf.saveResult.foreach(result.save)
         if conf.plot.isSupplied then writePlot(conf, result, loaded, err)
         else if conf.distanceTo.isSupplied then writeDistance(conf, result, out)
+        else if conf.barcodeOp.isSupplied then writeBarcodeOp(conf, result, out)
         else
           writeOutput(conf, result, out)
           noteHiddenBars(result, loaded, err)
@@ -221,6 +312,7 @@ object TDA4jCLI:
       }
     add("complex", conf.complex)
     add("engine", conf.engine)
+    add("threads", conf.threads)
     add("alphaBackend", conf.alphaBackend)
     add("requireValidTriangulation", conf.requireValidTriangulation)
     add("dtmK", conf.dtmK)
@@ -357,6 +449,397 @@ object TDA4jCLI:
         "as --max-filtration-value for step 2 (the JavaPlex tutorial's own 2R recipe)"
     )
 
+  private val eulerCurveOptions = Set("maxFiltrationValue", "threads")
+
+  /** `--euler-curve`: the curve of the Vietoris-Rips complex of a point cloud or distance matrix, one `scale,value`
+    * line for every scale where it steps. A flag that would change a computation this mode does not do is refused.
+    */
+  private[cli] def writeEulerCurve(
+    conf: TDA4jConf,
+    options: Array[String],
+    format: String,
+    resolved: ResolvedInput,
+    out: java.io.PrintStream
+  ): Unit =
+    val others = Seq(
+      "--plot" -> conf.plot.isSupplied,
+      "--distance-to" -> conf.distanceTo.isSupplied,
+      "--select-landmarks" -> conf.selectLandmarks(),
+      "--landmarks-file" -> conf.landmarksFile.isSupplied,
+      "--representatives" -> conf.representatives(),
+      "--bar-cells" -> conf.barCells(),
+      "--relative-to" -> conf.relativeTo.isSupplied,
+      "--output-format" -> conf.outputFormat.isSupplied,
+      "--save-result" -> conf.saveResult.isSupplied
+    ).collect { case (flag, true) => flag } ++
+      options.grouped(2).map(_(0)).filterNot(eulerCurveOptions).map(flagName)
+    if others.nonEmpty then
+      throw new IllegalArgumentException(
+        s"--euler-curve counts the cells of the Vietoris-Rips complex, and ${others.mkString(", ")} cannot go with it " +
+          "(it takes --max-simplex-dimension, --max-filtration-value and --threads)"
+      )
+    val chosen = options.grouped(2).filter(pair => eulerCurveOptions(pair(0))).flatten.toArray ++
+      conf.maxSimplexDimension.toOption.toSeq.flatMap(d => Seq("maxSimplexDimension", d.toString))
+    val curve = resolved match
+      case ResolvedInput.Points(points)       => TDA4j.eulerCurveFromPoints(points, chosen)
+      case ResolvedInput.Distances(distances) => TDA4j.eulerCurveFromDistanceMatrix(distances, chosen)
+      case _                                  =>
+        throw new IllegalArgumentException(
+          s"--euler-curve needs a point cloud or a distance matrix; --input-format=$format reads something else"
+        )
+    val lines = "scale,value" +: curve.scales().zip(curve.values()).toSeq.map((scale, value) => s"$scale,$value")
+    conf.output.toOption match
+      case Some(path) =>
+        val writer = FileAccess.printWriter(path)
+        try lines.foreach(writer.println)
+        finally writer.close()
+      case None => lines.foreach(out.println)
+
+  /** `--euler-curve`, `--bootstrap-band`, `--tomato` and `--inclusion-of` are modes of their own: at most one, and the
+    * flags of a mode only with it.
+    */
+  private[cli] def checkModes(conf: TDA4jConf): Unit =
+    val chosen = Seq(
+      "--euler-curve" -> conf.eulerCurve(),
+      "--persistent-laplacian" -> conf.persistentLaplacian(),
+      "--morse-reduction" -> conf.morseReduction(),
+      "--bootstrap-band" -> conf.bootstrapBand(),
+      "--tomato" -> conf.tomato(),
+      "--inclusion-of" -> conf.inclusionOf.isSupplied
+    ).collect { case (flag, true) => flag }
+    if chosen.size > 1 then
+      throw new IllegalArgumentException(s"${chosen.mkString(" and ")} are modes of their own: choose one")
+    val strays = Seq(
+      (
+        "--morse-reduction",
+        !conf.morseReduction(),
+        Seq("--morse-strategy" -> conf.morseStrategy.isSupplied)
+      ),
+      (
+        "--persistent-laplacian",
+        !conf.persistentLaplacian(),
+        Seq(
+          "--laplacian-dimension" -> conf.laplacianDimension.isSupplied,
+          "--laplacian-from" -> conf.laplacianFrom.isSupplied,
+          "--laplacian-to" -> conf.laplacianTo.isSupplied
+        )
+      ),
+      (
+        "--bootstrap-band",
+        !conf.bootstrapBand(),
+        Seq(
+          "--band-dimension" -> conf.bandDimension.isSupplied,
+          "--band-rounds" -> conf.bandRounds.isSupplied,
+          "--band-alpha" -> conf.bandAlpha.isSupplied,
+          "--band-seed" -> conf.bandSeed.isSupplied,
+          "--band-subsample-size" -> conf.bandSubsampleSize.isSupplied
+        )
+      ),
+      (
+        "--tomato",
+        !conf.tomato(),
+        Seq(
+          "--tomato-k" -> conf.tomatoK.isSupplied,
+          "--tomato-tau" -> conf.tomatoTau.isSupplied
+        )
+      ),
+      (
+        "--takens-dimension",
+        !conf.takensDimension.isSupplied,
+        Seq(
+          "--takens-delay" -> conf.takensDelay.isSupplied,
+          "--takens-max-lag" -> conf.takensMaxLag.isSupplied
+        )
+      )
+    )
+    for (mode, absent, flags) <- strays if absent do
+      val supplied = flags.collect { case (flag, true) => flag }
+      if supplied.nonEmpty then throw new IllegalArgumentException(s"${supplied.mkString(", ")} only go with $mode")
+
+  /** `--takens-dimension`: the input is a time series, one sample per line, and the computation is on its
+    * sliding-window embedding. A series of one column may have its delay chosen by autocorrelation
+    * (`--takens-max-lag`), the choice going to `err`.
+    */
+  private[cli] def applyTakens(
+    conf: TDA4jConf,
+    format: String,
+    resolved: ResolvedInput,
+    err: java.io.PrintStream
+  ): ResolvedInput =
+    conf.takensDimension.toOption match
+      case None            => resolved
+      case Some(dimension) =>
+        resolved match
+          case ResolvedInput.Points(rows) =>
+            if conf.takensDelay.isSupplied && conf.takensMaxLag.isSupplied then
+              throw new IllegalArgumentException(
+                "--takens-delay and --takens-max-lag are alternatives: the first gives the delay, the second chooses it"
+              )
+            val oneColumn = rows.nonEmpty && rows.forall(_.length == 1)
+            if conf.takensMaxLag.isSupplied && !oneColumn then
+              throw new IllegalArgumentException(
+                "--takens-max-lag chooses the delay of a series of one column; for a series of vectors give --takens-delay"
+              )
+            val delay = conf.takensMaxLag.toOption match
+              case Some(lag) =>
+                val chosen = TDA4j.delayByAutocorrelation(rows.map(_(0)), lag)
+                err.println(
+                  s"tda4j: delay $chosen chosen by autocorrelation (the first lag up to $lag where it is zero or negative)"
+                )
+                chosen
+              case None => conf.takensDelay.getOrElse(1)
+            ResolvedInput.Points(
+              if oneColumn then TDA4j.takensEmbedding(rows.map(_(0)), dimension, delay)
+              else TDA4j.takensEmbeddingOfVectors(rows, dimension, delay)
+            )
+          case _ =>
+            throw new IllegalArgumentException(
+              s"--takens-dimension reads a time series, one sample per line, as a point-cloud input; " +
+                s"--input-format=$format reads something else"
+            )
+
+  /** Refuses the flags a mode does not use, naming them: a flag that would change a computation this mode does not do
+    * must not be silently ignored.
+    */
+  private def refuseOtherFlags(
+    mode: String,
+    doing: String,
+    takes: String,
+    conf: TDA4jConf,
+    options: Array[String],
+    allowed: Set[String]
+  ): Unit =
+    val others = Seq(
+      "--plot" -> conf.plot.isSupplied,
+      "--distance-to" -> conf.distanceTo.isSupplied,
+      "--select-landmarks" -> conf.selectLandmarks(),
+      "--landmarks-file" -> conf.landmarksFile.isSupplied,
+      "--representatives" -> conf.representatives(),
+      "--bar-cells" -> conf.barCells(),
+      "--relative-to" -> conf.relativeTo.isSupplied,
+      "--output-format" -> conf.outputFormat.isSupplied,
+      "--save-result" -> conf.saveResult.isSupplied
+    ).collect { case (flag, true) => flag } ++
+      options.grouped(2).map(_(0)).filterNot(allowed).map(flagName)
+    if others.nonEmpty then
+      throw new IllegalArgumentException(
+        s"$mode $doing, and ${others.mkString(", ")} cannot go with it (it takes $takes)"
+      )
+
+  private def writeLines(conf: TDA4jConf, lines: Seq[String], out: java.io.PrintStream): Unit =
+    conf.output.toOption match
+      case Some(path) =>
+        val writer = FileAccess.printWriter(path)
+        try lines.foreach(writer.println)
+        finally writer.close()
+      case None => lines.foreach(out.println)
+
+  private val bootstrapBandOptions = Set("maxFiltrationValue", "threads", "prime")
+
+  /** `--bootstrap-band`: the width and threshold of the resampling band of one degree of a point cloud, as `key=value`
+    * lines.
+    */
+  private[cli] def writeBootstrapBand(
+    conf: TDA4jConf,
+    options: Array[String],
+    format: String,
+    resolved: ResolvedInput,
+    out: java.io.PrintStream
+  ): Unit =
+    refuseOtherFlags(
+      "--bootstrap-band",
+      "resamples a point cloud and compares the diagrams of the Vietoris-Rips complexes",
+      "the --band-* flags, --prime, --max-filtration-value and --threads",
+      conf,
+      options,
+      bootstrapBandOptions
+    )
+    val chosen = options.grouped(2).filter(pair => bootstrapBandOptions(pair(0))).flatten.toArray ++
+      Seq(
+        conf.bandDimension.toOption.map("dimension" -> _.toString),
+        conf.bandRounds.toOption.map("rounds" -> _.toString),
+        conf.bandAlpha.toOption.map("alpha" -> _.toString),
+        conf.bandSeed.toOption.map("seed" -> _.toString),
+        conf.bandSubsampleSize.toOption.map("subsampleSize" -> _.toString)
+      ).flatten.flatMap((key, value) => Seq(key, value))
+    val band = resolved match
+      case ResolvedInput.Points(points) => TDA4j.bootstrapBand(points, chosen)
+      case _                            =>
+        throw new IllegalArgumentException(
+          s"--bootstrap-band needs a point cloud; --input-format=$format reads something else"
+        )
+    writeLines(
+      conf,
+      Seq(
+        s"dimension=${conf.bandDimension.getOrElse(1)}",
+        s"rounds=${band.distances().length}",
+        s"alpha=${band.alpha()}",
+        s"width=${band.width()}",
+        s"threshold=${band.threshold()}"
+      ),
+      out
+    )
+
+  /** `--persistent-laplacian`: the persistent Betti number, spectral gap and eigenvalues of the Laplacian of the
+    * Vietoris-Rips complex of a point cloud or distance matrix.
+    */
+  private[cli] def writePersistentLaplacian(
+    conf: TDA4jConf,
+    options: Array[String],
+    format: String,
+    resolved: ResolvedInput,
+    out: java.io.PrintStream
+  ): Unit =
+    refuseOtherFlags(
+      "--persistent-laplacian",
+      "computes the Laplacian of a Vietoris-Rips complex",
+      "the --laplacian-* flags",
+      conf,
+      options,
+      Set.empty
+    )
+    def required[T](flag: String, value: ScallopOption[T]): T =
+      value.toOption.getOrElse(throw new IllegalArgumentException(s"--persistent-laplacian needs $flag"))
+    val dimension = required("--laplacian-dimension", conf.laplacianDimension)
+    val (from, to) = (required("--laplacian-from", conf.laplacianFrom), required("--laplacian-to", conf.laplacianTo))
+    val laplacian = resolved match
+      case ResolvedInput.Points(points)       => TDA4j.persistentLaplacianFromPoints(points, dimension, from, to)
+      case ResolvedInput.Distances(distances) =>
+        TDA4j.persistentLaplacianFromDistanceMatrix(distances, dimension, from, to)
+      case _ =>
+        throw new IllegalArgumentException(
+          s"--persistent-laplacian needs a point cloud or a distance matrix; --input-format=$format reads something else"
+        )
+    writeLines(
+      conf,
+      Seq(
+        s"dimension=$dimension",
+        s"from=$from",
+        s"to=$to",
+        s"betti-number=${laplacian.bettiNumber()}",
+        s"spectral-gap=${if laplacian.hasSpectralGap() then laplacian.spectralGap().toString else "none"}",
+        s"eigenvalues=${laplacian.eigenvalues().mkString(",")}"
+      ),
+      out
+    )
+
+  private val morseReductionOptions = Set("maxDimension", "maxFiltrationValue", "prime", "threads")
+
+  /** `--morse-reduction`: the cells and critical cells of the Vietoris-Rips complex of a point cloud or distance matrix
+    * by dimension, and the number of pairs, as `key=value` lines.
+    */
+  private[cli] def writeMorseReduction(
+    conf: TDA4jConf,
+    options: Array[String],
+    format: String,
+    resolved: ResolvedInput,
+    out: java.io.PrintStream
+  ): Unit =
+    refuseOtherFlags(
+      "--morse-reduction",
+      "reduces a Vietoris-Rips complex by discrete Morse theory",
+      "--morse-strategy, --max-dimension, --max-filtration-value, --prime and --threads",
+      conf,
+      options,
+      morseReductionOptions
+    )
+    val chosen = options.grouped(2).filter(pair => morseReductionOptions(pair(0))).flatten.toArray ++
+      conf.morseStrategy.toOption.toSeq.flatMap(strategy => Seq("strategy", strategy))
+    val reduction = resolved match
+      case ResolvedInput.Points(points)       => TDA4j.morseReductionFromPoints(points, chosen)
+      case ResolvedInput.Distances(distances) => TDA4j.morseReductionFromDistanceMatrix(distances, chosen)
+      case _                                  =>
+        throw new IllegalArgumentException(
+          s"--morse-reduction needs a point cloud or a distance matrix; --input-format=$format reads something else"
+        )
+    writeLines(
+      conf,
+      Seq(
+        s"cells=${reduction.cellCounts().mkString(",")}",
+        s"critical-cells=${reduction.criticalCounts().mkString(",")}",
+        s"pairs=${reduction.pairCount()}"
+      ),
+      out
+    )
+
+  /** `--tomato`: the cluster of every point, or, without `--tomato-tau`, the valleys between the density peaks. */
+  private[cli] def writeTomato(
+    conf: TDA4jConf,
+    options: Array[String],
+    format: String,
+    resolved: ResolvedInput,
+    out: java.io.PrintStream
+  ): Unit =
+    refuseOtherFlags(
+      "--tomato",
+      "clusters a point cloud by the k nearest neighbours",
+      "--tomato-k and --tomato-tau",
+      conf,
+      options,
+      Set.empty
+    )
+    if !conf.tomatoK.isSupplied then
+      throw new IllegalArgumentException("--tomato needs --tomato-k, the number of nearest neighbours")
+    val points = resolved match
+      case ResolvedInput.Points(points) => points
+      case _                            =>
+        throw new IllegalArgumentException(s"--tomato needs a point cloud; --input-format=$format reads something else")
+    val lines = conf.tomatoTau.toOption match
+      case Some(tau) => TDA4j.tomatoClusters(points, conf.tomatoK(), tau).toSeq.map(_.toString)
+      case None      =>
+        "birth,death" +: TDA4j.tomatoDiagram(points, conf.tomatoK()).toSeq.map(bar => s"${bar(0)},${bar(1)}")
+    writeLines(conf, lines, out)
+
+  private val inclusionOptions = Set("engine", "maxDimension", "maxFiltrationValue", "prime", "threads")
+
+  /** `--inclusion-of`: the image, kernel and cokernel, per degree, of the map induced by the inclusion of a subsample's
+    * Vietoris-Rips complex into the input's, one bar a line: `image 1: [birth,death)`.
+    */
+  private[cli] def writeInclusion(
+    conf: TDA4jConf,
+    options: Array[String],
+    format: String,
+    resolved: ResolvedInput,
+    out: java.io.PrintStream
+  ): Unit =
+    refuseOtherFlags(
+      "--inclusion-of",
+      "writes the map on persistent homology of the inclusion of a subsample's Vietoris-Rips complex",
+      "--max-dimension, --max-filtration-value, --prime, --engine as ripser or cohomology, and --threads",
+      conf,
+      options,
+      inclusionOptions
+    )
+    val subsample = parseVertexList("--inclusion-of", conf.inclusionOf())
+    val map = resolved match
+      case ResolvedInput.Points(points)       => TDA4j.computeInclusionFromPoints(points, subsample, options)
+      case ResolvedInput.Distances(distances) =>
+        TDA4j.computeInclusionFromDistanceMatrix(distances, subsample, options)
+      case _ =>
+        throw new IllegalArgumentException(
+          s"--inclusion-of needs a point cloud or a distance matrix; --input-format=$format reads something else"
+        )
+    writeLines(conf, inclusionLines(map), out)
+
+  private[cli] def inclusionLines(map: PersistenceMapResult): Seq[String] =
+    for
+      k <- 0 to map.maxDimension()
+      (kind, bars) <- Seq("image" -> map.image(k), "kernel" -> map.kernel(k), "cokernel" -> map.cokernel(k))
+      bar <- bars
+    yield s"$kind $k: [${bar(0)},${if bar(1).isPosInfinity then "∞" else bar(1).toString})"
+
+  /** `flag`'s comma-separated 0-based point numbers, `0,1,2`. */
+  private[cli] def parseVertexList(flag: String, text: String): Array[Int] =
+    text
+      .split(",")
+      .map(_.trim)
+      .filter(_.nonEmpty)
+      .map(item =>
+        item.toIntOption.getOrElse(
+          throw new IllegalArgumentException(s"$flag: expected comma-separated point numbers like 0,1,2, got '$text'")
+        )
+      )
+
   /** Reads a `--landmarks-file` written by `writeLandmarkSelection` above (or hand-edited in the same shape): one
     * 0-based landmark index per line, blank lines and `#`-prefixed comment lines ignored. Parse errors report the
     * OFFENDING LINE NUMBER (1-based, matching what a text editor shows), not just the bad token, since a hand-edited
@@ -455,6 +938,13 @@ object TDA4jCLI:
         .mkString(" + ")
     catch case _: UnsupportedOperationException => "(no representative recorded)"
 
+  private def formatCells(result: PersistenceResult, i: Int): String =
+    val born = result.birthCell(i)
+    if born.isEmpty then "(no cells recorded)"
+    else
+      val died = result.deathCell(i)
+      s"birth ${born.mkString("[", ",", "]")} death ${if died.isEmpty then "none" else died.mkString("[", ",", "]")}"
+
   /** Reads the saved diagram of `--distance-to` in format `csv`, `gudhi` or `dipha`. */
   private[cli] def readComparisonDiagram(format: String, path: String): Seq[PersistenceBar[Double, Nothing]] =
     format match
@@ -482,12 +972,30 @@ object TDA4jCLI:
         finally writer.close()
       case None => lines.foreach(out.println)
 
+  private val barcodeOps = Seq("product-max", "product-sum", "hom", "hom-dimension", "dual")
+
+  /** `--barcode-op`: the bars of the barcode algebra of this run's whole diagram (and that of `--barcode-with`), one
+    * `dimension,birth,death` line each; `hom-dimension` writes the number of maps.
+    */
+  private[cli] def writeBarcodeOp(conf: TDA4jConf, result: PersistenceResult, out: java.io.PrintStream): Unit =
+    val first = toBarsUnfiltered(result).toList
+    def second = CSV.readPersistenceDiagram(conf.barcodeWith()).toList
+    val lines = conf.barcodeOp() match
+      case "product-max" => Barcode.kunneth(first, second, ProductComplex.Combine.Max).map(CSV.formatBar)
+      case "product-sum" => Barcode.kunneth(first, second, ProductComplex.Combine.Sum).map(CSV.formatBar)
+      case "hom"         => Barcode.hom(first, second).map(CSV.formatBar)
+      case "dual"        => Barcode.dual(first).map(CSV.formatBar)
+      case _             => List(Barcode.homDimension(first, second).toString)
+    writeLines(conf, lines, out)
+
   private[cli] def writeOutput(conf: TDA4jConf, result: PersistenceResult, out: java.io.PrintStream): Unit =
     val bars = toBars(result)
     conf.outputFormat() match
       case "text" =>
         val lines = bars.zipWithIndex.map { case (bar, i) =>
-          if conf.representatives() then s"$bar   rep: ${formatRepresentative(result, i)}" else bar.toString
+          val rep = if conf.representatives() then s"   rep: ${formatRepresentative(result, i)}" else ""
+          val cells = if conf.barCells() then s"   cells: ${formatCells(result, i)}" else ""
+          s"$bar$rep$cells"
         }
         conf.output.toOption match
           case Some(path) =>
@@ -523,6 +1031,17 @@ object TDA4jCLI:
     "representative-3d"
   )
 
+  /** The kinds of a `--plot` value: one, or a comma list that is drawn as a board. */
+  private def plotKindsOf(spec: String): Seq[String] = spec.split(",", -1).toSeq.map(_.trim)
+
+  private val layoutText = """(\d{1,3})\s*[xX]\s*(\d{1,3})""".r
+
+  /** The rows and columns of a `--layout`: `2x3`. */
+  private def parseLayout(text: String): (Int, Int) =
+    text.trim match
+      case layoutText(rows, cols) => (rows.toInt, cols.toInt)
+      case _ => throw new IllegalArgumentException(s"--layout is rows x columns, such as 2x2, not '$text'")
+
   /** The plot flags, checked before anything is read or computed: a typo should not cost a long computation, and a flag
     * is never silently ignored.
     */
@@ -544,6 +1063,10 @@ object TDA4jCLI:
       "--title" -> conf.title.isSupplied,
       "--x-label" -> conf.xLabel.isSupplied,
       "--y-label" -> conf.yLabel.isSupplied,
+      "--caption" -> conf.caption.isSupplied,
+      "--tag" -> conf.tag.isSupplied,
+      "--description" -> conf.description.isSupplied,
+      "--look" -> conf.look.isSupplied,
       "--width" -> conf.width.isSupplied,
       "--height" -> conf.height.isSupplied,
       "--palette" -> conf.palette.isSupplied,
@@ -561,28 +1084,58 @@ object TDA4jCLI:
             throw new IllegalArgumentException(s"$flag is for --plot ${kinds.toSeq.sorted.mkString(" or ")}")
         }
         if looks.nonEmpty then throw new IllegalArgumentException(s"${looks.head} is for --plot")
-      case Some(kind) =>
-        if !plotKinds.contains(kind) then
-          throw new IllegalArgumentException(
-            s"unrecognized --plot '$kind'; expected one of ${plotKinds.mkString(", ")}"
-          )
-        usedBy.foreach { case (flag, (supplied, kinds)) =>
-          if supplied && !kinds.contains(kind) then
+        Seq("--layout" -> conf.layout.isSupplied, "--tagged" -> conf.tagged())
+          .collect { case (flag, true) => flag }
+          .foreach(flag => throw new IllegalArgumentException(s"$flag is for --plot"))
+      case Some(spec) =>
+        val listed = plotKindsOf(spec)
+        listed.foreach { kind =>
+          if !plotKinds.contains(kind) then
             throw new IllegalArgumentException(
-              s"$flag is not used by --plot $kind, only by --plot ${kinds.toSeq.sorted.mkString(" or ")}"
+              s"unrecognized --plot '$kind'; expected one of ${plotKinds.mkString(", ")}"
             )
         }
+        usedBy.foreach { case (flag, (supplied, kinds)) =>
+          if supplied && !listed.exists(kinds.contains) then
+            throw new IllegalArgumentException(
+              s"$flag is not used by --plot $spec, only by --plot ${kinds.toSeq.sorted.mkString(" or ")}"
+            )
+        }
+        if listed.size > 1 then
+          listed.filter(_.endsWith("-3d")).headOption.foreach { kind =>
+            throw new IllegalArgumentException(s"a 3-D plot cannot go on a board: $kind (draw it with its own --plot)")
+          }
+          if conf.tag.isSupplied then
+            throw new IllegalArgumentException("--tag labels one plot; --tagged letters the panels of a board")
+          conf.layout.toOption.foreach { text =>
+            val (rows, cols) = parseLayout(text)
+            // the grid itself refuses a size it cannot draw, now and not after the computation
+            Plot.layout(rows, cols, conf.width.getOrElse(960), conf.height.getOrElse(600))
+            if listed.size > rows * cols then
+              throw new IllegalArgumentException(
+                s"${listed.size} plots do not fit a ${rows}x$cols layout; give --layout with at least ${listed.size} cells"
+              )
+          }
+        else
+          Seq("--layout" -> conf.layout.isSupplied, "--tagged" -> conf.tagged())
+            .collect { case (flag, true) => flag }
+            .foreach(flag =>
+              throw new IllegalArgumentException(s"$flag is for a list of plots, as --plot barcode,diagram")
+            )
         if conf.bar.isSupplied && conf.dimension.isSupplied then
           throw new IllegalArgumentException(
             "give --bar (one bar) or --dimension (its most persistent bar), not both"
           )
-        if (kind == "complex" || kind == "complex-3d") && !conf.at.isSupplied then
-          throw new IllegalArgumentException(s"--plot $kind needs --at, the scale of the complex to draw")
+        listed.find(kind => kind == "complex" || kind == "complex-3d").foreach { kind =>
+          if !conf.at.isSupplied then
+            throw new IllegalArgumentException(s"--plot $kind needs --at, the scale of the complex to draw")
+        }
         // a typo or a number out of range should not cost a long computation: build the changes now
         appearance(conf)
         conf.theme.foreach(Theme.named)
-        if kind.endsWith("-3d") then
-          Seq("--x-label", "--y-label", "--x-scale", "--y-scale").foreach { flag =>
+        if listed.size == 1 && listed.head.endsWith("-3d") then
+          val kind = listed.head
+          Seq("--x-label", "--y-label", "--x-scale", "--y-scale", "--caption", "--tag", "--description").foreach { flag =>
             if looks.contains(flag) then
               throw new IllegalArgumentException(s"$flag is for 2-D plots, and --plot $kind draws a 3-D scene")
           }
@@ -595,6 +1148,7 @@ object TDA4jCLI:
           "--distance-to" -> conf.distanceTo.isSupplied,
           "--select-landmarks" -> conf.selectLandmarks(),
           "--representatives" -> conf.representatives(),
+          "--bar-cells" -> conf.barCells(),
           "--output-format" -> conf.outputFormat.isSupplied
         ).collect { case (flag, true) => flag }
         if others.nonEmpty then
@@ -611,9 +1165,24 @@ object TDA4jCLI:
 
   /** The changes the look flags ask for, in one tweak; `None` when none was given. */
   private def appearance(conf: TDA4jConf): Option[Tweak] =
+    val look = conf.look.toOption.map(Look.named)
+    // --text-scale changes the style it is given, so --look's style is the one it scales unless --style names another
+    val lookStyle = look.flatMap(_.tweaks.collect { case s: Style => s }.lastOption)
     val asked: Seq[Option[Tweak]] = Seq(
-      Option.when(conf.title.isSupplied || conf.xLabel.isSupplied || conf.yLabel.isSupplied)(
-        Labels(title = conf.title.toOption, x = conf.xLabel.toOption, y = conf.yLabel.toOption)
+      // the look first: the more specific flags after it win
+      look.flatMap(_.tweaks.reduceOption(_ + _)),
+      Option.when(
+        conf.title.isSupplied || conf.xLabel.isSupplied || conf.yLabel.isSupplied || conf.caption.isSupplied ||
+          conf.tag.isSupplied || conf.description.isSupplied
+      )(
+        Labels(
+          title = conf.title.toOption,
+          x = conf.xLabel.toOption,
+          y = conf.yLabel.toOption,
+          caption = conf.caption.toOption,
+          tag = conf.tag.toOption,
+          description = conf.description.toOption
+        )
       ),
       Option.when(conf.width.isSupplied || conf.height.isSupplied)(
         Size(width = conf.width.toOption, height = conf.height.toOption)
@@ -621,7 +1190,7 @@ object TDA4jCLI:
       conf.palette.toOption.map(Palette.named),
       // a Style replaces the whole style, so --style and --text-scale are one change: the preset, then its text scale
       Option.when(conf.style.isSupplied || conf.textScale.isSupplied) {
-        val preset = conf.style.toOption.map(Style.named).getOrElse(Style.default)
+        val preset = conf.style.toOption.map(Style.named).orElse(lookStyle).getOrElse(Style.default)
         conf.textScale.toOption.fold(preset)(factor => preset.copy(textScale = factor))
       },
       conf.xScale.toOption.map(name => Scale.x(Transform.named(name))),
@@ -642,8 +1211,7 @@ object TDA4jCLI:
       if i >= 0 && i < result.size() then err.println(s"tda4j: drawing bar $i: ${toBars(result)(i)}")
       i
     def dimension = conf.dimension.toOption.getOrElse(1)
-    val kind = conf.plot()
-    val figure: Plot = kind match
+    def figureOf(kind: String): Plot = kind match
       case "barcode"        => result.plotBarcode()
       case "diagram"        => result.plotDiagram()
       case "representative" =>
@@ -657,18 +1225,38 @@ object TDA4jCLI:
       case "complex-3d"        => result.plotComplex3D(conf.at())
       case "representative-3d" => result.plotRepresentative3D(chosenBar())
       case other               => throw new IllegalStateException(s"unreachable: --plot $other was checked")
-    if kind == "barcode" || kind == "diagram" then noteHiddenBars(result, loaded, err)
-    val drawn: Plot = appearance(conf).fold(figure) { tweak =>
+    val listed = plotKindsOf(conf.plot())
+    val kind = listed.mkString(",")
+    // one plot, or a board: a row, or the panels in row-major order on the grid --layout asks for
+    val figure: Plot = listed.map(figureOf) match
+      case Seq(single) => single
+      case several     =>
+        val panels = several.map {
+          case f: Figure => f
+          case other     => throw new IllegalStateException(s"unreachable: --plot $kind drew a $other on a board")
+        }
+        conf.layout.toOption.fold[Board](Plot.side(panels*)) { text =>
+          val (rows, cols) = parseLayout(text)
+          panels.zipWithIndex.foldLeft(Plot.layout(rows, cols, conf.width.getOrElse(960), conf.height.getOrElse(600))) {
+            case (board, (panel, i)) => board.place(panel, i / cols, i % cols)
+          }
+        }
+    if listed.exists(k => k == "barcode" || k == "diagram") then noteHiddenBars(result, loaded, err)
+    val tweaked: Plot = appearance(conf).fold(figure) { tweak =>
       figure match
-        case f: plot.Figure => f + tweak
-        case s: plot.Scene  => s + tweak
-        case other          => throw new IllegalStateException(s"unreachable: --plot $kind drew a $other")
+        case f: Figure => f + tweak
+        case s: Scene  => s + tweak
+        case b: Board  => b + tweak
+        case other     => throw new IllegalStateException(s"unreachable: --plot $kind drew a $other")
     }
+    val drawn: Plot = tweaked match
+      case b: Board if conf.tagged() => b.tagged()
+      case other                     => other
     val theme = conf.theme.toOption.map(Theme.named)
     conf.output.toOption match
       case Some(path) => drawn.save(path, theme)
       case None       =>
-        val page = FileAccess.tempFile(s"tda4j-$kind-", ".html")
+        val page = FileAccess.tempFile(s"tda4j-${listed.mkString("-")}-", ".html")
         FileAccess.writeText(page, drawn.html(theme.getOrElse(Theme.Auto)))
         val opened = Viewer.browse(FileAccess.fileUri(page))
         err.println(

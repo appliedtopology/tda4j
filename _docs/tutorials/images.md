@@ -75,7 +75,7 @@ dark.size                         // 221 bars
 
 Noise makes 221 bars, nearly all of them short. Because we know the noise is at most 0.1, a sensible cut-off is "persists
 for more than 0.3", three times the noise amplitude. (With point clouds the scale of the data suggested a cut-off; here
-the noise level of the camera does. `dark.significant()`, the command-line and MATLAB default of 1% of the range, would
+the noise level of the camera does. `dark.longerThanFraction()`, the command-line and MATLAB default of 1% of the range, would
 keep 170.)
 
 ```scala sc:nocompile
@@ -196,7 +196,7 @@ for row = 0:27
     end
 end
 
-% minPersistence 0.3 keeps the bars longer than 0.3, which is the Scala script's 'significant'
+% minPersistence 0.3 keeps the bars longer than 0.3, like dark.longerThan(0.3) in the Scala script
 dark = TDA4j.computeFromImage(pixels, {'sublevel', 'true', 'minPersistence', '0.3'});
 dark.toArray()          % four rows: [0 0 Inf], [0 0.001 1.002], [1 0.062 1.099], [1 0.064 0.900]
 

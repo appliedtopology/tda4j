@@ -28,7 +28,7 @@ non-finite → the barcode's own finite range), in the units the complex reports
 the scale is passed by-name and only computed when a fraction of it is needed. Options `minPersistence` (absolute) / `minPersistenceFraction` (default `0.01`),
 at most one; **`0` keeps every bar of positive length**; CLI `--min-persistence`/`--min-persistence-fraction`
 (mirrored, no Scallop default; stderr note when bars were hidden; rejected with `--select-landmarks`/`--distance-to`).
-Logic lives in `PersistenceFilter` (opt-in for Scala callers: `PersistenceFilter.significant`). Invariants:
+Logic lives in `PersistenceFilter` (opt-in for Scala callers: `PersistenceFilter.longerThanFraction`). Invariants:
 filter is post-hoc, applied by the thin `dispatch*` wrappers (validated before computing); `PersistenceResult` keeps
 the FULL arrays + a `visible` index, and **distances/landscapes/persistence images and `--distance-to` always use the
 complete barcode**; new facade option keys must go in every strict allowlist except `landmarkSelectionKeys`.
@@ -63,7 +63,9 @@ every 0.5.0 short flag (`WORKLOG-nan-mask.md`).
 **`--plot`/`--save-result`/`--input-format result`** (`WORKLOG-facade-plots.md`): a saved result (sniffed when the
 file starts with `{` and `--input-format` is not given) refuses every flag `buildOptions` passes, so a new computation
 flag is refused automatically; plot flags are checked in `run`, never with Scallop `choices`/`validate` (they exit the
-JVM); a plot flag a kind does not use is an error. `--plot` without `--output` writes a temporary page and
+JVM); a plot flag a kind does not use is an error. `--plot a,b` (2-D kinds) is a `Board`: `Plot.side`, or `Plot.layout` filled
+row by row with `--layout RxC`; look flags go through `Board + tweak` (`--title` titles the board), `--tag` is refused for it
+(`--tagged` letters the panels), 3-D kinds stay alone (`WORKLOG-plot-issues-sweep.md`). `--plot` without `--output` writes a temporary page and
 `Viewer.browse`s it: specs set `tda4j.plot.browser=none` (`PlotCLISpec`). `CliFull` prepends `--min-persistence 0`,
 which a saved result refuses: call `TDA4jCLI.run` directly there.
 
@@ -84,6 +86,12 @@ once into a private `ComplexKind`/`EngineKind`/`CoefficientKind` enum before any
   `sparseEpsilon` (strictly `(0,1)`); those two alone also work from `computeFromDistanceMatrix`. A sixth
   `engine`, `fast-alpha`, is valid ONLY for `complex=alpha`+`alphaBackend=helix`. `computeFromCubicalImage`/
   `computeFromImage` — same four base engines plus `fast-cubical`.
+- **`threads` and `parallel-ripser`** (#220): every `computeFrom...` takes `threads` (checked before anything runs; the
+  `dispatch*` wrappers call `Parallel.withThreads`). For `vr` over `Z/p` an UNSET `engine` goes to `Persistence`'s
+  `ParallelRipser` (`parallelVR`) when `Parallel.threads > 1`, no `includeZeroLength`, no `edgeCollapse`, and
+  `ParallelRipser.supports`; `engine=ripser` is always `PackedRipserCohomologyEngine`; `engine=parallel-ripser` is mapped to
+  `ripser` plus a flag at the top of `dispatchFull` (no `EngineKind` case) and refuses what it cannot do. The CLI mirrors
+  both (`--threads`, `--engine parallel-ripser`). Specs: `TDA4jParallelSpec` (JVM; Scala.js has one thread).
 - **Two-step witness recipe**: `selectLandmarksFrom{Points,DistanceMatrix}` → `LandmarkSelectionResult`, then
   `computeFrom{Points,DistanceMatrix}AndLandmarks` (takes that `int[]` directly, never re-selects);
   `coveringRadiusFrom{Points,DistanceMatrix}` queries R for a hand-picked set. CLI: `--select-landmarks`/
@@ -96,7 +104,8 @@ once into a private `ComplexKind`/`EngineKind`/`CoefficientKind` enum before any
   everything else** (relations, general witness included): the homology engines reduce every top cell and take minutes at degree 2
   (`WORKLOG-default-degree-2.md`); `TDA4jSpec` pins the default against an explicit `engine=cohomology`.
 - `maxDimension` (default 2) = top homological degree. `ripser`/`chunks` pass it straight through; `naive`/
-  `cohomology` wrap the stream in `LimitedCofaceSimplexStream(..., k+1)`. Alpha needs no +1.
+  `cohomology` wrap the stream in `LimitedCofaceSimplexStream(..., k+1)`. `alpha` and `dtm-alpha` are built to k+1
+  and reported to k as well (`AlphaMaxDimensionSpec`; the facade used to build the whole complex, `WORKLOG-js-scaling.md`).
 - Field: `Z` (prime, default `prime=17` = `FiniteField.DefaultPrime`, was 2) or `R` (`Field.DoubleApproximated`, internal specs' own default).
 - `PersistenceResult`: `toArray()` eager; `cycleVertices`/`cycleCoefficients` lazy, throwing
   `UnsupportedOperationException` for a bar with no representative (every engine records one — an engine
@@ -106,6 +115,10 @@ once into a private `ComplexKind`/`EngineKind`/`CoefficientKind` enum before any
 - **Circular coordinates**: `h1Bars(points)`/`circularCoordinates(points, r[, cocycleIndex, prime])` →
   `CircularCoordinatesResult`. **Toroidal coordinates**: `toroidalCoordinates(points, r, cocycleIndices[, prime,
   reduce])` → `ToroidalCoordinatesResult` (separate class). Neither has a CLI mirror.
+- **Euler curve** (#248): `eulerCurveFrom{Points,DistanceMatrix}(.., options)` → `EulerCurveResult` (`scales`, `values`,
+  `at`, `sample`); options `maxSimplexDimension`, `maxFiltrationValue`, `threads`. JS `eulerCurve`/`eulerCurveFromDistances`
+  → `EulerCurve`. CLI `--euler-curve` (+ `--max-simplex-dimension`) is a mode like `--distance-to`: it refuses every flag
+  that would change a diagram, and `CliFull` leaves it without `--min-persistence 0`.
 - **Plots and saved results** (#63, `WORKLOG-facade-plots.md`). A result records its `ResultSource` (method, options,
   complex, cocycles, field, landmarks, points or ORIGINAL image values), attached LAST at the public entry points (the
   `dispatch*` wrappers do not all see the input: `dispatchCubical` sees negated values). `plot...` methods draw the

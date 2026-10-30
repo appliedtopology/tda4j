@@ -11,23 +11,34 @@ import scala.jdk.CollectionConverters.ListHasAsScala
   *
   * {{{
   * java -cp $CP org.appliedtopology.tda4j.PaperBenchmarkDriver task=vr input=sphere.txt format=points dim=2 \
-  *   [threshold=1.8] [p=2] [engine=auto|ripser|cohomology|chunks|naive|fastcubical|fastalpha|blocks|parallel] \
+  *   [threshold=1.8] [p=2] [engine=auto|ripser|cohomology|chunks|naive|fastcubical|fastalpha|fastalpha-top|blocks|parallel] \
   *   [reps=cycles|cocycles|none] [backend=default|bowyer-watson|helix|dqp] [warmup=2] [trials=5] [out=bars.tsv]
-  *   [read=true] [hold=seconds] [count=true] [threads=N]
+  *   [read=true] [hold=seconds] [digest=true] [count=true] [threads=N]
   * }}}
   *
   *   - `task=vr`: points (`format=points`, one point per line) or a full distance matrix (`format=distance`).
-  *   - `task=cubical`: a `.npy` array of float64 in C order (any dimension), sublevel filtration, T-construction.
+  *   - `task=cubical`: a `.npy` array of float64 in C order (any dimension), sublevel filtration, T-construction (the
+  *     array holds the values of the top cells). `construction=V` reads the array as the values of the VERTICES, a cell
+  *     born at the largest value of its vertices (the lower star filtration; GUDHI's `vertices=`, CubicalRipser's and
+  *     FlashCubical's input): the library has no such input, so the run builds the (2 n - 1)-per-axis T image that
+  *     gives every cell that value (`refineVertexValues`, inside the timed region), which has the same persistent
+  *     homology and 2^d times the top cells.
   *   - `task=alpha`: points; filtration values are circumradii. `backend=default` (Bowyer-Watson up to 4 dimensions,
   *     Helix above, DQP when `threshold` is small enough), `bowyer-watson`, `helix` or `dqp`. `threshold` is the
-  *     largest radius: bars alive at it are essential, and DQP builds only what lies within it. `engine=fastalpha` runs
-  *     on the backend's triangulation and takes no threshold.
+  *     largest radius: bars alive at it are essential, and DQP builds only what lies within it; without one every
+  *     backend stops at the enclosing radius, as the default row does. `engine=fastalpha` runs on the backend's
+  *     triangulation up to degree `dim` and takes no threshold; `engine=fastalpha-top` gives only the top degree d - 1
+  *     (one union-find pass, `dim` ignored).
   *   - `task=cech`: points; filtration values are radii (the same barcode as alpha in general position).
   *   - `task=vr engine=parallel [threads=N]`: the block-parallel experiment `ParallelPackedCohomology` (implicit
   *     coboundaries) instead of `Persistence`, bars only (no representatives), on `threads` threads (default: every
   *     processor). Without a threshold it stops at the enclosing radius, as `Persistence` does; the edge table and the
   *     complex are built inside the timed region. `engine=parallel wide=true` uses two-word keys even where one Long
-  *     would do (what they cost).
+  *     would do (what they cost). The distances are tabulated before the timed region as one row of doubles per point
+  *     (8 n^2 bytes, so `--jvm-heap` must hold 29 GB at the limit of 60,000 points).
+  *   - `task=vr engine=parallelverb [threads=N]`: the same engine through `Persistence` (`Engine.ParallelRipser`,
+  *     cocycles or cycles as `reps` says), on `threads` threads, else on `Parallel.threads` (`sequential=true`: one);
+  *     the pool is made inside the timed region.
   *   - `task=vr collapse=true`: Vietoris-Rips after `EdgeCollapse.collapse` (the collapse is inside the timed region);
   *     the cross-tool twin of GUDHI's edge collapse.
   *   - `task=sparse eps=0.3`: Sheehy's sparse Rips (`SparseRips`, Cavanna-Jahanseir-Sheehy); points or a distance
@@ -49,12 +60,21 @@ import scala.jdk.CollectionConverters.ListHasAsScala
   *
   * Times cover the whole `Persistence(...)` call: building the complex, the reduction and the representatives. For
   * `task=cubical`, `read=true` also reads every representative's terms inside the timed region (the JSON line reports
-  * how many), and `hold=N` keeps the last diagram reachable for N seconds after the trials (for a heap histogram).
+  * how many), `hold=N` keeps the last diagram reachable for N seconds after the trials (for a heap histogram), and
+  * `digest=true` adds a SHA-256 of the last diagram's bars with their representatives (to compare two builds term for
+  * term).
   */
 object PaperBenchmarkDriver:
   given Epsilon = Epsilon(1e-5)
 
+  /** The most points `engine=parallel` takes: it tabulates all n^2 distances (28.8 GB at the limit, rows of 60,000). */
+  val MaxExperimentPoints: Int = 60000
+
   def main(args: Array[String]): Unit =
+    // `sequential=true` runs every parallel step of the library on the main thread (the single-threaded reference).
+    if args.contains("sequential=true") then Parallel.sequentially(run(args)) else run(args)
+
+  private def run(args: Array[String]): Unit =
     val opts: Map[String, String] = args.map { a =>
       val i = a.indexOf('=')
       require(i > 0, s"arguments are key=value, got '$a'")
@@ -79,6 +99,10 @@ object PaperBenchmarkDriver:
     val readReps = opts.get("read").contains("true")
     // hold=N (cubical): keep the last diagram reachable for N seconds after the trials, for a heap histogram.
     val holdSeconds = opts.getOrElse("hold", "0").toInt
+    // digest=true (cubical): a SHA-256 over the last diagram's bars in list order, each with its representative's keys
+    // and coefficients, to compare two builds on one input term for term.
+    val wantDigest = opts.get("digest").contains("true")
+    var digest = ""
     if opts.get("count").contains("true") then
       countCells(task, opts, dim, threshold)
       return
@@ -86,13 +110,14 @@ object PaperBenchmarkDriver:
     var held: AnyRef = null
 
     def engine: Persistence.Engine = engineName match
-      case "auto"        => Persistence.Engine.Auto
-      case "ripser"      => Persistence.Engine.Ripser
-      case "cohomology"  => Persistence.Engine.Cohomology
-      case "chunks"      => Persistence.Engine.Chunks
-      case "naive"       => Persistence.Engine.Naive
-      case "fastcubical" => Persistence.Engine.FastCubical
-      case other         => throw IllegalArgumentException(s"engine=$other not valid for task=$task")
+      case "auto"         => Persistence.Engine.Auto
+      case "ripser"       => Persistence.Engine.Ripser
+      case "cohomology"   => Persistence.Engine.Cohomology
+      case "chunks"       => Persistence.Engine.Chunks
+      case "naive"        => Persistence.Engine.Naive
+      case "fastcubical"  => Persistence.Engine.FastCubical
+      case "parallelverb" => Persistence.Engine.ParallelRipser
+      case other          => throw IllegalArgumentException(s"engine=$other not valid for task=$task")
 
     val threads = opts.get("threads").fold(Runtime.getRuntime.availableProcessors)(_.toInt)
 
@@ -101,22 +126,22 @@ object PaperBenchmarkDriver:
       case "vr" if engineName == "parallel" =>
         val ms = metricSpaceOf(opts)
         val n = ms.size
-        require(n.toLong * n <= Int.MaxValue, s"engine=parallel keeps n x n tables: $n points are too many")
-        val table = Array.tabulate(n * n)(k => ms.distance(k / n, k % n))
-        val distance: (Int, Int) => Double = (i, j) => table(i * n + j)
-        val t = threshold.getOrElse(ms.minimumEnclosingRadius)
-        // Daemon threads: the pool must not keep the JVM alive after the trials.
-        val pool = java.util.concurrent.Executors.newFixedThreadPool(
-          threads,
-          (r: Runnable) =>
-            val thread = Thread(r)
-            thread.setDaemon(true)
-            thread
+        require(
+          n <= MaxExperimentPoints,
+          s"engine=parallel keeps an n x n table of distances (${n.toLong * n * 8 >> 30} GiB for $n points; the " +
+            s"heap must hold it): at most $MaxExperimentPoints points"
         )
+        // One row per point: a flat array of n * n doubles stops at Int.MaxValue entries, 46,340 points.
+        val table = Array.tabulate(n)(i => Array.tabulate(n)(j => ms.distance(i, j)))
+        val distance: (Int, Int) => Double = (i, j) => table(i)(j)
+        val t = threshold.getOrElse(ms.minimumEnclosingRadius)
         () =>
           val space =
             ParallelPackedCohomology.Space(n, distance, t, dim, p, forceWide = opts.get("wide").contains("true"))
-          ParallelPackedCohomology.persistence(space, threads, 8, cocycles = false, pool).bars.toList
+          Parallel
+            .withThreads(threads)(ParallelPackedCohomology.persistence(space, threads, 8, cocycles = false))
+            .bars
+            .toList
       case "vr" if opts.get("collapse").contains("true") =>
         val ms = metricSpaceOf(opts)
         () =>
@@ -155,10 +180,15 @@ object PaperBenchmarkDriver:
           case other => throw IllegalArgumentException(s"format=$other (points|distance)")
       case "cubical" =>
         val (values, shape) = readNpy(input)
+        val vertexValues = opts.getOrElse("construction", "T") match
+          case "T"   => false
+          case "V"   => true
+          case other => throw IllegalArgumentException(s"construction=$other (T|V)")
         val image = Image(scala.collection.immutable.ArraySeq.unsafeWrapArray(values), shape)
         if repsName == "none" then
           // fastcubical only: the same bars without the top degree's representatives, to measure what they cost.
           require(engineName == "fastcubical", "reps=none is only for engine=fastcubical")
+          require(!vertexValues, "reps=none reads the array as it is (construction=T)")
           val grid = CubicalImage.fromFlatArray(shape, scala.collection.immutable.ArraySeq.unsafeWrapArray(values))
           val ff = FiniteField(p)
           import ff.given
@@ -169,24 +199,42 @@ object PaperBenchmarkDriver:
               .map(_.toTriple)
         else
           () =>
+            val input =
+              if !vertexValues then image
+              else
+                val (refined, refinedShape) = refineVertexValues(values, shape)
+                Image(scala.collection.immutable.ArraySeq.unsafeWrapArray(refined), refinedShape)
             val diagram =
-              Persistence(image, maxDimension = dim, characteristic = p, engine = engine, representatives = reps)
+              Persistence(input, maxDimension = dim, characteristic = p, engine = engine, representatives = reps)
             // read=true: every representative's terms once, inside the timed region, as a caller reading them all.
             if readReps then termsRead = diagram.bars.iterator.map(_.representative.terms.size.toLong).sum
-            held = diagram
+            if holdSeconds > 0 then held = diagram
+            if wantDigest then
+              val md = java.security.MessageDigest.getInstance("SHA-256")
+              def put(text: String): Unit = md.update(text.getBytes("UTF-8"))
+              diagram.bars.foreach { bar =>
+                put(s"${bar.dim}|${bar.lower}|${bar.upper}|")
+                (bar.representative: AnyRef) match
+                  case packed: PackedChain[?, ?] =>
+                    put(java.util.Arrays.toString(packed.keys))
+                    put(packed.coefficients.mkString(","))
+                  case other => put(bar.representative.terms.toString)
+                put("\n")
+              }
+              digest = md.digest().map(byte => f"$byte%02x").mkString
             diagram.triples
       case "alpha" =>
         val pts = readMatrix(input)
         val backend = AlphaBackend.parse(opts.getOrElse("backend", "default"))
-        if engineName == "fastalpha" then
-          require(threshold.isEmpty, "engine=fastalpha takes no threshold: it needs the whole triangulation")
-          () => fastAlpha(pts, backend, dim, p)
+        if engineName == "fastalpha" || engineName == "fastalpha-top" then
+          require(threshold.isEmpty, s"engine=$engineName takes no threshold: it needs the whole triangulation")
+          () => fastAlpha(pts, backend, dim, p, topOnly = engineName == "fastalpha-top")
         else if backend != AlphaBackend.Default then
-          // With a threshold the radius reaches the backend: DQP only builds the simplices within it (without one it
-          // is the untruncated DQP), the triangulations are filtered.
+          // The radius reaches the backend: DQP only builds the simplices within it, the triangulations are filtered.
+          // Without a threshold it is the enclosing radius, as for the default row.
           () =>
             Persistence(
-              Truncated(AlphaShapes(pts, backend, maxRadius = threshold, maxDimension = dim), dim),
+              Truncated(AlphaShapes.upToEnclosingRadius(pts, backend, maxRadius = threshold, maxDimension = dim), dim),
               characteristic = p,
               engine = engine,
               representatives = reps
@@ -225,16 +273,26 @@ object PaperBenchmarkDriver:
           ).triples
       case other => throw IllegalArgumentException(s"task=$other (vr|cubical|alpha|cech|sparse|dtm|witness|dowker)")
     val loadSeconds = (System.nanoTime() - loadStart) / 1e9
+    // `engine=parallelverb threads=N` runs the verb on N threads (a pool made for the call); without `threads` the
+    // verb takes `Parallel.threads`, and `sequential=true` makes that one.
+    val timed: () => List[(Int, Double, Double)] =
+      if engineName == "parallelverb" && opts.contains("threads") then () => Parallel.withThreads(threads)(compute())
+      else compute
 
+    // The last run's bars are let go before the next run starts: a measured peak is one computation's, not two.
     var bars: List[(Int, Double, Double)] = Nil
-    (1 to warmup).foreach(_ => bars = compute())
+    (1 to warmup).foreach { _ =>
+      bars = Nil
+      bars = timed()
+    }
     // The peak use of each heap pool over the timed runs: the RSS of a JVM follows its collector's policy (a parallel
     // collector with a large heap shows its total allocation), the pools' peaks follow the computation.
     val heapPools = ManagementFactory.getMemoryPoolMXBeans.asScala.filter(_.getType == MemoryType.HEAP).toList
     heapPools.foreach(_.resetPeakUsage())
     val times = (1 to trials).map { _ =>
+      bars = Nil
       val t0 = System.nanoTime()
-      bars = compute()
+      bars = timed()
       (System.nanoTime() - t0) / 1e9
     }
     opts.get("out").foreach { path =>
@@ -257,6 +315,7 @@ object PaperBenchmarkDriver:
         s""""heap_used_mb":${(rt.totalMemory - rt.freeMemory) / 1048576},""" +
         s""""heap_peak_mb":$heapPeakMb,"old_peak_mb":$oldPeakMb,""" +
         s""""terms_read":$termsRead,""" +
+        (if wantDigest then s""""digest":"$digest",""" else "") +
         s""""java":"${System.getProperty("java.version")}"""" +
         "}"
     )
@@ -379,17 +438,19 @@ object PaperBenchmarkDriver:
     pts: Array[Array[Double]],
     backend: AlphaBackend,
     dim: Int,
-    p: Int
+    p: Int,
+    topOnly: Boolean
   ): List[(Int, Double, Double)] =
     val ff = FiniteField(p)
     import ff.given
     val delaunay = AlphaShapes(pts, backend) match
       case d: DelaunayAlphaShapes => d
       case _                      => throw IllegalArgumentException("engine=fastalpha needs a triangulation, not DQP")
-    FastAlphaHomologyEngine[ff.Fp]()
-      .persistentHomology(delaunay)
-      .filter(_.dim <= dim)
-      .map(_.toTriple)
+    val engine = FastAlphaHomologyEngine[ff.Fp]()
+    val bars =
+      if topOnly then engine.persistentHomologyTopDegree(delaunay)
+      else engine.persistentHomology(delaunay, maxDimension = dim)
+    bars.map(_.toTriple)
 
   /** Whitespace- or comma-separated numbers, one row per line; blank lines and `#` comments skipped. */
   def readMatrix(path: String): Array[Array[Double]] =
@@ -402,6 +463,38 @@ object PaperBenchmarkDriver:
         .map(_.split("[,\\s]+").filter(_.nonEmpty).map(_.toDouble))
         .toArray
     finally src.close()
+
+  /** The T-construction image with the persistent homology of an array of VERTEX values (`construction=V`): the shape
+    * `n_k` per axis becomes `2 n_k - 1`, and the cell at an index with an odd entry on some axes lies between two
+    * vertices on each of them, so it gets the largest value of its vertices (the lower star filtration). The largest
+    * value over a product of vertex sets is the largest over the axes one after the other: one pass per axis, an even
+    * index keeps the vertex and an odd one takes the larger of its two neighbours.
+    */
+  def refineVertexValues(values: Array[Double], shape: IndexedSeq[Int]): (Array[Double], IndexedSeq[Int]) =
+    var current = values
+    var currentShape = shape
+    for axis <- shape.indices do
+      val n = currentShape(axis)
+      val outer = currentShape.take(axis).product
+      val inner = currentShape.drop(axis + 1).product
+      val m = 2 * n - 1
+      val refined = new Array[Double](outer * m * inner)
+      var o = 0
+      while o < outer do
+        var i = 0
+        while i < m do
+          val from = (o * n + i / 2) * inner
+          val to = (o * m + i) * inner
+          var k = 0
+          while k < inner do
+            refined(to + k) =
+              if i % 2 == 0 then current(from + k) else math.max(current(from + k), current(from + inner + k))
+            k += 1
+          i += 1
+        o += 1
+      current = refined
+      currentShape = currentShape.updated(axis, m)
+    (current, currentShape)
 
   /** A version 1-3 `.npy` file holding little-endian float64 in C order. */
   def readNpy(path: String): (Array[Double], IndexedSeq[Int]) =

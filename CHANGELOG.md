@@ -1,11 +1,13 @@
 # Changelog
 
-What changed in each release of `tda4j`, newest first. Every pull request that changes what a user sees or calls adds a
-line under **Unreleased**; at a release the section is renamed to the version (`RELEASE.md`). Each section opens with
-the changes that break existing code. Before 1.0, a minor version may break the API, and every break inside a series
+What changed in each release of `tda4j`, newest first. A pull request that changes what a user sees or calls adds a
+file to [`changelog.d/`](changelog.d/README.md), not a line here; the release folds the files into a section named for
+the version (`RELEASE.md`). Each section opens with the changes that break existing code. Before 1.0, a minor version may break the API, and every break inside a series
 is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ## Unreleased
+
+Entries since the last release that are not listed below are the files of [`changelog.d/`](changelog.d/), one per pull request; the release folds them in here.
 
 ### Breaking
 
@@ -49,6 +51,42 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Added
 
+- `CircularCoordinates(diagram, input, bar, r, complex)` and `CircularCoordinates.toroidal(diagram, input, bars, ...)`
+  give circular and toroidal coordinates from any `PersistenceDiagram[Simplex[Int]]`, not only from the Vietoris-Rips
+  complex of a metric space: a Cech or alpha diagram (say `complex = Cech`), a diagram of a stream or metric space, any
+  engine, over any odd prime. `h1Bars(diagram)` lists its loops. A diagram of cocycles
+  (`representatives = Representatives.Cocycles`) supplies each bar's cocycle, restricted to the complex at `r` and checked
+  exactly over the integers; a diagram of cycles has the class recovered by the cohomology of that complex. The scale
+  defaults to the middle of the bar. `PersistenceDiagram.representatives` says which kind of representative a diagram
+  carries. `compute`, `computeToroidal` and `h1Bars(metricSpace)` are as they were (#236).
+- `FastAlphaHomologyEngine.persistentHomology` takes `maxDimension`: the simplices above `maxDimension + 1` are no
+  longer built and the dual graph is walked only for the top degree, so `engine=fast-alpha` with the default
+  `maxDimension = 2` stops doing the work for degrees nobody asked for in 4 or more dimensions (MATLAB, CLI and JS too).
+  `persistentHomologyTopDegree` gives the top degree `d - 1` alone, by the dual union-find.
+- The alpha sweep (`bench/run.sh sweep-alpha`) has `--path top|four|plane`, the whole barcode in R^d, degrees up to 4 in
+  R^d, and the plane with the point count raised until each tool gives up; `--dim` takes `top`; the tool
+  `tda4j-fastalpha-top` times the top degree alone.
+- `Field.hash(x)`: a hash of a field element that agrees with `isEqual`, which `Chain.hashCode` uses. The default, `0`
+  for every element, is right for any field; override it for an exact field of your own to hash its coefficients too
+  (`Fp` hashes its residue in `0 until p`).
+- `Persistence.Engine.ParallelRipser` computes the Vietoris-Rips persistence of points or a metric space with the
+  block-parallel Ripser reduction on every processor (`ParallelPackedCohomology`, so far reachable only from the benchmark
+  driver), over `Z/p` for a prime `p` up to 46,000, and `Engine.Auto` chooses it instead of `Ripser` when there is more than
+  one thread and it applies (otherwise `Ripser`, as before). Cocycles are 4-5x faster than `Ripser`'s on 4 cores, cycles
+  about 3x (the cycle pass shares its work between the threads too). Its bars are `Ripser`'s; the representatives need not be, since ties between simplices of equal diameter
+  are broken differently, so a diagram's representatives can depend on the number of threads. Zero-length bars and real
+  coefficients are refused (`Auto` falls back to `Ripser` for them). On Scala.js the engine by name runs on its one thread, with the same bars.
+  Edge ranks are a dense table up to 4,096 points and sorted neighbour lists above, so memory follows the edges within the
+  threshold and the old 46,340-point limit is gone (about a quarter slower on small dense clouds is the price of the lists, which are not used there).
+  `Persistence(..., computeAllRepresentatives = false)` builds each bar's representative when it is first read (#220).
+- `Persistence(..., threads = n)` limits one call to `n` threads (`1` is the sequential computation, and makes `Auto` pick
+  `Ripser`), the representatives built later included. The MATLAB and Java option `threads` and the CLI flag `--threads`
+  do the same for every computation. In MATLAB, Java and the CLI an unset `engine` for `vr` over `Z/p` without
+  `includeZeroLength` or `edgeCollapse` is the parallel engine when there is more than one thread, and `engine=ripser`
+  stays `Ripser`; `engine=parallel-ripser` asks for it by name and refuses what it cannot do (#220).
+- `--plot barcode,diagram` draws a comma list of 2-D plots on one board, in a row or on `--layout RxC` (row by row; `--width`
+  and `--height` size the drawing); `--tagged` letters the panels and `--title` titles the board, the other look flags apply
+  to every panel (#105). A 3-D plot stays on its own.
 - `FlatLayerStream`: a stream that hands over its dimensions as vertex and value arrays (`FlatLayerStream.Layer`);
   `CellularCohomologyEngine` reduces one without making a `Simplex` per cell. The coface streams behind `Cech`,
   `Witness`, `Dowker`, `DtmRips`, `SparseRips` and `VietorisRips(implementation = RipserCoface)` are one, and `Truncated`
@@ -65,7 +103,8 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   (`Perseus.readUniformToplex`, `readNonUniformToplex`, `toplexStream`).
 - Two JVM-only experiments that reduce Vietoris-Rips cohomology with each degree split into units of whole edge blocks
   on a thread pool: `BlockParallelReduction` (explicit coboundaries) and `ParallelPackedCohomology` (implicit
-  coboundaries). Bars only, with no representatives; `Persistence` does not use them. `ParallelPackedCohomology` packs
+  coboundaries). `BlockParallelReduction` gives bars only and `Persistence` does not use it; `ParallelPackedCohomology` (now
+  `Persistence.Engine.ParallelRipser`) keeps reduction logs for representatives. It packs
   a simplex into one `Long` key where that fits and keeps the edge block beside the index where it does not (o3_4096
   to degree 3 on 4 threads in 31 s, ripser.cpp 36 s).
 - `WideSimplexIndexing`: the combinatorial number system with two-word indices of up to 126 bits (`SimplexIndexing`
@@ -154,6 +193,26 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   and `place(figure, row, col, rowSpan, colSpan)` puts a panel in it, spanning cells, so that one plot can run across a
   whole row or column. `Board.sharedColumns()` and `sharedRows()` put the panels over the same columns, or rows, on one
   scale. A board is saved as an SVG with each panel at the size of its cells, and on a page as a CSS grid.
+  `place(..., fill = true)` lets a persistence diagram, which keeps equal units, fill a wide cell (#110).
+- `Labels(title = ...)` on a board draws the title above the panels (`Board.heading`); it was only the page's title. The
+  color bar of a transformed scale (`Scale.color(transform = Transform.Sqrt)`) labels round numbers between its ends,
+  each where the transform puts it (#97).
+- A legend can have a box and columns: `Guide.legend(box = true, background = ..., opacity = ..., frame = ..., padding = ...,
+  columns = 2)` (`withLegendBox(...)`, the settings `legend-box.background/opacity/frame/frame-width/padding/columns`,
+  MATLAB `withLegendBox('white')` and `withLegendColumns(2)`). Without it a legend is drawn as before. The room inside
+  a box grows with the legend's text, and columns that would run a legend off the figure or over the plot are given up
+  (#103).
+- An axis can cross the other at a value: `Scale.x(crossesAt = 0)` draws the x axis through `y = 0`, `Scale.y(crossesAt =
+  0)` the y axis through `x = 0` (`Axis.crossesAt`, `withXScale(crossesAt = ...)`, the settings `x-axis.crosses-at` and
+  `y-axis.crosses-at`, MATLAB `withXCrossesAt(0)`). The numbers stay beside the line, the label at the edge, and the
+  margin the numbers needed goes to the plot. A value the other axis does not show leaves the axis at the edge, with a
+  note under the plot (#104).
+- `Palette.grayscale` (`withPalette("grayscale")`, `--palette grayscale`): `Palette.print` with no color, for a
+  black-and-white print. Degrees differ by lightness and, as always, by marker shape; a heatmap uses ColorBrewer's Greys; a
+  diverging scale (a cocycle's values) has a darker negative end than positive one (#97).
+- `Palette.okabeIto` (`withPalette("okabe-ito")`, `--palette okabe-ito`): the eight colors of Okabe and Ito on `print`'s white
+  surface, blue, vermillion and bluish green first (they stay apart side by side for every common color vision), with
+  `print`'s heatmap ramp and blue-against-vermillion diverging scale; one look for both themes (#97).
 - `Camera(azimuth, elevation, zoom)` (`Scene.withCamera`, settings `camera.azimuth/elevation/zoom`) sets the view of a 3-D
   scene: the saved `.svg` is that view, a page's canvas starts from it; a 2-D plot refuses it, and the CLI says so before
   computing.
@@ -162,7 +221,10 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 - MATLAB: the figures returned by the `plot...` methods have the common tweaks as methods that take strings and numbers
   (`withTitle`, `withSize`, `withXScale('log')`, `withPalette`, `withDegreeColor`, `withTextScale`, `withLegend`, ...,
   and `save(path, 'dark')`); command line: `--title`, `--x-label`, `--y-label`, `--width`, `--height`, `--palette`,
-  `--theme`, `--text-scale`, `--x-scale` and `--y-scale` for a `--plot`.
+  `--theme`, `--text-scale`, `--x-scale` and `--y-scale` for a `--plot`; also `--caption`, `--tag`, `--description` and
+  `--look` (`default`, `print` or `clear`, the palette and style together) (#106). Boards from MATLAB and Java:
+  `TDA4j.side(a, b)`, `TDA4j.layout(rows, cols, ...)`, and plain-argument `place`, `tagged`, `shared`, `withTitle`,
+  `withPalette`, `withStyle`, `withTextScale` and `withSetting` on a `Board` (#105).
 - `VantagePointTree(elements, distance)`: a vantage-point tree over any metric, with `withinDistance(query, radius)` (the
   boundary included) and `nearest(query, k)` (the first `k` of the stable sort by distance); and
   `MinimumEnclosingBall(points)`, the smallest ball around points in any dimension, with `center`, `squaredRadius` and
@@ -170,9 +232,59 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Changed
 
+- `engine=fast-cubical` on Scala.js is 8 times faster on a 2048² noisy image (129 s to 15 s, 1.8 times the JVM): the sort of
+  each region's boundary no longer allocates an array as long as the whole scratch array on every call, and its keys are
+  `Int`.
+- `Persistence` with `Engine.Ripser` (and the MATLAB and CLI `engine=ripser`) is about 15-20 % faster on large Vietoris-Rips
+  computations: a simplex is decoded from its index with a narrowed search and no sort (#220).
+- The JVM build shares more of its work between threads, with the same answers: the Helix triangulation (the walk evaluates
+  the next queued facets together), the face tables, alpha values and sort of `HelixDelaunay` and `BowyerWatsonDelaunay`, the
+  sort of each dimension and the coboundary blocks of the cohomology engine, and the cycle representatives of each death
+  dimension. `AlphaDQPSettings.parallel` and `parallelFiltrationValue` (Cech, DTM-Rips, sparse Rips, witness) are on by
+  default. On 4 cores: Helix in R^5 and R^6 about 2x, DQP without a radius 3x, Cech 2x, sparse Rips 1.7x, the verb on 30,000
+  points in R^3 1.5x. `-Djava.util.concurrent.ForkJoinPool.common.parallelism=0` runs everything on one thread; Scala.js
+  always does.
+- The alpha complexes of `HelixDelaunay` and `BowyerWatsonDelaunay` are `FlatLayerStream`s: the verb reduces them from
+  arrays, without a `Simplex` per cell.
+- `PackedRipserCohomologyEngine` pairs a column with its oldest cofacet of the same diameter without reducing it when no
+  earlier column has that cofacet as its pivot (Bauer's emergent pairs, #57). The bars, pairs and representatives are
+  those of the run without it (`useEmergentPairs = false`, a new last constructor parameter). On the Ripser paper's
+  data sets it saves up to 4 % of the time and, where many columns are stored (`o3_4096`), 22 % of the live heap.
+- Persistence of images (`Persistence(Image(...))`, `FastCubicalHomologyEngine`, `PackedCubicalCohomologyEngine`)
+  allocates a third to a half as much and runs 7 to 18 % faster, with the same bars and representatives term for term (#56).
+  With a heap that follows the live data, random noise of 96 x 96 x 96 now needs 0.54 GB of RSS (was 0.94; CubicalRipser
+  0.43, GUDHI 0.51) and runs in a 300 MB heap, and of 2048 x 2048 1.25 GB (was 1.36; CubicalRipser 1.0, GUDHI 1.4).
+- `Persistence(points, complex = AlphaShapes)` builds the alpha complex only up to the points' minimum enclosing radius
+  when no `maxFiltrationValue` is given, as the Vietoris-Rips and Čech complexes already did. The diagram is the same
+  (past that radius the union of balls is contractible); the long thin simplices along the hull of the triangulation
+  are not built.
+  `AlphaShapes.upToEnclosingRadius(points)` is that stream; `AlphaShapes(points)` is still the whole complex. The
+  MATLAB and CLI `complex=alpha` do the same (`engine=fast-alpha` still takes the whole triangulation): the bars are
+  unchanged, `numCells` is smaller (313 instead of 325 on the tutorial's noisy circle). Pass `maxFiltrationValue =
+  Double.PositiveInfinity` (MATLAB and CLI: `Infinity`) for the whole complex (#215).
+- `FiniteMetricSpace.minimumEnclosingRadius` (the default radius of every point-cloud computation, and the scale of
+  `significant()`) is found without allocating, giving up on a point as soon as it cannot beat the best so far: 2.8 s
+  to 2 ms for 10,000 points in 3-space (#209). A `EuclideanMetricSpace` works on squared distances and no longer fills
+  its distance cache for it. A space with a faster way overrides the protected `scanEnclosingRadius`. The value is the
+  same; the empty space raises `UnsupportedOperationException` with a message.
+- `VietorisRips(...)` builds `Implementation.RipserCoface` by default (was `Enumerating`, which tests every vertex set of
+  a dimension and is now the slowest choice). The complex is the same, cell for cell and in order; it is built as
+  arrays, which the cohomology engine reduces without a `Simplex` per cell. `keepCriterion` and `filtrationValueOverride`
+  work on it as before (they are parameters of the stream classes); `Implementation.Enumerating` is still there.
+- A text cut at a `limit`, and the width a legend makes room for, follow the advance widths of the letters
+  (`TextWidth.of(text, size, family, bold)`: Helvetica, Times, their bold faces, or a fixed width by the font list)
+  instead of 0.6 em for every character, so a row of `W`s is cut sooner than a row of `i`s; a legend of two-letter
+  entries is 0.3 pixel wider than before (#108).
+- A result's `plotRepresentative(i)` draws a cocycle restricted to the complex at its bar's birth, the few edges that
+  close the loop, instead of the whole cocycle across the data (#75). `plotRepresentative(i, Double.PositiveInfinity)`
+  (CLI `--at Infinity`) draws it whole; `Plot.cocycle` itself is as it was.
+- A result's `plotComplex(at)`, `plotComplex3D(at)` and `plotRepresentative(i, at)` draw the complex the computation
+  built, for every point-cloud complex: witness (on its landmarks), `dtm-rips`, `dtm-alpha` and `sparse-rips` as well as
+  `vr`, `cech` and `alpha`, with the alpha backend and parameters the result used. Past the result's
+  `maxFiltrationValue` the plot stops there and says so (#76).
 - The brand is Teal & Gold (was Slate & Gold): the teal is `#1a729b` (`#81bde0` in dark mode). The default plot palette
-  (`Palette.brand`) and the live viewer follow: degree 0 is `#1a729b` in light mode and the secondary ink is teal; the
-  other slots are as they were.
+  (`Palette.brand`) and the live viewer follow: degree 0 is `#1a729b` and degree 1 (gold) is `#b58605` in light mode, and the secondary ink is
+  teal; the other slots are as they were.
 - `BarcodeDistance.bottleneckDistance` no longer builds the all-pairs cost matrix: near pairs are found in a window of
   the other diagram sorted by birth, and feasibility is two matchings (one covering the bars too far from the diagonal on
   each side). The values are the same; two random diagrams of 1,500 bars took 22 s and take 0.2 s.
@@ -208,6 +320,14 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
 
 ### Fixed
 
+- `Chain.hashCode` agrees with `Chain.equals` (#58). Chains were equal as formal sums but hashed by identity, so a
+  `Set` of chains held two equal ones and a `Map` keyed by chains missed a present key. Equal chains now hash alike
+  whatever their storage, order, deferred entries or spelling of an `Fp` coefficient; over the reals, which compare within
+  a tolerance, the hash covers the cells only.
+- `Numbers.locale("ar")`, `"fa"` and the other locales that write their own digits (Burmese, Bengali, Nepali,
+  Marathi, ...) take their separators for the digits 0 to 9 the plot writes; `ar` gave the Arabic decimal separator `٫`
+  between Latin digits. On Scala.js the invisible direction mark that `Intl.NumberFormat` puts before a minus sign is
+  left out (#107).
 - The packed Ripser engine, which `Persistence` uses for point clouds and metric spaces (also in MATLAB and the CLI), no
   longer fails with `binomial(n, k) overflows Long` once C(n + d + 2, d + 2) passes 2^63 for `maxDimension = d`
   (about 16,000 points to degree 3, 122,000 to degree 2). It numbers the simplices with two words from there on, and
@@ -240,9 +360,26 @@ is named here and in a commented `mimaBinaryIssueFilters` entry in `build.sbt`.
   fraction of the number of points (a defect of the Java library it used); it returns `k`.
 - `CofacetIterator` reported vertices that are close to only some of the simplex's vertices as cofacets, and some cofacets
   twice; it gives each cofacet of the sparse complex once, in order of its diameter.
+- `complex=alpha` and `complex=dtm-alpha` through MATLAB, the CLI and the JavaScript API honor `maxDimension` (default 2)
+  like every other complex: the complex is built to one dimension above it and no bar of a higher degree is reported.
+  They built and reduced the whole complex, so points in d dimensions gave bars up to degree d - 1 and the dual-QP backend
+  took hundreds of times longer on Scala.js than on the JVM (#228); pass `maxDimension` = d - 1 for the old output.
+- Through MATLAB, the CLI and the JavaScript API the engines no longer build representatives for zero-length bars that
+  `includeZeroLength = false` drops afterwards (about 6 times the bars of a noisy image, 3 GB against 730 MB of heap for a
+  2048² image on the JVM).
 
 ### Build, CI and Documentation
 
+- A SNAPSHOT of the `scala` branch (`tda4j_3` and `tda4j_sjs1_3`) is published to Maven Central's snapshot repository on
+  every day on which a commit has landed; the installation page has the resolver line (`snapshot.yml`, `RELEASE.md`).
+- The benchmark harness's JVMs run the serial collector with a heap that follows the live data (up to `--jvm-heap`)
+  instead of a pinned heap with the parallel collector, so peak RSS says what a computation needs and compares with the
+  native tools (with a pinned heap a JVM's RSS is what it allocated until its first collection). `--jvm-fixed-heap`
+  restores the pinned heap; `sweep-threads` keeps it for its multithreaded tools. `PaperBenchmarkDriver` takes
+  `digest=true` for a term-for-term comparison of two builds on an image, and no longer keeps the previous run's results
+  alive during the next (#56).
+- The plotting guide has a section on PNG and PDF: the commands for `cairosvg`, Chromium, Inkscape (text as outlines) and
+  `rsvg-convert` that turn a saved `.svg` into either, with the resolution and the font caveats (#101).
 - The logo, favicons, header icons and docs theme colors are teal and gold. The docs site has a dark-mode favicon
   (`favicon-dark-N.png`, which the dark `prefers-color-scheme` links in the page head use in place of the light ones) and a
   dark-mode front-page logo; the dark icon PNGs and the dark web manifest sit on the dark surface instead of white.

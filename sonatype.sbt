@@ -1,4 +1,8 @@
 // Maven Central metadata for the published `tda4j` artifact (build-wide, `ThisBuild`).
+import java.nio.file.Files
+import java.util.Properties
+import scala.util.{Try, Using}
+
 ThisBuild / publishMavenStyle := true
 
 ThisBuild / organizationName := "Applied Topology"
@@ -33,4 +37,28 @@ ThisBuild / publishTo := {
   else localStaging.value
 }
 
-ThisBuild / credentials += Credentials(Path.userHome / ".sbt" / "sonatype_credentials")
+// The token Central's repositories take (RELEASE.md, "Credentials and secrets"): `SONATYPE_USERNAME` and `SONATYPE_PASSWORD`
+// when both are set (that is how `snapshot.yml` has it), otherwise the credentials file. One credential serves `sonaUpload`
+// (sbt looks it up by host) and a snapshot publish, but sbt sends a token only to the realm it was made for, and Central's
+// snapshot repository (a Nexus) asks for "Sonatype Nexus Repository Manager": a file that says `realm=Sonatype Central` would
+// get a 401 there, so the token is registered under the Nexus realm whichever of the two it came from. A file that is
+// missing, unreadable or for another host contributes nothing.
+ThisBuild / credentials ++= {
+  val host = "central.sonatype.com"
+  val fromEnv = for {
+    user <- sys.env.get("SONATYPE_USERNAME")
+    password <- sys.env.get("SONATYPE_PASSWORD")
+  } yield (user, password)
+  // The file's four keys (`realm`, `host`, `user`, `password`), read as sbt reads them.
+  def fromFile = Try {
+    val properties = Properties()
+    Using.resource(Files.newBufferedReader((Path.userHome / ".sbt" / "sonatype_credentials").toPath))(
+      properties.load(_)
+    )
+    (properties.getProperty("host"), properties.getProperty("user"), properties.getProperty("password"))
+  }.toOption.collect { case (`host`, user, password) if user != null && password != null => (user, password) }
+  fromEnv
+    .orElse(fromFile)
+    .map((user, password) => Credentials("Sonatype Nexus Repository Manager", host, user, password))
+    .toSeq
+}

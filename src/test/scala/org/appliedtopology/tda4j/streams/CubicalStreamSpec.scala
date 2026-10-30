@@ -308,8 +308,8 @@ class CubicalStreamSpec extends mutable.Specification with ScalaCheck:
 
         val noneMissing = chunksBars.forall(_.annotation.isDefined)
         val allCycles = chunksBars.forall(b => Chain.from(b.annotation.get.boundary).isZero())
-        // Multiset match via Chain's own overridden `equals`, not `.toSet` (Chain has no matching `hashCode`
-        // override -- see HomologySpec's own analogous check for the full reasoning).
+        // Multiset match via Chain's own `equals`, not `.toSet`: a Set would merge two bars with equal
+        // representatives, and the multiset must also have the same size.
         val remaining =
           scala.collection.mutable.ArrayBuffer.from(naiveBars.map(b => (b.dim, b.lower, b.upper, b.annotation.get)))
         val matchesNaive = chunksBars.forall { b =>

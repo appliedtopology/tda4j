@@ -12,6 +12,7 @@ import importlib.util
 import json
 import math
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -184,9 +185,15 @@ class CaseTests(unittest.TestCase):
         for pytool in ("dionysus", "oat"):
             self.assertIsInstance(bench.available("py", {"pytool": pytool}, sys.executable), bool)
 
-    def test_jvm_flags_are_one_policy(self):
-        self.assertEqual(bench.jvm_flags("16g"), ["-Xmx16g", "-Xms16g", "-XX:+UseParallelGC"])
+    def test_the_default_policy_follows_the_live_data(self):
+        flags = bench.jvm_flags("16g", "-Xss8m")
+        self.assertEqual(flags[:2], ["-Xmx16g", "-XX:+UseSerialGC"])
+        self.assertFalse([f for f in flags if f.startswith("-Xms")], "no pinned heap: RSS would be allocation")
+        self.assertEqual(flags[-1], "-Xss8m")
         self.assertEqual(bench.jvm_flags("4g", "-Xss8m -ea")[-2:], ["-Xss8m", "-ea"])
+
+    def test_the_fixed_heap_policy_is_pinned_with_the_parallel_collector(self):
+        self.assertEqual(bench.jvm_flags("16g", fixed_heap=True), ["-Xmx16g", "-Xms16g", "-XX:+UseParallelGC"])
 
 
 class AgreementTests(unittest.TestCase):
@@ -511,6 +518,33 @@ class AddressSpaceTests(unittest.TestCase):
     def test_no_cap_by_default(self):
         with tempfile.TemporaryDirectory() as d:
             self.assertEqual(bench.run_proc(child("x = bytearray(300 * 1024**2)"), 60, Path(d) / "log").status, "ok")
+
+
+class TopDegreeTests(unittest.TestCase):
+    def test_dim_top_is_one_less_than_the_ambient_dimension(self):
+        self.assertEqual([sweep_alpha.degree_for("top", d) for d in (3, 8)], [2, 7])
+        self.assertEqual(sweep_alpha.degree_for("2", 8), 2)
+
+    def test_a_number_never_asks_for_more_than_the_top_degree(self):
+        self.assertEqual([sweep_alpha.degree_for("4", d) for d in (2, 3, 5, 9)], [1, 2, 4, 4])
+
+    def test_the_plane_path_is_one_series_over_n_in_two_dimensions(self):
+        preset = sweep_alpha.PATHS["plane"]
+        args = Namespace(shapes=preset["shapes"], points=preset["points"], dims=preset["dims"], grid=preset["grid"],
+                         extra="")
+        cells = sweep_alpha.plan(args)
+        self.assertEqual({(shape, d) for shape, _, d, _ in cells}, {("interior", 2)})
+        self.assertEqual([n for _, n, _, _ in cells], sorted(n for _, n, _, _ in cells))
+        self.assertTrue(all(series[0] == "n" for _, _, _, series in cells))
+
+    def test_a_top_only_barcode_is_compared_in_its_degree_only(self):
+        a = {2: [(0.1, 0.5)]}
+        b = {0: [(0.0, math.inf)], 1: [(0.2, 0.4)], 2: [(0.1, 0.5)]}
+        bottleneck = lambda x, y: float(abs(len(x) - len(y)))
+        self.assertGreater(bench.agreement(a, b, 2, bottleneck)[0], 0)
+        self.assertEqual(bench.agreement(a, b, 2, bottleneck, [2])[0], 0)
+        a[2] = [(0.1, 0.5), (0.2, 0.3)]
+        self.assertGreater(bench.agreement(a, b, 2, bottleneck, [2])[0], 0)
 
 
 class CubePointsTests(unittest.TestCase):
@@ -1341,6 +1375,40 @@ class RevisionTests(unittest.TestCase):
             sweep_threads.summarize(out, bottleneck=stub_bottleneck)
             self.assertIn(f"TDA4j `{self.head[:12]}` with 1 changed file (notes.txt).", (out / "sweep.md").read_text())
 
+    def note(self, head, *dirty):
+        path = Path(self.dir.name) / "tda4j-js.git"
+        path.write_text("\n".join([head, *dirty]) + "\n")
+        return path
+
+    def test_the_note_gives_the_commit_and_the_files_that_differed(self):
+        rev = bench.js_revision(self.note(self.head, "src/main/scala/A.scala"), self.repo)
+        self.assertEqual((rev["tda4j_js_git"], rev["tda4j_js_dirty"]), (self.head, ["src/main/scala/A.scala"]))
+
+    def test_the_package_is_stale_once_src_main_differs_from_the_commit_it_was_built_from(self):
+        note = self.note(self.head)
+        self.assertIs(bench.js_revision(note, self.repo)["tda4j_js_stale"], False)
+        (self.repo / "notes.txt").write_text("not a source")
+        self.assertIs(bench.js_revision(note, self.repo)["tda4j_js_stale"], False)
+        (self.repo / "src" / "main" / "scala" / "A.scala").write_text("object A { val x = 2 }")
+        self.assertIs(bench.js_revision(note, self.repo)["tda4j_js_stale"], True)
+
+    def test_a_commit_git_does_not_know_leaves_staleness_unknown(self):
+        self.assertIsNone(bench.js_revision(self.note("f" * 40), self.repo)["tda4j_js_stale"])
+
+    def test_no_note_is_no_entry(self):
+        self.assertEqual(bench.js_revision(None, self.repo), {})
+        self.assertEqual(bench.js_revision(Path(self.dir.name) / "none", self.repo), {})
+        self.assertEqual(bench.js_revision(self.note(""), self.repo), {})
+
+    def test_the_summary_names_the_package_commit_only_where_it_differs_or_is_not_clean(self):
+        env = {"tda4j_git": "0123456789abcdef", "tda4j_js_git": "0123456789abcdef", "tda4j_js_dirty": []}
+        self.assertEqual(bench.revision_text(env), "TDA4j `0123456789ab`.")
+        self.assertIn("tda4j-js rows ran the npm package built from `fedcba987654`.",
+                      bench.revision_text({**env, "tda4j_js_git": "fedcba9876543210"}))
+        self.assertIn("with 2 changed files (a, b)", bench.revision_text({**env, "tda4j_js_dirty": ["a", "b"]}))
+        self.assertIn("src/main has changed since", bench.revision_text({**env, "tda4j_js_stale": True}))
+        self.assertEqual(bench.revision_text({"tda4j_git": "unavailable", "tda4j_js_git": "0123456789ab"}), "")
+
 
 class ThreadSweepTests(unittest.TestCase):
     """bench/sweep_threads.py: which counts run, how a tool is given its count and pinned, where a series stops, and the
@@ -1491,6 +1559,693 @@ class ThreadSweepTests(unittest.TestCase):
         self.assertIn("| 6 | 3 (2×) | timeout | 3 at 2 (1.5× ripser.cpp) | differs at 2 threads from 1 "
                       "(H1: bar (0.5, 0.8) against (0.5, 0.75)); ripser.cpp: 0 |", lines["giotto-ph-mt"])
         self.assertIn("| 2 |  |  |  |  |", lines["ripser.cpp (single-threaded)"])
+
+
+class SingleThreadedRowsTests(unittest.TestCase):
+    """The primary tables are single-threaded: a TDA4j row runs on the main thread unless it is a multithreaded one."""
+
+    def tda4j_command(self, opts):
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "cp").write_text("x.jar")
+            case = bench.Case("c", "vr", "pts.txt", "points", 2)
+            with mock.patch.dict(os.environ, {"TDA4J_CP": str(Path(d) / "cp")}):
+                return bench.command("tda4j", "t", opts, case, Path(d), 2, 1.0, 0, 1, "o", Namespace(jvm_heap="1g", jvm_opts=""))
+
+    def test_a_row_runs_sequentially_and_a_multithreaded_row_does_not(self):
+        self.assertIn("sequential=true", self.tda4j_command({"engine": "auto", "reps": "cycles"}))
+        self.assertIn("sequential=true", self.tda4j_command({"engine": "parallelverb", "reps": "cocycles"}))
+        mt = self.tda4j_command({"engine": "parallelverb", "reps": "cocycles", "threads": "4", "multithreaded": True})
+        self.assertNotIn("sequential=true", mt)
+        self.assertIn("threads=4", mt)
+
+    def test_the_tools_name_the_shipped_parallel_engine_on_one_thread_and_on_every_cpu(self):
+        tools = {name: opts for name, _, task, opts in bench.TOOLS if task == "vr"}
+        self.assertEqual(tools["tda4j-parallelverb-1t"]["engine"], "parallelverb")
+        self.assertNotIn("multithreaded", tools["tda4j-parallelverb-1t"])
+        self.assertTrue(tools["tda4j-parallelverb-mt"]["multithreaded"])
+        self.assertEqual(tools["tda4j-parallelverb-mt"]["threads"], "ALL")
+        self.assertEqual(tools["tda4j-parallelverb-mt"]["reps"], "cocycles", "the verb's representatives, not bars only")
+
+    def test_every_multithreaded_row_is_swept_for_threads_and_the_cubical_sweep_is_sequential(self):
+        sweep = [name for name, _, task, opts in bench.TOOLS if task == "vr" and opts.get("multithreaded")]
+        self.assertIn("tda4j-parallelverb-mt", sweep)
+        self.assertIn('"sequential=true"', (HERE_BENCH / "sweep_cubical.py").read_text())
+
+
+class ExperimentRowsTests(unittest.TestCase):
+    """An `experiment` row is run when `--tools` names it, and otherwise left out."""
+
+    def names_run(self, tools):
+        calls = []
+        with tempfile.TemporaryDirectory() as d:
+            data, out = Path(d) / "data", Path(d) / "out"
+            data.mkdir()
+            np.savetxt(data / "pts.txt", np.random.default_rng(0).random((20, 3)))
+            saved = bench.CASES, bench.TOOLS, bench.available, bench.run_one, bench.write_env
+            bench.CASES = [bench.Case("pts", "vr", "pts.txt", "points", 1)]
+            bench.TOOLS = [("base", "py", "vr", {}), ("lab", "py", "vr", {"experiment": True})]
+            bench.available = lambda kind, opts, python: True
+            bench.write_env = lambda out, args: None
+            bench.run_one = lambda w, f, data, out, case, p, threshold, name, *rest: calls.append(name) or "ok"
+            try:
+                bench.run(Namespace(data=str(data), out=str(out), cases="", tasks="", tools=tools, fields="2",
+                                    python="python3", rerun_timeouts=False))
+            finally:
+                bench.CASES, bench.TOOLS, bench.available, bench.run_one, bench.write_env = saved
+        return calls
+
+    def test_left_out_unless_named(self):
+        self.assertEqual(self.names_run(""), ["base"])
+        self.assertEqual(self.names_run("lab"), ["lab"])
+        self.assertEqual(self.names_run("base,lab"), ["base", "lab"])
+
+    def test_the_block_parallel_experiment_is_an_experiment_and_the_shipped_engine_is_not(self):
+        flags = {name: opts.get("experiment") for name, _, task, opts in bench.TOOLS if task == "vr"}
+        self.assertTrue(flags["tda4j-parallel-1t"] and flags["tda4j-parallel-mt"])
+        self.assertFalse(flags["tda4j-parallelverb-1t"] or flags["tda4j-parallelverb-mt"] or flags["tda4j"])
+
+
+class AlphaRadiusParityTests(unittest.TestCase):
+    """An alpha case without a radius gives every tool that takes one the enclosing radius (TDA4j stops there by
+    default, GUDHI does not), and the tools that take none, none."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.dir.cleanup)
+        self.data = Path(self.dir.name)
+        self.points = np.random.default_rng(3).random((30, 3))
+        np.savetxt(self.data / "pts.txt", self.points)
+
+    def calls(self, case):
+        calls = []
+        saved = bench.CASES, bench.TOOLS, bench.available, bench.run_one, bench.write_env
+        bench.CASES = [case]
+        bench.TOOLS = [("with", "py", "alpha", {}), ("without", "py", "alpha", {"no_radius": True}),
+                       ("dqp", "py", "alpha", {"needs_radius": True})]
+        bench.available = lambda kind, opts, python: True
+        bench.write_env = lambda out, args: None
+        bench.run_one = lambda w, f, data, out, case, p, threshold, name, *rest: calls.append((name, threshold)) or "ok"
+        try:
+            bench.run(Namespace(data=str(self.data), out=str(self.data / "out"), cases="", tasks="", tools="",
+                                fields="2", python="python3", rerun_timeouts=False))
+        finally:
+            bench.CASES, bench.TOOLS, bench.available, bench.run_one, bench.write_env = saved
+        return dict(calls)
+
+    def test_the_default_radius_is_the_enclosing_radius_of_the_points(self):
+        d = np.sqrt(((self.points[:, None, :] - self.points[None, :, :]) ** 2).sum(axis=2))
+        case = bench.Case("a", "alpha", "pts.txt", "points", 2)
+        self.assertAlmostEqual(bench.default_alpha_radius(case, self.data), float(d.max(axis=1).min()))
+
+    def test_a_case_without_a_radius_gives_the_tools_that_take_one_the_enclosing_radius(self):
+        got = self.calls(bench.Case("a", "alpha", "pts.txt", "points", 2))
+        radius = bench.default_alpha_radius(bench.Case("a", "alpha", "pts.txt", "points", 2), self.data)
+        self.assertEqual(got["with"], radius)
+        self.assertIsNone(got["without"], "the whole triangulation takes no radius")
+        self.assertNotIn("dqp", got, "a tool that needs the case's own radius is still skipped without one")
+
+    def test_a_case_with_its_own_radius_keeps_it_and_the_tools_that_take_none_skip_it(self):
+        got = self.calls(bench.Case("a", "alpha", "pts.txt", "points", 2, threshold=0.3))
+        self.assertEqual((got["with"], got["dqp"]), (0.3, 0.3))
+        self.assertNotIn("without", got, "unsupported on a case with a radius, as before")
+
+    def test_other_tasks_and_radius_k_cases_have_no_shared_radius(self):
+        self.assertIsNone(bench.default_alpha_radius(bench.Case("v", "vr", "pts.txt", "points", 2), self.data))
+        self.assertIsNone(bench.default_alpha_radius(bench.Case("a", "alpha", "pts.txt", "points", 2, radius_k=5), self.data))
+
+
+def result_row(case, tool, mode="cold", status="ok", p="2", wall="1.0", median="", threshold="", **extra):
+    row = {c: "" for c in bench.RUNS_COLUMNS}
+    row.update(case=case, task="vr", p=p, tool=tool, mode=mode, status=status, wall_s=wall, median_s=median,
+               threshold=threshold, **extra)
+    return row
+
+
+def write_results(directory, rows, env=None, bars=(), logs=()):
+    directory = Path(directory)
+    (directory / "bars").mkdir(parents=True, exist_ok=True)
+    (directory / "logs").mkdir(parents=True, exist_ok=True)
+    with open(directory / "runs.csv", "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=bench.RUNS_COLUMNS)
+        w.writeheader()
+        w.writerows(rows)
+    (directory / "env.json").write_text(json.dumps(env or {"args": {"javaplex_divisions": 1000}}))
+    for name, text in bars:
+        (directory / "bars" / name).write_text(text)
+    for name in logs:
+        (directory / "logs" / name).write_text("log")
+
+
+class MergeTests(unittest.TestCase):
+    """bench.py merge: one results directory from several, the last source with a (case, p, tool) winning."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.dir.cleanup)
+        self.root = Path(self.dir.name)
+        bars = "0\t0.0\tinf\n1\t0.5\t0.75\n"
+        self.old = self.root / "old"
+        write_results(self.old, [result_row("c", "ripser.cpp"), result_row("c", "ripser.cpp", "warm", median="2.0"),
+                                 result_row("c", "tda4j"), result_row("c", "tda4j", "warm", median="9.0"),
+                                 result_row("c", "gudhi", status="timeout")],
+                      env={"date": "2026-10-20T10:00:00", "host": "server", "tda4j_git": "a" * 40,
+                           "args": {"javaplex_divisions": 1000}},
+                      bars=[("c__p2__ripser.cpp.tsv", bars), ("c__p2__tda4j.tsv", "old"), ("c__p2__gudhi.tsv", "g")],
+                      logs=["c__p2__ripser.cpp__cold.out", "c__p2__tda4j__cold.out", "c__p2__tda4j__cold.err",
+                            "c__p2__tda4j-cocycles__cold.out"])
+        self.new = self.root / "new"
+        write_results(self.new, [result_row("c", "tda4j"), result_row("c", "tda4j", "warm", median="1.5"),
+                                 result_row("c", "gudhi", status="missing", mode="-"),
+                                 result_row("d", "tda4j", p="17")],
+                      env={"date": "2026-10-27T10:00:00", "host": "server", "tda4j_git": "b" * 40,
+                           "args": {"javaplex_divisions": 1000}},
+                      bars=[("c__p2__tda4j.tsv", bars), ("d__p17__tda4j.tsv", bars)],
+                      logs=["c__p2__tda4j__cold.out", "d__p17__tda4j__cold.out"])
+        self.out = self.root / "merged"
+
+    def runs(self):
+        return {(r["case"], r["p"], r["tool"], r["mode"]): r for r in bench.read_runs(self.out)}
+
+    def test_the_last_source_with_a_group_replaces_all_its_rows_of_the_earlier_ones(self):
+        bench.merge(self.out, [self.old, self.new])
+        runs = self.runs()
+        self.assertEqual(runs[("c", "2", "tda4j", "warm")]["median_s"], "1.5")
+        self.assertEqual(runs[("c", "2", "ripser.cpp", "warm")]["median_s"], "2.0", "not rerun: kept")
+        self.assertIn(("d", "17", "tda4j", "cold"), runs)
+        self.assertEqual(len([k for k in runs if k[:3] == ("c", "2", "tda4j")]), 2, "one cold and one warm row")
+
+    def test_a_tool_that_is_missing_in_the_later_run_does_not_replace_a_measurement(self):
+        bench.merge(self.out, [self.old, self.new])
+        self.assertEqual(self.runs()[("c", "2", "gudhi", "cold")]["status"], "timeout")
+
+    def test_a_tool_only_the_later_run_lists_is_kept_even_when_missing_there(self):
+        bench.merge(self.out, [self.new])
+        self.assertEqual(self.runs()[("c", "2", "gudhi", "-")]["status"], "missing")
+
+    def test_bars_and_logs_follow_their_rows_and_only_theirs(self):
+        bench.merge(self.out, [self.old, self.new])
+        self.assertEqual((self.out / "bars" / "c__p2__tda4j.tsv").read_text(), "0\t0.0\tinf\n1\t0.5\t0.75\n")
+        self.assertTrue((self.out / "bars" / "c__p2__ripser.cpp.tsv").exists(), "a dotted tool name")
+        self.assertTrue((self.out / "logs" / "c__p2__ripser.cpp__cold.out").exists())
+        self.assertEqual((self.out / "logs" / "c__p2__tda4j__cold.out").read_text(), "log")
+        self.assertFalse((self.out / "logs" / "c__p2__tda4j__cold.err").exists(), "the replaced run's log is not kept")
+        self.assertFalse((self.out / "logs" / "c__p2__tda4j-cocycles__cold.out").exists(), "a tool with no rows")
+
+    def test_a_tools_filter_takes_only_those_tools_of_a_source(self):
+        bench.merge(self.out, [f"{self.old}:ripser.cpp", f"{self.new}:tda4j"])
+        self.assertEqual({(k[0], k[2]) for k in self.runs()}, {("c", "ripser.cpp"), ("c", "tda4j"), ("d", "tda4j")})
+
+    def test_drop_leaves_tools_out(self):
+        bench.merge(self.out, [self.old, self.new], drop="gudhi,ripser.cpp")
+        self.assertEqual({k[2] for k in self.runs()}, {"tda4j"})
+
+    def test_the_environment_is_the_last_source_that_ran_tda4j_and_names_every_source(self):
+        bench.merge(self.out, [self.old, self.new])
+        env = bench.read_env(self.out)
+        self.assertEqual(env["tda4j_git"], "b" * 40)
+        self.assertEqual([o["tda4j_git"][:1] for o in env["merged_from"]], ["a", "b"])
+        self.assertEqual(env["merged_from"][0]["tools"], ["gudhi", "ripser.cpp"])
+        self.assertEqual(env["merged_from"][1]["tools"], ["gudhi", "tda4j"][1:])
+
+    def test_a_directory_that_holds_a_run_is_not_overwritten(self):
+        bench.merge(self.out, [self.old])
+        with self.assertRaises(SystemExit):
+            bench.merge(self.out, [self.new])
+
+    def test_the_merged_run_summarizes_with_the_sources_named_and_agreement_across_them(self):
+        bench.merge(self.out, [self.old, self.new])
+        bench.summarize(self.out, bottleneck=stub_bottleneck)
+        md = (self.out / "summary.md").read_text()
+        self.assertIn("Merged from:", md)
+        self.assertIn(f"`{self.old}` (2026-10-20, server, TDA4j `{'a' * 12}`): gudhi, ripser.cpp", md)
+        self.assertIn(f"`{self.new}` (2026-10-27, server, TDA4j `{'b' * 12}`): tda4j", md)
+        self.assertIn("TDA4j `" + "b" * 12 + "`", md.splitlines()[2], "the header names the commit that ran TDA4j")
+        summary = {r["tool"]: r for r in csv.DictReader(open(self.out / "summary.csv")) if r["case"] == "c"}
+        self.assertEqual(summary["tda4j"]["agrees"], "True", "compared with the reference run in the other directory")
+
+    def test_hosts_that_differ_are_a_warning_in_the_summary(self):
+        env = json.loads((self.new / "env.json").read_text())
+        (self.new / "env.json").write_text(json.dumps({**env, "host": "laptop"}))
+        bench.merge(self.out, [self.old, self.new])
+        bench.summarize(self.out, bottleneck=stub_bottleneck)
+        self.assertIn("different machines (laptop, server)", (self.out / "summary.md").read_text())
+
+    def test_parse_source(self):
+        self.assertEqual(bench.parse_source("/a/b"), (Path("/a/b"), ""))
+        self.assertEqual(bench.parse_source("/a/b:x,y-z"), (Path("/a/b"), "x,y-z"))
+        self.assertEqual(bench.parse_source("/a/b:!tda4j*"), (Path("/a/b"), "!tda4j*"))
+        self.assertEqual(bench.parse_source("a:b/c"), (Path("a:b/c"), ""))
+
+    def test_a_pattern_source_takes_every_tool_but_the_excluded(self):
+        bench.merge(self.out, [f"{self.old}:!tda4j*", f"{self.new}:tda4j*"])
+        runs = self.runs()
+        self.assertEqual({k[2] for k in runs}, {"ripser.cpp", "gudhi", "tda4j"})
+        self.assertEqual(runs[("c", "2", "tda4j", "warm")]["median_s"], "1.5", "the old TDA4j rows are not taken")
+
+
+class AnchorsTests(unittest.TestCase):
+    """bench.py anchors: whether the rows two runs share took the same time."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.dir.cleanup)
+        self.root = Path(self.dir.name)
+
+    def runs(self, name, times):
+        rows = []
+        for (case, tool), (cold, warm) in times.items():
+            rows.append(result_row(case, tool, wall=str(cold)))
+            if warm:
+                rows.append(result_row(case, tool, "warm", median=str(warm), wall="9"))
+        write_results(self.root / name, rows)
+        return self.root / name
+
+    def test_rows_within_the_tolerance_are_ok_and_the_warm_median_is_the_time(self):
+        old = self.runs("old", {("c", "ripser.cpp"): (5.0, 4.0), ("c", "gudhi"): (10.0, None)})
+        new = self.runs("new", {("c", "ripser.cpp"): (9.0, 4.4), ("c", "gudhi"): (11.0, None)})
+        rows, verdict = bench.anchors(new, old, tolerance=0.2)
+        self.assertEqual(verdict, "ok")
+        self.assertEqual([(r[2], round(r[5], 2)) for r in rows], [("gudhi", 1.1), ("ripser.cpp", 1.1)])
+
+    def test_a_row_outside_the_tolerance_either_way_is_drift(self):
+        old = self.runs("old", {("c", "ripser.cpp"): (5.0, 4.0), ("c", "gudhi"): (10.0, None)})
+        for factor in (1.5, 0.5):
+            new = self.runs("new", {("c", "ripser.cpp"): (5.0, 4.0), ("c", "gudhi"): (10.0 * factor, None)})
+            rows, verdict = bench.anchors(new, old, tolerance=0.2)
+            self.assertEqual(verdict, "drift")
+            self.assertEqual([r[2] for r in rows if not r[-1]], ["gudhi"])
+            shutil.rmtree(new)
+
+    def test_tools_restrict_the_rows_and_failed_rows_are_not_anchors(self):
+        write_results(self.root / "old", [result_row("c", "a", wall="1"), result_row("c", "b", wall="1"),
+                                          result_row("c", "t", wall="1", status="timeout")])
+        write_results(self.root / "new", [result_row("c", "a", wall="1"), result_row("c", "b", wall="5"),
+                                          result_row("c", "t", wall="1")])
+        rows, verdict = bench.anchors(self.root / "new", self.root / "old", {"a"})
+        self.assertEqual(([r[2] for r in rows], verdict), (["a"], "ok"))
+        self.assertEqual([r[2] for r in bench.anchors(self.root / "new", self.root / "old")[0]], ["a", "b"])
+
+    def test_no_common_row_is_none(self):
+        old = self.runs("old", {("c", "a"): (1.0, None)})
+        new = self.runs("new", {("c", "b"): (1.0, None)})
+        self.assertEqual(bench.anchors(new, old)[1], "none")
+
+    def test_the_text_names_each_row_and_the_verdict(self):
+        old = self.runs("old", {("c", "a"): (1.0, None)})
+        new = self.runs("new", {("c", "a"): (2.0, None)})
+        rows, verdict = bench.anchors(new, old)
+        text = "\n".join(bench.anchors_text(rows, verdict, 0.2))
+        self.assertIn("| c | 2 | a | 1.000 | 2.000 | 2.00 | NO |", text)
+        self.assertIn("differs by more than 20%", text)
+
+
+class PipConstraintsTests(unittest.TestCase):
+    def test_a_freeze_becomes_pins_and_editable_or_url_installs_are_left_out(self):
+        env = {"python_packages": "numpy==1.26.4\ngudhi==3.10.1\n-e git+https://x/y.git#egg=y\n"
+                                  "pkg @ file:///tmp/pkg\nripser==0.6.8\n\noat_python==0.1.2.post1"}
+        self.assertEqual(bench.pip_constraints(env),
+                         ["numpy==1.26.4", "gudhi==3.10.1", "ripser==0.6.8", "oat_python==0.1.2.post1"])
+        self.assertEqual(bench.pip_constraints({}), [])
+
+
+class ToolSelectionTests(unittest.TestCase):
+    def test_names_patterns_and_exclusions(self):
+        sel = bench.tool_selected
+        self.assertTrue(sel("anything", ""))
+        self.assertTrue(sel("tda4j-js", "tda4j*"))
+        self.assertTrue(sel("ripser.cpp", "ripser.cpp,gudhi"))
+        self.assertFalse(sel("ripser.py", "ripser.cpp,gudhi"))
+        self.assertFalse(sel("tda4j-js", "tda4j*,!tda4j-js*"))
+        self.assertTrue(sel("tda4j-cocycles", "tda4j*,!tda4j-js*"))
+        self.assertTrue(sel("gudhi", "!tda4j*"), "exclusions alone select the rest")
+        self.assertFalse(sel("tda4j", "!tda4j*"))
+
+
+class ResumeTests(unittest.TestCase):
+    """--resume: a run continues where an interrupted one stopped."""
+
+    def run_resumed(self, rows, tools=("a", "b", "c"), fields="2,17", resume=True):
+        calls = []
+        with tempfile.TemporaryDirectory() as d:
+            data, out = Path(d) / "data", Path(d) / "out"
+            data.mkdir()
+            out.mkdir()
+            np.savetxt(data / "pts.txt", np.random.default_rng(0).random((20, 3)))
+            if rows is not None:
+                write_results(out, rows)
+            saved = bench.CASES, bench.TOOLS, bench.available, bench.run_one, bench.write_env
+            bench.CASES = [bench.Case("pts", "vr", "pts.txt", "points", 1)]
+            bench.TOOLS = [(t, "py", "vr", {"slower_than": "a"} if t == "c" else {}) for t in tools]
+            bench.available = lambda kind, opts, python: True
+            bench.write_env = lambda out, args: None
+            bench.run_one = lambda w, f, data, out, case, p, threshold, name, *rest: calls.append((p, name)) or "ok"
+            try:
+                bench.run(Namespace(data=str(data), out=str(out), cases="", tasks="", tools="", fields=fields,
+                                    python="python3", rerun_timeouts=False, resume=resume))
+                kept = bench.read_runs(out)
+            finally:
+                bench.CASES, bench.TOOLS, bench.available, bench.run_one, bench.write_env = saved
+        return calls, kept
+
+    def test_finished_groups_are_skipped_and_the_others_run(self):
+        rows = [result_row("pts", "a"), result_row("pts", "a", "warm", median="1"),  # finished
+                result_row("pts", "b", status="timeout", reason="timed out"),  # finished: no warm row after a failure
+                result_row("pts", "a", p="17")]  # stopped after its cold row
+        calls, kept = self.run_resumed(rows)
+        self.assertEqual(calls, [(2, "c"), (17, "a"), (17, "c")], "b timed out at 2, so it is not run at 17")
+        self.assertEqual([(r["p"], r["tool"], r["mode"]) for r in kept[:3]],
+                         [("2", "a", "cold"), ("2", "a", "warm"), ("2", "b", "cold")],
+                         "the unfinished group's cold row is dropped, to be written again by the rerun")
+        skipped = next(r for r in kept if (r["p"], r["tool"]) == ("17", "b"))
+        self.assertIn("timed out at p=2", skipped["reason"])
+
+    def test_a_timeout_before_the_interruption_still_stops_the_later_field_and_the_slower_variant(self):
+        rows = [result_row("pts", "a", status="timeout", reason="timed out")]
+        calls, _ = self.run_resumed(rows, tools=("a", "c"))
+        self.assertEqual(calls, [], "a timed out at p=2: not run again at 17, and c is slower than a")
+
+    def test_without_resume_nothing_is_skipped(self):
+        rows = [result_row("pts", "a"), result_row("pts", "a", "warm", median="1")]
+        calls, _ = self.run_resumed(rows, tools=("a",), fields="2", resume=False)
+        self.assertEqual(calls, [(2, "a")])
+
+    def test_resuming_where_nothing_ran_runs_everything(self):
+        calls, _ = self.run_resumed(None, tools=("a", "b"), fields="2")
+        self.assertEqual(calls, [(2, "a"), (2, "b")])
+
+
+class CheckTests(unittest.TestCase):
+    """bench.py check: the rows of a summarized run that failed or disagree."""
+
+    def summary(self, rows):
+        d = tempfile.TemporaryDirectory()
+        self.addCleanup(d.cleanup)
+        fields = ["case", "task", "p", "tool", "status", "reason", "agrees", "degenerate", "vs_reference", "note"]
+        with open(Path(d.name) / "summary.csv", "w", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=fields)
+            w.writeheader()
+            for r in rows:
+                w.writerow({"task": "vr", "p": "2", "status": "ok", "reason": "", "agrees": "True", "degenerate": "False",
+                            "vs_reference": "0", "note": "", **r})
+        return d.name
+
+    def test_failed_and_disagreeing_rows_are_problems_and_allowed_statuses_are_not(self):
+        out = self.summary([{"case": "a", "tool": "tda4j"},
+                            {"case": "b", "tool": "tda4j", "status": "error(1)", "reason": "boom"},
+                            {"case": "c", "tool": "tda4j", "status": "timeout"},
+                            {"case": "d", "tool": "tda4j", "status": "unsupported"},
+                            {"case": "e", "tool": "tda4j", "agrees": "False", "vs_reference": "0.3"},
+                            {"case": "f", "tool": "tda4j", "agrees": "False", "degenerate": "True"},
+                            {"case": "g", "tool": "tda4j", "task": "sparse", "agrees": "False"},
+                            {"case": "h", "tool": "gudhi", "status": "error(1)"}])
+        problems = bench.check(out, tools="tda4j*")
+        self.assertEqual([(c, t) for c, _, t, _ in problems], [("b", "tda4j"), ("c", "tda4j"), ("e", "tda4j")])
+        self.assertIn("error(1) boom", problems[0][3])
+        self.assertIn("(0.3)", problems[2][3])
+        self.assertEqual([c for c, *_ in bench.check(out, tools="tda4j*", allow=("unsupported", "timeout"))], ["b", "e"])
+        self.assertEqual(len(bench.check(out)), 4, "all tools: gudhi's error counts")
+
+
+@unittest.skipUnless(shutil.which("bash") and shutil.which("git"), "needs bash and git")
+class FinalRunScriptTests(unittest.TestCase):
+    """bench/final_run.sh: the stages' commands, the frozen commit, the anchors verdict that gates the merge. run.sh is
+    replaced by a script that logs its arguments, so no tool is needed."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.dir.cleanup)
+        self.root = Path(self.dir.name)
+        self.repo = self.root / "repo"
+        self.repo.mkdir()
+        self.git("init", "-q")
+        (self.repo / "tracked.txt").write_text("1")
+        self.git("add", "-A")
+        self.commit("first")
+        self.log = self.root / "calls.log"
+        self.fake = self.root / "run.sh"
+        header = "case,p,tool,task,status,reason,agrees,degenerate,vs_reference,note"
+        self.fake.write_text('#!/usr/bin/env bash\necho "$*" >> "$FAKE_LOG"\n'
+                             f'if [ "$1" = merge ]; then mkdir -p "$2"; echo "{header}" > "$2/summary.csv"; fi\n'
+                             f'if [ "$1" = run ] && [ -n "${{RESULTS_DIR:-}}" ]; then mkdir -p "$RESULTS_DIR"; '
+                             f'echo "{header}" > "$RESULTS_DIR/summary.csv"; fi\n')
+        self.fake.chmod(0o755)
+        self.base = self.root / "base"
+        write_results(self.base, [result_row("c", "ripser.cpp")],
+                      env={"args": {"fields": "2,17", "timeout": 7200.0, "jvm_heap": "96g", "warmup": 1, "trials": 3,
+                                    "warm_cap": 30.0, "jvm_opts": "-Xss8m"}})
+        self.final = self.root / "work" / "final"
+
+    def git(self, *args):
+        return subprocess.run(["git", "-C", str(self.repo), *args], capture_output=True, text=True, check=True).stdout.strip()
+
+    def commit(self, message):
+        self.git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", message)
+
+    def script(self, *args, **env):
+        e = {**os.environ, "REPO": str(self.repo), "RUN": str(self.fake), "PY": sys.executable,
+             "WORKDIR": str(self.root / "work"), "BASE": str(self.base), "FAKE_LOG": str(self.log), **env}
+        return subprocess.run(["bash", str(HERE_BENCH / "final_run.sh"), *args], capture_output=True, text=True, env=e)
+
+    def calls(self):
+        return self.log.read_text().splitlines() if self.log.exists() else []
+
+    def test_freeze_records_the_commit_builds_and_pins_the_stages_to_it(self):
+        r = self.script("freeze")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual((self.final / "commit").read_text().strip(), self.git("rev-parse", "HEAD"))
+        self.assertIn("setup tda4j tda4j-js", self.calls())
+        self.commit("second")
+        for stage in ("smoke", "tda4j", "freeze"):
+            r = self.script(stage)
+            self.assertNotEqual(r.returncode, 0, stage)
+            self.assertIn("use a new FINAL", r.stderr)
+
+    def test_a_stage_needs_a_frozen_clean_checkout(self):
+        r = self.script("tda4j")
+        self.assertIn("run the freeze stage first", r.stderr)
+        self.script("freeze")
+        (self.repo / "tracked.txt").write_text("changed")
+        r = self.script("tda4j")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("tracked files differ from HEAD (tracked.txt", r.stderr)
+        self.assertEqual(self.script("plan").returncode, 0, "a plan changes nothing, so a dirty tree is fine")
+
+    def test_the_tda4j_stage_runs_every_jvm_row_with_the_protocol_of_the_earlier_run(self):
+        self.script("freeze")
+        self.log.unlink()
+        r = self.script("tda4j")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        run = next(c for c in self.calls() if c.startswith("run "))
+        self.assertIn("--tools tda4j*,!tda4j-js*,tda4j-parallel-1t,tda4j-parallel-mt", run)
+        for option in ("--fields 2,17", "--timeout 7200.0", "--jvm-heap 96g", "--warmup 1", "--trials 3",
+                       "--warm-cap 30.0", "--jvm-opts -Xss8m", "--resume"):
+            self.assertIn(option, run)
+        self.assertEqual(self.script("tda4j", TIMEOUT="100", FIELDS="17").returncode, 0)
+        last = next(c for c in reversed(self.calls()) if c.startswith("run "))
+        self.assertIn("--fields 17 --timeout 100 ", last, "the environment beats the earlier run's protocol")
+
+    def test_the_merge_takes_the_other_tools_from_the_earlier_run_and_refuses_drifting_anchors(self):
+        self.script("freeze")
+        self.final.mkdir(parents=True, exist_ok=True)
+        (self.final / "tda4j").mkdir()
+        write_results(self.final / "tda4j", [result_row("c", "tda4j")])
+        (self.final / "anchors.verdict").write_text("drift\n")
+        r = self.script("merge")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("ALLOW_DRIFT=1", r.stderr)
+        self.assertFalse(any(c.startswith("merge") for c in self.calls()))
+        r = self.script("merge", ALLOW_DRIFT="1")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        merge = next(c for c in self.calls() if c.startswith("merge "))
+        self.assertEqual(merge, f"merge {self.final}/merged {self.base}:!tda4j* {self.final}/tda4j")
+        self.assertNotEqual(self.script("merge", ALLOW_DRIFT="1").returncode, 0, "a merge is not overwritten")
+
+    def test_the_v_construction_stage_runs_the_external_tools_at_z2_and_the_merge_takes_its_rows(self):
+        self.script("freeze")
+        self.log.unlink()
+        r = self.script("cubicalv")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("setup flashcubical", self.calls())
+        run = next(c for c in self.calls() if c.startswith("run "))
+        for option in ("--tools gudhi,cripser,flashcubical", "--cases *_v", "--fields 2 ", "--timeout 7200.0", "--resume"):
+            self.assertIn(option, run)
+        (self.final / "tda4j").mkdir(parents=True, exist_ok=True)
+        write_results(self.final / "tda4j", [result_row("c", "tda4j")])
+        write_results(self.final / "cubicalv", [result_row("c_v", "gudhi")])
+        (self.final / "anchors.verdict").write_text("ok\n")
+        self.assertEqual(self.script("merge").returncode, 0)
+        merge = next(c for c in self.calls() if c.startswith("merge "))
+        self.assertEqual(merge, f"merge {self.final}/merged {self.base}:!tda4j* {self.final}/tda4j {self.final}/cubicalv")
+
+    def test_the_smoke_stage_checks_the_v_cases_at_z2_with_a_missing_tool_an_error(self):
+        self.script("freeze")
+        self.log.unlink()
+        self.assertEqual(self.script("smoke").returncode, 0)
+        runs = [c for c in self.calls() if c.startswith("run ")]
+        v = next(c for c in runs if "--cases random2d_512_v,random3d_32_v" in c)
+        self.assertIn("--fields 2 ", v)
+        for tool in ("tda4j*", "gudhi", "cripser", "flashcubical"):
+            self.assertIn(tool, v)
+        self.assertIn("setup flashcubical", self.calls())
+
+    def test_status_names_the_commit_and_counts_rows(self):
+        self.script("freeze")
+        (self.final / "tda4j").mkdir(parents=True)
+        write_results(self.final / "tda4j", [result_row("c", "tda4j"), result_row("c", "tda4j", "warm", median="1")])
+        out = self.script("status").stdout
+        self.assertIn(f"frozen at: {self.git('rev-parse', 'HEAD')}", out)
+        self.assertRegex(out, r"tda4j\s+2 rows")
+
+    def test_the_plan_lists_every_stage_and_runs_nothing(self):
+        r = self.script("plan")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        for stage in ("freeze", "smoke", "anchors", "tda4j", "js", "cubicalv", "merge", "sweeps"):
+            self.assertIn(f"=== {stage}", r.stdout)
+        self.assertIn("sweep-threads", r.stdout)
+        self.assertEqual(self.calls(), [])
+        self.assertFalse(self.final.exists())
+
+    def test_the_defaults_name_cases_and_tools_that_exist(self):
+        text = (HERE_BENCH / "final_run.sh").read_text()
+
+        def default(name):
+            return re.search(name + r'="\$\{' + name + r':-([^}]*)\}"', text).group(1)
+
+        cases = {c.name for c in bench.CASES}
+        for name in ("JS_CASES", "SMOKE_CASES", "ANCHOR_CASES", "SMOKE_V_CASES"):
+            self.assertLessEqual(set(default(name).split(",")), cases, name)
+        tools = {t[0] for t in bench.TOOLS}
+        for name in ("ANCHOR_TOOLS", "CUBICALV_TOOLS"):
+            self.assertLessEqual(set(default(name).split(",")), tools, name)
+        v_cases = {c.name for c in bench.CASES if dict(c.params).get("construction") == "V"}
+        self.assertEqual({c for c in cases if bench.tool_selected(c, default("CUBICALV_CASES"))}, v_cases,
+                         "the V stage runs the V cases and nothing else")
+        self.assertTrue(set(default("SMOKE_V_CASES").split(",")) <= v_cases)
+        self.assertTrue(set(default("TDA4J_TOOLS").split(",")) & tools >= {"tda4j-parallel-1t", "tda4j-parallel-mt"})
+        self.assertTrue(all(bench.tool_selected(t, default("JS_TOOLS")) for t in tools if t.startswith("tda4j-js")))
+        selected = {t for t in tools if bench.tool_selected(t, default("TDA4J_TOOLS"))}
+        self.assertFalse({t for t in selected if t.startswith("tda4j-js")}, "the JVM stage leaves the JS twins out")
+        self.assertIn("tda4j-parallelverb-mt", selected)
+
+
+def refined(vertices):
+    """The T-construction array with the barcode of the V-construction array `vertices`: (2n - 1) per axis, a cell has the
+    largest value of its vertices (the definition, not the driver's separable passes)."""
+    import itertools
+    out = np.empty(tuple(2 * n - 1 for n in vertices.shape))
+    for idx in itertools.product(*[range(2 * n - 1) for n in vertices.shape]):
+        axes = [[i // 2] if i % 2 == 0 else [i // 2, i // 2 + 1] for i in idx]
+        out[idx] = max(vertices[v] for v in itertools.product(*axes))
+    return out
+
+
+class VConstructionTests(unittest.TestCase):
+    """The `_v` cubical cases: the array read as vertex values (a cell born at the largest value of its vertices), the
+    construction FlashCubical takes. TDA4j runs them on the refined image, the T-only rows leave them out, and the
+    V-only row leaves the T cases out."""
+
+    WORKER = Path(__file__).resolve().parent / "workers" / "py_worker.py"
+
+    def case(self, name):
+        return next(c for c in bench.CASES if c.name == name)
+
+    def test_every_cubical_case_has_a_v_twin_on_the_same_array(self):
+        for t in [c for c in bench.CASES if c.task == "cubical" and not c.name.endswith("_v")]:
+            v = self.case(t.name + "_v")
+            self.assertEqual((v.task, v.file, v.format, v.dim, v.threshold), (t.task, t.file, t.format, t.dim, t.threshold))
+            self.assertEqual(dict(v.params), {"construction": "V"})
+            self.assertEqual(dict(t.params), {})
+        self.assertEqual(len({c.name for c in bench.CASES}), len(bench.CASES), "case names are unique")
+
+    def test_the_cases_option_takes_patterns_like_the_tools_option(self):
+        names = lambda spec: [c.name for c in bench.CASES if bench.tool_selected(c.name, spec) and c.task == "cubical"]
+        self.assertTrue(all(n.endswith("_v") for n in names("*_v")) and len(names("*_v")) == 10)
+        self.assertEqual(len(names("!*_v")), 10)
+        self.assertEqual(names("random3d_32,random3d_32_v"), ["random3d_32", "random3d_32_v"])
+
+    def test_flashcubical_runs_only_v_cases_at_z2_and_the_t_only_rows_only_t_cases(self):
+        flash = dict((t[0], t[3]) for t in bench.TOOLS)["flashcubical"]
+        t_case, v_case = self.case("random2d_512"), self.case("random2d_512_v")
+        self.assertIn("V-construction only", bench.skip_reason(flash, t_case, 0, None, 2))
+        self.assertIsNone(bench.skip_reason(flash, v_case, 0, None, 2))
+        self.assertIn("Z/2", bench.skip_reason(flash, v_case, 0, None, 17))
+        for name in ("tda4j-js", "tda4j-js-cohomology"):
+            opts = dict((t[0], t[3]) for t in bench.TOOLS if t[2] == "cubical")[name]
+            self.assertIsNone(bench.skip_reason(opts, t_case, 0, None, 17), name)
+            self.assertIn("T-construction only", bench.skip_reason(opts, v_case, 0, None, 17), name)
+        for name in ("tda4j", "tda4j-cohomology", "gudhi", "cripser"):
+            opts = dict((t[0], t[3]) for t in bench.TOOLS if t[2] == "cubical")[name]
+            for case in (t_case, v_case):
+                self.assertIsNone(bench.skip_reason(opts, case, 0, None, 2), f"{name} {case.name}")
+
+    def test_every_tool_is_told_the_construction_and_flashcubical_is_found_by_its_module(self):
+        self.assertEqual(bench.case_extra_args(self.case("blob3d_64_v"), Path(".")), ["construction=V"])
+        self.assertEqual(bench.case_extra_args(self.case("blob3d_64"), Path(".")), [])
+        self.assertEqual(bench.available("py", {"pytool": "flashcubical"}, sys.executable), have("flash_cubical"))
+
+    def test_the_reference_counts_a_v_case_by_its_vertices(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "a.npy"
+            np.save(path, np.zeros((4, 5)))
+            t = count_cells.count_cubical(self.case("random2d_512"), path)
+            v = count_cells.count_cubical(self.case("random2d_512_v"), path)
+        self.assertEqual(json.loads(t["cells"]), {"0": 30, "1": 49, "2": 20})  # 4 x 5 top cells
+        self.assertEqual(json.loads(v["cells"]), {"0": 20, "1": 31, "2": 12})  # 4 x 5 vertices: 3 x 4 top cells
+        reference = bench.cells_reference()
+        self.assertEqual(int(reference["random2d_1024_v"]), 1048576 + 2 * 1024 * 1023 + 1023 * 1023)
+        self.assertEqual(int(reference["random2d_1024"]), 1025 * 1025 + 2 * 1024 * 1025 + 1024 * 1024)
+
+    def run_worker(self, tool, vertices, construction, dim=1, p=2, env=None):
+        with tempfile.TemporaryDirectory() as d:
+            source, out = Path(d) / "a.npy", Path(d) / "bars.tsv"
+            np.save(source, vertices)
+            cmd = [sys.executable, str(self.WORKER), f"tool={tool}", "task=cubical", f"input={source}", f"dim={dim}",
+                   f"p={p}", "warmup=0", "trials=1", f"out={out}"] + ([f"construction={construction}"] if construction else [])
+            r = subprocess.run(cmd, capture_output=True, text=True, env={**os.environ, **(env or {})})
+            return r, (bench.read_bars(out) if r.returncode == 0 else None)
+
+    def test_flashcubical_adapter_reads_birth_death_degree_and_keeps_the_degrees_asked_for(self):
+        with tempfile.TemporaryDirectory() as d:
+            # a stand-in for the extension: the rows of a Persistence.values (birth, death, degree), one in degree 2
+            (Path(d) / "flash_cubical.py").write_text(
+                "import numpy as np\n"
+                "class _P:\n    values = np.array([[0.0, np.inf, 0], [1.0, 2.0, 0], [0.5, 4.0, 1], [3.0, 5.0, 2]])\n"
+                "def compute(x, **kw):\n    assert x.dtype == np.float64 and x.flags.c_contiguous\n    return _P()\n")
+            r, bars = self.run_worker("flashcubical", np.zeros((4, 4)), "V", env={"PYTHONPATH": d})
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertEqual(bars, {0: [(0.0, math.inf), (1.0, 2.0)], 1: [(0.5, 4.0)]})
+            r, bars = self.run_worker("flashcubical", np.zeros((4, 4, 4)), "V", dim=2, env={"PYTHONPATH": d})
+            self.assertEqual(sorted(bars), [0, 1, 2])
+            self.assertEqual(json.loads(r.stdout.strip().splitlines()[-1])["bars"], {"0": 2, "1": 1, "2": 1})
+            for construction, p in ((None, 2), ("T", 2), ("V", 17)):
+                r, _ = self.run_worker("flashcubical", np.zeros((4, 4)), construction, p=p, env={"PYTHONPATH": d})
+                self.assertEqual(r.returncode, 3, f"construction={construction} p={p}: exit 3 is 'unsupported'")
+
+    @unittest.skipUnless(have("gudhi"), "gudhi missing")
+    def test_gudhi_reads_the_vertex_array_as_the_t_construction_of_the_refined_one(self):
+        # Two low vertices on a diagonal: one component as top cells (they share a corner), two as vertices.
+        checkerboard = np.array([[0.0, 5.0], [5.0, 0.0]])
+        _, as_t = self.run_worker("gudhi", checkerboard, None)
+        _, as_v = self.run_worker("gudhi", checkerboard, "V")
+        self.assertEqual(as_t, {0: [(0.0, math.inf)]})
+        self.assertEqual(sorted(as_v[0]), [(0.0, 5.0), (0.0, math.inf)])
+        self.assertEqual(sorted(as_v), [0])
+        rng = np.random.default_rng(3)
+        for shape in ((6, 7), (4, 4, 5)):
+            vertices = rng.integers(0, 6, shape).astype(float)  # ties on purpose
+            _, direct = self.run_worker("gudhi", vertices, "V", dim=len(shape) - 1)
+            _, through_t = self.run_worker("gudhi", refined(vertices), None, dim=len(shape) - 1)
+            for k in range(len(shape)):
+                self.assertEqual(sorted(direct.get(k, [])), sorted(through_t.get(k, [])), f"{shape} degree {k}")
+
+    @unittest.skipUnless(have("gudhi") and have("cripser"), "gudhi or cripser missing")
+    def test_cripser_in_the_v_construction_has_the_barcode_of_gudhi(self):
+        vertices = np.random.default_rng(5).integers(0, 6, (6, 6, 5)).astype(float)
+        _, reference = self.run_worker("gudhi", vertices, "V", dim=2)
+        r, bars = self.run_worker("cripser", vertices, "V", dim=2)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        dist, note = bench.agreement(bars, reference, 2)
+        self.assertEqual((dist, note), (0.0, ""))
 
 
 if __name__ == "__main__":

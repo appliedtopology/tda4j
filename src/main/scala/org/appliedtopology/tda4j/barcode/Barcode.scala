@@ -8,6 +8,8 @@ package org.appliedtopology.tda4j
 
 import cats.Show
 
+import scala.compiletime.asMatchable
+
 // Sealed on purpose: the four cases are the endpoints of an interval on the extended line, a closed classification that
 // `endpointOrdering` and every reader match on exhaustively.
 sealed trait BarcodeEndpoint[FiltrationT: Ordering]:
@@ -94,13 +96,26 @@ object BarcodeEndpoint:
   *   Type of the filtration parameter
   * @tparam AnnotationT
   *   Type of the annotation (we would expect this to be [[Chain]]).
+  * @param cells
+  *   the cell that opens the bar and the one that closes it, when the engine records them
+  *   ([[PersistenceBar.birthCell]], [[PersistenceBar.deathCell]] read them typed). Not part of equality.
   */
 case class PersistenceBar[FiltrationT: Ordering, AnnotationT](
   dim: Int,
   lower: BarcodeEndpoint[FiltrationT],
   upper: BarcodeEndpoint[FiltrationT],
-  annotation: Option[AnnotationT] = None
+  annotation: Option[AnnotationT] = None,
+  cells: Option[Involution.Pair[?]] = None
 ):
+
+  // A bar is its interval and its annotation. `cells` says how the engine found it, and an engine that does not record
+  // them leaves it empty, so it is left out of equality.
+  override def equals(other: Any): Boolean = other.asMatchable match
+    case that: PersistenceBar[?, ?] =>
+      dim == that.dim && lower == that.lower && upper == that.upper && annotation == that.annotation
+    case _ => false
+
+  override def hashCode: Int = scala.util.hashing.MurmurHash3.orderedHash(List(dim, lower, upper, annotation))
 
   /** True for `[v, v)`: a cell paired with one entering at the same filtration value, so no class ever exists. Engines
     * leave these out unless asked (`includeZeroLength = true`).
@@ -167,20 +182,29 @@ object PersistenceBar:
     def persistence: Double = death - birth
     def toTriple: (Int, Double, Double) = (bar.dim, birth, death)
 
+  /** The cells of a bar whose annotation is a chain over them, which is how the cell type is known: `bar.birthCell` is
+    * the cell whose entry creates the class (of the bar's dimension, valued at its birth) and `bar.deathCell` the one
+    * that kills it (one dimension up, valued at its death; none for an essential class). Both are `None` for a bar from
+    * an engine that does not record cells, `bar.cells.isDefined` telling that apart from an essential bar.
+    */
+  extension [CellT](bar: PersistenceBar[?, ? <: Chain[CellT, ?]])
+    def birthCell: Option[CellT] = bar.cells.map(_.birth.asInstanceOf[CellT])
+    def deathCell: Option[CellT] = bar.cells.flatMap(_.death).map(_.asInstanceOf[CellT])
+
   /** Filtering a list of bars (no import needed: these are found through the bar type's companion).
     *
     *   - `bars.longerThan(0.1)`: essential bars and bars with persistence strictly greater than `0.1`.
-    *   - `bars.significant()`: the same, with the threshold 1% of the bars' own filtration range (the MATLAB/CLI
+    *   - `bars.longerThanFraction()`: the same, with the threshold 1% of the bars' own filtration range (the MATLAB/CLI
     *     default policy; see [[PersistenceFilter]] for the scale to pass).
     */
   extension [A](bars: List[PersistenceBar[Double, A]])
     def longerThan(minPersistence: Double): List[PersistenceBar[Double, A]] =
       bars.filter(b => b.death.isPosInfinity || b.persistence > minPersistence)
-    def significant(
+    def longerThanFraction(
       fraction: Double = PersistenceFilter.DefaultFraction,
       scale: Optional[Double] = Optional.empty
     ): List[PersistenceBar[Double, A]] =
-      PersistenceFilter.significant(bars, fraction = fraction, scale = scale)
+      PersistenceFilter.longerThanFraction(bars, fraction = fraction, scale = scale)
 
   /** `bars` without the zero-length ones, unless `includeZeroLength`: what every engine applies to its output. */
   def dropZeroLength[F, A](
@@ -268,116 +292,131 @@ open class BarcodeBuilder[FiltrationT: Ordering]():
   * construction and the one call).
   */
 object Barcode:
+
+  /** The endpoints of some bars as numbers, for [[MapAlgebra]]: the rank of an endpoint's value among the distinct
+    * values of all of them, so the algebra sees only their order, whatever the filtration values are. Open and closed
+    * make no difference (a bar is the half-open interval between the values of its endpoints, as for
+    * [[PersistenceBar.birth]]); infinite endpoints stay infinite.
+    */
+  private final class Ranking[F](bars: Seq[PersistenceBar[F, ?]])(using ord: Ordering[F]):
+    private val values: Vector[F] =
+      bars
+        .flatMap(b => List(b.lower, b.upper))
+        .collect {
+          case ClosedEndpoint(v) => v
+          case OpenEndpoint(v)   => v
+        }
+        .sorted(using ord)
+        .foldLeft(Vector.empty[F])((kept, v) => if kept.nonEmpty && ord.equiv(kept.last, v) then kept else kept :+ v)
+    private val rank = scala.collection.immutable.TreeMap.from(values.zipWithIndex)(using ord)
+
+    def number(e: BarcodeEndpoint[F]): Double = e match
+      case NegativeInfinity() => Double.NegativeInfinity
+      case PositiveInfinity() => Double.PositiveInfinity
+      case ClosedEndpoint(v)  => rank(v).toDouble
+      case OpenEndpoint(v)    => rank(v).toDouble
+
+    def interval(bar: PersistenceBar[F, ?]): MapAlgebra.Interval =
+      MapAlgebra.Interval(number(bar.lower), number(bar.upper))
+
+    /** The value `x` stands for, as the closed lower end of a bar, or `-Infinity`. */
+    def lower(x: Double): BarcodeEndpoint[F] =
+      if x.isInfinite then NegativeInfinity[F]() else ClosedEndpoint(values(x.toInt))
+
+    /** The value `x` stands for, as the open upper end of a bar, or `Infinity`. */
+    def upper(x: Double): BarcodeEndpoint[F] =
+      if x.isInfinite then PositiveInfinity[F]() else OpenEndpoint(values(x.toInt))
+
+  // The matrix is `target.size x source.size`, a column to each source bar: the columns as the maps from bar indices.
+  private def columnsOf(matrix: DenseMatrix): IndexedSeq[Map[Int, Double]] =
+    (0 until matrix.cols).map(c =>
+      (0 until matrix.rows).collect { case r if matrix(r, c) != 0.0 => r -> matrix(r, c) }.toMap
+    )
+
+  private def checked[F: Ordering, A](
+    what: String,
+    source: List[PersistenceBar[F, A]],
+    target: List[PersistenceBar[F, A]],
+    matrix: DenseMatrix
+  ): Unit =
+    require(
+      matrix.rows == target.size && matrix.cols == source.size,
+      s"Barcode.$what: the matrix is ${matrix.rows} x ${matrix.cols}, but a map from ${source.size} bars to ${target.size} bars is ${target.size} x ${source.size} (a row for each target bar, a column for each source bar)"
+    )
+    require(
+      isMap(source, target, matrix),
+      s"Barcode.$what: the matrix is not a map of persistence modules; Barcode.isMap says which entries must be zero (a source bar [b, d) goes only to target bars [b', d') with b' <= b < d' <= d)"
+    )
+
+  /** Whether `matrix` is a map of persistence modules from the bars `source` to the bars `target`: a row for each
+    * target bar, a column for each source bar, and a nonzero entry only where the target bar `[b', d')` is born no
+    * later than the source bar `[b, d)`, is still alive when it is born, and dies no later than the source does: `b' <=
+    * b < d' <= d`.
+    */
   def isMap[FiltrationT: Ordering, AnnotationT](
     source: List[PersistenceBar[FiltrationT, AnnotationT]],
     target: List[PersistenceBar[FiltrationT, AnnotationT]],
     matrix: DenseMatrix
-  ): Boolean = (for
+  ): Boolean =
+    val ranking = Ranking(source ++ target)
+    val (from, to) = (source.map(ranking.interval).toVector, target.map(ranking.interval).toVector)
+    (for
       c <- 0 until matrix.cols
       r <- 0 until matrix.rows
       if matrix(r, c) != 0
-    yield source(c).lower >= target(
-      r
-    ).lower && // target must be born when source is born
-      source(c).upper >= target(
-        r
-      ).upper && // source must still live when target dies
-      source(c).lower <= target(
-        r
-      ).upper && // source must be born before target dies
-      source(c).upper >= target(
-        r
-      ).lower // target must be born before source dies
-  ).forall(b => b)
+    yield MapAlgebra.isLegal(from(c), to(r))).forall(identity)
 
-  def imageMatrix[FiltrationT: Ordering, AnnotationT](
-    source: List[PersistenceBar[FiltrationT, AnnotationT]],
-    target: List[PersistenceBar[FiltrationT, AnnotationT]],
-    matrix: DenseMatrix
-  ): DenseMatrix =
-    val matrixT = matrix.transpose
-    val births = source.map(_.lower)
-    val deaths = target.map(_.upper)
-    val birthOrder = births.zipWithIndex.sortBy(_._1).map(_._2)
-    val deathOrder = deaths.zipWithIndex.sortBy(_._1).map(_._2)
-    val imagematrix =
-      DenseMatrix.tabulate(births.size, deaths.size)((birth, death) => matrixT(birthOrder(birth), deathOrder(death)))
-    reduceMatrix(imagematrix)
-
+  /** The bars of the image of `matrix`, a map of persistence modules from `source` to `target` ([[isMap]]), as a
+    * barcode: each carries the degree and the annotation of the source bar it grows from. The matrix is over the real
+    * numbers, an entry counting as zero within `1e-9`; [[MapAlgebra]] does the same over any field.
+    */
   def image[FiltrationT: Ordering, AnnotationT](
     source: List[PersistenceBar[FiltrationT, AnnotationT]],
     target: List[PersistenceBar[FiltrationT, AnnotationT]],
     matrix: DenseMatrix
   ): List[PersistenceBar[FiltrationT, AnnotationT]] =
-    val births = source.map(_.lower)
-    val deaths = target.map(_.upper)
-    val imagematrix = imageMatrix(source, target, matrix)
-    (for (birth, death) <- pivotsOf(imagematrix)
-    yield PersistenceBar[FiltrationT, AnnotationT](
-      source(birth).dim,
-      births(birth),
-      deaths(death),
-      source(birth).annotation
-    )).toList
+    checked("image", source, target, matrix)
+    given Double is Field = Field.DoubleApproximated(1e-9)
+    val ranking = Ranking(source ++ target)
+    MapAlgebra
+      .image(source.map(ranking.interval).toVector, target.map(ranking.interval).toVector, columnsOf(matrix))
+      .map((i, bar) =>
+        PersistenceBar(source(i).dim, ranking.lower(bar.birth), ranking.upper(bar.death), source(i).annotation)
+      )
 
-  def kernel[FiltrationT, AnnotationT](
+  /** The bars of the kernel of `matrix` ([[image]] says what it is), each carrying the degree and annotation of its
+    * source bar.
+    */
+  def kernel[FiltrationT: Ordering, AnnotationT](
     source: List[PersistenceBar[FiltrationT, AnnotationT]],
     target: List[PersistenceBar[FiltrationT, AnnotationT]],
     matrix: DenseMatrix
-  )(using
-    ord: Ordering[FiltrationT]
   ): List[PersistenceBar[FiltrationT, AnnotationT]] =
-    val dualSource: List[PersistenceBar[FiltrationT, AnnotationT]] =
-      target.map(pb => PersistenceBar(pb.dim, pb.upper, pb.lower))
-    val dualTarget: List[PersistenceBar[FiltrationT, AnnotationT]] =
-      source.map(pb => PersistenceBar(pb.dim, pb.upper, pb.lower))
-    val cokernelIntervals =
-      cokernel(dualSource, dualTarget, matrix.transpose)(using ord = ord.reverse)
-    cokernelIntervals.map(pb => PersistenceBar(pb.dim, pb.upper, pb.lower))
+    checked("kernel", source, target, matrix)
+    given Double is Field = Field.DoubleApproximated(1e-9)
+    val ranking = Ranking(source ++ target)
+    MapAlgebra
+      .kernel(source.map(ranking.interval).toVector, target.map(ranking.interval).toVector, columnsOf(matrix))
+      .map((i, bar) =>
+        PersistenceBar(source(i).dim, ranking.lower(bar.birth), ranking.upper(bar.death), source(i).annotation)
+      )
 
-  def cokernelMatrix[FiltrationT, AnnotationT](
+  /** The bars of the cokernel of `matrix` ([[image]] says what it is), each carrying the degree and annotation of its
+    * target bar.
+    */
+  def cokernel[FiltrationT: Ordering, AnnotationT](
     source: List[PersistenceBar[FiltrationT, AnnotationT]],
     target: List[PersistenceBar[FiltrationT, AnnotationT]],
     matrix: DenseMatrix
-  )(using
-    ord: Ordering[FiltrationT]
-  ): DenseMatrix =
-    val births = target.map(_.lower)
-    val deaths = source.map(_.lower.flip) ++ target.map(_.upper)
-    val birthOrder = births.zipWithIndex.sortBy(_._1).map(_._2)
-    val deathOrder = deaths.zipWithIndex.sortBy(_._1).map(_._2)
-    val cokernelmatrix = Array.ofDim[Double](births.size, deaths.size)
-    for
-      s <- 0 until source.size
-      t <- 0 until target.size
-    do cokernelmatrix(t)(s) = matrix(birthOrder(t), deathOrder(s))
-    (0 until target.size).foreach { t =>
-      cokernelmatrix(birthOrder(t))(deathOrder(source.size + t)) = 1.0
-    }
-    reduceMatrix(DenseMatrix(cokernelmatrix))
-
-  def cokernel[FiltrationT, AnnotationT](
-    source: List[PersistenceBar[FiltrationT, AnnotationT]],
-    target: List[PersistenceBar[FiltrationT, AnnotationT]],
-    matrix: DenseMatrix
-  )(using
-    ord: Ordering[FiltrationT]
   ): List[PersistenceBar[FiltrationT, AnnotationT]] =
-    val births = target.map(_.lower)
-    val deaths = source.map(_.lower.flip) ++ target.map(_.upper)
-    val birthOrder = births.zipWithIndex.sortBy(_._1).map(_._2)
-    val deathOrder = deaths.zipWithIndex.sortBy(_._1).map(_._2)
-    val cokernelmatrix = cokernelMatrix(source, target, matrix)
-    (for
-      (row, col) <- pivotsOf(cokernelmatrix)
-      birth <- List(birthOrder.indexOf(row))
-      death <- List(deathOrder.indexOf(col))
-    yield PersistenceBar[FiltrationT, AnnotationT](
-      target(birth).dim,
-      births(birth),
-      deaths(death),
-      target(birth).annotation
-    )).toList
+    checked("cokernel", source, target, matrix)
+    given Double is Field = Field.DoubleApproximated(1e-9)
+    val ranking = Ranking(source ++ target)
+    MapAlgebra
+      .cokernel(source.map(ranking.interval).toVector, target.map(ranking.interval).toVector, columnsOf(matrix))
+      .map((j, bar) =>
+        PersistenceBar(target(j).dim, ranking.lower(bar.birth), ranking.upper(bar.death), target(j).annotation)
+      )
 
   /** `matrix` with every column reduced by the columns to its left, by their lowest nonzero entries (the standard
     * persistence reduction over the reals): afterwards no two nonzero columns have the same lowest nonzero row. The
@@ -409,6 +448,135 @@ object Barcode:
     var row = rows - 1
     while row >= 0 && a(row)(col) == 0 do row -= 1
     row
+
+  // ---- Products, Hom and the dual of barcodes ----
+
+  private def requireFiniteBirths(what: String, bars: Seq[PersistenceBar[Double, ?]]): Unit =
+    require(
+      bars.forall(_.birth.isFinite),
+      s"Barcode.$what: every bar needs a finite birth (a bar from -Infinity has no shift to take)"
+    )
+
+  // A bar from `lower` to `upper`; an `upper` of Infinity is a bar that never dies.
+  private def plainBar(dim: Int, lower: Double, upper: Double): PersistenceBar[Double, Nothing] =
+    if upper.isPosInfinity then PersistenceBar[Double](dim, lower) else PersistenceBar[Double](dim, lower, upper)
+
+  private def inOrder(bars: Iterable[PersistenceBar[Double, Nothing]]): List[PersistenceBar[Double, Nothing]] =
+    bars.toList.sortBy(b => (b.dim, b.birth, b.death))
+
+  /** The pointwise tensor product of two barcodes, the module `t ↦ M_t ⊗ N_t`: the bars `[a, b)` and `[c, d)` give the
+    * bar `[max(a, c), min(b, d))` when that is not empty, and the degrees add (`p` and `q` give `p + q`). It is the
+    * homology of the product of two filtered complexes with [[ProductComplex.Combine.Max]] (a persistent Künneth
+    * theorem, [[kunneth]]). Only the numbers of the endpoints count; the bars come back with no annotation, ordered by
+    * degree, birth and death.
+    */
+  def tensor(
+    first: Seq[PersistenceBar[Double, ?]],
+    second: Seq[PersistenceBar[Double, ?]]
+  ): List[PersistenceBar[Double, Nothing]] =
+    inOrder(for
+      m <- first
+      n <- second
+      lower = math.max(m.birth, n.birth)
+      upper = math.min(m.death, n.death)
+      if lower < upper
+    yield plainBar(m.dim + n.dim, lower, upper))
+
+  /** The convolution of two barcodes, the tensor product over the filtration parameter (the Day convolution): the
+    * module whose value at `t` is generated by the products of an element of `M` at `s` and of `N` at `u` with `s + u
+    * <= t`. The bars `[a, b)` and `[c, d)` give `[a + c, min(b + c, a + d))`, the degrees add. It is the homology of
+    * the product of two filtered complexes with [[ProductComplex.Combine.Sum]] up to the terms [[tor]] adds
+    * ([[kunneth]]), and the left adjoint of [[hom]].
+    */
+  def convolve(
+    first: Seq[PersistenceBar[Double, ?]],
+    second: Seq[PersistenceBar[Double, ?]]
+  ): List[PersistenceBar[Double, Nothing]] =
+    requireFiniteBirths("convolve", first ++ second)
+    inOrder(for
+      m <- first
+      n <- second
+    yield plainBar(m.dim + n.dim, m.birth + n.birth, math.min(m.death + n.birth, m.birth + n.death)))
+
+  /** The first Tor of two barcodes over the filtration parameter: for two finite bars `[a, b)` and `[c, d)`, the bar
+    * `[max(b + c, a + d), b + d)`, in degree `p + q + 1`. A bar that never dies is free and contributes nothing.
+    */
+  def tor(
+    first: Seq[PersistenceBar[Double, ?]],
+    second: Seq[PersistenceBar[Double, ?]]
+  ): List[PersistenceBar[Double, Nothing]] =
+    requireFiniteBirths("tor", first ++ second)
+    inOrder(for
+      m <- first
+      n <- second
+      if m.death.isFinite && n.death.isFinite
+    yield plainBar(m.dim + n.dim + 1, math.max(m.death + n.birth, m.birth + n.death), m.death + n.death))
+
+  /** The barcode of the homology of the product of two filtered complexes, from the barcodes of the factors (all of
+    * their degrees; the result is right in the degrees below the highest degree both were computed to). A cell `(σ, τ)`
+    * of the product enters at `Max` or `Sum` of the values of `σ` and `τ` ([[ProductComplex.Combine]]):
+    *
+    *   - `Max`: `H_n(X × Y) = ⊕_{p + q = n} H_p(X) ⊗ H_q(Y)`, naturally in the filtration value, so the barcode is
+    *     [[tensor]] of the factors;
+    *   - `Sum`: the Künneth sequence over the filtration parameter, `⊕_{p + q = n} H_p(X) ⊛ H_q(Y)` (the [[convolve]])
+    *     and `⊕_{p + q = n - 1} Tor(H_p(X), H_q(Y))` (the [[tor]]).
+    *
+    * [[ProductComplex]] builds the product itself, which the tests compute the same bars from.
+    */
+  def kunneth(
+    first: Seq[PersistenceBar[Double, ?]],
+    second: Seq[PersistenceBar[Double, ?]],
+    combine: ProductComplex.Combine = ProductComplex.Combine.Max
+  ): List[PersistenceBar[Double, Nothing]] = combine match
+    case ProductComplex.Combine.Max => tensor(first, second)
+    case ProductComplex.Combine.Sum => inOrder(convolve(first, second) ++ tor(first, second))
+
+  /** The internal Hom of two barcodes, the module `[M, N]_t = Hom(M, N shifted by t)` of the maps from `M` to `N`
+    * shifted back by `t`: the bars `[a, b)` of `M` and `[c, d)` of `N` give `[max(c - a, d - b), d - a)` when that is
+    * not empty (none, for instance, from a bar that dies to one that never does). The degree of a bar is `q - p`: the
+    * maps of degree `q - p` from a degree `p` bar to a degree `q` bar. This is the right adjoint of [[convolve]]:
+    * `Hom(M ⊛ N, P) ≅ Hom(M, [N, P])`; the module of maps that exist, not the derived one (no Ext).
+    */
+  def hom(
+    first: Seq[PersistenceBar[Double, ?]],
+    second: Seq[PersistenceBar[Double, ?]]
+  ): List[PersistenceBar[Double, Nothing]] =
+    requireFiniteBirths("hom", first ++ second)
+    inOrder(for
+      m <- first
+      n <- second
+      lower = math.max(n.birth - m.birth, if m.death.isPosInfinity then Double.NegativeInfinity else n.death - m.death)
+      upper = n.death - m.birth
+      if lower < upper
+    yield plainBar(n.dim - m.dim, lower, upper))
+
+  /** The dimension of the space of maps of persistence modules from `first` to `second` (natural transformations degree
+    * by degree, with no shift): the number of pairs of a bar `[b, d)` of the first and a bar `[b', d')` of the second
+    * with `b' <= b < d' <= d`, each contributing one.
+    */
+  def homDimension(first: Seq[PersistenceBar[Double, ?]], second: Seq[PersistenceBar[Double, ?]]): Int =
+    (for
+      m <- first
+      n <- second
+      if m.dim == n.dim && MapAlgebra.isLegal(
+        MapAlgebra.Interval(m.birth, m.death),
+        MapAlgebra.Interval(n.birth, n.death)
+      )
+    yield 1).sum
+
+  /** The dual of a barcode, the module of linear functionals `t ↦ (M_t)*` with the arrows reversed, indexed by `-t` to
+    * run forward again: the interval is reflected, so the bar `[b, d)` becomes `(-d, -b]` (open below, closed above;
+    * from `-Infinity` for a bar that never dies), and the dual of the dual is the barcode you started from. The degrees
+    * are kept: the dual of the homology in degree `k` is the cohomology in degree `k`, indexed by `-t`, so for a finite
+    * complex over a field the two have the same pairs of values.
+    */
+  def dual[A](bars: Seq[PersistenceBar[Double, A]]): List[PersistenceBar[Double, Nothing]] =
+    def reflected(end: BarcodeEndpoint[Double]): BarcodeEndpoint[Double] = end match
+      case ClosedEndpoint(v)  => ClosedEndpoint(-v)
+      case OpenEndpoint(v)    => OpenEndpoint(-v)
+      case PositiveInfinity() => NegativeInfinity[Double]()
+      case NegativeInfinity() => PositiveInfinity[Double]()
+    inOrder(bars.map(bar => PersistenceBar[Double, Nothing](bar.dim, reflected(bar.upper), reflected(bar.lower))))
 
 type BarcodeGenerators[FiltrationT, CellT, CoefficientT] =
   List[PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]]]

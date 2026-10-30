@@ -29,7 +29,10 @@ radius, dimension by dimension, up to `maxDimension + 1` (`AlphaComplexDQPStream
 point (64 sample points) and compares a per-point cost model fitted to measurements (DQP about `c_d k^1.6`,
 BowyerWatson about `b_d (n/1000)^0.2`, Helix in 5-D about `150 (n/1000)^0.4`; in ambient dimension 6 and up DQP
 whenever a radius is given). `AlphaShapes.fromPoints` (the `Persistence` verb) and the MATLAB/CLI `maxFiltrationValue`
-pass the radius through; `engine=fast-alpha` needs a whole triangulation and refuses a radius. The facade's `alphaBackend`
+pass the radius through. Without one the verb calls `AlphaShapes.upToEnclosingRadius`: the triangulation (`BowyerWatson`
+or `Helix`; `Default` would pick DQP for any radius in 6 or more dimensions) cut at `metricSpace.minimumEnclosingRadius`,
+past which the union of balls is contractible; the MATLAB/CLI `complex=alpha` does the same. `maxFiltrationValue =
+Infinity` gives the whole complex, and `engine=fast-alpha` needs a whole triangulation and refuses a radius. The facade's `alphaBackend`
 string goes through `AlphaBackend.parse` (default `default`). All backends extend the common `AlphaShapes` abstract
 class, so they are interchangeable for any code consuming the stream: `AlphaComplexSpec` runs identical property
 checks against both, and `AlphaDispatchSpec` checks that the radius-limited complexes and the verb's bars agree.
@@ -159,15 +162,37 @@ maxRadius, maxDimension, settings)` directly.
   valid directions.
 - Ratio-test ties use the constraint's global index (Bland-style ordering).
 - When a small Schur complement cannot be handled safely, `DualQP.solve`
-  conservatively rejects that candidate simplex rather than risking
-  non-termination.
+  does not commit to it. Valid simplices of large circumradius, which are
+  common in high ambient dimension, have such pivots, so the candidate is solved
+  again with `rescueRankTolerance` (default `1e-11`) and kept only if the
+  multipliers it ends with satisfy the optimality conditions of the dual
+  against the data (a garbage answer from a poisoned factor fails them). The
+  cells then agree with Helix's within the radius, up to a circumradius of
+  about a hundred times the point spacing; past that the values are
+  approximate, so give `maxRadius` (or use `upToEnclosingRadius`) rather
+  than building the whole complex with DQP.
 - Vertex filtration values must use `space.weight(x)`; hard-coding `0.0`
   breaks weighted alpha filtrations.
 
-## Opt-in parallelism
+## Parallelism
 
-`AlphaDQPSettings.parallel` runs the per-vertex QP solves on the common
-`ForkJoinPool`. It is disabled by default and preserves deterministic output.
+The alpha complex shares its work between the threads of the JVM's common `ForkJoinPool`, and gives the same answer
+whatever the number of threads: the same simplices, values to the last bit, and stream order.
+
+- `AlphaDQPSettings.parallel` (on by default) solves the QPs of different vertices at the same time.
+- The Helix walk evaluates the next queued frontier facets together: for each, the Delaunay cofacet, the points on its
+  circumsphere and the hyperplanes of its other facets depend on the points alone. The walk then takes the facets in
+  queue order, as it always did, and uses what was computed; a facet that is cancelled or visited before its turn was
+  evaluated for nothing. The batch is eight facets per thread, and only for clouds with at least 500 coordinates.
+- The face tables of each dimension are numbered in the order the faces first occur, as a sequential pass would, but the
+  faces are found by one thread per partition of their hash, and the numbers are the ranks of the first occurrences.
+- Circumspheres, the Gabriel test, alpha values, the `Simplex` objects and the sort of each dimension run on ranges of
+  the faces.
+- The Bowyer-Watson insertion is sequential: each insertion changes the triangulation the next one walks in. Its time is
+  the triangulation and no more than a few seconds for 100,000 points in R^3; the rest of the pipeline is shared.
+
+`-Djava.util.concurrent.ForkJoinPool.common.parallelism=0` runs everything on the calling thread. On Scala.js there is
+one thread and the same code runs in order.
 
 ## Backend tradeoffs
 

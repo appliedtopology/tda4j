@@ -28,8 +28,10 @@ after every job below passes locally.
 | `test` (`test.yml`) | `sbt "clean ; tda4j/test"` on a fresh runner, then `sbt tda4j/assembly` and the jar run on `noisy-circle.csv` (exactly one degree-1 bar) | `sbt clean tda4j/testFull`; `sbt tda4j/assembly` and the same run | root-cause it; never skip, disable or loosen a test |
 | `test-js` (`test.yml`) | `sbt "clean ; tda4jJS/test"` with Node 22 | the same (Node 20.16 or newer) | root-cause it; a spec that needs a JVM moves to `src/test/scalajvm`, a failure on shared code is fixed in the shared code (`rules/scalajs.md`) |
 | `npm-package` (`test.yml`) | `sbt tda4jJS/npmPack`, then install the tarball into an empty project and run the library and `npx tda4j` | the same | the step that failed names it |
+| `python-package` (`test.yml`) | `sbt tda4j/assembly`, `python/scripts/bundle-jar.sh`, `python -m build --wheel python`, then the wheel installed in clean venvs (Python 3.13 and 3.10) and `python/tests` run from a copy outside the checkout | the same, or `TDA4J_JAR=<jar> PYTHONPATH=python/src pytest python/tests` for the sources | the failing test names it; a new facade method without a Python wrapper fails `test_facade_coverage.py` (`rules/python.md`) |
 | `docs-build` (`test.yml`) | `TDA4J_SCALA_VERSION=3.8.4 sbt tda4j/doc` | `sbt shutdown`, then the same | the error names `page.md:line` |
 | `mima` (`test.yml`) | `sbt tda4j/mimaReportBinaryIssues` | the same | see below |
+| `dry-run` (`snapshot.yml`, only on a PR that changes it or `sonatype.sbt`) | a dry run of the daily snapshot: `tda4j/publish` and `tda4jJS/publish` into `target/dry-run-repo`, then a check that the jar, sources, scaladoc and POM of both artifacts exist | `sbt 'set ThisBuild / publishTo := Some(Resolver.file("dry-run", file("target/dry-run-repo"))(Resolver.mavenStylePatterns))' tda4j/publish tda4jJS/publish` | the step names the missing file; a real publish needs secrets and is not run on a PR (`RELEASE.md`, "Snapshots") |
 
 CI starts every one of these with `sbt --server` (sbt in the foreground, exiting with its step), in every workflow; the
 table leaves the flag out because locally plain `sbt` is right. Through the thin client a server stays behind and
@@ -92,8 +94,9 @@ Codecov's commit statuses are informational (`codecov.yml`).
 
 ## What a push carries
 
-- **A `CHANGELOG.md` line** under Unreleased for anything a user sees or calls; a break goes under Breaking, with what
-  to write instead.
+- **A `changelog.d/<topic>.md` fragment** for anything a user sees or calls (format: `changelog.d/README.md`); a break
+  goes under Breaking, with what to write instead. Never a line of `CHANGELOG.md`: the `changelog` job fails it, and two
+  PRs that add to the same list conflict and drop out of the merge queue.
 - **An issue for everything left open**: a question for the project lead (`question`), a limitation (`enhancement`,
   `performance`), a claim nobody has checked (`unverified`). Search the issues first, open and closed. The body says
   what, where (files, worklog) and what done looks like, and ends with the attribution footer. Link the issues from

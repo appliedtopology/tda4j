@@ -114,7 +114,7 @@ object Side:
   *   a palette role (`Paint.Muted`) or a color of your own (`Paint.Fixed("#333333")`)
   * @param limit
   *   the longest the text may be, in pixels: a longer one is cut and ends in `…`, with the whole text as its tooltip.
-  *   The width is estimated from the characters (0.6 of the size each), as a font is not known
+  *   The width is estimated letter by letter ([[TextWidth]]), as the font the reader sees is not known
   */
 final case class TextStyle(
   size: Option[Double] = None,
@@ -184,14 +184,22 @@ final case class TextFace(
   paint: Paint,
   limit: Option[Double] = None
 ):
-  /** `text` as far as it fits within `limit` at the pixel size `px` (a character is taken to be 0.6 of it wide), and
-    * whether it was cut.
+  /** `text` as far as it fits within `limit` at the pixel size `px`, and whether it was cut. The width of a text is
+    * estimated letter by letter ([[TextWidth]]) for this face's font, or `font` (the style's font list) when the face
+    * names none; a cut text ends in an ellipsis, which counts toward the limit.
     */
-  def fit(text: String, px: Double): (String, Boolean) =
+  def fit(text: String, px: Double, font: String = Style.DefaultFont): (String, Boolean) =
     limit match
-      case Some(l) if text.length * 0.6 * px > l =>
-        val keep = math.max(1, (l / (0.6 * px)).toInt - 1)
-        (text.take(keep) + "…", true)
+      case Some(l) =>
+        val family = TextWidth.Family.of(this.font.getOrElse(font))
+        val bold = weight.exists(_.css >= 600)
+        def width(t: String) = TextWidth.of(t, px, family, bold)
+        if width(text) <= l then (text, false)
+        else
+          val dots = width("…")
+          val widths = text.scanLeft(0.0)((w, c) => w + width(c.toString)).tail
+          val keep = math.max(1, widths.count(_ + dots <= l))
+          (text.take(keep) + "…", true)
       case _ => (text, false)
 
 /** A line as it is drawn: every setting has a value. */
@@ -200,6 +208,25 @@ final case class LineStroke(visible: Boolean, width: Double, paint: Paint, dash:
 /** Tick marks as they are drawn: a length in pixels (`0` is none), a direction, and the line they are drawn in. */
 final case class TickMarks(length: Double, direction: TickDirection, stroke: LineStroke):
   def drawn: Boolean = stroke.visible && length > 0
+
+/** The box around a legend and how its entries are arranged, as asked for: nothing is drawn behind a legend unless it
+  * has a `fill` or a visible `frame`.
+  *
+  * @param fill
+  *   the background of the box (a paint and its opacity), if it has one
+  * @param frame
+  *   the line round the box
+  * @param padding
+  *   the room between the box and its entries, in pixels before the legend's text scale (6 if not given)
+  * @param columns
+  *   the number of columns of entries (1 if not given), filled one column before the next
+  */
+final case class LegendBox(
+  fill: Option[(Paint, Double)] = None,
+  frame: LineStyle = LineStyle(),
+  padding: Option[Double] = None,
+  columns: Option[Int] = None
+)
 
 /** The finer-grained look of a figure: what each piece of text, the gridlines, the axis lines, the tick marks, a frame
   * and the plot area's own fill are like, where the plot's [[Style]] has only the font, the scales of text and marks,
@@ -213,6 +240,8 @@ final case class TickMarks(length: Double, direction: TickDirection, stroke: Lin
   *   the look of each text role that was changed
   * @param panel
   *   the fill of the plot area, if it has one
+  * @param legendBox
+  *   the box round the legend and its columns
   * @param marker
   *   what to change about every point's marker (the shape, size, opacity, fill and edge)
   * @param numbers
@@ -228,7 +257,8 @@ final case class Elements(
   frame: LineStyle = LineStyle(),
   panel: Option[(Paint, Double)] = None,
   marker: MarkerStyle = MarkerStyle(),
-  numbers: NumberStyle = NumberStyle()
+  numbers: NumberStyle = NumberStyle(),
+  legendBox: LegendBox = LegendBox()
 ):
   /** This with `style` merged into what the text role `role` has. */
   def withText(role: TextRole, style: TextStyle): Elements =
@@ -264,12 +294,28 @@ final case class Elements(
   def minorGridStroke: LineStroke = stroke(minorGrid, LineStroke(false, 0.5, Paint.Grid, Dash.Solid, 1.0))
   def axisStroke: LineStroke = stroke(axis, LineStroke(true, 1.0, Paint.Axis, Dash.Solid, 1.0))
   def frameStroke: LineStroke = stroke(frame, LineStroke(false, 1.0, Paint.Axis, Dash.Solid, 1.0))
+
+  /** The line round the legend's box: off unless asked for. */
+  def legendFrameStroke: LineStroke = stroke(legendBox.frame, LineStroke(false, 1.0, Paint.Axis, Dash.Solid, 1.0))
+
+  /** Whether the legend has a box: a fill, or a frame that shows. */
+  def legendBoxDrawn: Boolean = legendBox.fill.isDefined || legendFrameStroke.visible
+
+  /** The room between the legend's box and its entries, in pixels before the legend's text scale. */
+  def legendPadding: Double = legendBox.padding.getOrElse(Elements.DefaultLegendPadding)
+
   def tickMarks: TickMarks =
     marks(ticks, TickMarks(0.0, TickDirection.Out, LineStroke(true, 1.0, Paint.Muted, Dash.Solid, 1.0)))
   def minorTickMarks: TickMarks =
     marks(minorTicks, TickMarks(0.0, TickDirection.Out, LineStroke(true, 1.0, Paint.Muted, Dash.Solid, 1.0)))
 
 object Elements:
+  /** The room inside a legend's box, in pixels. */
+  val DefaultLegendPadding: Double = 6.0
+
+  /** The fill of a legend's box when only its opacity or nothing is given: the page, a little see-through. */
+  val DefaultLegendFill: (Paint, Double) = (Paint.Surface, 0.9)
+
   /** What each text role is like unless changed: its weight, its alignment and its color. */
   private[plot] def defaultText(role: TextRole): TextFace =
     val (weight, align, paint) = role match

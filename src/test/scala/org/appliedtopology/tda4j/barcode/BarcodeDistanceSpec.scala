@@ -333,6 +333,102 @@ class BarcodeDistanceSpec extends Specification with ScalaCheck:
     }
   }
 
+  "matchings" >> {
+    type Bars = List[PersistenceBar[Double, Nothing]]
+    val noBars: Bars = Nil
+
+    // The cost a matching realizes under the L-infinity ground norm: pairs by max(|db|, |dd|), the rest to the diagonal.
+    def costs(d1: Bars, d2: Bars, m: BarcodeDistance.Matching): Seq[Double] =
+      def pt(b: PersistenceBar[Double, Nothing]) = DiagramPoint.of(b)
+      m.pairs.map((i, j) =>
+        math.max(math.abs(pt(d1(i)).birth - pt(d2(j)).birth), math.abs(pt(d1(i)).death - pt(d2(j)).death))
+      ) ++
+        m.leftToDiagonal.map(i => pt(d1(i)).persistence / 2.0) ++ m.rightToDiagonal.map(j =>
+          pt(d2(j)).persistence / 2.0
+        )
+    def usesEveryBarOnce(d1: Bars, d2: Bars, m: BarcodeDistance.Matching): Boolean =
+      (m.pairs.map(_._1) ++ m.leftToDiagonal).sorted == d1.indices.toList &&
+        (m.pairs.map(_._2) ++ m.rightToDiagonal).sorted == d2.indices.toList
+
+    "a close pair is matched directly, a lone bar goes to the diagonal" >> {
+      val near = BarcodeDistance.wassersteinMatching(List(bar(0, 0.0, 5.0)), List(bar(0, 1.0, 4.0))).get
+      near.pairs must beEqualTo(Vector((0, 0)))
+      near.cost must beCloseTo(1.0, 1e-9)
+      val alone = BarcodeDistance.bottleneckMatching(List(bar(0, 0.0, 5.0)), noBars).get
+      alone.pairs must beEmpty
+      alone.leftToDiagonal must beEqualTo(Vector(0))
+      alone.cost must beCloseTo(2.5, 1e-9)
+    }
+
+    "matching the far apart bars across would cost more than the diagonal: the nearer partner wins" >> {
+      // (0,10) and (0,1) against (0,9.5): the long bars pair, the short one goes to the diagonal.
+      val m = BarcodeDistance.wassersteinMatching(List(bar(0, 0.0, 10.0), bar(0, 0.0, 1.0)), List(bar(0, 0.0, 9.5))).get
+      m.pairs must beEqualTo(Vector((0, 0)))
+      m.leftToDiagonal must beEqualTo(Vector(1))
+      m.cost must beCloseTo(0.5 + 0.5, 1e-9)
+    }
+
+    "essential bars are matched in order of birth, and unequal numbers have no matching" >> {
+      val d1 = List(essentialBar(0, 3.0), essentialBar(0, 1.0))
+      val d2 = List(essentialBar(0, 0.0), essentialBar(0, 2.5))
+      val m = BarcodeDistance.wassersteinMatching(d1, d2).get
+      m.pairs.toSet must beEqualTo(Set((1, 0), (0, 1)))
+      m.cost must beCloseTo(1.5, 1e-9)
+      BarcodeDistance.wassersteinMatching(d1, List(essentialBar(0, 0.0))) must beNone
+      BarcodeDistance.bottleneckMatching(d1, List(essentialBar(0, 0.0))) must beNone
+    }
+
+    "the Wasserstein matching realizes the distance, using every bar once" >> {
+      val prop = forAll(diagramGen, diagramGen) { (d1: Bars, d2: Bars) =>
+        val m = BarcodeDistance.wassersteinMatching(d1, d2, order = 1.0).get
+        usesEveryBarOnce(d1, d2, m) &&
+        math.abs(costs(d1, d2, m).sum - BarcodeDistance.wassersteinDistance(d1, d2)) < 1e-9 &&
+        math.abs(m.cost - BarcodeDistance.wassersteinDistance(d1, d2)) < 1e-9
+      }
+      prop
+    }
+
+    "the bottleneck matching realizes the distance, using every bar once" >> {
+      val prop = forAll(diagramGen, diagramGen) { (d1: Bars, d2: Bars) =>
+        val m = BarcodeDistance.bottleneckMatching(d1, d2).get
+        val realized = costs(d1, d2, m).maxOption.getOrElse(0.0)
+        usesEveryBarOnce(d1, d2, m) &&
+        math.abs(realized - BarcodeDistance.bottleneckDistance(d1, d2)) < 1e-9 &&
+        math.abs(m.cost - BarcodeDistance.bottleneckDistance(d1, d2)) < 1e-9
+      }
+      prop
+    }
+  }
+
+  "slicedWassersteinDistance" >> {
+    type Bars = List[PersistenceBar[Double, Nothing]]
+
+    "a diagram against itself, and against its copy with essential bars added, is 0" >> {
+      val d = List(bar(0, 0.0, 5.0), bar(0, 1.0, 3.0))
+      BarcodeDistance.slicedWassersteinDistance(d, d) must beCloseTo(0.0, 1e-12)
+      BarcodeDistance.slicedWassersteinDistance(d, d :+ essentialBar(0, 0.0)) must beCloseTo(0.0, 1e-12)
+    }
+
+    "one bar against nothing tends to persistence * sqrt(2) / pi" >> {
+      val d = List(bar(0, 0.0, 2.0))
+      BarcodeDistance.slicedWassersteinDistance(d, List.empty[PersistenceBar[Double, Nothing]], directions = 1000) must
+        beCloseTo(2.0 * math.sqrt(2.0) / math.Pi, 1e-5)
+    }
+
+    "is symmetric and at most sqrt(2) times the 1-Wasserstein distance" >> {
+      val prop = forAll(diagramGen, diagramGen) { (d1: Bars, d2: Bars) =>
+        val sw = BarcodeDistance.slicedWassersteinDistance(d1, d2, directions = 60)
+        math.abs(sw - BarcodeDistance.slicedWassersteinDistance(d2, d1, directions = 60)) < 1e-9 &&
+        sw <= math.sqrt(2.0) * BarcodeDistance.wassersteinDistance(d1, d2) + 1e-9
+      }
+      prop
+    }
+
+    "rejects zero directions" >> {
+      BarcodeDistance.slicedWassersteinDistance(Nil, Nil, directions = 0) must throwA[IllegalArgumentException]
+    }
+  }
+
   private def diagramGen: Gen[List[PersistenceBar[Double, Nothing]]] =
     val pointGen =
       for

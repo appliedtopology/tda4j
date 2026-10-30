@@ -197,6 +197,6 @@ object Involution:
       val upper: BarcodeEndpoint[Double] = death match
         case Some(tau) => OpenEndpoint(fv(tau))
         case None      => PositiveInfinity()
-      new PersistenceBar(dim, ClosedEndpoint(fv(sigma)), upper, Some(z))
+      new PersistenceBar(dim, ClosedEndpoint(fv(sigma)), upper, Some(z), Some(Pair(dim, sigma, death)))
     }
     PersistenceBar.dropZeroLength(bars, includeZeroLength)

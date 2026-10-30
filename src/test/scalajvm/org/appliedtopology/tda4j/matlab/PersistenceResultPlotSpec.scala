@@ -64,11 +64,23 @@ class PersistenceResultPlotSpec extends Specification:
     "color a cocycle by value, and restrict it to the complex at a scale" >> {
       val r = TDA4j.computeFromPoints(circle, Array("maxDimension", "1", "representativeType", "cocycles"))
       val loop = r.mostPersistentBar(1)
-      val all = tips(r.plotRepresentative(loop).svg(), "∆(")
+      val all = tips(r.plotRepresentative(loop, Double.PositiveInfinity).svg(), "∆(")
       val atBirth = tips(r.plotRepresentative(loop, r.birth(loop)).svg(), "∆(")
       (all.size must beEqualTo(r.cycleVertices(loop).length)) and
         (atBirth.size must beGreaterThan(0)) and (atBirth.size must beLessThan(all.size)) and
         (r.plotRepresentative(loop).colorScale must beSome)
+    }
+    "draw a cocycle restricted to its bar's birth unless it is asked for whole" >> {
+      val r = TDA4j.computeFromPoints(circle, Array("maxDimension", "1", "representativeType", "cocycles"))
+      val loop = r.mostPersistentBar(1)
+      val byDefault = tips(r.plotRepresentative(loop).svg(), "∆(")
+      val whole = tips(r.plotRepresentative(loop, Double.PositiveInfinity).svg(), "∆(")
+      (byDefault must beEqualTo(tips(r.plotRepresentative(loop, r.birth(loop)).svg(), "∆("))) and
+        (byDefault.size must beLessThan(whole.size)) and
+        (whole.size must beEqualTo(r.cycleVertices(loop).length)) and
+        // a cycle has no complex under it unless one is asked for
+        (TDA4j.computeFromPoints(circle, Array("maxDimension", "1")).plotRepresentative(loop).title must
+          contain("Cycle"))
     }
     "restrict a Cech or alpha cocycle in the complex's own units (radii): at its birth, the edges that close the loop" >>
       forall(Seq("cech", "alpha")) { complex =>
@@ -123,9 +135,50 @@ class PersistenceResultPlotSpec extends Specification:
       (tips(TDA4j.computeFromPoints(square).plotComplex(1.0).svg(), "∆(").size must beEqualTo(4)) and
         (TDA4j.computeFromPoints(square, Array("complex", "cech")).plotComplex(0.5).title must contain("Cech"))
     }
-    "say which complexes it draws" >> {
-      TDA4j.computeFromPointsAndLandmarks(circle, Array(0, 4, 8, 12)).plotComplex(1.0) must
-        throwA[UnsupportedOperationException](message = "vr, cech and alpha")
+    "draw every complex of a point cloud, as the computation built it" >> {
+      val landmarks = Array(0, 4, 8, 12)
+      val witness = TDA4j.computeFromPointsAndLandmarks(circle, landmarks, Array("maxDimension", "1"))
+      val figure = witness.plotComplex(2.0)
+      // the cells of the witness complex, named by the points that are landmarks
+      val cells =
+        tips(figure.svg(), "∆(").flatMap(t => t.stripPrefix("∆(").takeWhile(_ != ')').split(",").map(_.trim.toInt))
+      val direct = LazyWitnessSimplexStream(
+        EuclideanMetricSpace(circle),
+        landmarks.toIndexedSeq,
+        2,
+        maxFiltrationValue = Some(2.0)
+      )
+      val expected = direct.iterator.filter(c => c.dim >= 1 && c.dim <= 2 && direct.filtrationValue(c) <= 2.0).size
+      (figure.title must contain("Witness")) and (cells must not(beEmpty)) and (cells.forall(
+        landmarks.contains
+      ) must beTrue) and
+        (tips(figure.svg(), "∆(").size must beEqualTo(expected)) and
+        (witness.plotComplex3D(2.0).title must contain("Witness"))
+    }
+    "draw a DTM-Rips, sparse Rips and DTM-alpha complex too" >> {
+      val dtm = TDA4j.computeFromPoints(circle, Array("complex", "dtm-rips", "dtmK", "2", "maxDimension", "1"))
+      val sparse =
+        TDA4j.computeFromPoints(circle, Array("complex", "sparse-rips", "sparseEpsilon", "0.5", "maxDimension", "1"))
+      val dtmAlpha = TDA4j.computeFromPoints(circle, Array("complex", "dtm-alpha", "dtmK", "2", "maxDimension", "1"))
+      (dtm.plotComplex(1.0).title must contain("DTM-Rips")) and (sparse.plotComplex(1.0).title must contain(
+        "Sparse Rips"
+      )) and
+        (dtmAlpha.plotComplex(1.0).title must contain("DTM-alpha")) and
+        (tips(sparse.plotComplex(1.0).svg(), "∆(").size must beGreaterThan(0))
+    }
+    "stop where the computation did, and say so" >> {
+      val r = TDA4j.computeFromPoints(circle, Array("maxDimension", "1", "maxFiltrationValue", "0.5"))
+      val figure = r.plotComplex(2.0)
+      (figure.subtitle must contain("the computation stopped at 0.5")) and
+        (figure.title must contain("0.5")) and
+        (tips(figure.svg(), "∆(") must beEqualTo(tips(r.plotComplex(0.5).svg(), "∆("))) and
+        (r.plotComplex(0.4).subtitle must not(contain("stopped")))
+    }
+    "use the alpha backend the result was computed with" >> {
+      val square = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0))
+      val dqp =
+        TDA4j.computeFromPoints(square, Array("complex", "alpha", "alphaBackend", "dqp", "maxFiltrationValue", "2"))
+      tips(dqp.plotComplex(0.6).svg(), "∆(").size must beEqualTo(4) // the sides, before the diagonals at 0.71
     }
   }
 

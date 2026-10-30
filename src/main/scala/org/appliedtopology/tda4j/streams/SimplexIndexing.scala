@@ -18,6 +18,19 @@ open class SimplexIndexing(val vertexCount: Int):
     if row(s) == -1L then row(s) = SimplexIndexing.binomial(d + s, s)
     row(s)
 
+  // Row `d` of the memo, made if need be: one lookup per row for a search that probes it many times.
+  private def binomialRow(d: Int): Array[Long] =
+    if d >= binomialRows.length then
+      val grown = Array.ofDim[Array[Long]](d + 1)
+      Array.copy(binomialRows, 0, grown, 0, binomialRows.length)
+      binomialRows = grown
+    if binomialRows(d) == null then binomialRows(d) = Array.fill(vertexCount + 1)(-1L)
+    binomialRows(d)
+
+  private inline def rowEntry(row: Array[Long], d: Int, s: Int): Long =
+    if row(s) == -1L then row(s) = SimplexIndexing.binomial(d + s, s)
+    row(s)
+
   /** Memoized `binomial(n, k)` with the small `k` (at most the size of a simplex) as the row and `n` (a vertex) as the
     * column, for [[CofacetCursor]], [[FacetCursor]] and `apply`.
     */
@@ -74,35 +87,30 @@ open class SimplexIndexing(val vertexCount: Int):
     */
   def decodeToArray(n0: Long, size: Int): Array[Int] =
     val result = new Array[Int](size)
-    var cursor = 0
     var n = n0
     var d = size
-    var continue = true
-    while continue do
-      if d < 0 then
-        // Unreachable in practice (mirrors `apply`'s own dead `d < 0` guard -- `d == 0` always short-circuits
-        // below before `d` could ever go negative), kept only for exact parity with `apply`'s branch structure.
-        continue = false
-      else if n <= 0 then
+    // The vertices come out in descending order and each search can stop at the previous answer, so the result is
+    // filled from the back (already sorted) and every row is looked up once.
+    var hi = vertexCount
+    while d > 0 do
+      if n <= 0 then
         // Remaining `d` vertices are exactly {0, ..., d-1} -- `apply`'s `upperAccum ++ (0 until d).toSet`.
         var v = 0
         while v < d do
-          result(cursor) = v
-          cursor += 1
+          result(v) = v
           v += 1
-        continue = false
-      else if d == 0 then
-        // `apply`'s `upperAccum + n.toInt` base case.
-        result(cursor) = n.toInt
-        cursor += 1
-        continue = false
+        d = 0
       else
-        val id: Int = searchRow(d, n)
-        result(cursor) = id + d
-        cursor += 1
-        n -= binomialEntry(d, id)
+        val row = binomialRow(d)
+        var lo = 0
+        var h = hi
+        while lo < h do
+          val mid = lo + (h - lo + 1) / 2
+          if rowEntry(row, d, mid) <= n then lo = mid else h = mid - 1
+        result(d - 1) = lo + d
+        n -= rowEntry(row, d, lo)
+        hi = lo
         d -= 1
-    java.util.Arrays.sort(result)
     result
 
   def cofacetIterator(simplex: Simplex[Int]): Iterator[Long] =
@@ -119,8 +127,11 @@ open class SimplexIndexing(val vertexCount: Int):
   /** A cursor over the cofacets of a simplex that allocates nothing per step: read `vertex` (the added vertex) and
     * `index` (the cofacet's index) as often as needed, then `advance()`.
     */
-  class CofacetCursor(startIndex: Long, size: Int, allCofacets: Boolean):
-    private val vertices: Array[Int] = decodeToArray(startIndex, size)
+  class CofacetCursor(startIndex: Long, vertices: Array[Int], allCofacets: Boolean):
+    /** The cursor over the simplex of `size` vertices at `startIndex`, which it decodes. */
+    def this(startIndex: Long, size: Int, allCofacets: Boolean) =
+      this(startIndex, decodeToArray(startIndex, size), allCofacets)
+    private val size: Int = vertices.length
     private var iB: Long = startIndex
     private var iA: Long = 0L
     private var k: Int = size
@@ -169,6 +180,12 @@ open class SimplexIndexing(val vertexCount: Int):
 
   def cofacetCursor(index: Long, size: Int, allCofacets: Boolean = true): CofacetCursor =
     new CofacetCursor(index, size, allCofacets)
+
+  /** [[cofacetCursor]] for a caller that has decoded the simplex already: `vertices` are the simplex at `index`,
+    * ascending (the cursor reads, never changes, the array).
+    */
+  def cofacetCursor(index: Long, vertices: Array[Int], allCofacets: Boolean): CofacetCursor =
+    new CofacetCursor(index, vertices, allCofacets)
 
   /** The cofacets of a simplex whose added vertex is a neighbour of every one of its vertices: the same cofacets, in
     * the same order (vertex, and so index, strictly decreasing) and with the same indices as `CofacetCursor`, but found
@@ -282,12 +299,14 @@ open class SimplexIndexing(val vertexCount: Int):
     * `apply(...).toSeq.sorted` (a `Simplex[Int]` decode followed by a redundant re-sort of an already-sorted
     * `SortedSet`).
     */
-  class FacetCursor(startIndex: Long, size: Int):
-    private val vertices: Array[Int] = decodeToArray(startIndex, size)
+  class FacetCursor(startIndex: Long, vertices: Array[Int]):
+    /** The cursor over the simplex of `size` vertices at `startIndex`, which it decodes. */
+    def this(startIndex: Long, size: Int) = this(startIndex, decodeToArray(startIndex, size))
     private var iB: Long = startIndex
     private var iA: Long = 0L
-    private var k: Int = size - 1
+    private var k: Int = vertices.length - 1
     private var _vertex: Int = -1
+    private var _position: Int = -1
     private var _index: Long = -1L
     private var havePending: Boolean = false
 
@@ -297,6 +316,7 @@ open class SimplexIndexing(val vertexCount: Int):
         val iiB = iB - binomialChoose(v, k + 1)
         val iiA = iA + binomialChoose(v, k)
         _vertex = v
+        _position = k
         _index = iiB + iA
         iB = iiB
         iA = iiA
@@ -308,11 +328,20 @@ open class SimplexIndexing(val vertexCount: Int):
 
     def hasNext: Boolean = havePending
     def vertex: Int = _vertex
+
+    /** The place of `vertex` among the simplex's vertices, ascending from 0. */
+    def position: Int = _position
     def index: Long = _index
     def advance(): Unit = step()
 
   def facetCursor(index: Long, size: Int): FacetCursor =
     new FacetCursor(index, size)
+
+  /** [[facetCursor]] for a caller that has decoded the simplex already: `vertices` are the simplex at `index`,
+    * ascending (the cursor reads, never changes, the array).
+    */
+  def facetCursor(index: Long, vertices: Array[Int]): FacetCursor =
+    new FacetCursor(index, vertices)
 
   /** Now a thin `Iterator[Long]` wrapper over `FacetCursor` above, kept for `SimplexIndexingSpec`'s own
     * `Iterator`-based assertions -- new call sites use `facetCursor` directly.
@@ -364,6 +393,24 @@ object SimplexIndexing:
         result = kept * factor
         i += 1
       result
+
+  /** The colexicographic order of vertex sets: the larger top vertex is the larger set, equal top vertices are compared
+    * by the next ones down. On sets of one size it is the order of the combinatorial index, so a tie-break by
+    * `colexOrdering` is the tie-break by index with no limit on the vertex count or the size (an index passes `Long`
+    * for 1,000 points at 8 vertices). Of two sets of different sizes whose top vertices agree, the shorter is smaller.
+    */
+  val colexOrdering: Ordering[Simplex[Int]] = (x, y) => colexCompare(x.underlying.toArray, y.underlying.toArray)
+
+  /** [[colexOrdering]] on ascending vertex arrays. */
+  def colexCompare(x: Array[Int], y: Array[Int]): Int =
+    var i = x.length - 1
+    var j = y.length - 1
+    var c = 0
+    while c == 0 && i >= 0 && j >= 0 do
+      c = Integer.compare(x(i), y(j))
+      i -= 1
+      j -= 1
+    if c != 0 then c else Integer.compare(i, j)
 
   /** Whether a `SimplexIndexing(vertexCount)` can index and decode every simplex with at most `size` vertices: its
     * decoding looks up coefficients up to `C(vertexCount + size, size)`, which must fit in a `Long`. Otherwise use

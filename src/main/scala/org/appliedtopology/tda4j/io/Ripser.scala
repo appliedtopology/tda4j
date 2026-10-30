@@ -103,7 +103,22 @@ object Ripser:
     * its `maxFiltrationValue` ([[maxFiniteDistance]]) to be the flag complex of the listed edges.
     */
   def parseSparseDistanceMatrix(text: String, origin: String = "input"): Array[Array[Double]] =
-    val triples = text.linesIterator.zipWithIndex
+    val triples = sparseTriples(text, origin)
+    val n = if triples.isEmpty then 0 else triples.map((i, j, _, _) => math.max(i, j)).max + 1
+    val matrix = Array.tabulate(n, n)((i, j) => if i == j then 0.0 else Double.PositiveInfinity)
+    triples.foreach { (i, j, d, number) =>
+      require(
+        matrix(i)(j).isInfinite,
+        s"$origin, line $number: the pair ($i, $j) is listed twice; list each pair once"
+      )
+      matrix(i)(j) = d
+      matrix(j)(i) = d
+    }
+    matrix
+
+  // The `i j d` lines as (i, j, d, line number), loops dropped.
+  private def sparseTriples(text: String, origin: String): IndexedSeq[(Int, Int, Double, Int)] =
+    text.linesIterator.zipWithIndex
       .map((line, i) => (line.trim, i + 1))
       .filter((line, _) => line.nonEmpty)
       .map { (line, number) =>
@@ -121,17 +136,26 @@ object Ripser:
       }
       .filter((i, j, _, _) => i != j)
       .toIndexedSeq
-    val n = if triples.isEmpty then 0 else triples.map((i, j, _, _) => math.max(i, j)).max + 1
-    val matrix = Array.tabulate(n, n)((i, j) => if i == j then 0.0 else Double.PositiveInfinity)
-    triples.foreach { (i, j, d, number) =>
+
+  /** The `sparse` text as a [[WeightedGraph]]: the same lines, held as neighbour lists (`n + 2 m` numbers) instead of
+    * an `n x n` matrix, for a network too large for a matrix. `Persistence(graph)` is then the flag complex of the
+    * listed edges ([[FlagComplex]]) up to the longest one. The rules are those of [[parseSparseDistanceMatrix]]: the
+    * number of vertices is the largest index plus one, loops are skipped and a pair listed twice is refused.
+    */
+  def parseSparseGraph(text: String, origin: String = "input"): WeightedGraph =
+    val triples = sparseTriples(text, origin)
+    val seen = scala.collection.mutable.HashSet.empty[(Int, Int)]
+    triples.foreach { (i, j, _, number) =>
       require(
-        matrix(i)(j).isInfinite,
+        seen.add((math.min(i, j), math.max(i, j))),
         s"$origin, line $number: the pair ($i, $j) is listed twice; list each pair once"
       )
-      matrix(i)(j) = d
-      matrix(j)(i) = d
     }
-    matrix
+    val n = if triples.isEmpty then 0 else triples.map((i, j, _, _) => math.max(i, j)).max + 1
+    WeightedGraph(n, triples.map((i, j, d, _) => (i, j, d)))
+
+  def readSparseGraph(path: String): WeightedGraph =
+    parseSparseGraph(FileAccess.readText(path), path)
 
   def readSparseDistanceMatrix(path: String): Array[Array[Double]] =
     parseSparseDistanceMatrix(FileAccess.readText(path), path)

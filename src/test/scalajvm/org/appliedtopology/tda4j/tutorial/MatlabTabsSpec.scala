@@ -22,6 +22,26 @@ class MatlabTabsSpec extends Specification:
       .map(b => (b(0).toInt, math.round(b(1) * 1e6), if b(2).isInfinite then Long.MaxValue else math.round(b(2) * 1e6)))
       .sorted
 
+  "vectorization.md (MATLAB tab, the Euler characteristic curve)" should {
+    val circle = Array.tabulate(30)(i => Array(math.cos(i * 0.21), math.sin(i * 0.21)))
+    "agree with the Scala tab: the same steps, and the same value at 0.5 and over [0, 1]" in {
+      val matlabCurve = TDA4j.eulerCurveFromPoints(circle)
+      val scalaCurve = EulerCharacteristicCurve(circle)
+      (matlabCurve.scales().toList must beEqualTo(scalaCurve.scales.toList))
+        .and(matlabCurve.values().toList must beEqualTo(scalaCurve.values.toList))
+        .and(matlabCurve.at(0.5) must beEqualTo(scalaCurve(0.5)))
+        .and(matlabCurve.sample(0, 1, 50).toList must beEqualTo(scalaCurve.sample(0.0, 1.0, 50).toList))
+        .and(matlabCurve.scales().head must beEqualTo(0.0))
+        .and(matlabCurve.values().head must beEqualTo(30L))
+    }
+    "take the options the tab passes" in {
+      val limited = TDA4j.eulerCurveFromPoints(circle, Array("maxSimplexDimension", "3", "maxFiltrationValue", "1.0"))
+      val scalaCurve = EulerCharacteristicCurve(circle, maxSimplexDimension = 3, maxFiltrationValue = 1.0)
+      (limited.scales().toList must beEqualTo(scalaCurve.scales.toList))
+        .and(limited.values().toList must beEqualTo(scalaCurve.values.toList))
+    }
+  }
+
   "find-a-loop.md (MATLAB tab)" should {
     lazy val result = TDA4j.computeFromPoints(points)
     "report 61 bars, hide 3, and find the loop" in {
@@ -53,7 +73,7 @@ class MatlabTabsSpec extends Specification:
       val settings = List(
         ("vr", Array[String](), 24711, (0.595, 1.707)),
         ("cech", Array[String](), 36050, (0.297, 0.935)),
-        ("alpha", Array[String](), 325, (0.297, 0.935)),
+        ("alpha", Array[String](), 313, (0.297, 0.935)),
         ("sparse-rips", Array("sparseEpsilon", "0.5"), 1730, (0.708, 1.789)),
         ("witness", Array("numLandmarks", "15"), 441, (0.278, 0.742))
       )
@@ -63,6 +83,15 @@ class MatlabTabsSpec extends Specification:
         (r.numCells(), (r3(loop(1)), r3(loop(2))))
       }
       got must beEqualTo(settings.map((_, _, cells, loop) => (cells, loop)))
+    }
+    "run alpha to the minimum enclosing radius, and on the whole complex for maxFiltrationValue Infinity, with the same bars" in {
+      def alpha(extra: String*) =
+        TDA4j.computeFromPoints(points, Array("maxDimension", "1", "complex", "alpha") ++ extra)
+      val byDefault = alpha()
+      val whole = alpha("maxFiltrationValue", "Infinity")
+      (byDefault.numCells() must beEqualTo(313))
+        .and(whole.numCells() must beEqualTo(325))
+        .and(rows(byDefault.toArray()) must beEqualTo(rows(whole.toArray())))
     }
   }
 
@@ -92,7 +121,7 @@ class MatlabTabsSpec extends Specification:
       val signal = if ring >= 6.0 && ring <= 8.0 then 1.0 else if blob <= 2.5 then 0.8 else 0.0
       signal + 0.1 * random.nextDouble()
     }
-    def significant(sublevel: String, engine: String) =
+    def longerThanFraction(sublevel: String, engine: String) =
       rows(
         TDA4j
           .computeFromImage(pixels, Array("sublevel", sublevel, "engine", engine, "minPersistence", "0.3"))
@@ -107,9 +136,9 @@ class MatlabTabsSpec extends Specification:
         List(1.0, 0.064, 0.9)
       )
       val bright = List(List(0.0, -1.099, Double.PositiveInfinity), List(0.0, -0.9, -0.063), List(1.0, -1.004, -0.001))
-      (significant("true", "naive") must beEqualTo(dark))
-        .and(significant("true", "fast-cubical") must beEqualTo(dark))
-        .and(significant("false", "naive") must beEqualTo(bright))
+      (longerThanFraction("true", "naive") must beEqualTo(dark))
+        .and(longerThanFraction("true", "fast-cubical") must beEqualTo(dark))
+        .and(longerThanFraction("false", "naive") must beEqualTo(bright))
     }
     "have 221 bars in the full barcode" in {
       TDA4j.computeFromImage(pixels, Array("sublevel", "true")).toArrayUnfiltered().length must beEqualTo(221)

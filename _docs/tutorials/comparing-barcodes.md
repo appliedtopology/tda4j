@@ -21,7 +21,7 @@ We compare the loops, so for each cloud we keep the dimension-1 bars that surviv
 import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.*
 
-def loops(file: String) = Persistence(CSV.readPointCloud(s"_docs/tutorials/data/$file")).dim(1).significant()
+def loops(file: String) = Persistence(CSV.readPointCloud(s"_docs/tutorials/data/$file")).dim(1).longerThanFraction()
 
 val circleA = loops("noisy-circle.csv")      // one loop, [0.595, 1.707)
 val circleB = loops("noisy-circle-b.csv")    // one loop, [0.631, 1.667)
@@ -126,7 +126,7 @@ format). Save the barcode of one cloud with `--output`, then compare other cloud
 import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.*
 
-def loops(file: String) = Persistence(CSV.readPointCloud(s"_docs/tutorials/data/$file")).dim(1).significant()
+def loops(file: String) = Persistence(CSV.readPointCloud(s"_docs/tutorials/data/$file")).dim(1).longerThanFraction()
 
 val circleA = loops("noisy-circle.csv")
 val circleB = loops("noisy-circle-b.csv")
@@ -190,4 +190,4 @@ norm(imageA(:) - imageEight(:))             % 0.163
 </div>
 </div>
 
-Through the facade, distances, landscapes and images always use the *complete* barcode of each result, including the short bars the Scala script set aside with `significant()`. The bottleneck distance does not notice them; the Wasserstein distance, a sum, does, so it comes out slightly larger here (0.045 against 0.040, and 0.830 against 0.826).
+Through the facade, distances, landscapes and images always use the *complete* barcode of each result, including the short bars the Scala script set aside with `longerThanFraction()`. The bottleneck distance does not notice them; the Wasserstein distance, a sum, does, so it comes out slightly larger here (0.045 against 0.040, and 0.830 against 0.826).

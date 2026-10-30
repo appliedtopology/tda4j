@@ -21,13 +21,16 @@ def insertionDiameter(
 
 /** Persistent cohomology of the Vietoris-Rips complex of a metric space by Bauer's Ripser algorithm (arXiv:1908.02518):
   * the fast engine for Vietoris-Rips, and the MATLAB/CLI default there. Cells are packed as (diameter, combinatorial
-  * index) pairs ([[DiameterIndex]], Ripser's `diameter_index_t`); clearing, apparent pairs and the enclosing-radius
-  * cutoff as in Ripser.
+  * index) pairs ([[DiameterIndex]], Ripser's `diameter_index_t`); clearing, apparent pairs, emergent pairs and the
+  * enclosing-radius cutoff as in Ripser.
   *
   * Reports degrees `0 .. maxDimension`, each bar with its representative cocycle over `DiameterIndex` cells: decode a
   * cell of a degree-`k` bar with `vertices(cell, k + 1)`. `maxFiltrationValue` defaults to the minimum enclosing
-  * radius, past which nothing new is born. `useApparentPairs = false` turns off the apparent-pair shortcut, which
-  * changes no output (for benchmarking).
+  * radius, past which nothing new is born. `useApparentPairs = false` and `useEmergentPairs = false` turn off the
+  * apparent-pair and the emergent-pair shortcut, which change no output (for benchmarking). An emergent pair is a
+  * column whose oldest cofacet of the same diameter is the pivot of no earlier column: it is paired with that cofacet
+  * without being reduced, and kept only as the simplex that makes it (rebuilt if a later column needs it), which saves
+  * the memory of its stored column.
   *
   * Under a threshold that keeps few of the pairs (a large point cloud with a small `maxFiltrationValue`), cofacets are
   * found from each vertex's list of neighbours within the threshold instead of by trying every vertex, as Ripser does
@@ -48,7 +51,9 @@ open class PackedRipserCohomologyEngine[CoefficientT: Field](
   // None: decided by how many pairs are within the threshold.
   neighbourLists: Option[Boolean] = None,
   // None: two words exactly when one Long cannot hold the indices.
-  wideIndices: Option[Boolean] = None
+  wideIndices: Option[Boolean] = None,
+  // Pair a column with its oldest same-diameter cofacet without reducing it, when no earlier column has that cofacet.
+  useEmergentPairs: Boolean = true
 ):
 
   private val resolvedMaxFiltrationValue: Double =
@@ -114,53 +119,52 @@ open class PackedRipserCohomologyEngine[CoefficientT: Field](
   /** Whether cofacets come from neighbour lists (diagnostics and tests). */
   def usesNeighbourLists: Boolean = lists.isDefined
 
-  // Every cofacet of `sigma` (with `size` vertices) within the threshold, vertex and index strictly decreasing, as
-  // (diameter, index, high word of the index, number of sigma's vertices below the added one); `f` returns whether to
-  // go on. Only the canonical ones (added vertex above sigma's largest) when `allCofacets` is false.
-  private inline def eachCofacet(sigma: DiameterIndex, size: Int, allCofacets: Boolean)(
-    inline f: (Double, Long, Long, Int) => Boolean
+  // Every cofacet of `sigma` (whose vertices the caller has decoded: `sigmaVertices`, ascending, read and not changed)
+  // within the threshold, vertex and index strictly decreasing, as (diameter, index, high word of the index, number of
+  // sigma's vertices below the added one, the added vertex); `f` returns whether to go on. Only the canonical ones
+  // (added vertex above sigma's largest) when `allCofacets` is false.
+  private inline def eachCofacetOf(sigma: DiameterIndex, sigmaVertices: Array[Int], allCofacets: Boolean)(
+    inline f: (Double, Long, Long, Int, Int) => Boolean
   ): Unit =
     if wide then
       val w = wsi // a stable path for the cursors' types where this is inlined
-      val vertices = w.decodeToArray(sigma.high, sigma.index, size)
       lists match
         case Some(nl) =>
-          val cur = w.sparseCofacetCursor(sigma.high, sigma.index, vertices, allCofacets, nl)
+          val cur = w.sparseCofacetCursor(sigma.high, sigma.index, sigmaVertices, allCofacets, nl)
           var go = true
           while go && cur.hasNext do
             val tauFv = if cur.maxDistance > sigma.diameter then cur.maxDistance else sigma.diameter
-            go = f(tauFv, cur.low, cur.high, cur.position)
+            go = f(tauFv, cur.low, cur.high, cur.position, cur.vertex)
             cur.advance()
         case None =>
-          val cur = w.cofacetCursor(sigma.high, sigma.index, size, allCofacets)
+          val cur = w.cofacetCursor(sigma.high, sigma.index, sigmaVertices, allCofacets)
           var go = true
           while go && cur.hasNext do
-            val tauFv = cofacetDiameter(vertices, sigma.diameter, cur.vertex)
+            val tauFv = cofacetDiameter(sigmaVertices, sigma.diameter, cur.vertex)
             if tauFv <= resolvedMaxFiltrationValue then
               var position = 0
-              while position < vertices.length && vertices(position) < cur.vertex do position += 1
-              go = f(tauFv, cur.low, cur.high, position)
+              while position < sigmaVertices.length && sigmaVertices(position) < cur.vertex do position += 1
+              go = f(tauFv, cur.low, cur.high, position, cur.vertex)
             cur.advance()
     else
-      val vertices = si.decodeToArray(sigma.index, size)
       lists match
         case Some(nl) =>
-          val cur = si.sparseCofacetCursor(sigma.index, vertices, allCofacets, nl)
+          val cur = si.sparseCofacetCursor(sigma.index, sigmaVertices, allCofacets, nl)
           var go = true
           while go && cur.hasNext do
             val tauFv = if cur.maxDistance > sigma.diameter then cur.maxDistance else sigma.diameter
-            go = f(tauFv, cur.index, 0L, cur.position)
+            go = f(tauFv, cur.index, 0L, cur.position, cur.vertex)
             cur.advance()
         case None =>
-          val cur = si.cofacetCursor(sigma.index, size, allCofacets)
+          val cur = si.cofacetCursor(sigma.index, sigmaVertices, allCofacets)
           var go = true
           while go && cur.hasNext do
-            val tauFv = cofacetDiameter(vertices, sigma.diameter, cur.vertex)
+            val tauFv = cofacetDiameter(sigmaVertices, sigma.diameter, cur.vertex)
             if tauFv <= resolvedMaxFiltrationValue then
-              // `vertices` is sorted ascending: a plain scan counts the entries below `cur.vertex`.
+              // `sigmaVertices` is sorted ascending: a plain scan counts the entries below `cur.vertex`.
               var position = 0
-              while position < vertices.length && vertices(position) < cur.vertex do position += 1
-              go = f(tauFv, cur.index, 0L, position)
+              while position < sigmaVertices.length && sigmaVertices(position) < cur.vertex do position += 1
+              go = f(tauFv, cur.index, 0L, position, cur.vertex)
             cur.advance()
 
   /** `insertionDiameter` with every distance read through `distance` above. */
@@ -378,61 +382,82 @@ open class PackedRipserCohomologyEngine[CoefficientT: Field](
     inline f: (Double, Long, Long, CoefficientT) => Unit
   ): Unit =
     if size - 1 <= maxDimension then
-      eachCofacet(sigma, size, allCofacets = true) { (tauFv, index, high, position) =>
+      eachCofacetOf(sigma, vertices(sigma, size), allCofacets = true) { (tauFv, index, high, position, _) =>
         f(tauFv, index, high, if position % 2 == 0 then fr.one else fr.negate(fr.one))
         true
       }
 
+  // A cofacet found by the apparent-pair test with its vertices, so that its own facets are found without decoding it.
+  private final class Cofacet(val cell: DiameterIndex, val vertices: Array[Int])
+
+  // A facet found by the apparent-pair test with the place of the removed vertex among the vertices of the simplex.
+  private final class Facet(val cell: DiameterIndex, val position: Int)
+
   // The oldest same-diameter cofacet (largest index): the cursor's index decreases strictly, so the first tie is it.
-  private def zeroPivotCofacet(sigma: DiameterIndex, size: Int): Option[DiameterIndex] =
-    if size - 1 > maxDimension then None
+  // `sigmaVertices` are sigma's vertices, decoded by the caller.
+  private def zeroPivotCofacet(sigma: DiameterIndex, sigmaVertices: Array[Int]): Option[Cofacet] =
+    if sigmaVertices.length - 1 > maxDimension then None
     else
-      var found: Option[DiameterIndex] = None
-      eachCofacet(sigma, size, allCofacets = true) { (tauFv, index, high, _) =>
-        if tauFv == sigma.diameter then found = Some(DiameterIndex(sigma.diameter, index, high))
+      var found: Option[Cofacet] = None
+      eachCofacetOf(sigma, sigmaVertices, allCofacets = true) { (tauFv, index, high, position, vertex) =>
+        if tauFv == sigma.diameter then
+          found = Some(Cofacet(DiameterIndex(sigma.diameter, index, high), insertAt(sigmaVertices, position, vertex)))
         found.isEmpty
       }
       found
 
+  private def insertAt(vertices: Array[Int], position: Int, vertex: Int): Array[Int] =
+    val result = new Array[Int](vertices.length + 1)
+    System.arraycopy(vertices, 0, result, 0, position)
+    result(position) = vertex
+    System.arraycopy(vertices, position, result, position + 1, vertices.length - position)
+    result
+
+  private def removeAt(vertices: Array[Int], position: Int): Array[Int] =
+    val result = new Array[Int](vertices.length - 1)
+    System.arraycopy(vertices, 0, result, 0, position)
+    System.arraycopy(vertices, position + 1, result, position, vertices.length - position - 1)
+    result
+
   // The youngest same-diameter facet (smallest index): the facet cursor's index increases strictly, so the first tie is
-  // it. Facet diameters are recomputed from the vertex array.
-  private def zeroPivotFacet(tau: DiameterIndex, size: Int): Option[DiameterIndex] =
-    val tauVertices = vertices(tau, size)
-    val candidate = new Array[Int](size - 1)
-    def diameterWithout(v: Int): Double =
-      var w = 0
-      var r = 0
-      while w < tauVertices.length do
-        if tauVertices(w) != v then
-          candidate(r) = tauVertices(w)
-          r += 1
-        w += 1
-      maxPairwiseDistance(candidate)
+  // it. A facet of tau has tau's diameter exactly when some longest edge of tau avoids the removed vertex (or all the
+  // distances are 0): one pass over the pairs of tau's vertices finds out which vertices some longest edge avoids.
+  private def zeroPivotFacet(tau: DiameterIndex, tauVertices: Array[Int]): Option[Facet] =
+    val size = tauVertices.length
+    val avoidedBySome = new Array[Boolean](size) // a longest edge without this vertex
+    var i = 0
+    while i < size do
+      var j = i + 1
+      while j < size do
+        if distance(tauVertices(i), tauVertices(j)) == tau.diameter then
+          var k = 0
+          while k < size do
+            if k != i && k != j then avoidedBySome(k) = true
+            k += 1
+        j += 1
+      i += 1
+    val everyFacetTies = tau.diameter == 0.0
     if wide then
-      val cur = wsi.facetCursor(tau.high, tau.index, size)
+      val cur = wsi.facetCursor(tau.high, tau.index, tauVertices)
       while cur.hasNext do
-        if diameterWithout(cur.vertex) == tau.diameter then return Some(DiameterIndex(tau.diameter, cur.low, cur.high))
+        if everyFacetTies || avoidedBySome(cur.position) then
+          return Some(Facet(DiameterIndex(tau.diameter, cur.low, cur.high), cur.position))
         cur.advance()
     else
-      val cur = si.facetCursor(tau.index, size)
+      val cur = si.facetCursor(tau.index, tauVertices)
       while cur.hasNext do
-        if diameterWithout(cur.vertex) == tau.diameter then return Some(DiameterIndex(tau.diameter, cur.index))
+        if everyFacetTies || avoidedBySome(cur.position) then
+          return Some(Facet(DiameterIndex(tau.diameter, cur.index), cur.position))
         cur.advance()
     None
 
-  private def zeroApparentCofacet(sigma: DiameterIndex, size: Int): Option[DiameterIndex] =
-    for
-      tau <- zeroPivotCofacet(sigma, size)
-      partner <- zeroPivotFacet(tau, size + 1)
-      if partner == sigma
-    yield tau
-
   private def zeroApparentFacet(tau: DiameterIndex, size: Int): Option[DiameterIndex] =
+    val tauVertices = vertices(tau, size)
     for
-      sigma <- zeroPivotFacet(tau, size)
-      partner <- zeroPivotCofacet(sigma, size - 1)
-      if partner == tau
-    yield sigma
+      sigma <- zeroPivotFacet(tau, tauVertices)
+      partner <- zeroPivotCofacet(sigma.cell, removeAt(tauVertices, sigma.position))
+      if partner.cell == tau
+    yield sigma.cell
 
   private var _substitutionCount: Int = 0
   def substitutionCount: Int = _substitutionCount
@@ -446,6 +471,13 @@ open class PackedRipserCohomologyEngine[CoefficientT: Field](
   // Distinct from `substitutionCount`, which counts the lazy fallback when another column needs an apparent pair's
   // column as a pivot (WORKLOG-o3-1024-fractal-r-session-2026-09-25.md).
   def apparentPairCount: Int = _apparentPairCount
+
+  private var _emergentPairCount: Int = 0
+
+  /** How many simplices the last run paired as emergent pairs: their oldest same-diameter cofacet was no earlier
+    * column's pivot, so the coboundary was already reduced and was never put on the working column.
+    */
+  def emergentPairCount: Int = _emergentPairCount
 
   /** Every bar of degree `0 .. maxDimension`, each with its representative cocycle (over [[DiameterIndex]] cells;
     * decode with `si`); zero-length bars only if `includeZeroLength`.
@@ -467,7 +499,7 @@ open class PackedRipserCohomologyEngine[CoefficientT: Field](
     List.tabulate(rows.size)(identity).collect {
       case k if includeZeroLength || !rows.isZeroLength(k) =>
         val bar = rows.bar(k)
-        new PersistenceBar(bar.dim, bar.lower, bar.upper, Some(cycles(k.toLong)))
+        new PersistenceBar(bar.dim, bar.lower, bar.upper, Some(cycles(k.toLong)), bar.cells)
     }
 
   /** Pushes `boundaryOf(tau, dim)` onto `working` without building it: the facets come from the facet cursor, the
@@ -546,9 +578,10 @@ open class PackedRipserCohomologyEngine[CoefficientT: Field](
   /** One cycle per `reported` row, as [[Involution.cycles]] computes them under `packedOrdering.reverse`: death columns
     * reduced on a heap working column, oldest death first per dimension; a finite bar's cycle is its reduced column.
     * Every death column is reduced and every pivot checked, zero-length ones included (they are pivots for the others),
-    * but an apparent pair's column is not kept: its boundary is already reduced, so it is rebuilt from the death
-    * simplex when another column needs it. The V-columns are needed only for essential bars, so only non-empty
-    * reduction logs are kept, and a V-column is expanded when an essential bar refers to it.
+    * except an apparent pair that is not reported: its boundary is already reduced, so it is recorded as a row and
+    * rebuilt from the death simplex when another column needs it. An apparent pair that is reported is reduced, but its
+    * column is not kept. The V-columns are needed only for essential bars, so only non-empty reduction logs are kept,
+    * and a V-column is expanded when an essential bar refers to it.
     */
   private def involutedCycles(
     rows: Pairing,
@@ -624,28 +657,32 @@ open class PackedRipserCohomologyEngine[CoefficientT: Field](
         val row = finite(o)
         val sigma = rows.birth(row)
         val sigmaKey = newKey(keys, sigma.index, sigma.high)
-        val tau = rows.death(row).get
-        val log = reduce(tau, deathDim)
-        if !working.pivot() || working.pivotIndex != sigma.index || working.pivotHigh != sigma.high then
-          throw new IllegalStateException(
-            s"Involution: the boundary of $tau does not reduce to its paired birth cell $sigma " +
-              "(the pairing and the order disagree)"
-          )
-        val column = working.drain()
-        if !rows.apparent(row) || log.nonEmpty then basis(sigmaKey) = column
-        byBirth(sigmaKey) = row
-        if log.nonEmpty then logs(sigmaKey) = log
-        if reported(row) then
-          val cycle = Chain.from(
-            column.indices.indices.map(k =>
-              (
-                DiameterIndex(column.diameters(k), column.indices(k), if wide then column.highs(k) else 0L),
-                column.coefficients(k).asInstanceOf[CoefficientT]
+        // An apparent pair's boundary is its own reduced column (sigma is its youngest facet, so nothing is subtracted
+        // and its log is empty): a zero-length one nobody reports is only recorded, as a row to rebuild on demand.
+        if rows.apparent(row) && !reported(row) then byBirth(sigmaKey) = row
+        else
+          val tau = rows.death(row).get
+          val log = reduce(tau, deathDim)
+          if !working.pivot() || working.pivotIndex != sigma.index || working.pivotHigh != sigma.high then
+            throw new IllegalStateException(
+              s"Involution: the boundary of $tau does not reduce to its paired birth cell $sigma " +
+                "(the pairing and the order disagree)"
+            )
+          val column = working.drain()
+          if !rows.apparent(row) || log.nonEmpty then basis(sigmaKey) = column
+          byBirth(sigmaKey) = row
+          if log.nonEmpty then logs(sigmaKey) = log
+          if reported(row) then
+            val cycle = Chain.from(
+              column.indices.indices.map(k =>
+                (
+                  DiameterIndex(column.diameters(k), column.indices(k), if wide then column.highs(k) else 0L),
+                  column.coefficients(k).asInstanceOf[CoefficientT]
+                )
               )
             )
-          )
-          cycle.collapseAll()
-          result(row.toLong) = cycle
+            cycle.collapseAll()
+            result(row.toLong) = cycle
 
     for row <- 0 until rows.size if rows.deathI(row) < 0 && reported(row) do
       val dim = rows.dims(row)
@@ -755,7 +792,8 @@ open class PackedRipserCohomologyEngine[CoefficientT: Field](
         dims(k),
         ClosedEndpoint(birthD(k)),
         if deathI(k) >= 0 then OpenEndpoint(deathD(k)) else PositiveInfinity(),
-        cocycles.get(k.toLong)
+        cocycles.get(k.toLong),
+        Some(pair(k))
       )
     def pair(k: Int): Involution.Pair[DiameterIndex] = Involution.Pair(dims(k), birth(k), death(k))
 
@@ -774,6 +812,7 @@ open class PackedRipserCohomologyEngine[CoefficientT: Field](
     _substitutionCount = 0
     _totalSimplexCount = 0
     _apparentPairCount = 0
+    _emergentPairCount = 0
     val rows = Pairing()
     val noLog: Array[(DiameterIndex, CoefficientT)] = Array.empty
 
@@ -843,7 +882,7 @@ open class PackedRipserCohomologyEngine[CoefficientT: Field](
         deathHigh: Long,
         log: Array[(DiameterIndex, CoefficientT)],
         isApparent: Boolean = false
-      ): Unit =
+      ): Int =
         val row = rows.add(d, sigma, deathDiameter, deathIndex, deathHigh, isApparent)
         val zeroLength = deathIndex >= 0 && deathDiameter == sigma.diameter
         if cocycles && (zeroLengthCocycles || !zeroLength) then pending += ((row, log))
@@ -851,7 +890,10 @@ open class PackedRipserCohomologyEngine[CoefficientT: Field](
           val key = newKey(nextKeys, deathIndex, deathHigh)
           rowOfDeath(key) = row
           if log.nonEmpty then logs(key) = log
+        row
       val nextCleared = ClearedSet()
+      // The row of each emergent pair, by the key of its death cell: the column is rebuilt from the birth cell.
+      val emergentRow = LongIntMap()
 
       // tau's own size (one more than sigma's) -- captured here, per-dimension, because a bare DiameterIndex
       // doesn't know its own dimension the way a Simplex[Int] does; zeroApparentFacet needs it to decode tau's
@@ -859,51 +901,79 @@ open class PackedRipserCohomologyEngine[CoefficientT: Field](
       val coboundarySize = size + 1
       val fallbackColumn = WorkingColumn(youngestFirst = false)
       val basisFallback: DiameterIndex => Option[Column] =
-        if useApparentPairs then
+        if useApparentPairs || useEmergentPairs then
           (tau: DiameterIndex) =>
-            zeroApparentFacet(tau, coboundarySize).map { sigma =>
-              _substitutionCount += 1
-              forEachCofacet(sigma, size)(fallbackColumn.push)
-              fallbackColumn.drain()
-            }
+            val key = keyOf(nextKeys, tau.index, tau.high)
+            if emergentRow.contains(key) then
+              forEachCofacet(rows.birth(emergentRow(key)), size)(fallbackColumn.push)
+              Some(fallbackColumn.drain())
+            else if useApparentPairs then
+              zeroApparentFacet(tau, coboundarySize).map { sigma =>
+                _substitutionCount += 1
+                forEachCofacet(sigma, size)(fallbackColumn.push)
+                fallbackColumn.drain()
+              }
+            else None
         else (_: DiameterIndex) => None
       val working = WorkingColumn(youngestFirst = false)
+
+      // Reduces the coboundary of `sigma` against the columns before it and records the bar it opens.
+      def reduce(sigma: DiameterIndex): Unit =
+        forEachCofacet(sigma, size)(working.push)
+        // Reduce: while the pivot is some earlier column's pivot (or an apparent pair's), subtract that column.
+        val log = mutable.ArrayBuffer.empty[(DiameterIndex, CoefficientT)]
+        var reducing = working.pivot()
+        while reducing do
+          val pivotCell = DiameterIndex(working.pivotDiameter, working.pivotIndex, working.pivotHigh)
+          basis.get(keyOf(nextKeys, working.pivotIndex, working.pivotHigh)).orElse(basisFallback(pivotCell)) match
+            case None         => reducing = false
+            case Some(column) =>
+              val redCoeff = fr.divide(working.pivotCoefficient, column.leadingCoefficient)
+              working.addScaled(column, fr.negate(redCoeff))
+              if cocycles then log += ((pivotCell, redCoeff))
+              reducing = working.pivot()
+        val reduced = working.drain()
+        val reductionLog = if log.isEmpty then noLog else log.toArray
+        if reduced.isEmpty then report(sigma, Double.PositiveInfinity, -1L, 0L, reductionLog)
+        else
+          val pivot = DiameterIndex(reduced.diameters(0), reduced.indices(0), if wide then reduced.highs(0) else 0L)
+          val key = newKey(nextKeys, pivot.index, pivot.high)
+          basis(key) = reduced
+          nextCleared += key
+          report(sigma, pivot.diameter, pivot.index, pivot.high, reductionLog)
 
       for
         o <- order
         if !activeCleared.contains(keyOf(activeKeys, levelI(o), if levelH != null then levelH(o) else 0L))
       do
         val sigma = DiameterIndex(levelD(o), levelI(o), if levelH != null then levelH(o) else 0L)
-        val sigmaFv = sigma.diameter
-        (if useApparentPairs then zeroApparentCofacet(sigma, size) else None) match
-          case Some(tau) =>
-            _apparentPairCount += 1
-            nextCleared += newKey(nextKeys, tau.index, tau.high)
-            report(sigma, tau.diameter, tau.index, tau.high, noLog, isApparent = true)
-          case None =>
-            forEachCofacet(sigma, size)(working.push)
-            // Reduce: while the pivot is some earlier column's pivot (or an apparent pair's), subtract that column.
-            val log = mutable.ArrayBuffer.empty[(DiameterIndex, CoefficientT)]
-            var reducing = working.pivot()
-            while reducing do
-              val pivotCell = DiameterIndex(working.pivotDiameter, working.pivotIndex, working.pivotHigh)
-              basis.get(keyOf(nextKeys, working.pivotIndex, working.pivotHigh)).orElse(basisFallback(pivotCell)) match
-                case None         => reducing = false
-                case Some(column) =>
-                  val redCoeff = fr.divide(working.pivotCoefficient, column.leadingCoefficient)
-                  working.addScaled(column, fr.negate(redCoeff))
-                  if cocycles then log += ((pivotCell, redCoeff))
-                  reducing = working.pivot()
-            val reduced = working.drain()
-            val reductionLog = if log.isEmpty then noLog else log.toArray
-            if reduced.isEmpty then report(sigma, Double.PositiveInfinity, -1L, 0L, reductionLog)
-            else
-              val pivot =
-                DiameterIndex(reduced.diameters(0), reduced.indices(0), if wide then reduced.highs(0) else 0L)
-              val key = newKey(nextKeys, pivot.index, pivot.high)
-              basis(key) = reduced
-              nextCleared += key
-              report(sigma, pivot.diameter, pivot.index, pivot.high, reductionLog)
+        // The oldest same-diameter cofacet is the pivot of sigma's unreduced coboundary. Sigma is decoded once: the
+        // vertices of that cofacet and of its facets come from it.
+        val tie =
+          if useApparentPairs || useEmergentPairs then zeroPivotCofacet(sigma, vertices(sigma, size)) else None
+        val youngestFacet =
+          if useApparentPairs && tie.isDefined then zeroPivotFacet(tie.get.cell, tie.get.vertices) else None
+        // Apparent: sigma is also that cofacet's youngest same-diameter facet. Emergent: no earlier column has the
+        // cofacet as its pivot (not a stored column, not an emergent pair, not the apparent partner of its youngest
+        // facet), so the coboundary is reduced as it stands.
+        def pivotTaken(tau: Cofacet): Boolean =
+          val key = keyOf(nextKeys, tau.cell.index, tau.cell.high)
+          basis.contains(key) || emergentRow.contains(key) ||
+          youngestFacet.exists(facet =>
+            zeroPivotCofacet(facet.cell, removeAt(tau.vertices, facet.position)).exists(_.cell == tau.cell)
+          )
+        if tie.isDefined && youngestFacet.exists(_.cell == sigma) then
+          val tau = tie.get.cell
+          _apparentPairCount += 1
+          nextCleared += newKey(nextKeys, tau.index, tau.high)
+          report(sigma, tau.diameter, tau.index, tau.high, noLog, isApparent = true)
+        else if useEmergentPairs && tie.isDefined && !pivotTaken(tie.get) then
+          val tau = tie.get.cell
+          _emergentPairCount += 1
+          val key = newKey(nextKeys, tau.index, tau.high)
+          nextCleared += key
+          emergentRow(key) = report(sigma, tau.diameter, tau.index, tau.high, noLog)
+        else reduce(sigma)
 
       val memo = mutable.LongMap.empty[Chain[DiameterIndex, CoefficientT]]
       def seedOf(pivot: Long): DiameterIndex = rows.birth(rowOfDeath(pivot))
@@ -921,7 +991,7 @@ open class PackedRipserCohomologyEngine[CoefficientT: Field](
         var k = 0
         while k < level.size do
           val sigma = DiameterIndex(levelD(k), levelI(k), if levelH != null then levelH(k) else 0L)
-          eachCofacet(sigma, size, allCofacets = false) { (diameter, index, high, _) =>
+          eachCofacetOf(sigma, vertices(sigma, size), allCofacets = false) { (diameter, index, high, _, _) =>
             next.add(diameter, index, high)
             true
           }

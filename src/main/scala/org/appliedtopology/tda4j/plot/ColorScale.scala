@@ -58,6 +58,18 @@ final case class ColorScale(
     case Transform.Log10 if lo <= 0 => Transform.SymLog(math.max(math.abs(lo), math.abs(hi)) / 1000.0)
     case other                      => other
 
+  /** The values labelled along the color bar between its two ends, each with its fraction of the way up the bar. A
+    * linear bar needs only its ends. On a `Sequential` scale spread by a transform the middle is round numbers of the
+    * data, each where the transform puts it (on a square-root bar 1 is half way to 4), so that the bar can be read.
+    */
+  def barTicks: Seq[(Double, Double)] =
+    if ramp != Ramp.Sequential || transform == Transform.Identity || !(hi > lo) then Seq.empty
+    else
+      val tr = spread
+      val (a, b) = (tr(lo), tr(hi))
+      if !(a.isFinite && b.isFinite && b > a) then Seq.empty
+      else tr.ticks(lo, hi).filter(v => v > lo && v < hi).map(v => (v, (tr(v) - a) / (b - a))).filter(_._2.isFinite)
+
   /** The color a fraction `t` of the way along the ramp, `0` at the low end: what the color bar draws. */
   def barColor(t: Double, palette: Palette): String = ramp match
     case Ramp.Sequential => Palette.along(stops.getOrElse(palette.sequential), t)

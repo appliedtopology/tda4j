@@ -13,6 +13,8 @@ others. Read this page before choosing which to build on.
 `PackedCubicalCohomologyEngine` is engine 4's algorithm (clearing, apparent pairs, a packed involution) on a cubical
 grid's own cell indices, with no `Cube` or `Chain` inside the reduction. It must equal engine 5 on any
 `CubicalGridStream`, bar for bar and term for term. `Engine.Cohomology` and engine 6's middle degrees run it on a grid.
+A reduced column is stored as its cells' keys and coefficients (the cycle of a reported bar is that column), an apparent
+pair's column is not stored at all, and the tables indexed by cell are dense `Int` arrays.
 
 `CellularHomologyEngine`, `CellularPersistenceInChunksEngine` and `CellularCohomologyEngine` also implement the
 `PersistenceEngine[CellT, C]` trait (`def barcode(stream): List[PersistenceBar[Double, Chain[CellT, C]]]`) through the
@@ -39,9 +41,10 @@ parallel V-column alongside the ordinary reduction.
 `maxDimension + 1` are neither sorted nor reduced. A cell of dimension `maxDimension + 1` can only close a class of
 degree `maxDimension`, so it is reduced only while such a class is open, and it leaves nothing but the pairing it makes
 (no V-column, no class of degree `maxDimension + 1`). The bars of degrees `0 .. maxDimension` and their representatives
-are those of the uncapped cursor, which the one-argument form stays. `Persistence` uses the capped cursor, and so does
-`PersistenceEngine.naive`, with the cap taken from the stream's `homologyDegreeLimit` (a complete complex has none and is
-read whole).
+are those of the cursor on the whole complex. The one-argument form reads a stream that has no `homologyDegreeLimit`
+whole, and a stream cut off at degree `k` (`VietorisRips(points, maxDimension = k)`) up to `k`, which is also what a
+larger explicit `maxDimension` comes to: the cells above `k` close nothing, so their unpaired ones are not homology.
+`Persistence` uses the capped cursor, and so does `PersistenceEngine.naive`.
 
 ## 2. `CellularPersistenceInChunksEngine` / `PersistenceInChunksEngine` — chunked, generic
 
@@ -59,6 +62,9 @@ essential classes — reconstructed incrementally from this class's own already-
 `boundaries`/`cleared`/`paired`/`killer` state (`vcolOf`, memoized) rather than by delegating to a second
 engine run. `advanceAll()` runs the whole pipeline in one shot; there is no incremental querying the way
 engine 1 has.
+
+Like every engine that reads a stream, it reports no degree above the stream's `homologyDegreeLimit`, whatever `maxDim`
+says: the default `maxDim = 5` on `VietorisRips(points, maxDimension = 2)` gives degrees `0..2`.
 
 **What the union-find takes.** `unionFindDim01` sorts each edge by its
 boundary over the engine's field (`edgeShape`):
@@ -138,9 +144,16 @@ cells are combined when they reach the top. Coboundaries and boundaries are push
 cofacets are found by intersecting its vertices' lists of neighbours within the threshold (built once, with each
 distance stored) rather than by trying every vertex; the lists give the same cofacets in the same order. Per-simplex
 bookkeeping is kept in primitive arrays (each degree's simplices, the pairing, the cleared indices), and a
-`PersistenceBar` is built only for a bar that is returned; in the involution, an apparent pair's boundary column is
-rebuilt from its death simplex when needed rather than stored. A stored reduced column keeps its pivot first and the
-remaining terms uncombined. Cocycles (the V-columns) are recorded as a reduction log per column and expanded only
+`PersistenceBar` is built only for a bar that is returned; in the involution, an apparent pair that is not reported is
+not reduced at all, and its boundary column is rebuilt from its death simplex when another column needs it rather than stored. A stored reduced column keeps its pivot first and the
+remaining terms uncombined. The test for an apparent or emergent pair decodes a column once: the vertices of its oldest
+cofacet of the same diameter are the column's with one added, those of that cofacet's facets the cofacet's with one
+removed, and its youngest facet of the same diameter comes from its longest edges (a facet keeps the diameter unless
+the removed vertex is an endpoint of every longest edge). An emergent pair (Bauer's Definition 3.11) is a column whose oldest cofacet of the same
+diameter is the pivot of no earlier column (no stored column, no emergent pair, and not the apparent partner of that
+cofacet's youngest facet): its coboundary is reduced as it stands, so the engine pairs it at once without putting its
+cofacets on the working column, and keeps only the simplex, from which the column is rebuilt in the rare case that a
+later column needs it. `useEmergentPairs = false` turns the shortcut off; no output changes. Cocycles (the V-columns) are recorded as a reduction log per column and expanded only
 for the bars that are reported, so `persistentCohomology()` builds none for zero-length bars and
 `persistentHomology()` builds none at all. Cycles come from the engine's own specialization of `Involution.cycles`
 on the same heap, which returns exactly what the generic involution returns. The heap relies on a simplex having
@@ -150,6 +163,7 @@ one diameter: a metric that is not symmetric by construction (anything but `Eucl
 **Counters.** Engines 3 and 4 report what their last run did:
 - `apparentPairCount`, the simplices paired as apparent pairs with no reduction
   of their coboundary;
+- `emergentPairCount` (engine 4 only), the simplices paired as emergent pairs;
 - `substitutionCount`, how often another column needed an apparent pair's
   column as a pivot and had it rebuilt;
 - `totalSimplexCount`, the simplices the run assembled over all dimensions.
@@ -177,7 +191,10 @@ largest single band) — no `SimplexIndexing`-style combinatorial machinery, and
 formula.
 
 **No `maxDim` parameter and no apparent pairs.** Callers truncate the input stream when needed, and the coboundary
-relation is already materialized, so apparent-pair optimizations have nothing to save.
+relation is already materialized, so apparent-pair optimizations have nothing to save. A stream built for degrees
+`0..k` says so in its `homologyDegreeLimit`; the engine then reports no bar above `k`, cocycles and cycles alike, because
+the cells of degree `k + 1` that close no class are not the complex's homology and would each cost a bar and a
+representative (`PackedCubicalCohomologyEngine` does the same on a truncated grid).
 
 **Representatives**: Every bar carries a V-column. Essential bars yield genuine cocycles over the
 full complex; finite bars carry representatives valid over their persistence
@@ -185,10 +202,11 @@ interval.
 
 **Simplices on flat arrays.** When the cells are simplices with `Int` vertices and the cell instance is the library's
 own (`simplexIsOrderedCell`, which every complex the library builds uses), the engine works on arrays instead of
-`Simplex` objects: each dimension's vertex tuples in the engine's order, a hash table from a tuple to its cell number,
-and each coboundary block as compressed columns of signs. A column whose first row is free is paired without building
-anything. A column that needs an addition is reduced by `Chain.reduceBy` as before, with the columns it adds built on
-demand, so the bars and representatives are exactly those of reducing the cells. Cycles take the same route: a death
+`Simplex` objects: each dimension's vertex tuples in the engine's order, a table from a tuple to its cell number (the
+vertices side by side in one `Long` when they fit, else a hash of them), and each coboundary block as compressed
+columns of signs, found and laid out on all threads. Degrees above the stream's `homologyDegreeLimit` are not reduced.
+A column whose first row is free is paired without building anything. A column that needs an addition is reduced by
+`Chain.reduceBy` as before, with the columns it adds built on demand, so the bars and representatives are exactly those of reducing the cells. Cycles take the same route: a death
 cell whose youngest face is its birth cell needs no reduction, and only the representatives returned are turned back
 into `Simplex` objects. `CellularCohomologyEngine(packSimplices = false)` reduces the cells themselves, and
 `reducesPacked(stream)` says which a stream gets. Other vertex types, a vertex order other than `Int`'s and a cell
@@ -198,9 +216,30 @@ instance of your own fall back to the cells.
 each degree cut into units of whole edge blocks (a simplex's block is its first longest edge):
 `BlockParallelReduction` on explicit coboundary matrices, `ParallelPackedCohomology` on implicit ones, as engine 4
 computes them (its key is one `Long` where the block and the index fit, else the block beside the index; the index
-itself is still one `Long`). Both give exactly the pairs of a sequential reduction. They return bars only, no representatives, and
-`Persistence` does not call them. The benchmark harness runs `ParallelPackedCohomology` as `tda4j-parallel-1t/-mt`;
-`BlockParallelReduction` builds its matrices in full and is not run there.
+itself is still one `Long`). Both give exactly the pairs of a sequential reduction.
+`BlockParallelReduction` builds its matrices in full, returns bars only and `Persistence` does not call it.
+`ParallelPackedCohomology` with `cocycles = true` keeps a `Log` per reduced column (the columns added to it and their
+factors; an apparent pair has none), from which `cocycle(degree, p, column)` builds a bar's cocycle, and with `keepPairs`
+the pairing. `Persistence.Engine.ParallelRipser` runs it: `Persistence.Input.parallelRipser` calls the seam
+`ParallelRipser.run` (shared code: 8 units per thread of `Parallel.threads`, run by `Parallel.tasks`, which pulls them
+from a counter on the JVM and runs them in order on Scala.js; `Auto` only asks with several threads, which JavaScript never has) and gets a `ParallelRipserRun`, the engine's keys and logs without its types, which is
+all the shared `Persistence` code sees. Each bar's chain is a `LazyChain`: a cocycle is built from the logs when read, a
+cycle comes out of one pass of `Involution.cycles` over the keys (`ParallelRipserCycles`, with the shortcut of
+`CellularCohomologyEngine`: a death simplex whose youngest face is its birth needs no reduction; the death simplices
+that do need one are found by a parallel scan of `faces` over every death, which is most of the pass, and their
+reductions then run in order, one death dimension to a thread). Keys of one dimension
+ascend with age, which is the order `Involution` is given, reversed. Cycles need one-word keys; two-word keys give
+cocycles only. `computeAllRepresentatives` forces the chains before returning (cocycles on all threads).
+`Engine.Auto` chooses the engine when `Parallel.threads > 1`, the input is a Vietoris-Rips metric space, there is no
+`includeZeroLength`, and `ParallelRipser.supports` (a prime up to 46,000, indices that fit 63
+bits). Edge ranks are a dense `n x n` table up to `DenseRankLimit` (4,096) points and sorted neighbour lists above it, so memory
+follows the edges within the threshold; the one `n`-squared cost left is the distance pass that builds the edge list. `Persistence`'s `threads` option runs the call in `Parallel.withThreads(n)` (a fork-join pool of that size on the
+JVM, none in JavaScript), and the lazy chains keep the count they were made under (`Parallel.limit`, `Parallel.limited`).
+The MATLAB facade and the CLI do the same through `threads`, and send an unset `engine` for the Vietoris-Rips complex over
+`Z/p` (no `includeZeroLength`, no `edgeCollapse`) to this engine when `Parallel.threads > 1` (`parallelVR`); `engine=ripser`
+stays `PackedRipserCohomologyEngine`. The benchmark harness runs the engine directly as `engine=parallel` (`tda4j-parallel-1t/-mt`, bars only, with `threads`
+and `wide`; it tabulates the distances, so it takes up to 60,000 points) and through `Persistence` as `engine=parallelverb`
+(`tda4j-parallelverb-1t/-mt`, with representatives).
 
 ## 6. `FastCubicalHomologyEngine` — dual-graph union-find
 
@@ -213,6 +252,10 @@ For ambient dimension `d >= 3`, intermediate dimensions
 (`PackedCubicalCohomologyEngine`, cycles by the involution).
 
 The engine is valid for ambient dimension `>= 2` and avoids general `Chain` reduction in the two shortcut dimensions, `H_0` and `H_{d-1}`.
+
+`persistentHomology(grid, includeZeroLength, maxDimension)` stops at degree `maxDimension`: the dual graph is walked only
+when the top degree `d - 1` is asked for, and the middle degrees are reduced on the grid cut to dimension
+`maxDimension + 1`, the same shape as `FastAlphaHomologyEngine`.
 
 A masked (NaN) pixel is not in the complex. In the dual graph it is present
 from the start, like the outside of the grid, and a masked region that dies
@@ -244,7 +287,9 @@ or `HelixDelaunay`).
 It requires a full triangulation and is not compatible with the DQP alpha
 backends. As with the cubical engine, `H_0` and `H_{d-1}` use union-find and
 intermediate dimensions go to `CellularCohomologyEngine` (cycles by the
-involution).
+involution). `maxDimension` caps the degrees: the cohomology engine then sees the
+stream only up to dimension `maxDimension + 1`, and the dual graph is walked only
+when the cap reaches `d - 1`. `persistentHomologyTopDegree` is that dual pass alone.
 
 The dual construction assumes each facet has at most two cofaces.
 `BowyerWatsonDelaunay`'s exact predicates guarantee this. `HelixDelaunay` can
@@ -312,6 +357,19 @@ representatives cell for cell across engines; check that each one is a cycle
 (or cocycle) present at the bar's birth. The fast engines have no derived kind:
 their union-finds break ties by value rather than by the stream's order. Image
 cocycles go through `Engine.Cohomology`.
+
+## Circular coordinates from a diagram
+
+`CircularCoordinates(diagram, input, ...)` turns a degree-1 bar of any `PersistenceDiagram[Simplex[Int]]` into a map to
+the circle. A finite bar's cocycle `V_σ` has `σ` as its oldest cell and a coboundary that starts at the death cell, so
+restricted to the complex `K_r` at a scale `r` inside the bar it is a cocycle, and it is non-zero there. The diagram
+records which kind it carries (`PersistenceDiagram.representatives`); a diagram of cocycles supplies the class directly, and
+a diagram of cycles has it recovered by the cohomology of `K_r` over the diagram's field, matched to the bar by its
+birth. Both lift to integers (checked exactly on every triangle) and are smoothed to the harmonic representative.
+
+A bar's class is only defined up to adding the classes of shorter bars nested inside it. When such bars are alive at `r`,
+the engines' representatives, and so their coordinates, differ; every one is a valid circle map. To compare two routes,
+choose `r` where only the loops asked for are alive.
 
 ## Streams × engines: what works with what
 

@@ -3,11 +3,16 @@
 # See bench/README.md. Idempotent: re-running skips what is already built or downloaded.
 #
 #   bench/run.sh setup [tool...]    build/install every tool into $WORKDIR, or only the named ones:
-#                                   python tda4j tda4j-js ripser julia javaplex dipha phat eirene dowker
+#                                   python flashcubical tda4j tda4j-js ripser julia javaplex dipha phat eirene dowker
 #   bench/run.sh prepare            download and generate the data sets into $WORKDIR/data
 #   bench/run.sh run [bench.py run options...]   e.g. --tasks vr --fields 2,17 --timeout 3600
 #   bench/run.sh all [options...]   setup + prepare + run
 #   bench/run.sh summarize RESULTS_DIR
+#   bench/run.sh merge OUT DIR[:tool,tool]...   one results directory from several, the last source with a row winning
+#                                   (bench.py merge); `anchors NEW OLD` checks that two runs ran at the same speed;
+#                                   `check DIR` lists the failed rows and disagreeing barcodes; `constraints DIR` writes
+#                                   a pip constraints file from a run's env.json
+#   bench/final_run.sh              the paper's final run in stages (see its header); this script's commands are the stages
 #   bench/run.sh sweep-cubical [--dims 2,3] [...]   size sweep of TDA4j's image engines (sweep_cubical.py)
 #   bench/run.sh sweep-alpha [--seeds 1] [...]       dimension and point-count sweep of the alpha complex backends
 #                                   (sweep_alpha.py): cube and sphere samples, the Helix thesis's workloads
@@ -27,6 +32,9 @@
 #   NODE           node binary for the Scala.js build of TDA4j (20.16 or newer; default: node on PATH); tda4j-js is
 #                  skipped if there is none
 #   SKIP_TDA4J_BUILD=1   reuse the classpath file from a previous setup
+#   RESULTS_DIR    where `run` writes (default: $WORKDIR/results/<timestamp>); bench/final_run.sh names its stages
+#   PIP_CONSTRAINTS   a pip constraints file for `setup python` (`bench.py constraints DIR` writes one from a run's
+#                  env.json), to install the versions an earlier run measured
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -46,11 +54,24 @@ setup_python() {
   log "Python tools (ripser.py, giotto-ph, GUDHI, CubicalRipser, Dionysus 2, OAT) in $VENV"
   if [ ! -x "$VENV/bin/python" ]; then "${PYTHON:-python3}" -m venv "$VENV"; fi
   "$VENV/bin/python" -m pip install --upgrade pip >/dev/null
-  # Unpinned on purpose: the versions actually installed are recorded in every run's env.json.
-  # For the paper's final run, pin them here (pip install pkg==x.y.z).
+  # Unpinned unless PIP_CONSTRAINTS names a constraints file: the versions actually installed are recorded in every
+  # run's env.json (`bench.py constraints DIR` turns them back into such a file for the paper's final run).
+  local constraints=()
+  if [ -n "${PIP_CONSTRAINTS:-}" ]; then constraints=(-c "$PIP_CONSTRAINTS"); fi
   for pkg in numpy scipy networkx pynverse matplotlib ripser giotto-ph gudhi cripser dionysus oat_python; do
-    "$VENV/bin/python" -m pip install "$pkg" || echo "WARNING: could not install $pkg; it will be reported as missing"
+    "$VENV/bin/python" -m pip install ${constraints[@]+"${constraints[@]}"} "$pkg" \
+      || echo "WARNING: could not install $pkg; it will be reported as missing"
   done
+}
+
+setup_flashcubical() {
+  log "FlashCubical (T-prog123; a C++17 pybind11 extension for 2-D and 3-D arrays) at a pinned commit, into $VENV"
+  if [ ! -x "$VENV/bin/python" ]; then echo "WARNING: FlashCubical installs into the Python venv (run setup python first): flashcubical will be reported as missing"; return; fi
+  # scikit-build-core builds it with CMake (3.20 or newer) and a C++17 compiler; pip fetches both build requirements.
+  # The commit's tarball, so that no git is needed; "Update README.md v2", 2026-06-04.
+  "$VENV/bin/python" -m pip install "https://github.com/T-prog123/FlashCubical/archive/eaff91f54a126eed48170cdf1d92fef20537bec9.tar.gz" \
+    && "$VENV/bin/python" -c 'import numpy, flash_cubical; print("flash_cubical:", len(flash_cubical.compute(numpy.arange(16.0).reshape(4, 4)).values), "pairs on a 4x4 ramp")' \
+    || echo "WARNING: FlashCubical did not build; it will be reported as missing"
 }
 
 setup_ripser() {
@@ -214,6 +235,7 @@ setup_tda4j_js() {
     rm -f "$TOOLS/tda4j-js.path"; return
   fi
   log "TDA4j for JavaScript: the npm package (optimized Scala.js link), installed under $TOOLS/tda4j-js"
+  rm -f "$TOOLS/tda4j-js.git"
   if ! command -v sbt >/dev/null; then echo "sbt not on PATH; .claude/scripts/install-sbt.sh installs it"; exit 1; fi
   # Never run two sbt processes on one checkout at once: this runs after setup_tda4j's sbt has finished.
   if ! (cd "$REPO" && sbt "tda4jJS/npmPack") > "$TOOLS/sbt-npm.log" 2>&1; then
@@ -231,6 +253,10 @@ setup_tda4j_js() {
     rm -f "$TOOLS/tda4j-js.path"; return
   fi
   echo "$main" > "$TOOLS/tda4j-js.path"
+  # The commit the package was built from (first line), then the tracked files that differed from it: env.json records
+  # it as tda4j_js_git, and the summaries name it where it is not the JVM classes' commit.
+  { git -C "$REPO" rev-parse HEAD && git -C "$REPO" diff --name-only HEAD; } > "$TOOLS/tda4j-js.git" 2>/dev/null \
+    || rm -f "$TOOLS/tda4j-js.git"
   echo "tda4j-js: $tarball -> $main"
 }
 
@@ -246,6 +272,7 @@ export_env() {
     export TDA4J_JS="$(cat "$TOOLS/tda4j-js.path")"
     export NODE="${NODE:-$(command -v node || true)}"
     [ -n "$NODE" ] || unset NODE TDA4J_JS
+    if [ -n "${TDA4J_JS:-}" ] && [ -s "$TOOLS/tda4j-js.git" ]; then export TDA4J_JS_GIT="$TOOLS/tda4j-js.git"; fi
   fi
   export RIPSER_BIN="$TOOLS/ripser/ripser"
   export RIPSER_COEFF_BIN="$TOOLS/ripser/ripser-coeff"
@@ -275,10 +302,11 @@ case "$cmd" in
   # TDA4j first: the optional tools after it only warn when they fail.
   setup)
     components=("$@")
-    if [ ${#components[@]} -eq 0 ]; then components=(python tda4j tda4j-js ripser julia javaplex dipha phat eirene); fi
+    if [ ${#components[@]} -eq 0 ]; then components=(python flashcubical tda4j tda4j-js ripser julia javaplex dipha phat eirene); fi
     for component in "${components[@]}"; do
       case "$component" in
         python) setup_python ;;
+        flashcubical) setup_flashcubical ;;
         tda4j) setup_tda4j ;;
         tda4j-js) setup_tda4j_js ;;
         ripser) setup_ripser ;;
@@ -288,18 +316,22 @@ case "$cmd" in
         phat) setup_phat ;;
         eirene) setup_eirene ;;
         dowker) setup_dowker ;;
-        *) echo "unknown component '$component' (python tda4j tda4j-js ripser julia javaplex dipha phat eirene dowker)"; exit 2 ;;
+        *) echo "unknown component '$component' (python flashcubical tda4j tda4j-js ripser julia javaplex dipha phat eirene dowker)"; exit 2 ;;
       esac
     done
     ;;
   prepare) "$VENV/bin/python" "$BENCH/bench.py" prepare --data "$DATA" ;;
   run)
     export_env
-    RESULTS="$WORKDIR/results/$(date +%Y%m%d-%H%M%S)"
+    RESULTS="${RESULTS_DIR:-$WORKDIR/results/$(date +%Y%m%d-%H%M%S)}"
     echo "results -> $RESULTS"
     "$VENV/bin/python" "$BENCH/bench.py" run --data "$DATA" --out "$RESULTS" --python "$VENV/bin/python" "$@"
     ;;
   summarize) "$VENV/bin/python" "$BENCH/bench.py" summarize "$@" ;;
+  merge) "$VENV/bin/python" "$BENCH/bench.py" merge "$@" ;;
+  anchors) "$VENV/bin/python" "$BENCH/bench.py" anchors "$@" ;;
+  constraints) "$VENV/bin/python" "$BENCH/bench.py" constraints "$@" ;;
+  check) "$VENV/bin/python" "$BENCH/bench.py" check "$@" ;;
   sweep-cubical)
     export_env
     "$VENV/bin/python" "$BENCH/sweep_cubical.py" --data "$DATA" --python "$VENV/bin/python" "$@"
@@ -323,5 +355,5 @@ case "$cmd" in
     "$0" prepare
     "$0" run "$@"
     ;;
-  *) echo "usage: $0 setup [tool...]|prepare|run|all|summarize|sweep-cubical|sweep-alpha|sweep-threads|count-cells [options]"; exit 2 ;;
+  *) echo "usage: $0 setup [tool...]|prepare|run|all|summarize|merge|anchors|check|constraints|sweep-cubical|sweep-alpha|sweep-threads|count-cells [options]"; exit 2 ;;
 esac

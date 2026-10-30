@@ -386,3 +386,45 @@ class FastAlphaHomologySpec extends mutable.Specification with ScalaCheck:
       val allCycles = bars.filter(_.dim > 0).forall(b => Chain.from(b.annotation.get.boundary).isZero())
       (allCycles must beTrue) and (triples.sorted must beEqualTo(naiveBars(repairedFixture3D).sorted))
     }
+
+  // ---------------------------------------------------------------------------------------------------------
+  // The degree cap: below the top degree only the simplices up to maxDimension + 1 are built, the answer in the
+  // degrees asked for is the one of the uncapped engine, and the top-degree method is the dual union-find alone.
+  // ---------------------------------------------------------------------------------------------------------
+  private def cloud(n: Int, dim: Int, seed: Long): DelaunayAlphaShapes =
+    val rng = new scala.util.Random(seed)
+    BowyerWatsonDelaunay(Array.fill(n)(Array.fill(dim)(rng.nextDouble())))
+
+  private def triples(bars: List[PersistenceBar[Double, ?]]): List[(Int, Double, Double)] =
+    bars.map(b => (b.dim, endpoint(b.lower), endpoint(b.upper))).sorted
+
+  "persistentHomology(maxDimension = k) is the uncapped barcode cut at degree k, in 2, 3 and 4 dimensions" >> {
+    val engine = FastAlphaHomologyEngine[Double]()
+    val problems = for
+      (n, d, seed) <- Seq((40, 2, 3L), (30, 3, 5L), (22, 4, 7L))
+      helix = cloud(n, d, seed)
+      full = engine.persistentHomology(helix)
+      k <- 0 until d
+      capped = triples(engine.persistentHomology(helix, maxDimension = k))
+      if capped != triples(full).filter(_._1 <= k)
+    yield (d, k)
+    problems must beEmpty
+  }
+
+  "persistentHomology(maxDimension = k) reports no bar above k and builds a bar for every degree up to k" >> {
+    val helix = cloud(22, 4, 7L)
+    val capped = FastAlphaHomologyEngine[Double]().persistentHomology(helix, maxDimension = 1)
+    (capped.map(_.dim).max must beEqualTo(1)) and (capped.map(_.dim).toSet must beEqualTo(Set(0, 1)))
+  }
+
+  "persistentHomologyTopDegree is the top-degree part of the full barcode, with cycles as representatives" >> {
+    val engine = FastAlphaHomologyEngine[Double]()
+    val problems = for
+      (n, d, seed) <- Seq((40, 2, 3L), (30, 3, 5L), (22, 4, 7L))
+      helix = cloud(n, d, seed)
+      top = engine.persistentHomologyTopDegree(helix)
+      expected = triples(engine.persistentHomology(helix)).filter(_._1 == d - 1)
+      if triples(top) != expected || !top.forall(b => Chain.from(b.annotation.get.boundary).isZero())
+    yield d
+    problems must beEmpty
+  }

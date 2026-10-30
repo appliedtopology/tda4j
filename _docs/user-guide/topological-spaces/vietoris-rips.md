@@ -25,8 +25,10 @@ within `r` of all others): past it the complex is a cone and nothing new is born
 diagram. Pass `Double.PositiveInfinity` for the whole complex. `maxDimension` is the top homological degree; the stream
 contains simplices one dimension higher, which is what lets a class of that degree die.
 
-`VietorisRips(..., implementation = VietorisRips.Implementation.RipserCoface)` (or `Inorder`, `Incremental`) picks
-another construction of the same complex, cell for cell; the default, `Enumerating`, is a good choice. `Persistence(points)`
+`VietorisRips(..., implementation = VietorisRips.Implementation.Inorder)` (or `Enumerating`, `Incremental`) picks
+another construction of the same complex, cell for cell; the default, `RipserCoface`, is the one the other complexes
+([Čech](cech-complexes.md), [witness](witness-complexes.md), [Dowker](dowker-complexes.md),
+[sparse Rips](sparse-vietoris-rips.md)) are built on. `Persistence(points)`
 does not build a stream at all: it runs Ripser's algorithm on the metric space, which is much faster, especially in
 degree 2. A stream is for the other engines, such as the naive engine, whose computation can be followed step by step.
 

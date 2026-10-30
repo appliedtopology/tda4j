@@ -39,7 +39,7 @@ open class SheehyRipsSimplexStream(
   val epsilon: Double,
   keepCriterion: PartialFunction[Simplex[Int], Boolean] = CofaceSimplexStream.keepAll,
   maxFiltrationValue: Option[Double] = None,
-  parallelFiltrationValue: Boolean = false
+  parallelFiltrationValue: Boolean = Parallel.byDefault
 ) extends RipserCofaceSimplexStream(
       ambientMetricSpace,
       keepCriterion,
@@ -96,6 +96,36 @@ open class SheehyRipsSimplexStream(
 
   override protected def flatFiltration: Option[RipserCofaceSimplexStream.FlatFiltration] = Some(flat)
 
+  // The flag complex of the finite edge births, in which a point leaves after its `vanish` scale: a simplex needs every
+  // vertex alive at its value (`deadline`), and keeps the faces it had.
+  override protected def flatGenerator: Option[LayeredInorderSimplexStream.FlagGenerator] =
+    val n = ambientMetricSpace.size
+    val lambda = Array.tabulate(n)(permutation.insertionRadius)
+    val as = LayeredInorderSimplexStream.IntBuffer()
+    val bs = LayeredInorderSimplexStream.IntBuffer()
+    val births = LayeredInorderSimplexStream.DoubleBuffer()
+    var b = 1
+    while b < n do
+      var a = 0
+      while a < b do
+        val birth = SheehyRipsSimplexStream.edgeBirth(lambda(a), lambda(b), ambientMetricSpace.distance(a, b), epsilon)
+        if birth.isFinite then
+          as += a
+          bs += b
+          births += birth
+        a += 1
+      b += 1
+    Some(
+      LayeredInorderSimplexStream.FlagGenerator.ofEdges(
+        n,
+        as.result,
+        bs.result,
+        births.result,
+        resolvedMaxFiltrationValue,
+        deadline = Array.tabulate(n)(v => SheehyRipsSimplexStream.vanishDoubled(lambda(v), epsilon))
+      )
+    )
+
 object SheehyRipsSimplexStream:
 
   /** The sparse Rips filtration of `ambientMetricSpace`, computing the greedy permutation (with `epsilon` checked
@@ -107,7 +137,7 @@ object SheehyRipsSimplexStream:
     firstPoint: Int = 0,
     keepCriterion: PartialFunction[Simplex[Int], Boolean] = CofaceSimplexStream.keepAll,
     maxFiltrationValue: Option[Double] = None,
-    parallelFiltrationValue: Boolean = false
+    parallelFiltrationValue: Boolean = Parallel.byDefault
   ): SheehyRipsSimplexStream =
     require(epsilon > 0.0 && epsilon < 1.0, s"epsilon must be in (0,1), got $epsilon")
     val selection = LandmarkSelector.maxmin(ambientMetricSpace, ambientMetricSpace.size, firstPoint)

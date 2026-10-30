@@ -113,9 +113,13 @@ final case class Labels(
       )
     s.copy(title = title.getOrElse(s.title), subtitle = subtitle.getOrElse(s.subtitle))
 
-  // A board's title is its page title; every panel keeps its own, and takes the other labels.
+  // A board's title is its page title and is drawn above the panels; every panel keeps its own, and takes the other labels.
   override def onBoard(b: Board): Board =
-    b.copy(title = title.getOrElse(b.title), plots = b.plots.map(copy(title = Optional.empty).onFigure))
+    b.copy(
+      title = title.getOrElse(b.title),
+      heading = title.getOrElse(b.heading),
+      plots = b.plots.map(copy(title = Optional.empty).onFigure)
+    )
 
 /** The size of a plot in pixels, width by height. Only what is given changes (`Size(width = 900)`); the plot area takes
   * what the margins leave. The plots choose a height that suits what they draw (a barcode grows with its bars), so give
@@ -170,6 +174,9 @@ object Scale:
     * `true` keeps the line even with nothing on it (panels that must line up). `position` puts the axis at the
     * `Side.Top` of the plot (or back at the `Side.Bottom`); `reverse = true` runs it the other way; `padding` is the
     * fraction of the data's extent left empty at each end (default 0.04) when `min` and `max` do not fix them.
+    * `crossesAt` draws the axis where the y axis has that value, in y's data units: `Scale.x(crossesAt = 0)` is the x
+    * axis through `y = 0`, with its numbers beside it and its label at the edge of the plot. A value the y axis does
+    * not show (or cannot place, `0` on a log axis) leaves the axis at the edge, and the plot says so.
     */
   def x(
     transform: Optional[Transform] = Optional.empty,
@@ -182,12 +189,31 @@ object Scale:
     minusInfinity: Optional[Boolean] = Optional.empty,
     position: Optional[Side] = Optional.empty,
     reverse: Optional[Boolean] = Optional.empty,
-    padding: Optional[Double] = Optional.empty
+    padding: Optional[Double] = Optional.empty,
+    crossesAt: Optional[Double] = Optional.empty
   ): Tweak =
     checkSide("x", position)
-    Position(true, false, transform, min, max, breaks, format, grid, visible, minusInfinity, position, reverse, padding)
+    checkCrossing("x", crossesAt)
+    Position(
+      true,
+      false,
+      transform,
+      min,
+      max,
+      breaks,
+      format,
+      grid,
+      visible,
+      minusInfinity,
+      position,
+      reverse,
+      padding,
+      crossesAt
+    )
 
-  /** The y axis; as [[x]], with `position` the `Side.Left` or `Side.Right` of the plot. */
+  /** The y axis; as [[x]], with `position` the `Side.Left` or `Side.Right` of the plot, and `crossesAt` the value of
+    * the x axis, in x's data units, that the y axis goes through.
+    */
   def y(
     transform: Optional[Transform] = Optional.empty,
     min: Optional[Double] = Optional.empty,
@@ -199,10 +225,27 @@ object Scale:
     minusInfinity: Optional[Boolean] = Optional.empty,
     position: Optional[Side] = Optional.empty,
     reverse: Optional[Boolean] = Optional.empty,
-    padding: Optional[Double] = Optional.empty
+    padding: Optional[Double] = Optional.empty,
+    crossesAt: Optional[Double] = Optional.empty
   ): Tweak =
     checkSide("y", position)
-    Position(false, true, transform, min, max, breaks, format, grid, visible, minusInfinity, position, reverse, padding)
+    checkCrossing("y", crossesAt)
+    Position(
+      false,
+      true,
+      transform,
+      min,
+      max,
+      breaks,
+      format,
+      grid,
+      visible,
+      minusInfinity,
+      position,
+      reverse,
+      padding,
+      crossesAt
+    )
 
   /** Both axes alike: a log-log persistence diagram is `Scale.xy(Transform.Log10)`. */
   def xy(
@@ -230,7 +273,8 @@ object Scale:
       minusInfinity,
       Optional.empty,
       reverse,
-      padding
+      padding,
+      Optional.empty
     )
 
   /** The figure's color scale, if it has one (a heatmap, a persistence image, a cocycle, circular coordinates; any
@@ -297,6 +341,9 @@ object Scale:
       if free then f.copy(equalAspect = false, aspect = None) else f.copy(aspect = ratio.orElse(f.aspect))
     override def toString: String = s"Scale.aspect($ratio, free = $free)"
 
+  private def checkCrossing(which: String, crossesAt: Optional[Double]): Unit =
+    crossesAt.toOption.foreach(v => require(v.isFinite, s"Scale.$which: crossesAt = ${Svg.number(v)} is not a number"))
+
   // an axis is on one of two sides: refused when the tweak is made, so a command line says so before anything is computed
   private def checkSide(which: String, position: Optional[Side]): Unit =
     position.toOption.foreach { side =>
@@ -320,7 +367,8 @@ object Scale:
     minusInfinity: Optional[Boolean],
     position: Optional[Side],
     reverse: Optional[Boolean],
-    padding: Optional[Double]
+    padding: Optional[Double],
+    crossesAt: Optional[Double]
   ) extends Tweak:
     def onFigure(f: Figure): Figure =
       f.copy(x = if onX then update(f.x, "x") else f.x, y = if onY then update(f.y, "y") else f.y)
@@ -366,7 +414,8 @@ object Scale:
         minusInfinity = minusInfinity.toOption.orElse(a.minusInfinity),
         side = position.toOption.orElse(a.side),
         reverse = reverse.getOrElse(a.reverse),
-        padding = padding.toOption.orElse(a.padding)
+        padding = padding.toOption.orElse(a.padding),
+        crossesAt = crossesAt.toOption.orElse(a.crossesAt)
       )
 
   private final case class ColorChange(

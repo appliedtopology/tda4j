@@ -27,14 +27,17 @@ open class FastCubicalHomologyEngine[CoefficientT: Field]:
   private val fr = summon[CoefficientT is Field]
   given Ordering[Cube] = cubeOrdering
 
-  /** Every bar of the image's sublevel (or superlevel) filtration, with representatives; zero-length bars (a plateau's
-    * cells pairing off at one value) only if `includeZeroLength`.
+  /** Every bar of the image's sublevel (or superlevel) filtration up to degree `maxDimension` (default: all, up to
+    * `d - 1`), with representatives; zero-length bars (a plateau's cells pairing off at one value) only if
+    * `includeZeroLength`. Below the top degree only the cells of dimension `maxDimension + 1` and lower are built, as
+    * for any other engine, and the dual graph is walked only when the top degree is asked for.
     */
   def persistentHomology(
     stream: CubicalGridStream,
-    includeZeroLength: Boolean = false
+    includeZeroLength: Boolean = false,
+    maxDimension: Optional[Int] = Optional.empty
   ): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
-    compute(stream, includeZeroLength, representatives = true)
+    compute(stream, includeZeroLength, representatives = true, maxDimension)
 
   // `private[tda4j]` on purpose: every public way to compute persistence returns a representative with every bar (the
   // library's design principle), and this measurement hook does not.
@@ -50,24 +53,23 @@ open class FastCubicalHomologyEngine[CoefficientT: Field]:
   private def compute(
     stream: CubicalGridStream,
     includeZeroLength: Boolean,
-    representatives: Boolean
+    representatives: Boolean,
+    maxDimension: Optional[Int] = Optional.empty
   ): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
     require(
       stream.ambientDim >= 2,
       s"FastCubicalHomologyEngine requires ambient dimension >= 2, got ${stream.ambientDim}"
     )
+    val top = stream.ambientDim - 1
+    val cap = math.min(maxDimension.getOrElse(top), top)
+    require(cap >= 0, s"maxDimension must be at least 0, got $cap")
     val grid = GridRanks(stream.shape, stream.topCellValues)
     // Representatives are packed on every grid whose cells have Int indices (every grid that fits in memory); one
     // decoder per run, shared by all of them.
     val cubes = Option.when(GridCubes.fits(grid.shape))(GridCubes(grid.shape))
-    val bars =
-      if stream.ambientDim == 2 then
-        computeH0(grid, includeZeroLength, cubes) ++
-          computeDualTopDimension(grid, includeZeroLength, representatives, cubes)
-      else
-        computeMiddleDimensions(stream, grid, includeZeroLength) ++
-          computeDualTopDimension(grid, includeZeroLength, representatives, cubes)
-    bars
+    val dual = if cap == top then computeDualTopDimension(grid, includeZeroLength, representatives, cubes) else Nil
+    if stream.ambientDim == 2 then computeH0(grid, includeZeroLength, cubes) ++ dual
+    else computeMiddleDimensions(stream, grid, includeZeroLength, math.min(cap, top - 1)) ++ dual
 
   // -------------------------------------------------------------------------------------------------------------
   // d >= 3's "middle" degrees (1 <= k <= d-2) have no duality shortcut. They go to cohomology on the grid without its
@@ -81,11 +83,12 @@ open class FastCubicalHomologyEngine[CoefficientT: Field]:
   private def computeMiddleDimensions(
     stream: CubicalGridStream,
     grid: GridRanks,
-    includeZeroLength: Boolean
+    includeZeroLength: Boolean,
+    upTo: Int
   ): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
-    new PackedCubicalCohomologyEngine[CoefficientT](stream, stream.ambientDim - 1, grid)
+    new PackedCubicalCohomologyEngine[CoefficientT](stream, upTo + 1, grid)
       .persistentHomology(includeZeroLength)
-      .filter(_.dim <= stream.ambientDim - 2)
+      .filter(_.dim <= upTo)
 
   private def endpoint(lower: Boolean)(v: Double): BarcodeEndpoint[Double] =
     if !lower && v == Double.PositiveInfinity then PositiveInfinity()
@@ -129,7 +132,8 @@ open class FastCubicalHomologyEngine[CoefficientT: Field]:
     // its lower corner, then along each axis take the minimum with the lower neighbour -- along every axis for a
     // vertex, every axis but `axis` for an edge.
     def embedded(): Array[Int] =
-      val a = Array.fill(numVertices)(Int.MaxValue)
+      val a = new Array[Int](numVertices)
+      java.util.Arrays.fill(a, Int.MaxValue)
       val pstride = GridRanks.strides(shape)
       val rowLength = shape(d - 1)
       val rows = grid.size / rowLength
@@ -257,10 +261,12 @@ open class FastCubicalHomologyEngine[CoefficientT: Field]:
       val r0 = find(upper)
       val r1 = find(lower)
       if r0 != r1 then
-        val (youngRoot, oldRoot) =
-          if distinct(vertexRank(r0)) <= distinct(vertexRank(r1)) then (r1, r0) else (r0, r1)
+        val upperIsOlder = distinct(vertexRank(r0)) <= distinct(vertexRank(r1))
+        val youngRoot = if upperIsOlder then r1 else r0
+        val oldRoot = if upperIsOlder then r0 else r1
         parent(youngRoot) = oldRoot
-        val (birth, death) = (distinct(vertexRank(youngRoot)), distinct(rank))
+        val birth = distinct(vertexRank(youngRoot))
+        val death = distinct(rank)
         if includeZeroLength || birth != death then
           bars += new PersistenceBar(
             0,
@@ -403,7 +409,7 @@ open class FastCubicalHomologyEngine[CoefficientT: Field]:
     val coefficientBox = Array.tabulate(5)(i => if i == 2 then null else field(i - 2).asInstanceOf[AnyRef])
     val keepCoefficient = Array.tabulate(5)(i => i != 2 && !fr.isEqual(field(i - 2), fr.zero))
     val sums = FacetSums()
-    def regionBoundary(uf: UnitSignedUnionFind, root: Int, flip: Int): Chain[Cube, CoefficientT] =
+    def heapRegionBoundary(uf: UnitSignedUnionFind, root: Int, flip: Int): Chain[Cube, CoefficientT] =
       uf.foreachMember(root) { (id, sign) =>
         val c = flip * sign
         var pixelKey = 0L
@@ -419,43 +425,75 @@ open class FastCubicalHomologyEngine[CoefficientT: Field]:
           sums.add(pixelKey - encWeight(a), -c * upperSign(a))
           a += 1
       }
-      cubes match
-        case Some(decoder) =>
-          // Key in the high half, sum in the low: sorted by key, which is the cubes' order (`cubeOrdering` is the
-          // doubled grid's row-major order).
-          val sorted = new Array[Long](sums.size)
-          var count = 0
-          var j = 0
-          while j < sums.size do
-            val n = sums.sumAt(j)
-            if n != 0 then
-              if n < -2 || n > 2 then
-                throw new IllegalStateException(s"an engine bug: a facet of a region boundary has coefficient $n")
-              if keepCoefficient(n + 2) then
-                sorted(count) = (sums.keyAt(j) << 32) | (n & 0xffffffffL)
-                count += 1
-            j += 1
-          sums.clear()
-          java.util.Arrays.sort(sorted, 0, count)
-          val keys = new Array[Int](count)
-          val coefficients = new Array[AnyRef](count)
-          var i = 0
-          while i < count do
-            keys(i) = (sorted(i) >>> 32).toInt
-            coefficients(i) = coefficientBox(sorted(i).toInt + 2)
-            i += 1
-          Chain.packed(keys, coefficients, decoder)
-        case None =>
-          val terms = mutable.ArrayBuffer.empty[(Cube, CoefficientT)]
-          var j = 0
-          while j < sums.size do
-            val n = sums.sumAt(j)
-            if n != 0 then
-              val x = field(n)
-              if !fr.isEqual(x, fr.zero) then terms += ((cubeOfKey(sums.keyAt(j)), x))
-            j += 1
-          sums.clear()
-          Chain.from(ArraySeq.untagged.from(terms))
+      val terms = mutable.ArrayBuffer.empty[(Cube, CoefficientT)]
+      var j = 0
+      while j < sums.size do
+        val n = sums.sumAt(j)
+        if n != 0 then
+          val x = field(n)
+          if !fr.isEqual(x, fr.zero) then terms += ((cubeOfKey(sums.keyAt(j)), x))
+        j += 1
+      sums.clear()
+      Chain.from(ArraySeq.untagged.from(terms))
+
+    // The same boundary for packed representatives, where every doubled-grid index is an `Int`: the sums, the sort and
+    // the arithmetic on the way to them stay in `Int`. On Scala.js a `Long` is two ints in an object and a `Long` array
+    // an array of objects, and `java.util.Arrays.sort` of a range allocates a scratch array as long as the WHOLE array
+    // (so once one big region has grown the scratch, each later region pays for it): `Parallel.sortInts` is the seam.
+    // This was a third of the time of a noisy 2048² image there (.claude/WORKLOG-js-scaling.md).
+    val intWeight = GridRanks.strides(bases)
+    val intSums = IntFacetSums()
+    // Reused from one region to the next: a region's facets before they cancel (interior ones included), which is
+    // several times the boundary that is kept.
+    var keptKeys = new Array[Int](1024)
+    def packedRegionBoundary(
+      uf: UnitSignedUnionFind,
+      root: Int,
+      flip: Int,
+      decoder: GridCubes
+    ): Chain[Cube, CoefficientT] =
+      uf.foreachMember(root) { (id, sign) =>
+        val c = flip * sign
+        var pixelKey = 0
+        var rem = id
+        var i = d - 1
+        while i >= 0 do
+          pixelKey += (2 * (rem % shape(i)) + 1) * intWeight(i)
+          rem /= shape(i)
+          i -= 1
+        var a = 0
+        while a < d do
+          intSums.add(pixelKey + intWeight(a), c * upperSign(a))
+          intSums.add(pixelKey - intWeight(a), -c * upperSign(a))
+          a += 1
+      }
+      if keptKeys.length < intSums.size then keptKeys = new Array[Int](math.max(intSums.size, 2 * keptKeys.length))
+      val kept = keptKeys
+      var count = 0
+      var j = 0
+      while j < intSums.size do
+        val n = intSums.sumAt(j)
+        if n != 0 then
+          if n < -2 || n > 2 then
+            throw new IllegalStateException(s"an engine bug: a facet of a region boundary has coefficient $n")
+          if keepCoefficient(n + 2) then
+            kept(count) = intSums.keyAt(j)
+            count += 1
+        j += 1
+      // Ascending key is the cubes' order (`cubeOrdering` is the doubled grid's row-major order).
+      Parallel.sortInts(kept, 0, count)
+      val keys = java.util.Arrays.copyOf(kept, count)
+      val coefficients = new Array[AnyRef](count)
+      var i = 0
+      while i < count do
+        coefficients(i) = coefficientBox(intSums.sumOf(keys(i)) + 2)
+        i += 1
+      intSums.clear()
+      Chain.packed(keys, coefficients, decoder)
+
+    def regionBoundary(uf: UnitSignedUnionFind, root: Int, flip: Int): Chain[Cube, CoefficientT] = cubes match
+      case Some(decoder) => packedRegionBoundary(uf, root, flip, decoder)
+      case None          => heapRegionBoundary(uf, root, flip)
 
     // Union-find over `0 to numTop` (numTop itself = infinityId). A root is always the OLDEST -- i.e. largest-value --
     // member of its component, so its value is the component's birth. Signs live in `uf`; a dying region is assembled
@@ -476,9 +514,8 @@ open class FastCubicalHomologyEngine[CoefficientT: Field]:
       val axis = (code / 3) % d
       val p = code / 3 / d
       // `a` and `b` as the facet lists them: the lower pixel first, `∞` last.
-      val (a, b) = side match
-        case 0 => (p - pstride(axis), p)
-        case _ => (p, infinityId)
+      val a = if side == 0 then p - pstride(axis) else p
+      val b = if side == 0 then p else infinityId
       val v = if rank == masked then Double.NaN else distinct(rank)
       val ra = uf.find(a)
       val rb = uf.find(b)
@@ -486,13 +523,16 @@ open class FastCubicalHomologyEngine[CoefficientT: Field]:
         // `infinityId` is the unconditional elder of any merge it takes part in, and a masked component of any merge
         // with a real one: a real top cell can also have the value +Infinity and tie against either, so they are
         // special-cased rather than left to the birth comparison.
-        val (sa, sb) = (seniority(ra), seniority(rb))
-        val (youngRoot, oldRoot) =
-          if sa != sb then if sa < sb then (ra, rb) else (rb, ra)
-          else if sa == 1 then (ra, rb) // two masked regions, both there from the start: the facet's lower side dies
-          else if birthOf(ra) <= birthOf(rb) then (ra, rb)
-          else (rb, ra)
-        val (youngTopId, oldTopId) = if youngRoot == ra then (a, b) else (b, a)
+        val sa = seniority(ra)
+        val sb = seniority(rb)
+        val aIsYounger =
+          if sa != sb then sa < sb
+          else if sa == 1 then true // two masked regions, both there from the start: the facet's lower side dies
+          else birthOf(ra) <= birthOf(rb)
+        val youngRoot = if aIsYounger then ra else rb
+        val oldRoot = if aIsYounger then rb else ra
+        val youngTopId = if aIsYounger then a else b
+        val oldTopId = if aIsYounger then b else a
         require(youngTopId != infinityId, "an engine bug: the infinity dual vertex was treated as the younger side")
         // The coefficient of the facet in `top`'s boundary: the facet is `top`'s upper face if `top` lies below it.
         def coeffToward(top: Int): Int =
@@ -573,6 +613,62 @@ private final class FacetSums:
     val oldKeys = keys
     val oldSums = sums
     keys = Array.fill(oldKeys.length * 2)(-1L)
+    sums = new Array[Int](oldKeys.length * 2)
+    var i = 0
+    while i < count do
+      val s = slot(oldKeys(used(i)), keys)
+      keys(s) = oldKeys(used(i))
+      sums(s) = oldSums(used(i))
+      used(i) = s
+      i += 1
+
+/** [[FacetSums]] for keys that are `Int`s (doubled-grid indices, so never negative): the packed representatives' case.
+  */
+// File-private scratch of one method (`computeDualTopDimension`), with no meaning outside it.
+private final class IntFacetSums:
+  private var keys: Array[Int] = Array.fill(64)(-1)
+  private var sums: Array[Int] = new Array[Int](64)
+  // The occupied slots, in insertion order.
+  private var used: Array[Int] = new Array[Int](32)
+  private var count: Int = 0
+
+  private def slot(key: Int, ks: Array[Int]): Int =
+    val mask = ks.length - 1
+    val h = key * 0x9e3779b9
+    var s = (h ^ (h >>> 16)) & mask
+    while ks(s) != -1 && ks(s) != key do s = (s + 1) & mask
+    s
+
+  def add(key: Int, n: Int): Unit =
+    if 2 * (count + 1) > keys.length then grow()
+    val s = slot(key, keys)
+    if keys(s) == -1 then
+      keys(s) = key
+      sums(s) = n
+      if count == used.length then used = java.util.Arrays.copyOf(used, 2 * count)
+      used(count) = s
+      count += 1
+    else sums(s) += n
+
+  /** The number of keys, which `keyAt` and `sumAt` index in the order they first came. */
+  def size: Int = count
+  def keyAt(i: Int): Int = keys(used(i))
+  def sumAt(i: Int): Int = sums(used(i))
+
+  /** The sum of a key that was added. */
+  def sumOf(key: Int): Int = sums(slot(key, keys))
+
+  def clear(): Unit =
+    var i = 0
+    while i < count do
+      keys(used(i)) = -1
+      i += 1
+    count = 0
+
+  private def grow(): Unit =
+    val oldKeys = keys
+    val oldSums = sums
+    keys = Array.fill(oldKeys.length * 2)(-1)
     sums = new Array[Int](oldKeys.length * 2)
     var i = 0
     while i < count do

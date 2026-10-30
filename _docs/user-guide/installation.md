@@ -10,12 +10,13 @@ title: Installation
 | Scala | Java 21 or newer, Scala 3.9 |
 | Java, MATLAB, the command line | Java 21 or newer (MATLAB: a release whose bundled or configured JVM is 21 or newer) |
 | JavaScript, TypeScript | a browser, or Node.js 20.16 or newer |
+| Python | Python 3.10 or newer, and Java 21 or newer |
 
-Everything runs on the JVM or in JavaScript; there is nothing to compile and no native library to install.
+Everything runs on the JVM or in JavaScript (the Python package starts a JVM); there is nothing to compile and no native library to install.
 
 The current version is on [Maven Central](https://central.sonatype.com/artifact/org.appliedtopology/tda4j_3) and in the
 [releases](https://github.com/appliedtopology/tda4j/releases); below it is written `VERSION`. A version that ends in
-`-SNAPSHOT` is a development build: [build it from source](#from-source).
+`-SNAPSHOT` is a development build: take the [daily snapshot](#development-snapshots) or [build it from source](#from-source).
 
 ## Scala
 
@@ -79,10 +80,34 @@ npm install @appliedtopology/tda4j
 
 See the [JavaScript page](javascript.md).
 
+## Python
+
+```
+pip install tda4j
+```
+
+The wheel carries the library's jar and starts a JVM when the first function needs it, so Java 21 or newer has to be
+installed. The wheel is also attached to each [release](https://github.com/appliedtopology/tda4j/releases). See the
+[Python page](python.md).
+
 ## Try it without installing anything to your project
 
 `tda4j-demo-VERSION.jar` from the releases is a Scala REPL with the library and its imports in place:
 `java -jar tda4j-demo-VERSION.jar`.
+
+## Development snapshots
+
+The `scala` branch is published as a `-SNAPSHOT` of the next version (the one in `version.sbt`) to Maven Central's snapshot
+repository on every day on which a commit has landed. A snapshot is whatever the branch held at that time: it can change or
+break without notice, and Central deletes one after 90 days. Add the repository and ask for the snapshot version:
+
+```scala sc:nocompile
+// sbt: NEXT-SNAPSHOT is the version in version.sbt, for example 0.7.0-SNAPSHOT
+resolvers += "Central Snapshots" at "https://central.sonatype.com/repository/maven-snapshots/"
+libraryDependencies += "org.appliedtopology" %% "tda4j" % "NEXT-SNAPSHOT"
+```
+
+Other build tools take the same repository URL, `https://central.sonatype.com/repository/maven-snapshots/`.
 
 ## From source
 

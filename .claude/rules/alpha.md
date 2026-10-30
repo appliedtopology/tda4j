@@ -28,9 +28,11 @@ to it (a vertex on the sphere = the same sphere; otherwise a ~1e-16 bar that dep
 `CholeskyWorkspace` hand-rolled incremental Cholesky. Filtration values are squared radii internally; `radiusOf`
 takes sqrt. `AlphaShapeDQP` always untruncated; `AlphaComplexDQP.euclidean(points, maxRadius, ...)` for truncation.
 
-**Settled `DualQP.solve` numerics — don't retune**: `rankTolerance=1e-6` (safe `[1e-7,1e-5]`); ratio-test ties
-broken by global constraint index (Bland's rule); small-Schur-complement-no-swappable-inequality → infeasible
-(accepted limitation, "commit anyway" tried and reverted). Vertex filtration value is `-space.weight(x)` only
+**`DualQP.solve` numerics**: `rankTolerance=1e-6` (a lower one admits a poisoned factor); ratio-test ties broken
+by global constraint index (Bland's rule). A pivot under it rules a candidate out, which in high dimension dropped
+valid simplices of large circumradius and their cofaces: such a candidate is retried at `rescueRankTolerance=1e-11`
+and kept only if its multipliers are certified against the data (`WORKLOG-dqp-ill-conditioned-cells.md`). Values past
+about 100 times the point spacing stay approximate: truncate DQP. Vertex filtration value is `-space.weight(x)` only
 when `x` is inside its own restricted power cell `V_x`, else the min over `x`'s own incident already-solved
 edges (dim 1 before 0), and a vertex with no incident edges is dropped entirely
 (`AlphaComplexDQPVertexAttachmentSpec`, `WORKLOG-dtm-filtrations.md`). Regressions in
@@ -48,10 +50,9 @@ its true affine span first.
 
 **Helix alpha values are computed top-down** (`built`, read by `valueOf`): top cells take the smallest containing circumradius;
 below that a simplex takes its own smallest circumradius (centre in its affine hull, `smallestCircumsphere`, never
-`Hypersphere.apply`) if Gabriel w.r.t. its cofaces' opposite vertices, else the min over its immediate cofaces. The
-Gabriel rule once covered edges only, so 3-D lost most `H_2` (`WORKLOG-helix-alpha-values.md`). **In general position
-Helix must equal DQP bar for bar** (`HelixDqpAgreementSpec`, a CI gate in 2-D/3-D/4-D); only degenerate inputs stay
-diagnostic.
+`Hypersphere.apply`) if Gabriel w.r.t. its cofaces' opposite vertices, else the min over its immediate cofaces. (`WORKLOG-helix-alpha-values.md`). **In general position
+Helix must equal DQP bar for bar** (`HelixDqpAgreementSpec`, a CI gate in 2-D to 4-D, and cell for cell in 7-D within
+a radius); only degenerate inputs stay diagnostic.
 
 **`DelaunayAlphaShapes` keeps faces and values in flat tables, read per dimension** (`WORKLOG-helix-alpha-speed.md`): `built`
 is a `FaceTable` per dimension plus value arrays; the `Simplex` objects, the sorted order of a dimension
@@ -60,8 +61,8 @@ never the millions of faces above), and `filtrationValue` probes the table, not 
 here may be per-simplex hash sets or a scan of the cells per top simplex (`topValue` was quadratic in the number of cells
 and was 75% of the time at 40 points in R^7: `HelixDelaunay.smallestCircumradii`); no `tabulate`/`map`/`sum` in
 `circumsphere` (boxing, once per face). Any change here is checked by a before/after dump of every simplex, value (hex
-doubles) and stream order (`AlphaProfileDriver dump=`), not by Betti numbers. 40 points in R^8: 7 s, in R^10: 71 s (GUDHI
-3.7 s, 56 s). Helix's walk is now 40-55% of that; DQP and Cech pay for the 3-skeleton only (at most C(n, <= 4)).
+doubles) and stream order (`AlphaProfileDriver dump=`), not by Betti numbers. DQP and Cech pay for the
+3-skeleton only (at most C(n, <= 4)) when capped.
 
 **Helix walk** (`WORKLOG-helix-construction-speed.md`): hull facet by gift wrapping (deterministic, no RNG); across
 each frontier facet the cofacet is the light point with the smallest centre parameter `t` (sphere centre `c0 + t n`),
@@ -73,7 +74,7 @@ facet in 3 tops, every boundary facet on the hull -- Euler characteristic is NOT
 passes it); a failure goes to `repairByJitterRetriangulation` (jitter `1e-4` of the spacing, all points when the
 structural check fails; on the PROJECTED points). Exact grids are valid by default at the default epsilon; at a far
 smaller epsilon (`1e-9`) a 3-D grid can still fail to repair (near-coplanar float predicates) and the raw walk is
-returned. Agreement with GUDHI at scale (bench harness): bottleneck <= 1e-8 at 1000/5000 3-D, 6e-7 at 10000 2-D.
+returned.
 **Dispatch with a radius** (`AlphaShapes(points, maxRadius = r)`, the verb's and facade's `maxFiltrationValue`):
 `Default` = the triangulation without a radius, else `prefersDQP` (mean of `k^1.6`, k = neighbours within `2r`, 64
 samples, vs a fitted cost model: DQP `0.004·2.35^(d-2)·k^1.6`, BowyerWatson `b_d (n/1000)^0.2`, b = 0.03/0.1/1.1 for
@@ -81,6 +82,10 @@ d = 2..4, Helix 5-D `150 (n/1000)^0.4`, d >= 6 always DQP). Triangulations are f
 results must be identical in general position (`AlphaDispatchSpec`; cospherical: DQP keeps the spanned simplex, Helix
 triangulates). The facade passes no `Epsilon`: alpha uses `AlphaShapes`' default `1e-5` (the `epsilon` option is `field=R`). Untruncated DQP is ~100x slower than Helix. fast-alpha refuses a
 radius and takes either triangulation. Measurements: `WORKLOG-helix-construction-speed.md`.
+**Without a radius** the verb (`AlphaShapes.fromPoints` -> `upToEnclosingRadius`) cuts the triangulation (BowyerWatson/Helix, NEVER
+`Default`, which picks DQP for any radius at d >= 6) at `minimumEnclosingRadius`: the union of balls is contractible past it, so the barcode is
+unchanged (`PersistenceVerbSpec`); the facade's `complex=alpha` does the same except `engine=fast-alpha` (tutorial count 313; `Infinity` gives the 325 of `AlphaShapes(points)`, `MatlabTabsSpec`). #215.
+`WORKLOG-enclosing-radius.md`.
 
 **One root mechanism (near-cospherical clusters, order-dependent facet-pivot choices) produces two DIFFERENT
 outcomes — don't conflate, a naive set-diff can't tell them apart**:
@@ -99,7 +104,9 @@ top simplices (BowyerWatson or Helix); valid any ambient dim≥2, never DQP (no 
 cofaces" precondition is guaranteed by BowyerWatson, NOT by Helix (more likely violated at higher dim/more points) — validated
 explicitly, throws `FastAlphaTriangulationException` rather than a silently-wrong dual graph. Facet dual-edge
 value from `HelixDelaunay.filtrationValue` directly, never recomputed as min over top simplices. At dim≥3, same
-cohomology hybrid as cubical on `LimitedAlphaShapesStream`; cross-validated at d=3. Wired as
+cohomology hybrid as cubical on `LimitedAlphaShapesStream`, capped by `maxDimension` (simplices up to
+`maxDimension + 1`; the dual graph only when the cap reaches `d - 1`; `persistentHomologyTopDegree` is the dual pass alone;
+`WORKLOG-fastalpha-degree-cap.md`); cross-validated at d=3. Wired as
 `engine="fast-alpha"` (alpha with a triangulating backend, project lead signed off on the measured exception rate). Representatives
 use `SignedUnionFind[C]` (`WORKLOG-fast-cubical-representatives.md`); the cubical engine moved to its byte-signed sibling
 `UnitSignedUnionFind` (`WORKLOG-cubical-performance.md`).
@@ -122,3 +129,13 @@ mixed vs Ripser/qhull; value is high ambient dimension + exact homology + small 
 Default)`, `AlphaBackend.Default | Helix | DQP | BowyerWatson` (parse: `bowyer-watson`/`bowyerwatson`/`bw`); the facade's `alphaBackend` string goes
 through `AlphaBackend.parse`. `AlphaShapes` is also a `PointCloudComplex` (`Persistence(points, complex = AlphaShapes)`),
 which refuses `maxFiltrationValue` with a message pointing at `diagram.at(f)`.
+
+## Parallelism in the alpha pipeline (`WORKLOG-parallelism.md`)
+
+Everything shared between threads gives the same simplices, values to the bit and stream order as one thread (`ParallelAlphaSpec`
+compares each against `Parallel.sequentially`; check a change with `AlphaProfileDriver dump=` before and after, `sequential=true`
+for the reference). The Helix walk evaluates the next queued frontier cases (`evaluate`, pure in the points) in batches and takes
+them in queue order: never let `evaluate` read walk state (`validated`, `visitedFacets`, `queuedByFacet`), and keep a speculative
+failure swallowed (the walk re-evaluates the case when it reaches it). `FaceTable.facesOf` numbers faces by first occurrence, as
+the sequential pass does; a face table made by it has no `add`. `DelaunayAlphaShapes.flatLayers` orders ties lexicographically
+(not colex like the VR layers) and is `None` with repeated points. BowyerWatson insertion stays sequential.

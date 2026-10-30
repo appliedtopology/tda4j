@@ -18,6 +18,11 @@ open class NoIntegerCocycleException(message: String) extends RuntimeException(m
   * the harmonic representative: `g` minimizing `||z - d0 g||²` over the connected component of `K_r` carrying the
   * class, solved by conjugate gradients on the normal equations with one vertex fixed at `0`. The coordinate of a point
   * is `g(v) mod 1`. The solve follows DREiMac's `toroidalcoords.py`.
+  *
+  * There are two ways in. `compute(metricSpace, r, ...)` takes the points and does everything itself, on the
+  * Vietoris-Rips complex. `CircularCoordinates(diagram, input, ...)` takes a [[PersistenceDiagram]] you already have,
+  * of any complex and from any engine, together with what it was computed from, and reads the bar, its field and (when
+  * the diagram carries cocycles) its cocycle from the diagram.
   */
 object CircularCoordinates:
 
@@ -170,7 +175,13 @@ object CircularCoordinates:
     krStream: CellStream[Simplex[Int], Double],
     zInt: Map[Simplex[Int], Int]
   )(using Double is Field): (Map[Int, Double], Map[Simplex[Int], Double], Set[Simplex[Int]]) =
-    val allEdges: Vector[Simplex[Int]] = krStream.iterator.filter(_.dim == 1).toVector
+    harmonicSmooth(krStream.iterator.filter(_.dim == 1).toVector, zInt)
+
+  /** [[harmonicSmoothOnComponent]] on the edges of `K_r` alone: the smoothing reads nothing else. */
+  private def harmonicSmooth(
+    allEdges: Vector[Simplex[Int]],
+    zInt: Map[Simplex[Int], Int]
+  )(using Double is Field): (Map[Int, Double], Map[Simplex[Int], Double], Set[Simplex[Int]]) =
     val adjacency: Map[Simplex[Int], Vector[Simplex[Int]]] =
       allEdges.flatMap(edge => edge.boundary[Double].map(_._1).map(v => v -> edge)).groupMap(_._1)(_._2)
     val seedVertex: Simplex[Int] = zInt.keys.head.boundary[Double].head._1
@@ -309,8 +320,6 @@ object CircularCoordinates:
       LimitedCofaceSimplexStream(EnumeratingCofaceSimplexStream(metricSpace, maxFiltrationValue = Some(r)), 2)
     val krEssentialH1 = ctx.persistentCohomology(krStream).filter(b => b.dim == 1 && !endpointValue(b.upper).isFinite)
 
-    case class ClassData(component: Set[Simplex[Int]], theta: Map[Int, Double], harmonic: Map[Simplex[Int], Double])
-
     val classData: IndexedSeq[ClassData] = cocycleIndices
       .zip(births)
       .map { case (idx, birth) =>
@@ -339,6 +348,26 @@ object CircularCoordinates:
       }
       .toIndexedSeq
 
+    combineClasses(classData, cocycleIndices, reduceFlag, r, prime)
+
+  /** One smoothed class on `K_r`: the connected component it lives on, its circle coordinate and its harmonic cochain.
+    */
+  private case class ClassData(
+    component: Set[Simplex[Int]],
+    theta: Map[Int, Double],
+    harmonic: Map[Simplex[Int], Double]
+  )
+
+  /** The classes' joint torus map: the Gram matrix of their harmonic cochains, its lattice reduction, the unimodular
+    * change of basis applied to the circle coordinates. The part of [[computeToroidal]] after each class is known.
+    */
+  private def combineClasses(
+    classData: IndexedSeq[ClassData],
+    cocycleIndices: Seq[Int],
+    reduceFlag: Boolean,
+    r: Double,
+    prime: Int
+  ): ToroidalResult =
     val sharedComponent = classData.head.component
     require(
       classData.forall(_.component == sharedComponent),
@@ -373,6 +402,256 @@ object CircularCoordinates:
 
     ToroidalResult(newTheta, cocycleIndices.toIndexedSeq, basisChange, gram, reducedGram, r, prime)
 
+  // ---- Coordinates from a persistence diagram -------------------------------------------------------------------------
+
+  /** The `(birth, death)` of every H¹ bar of `diagram`, most persistent first: index `i` is `bar = i` in [[apply]] and
+    * [[toroidal]]. Call this first to choose `r`.
+    */
+  def h1Bars(diagram: PersistenceDiagram[Simplex[Int]]): IndexedSeq[(Double, Double)] =
+    h1BarsOf[diagram.Coefficient](diagram).map(b => (endpointValue(b.lower), endpointValue(b.upper))).toIndexedSeq
+
+  private def h1BarsOf[C](
+    diagram: PersistenceDiagram.Of[Simplex[Int], C]
+  ): List[PersistenceBar[Double, Chain[Simplex[Int], C]]] =
+    diagram.bars.filter(_.dim == 1).sortBy(b => -persistenceOf(b))
+
+  /** Circular coordinates for one H¹ bar of a persistence diagram: the loop `diagram.dim(1)` found, whichever complex
+    * and engine found it.
+    *
+    * {{{
+    * val diagram = Persistence(points, maxDimension = 1)
+    * val coordinate = CircularCoordinates(diagram, points)       // the most persistent loop, at the middle of its bar
+    * CircularCoordinates(diagram, points, bar = 1, r = 0.6)      // another loop, at a chosen scale
+    * CircularCoordinates(cechDiagram, points, complex = Cech)    // a Cech diagram: say which complex it is of
+    * }}}
+    *
+    * The scale `r` and the cocycle are read off the diagram where they can be. With `representatives =
+    * Representatives.Cocycles` the bar's own cocycle is restricted to the complex at `r` and used as it is. A diagram
+    * of cycles (the default of [[Persistence]]), or one that does not say, has its class recovered by the cohomology of
+    * that complex over the diagram's field, matched to the bar by its birth. Either way the cocycle is lifted to the
+    * integers, checked there, and smoothed to the harmonic representative as in [[compute]].
+    *
+    * @param diagram
+    *   a diagram of degrees up to at least 1, over `Z/p` for an odd prime `p` (the `characteristic` it was computed
+    *   with), of a complex on integer vertices.
+    * @param input
+    *   what the diagram was computed from, as `Persistence` took it: points, a metric space or a stream.
+    * @param bar
+    *   the bar, counted among the diagram's H¹ bars from the most persistent, as in [[h1Bars]].
+    * @param r
+    *   the scale to compute at; it must lie in `[birth, death)` of the bar (default: the middle of the bar, or the end
+    *   of the diagram for a bar that never dies).
+    * @param complex
+    *   the complex a point cloud is turned into, as in `Persistence(points, complex = ...)`.
+    */
+  def apply(
+    diagram: PersistenceDiagram[Simplex[Int]],
+    input: Persistence.Input[Simplex[Int]],
+    bar: Int = 0,
+    r: Optional[Double] = Optional.empty,
+    complex: PointCloudComplex = VietorisRips
+  ): Result =
+    import diagram.given
+    val s = smoothClasses[diagram.Coefficient](diagram, input, Seq(bar), r.toOption, complex)
+    Result(s.classes.head.theta, s.bounds.head._1, s.bounds.head._2, s.r, s.prime)
+
+  /** Toroidal coordinates for several H¹ bars of a persistence diagram, as [[computeToroidal]] does for a metric space:
+    * the bars must be alive together at `r` and on one connected piece of the complex.
+    *
+    * @param bars
+    *   the bars, counted as in [[h1Bars]]; at least one, without repeats.
+    * @param r
+    *   the scale (default: the middle of the stretch where all the bars are alive).
+    * @param reduce
+    *   `false` keeps the classes as given, without the lattice reduction.
+    */
+  def toroidal(
+    diagram: PersistenceDiagram[Simplex[Int]],
+    input: Persistence.Input[Simplex[Int]],
+    bars: Seq[Int],
+    r: Optional[Double] = Optional.empty,
+    complex: PointCloudComplex = VietorisRips,
+    reduce: Boolean = true
+  ): ToroidalResult =
+    import diagram.given
+    val s = smoothClasses[diagram.Coefficient](diagram, input, bars, r.toOption, complex)
+    combineClasses(s.classes, bars, reduce, s.r, s.prime)
+
+  private case class Smoothed(
+    r: Double,
+    prime: Int,
+    bounds: IndexedSeq[(Double, Double)],
+    classes: IndexedSeq[ClassData]
+  )
+
+  /** `stream` cut at filtration value `r` and simplex dimension 2: the static complex `K_r`, as a stream the cohomology
+    * engine can read.
+    */
+  private class AtValue(stream: StratifiedCellStream[Simplex[Int], Double], r: Double)
+      extends LevelwiseSimplexStream[Int, Double]
+      with DoubleFiltration[Simplex[Int]]:
+    override def homologyDegreeLimit: Option[Int] = Some(1)
+    override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
+      case d if d >= 0 && d <= 2 && stream.iterateDimension.isDefinedAt(d) =>
+        stream.iterateDimension(d).filter(cell => stream.filtrationValue(cell) <= r)
+    }
+    override def filtrationOrdering: Ordering[Simplex[Int]] = stream.filtrationOrdering
+    override def filtrationValue: PartialFunction[Simplex[Int], Double] = stream.filtrationValue
+
+  /** The characteristic of `C` by repeated addition: the prime `p` with `p * 1 = 0`, `0` when that never happens within
+    * the largest prime a [[FiniteField]] has.
+    */
+  private def characteristicOf[C](using field: C is Field): Int =
+    var sum = field.one
+    var n = 1
+    while n <= FiniteField.MaxPrime && !field.isEqual(sum, field.zero) do
+      sum = field.plus(sum, field.one)
+      n += 1
+    if field.isEqual(sum, field.zero) then n else 0
+
+  /** The integer `k`, `|k| <= (p - 1) / 2`, with `k * 1 = x`, for each element `x` of the prime field `C`. */
+  private def centeredResidues[C](p: Int)(using field: C is Field): C => Int =
+    val table = mutable.HashMap.empty[Int, List[(C, Int)]]
+    def put(x: C, k: Int): Unit =
+      val h = field.hash(x)
+      table.update(h, (x, k) :: table.getOrElse(h, Nil))
+    var multiple = field.zero
+    put(multiple, 0)
+    for k <- 1 to (p - 1) / 2 do
+      multiple = field.plus(multiple, field.one)
+      put(multiple, k)
+      put(field.negate(multiple), -k)
+    x =>
+      table
+        .getOrElse(field.hash(x), Nil)
+        .collectFirst { case (y, k) if field.isEqual(x, y) => k }
+        .getOrElse(throw new IllegalStateException(s"a coefficient of the diagram is not a residue mod $p"))
+
+  private def sameValue(a: Double, b: Double): Boolean = a == b || math.abs(a - b) <= 1e-9 * math.max(1.0, math.abs(b))
+
+  /** The chosen H¹ bars of `diagram`, each as a smoothed class on `K_r`: the work [[apply]] and [[toroidal]] share. */
+  private def smoothClasses[C: Field](
+    diagram: PersistenceDiagram.Of[Simplex[Int], C],
+    input: Persistence.Input[Simplex[Int]],
+    indices: Seq[Int],
+    requestedR: Option[Double],
+    complex: PointCloudComplex
+  ): Smoothed =
+    given realField: (Double is Field) = Field.DoubleApproximated(1e-9)
+    val prime = characteristicOf[C]
+    require(
+      prime != 0,
+      "circular coordinates need coefficients in Z/p for an odd prime p, to lift the cocycle to the integers, and this " +
+        "diagram has real coefficients. Compute it with a prime `characteristic` (the default, 17, will do)."
+    )
+    require(
+      prime % 2 != 0,
+      "circular coordinates need an odd prime (p=2 can hide torsion classes with no real/integer lift), and this " +
+        "diagram is over Z/2. Compute it with `characteristic = 3` or larger (the default, 17, will do)."
+    )
+    require(indices.nonEmpty, "the bars to compute coordinates for must be non-empty")
+    require(indices.distinct.length == indices.length, s"the bars must not contain duplicates, got $indices")
+    require(
+      diagram.maxDimension >= 1,
+      s"circular coordinates come from degree 1, and this diagram has degrees up to ${diagram.maxDimension}: compute " +
+        "it with `maxDimension = 1` or more"
+    )
+    val h1 = h1BarsOf(diagram).toIndexedSeq
+    require(
+      indices.forall(i => i >= 0 && i < h1.length),
+      s"a bar must be in [0, ${h1.length}) -- this diagram has ${h1.length} H^1 bar(s) (`CircularCoordinates.h1Bars`), " +
+        s"got $indices"
+    )
+
+    val chosen = indices.map(h1(_))
+    val births = chosen.map(b => endpointValue(b.lower))
+    val deaths = chosen.map(b => endpointValue(b.upper))
+    val lo = births.max
+    val hi = deaths.min
+    val r = requestedR.getOrElse(
+      if hi.isFinite then lo + (hi - lo) / 2 else math.max(lo, diagram.lastFiltrationValue)
+    )
+    require(
+      r >= lo && r < hi,
+      s"r=$r must lie in [birth, death) of every chosen bar -- they are alive together on [$lo, $hi)"
+    )
+
+    // K_r: the complex the diagram was computed on, cut at r. Only its edges and triangles are read.
+    val stream = input.stream(1, Some(r), complex)
+    require(
+      stream.homologyDegreeLimit.forall(_ >= 1),
+      "this complex was built for degree 0 only, without the triangles that tell cocycles from cochains: build it " +
+        "with maxDimension = 1 or more"
+    )
+    val kr = new AtValue(stream, r)
+    def cells(dimension: Int): Iterator[Simplex[Int]] =
+      kr.iterateDimension.applyOrElse(dimension, (_: Int) => Iterator.empty[Simplex[Int]])
+    val edges = cells(1).toVector
+    val edgeSet = edges.toSet
+    require(edges.nonEmpty, s"the complex has no edges at r=$r: is it the complex the diagram was computed on?")
+
+    val toInt = centeredResidues[C](prime)
+    def asIntegers(chain: Chain[Simplex[Int], C]): Map[Simplex[Int], Int] =
+      chain.terms.map((cell, coefficient) => cell -> toInt(coefficient)).filter(_._2 != 0).toMap
+
+    // A diagram of cocycles carries the class on each bar; otherwise it is recovered from the cohomology of K_r, where
+    // the class is essential and found again by its birth. Computed once, for however many bars are asked for.
+    val cocyclesOnBars = diagram.representatives.contains(Representatives.Cocycles)
+    lazy val essentialAtKr: List[PersistenceBar[Double, Chain[Simplex[Int], C]]] =
+      CellularCohomologyEngine[Simplex[Int], C, Double]()
+        .persistentCohomology(kr)
+        .filter(b => b.dim == 1 && !endpointValue(b.upper).isFinite)
+
+    val classes: IndexedSeq[ClassData] =
+      indices.zip(chosen).zip(births).toIndexedSeq.map { case ((index, bar), birth) =>
+        val z: Map[Simplex[Int], Int] =
+          bar.annotation match
+            case Some(cocycle) if cocyclesOnBars =>
+              require(
+                cocycle.terms.forall(_._1.dim == 1),
+                s"bar $index: its representative has cells that are not edges, so it is not a degree-1 cocycle"
+              )
+              // Restriction to K_r: the cells it has past r (up to the bar's death) are not in the complex.
+              asIntegers(cocycle).filter((edge, _) => edgeSet.contains(edge))
+            case _ =>
+              val matches = essentialAtKr.filter(b => sameValue(endpointValue(b.lower), birth))
+              require(
+                matches.nonEmpty,
+                s"bar $index: no essential H^1 class of the complex at r=$r is born at $birth. Is it the complex the " +
+                  "diagram was computed on (the same input and `complex = ...`)?"
+              )
+              require(
+                matches.length == 1,
+                s"bar $index: ${matches.length} essential H^1 classes at K_r (r=$r) are born at $birth -- cannot " +
+                  "disambiguate which one is the bar; this is a genuine tie in the data, not resolvable automatically"
+              )
+              asIntegers(
+                matches.head.annotation.getOrElse(
+                  throw new IllegalStateException(
+                    "essential bar has no recorded cocycle representative -- an engine bug"
+                  )
+                )
+              )
+        require(
+          z.nonEmpty,
+          s"bar $index: its cocycle is zero on every edge of K_r (r=$r), so there is no class to compute. Is the complex " +
+            "the one the diagram was computed on?"
+        )
+        try verifyIntegerCocycleOn(cells(2), z, prime)
+        catch
+          case e: NoIntegerCocycleException =>
+            throw new NoIntegerCocycleException(s"bar $index: ${e.getMessage}")
+        val (theta, harmonic, component) = harmonicSmooth(edges, z)
+        require(
+          harmonic.values.exists(h => math.abs(h) > 1e-9),
+          s"bar $index: its class is zero in the cohomology of K_r (r=$r), so it has no circle coordinate. Is the " +
+            "complex the one the diagram was computed on?"
+        )
+        ClassData(component, theta, harmonic)
+      }
+
+    Smoothed(r, prime, births.zip(deaths).toIndexedSeq, classes)
+
   private def bfsComponent(
     seed: Simplex[Int],
     adjacencyByEdge: Map[Simplex[Int], Vector[Simplex[Int]]]
@@ -396,10 +675,26 @@ object CircularCoordinates:
     z: Map[Simplex[Int], Int],
     prime: Int
   )(using Double is Field): Unit =
-    val triangles = stream.iterator.filter(_.dim == 2)
+    verifyIntegerCocycleOn(stream.iterator.filter(_.dim == 2), z, prime)
+
+  /** [[verifyIntegerCocycle]] on the triangles themselves. A cochain that is not even a cocycle mod `prime` (a
+    * representative of another complex, or a cycle rather than a cocycle) is a different error from a class without an
+    * integer lift, and is reported as one.
+    */
+  private def verifyIntegerCocycleOn(
+    triangles: Iterator[Simplex[Int]],
+    z: Map[Simplex[Int], Int],
+    prime: Int
+  )(using Double is Field): Unit =
     for triangle <- triangles do
       val boundaryEdges = triangle.boundary[Double] // (edge, +-1.0) pairs -- sign only, magnitude always 1 here
       val total = boundaryEdges.map((edge, sign) => math.round(sign).toInt * z.getOrElse(edge, 0)).sum
+      if total % prime != 0 then
+        throw new IllegalArgumentException(
+          "the representative is not a cocycle of this complex: its coboundary on triangle " +
+            s"${triangle.underlying.mkString("[", ",", "]")} is $total mod $prime, not 0. Pass the complex the " +
+            "diagram was computed on (the same `complex = ...`, or the same stream)."
+        )
       if total != 0 then
         throw new NoIntegerCocycleException(
           s"the chosen cocycle has no exact integer lift at prime=$prime: triangle " +

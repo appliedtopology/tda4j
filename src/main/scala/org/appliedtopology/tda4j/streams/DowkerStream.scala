@@ -86,6 +86,54 @@ object DowkerFiltration:
       geometry.filtrationValue(spx.toIndexedSeq)
     )
 
+/** [[DowkerGeometry.filtrationValue]] for the candidates of a run, one parent after another: a candidate is a new row
+  * on top of its parent, so each witness's largest entry over the parent's rows is computed once per parent and the
+  * candidate takes the minimum over witnesses of the larger of that and its own row. A maximum and a minimum, so the
+  * same value bit for bit. Not for two threads at once: one per run (`perRun`).
+  */
+// File-private: it holds the maxima of the parent it saw last, which is only right inside one run of candidates.
+private final class DowkerFlatFiltration(geometry: DowkerGeometry) extends RipserCofaceSimplexStream.FlatFiltration:
+  private val maxima = new Array[Double](geometry.numWitnesses)
+  private var parent = new Array[Int](0)
+  private var parentSeen = false
+
+  def value(vertices: Array[Int], from: Int, width: Int, parentValue: Double): Double =
+    if width == 1 then geometry.filtrationValue(vertices, from, width)
+    else
+      if !isParent(vertices, from + 1, width - 1) then setParent(vertices, from + 1, width - 1)
+      val row = geometry.relation(vertices(from))
+      var best = Double.PositiveInfinity
+      var w = 0
+      while w < maxima.length do
+        val d = row(w)
+        val m = maxima(w)
+        val larger = if d > m then d else m
+        if larger < best then best = larger
+        w += 1
+      best
+
+  private def isParent(vertices: Array[Int], from: Int, width: Int): Boolean =
+    var same = parentSeen && parent.length == width
+    var i = 0
+    while same && i < width do
+      same = parent(i) == vertices(from + i)
+      i += 1
+    same
+
+  private def setParent(vertices: Array[Int], from: Int, width: Int): Unit =
+    if parent.length != width then parent = new Array[Int](width)
+    System.arraycopy(vertices, from, parent, 0, width)
+    parentSeen = true
+    java.util.Arrays.fill(maxima, 0.0)
+    var i = 0
+    while i < width do
+      val row = geometry.relation(parent(i))
+      var w = 0
+      while w < maxima.length do
+        if row(w) > maxima(w) then maxima(w) = row(w)
+        w += 1
+      i += 1
+
 /** Stands in for `RipserCofaceSimplexStream`'s own `FiniteMetricSpace[Int]` constructor parameter, purely to supply
   * `size`/`elements`/`contains` over `0 until n` -- `distance` is never actually read, since
   * `DowkerCofaceSimplexStream` always supplies its own `filtrationValueOverride` for every dimension including edges
@@ -131,6 +179,7 @@ open class DowkerCofaceSimplexStream(
   private val flat = new RipserCofaceSimplexStream.FlatFiltration:
     def value(vertices: Array[Int], from: Int, width: Int, parentValue: Double): Double =
       geometry.filtrationValue(vertices, from, width)
+    override def perRun: RipserCofaceSimplexStream.FlatFiltration = new DowkerFlatFiltration(geometry)
 
   override protected def flatFiltration: Option[RipserCofaceSimplexStream.FlatFiltration] = Some(flat)
 

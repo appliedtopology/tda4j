@@ -155,6 +155,74 @@ class ChainSpec extends mutable.Specification:
       (real((1, 1.0), (2, 0.5)) must not(beEqualTo(real((1, 1.1), (2, 0.5)))))
   }
 
+  // Equal chains hash alike, so chains are keys of a Set or Map: whatever the storage, the order the chain is kept in, the
+  // deferred entries it holds, or the Int form of a coefficient (Fp(-2) and Fp(1) are the same element of F_3).
+  "Chain hashing agrees with equality" >> {
+    object IntCells extends CellDecoder[Int]:
+      def apply(key: Int): Int = key
+    val f3 = FiniteField(3)
+    import f3.given
+    val fp = summon[f3.Fp is Field]
+    type C3 = Chain[Int, f3.Fp]
+    def heap(terms: Seq[(Int, f3.Fp)], order: Ordering[Int] = Ordering.Int): C3 =
+      Chain.from[Int, f3.Fp](terms)(using order, fp)
+    def packed(terms: Seq[(Int, f3.Fp)]): C3 =
+      val sorted = terms.sortBy(_._1)
+      Chain.packed[Int, f3.Fp](sorted.map(_._1).toArray, sorted.map(_._2.asInstanceOf[AnyRef]).toArray, IntCells)(using
+        Ordering.Int,
+        fp
+      )
+    val terms = Seq((1, f3.Fp(1)), (4, f3.Fp(2)), (7, f3.Fp(1)))
+    // The same elements written another way: 1 = -2 and 2 = -1 in F_3.
+    val respelled = Seq((1, f3.Fp(-2)), (4, f3.Fp(-1)), (7, f3.Fp(-2)))
+    val equalChains: Seq[(String, C3)] = Seq(
+      "heap" -> heap(terms),
+      "heap in the reverse order" -> heap(terms, Ordering.Int.reverse),
+      "heap with coefficients respelled" -> heap(respelled),
+      "packed" -> packed(terms),
+      "packed with coefficients respelled" -> packed(respelled),
+      // Deferred arithmetic: 2 as 1 + 1, and a cell that cancels (1 + 2 = 0).
+      "heap with deferred entries" -> heap(
+        Seq((1, f3.Fp(1)), (4, f3.Fp(1)), (4, f3.Fp(1)), (7, f3.Fp(1)), (9, f3.Fp(1)), (9, f3.Fp(2)))
+      )
+    )
+    val up = equalChains.head._2
+
+    "the premise: respelled coefficients are the same element, written differently" >> {
+      (fp.isEqual(f3.Fp(1), f3.Fp(-2)) must beTrue) and
+        ((f3.Fp(1): Any) must not(beEqualTo(f3.Fp(-2): Any)))
+    }
+    "equal chains have equal hash codes, in every storage and spelling" >> {
+      equalChains.collect { case (name, c) if c != up || c.## != up.## => name } must beEmpty
+    }
+    "equal chains collapse to one element of a Set, and find each other as keys of a Map" >> {
+      (equalChains.map(_._2).toSet.size must beEqualTo(1)) and
+        (equalChains.map(_._2).toSet.contains(heap(respelled, Ordering.Int.reverse)) must beTrue) and
+        (Map(up -> "found").get(packed(respelled)) must beSome("found"))
+    }
+    "chains that differ in a coefficient, a cell or a term hash differently here" >> {
+      // Not a requirement of the contract, which only constrains equal chains: pins that F_p coefficients are hashed.
+      val differentCoefficient = heap(Seq((1, f3.Fp(2)), (4, f3.Fp(2)), (7, f3.Fp(1))))
+      val differentCell = heap(Seq((1, f3.Fp(1)), (5, f3.Fp(2)), (7, f3.Fp(1))))
+      val shorter = heap(terms.take(2))
+      Seq(differentCoefficient, differentCell, shorter).map(c => (c == up, c.## == up.##)) must
+        beEqualTo(Seq((false, false), (false, false), (false, false)))
+    }
+    "a chain that sums to zero hashes as the empty chain" >> {
+      heap(Seq((3, f3.Fp(1)), (3, f3.Fp(2)))).## must beEqualTo(Chain.empty[Int, f3.Fp].##)
+    }
+    "over the reals, chains equal within the tolerance hash alike (by their cells)" >> {
+      val reals = Field.DoubleApproximated(1e-9)
+      def real(terms: (Int, Double)*) = Chain.from[Int, Double](terms)(using Ordering.Int, reals)
+      val one = real((1, 1.0), (2, 0.5))
+      val near = real((1, 1.0 + 1e-12), (2, 0.5))
+      // A term below the tolerance is a zero term, which `terms` drops.
+      val withNoise = real((1, 1.0), (2, 0.5), (3, 1e-12))
+      (Seq(near, withNoise).map(c => (c == one, c.## == one.##)) must beEqualTo(Seq((true, true), (true, true)))) and
+        (Set(one, near, withNoise).size must beEqualTo(1))
+    }
+  }
+
   "The `Chain` type should be comfortable to write expressions with" >> {
     val z1 = Chain(∆(1, 2, 3))
     val z2: Chain[Simplex[Int], Double] = ∆(1, 2) - ∆(1, 3) + ∆(2, 3)

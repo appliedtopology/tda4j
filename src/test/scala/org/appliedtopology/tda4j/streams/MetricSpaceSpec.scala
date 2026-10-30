@@ -110,3 +110,67 @@ class MetricSpaceSpec extends mutable.Specification with ScalaCheck:
     val space = EuclideanMetricSpace(Array.tabulate(n)(i => Array(i.toDouble, 0.0)))
     (space.distance(0, n - 1) must be_==((n - 1).toDouble)) and (space.distance(n - 1, 2) must be_==((n - 3).toDouble))
   }
+
+  "The minimum enclosing radius" >> {
+    // Its definition: the smallest, over the points, of the largest distance from that point.
+    def definition(space: FiniteMetricSpace[Int]): Double =
+      space.elements.map(x => space.elements.map(y => space.distance(x, y)).max).min
+    def cloud(seed: Int, n: Int, dim: Int): Array[Array[Double]] =
+      val rnd = new scala.util.Random(seed)
+      Array.tabulate(n)(_ => Array.fill(dim)(rnd.nextDouble() * 10 - 5))
+    def matrix(space: FiniteMetricSpace[Int]) =
+      ExplicitMetricSpace(Seq.tabulate(space.size)(x => Seq.tabulate(space.size)(y => space.distance(x, y))))
+    val inf = Double.PositiveInfinity
+
+    "equal the definition on random clouds of every size and dimension, cached or not, and as a distance matrix" >> {
+      val problems = for
+        seed <- 0 until 30
+        n = 1 + seed
+        dim = 1 + seed % 4
+        pts = cloud(seed, n, dim)
+        space = EuclideanMetricSpace(pts)
+        (name, other) <- Seq(
+          "cached" -> space,
+          "on demand" -> new EuclideanMetricSpace(pts, cacheDistances = false),
+          "matrix" -> matrix(space)
+        )
+        if other.minimumEnclosingRadius != definition(space)
+      yield s"$name, $n points in $dim-space: ${other.minimumEnclosingRadius} instead of ${definition(space)}"
+      problems must beEmpty
+    }
+    "not depend on the order of the points (the best centre may come last)" >> {
+      def radius(xs: Double*) = EuclideanMetricSpace(xs.map(Seq(_))).minimumEnclosingRadius
+      (radius(0.0, 10.0, 5.0) must be_==(5.0)) and (radius(5.0, 0.0, 10.0) must be_==(5.0)) and
+        (radius(10.0, 5.0, 0.0) must be_==(5.0)) and (radius(7.0) must be_==(0.0))
+    }
+    "be the largest listed distance when every point has an unlisted (infinite) one" >> {
+      // a 4-cycle without its diagonals
+      val cycle = ExplicitMetricSpace(
+        Seq(Seq(0.0, 1.0, inf, 1.0), Seq(1.0, 0.0, 1.0, inf), Seq(inf, 1.0, 0.0, 1.0), Seq(1.0, inf, 1.0, 0.0))
+      )
+      cycle.minimumEnclosingRadius must be_==(1.0)
+    }
+    "ignore the infinite distances of points that are not the centre" >> {
+      // point 0 reaches both others; 1 and 2 do not reach each other
+      val star = ExplicitMetricSpace(Seq(Seq(0.0, 1.0, 2.0), Seq(1.0, 0.0, inf), Seq(2.0, inf, 0.0)))
+      star.minimumEnclosingRadius must be_==(2.0)
+    }
+    "stop looking at a point once its largest distance can no longer beat the best so far" >> {
+      class Counting(inner: EuclideanMetricSpace) extends FiniteMetricSpace[Int]:
+        var calls = 0L
+        def distance(x: Int, y: Int): Double =
+          calls += 1
+          inner.distance(x, y)
+        def size = inner.size
+        def elements = inner.elements
+        def contains(x: Int) = inner.contains(x)
+      val pts = cloud(5, 600, 3)
+      val counted = Counting(EuclideanMetricSpace(pts))
+      val radius = counted.minimumEnclosingRadius
+      // all pairs would be 360,000 distances
+      (radius must be_==(definition(EuclideanMetricSpace(pts)))) and (counted.calls must beLessThan(36000L))
+    }
+    "fail on a space without points, which has no centre" >> {
+      ExplicitMetricSpace(Seq.empty[Seq[Double]]).minimumEnclosingRadius must throwA[UnsupportedOperationException]
+    }
+  }

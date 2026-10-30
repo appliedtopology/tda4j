@@ -309,13 +309,20 @@ trait CofaceSimplexStream[VertexT: Ordering, FiltrationT: Filterable]
 
   def currentDimensionCache: Seq[Simplex[VertexT]]
 
+  /** Which simplices the stream keeps, besides the threshold: a vertex, an edge or a higher simplex is kept when this
+    * returns `true` (a simplex it is not defined at is kept).
+    *
+    * '''The criterion must be closed under faces''': every face of a simplex it keeps, a vertex or an edge among them,
+    * is kept too. That is what makes the kept simplices a simplicial complex, which every engine needs for `∂∂ = 0`. It
+    * is not checked, and a criterion that breaks it gives a stream whose cells, order and bars are not defined.
+    */
   def keepCriterion: PartialFunction[Simplex[VertexT], Boolean]
 
 object CofaceSimplexStream:
 
   /** The `keepCriterion` that keeps every simplex, and the default of the coface streams. A stream whose criterion is
-    * this very function builds its dimensions as arrays ([[FlatLayerStream]]); any other criterion is asked about each
-    * candidate as a [[Simplex]].
+    * this very function builds its dimensions as arrays ([[FlatLayerStream]]) without asking about any simplex; any
+    * other criterion is asked about each candidate as a [[Simplex]].
     */
   val keepAll: PartialFunction[Simplex[Int], Boolean] = { case _ => true }
 
@@ -354,6 +361,11 @@ open class LimitedCofaceSimplexStream(stream: CofaceSimplexStream[Int, Double], 
 /** Vietoris-Rips (or, with `filtrationValueOverride`, any filtration on the same vertex set that is monotone along
   * faces), each dimension enumerated in full by [[SimplexIndexing]]'s combinatorial number system and filtered by
   * `keepCriterion` and `maxFiltrationValue`. What [[VietorisRips]] chooses between, with [[RipserCofaceSimplexStream]].
+  *
+  * Enumerating every vertex set of a dimension holds only while there are at most `Int.MaxValue` of them (a `Range` of
+  * indices); [[RipserCofaceSimplexStream]], the default, builds each dimension from the cofaces of the cells it kept
+  * and has no such limit. The tie-break of [[filtrationOrdering]] is [[SimplexIndexing.colexOrdering]], which has none
+  * either.
   */
 open class EnumeratingCofaceSimplexStream(
   val metricSpace: FiniteMetricSpace[Int],
@@ -381,7 +393,9 @@ open class EnumeratingCofaceSimplexStream(
     i <- metricSpace.elements
     j <- metricSpace.elements
     if i < j && metricSpace.distance(i, j) <= resolvedMaxFiltrationValue
-  yield Simplex(i, j)
+    edge = Simplex(i, j)
+    if criterionKeeps(edge)
+  yield edge
 
   // -1, not 0: subclasses' iterateDimension overrides (RipserCofaceSimplexStream and its own subclasses) use
   // `currentDimension != d - 1` to decide whether currentDimensionCache is fresh enough to reuse as dimension
@@ -441,21 +455,22 @@ open class EnumeratingCofaceSimplexStream(
     * ordering reversed, so iteration order and pivot order agree.
     */
   override val filtrationOrdering: Ordering[Simplex[Int]] =
-    FiltrationOrdering.canonical(filtrationValue, _.size, Ordering.by(simplexIndexing(_)))
+    FiltrationOrdering.canonical(filtrationValue, _.size, SimplexIndexing.colexOrdering)
 
   lazy val simplexIndexing: SimplexIndexing = SimplexIndexing(metricSpace.size)
 
-  /** `cells` sorted by `filtrationOrdering.reverse`, computing each cell's value and index once for the sort rather
-    * than on every comparison. The keys sit in primitive arrays and the sort moves positions, so no `Simplex` is hashed
-    * (a `SortedSet` hashes by walking its tree).
+  /** `cells` sorted by `filtrationOrdering.reverse`, computing each cell's value and tie-break key once for the sort
+    * rather than on every comparison. The keys sit in primitive arrays and the sort moves positions, so no `Simplex` is
+    * hashed (a `SortedSet` hashes by walking its tree). The tie-break key is the combinatorial index while the indices
+    * of this many vertices fit a `Long`, and the vertex array beyond that.
     */
   protected def sortedByFiltration(cells: IterableOnce[Simplex[Int]]): Vector[Simplex[Int]] =
     val all = mutable.ArrayBuffer.from(cells.iterator)
     val n = all.length
     val values = new Array[Double](n)
     val sizes = new Array[Int](n)
-    val indices = new Array[Long](n)
     var allDefined = true
+    var maxSize = 0
     var k = 0
     while k < n do
       val cell = all(k)
@@ -468,9 +483,17 @@ open class EnumeratingCofaceSimplexStream(
       )
       allDefined &&= defined
       sizes(k) = cell.size
-      indices(k) = simplexIndexing(cell)
+      maxSize = math.max(maxSize, sizes(k))
       k += 1
     if allDefined then
+      // The reverse of the tie-break of `filtrationOrdering`: colexicographic descending, by index or by vertices.
+      val laterFirst: (Int, Int) => Int =
+        if SimplexIndexing.fitsLong(metricSpace.size, maxSize) then
+          val indices = Array.tabulate(n)(j => simplexIndexing(all(j)))
+          (a, b) => java.lang.Long.compare(indices(b), indices(a))
+        else
+          val vertices = Array.tabulate(n)(j => all(j).underlying.toArray)
+          (a, b) => SimplexIndexing.colexCompare(vertices(b), vertices(a))
       val order: Array[Integer] = Array.tabulate(n)(Integer.valueOf(_))
       // The reverse of `filtrationOrdering` (value reversed, then size, then index): value ascending, then size and
       // index descending.
@@ -481,18 +504,16 @@ open class EnumeratingCofaceSimplexStream(
           if byValue != 0 then byValue
           else
             val bySize = Integer.compare(sizes(b), sizes(a))
-            if bySize != 0 then bySize else java.lang.Long.compare(indices(b), indices(a))
+            if bySize != 0 then bySize else laterFirst(a, b)
       )
       Vector.tabulate(n)(j => all(order(j)))
     else
       // A cell outside the filtration function's domain is ordered by size and index alone (`FiltrationOrdering`).
       val fvCache = mutable.HashMap.empty[Simplex[Int], Option[Double]]
-      val ixCache = mutable.HashMap.empty[Simplex[Int], Long]
       val memoFv: PartialFunction[Simplex[Int], Double] = new PartialFunction[Simplex[Int], Double]:
         def isDefinedAt(s: Simplex[Int]): Boolean = fvCache.getOrElseUpdate(s, filtrationValue.lift(s)).isDefined
         def apply(s: Simplex[Int]): Double = fvCache.getOrElseUpdate(s, filtrationValue.lift(s)).get
-      val memoTieBreak: Ordering[Simplex[Int]] = Ordering.by(s => ixCache.getOrElseUpdate(s, simplexIndexing(s)))
-      all.toVector.sorted(using FiltrationOrdering.canonical(memoFv, _.size, memoTieBreak).reverse)
+      all.toVector.sorted(using FiltrationOrdering.canonical(memoFv, _.size, SimplexIndexing.colexOrdering).reverse)
 
   /** A candidate is kept iff both the caller's own `keepCriterion` AND the threshold accept it -- one place deciding
     * "is this cell kept," per `sortedByFiltration`'s own note about not duplicating filtration-value lookups across
@@ -519,8 +540,8 @@ open class EnumeratingCofaceSimplexStream(
   // eventually staying false (an unbounded catch-all here was the actual root cause of the "some engines' .iterator
   // hangs / eventually crashes" bug, see StratifiedCellStream's doc).
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] = {
-    case 0                                   => metricSpace.elements.map(v => Simplex(v)).iterator
-    case 1                                   => sortedByFiltration(edges).iterator
+    case 0 => metricSpace.elements.map(v => Simplex(v)).filter(criterionKeeps).iterator
+    case 1 => sortedByFiltration(edges).iterator
     case d if d >= 0 && d < metricSpace.size =>
       // first, generate all simplices of this dimension
       sortedByFiltration(
@@ -533,8 +554,10 @@ open class EnumeratingCofaceSimplexStream(
 
 /** Vietoris-Rips, or any filtration monotone along faces given as `filtrationValueOverride`, built dimension by
   * dimension from the cofaces of the simplices kept in the dimension below (the loop [[Cech]], [[Witness]], [[Dowker]],
-  * [[DtmRips]] and [[SparseRips]] reuse). `keepCriterion` and `maxFiltrationValue` decide what is kept; a simplex is
-  * only offered once all its edges are kept, so `keepCriterion` must keep the edges of every simplex it keeps.
+  * [[DtmRips]] and [[SparseRips]] reuse). `keepCriterion` and `maxFiltrationValue` decide what is kept; the criterion
+  * must be closed under faces (see [[CofaceSimplexStream.keepCriterion]]). It is asked about each candidate that has a
+  * kept facet, whether the stream builds its dimensions with the coface loop or with [[flatGenerator]], which cuts each
+  * dimension to what the criterion keeps before generating the next from it.
   */
 open class RipserCofaceSimplexStream(
   metricSpace: FiniteMetricSpace[Int],
@@ -562,6 +585,50 @@ open class RipserCofaceSimplexStream(
   protected def flatFiltration: Option[FlatFiltration] =
     if filtrationIsDefault then Some(FlatFiltration.flag(metricSpace)) else None
 
+  /** The generator that builds this stream's dimensions from the edges up, in filtration order and without sorting
+    * ([[LayeredInorderSimplexStream.FlagGenerator]]), for a stream that is the flag complex of a weighted graph: a
+    * simplex is a set of vertices whose pairs are all edges, and its value is the largest weight. It is used instead of
+    * the coface loop when the vertices are `0 until n`, with `keepCriterion` applied to each generated dimension;
+    * `None` (the default) is the coface loop. A stream that gives one must give, for every simplex, the cell and the
+    * value of its [[flatFiltration]] (the stream's tests compare the two). A fresh generator is asked for once per
+    * stream. The default gives one for the edge-collapsed graph of an [[EdgeCollapsedMetricSpace]] with the default
+    * filtration, from its surviving edges, so that the pairs the collapse removed are never scanned, and for any other
+    * metric space with the default filtration of up to `MaxGeneratorVertices` points (the Vietoris-Rips complex), where
+    * it replaces the sort of each dimension.
+    */
+  protected def flatGenerator: Option[LayeredInorderSimplexStream.FlagGenerator] = metricSpace match
+    case collapsed: EdgeCollapsedMetricSpace if filtrationIsDefault =>
+      val as = LayeredInorderSimplexStream.IntBuffer()
+      val bs = LayeredInorderSimplexStream.IntBuffer()
+      val weights = LayeredInorderSimplexStream.DoubleBuffer()
+      collapsed.edges.foreach { (a, b, weight) =>
+        as += a
+        bs += b
+        weights += weight
+      }
+      Some(
+        LayeredInorderSimplexStream.FlagGenerator
+          .ofEdges(metricSpace.size, as.result, bs.result, weights.result, resolvedMaxFiltrationValue)
+      )
+    case _ if filtrationIsDefault && metricSpace.size <= RipserCofaceSimplexStream.MaxGeneratorVertices =>
+      Some(
+        LayeredInorderSimplexStream.Generator(
+          metricSpace.size,
+          LayeredInorderSimplexStream.distanceOf(metricSpace),
+          resolvedMaxFiltrationValue
+        )
+      )
+    case _ => None
+
+  private lazy val generator: Option[LayeredInorderSimplexStream.FlagGenerator] =
+    if java.util.Arrays.equals(vertexIds, Array.range(0, vertexIds.length)) then flatGenerator
+    else None
+
+  // The dimension built last by the generator and its `root` (the first longest edge of each simplex, in the generator's
+  // order). The next dimension is generated from these and that dimension's flat layer, which is the generator's with
+  // each tied run reversed: the stream keeps 4 bytes a simplex of the top dimension, not a second copy of it.
+  private var generatedRoots: Option[(Int, Array[Int])] = None
+
   override def flatLayers: Option[Iterator[FlatLayerStream.Layer]] =
     flatFiltration.map(f => Iterator.range(0, metricSpace.size).map(flatLayer(f, _)).takeWhile(_.size > 0))
 
@@ -574,12 +641,63 @@ open class RipserCofaceSimplexStream(
   private def flatLayer(f: FlatFiltration, d: Int): FlatLayerStream.Layer =
     flatCurrent.filter(_.dim == d).orElse(flatPrevious.filter(_.dim == d)).getOrElse {
       val parent = if d == 0 then None else Some(flatLayer(f, d - 1))
-      val layer = parent.fold(flatVertices(f))(flatCofaces(f, _))
+      val layer = parent.fold(flatVertices(f))(p => generator.fold(flatCofaces(f, p))(generatedLayer(_, d)))
       flatPrevious = parent
       flatCurrent = Some(layer)
-      if d == 1 then buildNeighbours(layer)
+      if d == 1 && generator.isEmpty then buildNeighbours(layer)
       layer
     }
+
+  // Dimension `d >= 1` from the generator, as a flat layer: its tied runs, which it lists colexicographically descending,
+  // are reversed to the order a layer is in (ascending).
+  private def generatedLayer(g: LayeredInorderSimplexStream.FlagGenerator, d: Int): FlatLayerStream.Layer =
+    val raw = pruned(if d == 1 then g.edges else g.cofacets(generatorLayer(g, d - 1)))
+    generatedRoots = Some((d, raw.root))
+    val values = Array.tabulate(raw.size)(g.diameter(raw, _))
+    FlatLayerStream.Layer(d, reversedTies(raw.vertices, values, d + 1), values)
+
+  // `layer` without the simplices `keepCriterion` rejects, in the same order. The next dimension is generated from what
+  // is left, which is the whole next dimension when the criterion is closed under faces (every face of a simplex it
+  // keeps is kept): a simplex is generated by its first full-diameter facet, which is then kept.
+  private def pruned(layer: LayeredInorderSimplexStream.Layer): LayeredInorderSimplexStream.Layer =
+    if keepsEverything then layer else criterionKept(layer)
+
+  private def criterionKept(layer: LayeredInorderSimplexStream.Layer): LayeredInorderSimplexStream.Layer =
+    val width = layer.dim + 1
+    val vertices = new mutable.ArrayBuilder.ofInt
+    val roots = new mutable.ArrayBuilder.ofInt
+    var kept = 0
+    var i = 0
+    while i < layer.size do
+      if criterionKeeps(FlatLayerStream.simplexOf(layer.vertices, i * width, width)) then
+        vertices.addAll(layer.vertices, i * width, width)
+        roots += layer.root(i)
+        kept += 1
+      i += 1
+    LayeredInorderSimplexStream.Layer(layer.dim, kept, vertices.result(), roots.result())
+
+  // The generator's layer of dimension `d`: from the flat layer and roots kept, or built again from the edges (when
+  // dimensions are asked for out of order).
+  private def generatorLayer(g: LayeredInorderSimplexStream.FlagGenerator, d: Int): LayeredInorderSimplexStream.Layer =
+    val kept = for
+      (dim, root) <- generatedRoots if dim == d
+      flat <- flatCurrent if flat.dim == d
+    yield LayeredInorderSimplexStream.Layer(d, flat.size, reversedTies(flat.vertices, flat.values, d + 1), root)
+    kept.getOrElse((2 to d).foldLeft(pruned(g.edges))((layer, _) => pruned(g.cofacets(layer))))
+
+  // `vertices`, `width` to a simplex, with every run of equal `values` in the reverse order: its own inverse.
+  private def reversedTies(vertices: Array[Int], values: Array[Double], width: Int): Array[Int] =
+    val reversed = new Array[Int](vertices.length)
+    var start = 0
+    while start < values.length do
+      var end = start + 1
+      while end < values.length && java.lang.Double.compare(values(start), values(end)) == 0 do end += 1
+      var i = start
+      while i < end do
+        System.arraycopy(vertices, i * width, reversed, (end - 1 - (i - start)) * width, width)
+        i += 1
+      start = end
+    reversed
 
   private def flatKept(value: Double, vertices: Array[Int], from: Int, width: Int): Boolean =
     keptValue(value) && (keepsEverything || criterionKeeps(FlatLayerStream.simplexOf(vertices, from, width)))
@@ -748,7 +866,7 @@ open class RipserCofaceSimplexStream(
 
   override def iterateDimension: PartialFunction[Int, Iterator[Simplex[Int]]] =
     val vertices: PartialFunction[Int, Iterator[Simplex[Int]]] = { case 0 =>
-      currentDimensionCache = metricSpace.elements.map(v => Simplex(v)).to(immutable.Queue)
+      currentDimensionCache = metricSpace.elements.map(v => Simplex(v)).filter(criterionKeeps).to(immutable.Queue)
       currentDimension = 0
       lastDimensionCache = IndexedSeq.empty[Simplex[Int]]
       currentDimensionCache.iterator
@@ -808,6 +926,11 @@ open class RipserCofaceSimplexStream(
 
 object RipserCofaceSimplexStream:
 
+  /** The most points for which the default `flatGenerator` is the layered in-order generator: its two bit matrices take
+    * `n^2 / 4` bytes, 256 MB at this bound, the cap of the coface loop's neighbour table.
+    */
+  private val MaxGeneratorVertices = 1 << 15
+
   /** Candidates are valued, and kept or dropped, this many at a time. */
   private val ChunkSize = 1 << 15
 
@@ -827,6 +950,12 @@ object RipserCofaceSimplexStream:
       * the edges of a simplex needs only the edges of the smallest vertex on top of it.
       */
     def value(vertices: Array[Int], from: Int, width: Int, parentValue: Double): Double
+
+    /** The filtration to call for one run of candidates, from one thread at a time: the candidates of one parent come
+      * together, parent's vertices after the new smallest one, so a filtration may keep what it computed for the parent
+      * between two calls. The default is the filtration itself, which must then keep nothing.
+      */
+    def perRun: FlatFiltration = this
 
   object FlatFiltration:
 
@@ -868,9 +997,10 @@ object RipserCofaceSimplexStream:
     parallel: Boolean
   ): Unit =
     def run(from: Int, until: Int): Unit =
+      val g = f.perRun
       var c = from
       while c < until do
-        values(c) = f.value(candidates, c * width, width, parentValues(c))
+        values(c) = g.value(candidates, c * width, width, parentValues(c))
         c += 1
     if parallel && count >= 4 * ParallelPart then
       Parallel.foreach((0 until count by ParallelPart).map(from => (from, math.min(count, from + ParallelPart)))) {
@@ -895,10 +1025,20 @@ object RipserCofaceSimplexStream:
       i += 1
     FlatLayerStream.Layer(dim, sortedVertices, sortedValues)
 
+  /** The numbers `0 until values.length` in the order of the cells they stand for (cell `i` has the `width` vertices
+    * from `vertices(i * width)`): ascending value, equal values in ascending colexicographic order of the vertices (the
+    * largest vertex decides first), or, with `colex = false`, in ascending lexicographic order.
+    */
+  private[tda4j] def layerOrder(width: Int, values: Array[Double], vertices: Array[Int], colex: Boolean): Array[Int] =
+    new LayerSorter(width, values, vertices, colex).sorted()
+
+  // Ranges of at least this many cells are sorted by two tasks, one for each half.
+  private val ParallelSortRun = 1 << 15
+
   /** A merge sort of the numbers `0 until values.length` by the cell they stand for, on primitives: a boxed sort with a
     * comparator took a third of the time of a large Cech complex.
     */
-  private final class LayerSorter(width: Int, values: Array[Double], vertices: Array[Int]):
+  private final class LayerSorter(width: Int, values: Array[Double], vertices: Array[Int], colex: Boolean = true):
     private val n = values.length
     // The bits of a value in an order that is the signed order of the longs, which is `Double.compare`'s (-0.0 before
     // 0.0, NaN last).
@@ -918,11 +1058,17 @@ object RipserCofaceSimplexStream:
       val (ka, kb) = (keys(a), keys(b))
       if ka != kb then ka < kb
       else
-        var k = width - 1
         var c = 0
-        while c == 0 && k >= 0 do
-          c = Integer.compare(vertices(a * width + k), vertices(b * width + k))
-          k -= 1
+        if colex then
+          var k = width - 1
+          while c == 0 && k >= 0 do
+            c = Integer.compare(vertices(a * width + k), vertices(b * width + k))
+            k -= 1
+        else
+          var k = 0
+          while c == 0 && k < width do
+            c = Integer.compare(vertices(a * width + k), vertices(b * width + k))
+            k += 1
         c < 0
 
     private def sort(lo: Int, hi: Int): Unit =
@@ -938,8 +1084,11 @@ object RipserCofaceSimplexStream:
           i += 1
       else
         val mid = (lo + hi) >>> 1
-        sort(lo, mid)
-        sort(mid, hi)
+        // The halves touch `order` and `scratch` only inside their own ranges.
+        if hi - lo >= ParallelSortRun then Parallel.both(sort(lo, mid), sort(mid, hi))
+        else
+          sort(lo, mid)
+          sort(mid, hi)
         // Already in order when the largest of the left half is not above the smallest of the right.
         if less(order(mid), order(mid - 1)) then
           System.arraycopy(order, lo, scratch, lo, mid - lo)

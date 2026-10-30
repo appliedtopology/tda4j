@@ -106,10 +106,10 @@ class PersistenceVerbSpec extends Specification:
         .and(norm(auto.triples) must beEqualTo(norm(chunks.triples)))
         .and(triangles.forall(t => fieldOps.isEqual(onBoundary(t), fieldOps.zero)) must beTrue)
     }
-    "report bettiNumbers and hide nothing until asked: significant() drops the short bars" in {
+    "report bettiNumbers and hide nothing until asked: longerThanFraction() drops the short bars" in {
       val d = Persistence(circle(16, noise = 0.02), maxFiltrationValue = 2.0)
       (d.bettiNumbers must beEqualTo(Vector(1, 0, 0)))
-        .and(d.significant().size must beLessThanOrEqualTo(d.size))
+        .and(d.longerThanFraction().size must beLessThanOrEqualTo(d.size))
     }
     "build Cech and alpha complexes, and say what to do when alpha gets a threshold" in {
       val pts = circle(12, noise = 0.05, seed = 2)
@@ -123,6 +123,38 @@ class PersistenceVerbSpec extends Specification:
             alpha.triples.sorted
           )
         )
+    }
+  }
+
+  "Persistence(points) with no maxFiltrationValue" should {
+    val rnd = new scala.util.Random(11)
+    val twoClusters =
+      Array.tabulate(14)(i => Array((if i < 7 then 0.0 else 5.0) + 0.3 * rnd.nextGaussian(), 0.3 * rnd.nextGaussian()))
+    val grid = Array.tabulate(16)(i => Array((i % 4).toDouble, (i / 4).toDouble))
+    val ball = Array.tabulate(25)(_ => Array.fill(3)(rnd.nextGaussian()))
+    val clouds = Seq(
+      "a noisy circle" -> circle(14, noise = 0.05, seed = 3),
+      "two clusters" -> twoClusters,
+      "a grid" -> grid,
+      "a 3-d cloud" -> ball
+    )
+    "run Vietoris-Rips, Cech and alpha complexes to the minimum enclosing radius, which changes no bar" in {
+      val problems = for
+        (name, pts) <- clouds
+        complex <- Seq[PointCloudComplex](VietorisRips, Cech, AlphaShapes)
+        byDefault = norm(Persistence(pts, complex = complex).triples)
+        unbounded = norm(Persistence(pts, complex = complex, maxFiltrationValue = Double.PositiveInfinity).triples)
+        if byDefault != unbounded
+      yield s"$name, $complex: ${byDefault.size} bars by default, ${unbounded.size} without a radius"
+      problems must beEmpty
+    }
+    "build the alpha complex only up to that radius: a sliver triangle on three nearly collinear points is left out" in {
+      val sliver = PointCloud(Array(Array(0.0, 0.0), Array(1.0, 0.01), Array(2.0, 0.0)))
+      val radius = sliver.metricSpace.minimumEnclosingRadius
+      def values(stream: LevelwiseSimplexStream[Int, Double]) = stream.iterator.map(stream.filtrationValue).toList
+      val byDefault = values(AlphaShapes.fromPoints(sliver, 2, None))
+      val unbounded = values(AlphaShapes.fromPoints(sliver, 2, Some(Double.PositiveInfinity)))
+      (byDefault.max must beLessThanOrEqualTo(radius)) and (unbounded.max must beGreaterThan(radius))
     }
   }
 
@@ -186,7 +218,7 @@ class PersistenceVerbSpec extends Specification:
       val ring = Array.tabulate(7, 7)((i, j) => if math.abs(math.hypot(i - 3, j - 3) - 2.2) < 0.8 then 0.0 else 1.0)
       val d = Persistence(Image(ring))
       (d.bettiNumbers must beEqualTo(Vector(1, 0, 0)))
-        .and(d.dim(1).significant().triples must beEqualTo(List((1, 0.0, 1.0))))
+        .and(d.dim(1).longerThanFraction().triples must beEqualTo(List((1, 0.0, 1.0))))
     }
   }
 
@@ -212,7 +244,10 @@ class PersistenceEnginesSpec extends org.specs2.mutable.Specification:
       val points = Array.fill(15)(Array(rnd.nextDouble(), rnd.nextDouble()))
       def rounded(d: PersistenceDiagram[Simplex[Int]]) =
         d.triples.map((k, b, e) => (k, math.rint(b * 1e9), if e.isInfinite then e else math.rint(e * 1e9))).sorted
-      val forPoints = Persistence.Engine.values.toList.filterNot(_ == Persistence.Engine.FastCubical)
+      // The parallel engine refuses on JavaScript: `ParallelRipserEngineSpec`, `ParallelRipserRefusalSpec`.
+      val forPoints = Persistence.Engine.values.toList.filterNot(e =>
+        e == Persistence.Engine.FastCubical || e == Persistence.Engine.ParallelRipser
+      )
       val diagrams = forPoints.map(e => Persistence(points, engine = e))
       val ripser = Persistence(points, engine = Persistence.Engine.Ripser)
       (diagrams.map(rounded).distinct.size must beEqualTo(1)) and

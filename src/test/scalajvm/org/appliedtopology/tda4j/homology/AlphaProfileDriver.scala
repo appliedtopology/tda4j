@@ -6,7 +6,7 @@ import scala.collection.mutable
   * per dimension, optionally a poor man's stack sampler on the main thread.
   *
   * {{{
-  * java -cp $CP org.appliedtopology.tda4j.AlphaProfileDriver points.txt [backend=helix|bowyer-watson|dqp] [sample=true] [dim=2] [dump=file] [verb=only]
+  * java -cp $CP org.appliedtopology.tda4j.AlphaProfileDriver points.txt [backend=helix|bowyer-watson|dqp] [sample=true] [dim=2] [dump=file] [verb=only] [sequential=true]
   * }}}
   *
   * Phases: the triangulation (`HelixDelaunay` / `BowyerWatsonDelaunay` constructor: the walk and its validity check),
@@ -46,8 +46,11 @@ object AlphaProfileDriver:
       counts.toSeq.sortBy(-_._2).take(top).foreach((k, v) => println(f"     ${100.0 * v / samples}%5.1f%%  $k"))
 
   def main(args: Array[String]): Unit =
-    val input = args(0)
     val opts = args.drop(1).map(a => a.takeWhile(_ != '=') -> a.dropWhile(_ != '=').drop(1)).toMap
+    // `sequential=true`: every parallel step of the library runs on this thread (the reference for the parallel run).
+    if opts.get("sequential").contains("true") then Parallel.sequentially(run(args(0), opts)) else run(args(0), opts)
+
+  private def run(input: String, opts: Map[String, String]): Unit =
     val dim = opts.getOrElse("dim", "2").toInt
     val pts = PaperBenchmarkDriver.readMatrix(input)
     val ambient = pts.head.length
@@ -63,6 +66,15 @@ object AlphaProfileDriver:
       val bars =
         timed(s"Persistence verb, degree $dim")(Persistence(Truncated(stream, dim), characteristic = 17).bars.size)
       println(s"  $bars bars")
+      // The same dump as the triangulation backends: every simplex with its value in full precision, to diff builds.
+      opts.get("dump").foreach { path =>
+        val lines = (0 to dim + 1).flatMap(k =>
+          stream
+            .iterateDimension(k)
+            .map(s => s.toSeq.mkString(",") + " " + java.lang.Double.toHexString(stream.filtrationValue(s)))
+        )
+        java.nio.file.Files.write(java.nio.file.Paths.get(path), lines.sorted.mkString("\n").getBytes("UTF-8"))
+      }
       return
     val sampler = Option.when(opts.get("sample").contains("true"))(new Sampler(Thread.currentThread()))
     sampler.foreach(_.start())

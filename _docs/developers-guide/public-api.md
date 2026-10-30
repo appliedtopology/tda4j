@@ -69,7 +69,7 @@ point cloud, a `FiniteMetricSpace[Int]`, an `Image` or any
 `StratifiedCellStream[CellT, Double]` converts to one at the call site. The
 conversions are givens in `object Input`. An input implements three members:
 - `stream(maxDimension, maxFiltrationValue, complex)`, the filtered complex;
-- `scale`, the size `significant()` measures against (a point cloud's minimum
+- `scale`, the size `longerThanFraction()` measures against (a point cloud's minimum
   enclosing radius);
 - `cells`, the cell type's `OrderedCell` instance.
 
@@ -145,7 +145,7 @@ lastFiltrationValue, scale)` builds one.
 
 The queries return new diagrams or lists and never mutate:
 - `dim(k)`, `at(f)` (the diagram truncated at `f`) and `essential`;
-- `longest`, `longest(n)`, `longerThan(x)` and `significant()`;
+- `longest`, `longest(n)`, `longerThan(x)` and `longerThanFraction()`;
 - `bettiNumbers` and `triples`.
 
 `lastFiltrationValue` lets `at(f)` tell a class alive at the end from one cut

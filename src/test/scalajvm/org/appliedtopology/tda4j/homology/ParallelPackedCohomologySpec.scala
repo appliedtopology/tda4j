@@ -3,7 +3,6 @@ package org.appliedtopology.tda4j
 import BlockParallelReductionSpec.{grid, integerMetric, octagon}
 import ParallelPackedCohomology.{coboundaryOf, cocycle, persistence, Result, Space}
 
-import java.util.concurrent.Executors
 import org.scalacheck.Gen
 import org.scalacheck.Prop.forAll
 import org.specs2.mutable.Specification
@@ -17,7 +16,6 @@ import org.specs2.execute.Result as TestResult
   * combinatorial index, and its bars.
   */
 class ParallelPackedCohomologySpec extends Specification with ScalaCheck:
-  private val pool = Executors.newFixedThreadPool(3)
   // (threads, units per thread): one unit per thread, several, and so many that most units are one block.
   private val parallel = Seq((3, 1), (3, 4), (3, 1000))
 
@@ -32,7 +30,7 @@ class ParallelPackedCohomologySpec extends Specification with ScalaCheck:
     Space(metricSpace.size, metricSpace.distance(_, _), threshold, maxDim, p, ripserApparent, forceWide = wide)
 
   private def reduce(sp: Space, threads: Int, unitsPerThread: Int): Result =
-    persistence(sp, threads, unitsPerThread, cocycles = true, if threads > 1 then pool else null, keepPairs = true)
+    Parallel.withThreads(threads)(persistence(sp, threads, unitsPerThread, cocycles = true, keepPairs = true))
 
   // The first place two sequences differ, if any (a `must beEqualTo` on whole arrays renders both into its message).
   private def firstDifference[A](a: Seq[A], b: Seq[A]): Option[String] =
@@ -41,9 +39,8 @@ class ParallelPackedCohomologySpec extends Specification with ScalaCheck:
       s"sizes ${a.size} and ${b.size}, first difference at $i: ${a.lift(i)} vs ${b.lift(i)}"
     }
 
-  private def logs(r: Result) = r.degrees.map(d =>
-    d.logs.toSeq.map((c, log) => (c, log.added.result().toSeq, log.factors.result().toSeq)).sortBy(_._1)
-  )
+  private def logs(r: Result) =
+    r.degrees.map(d => d.logs.toSeq.map((c, log) => (c, log.columns.toSeq, log.multipliers.toSeq)).sortBy(_._1))
 
   private def agrees(
     metricSpace: FiniteMetricSpace[Int],
@@ -78,7 +75,7 @@ class ParallelPackedCohomologySpec extends Specification with ScalaCheck:
     (
       r.degrees.map(_.pairs.map((a, b) => (i(a), i(b))).sorted.toSeq),
       r.degrees.map(d =>
-        d.logs.toSeq.map((c, log) => (i(c), log.added.result().toSeq.map(i), log.factors.result().toSeq)).sortBy(_._1)
+        d.logs.toSeq.map((c, log) => (i(c), log.columns.toSeq.map(i), log.multipliers.toSeq)).sortBy(_._1)
       ),
       r.bars
     )
@@ -184,6 +181,13 @@ class ParallelPackedCohomologySpec extends Specification with ScalaCheck:
       val stats = reduce(sp, 3, 4).degrees(1).stats
       (stats.apparent + stats.claimed1 must beGreaterThan(0)).and(stats.deferred must beGreaterThan(0))
     }
-  }
 
-  step(pool.shutdown())
+    // The edge pass reads (larger, smaller), the lower triangle, as ripser.cpp and ExplicitMetricSpace do (and along a
+    // row of a cached matrix): on a function that is not symmetric the lengths are the lower entries.
+    "read the lower triangle of a distance function that is not symmetric" in {
+      val lower = (i: Int, j: Int) => 1.0 + 0.01 * i + 0.001 * j
+      val sp = Space(5, (i, j) => if i > j then lower(i, j) else 100.0 + lower(j, i), 10.0, 1, 17)
+      val edges = sp.edgeA.indices.map(e => (sp.edgeA(e), sp.edgeB(e), sp.edgeLength(e)))
+      (edges.size must beEqualTo(10)).and(TestResult.foreach(edges)((a, b, l) => l must beEqualTo(lower(b, a))))
+    }
+  }

@@ -21,6 +21,15 @@ trait Field:
 
   def showForSelf: Show[Self]
 
+  /** A hash code of `x` that agrees with [[isEqual]]: elements the field calls equal have the same hash, whatever their
+    * representation, so that [[Chain]] can hash consistently with its equality. Nothing is required of unequal
+    * elements, so the default, `0` for every element, is right for any field; override it where equality is exact and
+    * the elements can be told apart (`Z/p` hashes the residue in `0 until p`). A field that compares within a
+    * tolerance, like [[Field.DoubleApproximated]], hashes every element alike: tolerance is not transitive, and no hash
+    * of the value can agree with it.
+    */
+  def hash(x: Self): Int = 0
+
   /** `x` as a real number, for plots and printouts: the integer `k` (`|k| <= 64`, the smallest first) with `k * 1 == x`
     * in the field, which is the balanced representative for `Z/p`; `NaN` when there is none. A field of real numbers
     * overrides it with the value itself ([[Field.DoubleApproximated]] does). It is decided by the field, never by the
@@ -61,6 +70,9 @@ object Field:
     override def divide(x: Double, y: Double): Double = fr.div(x, y)
 
     override def isEqual(x: Double, y: Double): Boolean = fr.abs(fr.minus(x, y)) < epsilon
+
+    // Equality within `epsilon` is not transitive, so only a constant hash agrees with it (the trait's default).
+    override def hash(x: Double): Int = 0
 
     override def negate(x: Double): Double = fr.negate(x)
 

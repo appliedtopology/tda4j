@@ -45,7 +45,11 @@ Every plot is an immutable value.
   them in a `val`.
 - Text that carries numbers goes through `Elements.numbers` (`NumberStyle`) at the point it is drawn: write a number into
   a label with `Svg.number` and let the renderer localize it, never format it with a symbol of your own. A text longer than
-  its `TextStyle.limit` is cut by `TextFace.fit`, which estimates a character at 0.6 em.
+  its `TextStyle.limit` is cut by `TextFace.fit`, and a legend is sized, by `TextWidth`: the advance widths of Helvetica or
+  Times (regular and bold) letter by letter, or 0.6 em in a monospace face, as no font is known when the SVG is written.
+- The legend can have a box (`Elements.legendBox`: fill, frame, padding) and columns, and an axis can cross the other at a
+  value (`Axis.crossesAt`, in the units of the other axis) instead of sitting at the edge; `Svg.render` decides both before
+  it fixes the margins, since the room an axis takes depends on where it is drawn.
 - `over` stacks one figure on another, such as a cycle on its complex.
 - A figure is changed with a `Tweak` (`Tweak.scala`): `fig + tweak`. `Labels`,
   `Size`, `Style`, `Palette` and the `Scale` constructors are tweaks; see the
@@ -124,6 +128,15 @@ pins the contrast of both palettes' inks and series against their surfaces.
 keyword; `Style.clear` is that and no background. The two looks are separate
 because a figure with a white background of its own and a figure that takes its
 page's color need different elements.
+
+`Style.transparent` is unset, `true` or `false`. Unset, a figure draws its
+palette's surface where it is displayed (`svg`, `fragment`, `html`, the viewer)
+and none in a file (`svgFile`, so `save` of an `.svg`, the facade and the CLI): a
+file is deployed somewhere else, which supplies the color behind it. The two
+renderings differ in one argument, `Svg.render(fig, theme, saved)` (a board
+and a scene pass it to their panels and their heading, too); `Style.print` is
+`false` so that a paper's figure keeps its white in a file, `Style.clear` is
+`true`, and `Style.hasBackground(saved)` is the one place that decides.
 
 ## The live viewer
 
