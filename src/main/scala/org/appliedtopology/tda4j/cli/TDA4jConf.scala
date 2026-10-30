@@ -415,6 +415,21 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
       "for --persistent-laplacian: the scale of the complex the chains live in, at least --laplacian-from (required)"
   )
 
+  // Discrete Morse reduction: a mode of its own. Declared last and without short flags, as above.
+  val morseReduction: ScallopOption[Boolean] = opt[Boolean](
+    name = "morse-reduction",
+    noshort = true,
+    default = Some(false),
+    descr = "instead of the diagram, reduce the Vietoris-Rips complex of a point cloud or distance matrix by discrete " +
+      "Morse theory and write the number of cells and of critical cells in each dimension and the number of pairs, as " +
+      "key=value lines"
+  )
+  val morseStrategy: ScallopOption[String] = opt[String](
+    name = "morse-strategy",
+    noshort = true,
+    descr = "for --morse-reduction: pair by reductions (reduction, the default) or by coreductions (coreduction)"
+  )
+
   // The resampling band and ToMATo: modes of their own, like the Euler curve. Declared last and without short flags.
   val bootstrapBand: ScallopOption[Boolean] = opt[Boolean](
     name = "bootstrap-band",

@@ -234,6 +234,36 @@ export function eulerCurve(points: number[][], options?: EulerCurveOptions): Eul
 /** `eulerCurve` for a finite metric space given as its full matrix of distances. */
 export function eulerCurveFromDistances(distances: number[][], options?: EulerCurveOptions): EulerCurve;
 
+/** Options of `morseReduction`. */
+export interface MorseReductionOptions {
+  /** The top degree of the bars (default 2). */
+  maxDimension?: number;
+  maxFiltrationValue?: number;
+  /** How cells are paired: by reductions (default) or by coreductions. */
+  strategy?: "reduction" | "coreduction";
+  prime?: number;
+  threads?: number;
+}
+
+/** The discrete Morse reduction of a point cloud's Vietoris-Rips complex. */
+export interface MorseReduction {
+  /** The cells of the complex in each dimension. */
+  cellCounts: number[];
+  /** The cells left after pairing off, in each dimension. */
+  criticalCounts: number[];
+  /** The pairs of cells that were cancelled. */
+  pairCount: number;
+  /** The cells left, as arrays of vertex numbers. */
+  criticalCells: number[][];
+  /** The bars of the complex, computed on the cells left: rows `[dimension, birth, death]`, `Infinity` for a bar that never dies. */
+  bars: number[][];
+}
+
+/** The discrete Morse reduction of the Vietoris-Rips complex of a point cloud: pairs of cells that enter together are cancelled, and the bars are computed on the cells left. */
+export function morseReduction(points: number[][], options?: MorseReductionOptions): MorseReduction;
+/** `morseReduction` for a finite metric space given as its full matrix of distances. */
+export function morseReductionFromDistances(distances: number[][], options?: MorseReductionOptions): MorseReduction;
+
 /** Options of `bootstrapBand`. */
 export interface BootstrapBandOptions {
   /** The degree of the bars (default 1). */

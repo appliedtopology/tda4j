@@ -97,6 +97,19 @@ class ExportsSpec extends Specification:
         (Exports.persistentLaplacian(square, 1, 2.0, 1.0) must throwA[js.JavaScriptException])
     }
 
+  "morseReduction" should
+    "leave fewer cells of a lattice's complex with the facade's counts, and refuse an unknown strategy" >> {
+      val grid = js.Array((0 until 16).map(i => js.Array((i / 4).toDouble, (i % 4).toDouble))*)
+      val reduced = dynamic(Exports.morseReduction(grid, options("strategy" -> "coreduction")))
+      val facade = org.appliedtopology.tda4j.matlab.TDA4j
+        .morseReductionFromPoints(grid.toArray.map(_.toArray), Array("strategy", "coreduction"))
+      val counts = reduced.criticalCounts.asInstanceOf[js.Array[Int]].toSeq
+      (counts must beEqualTo(facade.criticalCounts().toSeq)) and
+        (counts.sum must beLessThan(reduced.cellCounts.asInstanceOf[js.Array[Int]].toSeq.sum / 2)) and
+        (reduced.pairCount.asInstanceOf[Int] must beEqualTo(facade.pairCount())) and
+        (Exports.morseReduction(grid, options("strategy" -> "greedy")) must throwA[js.JavaScriptException])
+    }
+
   "relativePersistence" should {
     "drop the essential bar of degree 0 modulo one point, and take a distance matrix" >> {
       val points = circle(12)

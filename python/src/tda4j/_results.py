@@ -418,6 +418,20 @@ class PersistentLaplacian:
 
 
 @dataclass(frozen=True, eq=False)
+class MorseReduction:
+    """The discrete Morse reduction of the Vietoris-Rips complex (see ``morse_reduction``): ``cell_counts`` and
+    ``critical_counts`` are the numbers of cells and of cells left after pairing off, by dimension; ``pair_count`` the
+    pairs cancelled; ``critical_cells`` the cells left, as tuples of vertex numbers; ``bars`` the bars of the complex,
+    computed on the cells left, as rows ``(dimension, birth, death)``."""
+
+    cell_counts: np.ndarray
+    critical_counts: np.ndarray
+    pair_count: int
+    critical_cells: list
+    bars: np.ndarray
+
+
+@dataclass(frozen=True, eq=False)
 class BootstrapBand:
     """The resampling confidence band of the bars of one degree: a bar that persists longer than ``threshold`` survives
     the resampling at level ``alpha``; ``distances`` are the bottleneck distances the rounds measured."""

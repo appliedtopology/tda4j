@@ -37,6 +37,7 @@ from ._results import (
     Landmarks,
     MapDegree,
     MapResult,
+    MorseReduction,
     PersistentLaplacian,
     Plot,
     Representative,
@@ -59,6 +60,7 @@ __all__ = [
     "Landmarks",
     "MapDegree",
     "MapResult",
+    "MorseReduction",
     "PersistentLaplacian",
     "Plot",
     "Representative",
@@ -81,6 +83,8 @@ __all__ = [
     "inclusion_map_from_distances",
     "jar_path",
     "load_result",
+    "morse_reduction",
+    "morse_reduction_from_distances",
     "persistence",
     "persistence_from_distances",
     "persistence_from_distances_and_landmarks",
@@ -364,6 +368,36 @@ def delay_by_autocorrelation(series, max_lag: int) -> int:
     """The first lag in ``1..max_lag`` where the autocorrelation of the series is zero or negative: a first guess for the
     ``delay`` of ``takens_embedding``."""
     return int(_java().delayByAutocorrelation(_jvm.doubles_in(series), int(max_lag)))
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# discrete Morse reduction
+# ---------------------------------------------------------------------------------------------------------------------
+
+def _morse(java) -> MorseReduction:
+    return MorseReduction(
+        cell_counts=_jvm.vector_out(java.cellCounts(), np.int64),
+        critical_counts=_jvm.vector_out(java.criticalCounts(), np.int64),
+        pair_count=int(java.pairCount()),
+        critical_cells=[tuple(int(v) for v in cell) for cell in java.criticalCells()],
+        bars=_jvm.matrix_out(java.bars(), 3),
+    )
+
+
+@translating
+def morse_reduction(points, **options) -> MorseReduction:
+    """Discrete Morse reduction of the Vietoris-Rips complex of a point cloud: cells that enter together are paired off, and
+    the bars are computed on the cells left, which are the bars of the complex. Options: ``max_dimension`` (2),
+    ``max_filtration_value``, ``strategy`` (``"reduction"``, or ``"coreduction"``), ``prime``, ``threads``."""
+    return _morse(_java().morseReductionFromPoints(_jvm.points_in(points), _jvm.options_in(options)))
+
+
+@translating
+def morse_reduction_from_distances(distances, **options) -> MorseReduction:
+    """``morse_reduction`` for a matrix of distances."""
+    return _morse(
+        _java().morseReductionFromDistanceMatrix(_jvm.points_in(distances, "distances"), _jvm.options_in(options))
+    )
 
 
 # ---------------------------------------------------------------------------------------------------------------------

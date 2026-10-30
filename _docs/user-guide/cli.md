@@ -187,6 +187,17 @@ eigenvalue is zero) and `eigenvalues`, smallest first.
 | `--laplacian-from` | the scale the simplices are taken at (required) |
 | `--laplacian-to` | the scale of the complex the chains live in, at least `--laplacian-from` (required) |
 
+## Discrete Morse reduction
+
+`--morse-reduction` reduces the Vietoris-Rips complex of a point cloud or a distance matrix by [discrete Morse
+theory](discrete-morse.md) and writes, instead of the diagram, `key=value` lines: `cells` and `critical-cells`, the number of
+cells before and after in each dimension from 0, and `pairs`. It takes `--max-dimension`, `--max-filtration-value`,
+`--prime` and `--threads` as the diagram does.
+
+| flag | meaning |
+|---|---|
+| `--morse-strategy` | pair by reductions (`reduction`, the default) or by coreductions (`coreduction`) |
+
 ## The Euler characteristic curve
 
 `--euler-curve` writes the [Euler characteristic curve](vectorization.md#the-euler-characteristic-curve) of the

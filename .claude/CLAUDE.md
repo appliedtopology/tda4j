@@ -115,8 +115,7 @@ sbt -DrunBenchmarks=true tda4j/test   # also run benchmark/profiling specs — N
 No `sbt` on `PATH`: `.claude/scripts/install-sbt.sh`. A cloud Setup script
 should hold `.claude/scripts/cloud-setup-script.sh` (installer plus warmed dependencies), else a session starts cold (~1 h).
 
-No linter beyond scalafmt; tests are specs2. CI jobs (`test.yml`, `lint.yml`) and their local equivalents: steward skill; a weekly `coverage.yml` maps coverage. A binary
-break is not a strong requirement before 1.0 (project lead). The ~319 `-Wunused:all` warnings stay
+No linter beyond scalafmt; tests are specs2. CI jobs (`test.yml`, `lint.yml`) and their local equivalents: steward skill; a weekly `coverage.yml` maps coverage. The ~319 `-Wunused:all` warnings stay
 (`WORKLOG-compiler-warnings.md`). Docs build with 3.8.4 (a FRESH sbt server only: `rules/docs-and-tutorials.md`). After
 `sbt package` or a docs build a test compile can miss main classes ("Not found: TDAlab"): `sbt clean`. **scalafmt only sees git-tracked files**: `git add` a new file before `scalafmtAll`.
 
@@ -237,6 +236,7 @@ file before changing that subsystem; this table is the index, in case a rule did
 | `rules/streams.md` | the ordering contract every stream must satisfy (the #1 bug source), VR constructions, `maxFiltrationValue` default, `ExplicitStreamBuilder` | `streams/` |
 | `rules/engines.md` | the four persistence engines, `BarcodeDistance`/`Vectorization`, benchmark specs | `homology/`, `barcode/` |
 | `rules/module-maps.md` | maps of barcodes: `MapAlgebra`, `PersistenceMap`, their oracle | `MapAlgebra`, `PersistenceMap` |
+| `rules/morse-and-zigzag.md` | discrete Morse theory, zigzag persistence | `DiscreteMorse`, `MorseCell`, `Zigzag*` |
 | `rules/circular-coordinates.md` | circular and toroidal coordinates, from points or a diagram | those files |
 | `rules/cubical.md` | cubical complexes, `FastCubicalHomologyEngine` | cubical files |
 | `rules/simplicial-sets.md` | the `sset` add-on: simplicial sets, the Sage-parity layer, group classifying spaces | `sset/` |

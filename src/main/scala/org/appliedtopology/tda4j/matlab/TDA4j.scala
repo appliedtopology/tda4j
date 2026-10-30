@@ -635,6 +635,56 @@ object TDA4j:
     val complex = VietorisRips(metricSpace, maxDimension = dimension, maxFiltrationValue = to)
     new PersistentLaplacianResult(PersistentLaplacian(complex, dimension, from, to))
 
+  private val morseKeys = Set("maxdimension", "maxfiltrationvalue", "strategy", "prime", "threads")
+
+  /** The discrete Morse reduction of the Vietoris-Rips complex of a point cloud: see [[MorseReductionResult]] and
+    * `DiscreteMorse`. Options `maxDimension` (the top degree of the bars, default `2`), `maxFiltrationValue`,
+    * `strategy` (`reduction`, the default, or `coreduction`), `prime` (the default is 17) and `threads`, and no others.
+    */
+  def morseReductionFromPoints(points: Array[Array[Double]], options: Array[String]): MorseReductionResult =
+    validatePoints(points)
+    morseReduction(EuclideanMetricSpace(points), options)
+
+  def morseReductionFromPoints(points: Array[Array[Double]]): MorseReductionResult =
+    morseReductionFromPoints(points, Array.empty[String])
+
+  /** [[morseReductionFromPoints]] for a finite metric space given as its full matrix of distances. */
+  def morseReductionFromDistanceMatrix(distances: Array[Array[Double]], options: Array[String]): MorseReductionResult =
+    validateSquare(distances)
+    morseReduction(explicitMetricSpace(distances), options)
+
+  def morseReductionFromDistanceMatrix(distances: Array[Array[Double]]): MorseReductionResult =
+    morseReductionFromDistanceMatrix(distances, Array.empty[String])
+
+  private def morseReduction(metricSpace: FiniteMetricSpace[Int], options: Array[String]): MorseReductionResult =
+    val opts = parseOptionsWithKeys(options, morseKeys)
+    val maxDimension = opts.get("maxdimension").fold(2)(parseIntOption("maxDimension", _))
+    require(maxDimension >= 0, s"option 'maxDimension' must be 0 or more, got '$maxDimension'")
+    val strategy = opts.get("strategy").map(_.toLowerCase) match
+      case None | Some("reduction") => DiscreteMorse.Strategy.Reduction
+      case Some("coreduction")      => DiscreteMorse.Strategy.Coreduction
+      case Some(other)              =>
+        throw new IllegalArgumentException(s"option 'strategy' must be 'reduction' or 'coreduction', got '$other'")
+    val prime = opts.get("prime").fold(FiniteField.DefaultPrime)(parseIntOption("prime", _))
+    withThreads(opts) {
+      val complex = VietorisRips(
+        metricSpace,
+        maxDimension = maxDimension,
+        maxFiltrationValue = opts.get("maxfiltrationvalue").map(parseDoubleOption("maxFiltrationValue", _))
+      )
+      val morse = DiscreteMorse(complex, strategy)
+      val cells = complex.iterator.toVector
+      val top = cells.map(_.dim).max
+      val bars = Persistence(morse.stream, maxDimension = maxDimension, characteristic = prime).bars
+      new MorseReductionResult(
+        Array.tabulate(top + 1)(k => cells.count(_.dim == k)),
+        Array.tabulate(top + 1)(morse.criticalCount),
+        morse.pairs.size,
+        morse.critical.map(_.toList.toArray).toArray,
+        bars.map(b => Array(b.dim.toDouble, b.birth, b.death)).toArray
+      )
+    }
+
   private val bootstrapBandKeys =
     Set("dimension", "rounds", "alpha", "seed", "subsamplesize", "prime", "maxfiltrationvalue", "threads")
 

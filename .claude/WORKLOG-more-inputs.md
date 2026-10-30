@@ -242,3 +242,32 @@ the Künneth theorem gives an oracle that uses the engines.
   5 mutants (no projection, no down part, `<` for `<=` at either value, rank off by one) all fail.
 - Limits: dense, real coefficients only; a spectrum along a whole filtration is a loop over `(from, to)` that recomputes each time.
 
+
+## Discrete Morse theory (2026-10-30)
+
+- Matching: cells grouped by filtration value (`LinkedHashMap` on the `Double`), each level paired on its own. `Reduction` pairs a
+  cell that has exactly one coface left in the level with it; `Coreduction` a cell with exactly one facet left; when nothing applies
+  the free cell of highest (lowest) dimension is retired as critical. Acyclic because a gradient path never goes up in the filtration
+  and inside a level the order of retirement decreases along it. A pair needs an incidence of +-1 (read from the `Double` boundary), which
+  is a unit in every field, so the Morse boundary is computed in the coefficients asked for.
+- The Morse boundary and the lift come from one flow (`MorseComplex.flow`): for a lower member `a` with partner `b`, subtract
+  `(coefficient / ∂b[a]) ∂b` from the boundary being flowed and subtract the same factor times `b` from the lift. A first version of `lift`
+  summed `(-V∂)^n sigma`, which never terminates when a face of `sigma` is paired (`V∂b` contains `b` itself). The first spec of lifted
+  cycle representatives did not catch it: in those fixtures no representative had a paired face. What caught it is the identity
+  `∂ lift(tau) = lift(∂^M tau)`, checked with the original complex's boundary alone over Z/3, Z/17 and the rationals, and a spec that some
+  critical cell lifts to more than itself. Two mutants (sign of the lift term, no flow in the lift) had survived the representative spec and
+  are killed by the identity.
+- The first spec of persistence equality compared bars with `includeZeroLength = true` and failed on the 3x3 grid: the Morse complex has
+  dropped the pairs that produce the zero-length bars. The comparison is of the bars of positive length.
+- specs2 runs the examples of a specification concurrently, and a Vietoris-Rips stream caches its layers: with the fixtures a shared `val` one
+  example saw a wrong Euler characteristic once. The fixtures are a `def`.
+- The cohomology engine required a cell in every dimension below the top (`dimension-contiguous cell set`). A Morse complex can have no critical
+  cell in a dimension and cells above it (random 8 points, `Coreduction`: critical cells of dimensions 0, 1, 3). The engine now requires that
+  cells above a missing dimension have an empty boundary; the triangle with no edges is still refused (pinned in `DiscreteMorseSpec`).
+- A sign flip in the flow's `chain` update makes the flow non-terminating, so that mutant is detected by a timeout, not by a failing example;
+  not run again after the first hang left two sbt servers on the checkout (the second `sbt` waited for the first; kill stray `java` processes).
+- Mutants killed: no requeue in the flow, all cells in one level, boundary not filtered to critical cells, pair stored the wrong way round for
+  `Coreduction`, the engine guard accepting everything, the sign and the whole of the lift. Not killed and not killable by a spec of this kind:
+  dividing by the incidence versus multiplying (the incidences are +-1).
+- Limits: cocycles are not lifted (the other chain map, `Psi`, is not derived); the matching is greedy, not minimal; a user-supplied matching
+  is not checked for acyclicity; cubical and alpha streams were not tried.

@@ -204,6 +204,9 @@ object TDA4jCLI:
       else if conf.persistentLaplacian() then
         writePersistentLaplacian(conf, options, format, resolved, out)
         0
+      else if conf.morseReduction() then
+        writeMorseReduction(conf, options, format, resolved, out)
+        0
       else if conf.bootstrapBand() then
         writeBootstrapBand(conf, options, format, resolved, out)
         0
@@ -499,6 +502,7 @@ object TDA4jCLI:
     val chosen = Seq(
       "--euler-curve" -> conf.eulerCurve(),
       "--persistent-laplacian" -> conf.persistentLaplacian(),
+      "--morse-reduction" -> conf.morseReduction(),
       "--bootstrap-band" -> conf.bootstrapBand(),
       "--tomato" -> conf.tomato(),
       "--inclusion-of" -> conf.inclusionOf.isSupplied
@@ -506,6 +510,11 @@ object TDA4jCLI:
     if chosen.size > 1 then
       throw new IllegalArgumentException(s"${chosen.mkString(" and ")} are modes of their own: choose one")
     val strays = Seq(
+      (
+        "--morse-reduction",
+        !conf.morseReduction(),
+        Seq("--morse-strategy" -> conf.morseStrategy.isSupplied)
+      ),
       (
         "--persistent-laplacian",
         !conf.persistentLaplacian(),
@@ -710,6 +719,45 @@ object TDA4jCLI:
         s"betti-number=${laplacian.bettiNumber()}",
         s"spectral-gap=${if laplacian.hasSpectralGap() then laplacian.spectralGap().toString else "none"}",
         s"eigenvalues=${laplacian.eigenvalues().mkString(",")}"
+      ),
+      out
+    )
+
+  private val morseReductionOptions = Set("maxDimension", "maxFiltrationValue", "prime", "threads")
+
+  /** `--morse-reduction`: the cells and critical cells of the Vietoris-Rips complex of a point cloud or distance matrix
+    * by dimension, and the number of pairs, as `key=value` lines.
+    */
+  private[cli] def writeMorseReduction(
+    conf: TDA4jConf,
+    options: Array[String],
+    format: String,
+    resolved: ResolvedInput,
+    out: java.io.PrintStream
+  ): Unit =
+    refuseOtherFlags(
+      "--morse-reduction",
+      "reduces a Vietoris-Rips complex by discrete Morse theory",
+      "--morse-strategy, --max-dimension, --max-filtration-value, --prime and --threads",
+      conf,
+      options,
+      morseReductionOptions
+    )
+    val chosen = options.grouped(2).filter(pair => morseReductionOptions(pair(0))).flatten.toArray ++
+      conf.morseStrategy.toOption.toSeq.flatMap(strategy => Seq("strategy", strategy))
+    val reduction = resolved match
+      case ResolvedInput.Points(points)       => TDA4j.morseReductionFromPoints(points, chosen)
+      case ResolvedInput.Distances(distances) => TDA4j.morseReductionFromDistanceMatrix(distances, chosen)
+      case _                                  =>
+        throw new IllegalArgumentException(
+          s"--morse-reduction needs a point cloud or a distance matrix; --input-format=$format reads something else"
+        )
+    writeLines(
+      conf,
+      Seq(
+        s"cells=${reduction.cellCounts().mkString(",")}",
+        s"critical-cells=${reduction.criticalCounts().mkString(",")}",
+        s"pairs=${reduction.pairCount()}"
       ),
       out
     )

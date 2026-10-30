@@ -290,6 +290,36 @@ object Exports:
   def delayByAutocorrelation(series: js.Array[Double], maxLag: Int): Int =
     guarded(TDA4j.delayByAutocorrelation(series.toArray, maxLag))
 
+  /** The discrete Morse reduction of the Vietoris-Rips complex of a point cloud. Options: `maxDimension` (default 2),
+    * `maxFiltrationValue`, `strategy` (`"reduction"`, the default, or `"coreduction"`), `prime` and `threads`. Returns
+    * `{ cellCounts, criticalCounts, pairCount, criticalCells, bars }`: the cells of the complex and the cells left
+    * after pairing off, by dimension, the number of pairs, the cells left as arrays of vertex numbers, and the bars
+    * computed on them (rows `[dimension, birth, death]`), which are the bars of the complex.
+    */
+  @JSExportTopLevel("morseReduction")
+  def morseReduction(
+    points: js.Array[js.Array[Double]],
+    options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
+  ): js.Object = guarded(morseObject(TDA4j.morseReductionFromPoints(matrix(points), optionArray(options))))
+
+  /** [[morseReduction]] for a finite metric space given as its full matrix of distances. */
+  @JSExportTopLevel("morseReductionFromDistances")
+  def morseReductionFromDistances(
+    distances: js.Array[js.Array[Double]],
+    options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
+  ): js.Object = guarded(morseObject(TDA4j.morseReductionFromDistanceMatrix(matrix(distances), optionArray(options))))
+
+  private def morseObject(result: matlab.MorseReductionResult): js.Object =
+    js.Dynamic
+      .literal(
+        cellCounts = js.Array(result.cellCounts()*),
+        criticalCounts = js.Array(result.criticalCounts()*),
+        pairCount = result.pairCount(),
+        criticalCells = js.Array(result.criticalCells().map(cell => js.Array(cell*))*),
+        bars = js.Array(result.bars().map(row => js.Array(row*))*)
+      )
+      .asInstanceOf[js.Object]
+
   /** The persistent Laplacian of the Vietoris-Rips complex of a point cloud, on the simplices of dimension `dimension`
     * that have entered by `from`, for the complex at `to` (`from <= to`).
     */
