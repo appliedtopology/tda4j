@@ -106,7 +106,8 @@ are the real oracle.
 
 **`ParallelPackedCohomology`** is JVM-only experimental machinery. Its reduction-log graph is acyclic by construction;
 `cocycle` expands it with an explicit depth-first stack and memo so long substitutions cannot overflow the call stack,
-and reports a cycle as an invariant violation (`ParallelPackedCohomologySpec`, `WORKLOG-code-review-fixes-2026-10-30.md`).
+and reports a cycle as an invariant violation (`ParallelPackedCohomologySpec`, `WORKLOG-code-review-fixes-2026-10-30.md`,
+`WORKLOG-code-review-verification-2026-10-30.md`).
 
 **`BarcodeDistance`/`Vectorization`/`BootstrapBand`/`ToMATo`**: distances (matchings are `None` on an essential-count
 mismatch), sliced Wasserstein, landscapes, images, Betti curves (`birth <= t < death`), silhouettes, entropy on
