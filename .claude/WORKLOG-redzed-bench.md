@@ -78,6 +78,8 @@ and `o3_4096` and H2 for the rest, so the table will probably show RedZeD ahead 
 
 ## Left open
 
+- #273: the server run, the real data, the 64-bit index range at `o3_4096` and `clifford50000`, and how the table reads RedZeD.
+
 - `sweep-threads --baselines`: RedZeD is single-threaded, so it could be a second baseline for scale. Not added, not tried.
 - RedZeD's idea as a TDA4j experiment (an engine that skips (n+1)-births with no active face; Z/2 first, the contract is
   generic `Field` and representatives): not started, not requested.
