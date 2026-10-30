@@ -108,20 +108,18 @@ are the real oracle.
 mismatch), sliced Wasserstein, landscapes, images, Betti curves (`birth <= t < death`), silhouettes, entropy on
 `PersistenceBar[Double,_]`. Ground norm matches Hera/GUDHI, images `persim`. Essential bars: matched by birth for distance
 (mismatch → `+Infinity`); kept by landscapes and Betti curves, dropped by the rest. `longerThanFraction` is a display rule,
-not a test; `BootstrapBand.threshold` (2 x width, Fasy 2014) is the estimate. `matlab.PersistenceResult` and the JS result
-expose the vectorizations; the CLI only `--distance-to`. `WORKLOG-diagram-statistics.md`.
+not a test; `BootstrapBand.threshold` (2 x width, Fasy 2014) is the estimate. The facades are in `facade.md`. `WORKLOG-diagram-statistics.md`.
 
 ## Cross-engine benchmark
 
-`EngineComparisonBenchmarkSpec` times every (construction x engine) pairing over point count, dimension and `maxDim`; alpha and VR bar counts are never compared (radius vs diameter).
+`EngineComparisonBenchmarkSpec` times every (construction x engine) pairing; alpha and VR bar counts are never compared (radius vs diameter).
 
 **Benchmark specs** (`*BenchmarkSpec`, `ProfilingSpec` in `homology`) print timing tables; only an exception fails. All
-`skipAll` unless `-DrunBenchmarks=true` (a JVM property); scope with `testOnly` (`EngineComparisonBenchmarkSpec`: 15+
-min; `RipserPaperBenchmarkSpec` also needs `-DdataDir`: `.claude/scripts/run-ripser-paper-benchmark.sh`). Cross-tool
-benchmarks live in `bench/`.
+`skipAll` unless `-DrunBenchmarks=true`; scope with `testOnly` (`EngineComparisonBenchmarkSpec`: 15+ min;
+`RipserPaperBenchmarkSpec` also needs `-DdataDir`: `.claude/scripts/run-ripser-paper-benchmark.sh`); cross-tool ones in `bench/`.
 
-**`BarcodeRegressionSpec` (`HomologySpec`) runs on 25 - 30 points in 2 - 6 dimensions**: larger clouds cannot be
-enumerated by the constructions (`WORKLOG-chunks-top-cells.md`).
+**`BarcodeRegressionSpec` runs on 25 - 30 points in 2 - 6 dimensions**: larger clouds cannot be enumerated
+(`WORKLOG-chunks-top-cells.md`).
 
 **Query contract (naive + chunks, `DiagramQuerySpec`, `WORKLOG-cursor-and-verb.md`)**: `diagramAt(f)`/`barcodeAt(f)`/
 `diagramWithGeneratorsAt(f)` give the diagram truncated at `f` (bars born `<= f`, deaths capped at `f`, a class alive at

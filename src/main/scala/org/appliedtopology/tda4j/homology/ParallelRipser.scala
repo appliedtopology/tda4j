@@ -51,14 +51,14 @@ private[tda4j] object ParallelRipser:
   private final class Run(result: ParallelPackedCohomology.Result, withPairs: Boolean) extends ParallelRipserRun:
     private val space = result.space
 
-    // (degree, birth, death, column) of every bar, ordered as the triples are.
+    // (degree, birth, death, column, row) of every bar, ordered as the triples are.
     private val found = result.degrees
-      .flatMap(d => d.bars.indices.map(i => (d.bars(i), d.degree, d.barColumns(i))))
+      .flatMap(d => d.bars.indices.map(i => (d.bars(i), d.degree, d.barColumns(i), d.barRows(i))))
       .sortBy(_._1)
     val bars: IndexedSeq[(Int, Double, Double)] = found.map(_._1)
 
     def cocycle(i: Int): IndexedSeq[(Array[Int], Int)] =
-      val (_, degree, column) = found(i)
+      val (_, degree, column, _) = found(i)
       val p = space.p
       ParallelPackedCohomology
         .cocycle(result.degrees(degree), p, column)
@@ -77,8 +77,12 @@ private[tda4j] object ParallelRipser:
       maps
 
     def pairOfBar(i: Int): Int =
-      val (_, degree, column) = found(i)
+      val (_, degree, column, _) = found(i)
       pairIndex(degree)(column)
+
+    def cellsOfBar(i: Int): (Array[Int], Option[Array[Int]]) =
+      val (_, degree, column, row) = found(i)
+      (vertices(column, degree), Option.when(row >= 0)(vertices(row, degree + 1)))
 
     def vertices(key: Long, dim: Int): Array[Int] =
       val vs = new Array[Int](dim + 1)

@@ -235,17 +235,18 @@ file before changing that subsystem; this table is the index, in case a rule did
 
 | file | covers | loads for |
 |---|---|---|
-| `rules/streams.md` | the ordering contract every stream must satisfy (the #1 historical bug source), VR constructions, `maxFiltrationValue` default, `ExplicitStreamBuilder` | `streams/` |
+| `rules/streams.md` | the ordering contract every stream must satisfy (the #1 bug source), VR constructions, `maxFiltrationValue` default, `ExplicitStreamBuilder` | `streams/` |
 | `rules/engines.md` | the four persistence engines, `BarcodeDistance`/`Vectorization`, benchmark specs | `homology/`, `barcode/` |
+| `rules/module-maps.md` | maps of barcodes: `MapAlgebra`, `PersistenceMap`, their oracle | `MapAlgebra`, `PersistenceMap` |
 | `rules/circular-coordinates.md` | circular and toroidal coordinates, from points or a diagram | those files |
 | `rules/cubical.md` | cubical complexes, `FastCubicalHomologyEngine` | cubical files |
 | `rules/simplicial-sets.md` | the `sset` add-on: simplicial sets, the Sage-parity layer, group classifying spaces | `sset/` |
 | `rules/filtered-complexes.md` | Cech, witness, Dowker, DTM, sparse Rips, edge collapse | those files |
 | `rules/alpha.md` | alpha complexes (DQP, Helix, fast alpha) | `alpha/`, alpha files |
 | `rules/facade.md` | MATLAB facade, CLI, file I/O, the persistence threshold (which bars are reported) | `matlab/`, `cli/`, `io/` |
-| `rules/scalajs.md` | the Scala.js build: platform seams, what to avoid in shared code, the JS API and npm package, limits | `scalajs/`, `scalajvm/`, `build.sbt`, `npm/` |
+| `rules/scalajs.md` | the Scala.js build: platform seams, shared-code limits, the JS API and npm package | `scalajs/`, `scalajvm/`, `build.sbt`, `npm/` |
 | `rules/docs-and-tutorials.md` | docs site, tutorial pages (the docs are the tests), language tabs | `_docs/`, tutorial specs, `build.sbt` |
-| `rules/plotting.md` | the `plot` subpackage: scene model, the tweak grammar, looks, live viewer, gallery screenshots | `plot/` (main and test) |
+| `rules/plotting.md` | the `plot` subpackage: scene model, tweaks, looks, live viewer, gallery | `plot/` (main and test) |
 | `rules/algebra.md` | fields, chains and cells: `RingModule`, `Field`, `Chain`, `Cell` | `algebra/`, `cells/` |
 | `rules/testing.md` | writing specs: shared generators, specs2 traps | `src/test/**` |
 | `rules/scala-style.md` | the Scala 3 idioms used throughout, opaque-type and extension-method hazards | `src/**/*.scala` |

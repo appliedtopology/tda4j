@@ -286,6 +286,22 @@ classDiagram
         kernel(source, target, matrix) List~PersistenceBar~
         cokernel(source, target, matrix) List~PersistenceBar~
     }
+    class MapAlgebra {
+        <<object>>
+        image(source, target, columns) List~Tuple~
+        kernel(source, target, columns) List~Tuple~
+        cokernel(source, target, columns) List~Tuple~
+    }
+    class PersistenceMap {
+        source: PersistenceDiagram
+        target: PersistenceDiagram
+        entries(k) List~Tuple~
+        image(k) List~PersistenceBar~
+        kernel(k) List~PersistenceBar~
+        cokernel(k) List~PersistenceBar~
+    }
+    Barcode ..> MapAlgebra
+    PersistenceMap ..> MapAlgebra
     class BarcodeDistance {
         <<object>>
         bottleneckDistance(diagram1, diagram2, groundNorm) Double

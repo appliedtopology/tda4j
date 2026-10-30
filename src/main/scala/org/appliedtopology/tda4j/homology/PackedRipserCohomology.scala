@@ -499,7 +499,7 @@ open class PackedRipserCohomologyEngine[CoefficientT: Field](
     List.tabulate(rows.size)(identity).collect {
       case k if includeZeroLength || !rows.isZeroLength(k) =>
         val bar = rows.bar(k)
-        new PersistenceBar(bar.dim, bar.lower, bar.upper, Some(cycles(k.toLong)))
+        new PersistenceBar(bar.dim, bar.lower, bar.upper, Some(cycles(k.toLong)), bar.cells)
     }
 
   /** Pushes `boundaryOf(tau, dim)` onto `working` without building it: the facets come from the facet cursor, the
@@ -792,7 +792,8 @@ open class PackedRipserCohomologyEngine[CoefficientT: Field](
         dims(k),
         ClosedEndpoint(birthD(k)),
         if deathI(k) >= 0 then OpenEndpoint(deathD(k)) else PositiveInfinity(),
-        cocycles.get(k.toLong)
+        cocycles.get(k.toLong),
+        Some(pair(k))
       )
     def pair(k: Int): Involution.Pair[DiameterIndex] = Involution.Pair(dims(k), birth(k), death(k))
 

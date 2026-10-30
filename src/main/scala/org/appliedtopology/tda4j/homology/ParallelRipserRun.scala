@@ -23,6 +23,11 @@ private[tda4j] trait ParallelRipserRun:
   /** The index in `pairs` of the pair that bar `i` of `bars` is. */
   def pairOfBar(i: Int): Int
 
+  /** The vertices (ascending) of the simplex that opens bar `i` of `bars`, and of the one that closes it (none for an
+    * essential class).
+    */
+  def cellsOfBar(i: Int): (Array[Int], Option[Array[Int]])
+
   /** The keys of the faces of the simplex with key `key` and dimension `dim`; face `i` leaves out vertex `i`. */
   def faces(key: Long, dim: Int): Array[Long]
 

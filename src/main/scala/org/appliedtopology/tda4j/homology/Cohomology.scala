@@ -123,7 +123,8 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
         val bars = kept.zip(cycles).toList.map { case (e, (cycle, _)) =>
           val cells = r.cellsByDim(e.dim)
           val rep = Chain.from(cycle.terms.map((i, c) => (cells(i), c)))(using youngestFirst)
-          new PersistenceBar(e.dim, r.lower(e), r.upper(e), Some(rep))
+          val pair = Involution.Pair(e.dim, cells(e.birth), Option.when(e.death >= 0)(r.cellsByDim(e.dim + 1)(e.death)))
+          new PersistenceBar(e.dim, r.lower(e), r.upper(e), Some(rep), Some(pair))
         }
         PersistenceBar.dropZeroLength(bars, includeZeroLength)
 
@@ -149,7 +150,8 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
           val cells = r.cellsByDim(e.dim)
           val rep = Chain.from(e.cocycle.map((i, c) => (cells(i), c)))(using r.olderFirst)
           val death = Option.when(e.death >= 0)(r.cellsByDim(e.dim + 1)(e.death))
-          (PersistenceBar(e.dim, r.lower(e), r.upper(e), Some(rep)), Involution.Pair(e.dim, cells(e.birth), death))
+          val pair = Involution.Pair(e.dim, cells(e.birth), death)
+          (PersistenceBar(e.dim, r.lower(e), r.upper(e), Some(rep), Some(pair)), pair)
         }
         (paired, r.olderFirst)
 
@@ -699,15 +701,17 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
       val level = levels(barDims(e))
       Chain.from(cocycle(e).map((i, c) => (level.cell(i), c)))(using olderFirst)
 
+    // The cells that open and close bar `e`.
+    private def cellsOf(e: Int): Involution.Pair[CellT] =
+      val dim = barDims(e)
+      val death = Option.when(barDeaths(e) >= 0)(levels(dim + 1).cell(barDeaths(e)))
+      Involution.Pair(dim, levels(dim).cell(barBirths(e)), death)
+
     def pairs
       : (List[(PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]], Involution.Pair[CellT])], Ordering[CellT]) =
       val paired = List.tabulate(count) { e =>
-        val (dim, level) = (barDims(e), levels(barDims(e)))
-        val death = Option.when(barDeaths(e) >= 0)(levels(dim + 1).cell(barDeaths(e)))
-        (
-          PersistenceBar(dim, lower(e), upper(e), Some(cocycleChain(e))),
-          Involution.Pair(dim, level.cell(barBirths(e)), death)
-        )
+        val pair = cellsOf(e)
+        (PersistenceBar(barDims(e), lower(e), upper(e), Some(cocycleChain(e)), Some(pair)), pair)
       }
       (paired, olderFirst)
 
@@ -717,7 +721,7 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
     ): List[PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]]] =
       (0 until count).iterator
         .filter(e => barDims(e) <= limit && (includeZeroLength || !isZeroLength(e)))
-        .map(e => PersistenceBar(barDims(e), lower(e), upper(e), Some(cocycleChain(e))))
+        .map(e => PersistenceBar(barDims(e), lower(e), upper(e), Some(cocycleChain(e)), Some(cellsOf(e))))
         .toList
 
     // The faces of cell `j` of dimension `dim` that are in the stream, with their signs, as `boundary` lists them.
@@ -830,7 +834,7 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
               vcol.terms
           val level = levels(dim)
           val rep = Chain.from(cycle.map((i, c) => (level.cell(i), c)))(using youngestCellFirst)
-          new PersistenceBar(dim, lower(e), upper(e), Some(rep))
+          new PersistenceBar(dim, lower(e), upper(e), Some(rep), Some(cellsOf(e)))
         }
         .toList
 

@@ -235,7 +235,15 @@ object Persistence:
             val chain = Chain.from(bar.representative.terms.map { (cell, c) =>
               (Simplex(engine.vertices(cell, bar.dim + 1)*), c)
             })
-            new PersistenceBar(bar.dim, bar.lower, bar.upper, Some(chain))
+            val pair = bar.cells.map { cells =>
+              val packed = cells.asInstanceOf[Involution.Pair[engine.DiameterIndex]]
+              Involution.Pair(
+                packed.dim,
+                Simplex(engine.vertices(packed.birth, packed.dim + 1)*),
+                packed.death.map(death => Simplex(engine.vertices(death, packed.dim + 2)*))
+              )
+            }
+            new PersistenceBar(bar.dim, bar.lower, bar.upper, Some(chain), pair)
           val longestEdge = longestEdgeWithin(ms, threshold)
           PersistenceDiagram[Simplex[Int], coefficients.C](
             (if cycles then engine.persistentHomology(includeZeroLength)
@@ -243,7 +251,8 @@ object Persistence:
             maxDimension,
             longestEdge,
             scale,
-            Some(kindOf(cycles))
+            Some(kindOf(cycles)),
+            cycles
           )
         override def parallelRipserApplies(
           complex: PointCloudComplex,
@@ -300,11 +309,14 @@ object Persistence:
               if cycles then () => simplexChain(allCycles(i).map((key, c) => (run.vertices(key, dim), c)))
               else () => simplexChain(run.cocycle(i).map((vertices, c) => (vertices, coefficients.fromInt(c))))
             )(summon[Ordering[Simplex[Int]]], summon[coefficients.C is Field])
+            val (birthVertices, deathVertices) = run.cellsOfBar(i)
+            val pair = Involution.Pair(dim, Simplex(birthVertices*), deathVertices.map(vs => Simplex(vs*)))
             val bar = PersistenceBar[Double, Chain[Simplex[Int], coefficients.C]](
               dim,
               ClosedEndpoint(birth),
               if death.isPosInfinity then PositiveInfinity() else OpenEndpoint(death),
-              Some(representative)
+              Some(representative),
+              Some(pair)
             )
             (bar, representative)
           }
@@ -317,7 +329,8 @@ object Persistence:
             maxDimension,
             longestEdgeWithin(ms, threshold),
             scale,
-            Some(kindOf(cycles))
+            Some(kindOf(cycles)),
+            cycles
           )
 
     given fromPointCloud: Conversion[PointCloud, Input[Simplex[Int]]] = pc => ofMetricSpace(pc.metricSpace, Some(pc))
@@ -550,5 +563,8 @@ object Persistence:
       maxDimension,
       last,
       scale,
-      Some(kindOf(cycles))
+      Some(kindOf(cycles)),
+      // The cycles of the cohomology engine are derived by involution, one boundary for each finite bar; those of the
+      // naive and chunked engines are the generators of their reductions.
+      cycles && engine == Engine.Cohomology
     )

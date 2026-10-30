@@ -8,6 +8,8 @@ package org.appliedtopology.tda4j
 
 import cats.Show
 
+import scala.compiletime.asMatchable
+
 // Sealed on purpose: the four cases are the endpoints of an interval on the extended line, a closed classification that
 // `endpointOrdering` and every reader match on exhaustively.
 sealed trait BarcodeEndpoint[FiltrationT: Ordering]:
@@ -94,13 +96,26 @@ object BarcodeEndpoint:
   *   Type of the filtration parameter
   * @tparam AnnotationT
   *   Type of the annotation (we would expect this to be [[Chain]]).
+  * @param cells
+  *   the cell that opens the bar and the one that closes it, when the engine records them
+  *   ([[PersistenceBar.birthCell]], [[PersistenceBar.deathCell]] read them typed). Not part of equality.
   */
 case class PersistenceBar[FiltrationT: Ordering, AnnotationT](
   dim: Int,
   lower: BarcodeEndpoint[FiltrationT],
   upper: BarcodeEndpoint[FiltrationT],
-  annotation: Option[AnnotationT] = None
+  annotation: Option[AnnotationT] = None,
+  cells: Option[Involution.Pair[?]] = None
 ):
+
+  // A bar is its interval and its annotation. `cells` says how the engine found it, and an engine that does not record
+  // them leaves it empty, so it is left out of equality.
+  override def equals(other: Any): Boolean = other.asMatchable match
+    case that: PersistenceBar[?, ?] =>
+      dim == that.dim && lower == that.lower && upper == that.upper && annotation == that.annotation
+    case _ => false
+
+  override def hashCode: Int = scala.util.hashing.MurmurHash3.orderedHash(List(dim, lower, upper, annotation))
 
   /** True for `[v, v)`: a cell paired with one entering at the same filtration value, so no class ever exists. Engines
     * leave these out unless asked (`includeZeroLength = true`).
@@ -166,6 +181,15 @@ object PersistenceBar:
     def death: Double = numeric(bar.upper)
     def persistence: Double = death - birth
     def toTriple: (Int, Double, Double) = (bar.dim, birth, death)
+
+  /** The cells of a bar whose annotation is a chain over them, which is how the cell type is known: `bar.birthCell` is
+    * the cell whose entry creates the class (of the bar's dimension, valued at its birth) and `bar.deathCell` the one
+    * that kills it (one dimension up, valued at its death; none for an essential class). Both are `None` for a bar from
+    * an engine that does not record cells, `bar.cells.isDefined` telling that apart from an essential bar.
+    */
+  extension [CellT](bar: PersistenceBar[?, ? <: Chain[CellT, ?]])
+    def birthCell: Option[CellT] = bar.cells.map(_.birth.asInstanceOf[CellT])
+    def deathCell: Option[CellT] = bar.cells.flatMap(_.death).map(_.asInstanceOf[CellT])
 
   /** Filtering a list of bars (no import needed: these are found through the bar type's companion).
     *
@@ -268,116 +292,131 @@ open class BarcodeBuilder[FiltrationT: Ordering]():
   * construction and the one call).
   */
 object Barcode:
+
+  /** The endpoints of some bars as numbers, for [[MapAlgebra]]: the rank of an endpoint's value among the distinct
+    * values of all of them, so the algebra sees only their order, whatever the filtration values are. Open and closed
+    * make no difference (a bar is the half-open interval between the values of its endpoints, as for
+    * [[PersistenceBar.birth]]); infinite endpoints stay infinite.
+    */
+  private final class Ranking[F](bars: Seq[PersistenceBar[F, ?]])(using ord: Ordering[F]):
+    private val values: Vector[F] =
+      bars
+        .flatMap(b => List(b.lower, b.upper))
+        .collect {
+          case ClosedEndpoint(v) => v
+          case OpenEndpoint(v)   => v
+        }
+        .sorted(using ord)
+        .foldLeft(Vector.empty[F])((kept, v) => if kept.nonEmpty && ord.equiv(kept.last, v) then kept else kept :+ v)
+    private val rank = scala.collection.immutable.TreeMap.from(values.zipWithIndex)(using ord)
+
+    def number(e: BarcodeEndpoint[F]): Double = e match
+      case NegativeInfinity() => Double.NegativeInfinity
+      case PositiveInfinity() => Double.PositiveInfinity
+      case ClosedEndpoint(v)  => rank(v).toDouble
+      case OpenEndpoint(v)    => rank(v).toDouble
+
+    def interval(bar: PersistenceBar[F, ?]): MapAlgebra.Interval =
+      MapAlgebra.Interval(number(bar.lower), number(bar.upper))
+
+    /** The value `x` stands for, as the closed lower end of a bar, or `-Infinity`. */
+    def lower(x: Double): BarcodeEndpoint[F] =
+      if x.isInfinite then NegativeInfinity[F]() else ClosedEndpoint(values(x.toInt))
+
+    /** The value `x` stands for, as the open upper end of a bar, or `Infinity`. */
+    def upper(x: Double): BarcodeEndpoint[F] =
+      if x.isInfinite then PositiveInfinity[F]() else OpenEndpoint(values(x.toInt))
+
+  // The matrix is `target.size x source.size`, a column to each source bar: the columns as the maps from bar indices.
+  private def columnsOf(matrix: DenseMatrix): IndexedSeq[Map[Int, Double]] =
+    (0 until matrix.cols).map(c =>
+      (0 until matrix.rows).collect { case r if matrix(r, c) != 0.0 => r -> matrix(r, c) }.toMap
+    )
+
+  private def checked[F: Ordering, A](
+    what: String,
+    source: List[PersistenceBar[F, A]],
+    target: List[PersistenceBar[F, A]],
+    matrix: DenseMatrix
+  ): Unit =
+    require(
+      matrix.rows == target.size && matrix.cols == source.size,
+      s"Barcode.$what: the matrix is ${matrix.rows} x ${matrix.cols}, but a map from ${source.size} bars to ${target.size} bars is ${target.size} x ${source.size} (a row for each target bar, a column for each source bar)"
+    )
+    require(
+      isMap(source, target, matrix),
+      s"Barcode.$what: the matrix is not a map of persistence modules; Barcode.isMap says which entries must be zero (a source bar [b, d) goes only to target bars [b', d') with b' <= b < d' <= d)"
+    )
+
+  /** Whether `matrix` is a map of persistence modules from the bars `source` to the bars `target`: a row for each
+    * target bar, a column for each source bar, and a nonzero entry only where the target bar `[b', d')` is born no
+    * later than the source bar `[b, d)`, is still alive when it is born, and dies no later than the source does: `b' <=
+    * b < d' <= d`.
+    */
   def isMap[FiltrationT: Ordering, AnnotationT](
     source: List[PersistenceBar[FiltrationT, AnnotationT]],
     target: List[PersistenceBar[FiltrationT, AnnotationT]],
     matrix: DenseMatrix
-  ): Boolean = (for
+  ): Boolean =
+    val ranking = Ranking(source ++ target)
+    val (from, to) = (source.map(ranking.interval).toVector, target.map(ranking.interval).toVector)
+    (for
       c <- 0 until matrix.cols
       r <- 0 until matrix.rows
       if matrix(r, c) != 0
-    yield source(c).lower >= target(
-      r
-    ).lower && // target must be born when source is born
-      source(c).upper >= target(
-        r
-      ).upper && // source must still live when target dies
-      source(c).lower <= target(
-        r
-      ).upper && // source must be born before target dies
-      source(c).upper >= target(
-        r
-      ).lower // target must be born before source dies
-  ).forall(b => b)
+    yield MapAlgebra.isLegal(from(c), to(r))).forall(identity)
 
-  def imageMatrix[FiltrationT: Ordering, AnnotationT](
-    source: List[PersistenceBar[FiltrationT, AnnotationT]],
-    target: List[PersistenceBar[FiltrationT, AnnotationT]],
-    matrix: DenseMatrix
-  ): DenseMatrix =
-    val matrixT = matrix.transpose
-    val births = source.map(_.lower)
-    val deaths = target.map(_.upper)
-    val birthOrder = births.zipWithIndex.sortBy(_._1).map(_._2)
-    val deathOrder = deaths.zipWithIndex.sortBy(_._1).map(_._2)
-    val imagematrix =
-      DenseMatrix.tabulate(births.size, deaths.size)((birth, death) => matrixT(birthOrder(birth), deathOrder(death)))
-    reduceMatrix(imagematrix)
-
+  /** The bars of the image of `matrix`, a map of persistence modules from `source` to `target` ([[isMap]]), as a
+    * barcode: each carries the degree and the annotation of the source bar it grows from. The matrix is over the real
+    * numbers, an entry counting as zero within `1e-9`; [[MapAlgebra]] does the same over any field.
+    */
   def image[FiltrationT: Ordering, AnnotationT](
     source: List[PersistenceBar[FiltrationT, AnnotationT]],
     target: List[PersistenceBar[FiltrationT, AnnotationT]],
     matrix: DenseMatrix
   ): List[PersistenceBar[FiltrationT, AnnotationT]] =
-    val births = source.map(_.lower)
-    val deaths = target.map(_.upper)
-    val imagematrix = imageMatrix(source, target, matrix)
-    (for (birth, death) <- pivotsOf(imagematrix)
-    yield PersistenceBar[FiltrationT, AnnotationT](
-      source(birth).dim,
-      births(birth),
-      deaths(death),
-      source(birth).annotation
-    )).toList
+    checked("image", source, target, matrix)
+    given Double is Field = Field.DoubleApproximated(1e-9)
+    val ranking = Ranking(source ++ target)
+    MapAlgebra
+      .image(source.map(ranking.interval).toVector, target.map(ranking.interval).toVector, columnsOf(matrix))
+      .map((i, bar) =>
+        PersistenceBar(source(i).dim, ranking.lower(bar.birth), ranking.upper(bar.death), source(i).annotation)
+      )
 
-  def kernel[FiltrationT, AnnotationT](
+  /** The bars of the kernel of `matrix` ([[image]] says what it is), each carrying the degree and annotation of its
+    * source bar.
+    */
+  def kernel[FiltrationT: Ordering, AnnotationT](
     source: List[PersistenceBar[FiltrationT, AnnotationT]],
     target: List[PersistenceBar[FiltrationT, AnnotationT]],
     matrix: DenseMatrix
-  )(using
-    ord: Ordering[FiltrationT]
   ): List[PersistenceBar[FiltrationT, AnnotationT]] =
-    val dualSource: List[PersistenceBar[FiltrationT, AnnotationT]] =
-      target.map(pb => PersistenceBar(pb.dim, pb.upper, pb.lower))
-    val dualTarget: List[PersistenceBar[FiltrationT, AnnotationT]] =
-      source.map(pb => PersistenceBar(pb.dim, pb.upper, pb.lower))
-    val cokernelIntervals =
-      cokernel(dualSource, dualTarget, matrix.transpose)(using ord = ord.reverse)
-    cokernelIntervals.map(pb => PersistenceBar(pb.dim, pb.upper, pb.lower))
+    checked("kernel", source, target, matrix)
+    given Double is Field = Field.DoubleApproximated(1e-9)
+    val ranking = Ranking(source ++ target)
+    MapAlgebra
+      .kernel(source.map(ranking.interval).toVector, target.map(ranking.interval).toVector, columnsOf(matrix))
+      .map((i, bar) =>
+        PersistenceBar(source(i).dim, ranking.lower(bar.birth), ranking.upper(bar.death), source(i).annotation)
+      )
 
-  def cokernelMatrix[FiltrationT, AnnotationT](
+  /** The bars of the cokernel of `matrix` ([[image]] says what it is), each carrying the degree and annotation of its
+    * target bar.
+    */
+  def cokernel[FiltrationT: Ordering, AnnotationT](
     source: List[PersistenceBar[FiltrationT, AnnotationT]],
     target: List[PersistenceBar[FiltrationT, AnnotationT]],
     matrix: DenseMatrix
-  )(using
-    ord: Ordering[FiltrationT]
-  ): DenseMatrix =
-    val births = target.map(_.lower)
-    val deaths = source.map(_.lower.flip) ++ target.map(_.upper)
-    val birthOrder = births.zipWithIndex.sortBy(_._1).map(_._2)
-    val deathOrder = deaths.zipWithIndex.sortBy(_._1).map(_._2)
-    val cokernelmatrix = Array.ofDim[Double](births.size, deaths.size)
-    for
-      s <- 0 until source.size
-      t <- 0 until target.size
-    do cokernelmatrix(t)(s) = matrix(birthOrder(t), deathOrder(s))
-    (0 until target.size).foreach { t =>
-      cokernelmatrix(birthOrder(t))(deathOrder(source.size + t)) = 1.0
-    }
-    reduceMatrix(DenseMatrix(cokernelmatrix))
-
-  def cokernel[FiltrationT, AnnotationT](
-    source: List[PersistenceBar[FiltrationT, AnnotationT]],
-    target: List[PersistenceBar[FiltrationT, AnnotationT]],
-    matrix: DenseMatrix
-  )(using
-    ord: Ordering[FiltrationT]
   ): List[PersistenceBar[FiltrationT, AnnotationT]] =
-    val births = target.map(_.lower)
-    val deaths = source.map(_.lower.flip) ++ target.map(_.upper)
-    val birthOrder = births.zipWithIndex.sortBy(_._1).map(_._2)
-    val deathOrder = deaths.zipWithIndex.sortBy(_._1).map(_._2)
-    val cokernelmatrix = cokernelMatrix(source, target, matrix)
-    (for
-      (row, col) <- pivotsOf(cokernelmatrix)
-      birth <- List(birthOrder.indexOf(row))
-      death <- List(deathOrder.indexOf(col))
-    yield PersistenceBar[FiltrationT, AnnotationT](
-      target(birth).dim,
-      births(birth),
-      deaths(death),
-      target(birth).annotation
-    )).toList
+    checked("cokernel", source, target, matrix)
+    given Double is Field = Field.DoubleApproximated(1e-9)
+    val ranking = Ranking(source ++ target)
+    MapAlgebra
+      .cokernel(source.map(ranking.interval).toVector, target.map(ranking.interval).toVector, columnsOf(matrix))
+      .map((j, bar) =>
+        PersistenceBar(target(j).dim, ranking.lower(bar.birth), ranking.upper(bar.death), target(j).annotation)
+      )
 
   /** `matrix` with every column reduced by the columns to its left, by their lowest nonzero entries (the standard
     * persistence reduction over the reals): afterwards no two nonzero columns have the same lowest nonzero row. The

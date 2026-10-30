@@ -118,6 +118,28 @@ val withCocycles = Persistence(points, representatives = Representatives.Cocycle
 withCocycles.dim(1).longest.get.representative.cells   // a cocycle: 50 edges cutting across the loop
 ```
 
+### The cells that open and close a bar
+
+Besides its representative, a bar knows the two cells of the persistence pairing: `bar.birthCell` is the simplex whose
+entry created the class (of the bar's dimension, entering at the bar's birth) and `bar.deathCell` the one that killed it
+(one dimension up, entering at its death; `None` for a class that never dies). That is GUDHI's `persistence_pairs`, and
+what to use to point at where in the data a feature is born and where it fills in.
+
+```scala 3
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+
+val points = Array.tabulate(30)(i => Array(math.cos(i * 0.21), math.sin(i * 0.21)))
+val loop = Persistence(points).dim(1).longest.get
+loop.birthCell     // Some(a Simplex of two points): the edge whose length is the birth
+loop.deathCell     // Some(a Simplex of three points): the triangle whose entry fills the loop in
+```
+
+Cells are recorded by every engine that computes on simplices, and are `None` for the fast cubical engine and for
+images. Among cells that enter at the same value, which one is *the* birth cell depends on the order the engine breaks
+ties in (a bar's endpoints, which do not, are the same for every engine); in degree 0 all the vertices enter at 0, so
+the vertex that is born where a component starts is a matter of that convention.
+
 ### Long computations: the cursor
 
 `Persistence` runs to the end. For a computation that may take days, run an engine yourself: its state is a cursor

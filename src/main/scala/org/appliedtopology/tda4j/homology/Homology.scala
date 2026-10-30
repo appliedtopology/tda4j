@@ -341,23 +341,28 @@ open class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtr
       f: FiltrationT,
       includeZeroLength: Boolean = false
     ): List[(Int, FiltrationT, FiltrationT, Chain[CellT, CoefficientT])] =
-      truncatedAt(f, includeZeroLength).map((dim, l, u, rep, _) => (dim, l, u, rep))
+      truncatedAt(f, includeZeroLength).map((dim, l, u, rep, _, _) => (dim, l, u, rep))
 
-    /** `diagramWithGeneratorsAt`, plus whether each bar's death was capped at `f` (the class is alive at `f`). */
+    /** `diagramWithGeneratorsAt`, plus whether each bar's death was capped at `f` (the class is alive at `f`) and the
+      * cells that open and close it (the closing cell only if the bar finished by `f`).
+      */
     private def truncatedAt(
       f: FiltrationT,
       includeZeroLength: Boolean
-    ): List[(Int, FiltrationT, FiltrationT, Chain[CellT, CoefficientT], Boolean)] =
+    ): List[(Int, FiltrationT, FiltrationT, Chain[CellT, CoefficientT], Boolean, Involution.Pair[CellT])] =
       advanceTo(f)
-      val finished = barcode.toList.collect {
-        case (dim, lower, upper, rep) if lower <= f && (includeZeroLength || lower != upper) =>
-          if upper <= f then (dim, lower, upper, rep, false) else (dim, lower, f, rep, true)
+      val finished = barcode.toList.zipWithIndex.collect {
+        case ((dim, lower, upper, rep), i) if lower <= f && (includeZeroLength || lower != upper) =>
+          val (birthCell, deathCell) = pairedCells(i)
+          if upper <= f then (dim, lower, upper, rep, false, Involution.Pair(dim, birthCell, Some(deathCell)))
+          else (dim, lower, f, rep, true, Involution.Pair(dim, birthCell, None))
       }
       val essentialUpper: FiltrationT = lastFiltrationValue match
         case Some(last) if f < last => f
         case _                      => filtration.largest
       val alive = positives.toList.collect {
-        case (sigma, (birth, rep)) if birth <= f => (sigma.dim, birth, essentialUpper, rep, true)
+        case (sigma, (birth, rep)) if birth <= f =>
+          (sigma.dim, birth, essentialUpper, rep, true, Involution.Pair(sigma.dim, sigma, None))
       }
       finished ++ alive
 
@@ -386,14 +391,14 @@ open class CellularHomologyEngine[CellT: OrderedCell, CoefficientT: Field, Filtr
       f: FiltrationT,
       includeZeroLength: Boolean = false
     ): List[PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]]] =
-      truncatedAt(f, includeZeroLength).map { (dim, l, u, rep, capped) =>
+      truncatedAt(f, includeZeroLength).map { (dim, l, u, rep, capped, cells) =>
         val lower: BarcodeEndpoint[FiltrationT] =
           if l == filtration.smallest then NegativeInfinity() else ClosedEndpoint(l)
         val upper: BarcodeEndpoint[FiltrationT] =
           if u == filtration.largest then PositiveInfinity()
           else if capped then ClosedEndpoint(u)
           else OpenEndpoint(u)
-        new PersistenceBar(dim, lower, upper, Some(rep))
+        new PersistenceBar(dim, lower, upper, Some(rep), Some(cells))
       }
 
   /** The cursor for the whole stream. A stream that says it was cut off (`homologyDegreeLimit`, as `VietorisRips(..,
@@ -899,7 +904,10 @@ open class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: F
                   // path it closes (or, after union-find's fallback, its V-column), built on first request.
                   if dim == 1 then degreeOneRepresentative(pivot)
                   else vcolOf(pivot)
-              new PersistenceBar(dim, endpoint(true)(lower), deathAt(upper), Some(rep))
+              // The pivot is the birth cell; its killer is the death cell, unless the bar is cut off at `f`.
+              val birthCell = chain.leadingCell.get
+              val cells = Involution.Pair(dim, birthCell, if upper <= f then killer.get(birthCell) else None)
+              new PersistenceBar(dim, endpoint(true)(lower), deathAt(upper), Some(rep), Some(cells))
           }
         }
 
@@ -913,7 +921,13 @@ open class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: F
               else essentialRepresentatives.getOrElseUpdate(sigma, vcolOf(sigma))
             val upper: BarcodeEndpoint[Double] =
               if essentialUpperAt(f).isPosInfinity then PositiveInfinity() else ClosedEndpoint(f)
-            new PersistenceBar(sigma.dim, endpoint(true)(lower), upper, Some(rep))
+            new PersistenceBar(
+              sigma.dim,
+              endpoint(true)(lower),
+              upper,
+              Some(rep),
+              Some(Involution.Pair(sigma.dim, sigma, None))
+            )
           }
         }
 
