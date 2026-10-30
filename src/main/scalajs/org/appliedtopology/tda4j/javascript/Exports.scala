@@ -404,6 +404,17 @@ final class Result private[javascript] (underlying: PersistenceResult):
       .asInstanceOf[js.Object]
   }
 
+  /** The cells that open and close `bars[i]`: `{ birth, death }`, each a cell as in `representative(i).cells`. `birth`
+    * is `null` where the engine recorded no cells, `death` where no cell closes the bar (an essential one).
+    */
+  @JSExport
+  def barCells(i: Int): js.Object = Exports.guarded {
+    def cell(vertices: Array[Int]): js.Array[Int] = if vertices.isEmpty then null else js.Array(vertices*)
+    js.Dynamic
+      .literal(birth = cell(underlying.birthCell(i)), death = cell(underlying.deathCell(i)))
+      .asInstanceOf[js.Object]
+  }
+
   /** The bottleneck distance to `other` between the dimension-`dimension` bars (all of them, not only the reported). */
   @JSExport
   def bottleneckDistance(other: Result, dimension: Int): Double =

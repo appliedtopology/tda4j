@@ -160,6 +160,18 @@ class ExportsSpec extends Specification:
       (image.length must beEqualTo(5)) and (image.forall(_.length == 6) must beTrue) and
         (image.flatMap(_.toSeq).exists(_ > 0.0) must beTrue)
     }
+    "give the cells that open and close a bar: a loop's edge and its triangle, an essential bar's vertex and no death" >> {
+      val bars = result.bars
+      val loop = bars.indexWhere(b => dynamic(b).dim.asInstanceOf[Int] == 1)
+      val essential = bars.indexWhere(b => dynamic(b).death.asInstanceOf[Double].isInfinite)
+      val loopCells = dynamic(result.barCells(loop))
+      val essentialCells = dynamic(result.barCells(essential))
+      (loop must be_>=(0)) and
+        (loopCells.birth.asInstanceOf[js.Array[Int]].length must beEqualTo(2)) and
+        (loopCells.death.asInstanceOf[js.Array[Int]].length must beEqualTo(3)) and
+        (essentialCells.birth.asInstanceOf[js.Array[Int]].length must beEqualTo(1)) and
+        (essentialCells.death == null must beTrue)
+    }
     "export its boundary matrix, columns in filtration order" >> {
       val boundary = dynamic(result.boundary())
       val rows = boundary.rows.asInstanceOf[js.Array[Int]]

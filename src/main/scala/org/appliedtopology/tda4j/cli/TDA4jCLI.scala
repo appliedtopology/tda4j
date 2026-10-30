@@ -86,6 +86,12 @@ object TDA4jCLI:
           "--include-zero-length is meaningless with --select-landmarks: there is no barcode here, only a landmark set"
         )
 
+      if conf.barCells() && conf.outputFormat() != "text" then
+        throw new IllegalArgumentException(
+          s"--bar-cells adds the cells to the text output, and --output-format=${conf.outputFormat()} has no place for " +
+            "them: use --output-format=text, or --save-result, which keeps them"
+        )
+
       if conf.distanceTo.isSupplied then
         if conf.selectLandmarks() then
           throw new IllegalArgumentException(
@@ -95,6 +101,11 @@ object TDA4jCLI:
           throw new IllegalArgumentException(
             "--representatives is meaningless with --distance-to: a bottleneck/Wasserstein comparison has no " +
               "representative chains, only a distance per dimension"
+          )
+        if conf.barCells() then
+          throw new IllegalArgumentException(
+            "--bar-cells is meaningless with --distance-to: a bottleneck/Wasserstein comparison has no cells, only " +
+              "a distance per dimension"
           )
         if conf.outputFormat() != "text" then
           throw new IllegalArgumentException(
@@ -156,6 +167,10 @@ object TDA4jCLI:
           throw new IllegalArgumentException(
             "--representatives is meaningless with --select-landmarks: there is no barcode here, only a " +
               "landmark set"
+          )
+        if conf.barCells() then
+          throw new IllegalArgumentException(
+            "--bar-cells is meaningless with --select-landmarks: there is no barcode here, only a landmark set"
           )
         if conf.outputFormat() != "text" then
           throw new IllegalArgumentException(
@@ -390,6 +405,7 @@ object TDA4jCLI:
       "--select-landmarks" -> conf.selectLandmarks(),
       "--landmarks-file" -> conf.landmarksFile.isSupplied,
       "--representatives" -> conf.representatives(),
+      "--bar-cells" -> conf.barCells(),
       "--output-format" -> conf.outputFormat.isSupplied,
       "--save-result" -> conf.saveResult.isSupplied
     ).collect { case (flag, true) => flag } ++
@@ -519,6 +535,7 @@ object TDA4jCLI:
       "--select-landmarks" -> conf.selectLandmarks(),
       "--landmarks-file" -> conf.landmarksFile.isSupplied,
       "--representatives" -> conf.representatives(),
+      "--bar-cells" -> conf.barCells(),
       "--output-format" -> conf.outputFormat.isSupplied,
       "--save-result" -> conf.saveResult.isSupplied
     ).collect { case (flag, true) => flag } ++
@@ -708,6 +725,13 @@ object TDA4jCLI:
         .mkString(" + ")
     catch case _: UnsupportedOperationException => "(no representative recorded)"
 
+  private def formatCells(result: PersistenceResult, i: Int): String =
+    val born = result.birthCell(i)
+    if born.isEmpty then "(no cells recorded)"
+    else
+      val died = result.deathCell(i)
+      s"birth ${born.mkString("[", ",", "]")} death ${if died.isEmpty then "none" else died.mkString("[", ",", "]")}"
+
   /** Reads the saved diagram of `--distance-to` in format `csv`, `gudhi` or `dipha`. */
   private[cli] def readComparisonDiagram(format: String, path: String): Seq[PersistenceBar[Double, Nothing]] =
     format match
@@ -740,7 +764,9 @@ object TDA4jCLI:
     conf.outputFormat() match
       case "text" =>
         val lines = bars.zipWithIndex.map { case (bar, i) =>
-          if conf.representatives() then s"$bar   rep: ${formatRepresentative(result, i)}" else bar.toString
+          val rep = if conf.representatives() then s"   rep: ${formatRepresentative(result, i)}" else ""
+          val cells = if conf.barCells() then s"   cells: ${formatCells(result, i)}" else ""
+          s"$bar$rep$cells"
         }
         conf.output.toOption match
           case Some(path) =>
@@ -893,6 +919,7 @@ object TDA4jCLI:
           "--distance-to" -> conf.distanceTo.isSupplied,
           "--select-landmarks" -> conf.selectLandmarks(),
           "--representatives" -> conf.representatives(),
+          "--bar-cells" -> conf.barCells(),
           "--output-format" -> conf.outputFormat.isSupplied
         ).collect { case (flag, true) => flag }
         if others.nonEmpty then

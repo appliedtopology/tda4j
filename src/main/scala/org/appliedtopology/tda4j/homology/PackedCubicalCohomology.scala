@@ -351,7 +351,8 @@ open class PackedCubicalCohomologyEngine[C: Field](
         dims(row).toInt,
         ClosedEndpoint(valueOf(births(row))),
         if deaths(row) < 0 then PositiveInfinity() else OpenEndpoint(valueOf(deaths(row))),
-        Some(representative)
+        Some(representative),
+        Some(Involution.Pair(dims(row).toInt, cubeOf(births(row)), Option.when(deaths(row) >= 0)(cubeOf(deaths(row)))))
       )
 
   /** The steps of one reduction in order: the pivot cell reduced by, and the multiple of its column subtracted. */

@@ -2073,4 +2073,23 @@ object TDA4j:
             s"no representative chain was recorded for bar $i; every engine records one for every bar, so this " +
               "indicates a bug in the engine that produced this result, not an expected gap"
           )
-    new PersistenceResult(dims, births, deaths, cycleProvider, boundaryMatrixOf)
+    // The bar's cells: of its dimension (the Ripser engine's packed cells need it to be decoded), and one up.
+    val cellProvider: Int => (Array[Int], Array[Int]) = i =>
+      indexed(i).cells match
+        case Some(Involution.Pair(dim, born, died)) =>
+          (
+            cellVertices(dim, born.asInstanceOf[CellT]),
+            died.fold(Array.emptyIntArray)(cell => cellVertices(dim + 1, cell.asInstanceOf[CellT]))
+          )
+        case None => PersistenceResult.noCells(i)
+    new PersistenceResult(
+      dims,
+      births,
+      deaths,
+      cycleProvider,
+      boundaryMatrixOf,
+      Array.range(0, dims.length),
+      0.0,
+      None,
+      cellProvider
+    )

@@ -83,6 +83,17 @@ class ResultFileSpec extends Specification:
         (loaded.cycleVertices(i).map(_.toSeq).toSeq must beEqualTo(original.cycleVertices(i).map(_.toSeq).toSeq)) and
           (loaded.cycleCoefficients(i).toSeq must beEqualTo(original.cycleCoefficients(i).toSeq))
       }
+    "keep the cells that open and close every bar, the hidden bars' too" >> {
+      val path = tempPath(".json")
+      original.save(path)
+      val keptAll = "\"birthCells\": \\[".r.findFirstIn(read(path)).isDefined
+      (keptAll must beTrue) and
+        (original.birthCell(0).length must beGreaterThan(0)) and
+        forall(0 until original.size()) { i =>
+          (loaded.birthCell(i).toSeq must beEqualTo(original.birthCell(i).toSeq)) and
+            (loaded.deathCell(i).toSeq must beEqualTo(original.deathCell(i).toSeq))
+        }
+    }
     "draw the same plots" >> {
       val loop = original.mostPersistentBar(1)
       (svg(loaded.plotBarcode()) must beEqualTo(svg(original.plotBarcode()))) and
@@ -233,7 +244,19 @@ class ResultFileSpec extends Specification:
       )
       (r.size() must beEqualTo(2)) and (r.death(0) must beEqualTo(Double.PositiveInfinity)) and
         (r.plotDiagram().svg() must contain("<svg")) and
-        (r.cycleVertices(1) must throwA[UnsupportedOperationException])
+        (r.cycleVertices(1) must throwA[UnsupportedOperationException]) and
+        (r.birthCell(1) must beEmpty) and (r.deathCell(1) must beEmpty)
+    }
+    "read the cells of a file that has them, and refuse a list of the wrong length" >> {
+      val head = """{"format": "tda4j-persistence-result", "formatVersion": 1,
+                   | "dimensions": [0, 1], "births": [0, 0.5], "deaths": ["Infinity", 1.5],""".stripMargin
+      val r = TDA4j.loadResult(write(head + """ "birthCells": [[3], [0, 2]], "deathCells": [[], [0, 1, 2]]}"""))
+      (r.birthCell(1).toSeq must beEqualTo(Seq(0, 2))) and (r.deathCell(1).toSeq must beEqualTo(Seq(0, 1, 2))) and
+        (r.deathCell(0) must beEmpty) and
+        (TDA4j.loadResult(write(head + """ "birthCells": [[3]], "deathCells": [[], []]}""")) must
+          throwA[IllegalArgumentException](message = "one per bar")) and
+        (TDA4j.loadResult(write(head + """ "birthCells": [[3], [0, 2]]}""")) must
+          throwA[IllegalArgumentException](message = "come together"))
     }
     "refuse another kind of JSON file, naming the format it reads" >> {
       TDA4j.loadResult(write("""{"dimensions": []}""")) must throwA[IllegalArgumentException](

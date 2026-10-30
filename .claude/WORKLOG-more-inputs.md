@@ -132,3 +132,24 @@ transformation (`applyTakens`, right after the input is read) so it composes wit
 other two; `--takens-max-lag` is for a one-column series and says the chosen delay on stderr. `TDA4j.takensEmbedding`,
 `takensEmbeddingOfVectors`, `delayByAutocorrelation` are new in the facade (two overloads each, stride optional) and in
 the JS exports and `index.d.ts`. Specs compare each CLI line with the facade call of the same arguments (`ModesCLISpec`).
+
+# Bar cells in the facades (2026-10-30)
+
+`PersistenceResult.birthCell(i)`/`deathCell(i)` return a cell in `cycleVertices`' format (empty: none recorded, or an
+essential bar's death). `TDA4j.fromBars` builds them from `bar.cells` with `cellVertices(dim, birth)` and
+`cellVertices(dim + 1, death)` (the Ripser engine's packed cells need the size to decode; mutating the `+ 1` fails the spec).
+Result file: optional `birthCells`/`deathCells` parallel to `dimensions` (all bars, hidden ones too, since a cell is a few
+ints), written only when some bar has a cell; one without the other, or a list of the wrong length, is refused on read;
+format version stays 1 because older readers skip unknown keys. JS `Result.barCells(i)` gives `{birth, death}` with `null`
+for none; CLI `--bar-cells` appends `cells: birth [..] death [..]` to the text lines (refused with the other modes,
+`--distance-to`, `--select-landmarks`, `--plot` and any other output format).
+
+`PackedCubicalCohomologyEngine` now records the cells (`Rows.bar` passes an `Involution.Pair`), so `engine=cohomology` on an
+image has them; the oracle is the loop around a ring of 0 pixels: its death cell is the middle pixel, birth one of its edges.
+`FastCubicalHomologyEngine` (H0 by union-find, H_{d-1} by the dual union-find) and `FastAlphaHomologyEngine` record none;
+the H0 side has the edge and the young root vertex at hand, the dual side the facet and the root pixel, but the tie order
+of each would need its own textbook oracle (#271).
+
+Facade-vs-verb check: for each of `ripser`, `naive`, `chunks`, `cohomology` and each kind of representative the facade's
+cells are the verb's for the same engine. Across engines the pairs differ (ties: all vertices enter at 0, an edge and its
+triangle at one value), which `BarCellsSpec` pins per engine, so no cross-engine equality is asserted.

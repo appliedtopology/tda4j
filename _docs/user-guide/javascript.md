@@ -21,6 +21,7 @@ const result = persistence(points, { maxDimension: 1 });
 
 result.bars;                // [{ dim: 0, birth: 0, death: Infinity }, { dim: 1, birth: 1, death: 1.41... }, ...]
 result.representative(1);   // { cells: [[0, 1], [1, 2], ...], coefficients: [...] }: the loop of the bar result.bars[1]
+result.barCells(1);         // { birth: [0, 1], death: [0, 1, 2] }: the edge that opens that loop and the triangle that closes it
 result.plotBarcode().svg(); // an SVG document, to put in a page or a file
 ```
 

@@ -100,6 +100,7 @@ The diagram goes to standard output or to `--output`.
 | `--output-format` | `text` (default), `csv`, `gudhi`, `dipha`, `perseus` |
 | `--output` | the file to write. Required for every format but `text`. For `perseus` it is a filename prefix: one file per dimension |
 | `--representatives` | with `text`, also print each bar's representative after `rep:`, as `coefficient*[vertices] + ...` |
+| `--bar-cells` | with `text`, also print the cell that opens each bar and the cell that closes it after `cells:`, as `birth [vertices] death [vertices]` (`death none` for an essential bar, `(no cells recorded)` for an engine that records none) |
 
 `perseus` stores integer filtration steps, so it refuses a diagram with non-integer birth or death values rather than
 round them. Cells of an image are given by their coordinates in the doubled grid (see [MATLAB](matlab.md#representatives)).

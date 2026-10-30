@@ -142,6 +142,15 @@ For the witness complex the vertices are point numbers, not landmark numbers. Fo
 coordinates in the doubled grid (a pixel `(i, j)` is `(2i + 1, 2j + 1)`). The [boundary matrix](boundary-matrix.md) of
 the complex is also available.
 
+### The cells that open and close a bar
+
+`birthCell(i)` is the cell whose entry created the class of bar `i`, and `deathCell(i)` the cell whose entry killed it,
+each in the format of one row of `cycleVertices(i)`. The birth cell has the bar's dimension and enters at its birth; the
+death cell is one dimension up and enters at its death. `deathCell(i)` is empty for an essential bar, and both are empty
+for an engine that records no cells (`fast-cubical`, `fast-alpha`: use `engine=cohomology` for an image). Among cells that
+enter at the same value, which one is the birth cell depends on the engine's order of ties; the bars do not. `save`
+writes the cells of every bar to the result file (`birthCells` and `deathCells`).
+
 ## Result objects
 
 ### `PersistenceResult`
@@ -157,6 +166,7 @@ Bars are indexed from 0 in the order of `toArray()`: the reported bars only, as 
 | `persistenceThreshold()` | the persistence a bar had to exceed to be reported (`0`: no threshold) |
 | `toArrayUnfiltered()` | every computed bar, laid out like `toArray()` |
 | `cycleVertices(i)`, `cycleCoefficients(i)` | the representative of bar `i`: its simplices as rows of sorted vertex numbers, and the coefficients (an integer representative over `Z/p`) |
+| `birthCell(i)`, `deathCell(i)` | the cells that open and close bar `i`, as one row of `cycleVertices(i)`; empty for an essential bar's death, and where the engine records no cells |
 | `mostPersistentBar(dimension)` | the index of the reported bar of that dimension with the largest persistence (an essential bar first) |
 | `bottleneckDistance(other, dimension)`, `(other, dimension, groundNorm)` | the bottleneck distance between the bars of that dimension of two results; `groundNorm` is `Inf` (the default) or a finite `p >= 1`. `Inf` if the numbers of essential bars differ |
 | `wassersteinDistance(other, dimension)`, `(…, order)`, `(…, order, groundNorm)` | the Wasserstein distance; `order` defaults to `1` |

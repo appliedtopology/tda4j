@@ -89,6 +89,8 @@ export class Result {
   readonly hiddenCount: number;
   /** The representative of `bars[i]`. */
   representative(i: number): Representative;
+  /** The cells that open and close `bars[i]`, each a cell as in `representative(i).cells`: `birth` is `null` where the engine recorded none, `death` where no cell closes the bar (an essential one). */
+  barCells(i: number): { birth: number[] | null; death: number[] | null };
   bottleneckDistance(other: Result, dimension: number): number;
   wassersteinDistance(other: Result, dimension: number, order?: number): number;
   /** `landscape[k][j]` is level `k` of the persistence landscape at sample `j` of `[tMin, tMax]`. */

@@ -36,7 +36,8 @@ final class PersistenceResult private[matlab] (
   private val boundaryMatrixProvider: () => BoundaryMatrixData,
   private val visible: Array[Int],
   private val threshold: Double,
-  private val source: Option[ResultSource] = None
+  private val source: Option[ResultSource] = None,
+  private val cellProvider: Int => (Array[Int], Array[Int]) = PersistenceResult.noCells
 ):
   /** A result that reports every bar -- what `fromBars` builds; `TDA4j`'s dispatch then narrows it with
     * [[withPersistenceThreshold]].
@@ -86,7 +87,8 @@ final class PersistenceResult private[matlab] (
       boundaryMatrixProvider,
       PersistenceFilter.keptIndices(allBirths, allDeaths, thr),
       thr,
-      source
+      source,
+      cellProvider
     )
 
   /** This result without its zero-length bars (`birth == death`): what every entry point returns unless the
@@ -102,7 +104,8 @@ final class PersistenceResult private[matlab] (
       boundaryMatrixProvider,
       Array.range(0, keep.length),
       0.0,
-      source
+      source,
+      i => cellProvider(keep(i))
     )
 
   def size(): Int = visible.length
@@ -132,6 +135,18 @@ final class PersistenceResult private[matlab] (
     * of the residue, over the reals the value.
     */
   def cycleCoefficients(i: Int): Array[Double] = cycleProvider(visible(i))._2
+
+  /** The cell that opens bar `i`, in the format of one row of [[cycleVertices]]: the cell whose entry creates the
+    * class, of the bar's dimension and with the bar's birth as its filtration value. Empty if the engine behind the
+    * result recorded no cells (and for a result loaded from a file that has none).
+    */
+  def birthCell(i: Int): Array[Int] = cellProvider(visible(i))._1
+
+  /** The cell that closes bar `i`, in the format of one row of [[cycleVertices]]: the cell whose entry kills the class,
+    * one dimension up from the bar's and with the bar's death as its filtration value. Empty for an essential bar, and
+    * where [[birthCell]] is empty.
+    */
+  def deathCell(i: Int): Array[Int] = cellProvider(visible(i))._2
 
   /** All the bars of dimension `dim`, threshold or not, without representatives: what the distances and vectorizations
     * compare (so they do not depend on each result's own threshold).
@@ -316,8 +331,17 @@ final class PersistenceResult private[matlab] (
     * the file can grow with the square of the number of points. Returns the file's absolute path.
     */
   def save(path: String): String =
-    ResultFile
-      .write(path, allDims, allBirths, allDeaths, visible, threshold, k => cycleProvider(visible(k)), source)
+    ResultFile.write(
+      path,
+      allDims,
+      allBirths,
+      allDeaths,
+      visible,
+      threshold,
+      k => cycleProvider(visible(k)),
+      cellProvider,
+      source
+    )
 
   // ---------------------------------------------------------------------------------------------------------------
   // plots
@@ -337,7 +361,8 @@ final class PersistenceResult private[matlab] (
       boundaryMatrixProvider,
       visible,
       threshold,
-      Some(s)
+      Some(s),
+      cellProvider
     )
 
   private def barAt(k: Int): PersistenceBar[Double, Nothing] =
@@ -519,3 +544,7 @@ final class PersistenceResult private[matlab] (
           "compute cycles (representativeType cycles)"
       )
     Plot.cycle3D(ps, simplicialTerms(i), representativeTitle(i))
+
+private[matlab] object PersistenceResult:
+  /** The cells of a result whose engine recorded none: both empty. */
+  val noCells: Int => (Array[Int], Array[Int]) = _ => (Array.emptyIntArray, Array.emptyIntArray)

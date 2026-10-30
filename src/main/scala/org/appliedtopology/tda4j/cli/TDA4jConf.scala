@@ -46,6 +46,11 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     default = Some(false),
     descr = "also print each bar's representative (--output-format=text only)"
   )
+  val barCells: ScallopOption[Boolean] = opt[Boolean](
+    name = "bar-cells",
+    default = Some(false),
+    descr = "also print the cell that opens each bar and the cell that closes it (--output-format=text only)"
+  )
 
   val complex: ScallopOption[String] =
     opt[String](name = "complex", descr = "vr (default), alpha, cech, witness, dtm-rips, dtm-alpha, or sparse-rips")

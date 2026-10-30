@@ -135,8 +135,10 @@ loop.birthCell     // Some(a Simplex of two points): the edge whose length is th
 loop.deathCell     // Some(a Simplex of three points): the triangle whose entry fills the loop in
 ```
 
-Cells are recorded by every engine that computes on simplices, and are `None` for the fast cubical engine and for
-images. Among cells that enter at the same value, which one is *the* birth cell depends on the order the engine breaks
+Cells are recorded by every engine except the fast ones (`FastCubical`, which `Persistence` chooses for images of
+dimension 2 and up, and `FastAlpha`), whose bars have `cells = None`; for an image, ask for `engine =
+Engine.Cohomology` to get them, as cubes. The same cells are in the results of [MATLAB and Java](matlab.md#the-cells-that-open-and-close-a-bar),
+[JavaScript](javascript.md), the [command line](cli.md) and the saved result file. Among cells that enter at the same value, which one is *the* birth cell depends on the order the engine breaks
 ties in (a bar's endpoints, which do not, are the same for every engine); in degree 0 all the vertices enter at 0, so
 the vertex that is born where a component starts is a matter of that convention.
 
