@@ -201,6 +201,9 @@ object TDA4jCLI:
       if conf.eulerCurve() then
         writeEulerCurve(conf, options, format, resolved, out)
         0
+      else if conf.persistentLaplacian() then
+        writePersistentLaplacian(conf, options, format, resolved, out)
+        0
       else if conf.bootstrapBand() then
         writeBootstrapBand(conf, options, format, resolved, out)
         0
@@ -495,6 +498,7 @@ object TDA4jCLI:
   private[cli] def checkModes(conf: TDA4jConf): Unit =
     val chosen = Seq(
       "--euler-curve" -> conf.eulerCurve(),
+      "--persistent-laplacian" -> conf.persistentLaplacian(),
       "--bootstrap-band" -> conf.bootstrapBand(),
       "--tomato" -> conf.tomato(),
       "--inclusion-of" -> conf.inclusionOf.isSupplied
@@ -502,6 +506,15 @@ object TDA4jCLI:
     if chosen.size > 1 then
       throw new IllegalArgumentException(s"${chosen.mkString(" and ")} are modes of their own: choose one")
     val strays = Seq(
+      (
+        "--persistent-laplacian",
+        !conf.persistentLaplacian(),
+        Seq(
+          "--laplacian-dimension" -> conf.laplacianDimension.isSupplied,
+          "--laplacian-from" -> conf.laplacianFrom.isSupplied,
+          "--laplacian-to" -> conf.laplacianTo.isSupplied
+        )
+      ),
       (
         "--bootstrap-band",
         !conf.bootstrapBand(),
@@ -654,6 +667,49 @@ object TDA4jCLI:
         s"alpha=${band.alpha()}",
         s"width=${band.width()}",
         s"threshold=${band.threshold()}"
+      ),
+      out
+    )
+
+  /** `--persistent-laplacian`: the persistent Betti number, spectral gap and eigenvalues of the Laplacian of the
+    * Vietoris-Rips complex of a point cloud or distance matrix.
+    */
+  private[cli] def writePersistentLaplacian(
+    conf: TDA4jConf,
+    options: Array[String],
+    format: String,
+    resolved: ResolvedInput,
+    out: java.io.PrintStream
+  ): Unit =
+    refuseOtherFlags(
+      "--persistent-laplacian",
+      "computes the Laplacian of a Vietoris-Rips complex",
+      "the --laplacian-* flags",
+      conf,
+      options,
+      Set.empty
+    )
+    def required[T](flag: String, value: ScallopOption[T]): T =
+      value.toOption.getOrElse(throw new IllegalArgumentException(s"--persistent-laplacian needs $flag"))
+    val dimension = required("--laplacian-dimension", conf.laplacianDimension)
+    val (from, to) = (required("--laplacian-from", conf.laplacianFrom), required("--laplacian-to", conf.laplacianTo))
+    val laplacian = resolved match
+      case ResolvedInput.Points(points)       => TDA4j.persistentLaplacianFromPoints(points, dimension, from, to)
+      case ResolvedInput.Distances(distances) =>
+        TDA4j.persistentLaplacianFromDistanceMatrix(distances, dimension, from, to)
+      case _ =>
+        throw new IllegalArgumentException(
+          s"--persistent-laplacian needs a point cloud or a distance matrix; --input-format=$format reads something else"
+        )
+    writeLines(
+      conf,
+      Seq(
+        s"dimension=$dimension",
+        s"from=$from",
+        s"to=$to",
+        s"betti-number=${laplacian.bettiNumber()}",
+        s"spectral-gap=${if laplacian.hasSpectralGap() then laplacian.spectralGap().toString else "none"}",
+        s"eigenvalues=${laplacian.eigenvalues().mkString(",")}"
       ),
       out
     )

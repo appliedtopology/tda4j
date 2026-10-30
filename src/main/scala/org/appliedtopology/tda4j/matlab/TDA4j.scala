@@ -601,6 +601,40 @@ object TDA4j:
       new EulerCurveResult(EulerCharacteristicCurve.vietorisRips(metricSpace, maxSimplexDimension, maxFiltrationValue))
     }
 
+  /** The persistent Laplacian of the Vietoris-Rips complex of a point cloud, on the simplices of dimension `dimension`
+    * that have entered by `from`, for the complex at `to` (`from <= to`; the filtration value is the scale, the larger
+    * of the distances in a simplex): see [[PersistentLaplacianResult]] and `PersistentLaplacian`.
+    */
+  def persistentLaplacianFromPoints(
+    points: Array[Array[Double]],
+    dimension: Int,
+    from: Double,
+    to: Double
+  ): PersistentLaplacianResult =
+    validatePoints(points)
+    persistentLaplacian(EuclideanMetricSpace(points), dimension, from, to)
+
+  /** [[persistentLaplacianFromPoints]] for a finite metric space given as its full matrix of distances. */
+  def persistentLaplacianFromDistanceMatrix(
+    distances: Array[Array[Double]],
+    dimension: Int,
+    from: Double,
+    to: Double
+  ): PersistentLaplacianResult =
+    validateSquare(distances)
+    persistentLaplacian(explicitMetricSpace(distances), dimension, from, to)
+
+  private def persistentLaplacian(
+    metricSpace: FiniteMetricSpace[Int],
+    dimension: Int,
+    from: Double,
+    to: Double
+  ): PersistentLaplacianResult =
+    require(dimension >= 0, s"persistentLaplacian: dimension must be 0 or more, got $dimension")
+    // The complex needs no simplex that enters after `to`.
+    val complex = VietorisRips(metricSpace, maxDimension = dimension, maxFiltrationValue = to)
+    new PersistentLaplacianResult(PersistentLaplacian(complex, dimension, from, to))
+
   private val bootstrapBandKeys =
     Set("dimension", "rounds", "alpha", "seed", "subsamplesize", "prime", "maxfiltrationvalue", "threads")
 

@@ -401,6 +401,23 @@ translating(EulerCurve)
 
 
 @dataclass(frozen=True, eq=False)
+class PersistentLaplacian:
+    """The persistent Laplacian of the Vietoris-Rips complex (see ``persistent_laplacian``): ``matrix`` is symmetric on
+    the simplices ``cells`` (tuples of vertex numbers) that have entered by ``start``; its kernel has the dimension
+    ``betti_number``, the number of classes of that dimension at ``start`` still there at ``stop``. ``eigenvalues`` are
+    ascending and ``spectral_gap`` is the smallest one that is not zero (``None`` if all are)."""
+
+    dimension: int
+    start: float
+    stop: float
+    cells: list
+    matrix: np.ndarray
+    eigenvalues: np.ndarray
+    betti_number: int
+    spectral_gap: object
+
+
+@dataclass(frozen=True, eq=False)
 class BootstrapBand:
     """The resampling confidence band of the bars of one degree: a bar that persists longer than ``threshold`` survives
     the resampling at level ``alpha``; ``distances`` are the bottleneck distances the rounds measured."""

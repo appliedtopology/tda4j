@@ -229,3 +229,16 @@ the Künneth theorem gives an oracle that uses the engines.
   (`q - p`), so comparing with `homDimension` needs `.filter(_.dim == 0)`.
 - Not done: the product's bars through the facades (`ProductCell` has no vertex-array form). Facade `productBars` works on rows.
 
+## Persistent Laplacian (2026-10-30)
+
+- Formula used (Wang-Nguyen-Wei, Memoli-Wan-Wang): with the rows of `partial_{k+1}` of `K_t` split into those of `K_s` (`D`) and
+  those of `K_t \ K_s` (`R`), `Delta = D (1 - R^+ R) D^T + A^T A`. Implemented as `Delta = X X^T` with `X = [A^T | D (1 - V_r V_r^T)]`,
+  `V_r` the right singular vectors of `R` above the SVD tolerance (`DenseMatrix.svd`, one-sided Jacobi), so eigenvalues are squared
+  singular values of `X` and the kernel is `n - rank X`: no squaring of the condition number.
+- Oracles: kernel dimension = the engines' barcode count (`b <= s`, `t < d`) for every pair of critical values, three degrees, four
+  point clouds; entries = the Schur complement `DD^T - D R^T (R R^T)^-1 R D^T + A^T A` solved by Gaussian elimination in the test on
+  boundary matrices it builds itself (more than 100 instances compared, skipping those with a singular `R R^T`); the hollow
+  triangle (0, 3, 3); and the three-vertex example in which projecting is the whole point (without it the kernel has the wrong size).
+  5 mutants (no projection, no down part, `<` for `<=` at either value, rank off by one) all fail.
+- Limits: dense, real coefficients only; a spectrum along a whole filtration is a loop over `(from, to)` that recomputes each time.
+

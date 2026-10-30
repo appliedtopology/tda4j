@@ -175,6 +175,18 @@ file as `--output-format=csv` writes it. See [products, Hom and duals](barcode-p
 
 `--barcode-with` is the second barcode.
 
+## The persistent Laplacian
+
+`--persistent-laplacian` writes the [persistent Laplacian](persistent-laplacian.md) of the Vietoris-Rips complex of a point
+cloud or a distance matrix, instead of the diagram, as `key=value` lines: `betti-number`, `spectral-gap` (`none` if every
+eigenvalue is zero) and `eigenvalues`, smallest first.
+
+| flag | meaning |
+|---|---|
+| `--laplacian-dimension` | the dimension of the simplices the matrix is on (required) |
+| `--laplacian-from` | the scale the simplices are taken at (required) |
+| `--laplacian-to` | the scale of the complex the chains live in, at least `--laplacian-from` (required) |
+
 ## The Euler characteristic curve
 
 `--euler-curve` writes the [Euler characteristic curve](vectorization.md#the-euler-characteristic-curve) of the

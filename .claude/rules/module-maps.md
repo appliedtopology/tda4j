@@ -9,6 +9,8 @@ paths:
   - "src/main/scala/org/appliedtopology/tda4j/cells/ProductCell.scala"
   - "src/test/scala/org/appliedtopology/tda4j/barcode/BarcodeProductsSpec.scala"
   - "src/test/scala/org/appliedtopology/tda4j/streams/ProductComplexSpec.scala"
+  - "src/main/scala/org/appliedtopology/tda4j/homology/PersistentLaplacian.scala"
+  - "src/test/scala/org/appliedtopology/tda4j/homology/PersistentLaplacianSpec.scala"
 ---
 
 # Maps of persistence modules: `MapAlgebra`, `Barcode.image/kernel/cokernel`, `PersistenceMap`
@@ -62,3 +64,12 @@ paths:
   the pair of positions as tie-break, and cuts at `min(homologyDegreeLimit) + 1`. Its bars carry `ProductCell` chains, which no facade
   turns into vertex arrays: the interfaces other than Scala get the barcode algebra on rows, not the product complex.
 - Chosen: names `Barcode.kunneth` (not `product`), `ProductCell`/`ProductComplex` (a top-level `Product` would shadow `scala.Product`).
+
+## Persistent Laplacian (`homology/PersistentLaplacian.scala`; `WORKLOG-more-inputs.md`, "Persistent Laplacian")
+
+- `Delta_k^{s,t} = D (1 - R^+ R) D^T + A^T A` (D: boundary rows in `K_s`, R: rows entering after `s`, A: boundary of `K_s`'s k-cells);
+  built as `X X^T` from `DenseMatrix.svd`, never by forming and inverting `R R^T`. Kernel dimension = `beta_k^{s,t}` = bars with `b <= s`,
+  `t < d`; `from`/`to` compare with `<=`, so the cells are those with value `<= s` (a `<` here is the first thing the barcode oracle catches).
+- The chains are those of `K_t` with boundary in `K_s`, NOT the cells of `K_s`: the projector is the whole content (`PersistentLaplacianSpec`,
+  the three-vertex example). Real coefficients, dense matrices, orthonormal cell basis; the stream needs its cells one dimension up.
+

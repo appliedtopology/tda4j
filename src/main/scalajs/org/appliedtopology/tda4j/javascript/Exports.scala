@@ -290,6 +290,30 @@ object Exports:
   def delayByAutocorrelation(series: js.Array[Double], maxLag: Int): Int =
     guarded(TDA4j.delayByAutocorrelation(series.toArray, maxLag))
 
+  /** The persistent Laplacian of the Vietoris-Rips complex of a point cloud, on the simplices of dimension `dimension`
+    * that have entered by `from`, for the complex at `to` (`from <= to`).
+    */
+  @JSExportTopLevel("persistentLaplacian")
+  def persistentLaplacian(
+    points: js.Array[js.Array[Double]],
+    dimension: Int,
+    from: Double,
+    to: Double
+  ): PersistentLaplacian =
+    guarded(PersistentLaplacian(TDA4j.persistentLaplacianFromPoints(matrix(points), dimension, from, to)))
+
+  /** [[persistentLaplacian]] for a finite metric space given as its full matrix of distances. */
+  @JSExportTopLevel("persistentLaplacianFromDistances")
+  def persistentLaplacianFromDistances(
+    distances: js.Array[js.Array[Double]],
+    dimension: Int,
+    from: Double,
+    to: Double
+  ): PersistentLaplacian =
+    guarded(
+      PersistentLaplacian(TDA4j.persistentLaplacianFromDistanceMatrix(matrix(distances), dimension, from, to))
+    )
+
   /** The barcode of the homology of the product of two filtered complexes from the barcodes of the factors (rows
     * `[dimension, birth, death]`): a cell of the product enters at the larger (`filtration: "max"`, the default) or the
     * sum (`"sum"`) of the values of its two factors.
@@ -510,6 +534,47 @@ final class EulerCurve private[javascript] (underlying: matlab.EulerCurveResult)
 
 object EulerCurve:
   private[javascript] def apply(underlying: matlab.EulerCurveResult): EulerCurve = new EulerCurve(underlying)
+
+/** The persistent Laplacian of one dimension and one pair of filtration values: a symmetric matrix on the simplices
+  * that have entered by `from`, whose kernel has the dimension of the persistent Betti number from `from` to `to`.
+  */
+final class PersistentLaplacian private[javascript] (underlying: matlab.PersistentLaplacianResult):
+
+  /** The dimension of the simplices the matrix is on. */
+  @JSExport
+  def dimension: Int = underlying.dimension()
+
+  /** The simplices that have entered by this value are the rows and columns. */
+  @JSExport
+  def from: Double = underlying.start()
+
+  /** The complex at this value is the one the chains live in. */
+  @JSExport
+  def to: Double = underlying.stop()
+
+  /** The simplices as arrays of vertex numbers, one for each row and column of `matrix`. */
+  @JSExport
+  def cells: js.Array[js.Array[Int]] = js.Array(underlying.cells().map(c => js.Array(c*))*)
+
+  /** The matrix, as an array of rows. */
+  @JSExport
+  def matrix: js.Array[js.Array[Double]] = js.Array(underlying.matrix().map(row => js.Array(row*))*)
+
+  /** The eigenvalues, smallest first. */
+  @JSExport
+  def eigenvalues: js.Array[Double] = js.Array(underlying.eigenvalues()*)
+
+  /** The dimension of the kernel: the persistent Betti number from `from` to `to`. */
+  @JSExport
+  def bettiNumber: Int = underlying.bettiNumber()
+
+  /** The smallest eigenvalue that is not zero, `undefined` if there is none. */
+  @JSExport
+  def spectralGap: js.UndefOr[Double] = if underlying.hasSpectralGap() then underlying.spectralGap() else js.undefined
+
+object PersistentLaplacian:
+  private[javascript] def apply(underlying: matlab.PersistentLaplacianResult): PersistentLaplacian =
+    new PersistentLaplacian(underlying)
 
 /** The result of a computation: the bars, the representatives, and the plots. */
 final class Result private[javascript] (underlying: PersistenceResult):

@@ -389,6 +389,32 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     descr = "for --euler-curve: the largest simplex dimension counted (default: 2)"
   )
 
+  // The persistent Laplacian: a mode of its own. Declared last and without short flags, as above.
+  val persistentLaplacian: ScallopOption[Boolean] = opt[Boolean](
+    name = "persistent-laplacian",
+    noshort = true,
+    default = Some(false),
+    descr = "instead of the diagram, write the persistent Laplacian of the Vietoris-Rips complex of a point cloud or " +
+      "distance matrix, from --laplacian-from to --laplacian-to, in --laplacian-dimension: its persistent Betti " +
+      "number, the smallest eigenvalue that is not zero and all the eigenvalues, as key=value lines"
+  )
+  val laplacianDimension: ScallopOption[Int] = opt[Int](
+    name = "laplacian-dimension",
+    noshort = true,
+    descr = "for --persistent-laplacian: the dimension of the simplices the Laplacian is on (required)"
+  )
+  val laplacianFrom: ScallopOption[Double] = opt[Double](
+    name = "laplacian-from",
+    noshort = true,
+    descr = "for --persistent-laplacian: the scale the simplices are taken at (required)"
+  )
+  val laplacianTo: ScallopOption[Double] = opt[Double](
+    name = "laplacian-to",
+    noshort = true,
+    descr =
+      "for --persistent-laplacian: the scale of the complex the chains live in, at least --laplacian-from (required)"
+  )
+
   // The resampling band and ToMATo: modes of their own, like the Euler curve. Declared last and without short flags.
   val bootstrapBand: ScallopOption[Boolean] = opt[Boolean](
     name = "bootstrap-band",

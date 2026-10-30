@@ -26,6 +26,7 @@ NOT_WRAPPED = {
     "CircularCoordinatesResult": {"hasCoordinate": "nan in theta"},
     "ToroidalCoordinatesResult": {"hasCoordinate": "nan in theta"},
     "EulerCurveResult": {},
+    "PersistentLaplacianResult": {},
     "BootstrapBandResult": {},
     "LandmarkSelectionResult": {},
 }

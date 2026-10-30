@@ -86,6 +86,17 @@ class ExportsSpec extends Specification:
         (Exports.productBars(segment, segment, "mean") must throwA[js.JavaScriptException])
     }
 
+  "persistentLaplacian" should
+    "have the square's loop at 1 in its kernel and nothing there once the diagonals come in" >> {
+      val square = js.Array(js.Array(0.0, 0.0), js.Array(1.0, 0.0), js.Array(1.0, 1.0), js.Array(0.0, 1.0))
+      val alive = Exports.persistentLaplacian(square, 1, 1.0, 1.0)
+      val gone = Exports.persistentLaplacian(square, 1, 1.0, math.sqrt(2.0))
+      (alive.bettiNumber must beEqualTo(1)) and (gone.bettiNumber must beEqualTo(0)) and
+        (alive.eigenvalues.length must beEqualTo(4)) and (alive.matrix.length must beEqualTo(4)) and
+        (alive.cells.length must beEqualTo(4)) and (alive.spectralGap.isDefined must beTrue) and
+        (Exports.persistentLaplacian(square, 1, 2.0, 1.0) must throwA[js.JavaScriptException])
+    }
+
   "relativePersistence" should {
     "drop the essential bar of degree 0 modulo one point, and take a distance matrix" >> {
       val points = circle(12)

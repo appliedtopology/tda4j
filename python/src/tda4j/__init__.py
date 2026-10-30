@@ -37,6 +37,7 @@ from ._results import (
     Landmarks,
     MapDegree,
     MapResult,
+    PersistentLaplacian,
     Plot,
     Representative,
     Result,
@@ -58,6 +59,7 @@ __all__ = [
     "Landmarks",
     "MapDegree",
     "MapResult",
+    "PersistentLaplacian",
     "Plot",
     "Representative",
     "Result",
@@ -85,6 +87,8 @@ __all__ = [
     "persistence_from_image",
     "persistence_from_landmarks",
     "persistence_from_relation",
+    "persistent_laplacian",
+    "persistent_laplacian_from_distances",
     "product_bars",
     "relative_persistence",
     "relative_persistence_from_distances",
@@ -360,6 +364,42 @@ def delay_by_autocorrelation(series, max_lag: int) -> int:
     """The first lag in ``1..max_lag`` where the autocorrelation of the series is zero or negative: a first guess for the
     ``delay`` of ``takens_embedding``."""
     return int(_java().delayByAutocorrelation(_jvm.doubles_in(series), int(max_lag)))
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# the persistent Laplacian
+# ---------------------------------------------------------------------------------------------------------------------
+
+def _laplacian(java) -> PersistentLaplacian:
+    return PersistentLaplacian(
+        dimension=int(java.dimension()),
+        start=float(java.start()),
+        stop=float(java.stop()),
+        cells=[tuple(int(v) for v in cell) for cell in java.cells()],
+        matrix=_jvm.matrix_out(java.matrix(), int(java.size())),
+        eigenvalues=_jvm.vector_out(java.eigenvalues()),
+        betti_number=int(java.bettiNumber()),
+        spectral_gap=float(java.spectralGap()) if java.hasSpectralGap() else None,
+    )
+
+
+@translating
+def persistent_laplacian(points, dimension: int, start: float, stop: float) -> PersistentLaplacian:
+    """The persistent Laplacian of the Vietoris-Rips complex of a point cloud: a symmetric matrix on the simplices of the
+    given dimension that have entered by the scale ``start``, for the complex at the scale ``stop`` (``start <= stop``).
+    Its kernel has the dimension of the persistent Betti number: the classes of that dimension at ``start`` that are still
+    there at ``stop``; the smallest eigenvalue that is not zero is its ``spectral_gap``."""
+    return _laplacian(_java().persistentLaplacianFromPoints(_jvm.points_in(points), int(dimension), float(start), float(stop)))
+
+
+@translating
+def persistent_laplacian_from_distances(distances, dimension: int, start: float, stop: float) -> PersistentLaplacian:
+    """``persistent_laplacian`` for a matrix of distances."""
+    return _laplacian(
+        _java().persistentLaplacianFromDistanceMatrix(
+            _jvm.points_in(distances, "distances"), int(dimension), float(start), float(stop)
+        )
+    )
 
 
 # ---------------------------------------------------------------------------------------------------------------------

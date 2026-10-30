@@ -271,6 +271,27 @@ export function tomatoDiagram(points: number[][], k: number): number[][];
 export function takensEmbedding(series: number[], dimension: number, delay?: number, stride?: number): number[][];
 /** `takensEmbedding` for a series of vectors, one array per time step: a point is the `dimension` arrays of a window, one after the other. */
 export function takensEmbeddingOfVectors(series: number[][], dimension: number, delay?: number, stride?: number): number[][];
+/** The persistent Laplacian of one dimension and one pair of filtration values: a symmetric matrix on the simplices that have entered by `from`, whose kernel has the dimension of the persistent Betti number from `from` to `to`. */
+export class PersistentLaplacian {
+  /** The dimension of the simplices the matrix is on. */
+  readonly dimension: number;
+  readonly from: number;
+  readonly to: number;
+  /** The simplices as arrays of vertex numbers, one for each row and column of `matrix`. */
+  readonly cells: number[][];
+  readonly matrix: number[][];
+  /** The eigenvalues, smallest first. */
+  readonly eigenvalues: number[];
+  /** The dimension of the kernel: the persistent Betti number from `from` to `to`. */
+  readonly bettiNumber: number;
+  /** The smallest eigenvalue that is not zero; `undefined` if there is none. */
+  readonly spectralGap: number | undefined;
+}
+
+/** The persistent Laplacian of the Vietoris-Rips complex of a point cloud, on the simplices of dimension `dimension` that have entered by `from`, for the complex at `to` (`from <= to`). */
+export function persistentLaplacian(points: number[][], dimension: number, from: number, to: number): PersistentLaplacian;
+/** `persistentLaplacian` for a finite metric space given as its full matrix of distances. */
+export function persistentLaplacianFromDistances(distances: number[][], dimension: number, from: number, to: number): PersistentLaplacian;
 /** The barcode of the homology of the product of two filtered complexes from the barcodes of the factors, rows `[dimension, birth, death]` (every dimension of each): a cell of the product enters at the larger (`"max"`, the default) or the sum (`"sum"`) of the values of its two factors. */
 export function productBars(first: number[][], second: number[][], filtration?: "max" | "sum"): number[][];
 /** The internal Hom of two barcodes, rows `[dimension, birth, death]`: the module of maps from the first to the second shifted by `t`; a bar of dimension `p` and one of dimension `q` give a bar of dimension `q - p`. */
