@@ -42,8 +42,13 @@ none), the top degree of the bars (`maxDimension`, default 2) and the prime of t
 bars have representatives: a cycle in the complex at the bar's birth.
 
 ```scala 3
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+
+val triangle = Seq(Simplex(0), Simplex(1), Simplex(2), Simplex(0, 1), Simplex(1, 2), Simplex(0, 2))
+val diagram = ZigzagPersistence(triangle.map(ZigzagStep.Add(_)))
 import diagram.given
-val loop = diagram.bars.filter(_.dim == 1).map(_.representative)
+val loops = diagram.bars.filter(_.dim == 1).map(_.representative)
 ```
 
 ## A list of complexes
@@ -54,6 +59,9 @@ position of its own: `K₀ ⊂ K₀ ∪ K₁ ⊃ K₁`. This is the usual way to
 each time (a Vietoris-Rips complex at a fixed scale, say) on vertices that keep their number from one time to the next.
 
 ```scala 3
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+
 val first  = Seq(Simplex(0), Simplex(1), Simplex(2), Simplex(0, 1), Simplex(1, 2))
 val second = Seq(Simplex(0), Simplex(1), Simplex(2), Simplex(1, 2), Simplex(0, 2))
 val changing = ZigzagPersistence.ofComplexes(Seq(first, second), link = ZigzagPersistence.Link.Union)

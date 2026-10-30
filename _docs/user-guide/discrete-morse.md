@@ -49,6 +49,12 @@ computed with cycles, into a chain of the original complex: the cycle with the s
 no later than the bar was born. Cocycles are not lifted yet.
 
 ```scala 3
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+
+val grid = for x <- 0 until 4; y <- 0 until 4 yield Array(x.toDouble, y.toDouble)
+val morse = DiscreteMorse(VietorisRips(EuclideanMetricSpace(grid.toArray), maxDimension = 2))
+
 val cycles = Persistence(morse.stream, maxDimension = 1, representatives = Representatives.Cycles)
 import cycles.given
 val loops = cycles.bars.filter(_.dim == 1).map(bar => morse.lift(bar.representative))
