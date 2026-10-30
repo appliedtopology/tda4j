@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/scripts/session-start.sh",
+            "timeout": 120,
+            "statusMessage": "Turning on the pre-commit format check"
+          }
+        ]
+      }
+    ]
+  }
+}
