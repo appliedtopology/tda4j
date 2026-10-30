@@ -54,7 +54,7 @@ the limit; `FastCubicalHomologyEngine`/`FastAlphaHomologyEngine` take `maxDimens
    tree (`ChainPackedRipserReference`) term for term, essentials included (`PackedWorkingColumnSpec`): re-run it after any
    change to the reduction (`WORKLOG-vr-working-column.md`). The heap needs ONE diameter per simplex: non-trusted metrics
    are read as `d(max, min)` (else an asymmetric one grows the column until OOM); Euclidean/Explicit are read as given
-   (canonicalizing breaks the distance cache's row-wise walk). Edge-block units on threads are exact (#192, #194);
+   (canonicalizing breaks the distance cache's row-wise walk). Edge-block units on threads are exact (#192, #194); their serial rest is H0's reduction and degree 1's deferred columns, which a binary tree over the units does not shorten (`WORKLOG-tree-merge.md`);
    `Engine.ParallelRipser` runs them from the verb (`Auto` picks it with `Parallel.threads > 1` when it applies: prime
    <= 46,000, no `includeZeroLength`; edge ranks are dense up to `DenseRankLimit` = 4,096 points, sorted neighbour lists
    above: `WORKLOG-sparse-ranks.md`; facade and CLI likewise for an unset `engine`; `threads` runs under
