@@ -201,14 +201,18 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
         Ordering.by[CellT, FiltrationT](cellFv).orElse(theStream.filtrationOrdering)
 
       val topDim = grouped.keys.max
-      // A d-cell forces its faces to exist, so a gap means a malformed stream; without this check a missing
-      // dimension would silently reduce as an empty one.
+      // A d-cell of a face-closed complex forces its faces to exist, so a dimension with no cells under cells that have
+      // a boundary means a malformed stream; without this check a missing dimension would silently reduce as an empty
+      // one. A Morse complex (DiscreteMorse) can have no critical cell in a dimension and still have cells above it,
+      // whose Morse boundary is then empty: that is a gap the reduction handles as an empty dimension.
+      val gaps = (0 until topDim).filterNot(grouped.contains)
       require(
-        grouped.keySet == (0 to topDim).toSet,
-        s"CellularCohomologyEngine requires a dimension-contiguous cell set (0..$topDim, no gaps), got " +
-          s"dimensions ${grouped.keySet.toSeq.sorted.mkString(", ")}"
+        gaps.forall(d => grouped.getOrElse(d + 1, Vector.empty).forall(_.boundary[CoefficientT].isEmpty)),
+        s"CellularCohomologyEngine requires a dimension-contiguous cell set (0..$topDim, no gaps) unless the cells above " +
+          s"a gap have no boundary, got dimensions ${grouped.keySet.toSeq.sorted.mkString(", ")}"
       )
-      val cellsByDim: IndexedSeq[Vector[CellT]] = (0 to topDim).map(d => grouped(d).sorted(using cohomologyOrdering))
+      val cellsByDim: IndexedSeq[Vector[CellT]] =
+        (0 to topDim).map(d => grouped.getOrElse(d, Vector.empty).sorted(using cohomologyOrdering))
 
       val idOrdering: Ordering[Int] = Ordering.Int // ascending number = oldest first = a column's leading term
       val fr = summon[CoefficientT is Field]
