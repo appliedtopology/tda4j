@@ -372,6 +372,8 @@ object ParallelPackedCohomology:
     val logs = mutable.LongMap.empty[Log]
     val essential = mutable.ArrayBuffer.empty[Long]
     val essentialBlocks = mutable.ArrayBuffer.empty[Int]
+    // Degree 0 only: the cocycle of the bar a vertex's column opens, the vertices of its component when it dies.
+    var components: Long => Map[Long, Int] = null
 
   open class Result(val space: Space, val degrees: Vector[Degree]):
     def bars: Vector[(Int, Double, Double)] = degrees.flatMap(_.bars).sorted
@@ -719,7 +721,8 @@ object ParallelPackedCohomology:
       val target = math.max(1, level.length / math.max(1, threads * unitsPerThread))
       val unitsB = mutable.ArrayBuffer.empty[WorkUnit]
       var start = 0
-      while start < level.length do
+      // Degree 0 is not reduced: its pairs are the elder rule's, by union-find over the edges (below).
+      while d > 0 && start < level.length do
         var end = math.min(level.length, start + target)
         if threads * unitsPerThread == 1 then end = level.length
         while end < level.length && levelBlock(end) == levelBlock(end - 1) do end += 1
@@ -792,6 +795,47 @@ object ParallelPackedCohomology:
       stats.claimed1 = units.map(_.claimed).sum
       stats.adds1 = units.map(_.additions).sum
 
+      // Owners claimed after phase 1 (deferred columns, or degree 0's pairs), for a pivot whose block is in no unit.
+      val late = mutable.LongMap.empty[Owner]
+      val latePivots = mutable.ArrayBuilder.ofLong()
+      if d == 0 then
+        // The elder rule over the edges in filtration order: the older root (the larger vertex) lives, the younger dies
+        // paired with the edge that joins them. These are the pairs of the reduction of degree 0, in the same order of
+        // edges; the bar's cocycle is the indicator of the dying component.
+        val t0 = System.nanoTime()
+        val forest = MergeForest(n)
+        val pair = new Array[Int](2)
+        var r = 0
+        while r < edgeA.length do
+          val ra = forest.find(edgeA(r))
+          val rb = forest.find(edgeB(r))
+          if ra != rb then
+            val (dead, alive) = if ra < rb then (ra, rb) else (rb, ra)
+            forest.kill(dead, alive, r)
+            pair(0) = edgeA(r)
+            pair(1) = edgeB(r)
+            val row = key(r + 1, indexOf(pair, 2))
+            val column = key(0, dead.toLong)
+            late(row) = Owner(column, 0, null, null, null, r + 1)
+            latePivots += row
+            if keepPairs then degree.pairs += ((column, row))
+          r += 1
+        forest.seal()
+        var v = 0
+        while v < n do
+          if forest.diedAt(v) == Int.MaxValue then
+            degree.essential += key(0, v.toLong)
+            degree.essentialBlocks += 0
+            if keepPairs then degree.pairs += ((key(0, v.toLong), -1L))
+          v += 1
+        if cocycles then
+          // `column` is a vertex's key; the death of the bar it opens is the merge that killed it.
+          degree.components = column =>
+            val v = index(column).toInt
+            forest.members(v, forest.diedAt(v)).map(w => key(0, w.toLong) -> 1).toMap
+        stats.units = 1
+        stats.nanos1 = System.nanoTime() - t0
+
       // Phase 2a: the deferred columns, in parallel, while their pivots belong to the units' pairs.
       // Youngest first: by block, then key, descending.
       val deferred = units
@@ -829,8 +873,6 @@ object ParallelPackedCohomology:
 
       // Phase 2b: one by one, youngest first, against every owner so far.
       val t3 = System.nanoTime()
-      val late = mutable.LongMap.empty[Owner]
-      val latePivots = mutable.ArrayBuilder.ofLong()
       val lookupAll: (Long, Int) => Owner | Null = (row, rowBlock) =>
         val o = lookupUnits(row, rowBlock)
         if o != null then o else late.getOrNull(row)
@@ -954,17 +996,19 @@ object ParallelPackedCohomology:
 
   /** V for a column: the column plus factor * V(added) over its log, recursively. */
   def cocycle(degree: Degree, p: Int, column: Long): Map[Long, Int] =
-    val memo = mutable.LongMap.empty[Map[Long, Int]]
-    def v(c: Long): Map[Long, Int] = memo.get(c) match
-      case Some(known) => known
-      case None        =>
-        val result = degree.logs.get(c) match
-          case None      => Map(c -> 1)
-          case Some(log) =>
-            val acc = mutable.LongMap(c -> 1)
-            val (added, factors) = (log.columns, log.multipliers)
-            for i <- added.indices; (e, x) <- v(added(i)) do acc(e) = (acc.getOrElse(e, 0) + factors(i) * x) % p
-            acc.filter(_._2 != 0).toMap
-        memo(c) = result
-        result
-    v(column)
+    if degree.components != null then degree.components(column)
+    else
+      val memo = mutable.LongMap.empty[Map[Long, Int]]
+      def v(c: Long): Map[Long, Int] = memo.get(c) match
+        case Some(known) => known
+        case None        =>
+          val result = degree.logs.get(c) match
+            case None      => Map(c -> 1)
+            case Some(log) =>
+              val acc = mutable.LongMap(c -> 1)
+              val (added, factors) = (log.columns, log.multipliers)
+              for i <- added.indices; (e, x) <- v(added(i)) do acc(e) = (acc.getOrElse(e, 0) + factors(i) * x) % p
+              acc.filter(_._2 != 0).toMap
+          memo(c) = result
+          result
+      v(column)

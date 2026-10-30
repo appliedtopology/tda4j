@@ -8,6 +8,8 @@ import org.specs2.mutable
   * to a dimension (`LimitedCubicalGridStream`: the fast engine's middle degrees). Inputs: 1-D to 4-D grids, degenerate
   * shapes, tied values (zero-length pairs everywhere), +Infinity pixels, masked (NaN) pixels, both signed zeros, and
   * noise; F_2, F_3, F_17; zero-length bars on and off; apparent pairs on and off (the shortcut must change nothing).
+  * Degree 0 by union-find, in the packed engine, must equal the generic engine reducing every column and the packed
+  * engine doing so (`useUnionFind = false`).
   */
 class PackedCubicalCohomologySpec extends mutable.Specification:
   val fields: Seq[FiniteField] = Seq(FiniteField(2), FiniteField(3), FiniteField(17))
@@ -52,9 +54,22 @@ class PackedCubicalCohomologySpec extends mutable.Specification:
       new PackedCubicalCohomologyEngine[ff.Fp](grid, topDim, GridRanks(grid.shape, grid.topCellValues), apparent)
     val cells: StratifiedCellStream[Cube, Double] =
       if topDim == grid.ambientDim then grid else LimitedCubicalGridStream(grid, topDim)
-    val generic = CellularCohomologyEngine[Cube, ff.Fp, Double]()
-    if cocycles then packed.persistentCohomology(zeroLength) == generic.persistentCohomology(cells, zeroLength)
-    else packed.persistentHomology(zeroLength) == generic.persistentHomology(cells, zeroLength)
+    // Every column of every degree reduced, degree 0 included (the packed engine pairs it by union-find).
+    val generic = CellularCohomologyEngine[Cube, ff.Fp, Double](useUnionFind = false)
+    val reduced =
+      new PackedCubicalCohomologyEngine[ff.Fp](
+        grid,
+        topDim,
+        GridRanks(grid.shape, grid.topCellValues),
+        apparent,
+        useUnionFind = false
+      )
+    if cocycles then
+      packed.persistentCohomology(zeroLength) == generic.persistentCohomology(cells, zeroLength) &&
+      packed.persistentCohomology(zeroLength) == reduced.persistentCohomology(zeroLength)
+    else
+      packed.persistentHomology(zeroLength) == generic.persistentHomology(cells, zeroLength) &&
+      packed.persistentHomology(zeroLength) == reduced.persistentHomology(zeroLength)
 
   // Seeds search for rare inputs; the JVM run does that, Scala.js only has to show any platform difference.
   def failures(topDims: CubicalGridStream => Seq[Int]): Seq[String] =
@@ -97,7 +112,7 @@ class PackedCubicalCohomologySpec extends mutable.Specification:
         val packed = new PackedCubicalCohomologyEngine[Double](grid, topDim, GridRanks(grid.shape, grid.topCellValues))
         val cells: StratifiedCellStream[Cube, Double] =
           if topDim == grid.ambientDim then grid else LimitedCubicalGridStream(grid, topDim)
-        val generic = CellularCohomologyEngine[Cube, Double, Double]()
+        val generic = CellularCohomologyEngine[Cube, Double, Double](useUnionFind = false)
         val cycles = packed.persistentHomology(zeroLength)
         val cocycles = packed.persistentCohomology(zeroLength)
         val cubesByDim = cells.iterator.toSeq.groupBy(_.dim)

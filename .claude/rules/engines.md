@@ -1,12 +1,10 @@
 ---
 paths:
   - "src/main/scala/org/appliedtopology/tda4j/homology/**"
-  - "src/main/scala/org/appliedtopology/tda4j/barcode/**"
   - "src/test/scala/org/appliedtopology/tda4j/homology/**"
-  - "src/test/scala/org/appliedtopology/tda4j/barcode/**"
 ---
 
-# Persistent homology engines, barcode distances, benchmark specs
+# Persistent homology engines, benchmark specs
 
 ## Persistent homology: four independent engines
 
@@ -18,9 +16,8 @@ streams have none): use `VietorisRips` (`DESIGN-stream-naming.md`, `WORKLOG-maxd
 (`VietorisRips(.., k)`, `Truncated`), and `persistentCohomology` (and the packed cubical engine's) leaves out the bars
 above it before building any representative (`CohomologyDegreeLimitSpec`, `WORKLOG-generic-engine-profile.md`). **Every engine that reads a stream stops at its declared limit**, whatever degree it was asked for (`min(asked, limit)`):
 naive (both cursors), chunks, cohomology, `Involution`. A hand-built complex that wants its top degree must not be a
-`Truncated`/`LimitedCofaceSimplexStream` (use `ExplicitStreamBuilder`). `TruncatedTopDegreeSpec` runs every way (factories,
-direct engines, the verb with each engine and representative kind, images, alpha) against the longer stream's bars up to
-the limit; `FastCubicalHomologyEngine`/`FastAlphaHomologyEngine` take `maxDimension` and skip the dual graph below the top.
+`Truncated`/`LimitedCofaceSimplexStream` (use `ExplicitStreamBuilder`). `TruncatedTopDegreeSpec` runs every way against the
+longer stream's bars up to the limit; the fast cubical/alpha engines take `maxDimension` and skip the dual graph below the top.
 
 1. **Naive** (`CellularHomologyEngine`/`SimplicialHomologyEngine`) — single-pivot-table reduction, no clearing; the
    reference baseline. Incremental; a raw-UnionFind fast path was rejected.
@@ -43,19 +40,18 @@ the limit; `FastCubicalHomologyEngine`/`FastAlphaHomologyEngine` take `maxDimens
    reference oracle only** — production uses `PackedRipserCohomologyEngine`. Clearing is required;
    apparent pairs with lazy substitution; no emergent pairs (Def 3.11, only in engine 4); `memoizeFiltrationValue`
    defaults **false** (project lead: memory over speed) (`WORKLOG-packed-ripser-engine.md`).
-   The PACKED engine numbers simplices with one `Long` or, past 2^63 (C(n + maxDim + 2, maxDim + 2)), two words
-   (`WideSimplexIndexing`, `usesWideIndices`, `WideKeys` for the maps keyed by index); the second word exists only in a
-   two-word run, every new index-keyed structure carries it, and `WideIndicesSpec` / `WideIndicesPastLongSpec` hold both
-   paths equal (`WORKLOG-two-word-indices.md`).
-   The PACKED engine's apparent-pair test decodes a column once (`WORKLOG-ripser-decode-once.md`, #194; its pair count
+   The PACKED engine numbers simplices with one `Long` or, past 2^63, two words (`WideSimplexIndexing`, `usesWideIndices`,
+   `WideKeys` for maps keyed by index); every new index-keyed structure carries the second word, and `WideIndicesSpec` /
+   `WideIndicesPastLongSpec` hold both paths equal (`WORKLOG-two-word-indices.md`).
+   Its apparent-pair test decodes a column once (`WORKLOG-ripser-decode-once.md`, #194; the pair count of degrees 1 and up
    equals the reference engine's: `EmergentPairsSpec`). It reduces on a primitive-array heap, expands cocycles lazily from reduction logs (only for reported
    bars) and derives cycles with its own copy of `Involution.cycles`, which does not reduce an apparent pair nobody reports
    (`WORKLOG-involution-apparent-skip.md`). It must equal the `Chain`-based engine in the test
    tree (`ChainPackedRipserReference`) term for term, essentials included (`PackedWorkingColumnSpec`): re-run it after any
    change to the reduction (`WORKLOG-vr-working-column.md`). The heap needs ONE diameter per simplex: non-trusted metrics
    are read as `d(max, min)` (else an asymmetric one grows the column until OOM); Euclidean/Explicit are read as given
-   (canonicalizing breaks the distance cache's row-wise walk). Edge-block units on threads are exact (#192, #194);
-   `Engine.ParallelRipser` runs them from the verb (`Auto` picks it with `Parallel.threads > 1` when it applies: prime
+   (canonicalizing breaks the distance cache's row-wise walk). Edge-block units on threads are exact (#192, #194; a binary tree over them does not shorten the serial rest:
+   `WORKLOG-tree-merge.md`); `Engine.ParallelRipser` runs them from the verb (`Auto` picks it with `Parallel.threads > 1` when it applies: prime
    <= 46,000, no `includeZeroLength`; edge ranks are dense up to `DenseRankLimit` = 4,096 points, sorted neighbour lists
    above: `WORKLOG-sparse-ranks.md`; facade and CLI likewise for an unset `engine`; `threads` runs under
    `Parallel.withThreads`). Its representatives are `LazyChain`s (cocycles from the logs; cycles from one parallel
@@ -69,8 +65,8 @@ the limit; `FastCubicalHomologyEngine`/`FastAlphaHomologyEngine` take `maxDimens
    <= 4 % time, up to -22 % heap (`WORKLOG-emergent-pairs.md`, #57).
 4. **`CellularCohomologyEngine`** (`Cohomology.scala`) — generic over `CellT: OrderedCell`, fully-materialized streams
    only, no `maxDim`/apparent pairs. Only essential bars' V-columns are cocycles; finite bars' V-columns are their reduced
-   pivot chain. Representatives don't match Ripser term-for-term (tie direction) but bar values do. Sign-tested on RP²
-   over Fp (3) (`WORKLOG-generic-cohomology.md`). Reduces over **dense cell numbers** (position in the engine's order),
+   pivot chain. Representatives don't match Ripser term-for-term (tie direction) but bar values do
+   (`WORKLOG-generic-cohomology.md`). Reduces over **dense cell numbers** (position in the engine's order),
    its involution too; must equal the cell-keyed reduction in the test tree (`CellKeyedCohomologyReference`) bar for bar,
    pair for pair, term for term (`CohomologyNumberingSpec`): re-run it after any change to the reduction
    (`WORKLOG-dense-cohomology.md`). On a `CubicalGridStream` the verb runs `PackedCubicalCohomologyEngine`, which must
@@ -81,20 +77,27 @@ the limit; `FastCubicalHomologyEngine`/`FastAlphaHomologyEngine` take `maxDimens
    above the level's largest is rejected, never wrapped), else by hash; the coboundary is transposed in column ranges on
    all threads; degrees above the stream's limit are not reduced (`WORKLOG-cohomology-face-lookup.md`, #251).
 
-**Cycles from cohomology (`Involution`, `homology/Involution.scala`)**: both cohomology engines expose
-`pairedCohomology` (bars + birth/death cells, zero-length pairs INCLUDED: their columns are pivots) and
-`persistentHomology` (same bars, cycles). Only death columns are reduced, under the engine's own order reversed;
-a pivot that is not the paired birth cell throws (a pairing/order mismatch is a
-bug, never fall back). Finite bar cycle = `R_τ`; essential = `V_σ`. The dual direction (`Involution.cocycles`) starts
-from a homology pairing (naive/chunks, identical, union-find included: `InvolutionSpec`) and reduces only birth cells'
-coboundaries (`coboundariesOf`), youngest first. Fast cubical's union-find ties by value, not the stream order: no dual path, image cocycles go
-through the cohomology engine. The native kind is faster (`WORKLOG-involution.md`). Engines report different valid
-cycles: never compare representatives cell for cell across engines (`InvolutionSpec` checks validity).
+**Degree 0 is paired by union-find in every engine that reduces it** (#194, `WORKLOG-h0-union-find.md`): the edges oldest
+first, an edge joining two components kills the one with the younger root, paired with it. The pairs are the reduction's,
+and a bar's V-column is the indicator of the dying component (the final one if essential). `ParallelPackedCohomology`
+builds it on demand from a `MergeForest`. `CellularCohomologyEngine` needs every edge `c·(v-u)` or boundary-free
+(`EdgeBoundary.shape`) with both ends in the stream, else it reduces degree 0 by columns. The packed engines'
+`useUnionFind = false` does that too, for A/B and for specs: each compares against it, and the naive engine,
+`RipserCohomologyEngine`, `ChainPackedRipserReference` and `CellKeyedCohomologyReference` always reduce. Apparent and
+emergent pair counts are those of degrees 1 and up.
+
+**Cycles from cohomology (`Involution`, `homology/Involution.scala`)**: both cohomology engines expose `pairedCohomology`
+(bars + birth/death cells, zero-length pairs INCLUDED: their columns are pivots) and `persistentHomology` (same bars,
+cycles). Only death columns are reduced, under the engine's own order reversed; a pivot that is not the paired birth cell
+throws (a pairing/order mismatch is a bug, never fall back). Finite bar cycle = `R_τ`; essential = `V_σ`. The dual
+direction (`Involution.cocycles`) starts from a homology pairing (naive/chunks, identical, union-find included:
+`InvolutionSpec`) and reduces only birth cells' coboundaries, youngest first; fast cubical's union-find ties by value, not
+the stream order, so it has no dual path (image cocycles go through the cohomology engine). Engines report different
+valid cycles: compare validity, never cell for cell across engines (`WORKLOG-involution.md`).
 
 Every engine takes `includeZeroLength` (default `false`) on its bar-returning methods and drops `birth == death` pairs
-from the pairing itself (`PersistenceBar.dropZeroLength`). Naive and chunks `diagramAt(f)` report a class alive at `f` as
-`[birth, f]` (closed end), so a class born exactly at `f` survives the filter; a finished bar is `[b, d)`. Fast
-cubical/alpha drop equal-value pairs at construction.
+(`PersistenceBar.dropZeroLength`; fast cubical/alpha at construction). Naive and chunks `diagramAt(f)` report a class
+alive at `f` as `[birth, f]` (closed end), so a class born exactly at `f` survives the filter; a finished bar is `[b, d)`.
 `ZeroLengthBarsSpec`.
 
 `Chain.reduceBy`/`reduceByUntil` throw (`IllegalStateException`) when the pivot moves back or stays put for 64 steps (a
@@ -103,12 +106,6 @@ basis column whose leading cell is not its key, or an order mismatch; `WORKLOG-c
 Testing lessons: F2 hides sign errors; signed-field fixtures need ≥5 vertices (`Set1..Set4` hash-order past 4
 elements, `SignedFieldBarcodeSpec`). Two engines agreeing isn't proof if they share a code path: hand-derived fixtures
 are the real oracle.
-
-**`BarcodeDistance`/`Vectorization`/`BootstrapBand`/`ToMATo`**: distances (matchings are `None` on an essential-count
-mismatch), sliced Wasserstein, landscapes, images, Betti curves (`birth <= t < death`), silhouettes, entropy on
-`PersistenceBar[Double,_]`. Ground norm matches Hera/GUDHI, images `persim`. Essential bars: matched by birth for distance
-(mismatch → `+Infinity`); kept by landscapes and Betti curves, dropped by the rest. `longerThanFraction` is a display rule,
-not a test; `BootstrapBand.threshold` (2 x width, Fasy 2014) is the estimate. The facades are in `facade.md`. `WORKLOG-diagram-statistics.md`.
 
 ## Cross-engine benchmark
 

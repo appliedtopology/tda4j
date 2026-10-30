@@ -3,12 +3,13 @@ package org.appliedtopology.tda4j
 import org.specs2.mutable.Specification
 
 /** `CellularCohomologyEngine` reduces simplices with `Int` vertices on flat vertex arrays. It must give exactly what it
-  * gives reducing the cells themselves (`packSimplices = false`): the same pairs in the same order, the same cocycles
-  * and cycles term for term, with zero-length bars and without. Inputs: alpha complexes in R², R³ and R⁴ and a
-  * truncated one; Vietoris-Rips, Čech and witness complexes of a grid, where the stream's tie-break decides the pairs;
-  * an explicit RP² (H₁ over F₂, not over F₃); streams that list their cells out of order. Over F₂, F₃, F₁₇ and the
-  * reals. The engine must take the packed path on all of them (or the comparison is with itself), and must not take it
-  * for vertices that are not `Int`s, for a vertex order other than `Int`'s, or for a cell instance of the user's own.
+  * gives reducing the cells themselves (`packSimplices = false`, with every column of degree 0 reduced instead of
+  * paired by union-find): the same pairs in the same order, the same cocycles and cycles term for term, with
+  * zero-length bars and without. Inputs: alpha complexes in R², R³ and R⁴ and a truncated one; Vietoris-Rips, Čech and
+  * witness complexes of a grid, where the stream's tie-break decides the pairs; an explicit RP² (H₁ over F₂, not over
+  * F₃); streams that list their cells out of order. Over F₂, F₃, F₁₇ and the reals. The engine must take the packed
+  * path on all of them (or the comparison is with itself), and must not take it for vertices that are not `Int`s, for a
+  * vertex order other than `Int`'s, or for a cell instance of the user's own.
   */
 class PackedSimplexCohomologySpec extends Specification:
 
@@ -80,7 +81,7 @@ class PackedSimplexCohomologySpec extends Specification:
   // Everything the engine returns for `stream`: the pairing with its cocycles, the order it was computed under, and the
   // bars of each kind with and without zero-length ones.
   private def results[C: Field](stream: CellStream[Simplex[Int], Double], packed: Boolean): Seq[Seq[Any]] =
-    val engine = CellularCohomologyEngine[Simplex[Int], C, Double](packSimplices = packed)
+    val engine = CellularCohomologyEngine[Simplex[Int], C, Double](packSimplices = packed, useUnionFind = packed)
     def bars(bs: List[PersistenceBar[Double, Chain[Simplex[Int], C]]]) =
       bs.map(b => (b.dim, b.lower, b.upper, b.representative.terms, b.representative.leadingCell))
     val (paired, order) = engine.pairedCohomology(stream)
@@ -136,7 +137,8 @@ class PackedSimplexCohomologySpec extends Specification:
       import ff.given
       val stream = withoutEdgesAtLastVertex(VietorisRips(EuclideanMetricSpace(grid), maxDimension = 2), 11)
       def cohomology(packed: Boolean) =
-        val engine = CellularCohomologyEngine[Simplex[Int], ff.Fp, Double](packSimplices = packed)
+        val engine =
+          CellularCohomologyEngine[Simplex[Int], ff.Fp, Double](packSimplices = packed, useUnionFind = packed)
         val (paired, order) = engine.pairedCohomology(stream)
         (
           paired.map((b, p) => (b.dim, b.lower, b.upper, p, b.representative.terms)),
@@ -168,7 +170,8 @@ class PackedSimplexCohomologySpec extends Specification:
           )
         def iterator = values.keysIterator
       def cohomology(packed: Boolean) =
-        val engine = CellularCohomologyEngine[Simplex[Int], ff.Fp, Double](packSimplices = packed)
+        val engine =
+          CellularCohomologyEngine[Simplex[Int], ff.Fp, Double](packSimplices = packed, useUnionFind = packed)
         engine.pairedCohomology(stream)._1.map((b, p) => (b.dim, b.lower, b.upper, p, b.representative.terms))
       (CellularCohomologyEngine[Simplex[Int], ff.Fp, Double]().reducesPacked(stream) must beTrue)
         .and(cohomology(packed = true) must beEqualTo(cohomology(packed = false)))

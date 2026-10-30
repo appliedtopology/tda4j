@@ -3,9 +3,9 @@ package org.appliedtopology.tda4j
 /** Test-scope driver, NOT a scratch file (unlike this arc's earlier `PackedProfileDriver.scala`/ `ProfileDriver.scala`,
   * each written fresh and deleted before its session ended) -- kept alongside `RipserPaperBenchmarkSpec.scala` as the
   * subprocess target a real time-and-memory comparison against `ripser.cpp` needs: one engine, one JVM process, no
-  * sbt/timeout/daemon-thread machinery, invoked directly via
-  * `java -Xmx<N> -cp $CP ... SingleEngineProfileDriver <engine> <format> <dataFile> <maxDim> [threshold] [trials]`
-  * (optionally wrapped in `/usr/bin/time -l`, or with `-XX:StartFlightRecording=...` for JFR) -- see
+  * sbt/timeout/daemon-thread machinery, invoked directly via `java -Xmx<N> -cp $CP ... SingleEngineProfileDriver
+  * <engine> <format> <dataFile> <maxDim> [threshold] [trials] [emergent] [apparent] [prime] [unionFind]` (optionally
+  * wrapped in `/usr/bin/time -l`, or with `-XX:StartFlightRecording=...` for JFR) -- see
   * `.claude/WORKLOG-ripser-profiling.md`'s cursor-redesign session for why this needs to be a real subprocess rather
   * than another `-DpackedOnly`-style in-process sbt spec: a memory measurement specifically needs one engine per OS
   * process, and `RipserPaperBenchmarkSpec`'s shared-JVM, per-cell-timeout harness has no cooperative cancellation, so a
@@ -45,6 +45,8 @@ object SingleEngineProfileDriver:
     val apparent = if args.length > 7 then args(7).toBoolean else true
     // The coefficient field's characteristic (default 2).
     val prime = if args.length > 8 then args(8).toInt else 2
+    // `packed` only: degree 0 by union-find (#194), the default, or by reducing the vertices' coboundaries.
+    val unionFind = if args.length > 9 then args(9).toBoolean else true
 
     val threshold: Option[Double] = if thresholdArg == "none" then None else Some(thresholdArg.toDouble)
 
@@ -78,7 +80,8 @@ object SingleEngineProfileDriver:
             maxDim,
             useApparentPairs = apparent,
             maxFiltrationValue = threshold,
-            useEmergentPairs = emergent
+            useEmergentPairs = emergent,
+            useUnionFind = unionFind
           )
           val bars = if engine == "packed-cycles" then ctx.persistentHomology() else ctx.persistentCohomology()
           // Digests of the bars alone and of the bars with their representatives' terms (cell index, high word, coefficient),

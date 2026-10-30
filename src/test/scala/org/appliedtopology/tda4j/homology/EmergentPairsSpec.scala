@@ -107,6 +107,57 @@ class EmergentPairsSpec extends mutable.Specification:
       (runs.collect { case ((_, _, _, false, _, _), Some(n)) => n }.sum must beGreaterThan(0))
   }
 
+  /** Degree 0 by union-find against degree 0 by reducing the vertices' coboundaries: the same bars, pairs, cocycles and
+    * cycles, term for term. The number of cocycles of degree 0 with more than one vertex is returned, so that the
+    * comparison can be seen to cover the merged components.
+    */
+  def unionFindDegreeZero(field: FiniteField)(
+    space: FiniteMetricSpace[Int],
+    threshold: Option[Double],
+    lists: Boolean,
+    wide: Boolean
+  ): Option[Int] =
+    import field.given
+    def engine(unionFind: Boolean) =
+      PackedRipserCohomologyEngine[field.Fp](
+        space,
+        2,
+        maxFiltrationValue = threshold,
+        neighbourLists = Some(lists),
+        wideIndices = Some(wide),
+        useUnionFind = unionFind
+      )
+    val with_ = engine(true)
+    val without = engine(false)
+    def flat[Cell](bars: List[PersistenceBar[Double, Chain[Cell, field.Fp]]]) =
+      bars.map(b => (b.dim, b.lower.toString, b.upper.toString, entries(b.representative)))
+    def pairs(e: PackedRipserCohomologyEngine[field.Fp]) =
+      e.pairedCohomology().map { case (_, p) => (p.dim, cell(p.birth), p.death.map(cell)) }
+    val cocycles = with_.persistentCohomology(true)
+    val agree =
+      flat(with_.pairedCohomology().map(_._1)) == flat(without.pairedCohomology().map(_._1)) &&
+        pairs(with_) == pairs(without) &&
+        flat(cocycles) == flat(without.persistentCohomology(true)) &&
+        flat(with_.persistentCohomology()) == flat(without.persistentCohomology()) &&
+        flat(with_.persistentHomology(true)) == flat(without.persistentHomology(true)) &&
+        flat(with_.persistentHomology()) == flat(without.persistentHomology()) &&
+        with_.totalSimplexCount == without.totalSimplexCount
+    Option.when(agree)(cocycles.count(b => b.dim == 0 && b.representative.rawEntries.size > 1))
+
+  "Degree 0 by union-find changes no bar, pair, cocycle or cycle, term for term" >> {
+    val runs = for
+      seed <- seeds(jvm = 10L, js = 2L)
+      space <- clouds(seed)
+      threshold <- Seq(Some(0.3), None)
+      field <- Seq(FiniteField(2), FiniteField(3), FiniteField(17))
+      lists <- Seq(true, false)
+      wide <- Seq(false, true)
+    yield (seed, threshold, field.p, lists, wide) -> unionFindDegreeZero(field)(space, threshold, lists, wide)
+    (runs.collect { case (run, None) => run }.take(3) must beEmpty) and
+      // Components of more than one vertex have to be merged for this to say anything.
+      (runs.collect { case (_, Some(n)) => n }.sum must beGreaterThan(0))
+  }
+
   /** The bars of the packed engine (zero-length ones included) and of the reference engine, as sorted triples. */
   def barsOfBoth(field: FiniteField)(
     space: FiniteMetricSpace[Int]
@@ -131,11 +182,12 @@ class EmergentPairsSpec extends mutable.Specification:
   }
 
   /** The apparent pairs change no output, so only their number can tell that the test for them is right: the packed
-    * engine, which finds the youngest facet of a cofacet from its longest edges, pairs as many simplices as the
-    * reference engine, which compares the diameter of every facet. Points that coincide give zero-length edges, whose
-    * facets all tie.
+    * engine, which finds the youngest facet of a cofacet from its longest edges, pairs as many simplices of degrees 1
+    * and 2 as the reference engine, which compares the diameter of every facet. Points that coincide give zero-length
+    * edges, whose facets all tie. Degree 0 is paired by union-find in the packed engine and not counted there, so the
+    * reference's degree-0 pairs (a zero-length edge at a vertex) are taken off its count.
     */
-  "The packed engine finds as many apparent pairs as the reference engine" >> {
+  "The packed engine finds as many apparent pairs as the reference engine in degrees 1 and 2" >> {
     val field = FiniteField(17)
     import field.given
     val failures = for
@@ -144,9 +196,12 @@ class EmergentPairsSpec extends mutable.Specification:
       threshold <- Seq(Some(0.3), None)
       packed = PackedRipserCohomologyEngine[field.Fp](space, 2, maxFiltrationValue = threshold)
       reference = RipserCohomologyEngine[field.Fp](space, 2, maxFiltrationValue = threshold)
+      referenceDegreeZero = RipserCohomologyEngine[field.Fp](space, 0, maxFiltrationValue = threshold)
       _ = (packed.persistentCohomology(true), reference.persistentCohomology(true))
-      if packed.apparentPairCount != reference.apparentPairCount
-    yield (seed, threshold, packed.apparentPairCount, reference.apparentPairCount)
+      _ = referenceDegreeZero.persistentCohomology(true)
+      expected = reference.apparentPairCount - referenceDegreeZero.apparentPairCount
+      if packed.apparentPairCount != expected
+    yield (seed, threshold, packed.apparentPairCount, expected)
     failures.take(3) must beEmpty
   }
 

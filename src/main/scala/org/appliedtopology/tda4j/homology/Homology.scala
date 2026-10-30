@@ -541,30 +541,9 @@ open class CellularPersistenceInChunksEngine[CellT: OrderedCell, CoefficientT: F
     // general reduction like every other degree.
     private var dim01ByUnionFind: Boolean = true
 
-    // The shape of an edge's boundary, for union-find: ZeroBoundary (no entries, a loop's (v, c), (v, -c), or
-    // coefficients that vanish in this field), JoinsTwo (c·(v - u) with u ≠ v and c a unit, as entries 0 and 1), or
-    // Irregular (anything else, which an algebraic chain complex may have and union-find cannot express). Plain Ints
-    // and no allocation on the common two-entry path: this runs once per edge of the complex.
-    private val ZeroBoundary = 0
-    private val JoinsTwo = 1
-    private val Irregular = 2
-    private def edgeShape(endpoints: Seq[(CellT, CoefficientT)]): Int =
-      val fld = summon[CoefficientT is Field]
-      def isZero(x: CoefficientT): Boolean = fld.isEqual(x, fld.zero)
-      endpoints.length match
-        case 0 => ZeroBoundary
-        case 1 => if isZero(endpoints(0)._2) then ZeroBoundary else Irregular
-        case 2 =>
-          val (a, ca) = endpoints(0)
-          val (b, cb) = endpoints(1)
-          if a == b then if isZero(fld.plus(ca, cb)) then ZeroBoundary else Irregular
-          else if isZero(ca) then if isZero(cb) then ZeroBoundary else Irregular
-          else if isZero(cb) then Irregular
-          else if isZero(fld.plus(ca, cb)) then JoinsTwo
-          else Irregular
-        case _ =>
-          if endpoints.groupMapReduce(_._1)(_._2)(fld.plus).valuesIterator.forall(isZero) then ZeroBoundary
-          else Irregular
+    // The shape of an edge's boundary, for union-find (see EdgeBoundary).
+    import EdgeBoundary.{Irregular, JoinsTwo, ZeroBoundary}
+    private def edgeShape(endpoints: Seq[(CellT, CoefficientT)]): Int = EdgeBoundary.shape(endpoints)
 
     /** The whole pairing (running the reduction): every finite bar's birth and death cells, zero-length ones included,
       * and every essential bar's birth cell of degree at most `maxDim`. Computed under `stream.filtrationOrdering`.

@@ -12,7 +12,9 @@ import scala.collection.mutable
   * encoding ascending. Boundaries and coboundaries come from index arithmetic. Clearing as in the generic engine;
   * apparent pairs (a cell whose oldest same-value cofacet has it as its youngest same-value facet) are paired without a
   * reduction and their columns rebuilt when another column needs them, which changes no output (`useApparentPairs =
-  * false` turns them off). Cycles come from the involution on the same pairs, specialised to packed cells as
+  * false` turns them off). Degree 0 is paired by union-find over the edges, the elder rule, with the indicator of the
+  * dying component as the cocycle (`useUnionFind = false` reduces the vertices' coboundaries instead, with the same
+  * output). Cycles come from the involution on the same pairs, specialised to packed cells as
   * [[PackedRipserCohomologyEngine]] does it. A cell every pixel around which is masked (NaN) is not in the complex: it
   * has rank [[GridRanks.masked]], and is never listed nor met as a cofacet.
   */
@@ -20,7 +22,9 @@ open class PackedCubicalCohomologyEngine[C: Field](
   grid: CubicalGridStream,
   topDim: Int,
   ranks: GridRanks,
-  useApparentPairs: Boolean = true
+  useApparentPairs: Boolean = true,
+  // Degree 0 by union-find over the edges instead of by reducing the vertices' coboundaries.
+  useUnionFind: Boolean = true
 ):
   private val fr = summon[C is Field]
   private val d = grid.ambientDim
@@ -566,6 +570,79 @@ open class PackedCubicalCohomologyEngine[C: Field](
         j -= 1
     math.min(counts.take(k + 1).sum, Int.MaxValue.toLong - 8).toInt
 
+  /** Degree 0 by the elder rule, as [[CellularCohomologyEngine]] pairs it: the edges come oldest first, and an edge
+    * that joins two components kills the younger one (the root that is the younger cell), paired with that edge. The
+    * pairs are those of the reduction, which pivots every column on its oldest edge, and the cocycle of a bar is the
+    * indicator of the component that dies, just before its death edge (the final component for a vertex that never
+    * dies). The components are over the vertices of the grid, numbered by their coordinates; `vertices` and `edges` are
+    * the cells of dimensions 0 and 1 in the complex, oldest first.
+    */
+  private def pairVertices(
+    vertices: Array[Int],
+    edges: Array[Int],
+    rows: Rows,
+    cleared: java.util.BitSet,
+    cocycles: Boolean,
+    wanted: (Int, Int, Int) => Boolean,
+    cocycleOf: mutable.LongMap[Chain[Cube, C]]
+  ): Unit =
+    // A vertex's number: its coordinates (half those of the doubled grid) in a mixed radix, in the order of the keys.
+    val stride = new Array[Int](d)
+    var total = 1
+    var axis = d - 1
+    while axis >= 0 do
+      stride(axis) = total
+      total *= shape(axis) + 1
+      axis -= 1
+    def numberOf(key: Int): Int =
+      var number = 0
+      var a = 0
+      while a < d do
+        number += (((key / weight(a)) % extent(a)) >> 1) * stride(a)
+        a += 1
+      number
+    def keyOfNumber(number: Int): Int =
+      var key = 0
+      var a = 0
+      while a < d do
+        key += 2 * ((number / stride(a)) % (shape(a) + 1)) * weight(a)
+        a += 1
+      key
+    val forest = MergeForest(total)
+    var merges = 0
+    var j = 0
+    while j < edges.length && merges < vertices.length - 1 do
+      var first = -1
+      var second = -1
+      foreachFacet(edges(j))((vertex, _) => if first < 0 then first = numberOf(vertex) else second = numberOf(vertex))
+      val ra = forest.find(first)
+      val rb = forest.find(second)
+      if ra != rb then
+        val (dead, alive) =
+          if packed(keyOfNumber(ra)) < packed(keyOfNumber(rb)) then (rb, ra) else (ra, rb)
+        forest.kill(dead, alive, j)
+        merges += 1
+      j += 1
+    forest.seal()
+    var i = vertices.length - 1
+    while i >= 0 do // youngest first
+      val sigma = vertices(i)
+      val number = numberOf(sigma)
+      val diedAt = forest.diedAt(number)
+      val death = if diedAt == Int.MaxValue then -1 else edges(diedAt)
+      if death >= 0 then cleared.set(death)
+      val row = rows.add(0, sigma, death, false)
+      if cocycles && wanted(0, sigma, death) then
+        val component = forest.members(number, diedAt)
+        val keys = new Array[Int](component.length)
+        var k = 0
+        while k < keys.length do
+          keys(k) = keyOfNumber(component(k))
+          k += 1
+        cocycleOf(row.toLong) =
+          cubeChain(SparseColumn(keys, Array.fill[Any](keys.length)(fr.one)), youngestFirst = false)
+      i -= 1
+
   /** The reduction: every pair of degree `0 .. lastDim` in report order. With `cocycles`, also the cocycle of every row
     * `wanted` accepts.
     */
@@ -582,8 +659,10 @@ open class PackedCubicalCohomologyEngine[C: Field](
     // cell: a cell is the death of at most one row, in one dimension. -1 for no row.
     val seedOfDeath = if cocycles then filledWith(-1) else Array.empty[Int]
 
+    // With degree 0 by union-find, the edges it sorted, for degree 1.
+    var edgeLevel: Array[Int] = null
     for k <- 0 to math.min(lastDim, topDim) do
-      val cells = level(k)
+      val cells = if k == 1 && edgeLevel != null then edgeLevel else level(k)
       val hasCofacets = k < topDim
       val basis = new mutable.LongMap[Column]()
       // A pivot's log is kept only when not empty; essential rows' logs by row.
@@ -599,53 +678,57 @@ open class PackedCubicalCohomologyEngine[C: Field](
             if log.nonEmpty then logs(death.toLong) = log
           if wanted(k, sigma, death) then pending += ((row, log))
 
-      var i = cells.length - 1
-      while i >= 0 do // youngest first
-        val sigma = cells(i)
-        if !cleared.get(sigma) then
-          if !hasCofacets then report(sigma, -1, noLog, isApparent = false)
-          else
-            val tau = if useApparentPairs then zeroApparentCofacet(sigma) else -1
-            if tau >= 0 then
-              cleared.set(tau)
-              report(sigma, tau, noLog, isApparent = true)
+      if k == 0 && useUnionFind && hasCofacets then
+        edgeLevel = level(1)
+        pairVertices(cells, edgeLevel, rows, cleared, cocycles, wanted, cocycleOf)
+      else
+        var i = cells.length - 1
+        while i >= 0 do // youngest first
+          val sigma = cells(i)
+          if !cleared.get(sigma) then
+            if !hasCofacets then report(sigma, -1, noLog, isApparent = false)
             else
-              foreachCofacet(sigma)((cell, c) => working.push(packed(cell), c))
-              var reducing = working.pivot()
-              while reducing do
-                val pivotCell = working.pivotCell
-                val pivotKey = keyOf(pivotCell)
-                var redCoeff = fr.zero
-                var found = true
-                val stored = basis.getOrNull(pivotKey.toLong)
-                if stored != null then
-                  redCoeff = fr.divide(working.pivotCoefficient, stored.leadingCoefficient)
-                  working.addScaled(stored, fr.negate(redCoeff))
-                else
-                  // An apparent pair's column is not stored: it is the coboundary of its birth cell, which has pivot
-                  // `pivotKey` and distinct cells with coefficients +-1, so it is added as it is, uncombined.
-                  val sigma = if useApparentPairs then zeroApparentFacet(pivotKey) else -1
-                  if sigma < 0 then found = false
-                  else
-                    redCoeff = fr.divide(working.pivotCoefficient, cofacetCoefficient(sigma, pivotKey))
-                    val factor = fr.negate(redCoeff)
-                    foreachCofacet(sigma)((cell, c) => working.push(packed(cell), fr.times(factor, c)))
-                if !found then reducing = false
-                else
-                  if cocycles then steps.add(pivotKey, redCoeff)
-                  reducing = working.pivot()
-                  // Each step must move the pivot on (younger): otherwise a column and the order disagree, and the
-                  // loop would never end.
-                  if reducing && working.pivotCell <= pivotCell then orderBug(pivotKey)
-              val reduced = working.drain()
-              val reductionLog = steps.drain()
-              if reduced.isEmpty then report(sigma, -1, reductionLog, isApparent = false)
+              val tau = if useApparentPairs then zeroApparentCofacet(sigma) else -1
+              if tau >= 0 then
+                cleared.set(tau)
+                report(sigma, tau, noLog, isApparent = true)
               else
-                val pivotKey = reduced.keys(0)
-                basis(pivotKey.toLong) = reduced
-                cleared.set(pivotKey)
-                report(sigma, pivotKey, reductionLog, isApparent = false)
-        i -= 1
+                foreachCofacet(sigma)((cell, c) => working.push(packed(cell), c))
+                var reducing = working.pivot()
+                while reducing do
+                  val pivotCell = working.pivotCell
+                  val pivotKey = keyOf(pivotCell)
+                  var redCoeff = fr.zero
+                  var found = true
+                  val stored = basis.getOrNull(pivotKey.toLong)
+                  if stored != null then
+                    redCoeff = fr.divide(working.pivotCoefficient, stored.leadingCoefficient)
+                    working.addScaled(stored, fr.negate(redCoeff))
+                  else
+                    // An apparent pair's column is not stored: it is the coboundary of its birth cell, which has pivot
+                    // `pivotKey` and distinct cells with coefficients +-1, so it is added as it is, uncombined.
+                    val sigma = if useApparentPairs then zeroApparentFacet(pivotKey) else -1
+                    if sigma < 0 then found = false
+                    else
+                      redCoeff = fr.divide(working.pivotCoefficient, cofacetCoefficient(sigma, pivotKey))
+                      val factor = fr.negate(redCoeff)
+                      foreachCofacet(sigma)((cell, c) => working.push(packed(cell), fr.times(factor, c)))
+                  if !found then reducing = false
+                  else
+                    if cocycles then steps.add(pivotKey, redCoeff)
+                    reducing = working.pivot()
+                    // Each step must move the pivot on (younger): otherwise a column and the order disagree, and the
+                    // loop would never end.
+                    if reducing && working.pivotCell <= pivotCell then orderBug(pivotKey)
+                val reduced = working.drain()
+                val reductionLog = steps.drain()
+                if reduced.isEmpty then report(sigma, -1, reductionLog, isApparent = false)
+                else
+                  val pivotKey = reduced.keys(0)
+                  basis(pivotKey.toLong) = reduced
+                  cleared.set(pivotKey)
+                  report(sigma, pivotKey, reductionLog, isApparent = false)
+          i -= 1
 
       if cocycles then
         val memo = mutable.LongMap.empty[SparseColumn]
