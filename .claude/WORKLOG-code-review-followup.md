@@ -51,8 +51,11 @@ The case for #281 is that the representatives are never read, not a measured spe
 
 #282: `partitionLevel`, `workUnitOf` and `assembleNextLevel` are extracted (checked: `level` and `levelBlocks` are not
 reassigned between the loop start and the assembly call, so passing the live variables equals the old snapshot); the
-phase reductions and pairing/bar collection stay in `persistence`. No A/B measurement of the extraction; it is outside the
-inner loops.
+phase reductions and pairing/bar collection stay in `persistence` (#282). No A/B measurement of the extraction; it is
+outside the inner loops.
 
 `cocycle`'s memo keeps every intermediate cocycle, so a deep chain with non-zero factors costs memory quadratic in the
-depth; the iterative version fixes the stack, not that. Neither the depth of real logs nor that memory was measured.
+depth; the iterative version fixes the stack, not that. Neither the depth of real logs nor that memory was measured (#287).
+
+The extra copy of the coordinates that `EuclideanMetricSpace` now holds (and the lazy one in `vpt`) was not measured against
+the memory of a run at 10^4 to 10^6 points (#288).
