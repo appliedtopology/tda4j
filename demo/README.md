@@ -62,7 +62,7 @@ from), the print height, and the logging of the viewer's web server turned down 
 
 ## Not verified
 
-Tested on Linux with Java 21 only: the deck-style session (`Persistence`, `significant`, representatives, three
+Tested on Linux with Java 21 only: the deck-style session (`Persistence`, `longerThanFraction`, representatives, three
 `view()` calls) run through the finished jar, the viewer's pages, list, 404 and event stream fetched over HTTP, and a
 clean exit on `:quit` with the server running.
 

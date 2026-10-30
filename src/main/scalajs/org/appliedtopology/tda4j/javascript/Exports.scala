@@ -73,6 +73,109 @@ object Exports:
       Result(TDA4j.computeFromDistanceMatrixAndLandmarks(matrix(distances), landmarks.toArray, optionArray(options)))
     )
 
+  /** The relative persistent homology of the Vietoris-Rips complex of a point cloud modulo the subcomplex on the points
+    * `subcomplex` (point numbers, from 0): the bars of `H(X_t, A_t)`. See `relativePersistence` in the user guide.
+    */
+  @JSExportTopLevel("relativePersistence")
+  def relativePersistence(
+    points: js.Array[js.Array[Double]],
+    subcomplex: js.Array[Int],
+    options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
+  ): Result =
+    guarded(Result(TDA4j.computeRelativeFromPoints(matrix(points), subcomplex.toArray, optionArray(options))))
+
+  /** [[relativePersistence]] for a finite metric space given as its full matrix of distances. */
+  @JSExportTopLevel("relativePersistenceFromDistances")
+  def relativePersistenceFromDistances(
+    distances: js.Array[js.Array[Double]],
+    subcomplex: js.Array[Int],
+    options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
+  ): Result =
+    guarded(
+      Result(TDA4j.computeRelativeFromDistanceMatrix(matrix(distances), subcomplex.toArray, optionArray(options)))
+    )
+
+  /** The map on persistent homology induced by the inclusion of the Vietoris-Rips complex of a subsample (`subsample`:
+    * point numbers, from 0) into that of the whole point cloud: see `inclusionMap` in the user guide. Returns
+    * `{ maxDimension, characteristic, degrees }` with, for each degree, `{ dimension, sourceBars, targetBars, entries,
+    * image, kernel, cokernel }`.
+    */
+  @JSExportTopLevel("inclusionMap")
+  def inclusionMap(
+    points: js.Array[js.Array[Double]],
+    subsample: js.Array[Int],
+    options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
+  ): js.Object =
+    guarded(mapObject(TDA4j.computeInclusionFromPoints(matrix(points), subsample.toArray, optionArray(options))))
+
+  /** [[inclusionMap]] for a finite metric space given as its full matrix of distances. */
+  @JSExportTopLevel("inclusionMapFromDistances")
+  def inclusionMapFromDistances(
+    distances: js.Array[js.Array[Double]],
+    subsample: js.Array[Int],
+    options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
+  ): js.Object =
+    guarded(
+      mapObject(TDA4j.computeInclusionFromDistanceMatrix(matrix(distances), subsample.toArray, optionArray(options)))
+    )
+
+  /** The map induced by the simplicial map of Vietoris-Rips complexes that sends point `i` of `sourcePoints` to point
+    * `vertexMap[i]` of `targetPoints`; the result is that of [[inclusionMap]].
+    */
+  @JSExportTopLevel("simplicialMap")
+  def simplicialMap(
+    sourcePoints: js.Array[js.Array[Double]],
+    targetPoints: js.Array[js.Array[Double]],
+    vertexMap: js.Array[Int],
+    options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
+  ): js.Object =
+    guarded(
+      mapObject(
+        TDA4j.computeMapFromPoints(matrix(sourcePoints), matrix(targetPoints), vertexMap.toArray, optionArray(options))
+      )
+    )
+
+  /** [[simplicialMap]] between two finite metric spaces given as full matrices of distances. */
+  @JSExportTopLevel("simplicialMapFromDistances")
+  def simplicialMapFromDistances(
+    sourceDistances: js.Array[js.Array[Double]],
+    targetDistances: js.Array[js.Array[Double]],
+    vertexMap: js.Array[Int],
+    options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
+  ): js.Object =
+    guarded(
+      mapObject(
+        TDA4j.computeMapFromDistanceMatrices(
+          matrix(sourceDistances),
+          matrix(targetDistances),
+          vertexMap.toArray,
+          optionArray(options)
+        )
+      )
+    )
+
+  private def rowsOf(rows: Array[Array[Double]]): js.Array[js.Array[Double]] =
+    js.Array(rows.toSeq.map(row => js.Array(row*))*)
+
+  private def mapObject(map: matlab.PersistenceMapResult): js.Object =
+    js.Dynamic
+      .literal(
+        maxDimension = map.maxDimension(),
+        characteristic = map.characteristic(),
+        degrees = js.Array((0 to map.maxDimension()).map { k =>
+          js.Dynamic.literal(
+            dimension = k,
+            sourceBars = rowsOf(map.sourceBars(k)),
+            targetBars = rowsOf(map.targetBars(k)),
+            entries = rowsOf(map.entries(k)),
+            image = rowsOf(map.image(k)),
+            kernel = rowsOf(map.kernel(k)),
+            cokernel = rowsOf(map.cokernel(k))
+          )
+        }*)
+      )
+      .asInstanceOf[js.Object]
+
   /** Picks landmarks from a point cloud: options `numLandmarks` (required), `landmarkSelector` (`"maxmin"` or
     * `"random"`) and `landmarkSeed`. Returns `{ landmarks, coveringRadius }`, the landmarks as point numbers from 0 and
     * the covering radius `R` (compute with `maxFiltrationValue: 2 * R`, the JavaPlex tutorials' recipe).
@@ -119,6 +222,217 @@ object Exports:
     options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
   ): EulerCurve =
     guarded(EulerCurve(TDA4j.eulerCurveFromDistanceMatrix(matrix(distances), optionArray(options))))
+
+  /** The resampling confidence band of the bars of one degree of a point cloud (Fasy et al. 2014): resample the points,
+    * compute each resample's diagram and measure its bottleneck distance to the original. Options: `dimension` (default
+    * 1), `rounds` (100), `alpha` (0.05), `seed` (0), `subsampleSize` (draw that many points without replacement; by
+    * default draw with replacement), `prime`, `maxFiltrationValue` and `threads`. Returns `{ width, threshold, alpha,
+    * distances }`: a bar that persists longer than `threshold` (twice the width) survives the resampling.
+    */
+  @JSExportTopLevel("bootstrapBand")
+  def bootstrapBand(
+    points: js.Array[js.Array[Double]],
+    options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
+  ): js.Object = guarded {
+    val result = TDA4j.bootstrapBand(matrix(points), optionArray(options))
+    js.Dynamic
+      .literal(
+        width = result.width(),
+        threshold = result.threshold(),
+        alpha = result.alpha(),
+        distances = js.Array(result.distances()*)
+      )
+      .asInstanceOf[js.Object]
+  }
+
+  /** The ToMATo cluster of every point of a cloud (0 for the cluster of the highest peak): the graph and the density
+    * come from the `k` nearest neighbours, and two peaks merge when the valley between them is shallower than `tau`.
+    */
+  @JSExportTopLevel("tomatoClusters")
+  def tomatoClusters(points: js.Array[js.Array[Double]], k: Int, tau: Double): js.Array[Int] =
+    guarded(js.Array(TDA4j.tomatoClusters(matrix(points), k, tau)*))
+
+  /** The valleys between the density peaks used by `tomatoClusters`: `[birth, death]` per bar, with death `Infinity`
+    * for the highest peak of each component. A bar's persistence is the depth of its valley: choose `tau` in a gap.
+    */
+  @JSExportTopLevel("tomatoDiagram")
+  def tomatoDiagram(points: js.Array[js.Array[Double]], k: Int): js.Array[js.Array[Double]] =
+    guarded(grid(TDA4j.tomatoDiagram(matrix(points), k)))
+
+  /** The sliding-window (Takens) embedding of a time series: the window `(x_t, x_{t+delay}, ..., x_{t+(dimension-1)
+    * delay})` for every `stride`-th start `t` (`delay` and `stride` default to 1), as a point cloud.
+    */
+  @JSExportTopLevel("takensEmbedding")
+  def takensEmbedding(
+    series: js.Array[Double],
+    dimension: Int,
+    delay: js.UndefOr[Int] = js.undefined,
+    stride: js.UndefOr[Int] = js.undefined
+  ): js.Array[js.Array[Double]] =
+    guarded(grid(TDA4j.takensEmbedding(series.toArray, dimension, delay.getOrElse(1), stride.getOrElse(1))))
+
+  /** The same for a series of vectors, one array per time step: a point is the `dimension` arrays of a window, one
+    * after the other.
+    */
+  @JSExportTopLevel("takensEmbeddingOfVectors")
+  def takensEmbeddingOfVectors(
+    series: js.Array[js.Array[Double]],
+    dimension: Int,
+    delay: js.UndefOr[Int] = js.undefined,
+    stride: js.UndefOr[Int] = js.undefined
+  ): js.Array[js.Array[Double]] =
+    guarded(grid(TDA4j.takensEmbeddingOfVectors(matrix(series), dimension, delay.getOrElse(1), stride.getOrElse(1))))
+
+  /** The first lag in `1..maxLag` at which the series' autocorrelation is zero or negative: a first guess for the
+    * `delay` of `takensEmbedding` (a quarter of the period for a sinusoid).
+    */
+  @JSExportTopLevel("delayByAutocorrelation")
+  def delayByAutocorrelation(series: js.Array[Double], maxLag: Int): Int =
+    guarded(TDA4j.delayByAutocorrelation(series.toArray, maxLag))
+
+  /** The discrete Morse reduction of the Vietoris-Rips complex of a point cloud. Options: `maxDimension` (default 2),
+    * `maxFiltrationValue`, `strategy` (`"reduction"`, the default, or `"coreduction"`), `prime` and `threads`. Returns
+    * `{ cellCounts, criticalCounts, pairCount, criticalCells, bars }`: the cells of the complex and the cells left
+    * after pairing off, by dimension, the number of pairs, the cells left as arrays of vertex numbers, and the bars
+    * computed on them (rows `[dimension, birth, death]`), which are the bars of the complex.
+    */
+  @JSExportTopLevel("morseReduction")
+  def morseReduction(
+    points: js.Array[js.Array[Double]],
+    options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
+  ): js.Object = guarded(morseObject(TDA4j.morseReductionFromPoints(matrix(points), optionArray(options))))
+
+  /** [[morseReduction]] for a finite metric space given as its full matrix of distances. */
+  @JSExportTopLevel("morseReductionFromDistances")
+  def morseReductionFromDistances(
+    distances: js.Array[js.Array[Double]],
+    options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
+  ): js.Object = guarded(morseObject(TDA4j.morseReductionFromDistanceMatrix(matrix(distances), optionArray(options))))
+
+  private def morseObject(result: matlab.MorseReductionResult): js.Object =
+    js.Dynamic
+      .literal(
+        cellCounts = js.Array(result.cellCounts()*),
+        criticalCounts = js.Array(result.criticalCounts()*),
+        pairCount = result.pairCount(),
+        criticalCells = js.Array(result.criticalCells().map(cell => js.Array(cell*))*),
+        bars = js.Array(result.bars().map(row => js.Array(row*))*)
+      )
+      .asInstanceOf[js.Object]
+
+  /** The zigzag persistent homology of a sequence of complexes given as steps from the complex `initial` (an array of
+    * simplices, each an array of vertex numbers): step `k` adds the simplex `simplices[k]` if `additions[k]` is true
+    * and removes it otherwise. A simplex is added after its facets and removed before the simplices it is a facet of.
+    * Options: `maxDimension` (default 2) and `prime` (default 17). Returns `{ bars, representatives, lastPosition }`:
+    * the bars as rows `[dimension, birth, death]` over the positions `0..lastPosition` (death `Infinity` for a class
+    * still there at the end), and for each bar a representative `{ cells, coefficients }`, a cycle in the complex at
+    * its birth.
+    */
+  @JSExportTopLevel("zigzagFromSteps")
+  def zigzagFromSteps(
+    initial: js.Array[js.Array[Int]],
+    simplices: js.Array[js.Array[Int]],
+    additions: js.Array[Boolean],
+    options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
+  ): js.Object =
+    guarded(
+      zigzagObject(
+        TDA4j.zigzagFromSteps(
+          initial.map(_.toArray).toArray,
+          simplices.map(_.toArray).toArray,
+          additions.toArray,
+          optionArray(options)
+        )
+      )
+    )
+
+  /** The zigzag persistent homology of a list of complexes, each an array of simplices (arrays of vertex numbers), each
+    * included in the next or the next in it. With the option `link` set to `"union"` or `"intersection"`, two
+    * consecutive complexes are joined through their union or intersection, which takes a position of its own. Options:
+    * `link`, `maxDimension` and `prime`. The result is that of [[zigzagFromSteps]].
+    */
+  @JSExportTopLevel("zigzagFromComplexes")
+  def zigzagFromComplexes(
+    complexes: js.Array[js.Array[js.Array[Int]]],
+    options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
+  ): js.Object =
+    guarded(
+      zigzagObject(
+        TDA4j.zigzagFromComplexes(complexes.map(_.map(_.toArray).toArray).toArray, optionArray(options))
+      )
+    )
+
+  private def zigzagObject(result: matlab.ZigzagResult): js.Object =
+    js.Dynamic
+      .literal(
+        bars = js.Array(result.toArray().map(row => js.Array(row*))*),
+        representatives = js.Array((0 until result.size()).map { i =>
+          js.Dynamic.literal(
+            cells = js.Array(result.cycleVertices(i).map(cell => js.Array(cell*))*),
+            coefficients = js.Array(result.cycleCoefficients(i)*)
+          )
+        }*),
+        lastPosition = result.lastPosition()
+      )
+      .asInstanceOf[js.Object]
+
+  /** The persistent Laplacian of the Vietoris-Rips complex of a point cloud, on the simplices of dimension `dimension`
+    * that have entered by `from`, for the complex at `to` (`from <= to`).
+    */
+  @JSExportTopLevel("persistentLaplacian")
+  def persistentLaplacian(
+    points: js.Array[js.Array[Double]],
+    dimension: Int,
+    from: Double,
+    to: Double
+  ): PersistentLaplacian =
+    guarded(PersistentLaplacian(TDA4j.persistentLaplacianFromPoints(matrix(points), dimension, from, to)))
+
+  /** [[persistentLaplacian]] for a finite metric space given as its full matrix of distances. */
+  @JSExportTopLevel("persistentLaplacianFromDistances")
+  def persistentLaplacianFromDistances(
+    distances: js.Array[js.Array[Double]],
+    dimension: Int,
+    from: Double,
+    to: Double
+  ): PersistentLaplacian =
+    guarded(
+      PersistentLaplacian(TDA4j.persistentLaplacianFromDistanceMatrix(matrix(distances), dimension, from, to))
+    )
+
+  /** The barcode of the homology of the product of two filtered complexes from the barcodes of the factors (rows
+    * `[dimension, birth, death]`): a cell of the product enters at the larger (`filtration: "max"`, the default) or the
+    * sum (`"sum"`) of the values of its two factors.
+    */
+  @JSExportTopLevel("productBars")
+  def productBars(
+    first: js.Array[js.Array[Double]],
+    second: js.Array[js.Array[Double]],
+    filtration: js.UndefOr[String] = js.undefined
+  ): js.Array[js.Array[Double]] =
+    guarded(grid(TDA4j.productBars(matrix(first), matrix(second), filtration.getOrElse("max"))))
+
+  /** The internal Hom of two barcodes (rows `[dimension, birth, death]`): the module of maps from the first to the
+    * second shifted by `t`; a bar of dimension `p` and one of dimension `q` give a bar of dimension `q - p`.
+    */
+  @JSExportTopLevel("homBars")
+  def homBars(
+    first: js.Array[js.Array[Double]],
+    second: js.Array[js.Array[Double]]
+  ): js.Array[js.Array[Double]] =
+    guarded(grid(TDA4j.homBars(matrix(first), matrix(second))))
+
+  /** The dimension of the space of maps of persistence modules between two barcodes, degree by degree. */
+  @JSExportTopLevel("homDimension")
+  def homDimension(first: js.Array[js.Array[Double]], second: js.Array[js.Array[Double]]): Int =
+    guarded(TDA4j.homDimension(matrix(first), matrix(second)))
+
+  /** The dual of a barcode: the row `[dimension, birth, death]` of `[b, d)` becomes `[dimension, -d, -b]`, the interval
+    * `(-d, -b]` (`-Infinity` as the first end for a bar that never dies).
+    */
+  @JSExportTopLevel("dualBars")
+  def dualBars(bars: js.Array[js.Array[Double]]): js.Array[js.Array[Double]] =
+    guarded(grid(TDA4j.dualBars(matrix(bars))))
 
   /** The loops of the point cloud's Vietoris-Rips complex: `[birth, death]` for each persistent class of degree 1, the
     * most persistent first. Loop `i` is `cocycleIndex: i` of `circularCoordinates`; pick `r` between its birth and
@@ -307,6 +621,47 @@ final class EulerCurve private[javascript] (underlying: matlab.EulerCurveResult)
 object EulerCurve:
   private[javascript] def apply(underlying: matlab.EulerCurveResult): EulerCurve = new EulerCurve(underlying)
 
+/** The persistent Laplacian of one dimension and one pair of filtration values: a symmetric matrix on the simplices
+  * that have entered by `from`, whose kernel has the dimension of the persistent Betti number from `from` to `to`.
+  */
+final class PersistentLaplacian private[javascript] (underlying: matlab.PersistentLaplacianResult):
+
+  /** The dimension of the simplices the matrix is on. */
+  @JSExport
+  def dimension: Int = underlying.dimension()
+
+  /** The simplices that have entered by this value are the rows and columns. */
+  @JSExport
+  def from: Double = underlying.start()
+
+  /** The complex at this value is the one the chains live in. */
+  @JSExport
+  def to: Double = underlying.stop()
+
+  /** The simplices as arrays of vertex numbers, one for each row and column of `matrix`. */
+  @JSExport
+  def cells: js.Array[js.Array[Int]] = js.Array(underlying.cells().map(c => js.Array(c*))*)
+
+  /** The matrix, as an array of rows. */
+  @JSExport
+  def matrix: js.Array[js.Array[Double]] = js.Array(underlying.matrix().map(row => js.Array(row*))*)
+
+  /** The eigenvalues, smallest first. */
+  @JSExport
+  def eigenvalues: js.Array[Double] = js.Array(underlying.eigenvalues()*)
+
+  /** The dimension of the kernel: the persistent Betti number from `from` to `to`. */
+  @JSExport
+  def bettiNumber: Int = underlying.bettiNumber()
+
+  /** The smallest eigenvalue that is not zero, `undefined` if there is none. */
+  @JSExport
+  def spectralGap: js.UndefOr[Double] = if underlying.hasSpectralGap() then underlying.spectralGap() else js.undefined
+
+object PersistentLaplacian:
+  private[javascript] def apply(underlying: matlab.PersistentLaplacianResult): PersistentLaplacian =
+    new PersistentLaplacian(underlying)
+
 /** The result of a computation: the bars, the representatives, and the plots. */
 final class Result private[javascript] (underlying: PersistenceResult):
 
@@ -337,6 +692,17 @@ final class Result private[javascript] (underlying: PersistenceResult):
       .asInstanceOf[js.Object]
   }
 
+  /** The cells that open and close `bars[i]`: `{ birth, death }`, each a cell as in `representative(i).cells`. `birth`
+    * is `null` where the engine recorded no cells, `death` where no cell closes the bar (an essential one).
+    */
+  @JSExport
+  def barCells(i: Int): js.Object = Exports.guarded {
+    def cell(vertices: Array[Int]): js.Array[Int] = if vertices.isEmpty then null else js.Array(vertices*)
+    js.Dynamic
+      .literal(birth = cell(underlying.birthCell(i)), death = cell(underlying.deathCell(i)))
+      .asInstanceOf[js.Object]
+  }
+
   /** The bottleneck distance to `other` between the dimension-`dimension` bars (all of them, not only the reported). */
   @JSExport
   def bottleneckDistance(other: Result, dimension: Int): Double =
@@ -346,6 +712,29 @@ final class Result private[javascript] (underlying: PersistenceResult):
   @JSExport
   def wassersteinDistance(other: Result, dimension: Int, order: js.UndefOr[Double] = js.undefined): Double =
     Exports.guarded(underlying.wassersteinDistance(other.wrapped, dimension, order.getOrElse(1.0)))
+
+  /** An optimal matching of the dimension-`dimension` bars with those of `other` for the `order`-Wasserstein distance
+    * (default 1): `[i, j]` pairs bar `i` here with bar `j` there, `[i, -1]` sends a bar here to the diagonal and
+    * `[-1, j]` one there. Empty when the numbers of essential bars differ.
+    */
+  @JSExport
+  def wassersteinMatching(
+    other: Result,
+    dimension: Int,
+    order: js.UndefOr[Double] = js.undefined
+  ): js.Array[js.Array[Int]] =
+    Exports.guarded(
+      js.Array(
+        underlying.wassersteinMatching(other.wrapped, dimension, order.getOrElse(1.0)).map(row => js.Array(row*))*
+      )
+    )
+
+  /** As `wassersteinMatching`, for the bottleneck distance. */
+  @JSExport
+  def bottleneckMatching(other: Result, dimension: Int): js.Array[js.Array[Int]] =
+    Exports.guarded(
+      js.Array(underlying.bottleneckMatching(other.wrapped, dimension).map(row => js.Array(row*))*)
+    )
 
   /** The first `numLevels` persistence landscapes of the dimension-`dimension` bars, `resolution` samples of
     * `[tMin, tMax]` each: `landscape[k][j]` is level `k` at sample `j`.
@@ -359,6 +748,40 @@ final class Result private[javascript] (underlying: PersistenceResult):
     resolution: Int
   ): js.Array[js.Array[Double]] =
     Exports.guarded(grid(underlying.landscape(dimension, numLevels, tMin, tMax, resolution)))
+
+  /** The number of dimension-`dimension` bars alive at each of `resolution` samples of `[tMin, tMax]`: a bar `[birth,
+    * death)` is alive at `t` when `birth <= t < death`.
+    */
+  @JSExport
+  def bettiCurve(dimension: Int, tMin: Double, tMax: Double, resolution: Int): js.Array[Int] =
+    Exports.guarded(js.Array(underlying.bettiCurve(dimension, tMin, tMax, resolution)*))
+
+  /** The persistence silhouette of the dimension-`dimension` bars at `resolution` samples of `[tMin, tMax]`: the
+    * average of the bars' tents weighted by persistence to the power `power` (default 1). Essential bars are left out.
+    */
+  @JSExport
+  def silhouette(
+    dimension: Int,
+    tMin: Double,
+    tMax: Double,
+    resolution: Int,
+    power: js.UndefOr[Double] = js.undefined
+  ): js.Array[Double] =
+    Exports.guarded(js.Array(underlying.silhouette(dimension, power.getOrElse(1.0), tMin, tMax, resolution)*))
+
+  /** The persistence entropy of the dimension-`dimension` bars, in `[0, 1]` when `normalized`. Essential bars are left
+    * out.
+    */
+  @JSExport
+  def persistenceEntropy(dimension: Int, normalized: js.UndefOr[Boolean] = js.undefined): Double =
+    Exports.guarded(underlying.persistenceEntropy(dimension, normalized.getOrElse(false)))
+
+  /** The sliced Wasserstein distance to `other` between the dimension-`dimension` bars, averaged over `directions`
+    * directions (default 50). Essential bars are left out.
+    */
+  @JSExport
+  def slicedWassersteinDistance(other: Result, dimension: Int, directions: js.UndefOr[Int] = js.undefined): Double =
+    Exports.guarded(underlying.slicedWassersteinDistance(other.wrapped, dimension, directions.getOrElse(50)))
 
   /** The persistence image of the dimension-`dimension` bars over `[birthMin, birthMax] x [persistenceMin,
     * persistenceMax]`, `birthResolution` by `persistenceResolution` pixels with a Gaussian of width `sigma`:

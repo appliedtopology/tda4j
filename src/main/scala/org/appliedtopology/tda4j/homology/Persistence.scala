@@ -42,9 +42,9 @@ object Image:
   * `representatives = Representatives.Cocycles` gives '''cocycles''' instead (a loop's cocycle cuts across it; circular
   * coordinates are built from cocycles). The pairing is computed by cohomology either way, which is fast in degree 2;
   * cycles then cost one more reduction, of the boundaries of the cells that end bars. Zero-length bars are left out;
-  * short ones are one call away (`diagram.longerThan(0.05)`, `diagram.significant()`). This runs the computation to the
-  * end; for a long run you want to inspect while it goes (or keep if it dies), build an engine and use its cursor
-  * (`advanceFor`, `diagramAt`) instead.
+  * short ones are one call away (`diagram.longerThan(0.05)`, `diagram.longerThanFraction()`). This runs the computation
+  * to the end; for a long run you want to inspect while it goes (or keep if it dies), build an engine and use its
+  * cursor (`advanceFor`, `diagramAt`) instead.
   *
   * @param input
   *   points (`Array[Array[Double]]`, `Seq[Seq[Double]]`, `Seq[Array[Double]]`), a `FiniteMetricSpace[Int]`, an
@@ -61,6 +61,10 @@ object Image:
   * @param characteristic
   *   the coefficient field: a prime `p` for `Z/p` (default `FiniteField.DefaultPrime`, 17), or `0` for real
   *   coefficients.
+  * @param coefficients
+  *   the coefficient field as an object, for the one `characteristic` cannot name: `Coefficients.Rationals` for exact
+  *   rational numbers. When given it replaces `characteristic`, which must then be left alone or agree with it
+  *   (`Coefficients.Rationals` has characteristic 0).
   * @param engine
   *   `Persistence.Engine.Auto` (default) picks one for the input and `representatives`; see [[Persistence.Engine]].
   *   Most users never set it.
@@ -125,7 +129,9 @@ object Persistence:
       complex: PointCloudComplex
     ): StratifiedCellStream[CellT, Double]
 
-    /** The scale `significant()` measures persistence against (a point cloud's minimum enclosing radius), if any. */
+    /** The scale `longerThanFraction()` measures persistence against (a point cloud's minimum enclosing radius), if
+      * any.
+      */
     def scale: Option[Double]
 
     /** The cell type's boundary and order. */
@@ -142,7 +148,7 @@ object Persistence:
       maxDimension: Int,
       maxFiltrationValue: Option[Double],
       complex: PointCloudComplex,
-      characteristic: Int,
+      coefficients: Coefficients,
       includeZeroLength: Boolean,
       cycles: Boolean
     ): PersistenceDiagram[CellT] =
@@ -196,25 +202,33 @@ object Persistence:
     private def ofMetricSpace(ms: FiniteMetricSpace[Int], points: Option[PointCloud]): Input[Simplex[Int]] =
       new Input[Simplex[Int]]:
         require(ms.size > 0, "Persistence: the input has no points")
-        def stream(maxDimension: Int, maxFiltrationValue: Option[Double], complex: PointCloudComplex) =
+        def stream(
+          maxDimension: Int,
+          maxFiltrationValue: Option[Double],
+          complex: PointCloudComplex
+        ): StratifiedCellStream[Simplex[Int], Double] =
           points match
             case Some(pc) => complex.fromPoints(pc, maxDimension, maxFiltrationValue)
             case None     =>
               require(complex eq VietorisRips, "Persistence: a metric space only supports complex = VietorisRips")
-              VietorisRips(ms, maxDimension, maxFiltrationValue)
+              ms match
+                // The flag complex of the listed edges, grown from the neighbour lists: no n x n matrix.
+                case graph: WeightedGraph => FlagComplex(graph, maxDimension, maxFiltrationValue)
+                case _                    => VietorisRips(ms, maxDimension, maxFiltrationValue)
         lazy val scale = Some(ms.minimumEnclosingRadius)
         def cells = summon[Simplex[Int] is OrderedCell]
-        override def ripserApplies(complex: PointCloudComplex) = complex eq VietorisRips
+        // The Ripser engines index a dense matrix; a graph goes to the cohomology engine on its flag complex.
+        override def ripserApplies(complex: PointCloudComplex) =
+          (complex eq VietorisRips) && !ms.isInstanceOf[WeightedGraph]
         override def ripser(
           maxDimension: Int,
           maxFiltrationValue: Option[Double],
           complex: PointCloudComplex,
-          characteristic: Int,
+          coefficients: Coefficients,
           includeZeroLength: Boolean,
           cycles: Boolean
         ) =
           require(complex eq VietorisRips, "Persistence: engine = Ripser needs complex = VietorisRips")
-          val coefficients = Coefficients(characteristic)
           import coefficients.given
           val engine =
             PackedRipserCohomologyEngine[coefficients.C](ms, maxDimension, maxFiltrationValue = maxFiltrationValue)
@@ -224,7 +238,15 @@ object Persistence:
             val chain = Chain.from(bar.representative.terms.map { (cell, c) =>
               (Simplex(engine.vertices(cell, bar.dim + 1)*), c)
             })
-            new PersistenceBar(bar.dim, bar.lower, bar.upper, Some(chain))
+            val pair = bar.cells.map { cells =>
+              val packed = cells.asInstanceOf[Involution.Pair[engine.DiameterIndex]]
+              Involution.Pair(
+                packed.dim,
+                Simplex(engine.vertices(packed.birth, packed.dim + 1)*),
+                packed.death.map(death => Simplex(engine.vertices(death, packed.dim + 2)*))
+              )
+            }
+            new PersistenceBar(bar.dim, bar.lower, bar.upper, Some(chain), pair)
           val longestEdge = longestEdgeWithin(ms, threshold)
           PersistenceDiagram[Simplex[Int], coefficients.C](
             (if cycles then engine.persistentHomology(includeZeroLength)
@@ -232,7 +254,8 @@ object Persistence:
             maxDimension,
             longestEdge,
             scale,
-            Some(kindOf(cycles))
+            Some(kindOf(cycles)),
+            cycles
           )
         override def parallelRipserApplies(
           complex: PointCloudComplex,
@@ -241,7 +264,7 @@ object Persistence:
           includeZeroLength: Boolean,
           cycles: Boolean
         ) =
-          (complex eq VietorisRips) && !includeZeroLength &&
+          (complex eq VietorisRips) && !ms.isInstanceOf[WeightedGraph] && !includeZeroLength &&
             ParallelRipser.supports(ms.size, maxDimension, characteristic, cycles)
         override def parallelRipser(
           maxDimension: Int,
@@ -289,11 +312,14 @@ object Persistence:
               if cycles then () => simplexChain(allCycles(i).map((key, c) => (run.vertices(key, dim), c)))
               else () => simplexChain(run.cocycle(i).map((vertices, c) => (vertices, coefficients.fromInt(c))))
             )(summon[Ordering[Simplex[Int]]], summon[coefficients.C is Field])
+            val (birthVertices, deathVertices) = run.cellsOfBar(i)
+            val pair = Involution.Pair(dim, Simplex(birthVertices*), deathVertices.map(vs => Simplex(vs*)))
             val bar = PersistenceBar[Double, Chain[Simplex[Int], coefficients.C]](
               dim,
               ClosedEndpoint(birth),
               if death.isPosInfinity then PositiveInfinity() else OpenEndpoint(death),
-              Some(representative)
+              Some(representative),
+              Some(pair)
             )
             (bar, representative)
           }
@@ -306,7 +332,8 @@ object Persistence:
             maxDimension,
             longestEdgeWithin(ms, threshold),
             scale,
-            Some(kindOf(cycles))
+            Some(kindOf(cycles)),
+            cycles
           )
 
     given fromPointCloud: Conversion[PointCloud, Input[Simplex[Int]]] = pc => ofMetricSpace(pc.metricSpace, Some(pc))
@@ -351,8 +378,17 @@ object Persistence:
     includeZeroLength: Boolean = false,
     representatives: Representatives = Representatives.Cycles,
     computeAllRepresentatives: Boolean = true,
-    threads: Optional[Int] = Optional.empty
+    threads: Optional[Int] = Optional.empty,
+    coefficients: Optional[Coefficients] = Optional.empty
   ): PersistenceDiagram[CellT] =
+    val field = coefficients.toOption match
+      case Some(chosen) =>
+        require(
+          characteristic == FiniteField.DefaultPrime || characteristic == chosen.characteristic,
+          s"Persistence: characteristic = $characteristic and coefficients = $chosen disagree; give one of them"
+        )
+        chosen
+      case None => Coefficients(characteristic)
     threads.toOption match
       case Some(n) =>
         require(n >= 1, s"Persistence: threads must be at least 1, got $n")
@@ -362,7 +398,7 @@ object Persistence:
             maxDimension,
             maxFiltrationValue,
             complex,
-            characteristic,
+            field,
             engine,
             includeZeroLength,
             representatives,
@@ -375,7 +411,7 @@ object Persistence:
           maxDimension,
           maxFiltrationValue,
           complex,
-          characteristic,
+          field,
           engine,
           includeZeroLength,
           representatives,
@@ -387,7 +423,7 @@ object Persistence:
     maxDimension: Optional[Int],
     maxFiltrationValue: Optional[Double],
     complex: PointCloudComplex,
-    characteristic: Int,
+    coefficients: Coefficients,
     engine: Engine,
     includeZeroLength: Boolean,
     representatives: Representatives,
@@ -402,7 +438,7 @@ object Persistence:
           if Parallel.threads > 1 && input.parallelRipserApplies(
               complex,
               requested.getOrElse(DefaultMaxDimension),
-              characteristic,
+              coefficients.characteristic,
               includeZeroLength,
               cycles
             )
@@ -422,7 +458,7 @@ object Persistence:
         requested.getOrElse(DefaultMaxDimension),
         maxFiltrationValue.toOption,
         complex,
-        characteristic,
+        coefficients.characteristic,
         includeZeroLength,
         cycles,
         computeAllRepresentatives
@@ -432,7 +468,7 @@ object Persistence:
         requested.getOrElse(DefaultMaxDimension),
         maxFiltrationValue.toOption,
         complex,
-        characteristic,
+        coefficients,
         includeZeroLength,
         cycles
       )
@@ -444,7 +480,7 @@ object Persistence:
         )
       )
       require(grid.ambientDim >= 2, "Persistence: engine = FastCubical needs an image of dimension 2 or more")
-      fastCubical(grid, requested.getOrElse(DefaultMaxDimension), characteristic, includeZeroLength)
+      fastCubical(grid, requested.getOrElse(DefaultMaxDimension), coefficients, includeZeroLength)
         .asInstanceOf[PersistenceDiagram[CellT]]
     else
       val stream = input.stream(requested.getOrElse(DefaultMaxDimension), maxFiltrationValue.toOption, complex)
@@ -460,7 +496,7 @@ object Persistence:
       compute(
         stream,
         degree,
-        characteristic,
+        coefficients,
         chosen,
         input.scale,
         includeZeroLength,
@@ -470,10 +506,9 @@ object Persistence:
   private def fastCubical(
     grid: CubicalGridStream,
     maxDimension: Int,
-    characteristic: Int,
+    coefficients: Coefficients,
     includeZeroLength: Boolean
   ): PersistenceDiagram[Cube] =
-    val coefficients = Coefficients(characteristic)
     import coefficients.given
     val bars = FastCubicalHomologyEngine[coefficients.C]().persistentHomology(grid, includeZeroLength, maxDimension)
     PersistenceDiagram[Cube, coefficients.C](
@@ -494,13 +529,12 @@ object Persistence:
   private def compute[CellT: OrderedCell](
     stream: StratifiedCellStream[CellT, Double],
     maxDimension: Int,
-    characteristic: Int,
+    coefficients: Coefficients,
     engine: Engine,
     scale: Option[Double],
     includeZeroLength: Boolean,
     cycles: Boolean
   ): PersistenceDiagram[CellT] =
-    val coefficients = Coefficients(characteristic)
     import coefficients.given
     val (bars, last) = engine match
       case Engine.Chunks =>
@@ -539,5 +573,8 @@ object Persistence:
       maxDimension,
       last,
       scale,
-      Some(kindOf(cycles))
+      Some(kindOf(cycles)),
+      // The cycles of the cohomology engine are derived by involution, one boundary for each finite bar; those of the
+      // naive and chunked engines are the generators of their reductions.
+      cycles && engine == Engine.Cohomology
     )

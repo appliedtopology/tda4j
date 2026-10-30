@@ -10,8 +10,9 @@ title: Installation
 | Scala | Java 21 or newer, Scala 3.9 |
 | Java, MATLAB, the command line | Java 21 or newer (MATLAB: a release whose bundled or configured JVM is 21 or newer) |
 | JavaScript, TypeScript | a browser, or Node.js 20.16 or newer |
+| Python | Python 3.10 or newer, and Java 21 or newer |
 
-Everything runs on the JVM or in JavaScript; there is nothing to compile and no native library to install.
+Everything runs on the JVM or in JavaScript (the Python package starts a JVM); there is nothing to compile and no native library to install.
 
 The current version is on [Maven Central](https://central.sonatype.com/artifact/org.appliedtopology/tda4j_3) and in the
 [releases](https://github.com/appliedtopology/tda4j/releases); below it is written `VERSION`. A version that ends in
@@ -78,6 +79,16 @@ npm install @appliedtopology/tda4j
 ```
 
 See the [JavaScript page](javascript.md).
+
+## Python
+
+```
+pip install tda4j
+```
+
+The wheel carries the library's jar and starts a JVM when the first function needs it, so Java 21 or newer has to be
+installed. The wheel is also attached to each [release](https://github.com/appliedtopology/tda4j/releases). See the
+[Python page](python.md).
 
 ## Try it without installing anything to your project
 

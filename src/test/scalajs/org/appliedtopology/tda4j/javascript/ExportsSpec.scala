@@ -39,6 +39,167 @@ class ExportsSpec extends Specification:
     }
   }
 
+  "bootstrapBand, tomatoClusters and tomatoDiagram" should {
+    "return the band as a plain object and cluster two separated blobs" >> {
+      val band = dynamic(Exports.bootstrapBand(circle(30), options("rounds" -> 6, "seed" -> 2)))
+      val blobs =
+        js.Array((0 until 20).map(i => js.Array(0.1 * i, 0.0)) ++ (0 until 20).map(i => js.Array(50.0 + 0.1 * i, 0.0))*)
+      (band.threshold.asInstanceOf[Double] must beEqualTo(2.0 * band.width.asInstanceOf[Double])) and
+        (band.distances.asInstanceOf[js.Array[Double]].length must beEqualTo(6)) and
+        (Exports.tomatoClusters(blobs, 4, 100.0).toSet.size must beEqualTo(2)) and
+        (Exports.tomatoDiagram(blobs, 4).count(_(1).isInfinite) must beEqualTo(2))
+    }
+    "match a result with itself" >> {
+      val result = Exports.persistence(circle(20), options("maxDimension" -> 1))
+      result.wassersteinMatching(result, 1).forall(row => row(0) == row(1)) must beTrue
+    }
+  }
+
+  "takensEmbedding, takensEmbeddingOfVectors and delayByAutocorrelation" should
+    "give the windows of a series, with the delay and stride optional, and a delay for a sinusoid" >> {
+      val ramp = js.Array((0 to 5).map(_.toDouble)*)
+      val sine = js.Array((0 until 60).map(t => math.sin(2 * math.Pi * t / 20))*)
+      val rows = js.Array(js.Array(0.0, 10.0), js.Array(1.0, 11.0), js.Array(2.0, 12.0), js.Array(3.0, 13.0))
+      (Exports.takensEmbedding(ramp, 3, 2).map(_.toSeq).toSeq must beEqualTo(
+        Seq(Seq(0.0, 2.0, 4.0), Seq(1.0, 3.0, 5.0))
+      )) and
+        (Exports.takensEmbedding(ramp, 2).length must beEqualTo(5)) and
+        (Exports.takensEmbedding(ramp, 2, 1, 2).length must beEqualTo(3)) and
+        (Exports.takensEmbeddingOfVectors(rows, 2, 2).map(_.toSeq).toSeq must beEqualTo(
+          Seq(Seq(0.0, 10.0, 2.0, 12.0), Seq(1.0, 11.0, 3.0, 13.0))
+        )) and
+        (Exports.delayByAutocorrelation(sine, 15) must beBetween(4, 6)) and
+        (Exports.takensEmbedding(js.Array(1.0, 2.0), 3, 2) must throwA[js.JavaScriptException])
+    }
+
+  "productBars, homBars, homDimension and dualBars" should
+    "give the worked examples: the Tor class of a product with the sum, [2, 5) as Hom, and a reflected bar" >> {
+      val segment = js.Array(js.Array(0.0, 0.0, 1.0), js.Array(0.0, 0.0, Double.PositiveInfinity))
+      val (a, b) = (js.Array(js.Array(0.0, 0.0, 3.0)), js.Array(js.Array(0.0, 1.0, 5.0)))
+      (Exports.productBars(segment, segment).length must beEqualTo(4)) and
+        (Exports.productBars(segment, segment, "sum").map(_.toSeq).toSeq must contain(Seq(1.0, 1.0, 2.0))) and
+        (Exports.homBars(a, b).map(_.toSeq).toSeq must beEqualTo(Seq(Seq(0.0, 2.0, 5.0)))) and
+        (Exports.homDimension(b, a) must beEqualTo(1)) and
+        (Exports.dualBars(js.Array(js.Array(1.0, 1.0, 4.0))).map(_.toSeq).toSeq must beEqualTo(
+          Seq(Seq(1.0, -4.0, -1.0))
+        )) and
+        (Exports.productBars(segment, segment, "mean") must throwA[js.JavaScriptException])
+    }
+
+  "persistentLaplacian" should
+    "have the square's loop at 1 in its kernel and nothing there once the diagonals come in" >> {
+      val square = js.Array(js.Array(0.0, 0.0), js.Array(1.0, 0.0), js.Array(1.0, 1.0), js.Array(0.0, 1.0))
+      val alive = Exports.persistentLaplacian(square, 1, 1.0, 1.0)
+      val gone = Exports.persistentLaplacian(square, 1, 1.0, math.sqrt(2.0))
+      (alive.bettiNumber must beEqualTo(1)) and (gone.bettiNumber must beEqualTo(0)) and
+        (alive.eigenvalues.length must beEqualTo(4)) and (alive.matrix.length must beEqualTo(4)) and
+        (alive.cells.length must beEqualTo(4)) and (alive.spectralGap.isDefined must beTrue) and
+        (Exports.persistentLaplacian(square, 1, 2.0, 1.0) must throwA[js.JavaScriptException])
+    }
+
+  "morseReduction" should
+    "leave fewer cells of a lattice's complex with the facade's counts, and refuse an unknown strategy" >> {
+      val grid = js.Array((0 until 16).map(i => js.Array((i / 4).toDouble, (i % 4).toDouble))*)
+      val reduced = dynamic(Exports.morseReduction(grid, options("strategy" -> "coreduction")))
+      val facade = org.appliedtopology.tda4j.matlab.TDA4j
+        .morseReductionFromPoints(grid.toArray.map(_.toArray), Array("strategy", "coreduction"))
+      val counts = reduced.criticalCounts.asInstanceOf[js.Array[Int]].toSeq
+      (counts must beEqualTo(facade.criticalCounts().toSeq)) and
+        (counts.sum must beLessThan(reduced.cellCounts.asInstanceOf[js.Array[Int]].toSeq.sum / 2)) and
+        (reduced.pairCount.asInstanceOf[Int] must beEqualTo(facade.pairCount())) and
+        (Exports.morseReduction(grid, options("strategy" -> "greedy")) must throwA[js.JavaScriptException])
+    }
+
+  "zigzagFromSteps" should
+    "close and open a loop as the facade does, and zigzagFromComplexes needs a link for a union" >> {
+      def simplex(vertices: Int*) = js.Array(vertices*)
+      val simplices = js.Array(
+        simplex(0),
+        simplex(1),
+        simplex(2),
+        simplex(0, 1),
+        simplex(1, 2),
+        simplex(0, 2),
+        simplex(0, 2)
+      )
+      val additions = js.Array(true, true, true, true, true, true, false)
+      val steps = dynamic(Exports.zigzagFromSteps(js.Array(), simplices, additions))
+      val facade = org.appliedtopology.tda4j.matlab.TDA4j
+        .zigzagFromSteps(Array.empty[Array[Int]], simplices.toArray.map(_.toArray), additions.toArray)
+      val bars = steps.bars.asInstanceOf[js.Array[js.Array[Double]]].toSeq.map(_.toSeq)
+      val first = js.Array(simplex(0), simplex(1), simplex(2), simplex(0, 1), simplex(1, 2))
+      val second = js.Array(simplex(0), simplex(1), simplex(2), simplex(1, 2), simplex(0, 2))
+      val joined = dynamic(Exports.zigzagFromComplexes(js.Array(first, second), options("link" -> "union")))
+      (bars must beEqualTo(facade.toArray().toSeq.map(_.toSeq))) and
+        (steps.lastPosition.asInstanceOf[Int] must beEqualTo(7)) and
+        (steps.representatives.asInstanceOf[js.Array[js.Any]].length must beEqualTo(bars.size)) and
+        (joined.bars.asInstanceOf[js.Array[js.Array[Double]]].toSeq.map(_.toSeq) must contain(Seq(1.0, 1.0, 2.0))) and
+        (Exports.zigzagFromComplexes(js.Array(first, second)) must throwA[js.JavaScriptException]) and
+        (Exports
+          .zigzagFromSteps(js.Array(), js.Array(simplex(0, 1)), js.Array(true)) must throwA[js.JavaScriptException])
+    }
+
+  "relativePersistence" should {
+    "drop the essential bar of degree 0 modulo one point, and take a distance matrix" >> {
+      val points = circle(12)
+      val absolute = Exports.persistence(points, options("maxDimension" -> 1, "minPersistence" -> 0))
+      val relative =
+        Exports.relativePersistence(points, js.Array(0), options("maxDimension" -> 1, "minPersistence" -> 0))
+      val distances = js.Array(
+        points.toSeq.map(p => js.Array(points.toSeq.map(q => math.hypot(p(0) - q(0), p(1) - q(1)))*))*
+      )
+      val byMatrix =
+        Exports.relativePersistenceFromDistances(
+          distances,
+          js.Array(0),
+          options("maxDimension" -> 1, "minPersistence" -> 0)
+        )
+      def essential(r: Result) = r.bars.count(b => dynamic(b).death.asInstanceOf[Double].isInfinite)
+      (essential(absolute) must beEqualTo(1)) and (essential(relative) must beEqualTo(0)) and
+        (byMatrix.bars.length must beEqualTo(relative.bars.length))
+    }
+    "say which point is not there" >> {
+      Exports.relativePersistence(circle(5), js.Array(7)) must throwWith[js.JavaScriptException]("out of range")
+    }
+  }
+
+  "inclusionMap and simplicialMap" should {
+    "tell the square's loop from the circle's: the image from the side, the kernel after the circle's loop, the cokernel before" >> {
+      val points = circle(24)
+      val subsample = js.Array(0, 6, 12, 18)
+      val map = dynamic(Exports.inclusionMap(points, subsample, options("maxFiltrationValue" -> 2.5)))
+      val loop = dynamic(map.degrees.asInstanceOf[js.Array[js.Object]](1))
+      def bars(name: String) =
+        dynamic(loop.selectDynamic(name).asInstanceOf[js.Object]).asInstanceOf[js.Array[js.Array[Double]]]
+      val between = dynamic(
+        Exports.simplicialMap(
+          js.Array(subsample.map(points.apply).toSeq*),
+          points,
+          subsample,
+          options("maxFiltrationValue" -> 2.5)
+        )
+      )
+      (map.maxDimension.asInstanceOf[Int] must beEqualTo(2)) and (map.characteristic.asInstanceOf[Int] must beEqualTo(
+        17
+      )) and
+        (bars("image").length must beEqualTo(1)) and (bars("kernel").length must beEqualTo(1)) and
+        (bars("cokernel").length must beEqualTo(1)) and
+        (bars("image")(0)(0) must beCloseTo(math.sqrt(2.0), 1e-9)) and
+        (bars("kernel")(0)(0) must beEqualTo(bars("image")(0)(1))) and
+        (bars("cokernel")(0)(1) must beCloseTo(math.sqrt(2.0), 1e-9)) and
+        (js.JSON.stringify(between.degrees) must beEqualTo(js.JSON.stringify(map.degrees)))
+    }
+    "take distances, and say what is wrong with the subsample" >> {
+      val points = circle(8)
+      val distances =
+        js.Array(points.toSeq.map(p => js.Array(points.toSeq.map(q => math.hypot(p(0) - q(0), p(1) - q(1)))*))*)
+      val byDistances =
+        dynamic(Exports.inclusionMapFromDistances(distances, js.Array(0, 4), options("maxDimension" -> 1)))
+      (byDistances.maxDimension.asInstanceOf[Int] must beEqualTo(1)) and
+        (Exports.inclusionMap(points, js.Array(8)) must throwWith[js.JavaScriptException]("1-based"))
+    }
+  }
+
   "eulerCurve" should {
     "give the unit square's steps: four vertices, then four edges close a loop, then the diagonals fill it" >> {
       val square = js.Array(js.Array(0.0, 0.0), js.Array(1.0, 0.0), js.Array(1.0, 1.0), js.Array(0.0, 1.0))
@@ -116,10 +277,28 @@ class ExportsSpec extends Specification:
 
   "a Result" should {
     val result = Exports.persistence(circle(30), options("maxDimension" -> 1))
+    "give a Betti curve, a silhouette, an entropy and a sliced Wasserstein distance" >> {
+      val curve = result.bettiCurve(1, 0.0, 2.0, 11)
+      (curve.length must beEqualTo(11)) and (result.silhouette(1, 0.0, 2.0, 11).length must beEqualTo(11)) and
+        (result.persistenceEntropy(0, true) must beBetween(0.0, 1.0)) and
+        (result.slicedWassersteinDistance(result, 1) must beEqualTo(0.0))
+    }
     "give the persistence image of its bars" >> {
       val image = result.persistenceImage(1, 0.1, 0.0, 1.0, 0.0, 2.0, 5, 6)
       (image.length must beEqualTo(5)) and (image.forall(_.length == 6) must beTrue) and
         (image.flatMap(_.toSeq).exists(_ > 0.0) must beTrue)
+    }
+    "give the cells that open and close a bar: a loop's edge and its triangle, an essential bar's vertex and no death" >> {
+      val bars = result.bars
+      val loop = bars.indexWhere(b => dynamic(b).dim.asInstanceOf[Int] == 1)
+      val essential = bars.indexWhere(b => dynamic(b).death.asInstanceOf[Double].isInfinite)
+      val loopCells = dynamic(result.barCells(loop))
+      val essentialCells = dynamic(result.barCells(essential))
+      (loop must be_>=(0)) and
+        (loopCells.birth.asInstanceOf[js.Array[Int]].length must beEqualTo(2)) and
+        (loopCells.death.asInstanceOf[js.Array[Int]].length must beEqualTo(3)) and
+        (essentialCells.birth.asInstanceOf[js.Array[Int]].length must beEqualTo(1)) and
+        (essentialCells.death == null must beTrue)
     }
     "export its boundary matrix, columns in filtration order" >> {
       val boundary = dynamic(result.boundary())

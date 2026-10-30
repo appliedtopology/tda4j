@@ -36,7 +36,8 @@ final class PersistenceResult private[matlab] (
   private val boundaryMatrixProvider: () => BoundaryMatrixData,
   private val visible: Array[Int],
   private val threshold: Double,
-  private val source: Option[ResultSource] = None
+  private val source: Option[ResultSource] = None,
+  private val cellProvider: Int => (Array[Int], Array[Int]) = PersistenceResult.noCells
 ):
   /** A result that reports every bar -- what `fromBars` builds; `TDA4j`'s dispatch then narrows it with
     * [[withPersistenceThreshold]].
@@ -86,7 +87,8 @@ final class PersistenceResult private[matlab] (
       boundaryMatrixProvider,
       PersistenceFilter.keptIndices(allBirths, allDeaths, thr),
       thr,
-      source
+      source,
+      cellProvider
     )
 
   /** This result without its zero-length bars (`birth == death`): what every entry point returns unless the
@@ -102,7 +104,8 @@ final class PersistenceResult private[matlab] (
       boundaryMatrixProvider,
       Array.range(0, keep.length),
       0.0,
-      source
+      source,
+      i => cellProvider(keep(i))
     )
 
   def size(): Int = visible.length
@@ -132,6 +135,18 @@ final class PersistenceResult private[matlab] (
     * of the residue, over the reals the value.
     */
   def cycleCoefficients(i: Int): Array[Double] = cycleProvider(visible(i))._2
+
+  /** The cell that opens bar `i`, in the format of one row of [[cycleVertices]]: the cell whose entry creates the
+    * class, of the bar's dimension and with the bar's birth as its filtration value. Empty if the engine behind the
+    * result recorded no cells (and for a result loaded from a file that has none).
+    */
+  def birthCell(i: Int): Array[Int] = cellProvider(visible(i))._1
+
+  /** The cell that closes bar `i`, in the format of one row of [[cycleVertices]]: the cell whose entry kills the class,
+    * one dimension up from the bar's and with the bar's death as its filtration value. Empty for an essential bar, and
+    * where [[birthCell]] is empty.
+    */
+  def deathCell(i: Int): Array[Int] = cellProvider(visible(i))._2
 
   /** All the bars of dimension `dim`, threshold or not, without representatives: what the distances and vectorizations
     * compare (so they do not depend on each result's own threshold).
@@ -175,6 +190,27 @@ final class PersistenceResult private[matlab] (
       order,
       toGroundNorm(groundNorm)
     )
+
+  private def matchingRows(matching: Option[BarcodeDistance.Matching]): Array[Array[Int]] =
+    matching.fold(Array.empty[Array[Int]]) { m =>
+      (m.pairs.map((i, j) => Array(i, j)) ++ m.leftToDiagonal.map(i => Array(i, -1)) ++
+        m.rightToDiagonal.map(j => Array(-1, j))).toArray
+    }
+
+  /** An optimal matching of the dimension-`dimension` bars of this result with those of `other` for the Wasserstein
+    * distance of order `order`: one row `[i j]` per matched pair of bars, `[i -1]` for a bar of this result matched to
+    * the diagonal and `[-1 j]` for one of `other`. The bars are numbered from 0 in the order of [[toArrayUnfiltered]]
+    * restricted to that dimension. No rows if the numbers of essential bars differ (the distance is `Inf` then). See
+    * `BarcodeDistance.wassersteinMatching`.
+    */
+  def wassersteinMatching(other: PersistenceResult, dimension: Int, order: Double): Array[Array[Int]] =
+    matchingRows(
+      BarcodeDistance.wassersteinMatching(barsOfDimension(dimension), other.barsOfDimension(dimension), order)
+    )
+
+  /** As [[wassersteinMatching]], for the bottleneck distance. */
+  def bottleneckMatching(other: PersistenceResult, dimension: Int): Array[Array[Int]] =
+    matchingRows(BarcodeDistance.bottleneckMatching(barsOfDimension(dimension), other.barsOfDimension(dimension)))
 
   /** The first `numLevels` persistence landscapes of the dimension-`dimension` bars, sampled at `resolution` points of
     * `[tMin, tMax]`: `levels(k)(j)` is level `k` (`0` the outermost) at point `j`. See `Vectorization.landscape`.
@@ -227,6 +263,34 @@ final class PersistenceResult private[matlab] (
       weightCap
     )
 
+  /** The number of bars of the dimension-`dimension` bars alive at each of `resolution` points of `[tMin, tMax]` (a bar
+    * `[birth, death)` is alive at `t` when `birth <= t < death`). See `Vectorization.bettiCurve`.
+    */
+  def bettiCurve(dimension: Int, tMin: Double, tMax: Double, resolution: Int): Array[Int] =
+    Vectorization.bettiCurve(barsOfDimension(dimension), tMin, tMax, resolution)
+
+  /** The persistence silhouette of the dimension-`dimension` bars, weighted by persistence to the power `power`,
+    * sampled at `resolution` points of `[tMin, tMax]`. Essential bars are left out. See `Vectorization.silhouette`.
+    */
+  def silhouette(dimension: Int, power: Double, tMin: Double, tMax: Double, resolution: Int): Array[Double] =
+    Vectorization.silhouette(barsOfDimension(dimension), tMin, tMax, resolution, power)
+
+  /** The persistence entropy of the dimension-`dimension` bars; essential bars are left out. With `normalized`, divided
+    * by the logarithm of the number of bars, so that it lies in `[0, 1]`. See `Vectorization.persistenceEntropy`.
+    */
+  def persistenceEntropy(dimension: Int, normalized: Boolean): Double =
+    Vectorization.persistenceEntropy(barsOfDimension(dimension), normalized)
+
+  /** The sliced Wasserstein distance between the dimension-`dimension` bars of this result and `other`, averaged over
+    * `directions` directions. Essential bars are left out. See `BarcodeDistance.slicedWassersteinDistance`.
+    */
+  def slicedWassersteinDistance(other: PersistenceResult, dimension: Int, directions: Int): Double =
+    BarcodeDistance.slicedWassersteinDistance(
+      barsOfDimension(dimension),
+      other.barsOfDimension(dimension),
+      directions
+    )
+
   /** Built on first use, then cached. */
   private lazy val boundaryMatrixData: BoundaryMatrixData = boundaryMatrixProvider()
 
@@ -267,8 +331,17 @@ final class PersistenceResult private[matlab] (
     * the file can grow with the square of the number of points. Returns the file's absolute path.
     */
   def save(path: String): String =
-    ResultFile
-      .write(path, allDims, allBirths, allDeaths, visible, threshold, k => cycleProvider(visible(k)), source)
+    ResultFile.write(
+      path,
+      allDims,
+      allBirths,
+      allDeaths,
+      visible,
+      threshold,
+      k => cycleProvider(visible(k)),
+      cellProvider,
+      source
+    )
 
   // ---------------------------------------------------------------------------------------------------------------
   // plots
@@ -288,7 +361,8 @@ final class PersistenceResult private[matlab] (
       boundaryMatrixProvider,
       visible,
       threshold,
-      Some(s)
+      Some(s),
+      cellProvider
     )
 
   private def barAt(k: Int): PersistenceBar[Double, Nothing] =
@@ -470,3 +544,7 @@ final class PersistenceResult private[matlab] (
           "compute cycles (representativeType cycles)"
       )
     Plot.cycle3D(ps, simplicialTerms(i), representativeTitle(i))
+
+private[matlab] object PersistenceResult:
+  /** The cells of a result whose engine recorded none: both empty. */
+  val noCells: Int => (Array[Int], Array[Int]) = _ => (Array.emptyIntArray, Array.emptyIntArray)

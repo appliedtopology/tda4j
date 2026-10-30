@@ -46,6 +46,11 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     default = Some(false),
     descr = "also print each bar's representative (--output-format=text only)"
   )
+  val barCells: ScallopOption[Boolean] = opt[Boolean](
+    name = "bar-cells",
+    default = Some(false),
+    descr = "also print the cell that opens each bar and the cell that closes it (--output-format=text only)"
+  )
 
   val complex: ScallopOption[String] =
     opt[String](name = "complex", descr = "vr (default), alpha, cech, witness, dtm-rips, dtm-alpha, or sparse-rips")
@@ -112,7 +117,10 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
       "--min-persistence 0"
   )
   val field: ScallopOption[String] =
-    opt[String](name = "field", descr = "Z (default, a prime finite field) or R (floating point)")
+    opt[String](
+      name = "field",
+      descr = "Z (default, a prime finite field), R (floating point) or Q (exact rational numbers)"
+    )
   val prime: ScallopOption[Int] = opt[Int](name = "prime", descr = "prime for --field=Z (default: 17)")
   val epsilon: ScallopOption[Double] = opt[Double](name = "epsilon", descr = "tolerance for --field=R (default: 1e-9)")
   // Boolean-valued options are Strings: Scallop's opt[Boolean] is always supplied (false when absent), which would
@@ -193,6 +201,18 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     descr = "step 2 of the two-step witness complex: read the landmarks from this file (as written by " +
       "--select-landmarks) instead of selecting them; implies --complex witness"
   )
+  val relativeTo: ScallopOption[String] = opt[String](
+    name = "relative-to",
+    descr = "relative persistent homology of the Vietoris-Rips complex of a point cloud or a distance matrix modulo " +
+      "the subcomplex on these points: comma-separated 0-based point numbers, e.g. 0,1,2 (--engine takes naive, " +
+      "chunks or cohomology; --complex is not offered)"
+  )
+  val inclusionOf: ScallopOption[String] = opt[String](
+    name = "inclusion-of",
+    descr = "instead of the diagram, write the image, kernel and cokernel of the map on persistent homology induced " +
+      "by the inclusion of the Vietoris-Rips complex of a subsample into that of the input: comma-separated 0-based " +
+      "point numbers of the subsample, e.g. 0,5,9"
+  )
 
   // Diagram distances, as in BarcodeDistance.
   val distanceTo: ScallopOption[String] = opt[String](
@@ -214,6 +234,21 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     name = "distance-ground-norm",
     descr = "the ground norm on the birth-death plane: a finite p >= 1.0 (default: L-infinity), with " +
       "--distance-to"
+  )
+
+  // The algebra of barcodes, as in Barcode.
+  val barcodeOp: ScallopOption[String] = opt[String](
+    name = "barcode-op",
+    descr = "instead of the diagram, write a barcode computed from it: product-max or product-sum (the barcode of the " +
+      "product of two filtered complexes, from the diagram of each, with --barcode-with), hom (the internal Hom from " +
+      "this diagram to that of --barcode-with), hom-dimension (the number of maps from this diagram to that one) or " +
+      "dual. One 'dimension,birth,death' line per bar (--output-format text only)"
+  )
+  val barcodeWith: ScallopOption[String] = opt[String](
+    name = "barcode-with",
+    descr =
+      "for --barcode-op: the second barcode, a csv file of 'dimension,birth,death' lines as --output-format=csv " +
+        "writes them (the first barcode is the diagram this run computes, whole: --min-persistence does not apply)"
   )
 
   // Plots and saved results. Declared last and without short flags: Scallop gives a letter to the first option declared
@@ -352,6 +387,122 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     name = "max-simplex-dimension",
     noshort = true,
     descr = "for --euler-curve: the largest simplex dimension counted (default: 2)"
+  )
+
+  // The persistent Laplacian: a mode of its own. Declared last and without short flags, as above.
+  val persistentLaplacian: ScallopOption[Boolean] = opt[Boolean](
+    name = "persistent-laplacian",
+    noshort = true,
+    default = Some(false),
+    descr = "instead of the diagram, write the persistent Laplacian of the Vietoris-Rips complex of a point cloud or " +
+      "distance matrix, from --laplacian-from to --laplacian-to, in --laplacian-dimension: its persistent Betti " +
+      "number, the smallest eigenvalue that is not zero and all the eigenvalues, as key=value lines"
+  )
+  val laplacianDimension: ScallopOption[Int] = opt[Int](
+    name = "laplacian-dimension",
+    noshort = true,
+    descr = "for --persistent-laplacian: the dimension of the simplices the Laplacian is on (required)"
+  )
+  val laplacianFrom: ScallopOption[Double] = opt[Double](
+    name = "laplacian-from",
+    noshort = true,
+    descr = "for --persistent-laplacian: the scale the simplices are taken at (required)"
+  )
+  val laplacianTo: ScallopOption[Double] = opt[Double](
+    name = "laplacian-to",
+    noshort = true,
+    descr =
+      "for --persistent-laplacian: the scale of the complex the chains live in, at least --laplacian-from (required)"
+  )
+
+  // Discrete Morse reduction: a mode of its own. Declared last and without short flags, as above.
+  val morseReduction: ScallopOption[Boolean] = opt[Boolean](
+    name = "morse-reduction",
+    noshort = true,
+    default = Some(false),
+    descr = "instead of the diagram, reduce the Vietoris-Rips complex of a point cloud or distance matrix by discrete " +
+      "Morse theory and write the number of cells and of critical cells in each dimension and the number of pairs, as " +
+      "key=value lines"
+  )
+  val morseStrategy: ScallopOption[String] = opt[String](
+    name = "morse-strategy",
+    noshort = true,
+    descr = "for --morse-reduction: pair by reductions (reduction, the default) or by coreductions (coreduction)"
+  )
+
+  // The resampling band and ToMATo: modes of their own, like the Euler curve. Declared last and without short flags.
+  val bootstrapBand: ScallopOption[Boolean] = opt[Boolean](
+    name = "bootstrap-band",
+    noshort = true,
+    default = Some(false),
+    descr = "instead of the diagram, write the resampling confidence band of the bars of one degree of a point " +
+      "cloud: resample the points, compute each resample's diagram and take the quantile of the bottleneck " +
+      "distances to the original. A bar longer than the threshold survives the resampling. Takes the --band-* " +
+      "flags, --prime, --max-filtration-value and --threads"
+  )
+  val bandDimension: ScallopOption[Int] =
+    opt[Int](
+      name = "band-dimension",
+      noshort = true,
+      descr = "for --bootstrap-band: the degree of the bars (default: 1)"
+    )
+  val bandRounds: ScallopOption[Int] =
+    opt[Int](
+      name = "band-rounds",
+      noshort = true,
+      descr = "for --bootstrap-band: the number of resamples (default: 100)"
+    )
+  val bandAlpha: ScallopOption[Double] = opt[Double](
+    name = "band-alpha",
+    noshort = true,
+    descr = "for --bootstrap-band: the band covers 1 - alpha of the resamples (default: 0.05)"
+  )
+  val bandSeed: ScallopOption[Int] =
+    opt[Int](
+      name = "band-seed",
+      noshort = true,
+      descr = "for --bootstrap-band: the seed of the resampling (default: 0)"
+    )
+  val bandSubsampleSize: ScallopOption[Int] = opt[Int](
+    name = "band-subsample-size",
+    noshort = true,
+    descr =
+      "for --bootstrap-band: draw this many points without replacement (default: all the points, with replacement)"
+  )
+  val tomato: ScallopOption[Boolean] = opt[Boolean](
+    name = "tomato",
+    noshort = true,
+    default = Some(false),
+    descr = "instead of the diagram, cluster a point cloud by ToMATo (Chazal et al.): the k nearest neighbours give " +
+      "the graph and the density, and two density peaks merge when the valley between them is shallower than " +
+      "--tomato-tau. With --tomato-tau, one cluster number per point (0 for the highest peak), one per line; " +
+      "without it, the valleys as 'birth,death' lines, to choose --tomato-tau in a gap. Needs --tomato-k"
+  )
+  val tomatoK: ScallopOption[Int] =
+    opt[Int](name = "tomato-k", noshort = true, descr = "for --tomato: the number of nearest neighbours")
+  val tomatoTau: ScallopOption[Double] = opt[Double](
+    name = "tomato-tau",
+    noshort = true,
+    descr = "for --tomato: the depth below which two peaks merge (the density is minus the mean neighbour distance)"
+  )
+  // A time series as input: the points are the windows of its samples.
+  val takensDimension: ScallopOption[Int] = opt[Int](
+    name = "takens-dimension",
+    noshort = true,
+    descr = "read the input as a time series, one sample per line (several columns: a vector series), and compute " +
+      "on its sliding-window (Takens) embedding: windows of this many samples. With --takens-delay or " +
+      "--takens-max-lag; for point-cloud input formats only"
+  )
+  val takensDelay: ScallopOption[Int] = opt[Int](
+    name = "takens-delay",
+    noshort = true,
+    descr = "for --takens-dimension: the number of samples between the samples of a window (default: 1)"
+  )
+  val takensMaxLag: ScallopOption[Int] = opt[Int](
+    name = "takens-max-lag",
+    noshort = true,
+    descr = "for --takens-dimension, instead of --takens-delay and for a one-column series: choose the delay as the " +
+      "first lag up to this one at which the autocorrelation is zero or negative; the choice goes to stderr"
   )
 
   val input: ScallopOption[String] =

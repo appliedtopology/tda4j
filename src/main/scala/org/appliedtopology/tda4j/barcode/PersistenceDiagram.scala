@@ -25,7 +25,8 @@ trait PersistenceDiagram[CellT]:
   /** The filtration value of the last cell of the complex: a class alive at `f` is essential only from here on. */
   def lastFiltrationValue: Double
 
-  /** The scale `significant` measures persistence against by default (a point cloud's minimum enclosing radius). */
+  /** The scale `longerThanFraction` measures persistence against by default (a point cloud's minimum enclosing radius).
+    */
   def scale: Option[Double]
 
   /** Which kind of representative the bars carry: what `Persistence(...)` was asked for, `None` for a diagram that does
@@ -34,10 +35,26 @@ trait PersistenceDiagram[CellT]:
     */
   def representatives: Option[Representatives] = None
 
+  /** Whether the representative of a finite bar is the cycle that its death cell bounds, which is zero in homology from
+    * the bar's death on. Then the representatives of the bars alive at a value `t` are a basis of the homology there,
+    * one for each bar, and each of them generates exactly its bar: what [[PersistenceMap]] needs to write a map in
+    * terms of bars. True of the cycles of the cohomology engines and of Ripser; false of the cycles of the naive and
+    * chunked engines, which are the generators the reduction works with and stay nonzero classes after their bar ends,
+    * and of a diagram that does not say.
+    */
+  def representativesDieWithTheirBars: Boolean = false
+
   private def withBars(
     bs: List[PersistenceBar[Double, Chain[CellT, Coefficient]]]
   ): PersistenceDiagram.Of[CellT, Coefficient] =
-    PersistenceDiagram[CellT, Coefficient](bs, maxDimension, lastFiltrationValue, scale, representatives)
+    PersistenceDiagram[CellT, Coefficient](
+      bs,
+      maxDimension,
+      lastFiltrationValue,
+      scale,
+      representatives,
+      representativesDieWithTheirBars
+    )
 
   /** The bars of degree `k`. */
   def dim(k: Int): PersistenceDiagram.Of[CellT, Coefficient] = withBars(bars.filter(_.dim == k))
@@ -47,9 +64,12 @@ trait PersistenceDiagram[CellT]:
     */
   def at(f: Double): PersistenceDiagram.Of[CellT, Coefficient] =
     withBars(bars.filter(_.birth <= f).map { b =>
+      // A class cut off at `f` has no killer in the truncated complex.
+      def alive(upper: BarcodeEndpoint[Double]) =
+        new PersistenceBar(b.dim, b.lower, upper, b.annotation, b.cells.map(p => Involution.Pair(p.dim, p.birth, None)))
       if b.death <= f then b
-      else if f >= lastFiltrationValue then new PersistenceBar(b.dim, b.lower, PositiveInfinity[Double](), b.annotation)
-      else new PersistenceBar(b.dim, b.lower, ClosedEndpoint(f), b.annotation)
+      else if f >= lastFiltrationValue then alive(PositiveInfinity[Double]())
+      else alive(ClosedEndpoint(f))
     })
 
   /** Bars that never die. */
@@ -66,13 +86,15 @@ trait PersistenceDiagram[CellT]:
     withBars(bars.filter(b => b.death.isPosInfinity || b.persistence > minPersistence))
 
   /** Essential bars and bars longer than `fraction` of `scale` (default: the diagram's own scale -- a point cloud's
-    * minimum enclosing radius -- else its filtration range). With the defaults, the bars the MATLAB/CLI facade shows.
+    * minimum enclosing radius -- else its filtration range). With the defaults, the bars the MATLAB/CLI facade shows. A
+    * rule of thumb for what to show, not a test of which bars are noise; [[BootstrapBand]] estimates that from the
+    * data.
     */
-  def significant(
+  def longerThanFraction(
     fraction: Double = PersistenceFilter.DefaultFraction,
     scale: Optional[Double] = Optional.empty
   ): PersistenceDiagram.Of[CellT, Coefficient] =
-    withBars(PersistenceFilter.significant(bars, fraction = fraction, scale = scale.toOption.orElse(this.scale)))
+    withBars(PersistenceFilter.longerThanFraction(bars, fraction = fraction, scale = scale.toOption.orElse(this.scale)))
 
   /** `dim H_k` for `k = 0 .. maxDimension`: the classes alive at the end of the diagram. For a whole diagram these are
     * the essential classes, the Betti numbers of the complex; for `at(f)` they are the Betti numbers at `f`
@@ -104,7 +126,7 @@ object PersistenceDiagram:
 
   /** `diagram.show`: a header, then every bar with its representative, degree by degree (the bars' and chains' own
     * `Show`s, the coefficients by the diagram's field). Typed for every diagram type, `PersistenceDiagram.Of[...]`
-    * (what `dim`, `at` and `significant` return) included. `toString` is the short summary.
+    * (what `dim`, `at` and `longerThanFraction` return) included. `toString` is the short summary.
     */
   given diagramShow: [CellT: Show, D <: PersistenceDiagram[CellT]] => Show[D] = Show.show { d =>
     given (d.Coefficient is Field) = d.coefficientField
@@ -119,9 +141,11 @@ object PersistenceDiagram:
     maxDimension: Int,
     lastFiltrationValue: Double,
     scale: Option[Double] = None,
-    representatives: Option[Representatives] = None
+    representatives: Option[Representatives] = None,
+    representativesDieWithTheirBars: Boolean = false
   )(using field: C is Field): Of[CellT, C] =
-    val (b, m, l, s, k) = (bars, maxDimension, lastFiltrationValue, scale, representatives)
+    val (b, m, l, s, k, d) =
+      (bars, maxDimension, lastFiltrationValue, scale, representatives, representativesDieWithTheirBars)
     new PersistenceDiagram[CellT]:
       type Coefficient = C
       override given coefficientField: (C is Field) = field
@@ -130,3 +154,4 @@ object PersistenceDiagram:
       val lastFiltrationValue = l
       val scale = s
       override val representatives = k
+      override val representativesDieWithTheirBars = d

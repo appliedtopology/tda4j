@@ -1,0 +1,44 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "tda4j"
+# release.yml sets the release's version here before building (the library's own is in ../version.sbt, not PEP 440).
+version = "0.7.0.dev0"
+description = "Persistent homology and topological data analysis on the TDA4j library: barcodes with representatives, relative persistence, maps between barcodes, NumPy in and out."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE.md"]
+authors = [{ name = "The TDA4j developers" }]
+keywords = ["topological data analysis", "tda", "persistent homology", "persistence diagram", "barcode", "vietoris-rips", "alpha complex"]
+classifiers = [
+  "Intended Audience :: Science/Research",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Java",
+  "Topic :: Scientific/Engineering :: Mathematics",
+]
+dependencies = ["numpy>=1.23", "jpype1>=1.5"]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[project.urls]
+Homepage = "https://tda4j.appliedtopology.org"
+Documentation = "https://tda4j.appliedtopology.org/user-guide/python.html"
+Source = "https://github.com/appliedtopology/tda4j"
+Issues = "https://github.com/appliedtopology/tda4j/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tda4j"]
+# The jar is git-ignored (*.jar) and built by sbt: scripts/bundle-jar.sh puts it here.
+artifacts = ["src/tda4j/jars/*.jar"]
+exclude = ["src/tda4j/jars/.gitignore"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/tda4j", "tests", "README.md", "LICENSE.md", "scripts"]
+artifacts = ["src/tda4j/jars/*.jar"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

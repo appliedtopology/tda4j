@@ -54,7 +54,7 @@ The [file formats page](input-output.md) describes the formats.
 | `--threads` | integer, at least 1 | all the processors; `1` is the sequential computation. The bars do not depend on it; where tied simplices give a choice, the representatives can |
 | `--max-dimension` | integer | `2`; for an image, its dimension |
 | `--max-filtration-value` | number | the minimum enclosing radius; in the units of the complex (a diameter for `vr`, a radius for `cech` and `alpha`) |
-| `--field` | `Z` (a prime field), `R` (floating point) | `Z` |
+| `--field` | `Z` (a prime field), `R` (floating point), `Q` (exact rational numbers) | `Z` |
 | `--prime` | prime | `17`, for `--field Z` |
 | `--epsilon` | number | `1e-9`, the tolerance of `--field R` |
 | `--representative-type` | `cycles`, `cocycles` | `cycles`; every engine gives both except `fast-cubical` and `fast-alpha` (cycles only) |
@@ -100,6 +100,7 @@ The diagram goes to standard output or to `--output`.
 | `--output-format` | `text` (default), `csv`, `gudhi`, `dipha`, `perseus` |
 | `--output` | the file to write. Required for every format but `text`. For `perseus` it is a filename prefix: one file per dimension |
 | `--representatives` | with `text`, also print each bar's representative after `rep:`, as `coefficient*[vertices] + ...` |
+| `--bar-cells` | with `text`, also print the cell that opens each bar and the cell that closes it after `cells:`, as `birth [vertices] death [vertices]` (`death none` for an essential bar, `(no cells recorded)` for an engine that records none) |
 
 `perseus` stores integer filtration steps, so it refuses a diagram with non-integer birth or death values rather than
 round them. Cells of an image are given by their coordinates in the doubled grid (see [MATLAB](matlab.md#representatives)).
@@ -122,6 +123,30 @@ rejected with `--select-landmarks` (no diagram) and `--distance-to` (distances a
 | `--min-persistence` | report only bars longer than this; `0` reports every bar of positive length. Essential bars are always reported |
 | `--min-persistence-fraction` | the same as a fraction of the input's scale (the minimum enclosing radius, or the range of values of an image or relation); default `0.01` |
 
+## Relative persistence
+
+`--relative-to 0,3,5` computes the [relative persistent homology](relative-persistence.md) of the Vietoris-Rips complex of
+a point cloud or a distance matrix modulo the subcomplex on those points (0-based, comma-separated): the bars of
+`H(X_t, A_t)`, written like any diagram. It takes the flags of the Vietoris-Rips computation (`--max-dimension`,
+`--max-filtration-value`, `--field`, `--prime`, `--representative-type`, `--engine` as `cohomology`, `naive` or `chunks`,
+the bar flags and `--threads`), and refuses `--complex`, the landmark flags, images, relations and saved results.
+
+```
+$ tda4j --relative-to 0,3,5 --max-dimension 1 points.csv
+```
+
+## The map of a subsample
+
+`--inclusion-of 0,6,12,18` writes the [map on persistent homology](barcode-algebra.md#maps-between-spaces) of the
+inclusion of the Vietoris-Rips complex of those points (0-based, comma-separated) into that of the whole input, a point
+cloud or a distance matrix: the bars of its image, kernel and cokernel, a line a bar, `image 1: [1.41,1.73)`. It takes
+`--max-dimension`, `--max-filtration-value` (shared by both complexes; by default the input's enclosing radius),
+`--prime`, `--engine` as `ripser` or `cohomology` and `--threads`, and refuses the flags of any other computation.
+
+```
+$ tda4j --inclusion-of 0,6,12,18 --max-filtration-value 2.5 --max-dimension 1 circle.csv
+```
+
 ## Comparing diagrams
 
 `--distance-to saved-diagram` prints the bottleneck and Wasserstein distances per dimension to a diagram saved earlier,
@@ -134,6 +159,44 @@ bar, whatever the threshold.
 | `--distance-format` | its format: `csv` (default), `gudhi`, `dipha` |
 | `--distance-order` | the order of the Wasserstein distance; default `1.0` |
 | `--distance-ground-norm` | the ground norm on the birth-death plane: a finite `p >= 1`; default `L∞` |
+
+## The algebra of barcodes
+
+`--barcode-op` writes a barcode computed from the diagram of this run (every bar, whatever the threshold), one
+`dimension,birth,death` line per bar, instead of the diagram. The second barcode, for the operations that take two, is a csv
+file as `--output-format=csv` writes it. See [products, Hom and duals](barcode-products.md).
+
+| `--barcode-op` | writes |
+|---|---|
+| `product-max`, `product-sum` | the barcode of the product of the filtered complexes of the two diagrams, a cell entering at the larger or the sum of its factors' values |
+| `hom` | the internal Hom from this diagram to the one in `--barcode-with` |
+| `hom-dimension` | the dimension of the space of maps from this diagram to that one: a number |
+| `dual` | the dual of this diagram: no second diagram |
+
+`--barcode-with` is the second barcode.
+
+## The persistent Laplacian
+
+`--persistent-laplacian` writes the [persistent Laplacian](persistent-laplacian.md) of the Vietoris-Rips complex of a point
+cloud or a distance matrix, instead of the diagram, as `key=value` lines: `betti-number`, `spectral-gap` (`none` if every
+eigenvalue is zero) and `eigenvalues`, smallest first.
+
+| flag | meaning |
+|---|---|
+| `--laplacian-dimension` | the dimension of the simplices the matrix is on (required) |
+| `--laplacian-from` | the scale the simplices are taken at (required) |
+| `--laplacian-to` | the scale of the complex the chains live in, at least `--laplacian-from` (required) |
+
+## Discrete Morse reduction
+
+`--morse-reduction` reduces the Vietoris-Rips complex of a point cloud or a distance matrix by [discrete Morse
+theory](discrete-morse.md) and writes, instead of the diagram, `key=value` lines: `cells` and `critical-cells`, the number of
+cells before and after in each dimension from 0, and `pairs`. It takes `--max-dimension`, `--max-filtration-value`,
+`--prime` and `--threads` as the diagram does.
+
+| flag | meaning |
+|---|---|
+| `--morse-strategy` | pair by reductions (`reduction`, the default) or by coreductions (`coreduction`) |
 
 ## The Euler characteristic curve
 
@@ -161,6 +224,58 @@ scale,value
 A flag that would change a diagram (`--complex`, `--max-dimension`, `--engine`, `--field`, ...), `--plot`,
 `--distance-to`, `--save-result` and the landmark flags are rejected with `--euler-curve`, as are images, relations and
 saved results as input.
+
+## The resampling band and ToMATo
+
+`--bootstrap-band` writes the [resampling band](noise-and-clusters.md) of the bars of one degree of a point cloud in
+place of a diagram, as `key=value` lines: the `width` (a quantile of the bottleneck distances from the resamples to the
+original), and the `threshold`, twice that, above which a bar survives the resampling.
+
+```
+$ tda4j --bootstrap-band --band-rounds 200 --band-seed 1 circle.csv
+dimension=1
+rounds=200
+alpha=0.05
+width=0.08323
+threshold=0.16646
+```
+
+| flag | meaning |
+|---|---|
+| `--bootstrap-band` | write the band instead of the diagram |
+| `--band-dimension` | the degree of the bars; default `1` |
+| `--band-rounds` | the number of resamples; default `100` |
+| `--band-alpha` | the band covers `1 - alpha` of the resamples; default `0.05` |
+| `--band-seed` | the seed of the resampling; default `0` |
+| `--band-subsample-size` | draw this many points without replacement; default all the points, with replacement |
+| `--prime`, `--max-filtration-value`, `--threads`, `--output` | as for a diagram |
+
+`--tomato` clusters a point cloud by [ToMATo](noise-and-clusters.md) instead: `--tomato-k` nearest neighbours give the
+graph and the density, and two density peaks merge when the valley between them is shallower than `--tomato-tau`. With
+`--tomato-tau` it writes the cluster of each point, one number per line (0 for the highest peak); without it, the
+valleys as `birth,death` lines, so that you can choose `--tomato-tau` in a gap.
+
+```
+$ tda4j --tomato --tomato-k 4 blobs.csv                         # the valleys: pick tau between the small ones and the deep one
+$ tda4j --tomato --tomato-k 4 --tomato-tau 100 blobs.csv        # one cluster number per point
+```
+
+Both modes take point clouds only. A flag that would change a diagram, `--plot`, `--distance-to`, `--save-result`, the
+landmark flags and the other modes are rejected with them.
+
+## A time series as input
+
+`--takens-dimension d` reads the input file as a time series, one sample per line (several columns: a series of
+vectors), and computes on the points of its sliding-window (Takens) embedding: the windows of `d` samples, `--takens-delay`
+samples apart (default `1`). For a series of one column, `--takens-max-lag n` chooses the delay instead, as the first lag up to
+`n` at which the autocorrelation is zero or negative, and says which on standard error. It goes with any mode that takes a
+point cloud: a diagram, `--euler-curve`, `--bootstrap-band`, `--tomato`.
+
+```
+$ tda4j --takens-dimension 2 --takens-max-lag 30 --max-dimension 1 signal.csv
+tda4j: delay 10 chosen by autocorrelation (the first lag up to 30 where it is zero or negative)
+...
+```
 
 ## Saved results
 

@@ -217,6 +217,166 @@ object BarcodeDistance:
         val finitePow = finiteWassersteinPow(fin1, fin2, order, groundNorm)
         math.pow(essentialPow + finitePow, 1.0 / order)
 
+  /** The sliced Wasserstein distance between two persistence diagrams (Carriere, Cuturi, Oudot 2017): project both
+    * diagrams, each completed by the orthogonal projections of the other's points onto the diagonal, onto a line,
+    * compare the sorted projections in `L1`, and average over the lines. It is a metric on diagrams that is bounded by
+    * constant multiples of the 1-Wasserstein distance and costs `O(directions * n log n)`, so it suits kernels and
+    * large diagrams, where the Hungarian algorithm does not.
+    *
+    * The average runs over `directions` evenly-spaced angles in `[-pi/2, pi/2)`. The distance between a diagram of one
+    * bar and the empty diagram tends to `persistence * sqrt(2) / pi` as `directions` grows (the spec checks it).
+    * Essential bars are dropped; compare them with [[bottleneckDistance]].
+    */
+  def slicedWassersteinDistance(
+    diagram1: Seq[PersistenceBar[Double, ?]],
+    diagram2: Seq[PersistenceBar[Double, ?]],
+    directions: Int = 50
+  ): Double =
+    require(directions >= 1, s"slicedWassersteinDistance requires directions >= 1, got $directions")
+    val pts1 = diagram1.map(toPoint).filterNot(isEssential)
+    val pts2 = diagram2.map(toPoint).filterNot(isEssential)
+    def onDiagonal(p: Point): Point = DiagramPoint((p.birth + p.death) / 2.0, (p.birth + p.death) / 2.0)
+    val a = pts1 ++ pts2.map(onDiagonal)
+    val b = pts2 ++ pts1.map(onDiagonal)
+    val total = (0 until directions).map { k =>
+      val theta = -math.Pi / 2.0 + math.Pi * k / directions
+      val (c, s) = (math.cos(theta), math.sin(theta))
+      val pa = a.map(p => p.birth * c + p.death * s).sorted
+      val pb = b.map(p => p.birth * c + p.death * s).sorted
+      pa.zip(pb).map((x, y) => math.abs(x - y)).sum
+    }.sum
+    total / directions
+
+  /** An optimal matching of two diagrams: bar `i` of the first diagram is matched to bar `j` of the second for each
+    * `(i, j)` of `pairs`; the bars in `leftToDiagonal` and `rightToDiagonal` (indices into the diagrams as given) are
+    * matched to the diagonal, that is, left unmatched; `cost` is the distance the matching realizes.
+    */
+  final case class Matching(
+    pairs: Vector[(Int, Int)],
+    leftToDiagonal: Vector[Int],
+    rightToDiagonal: Vector[Int],
+    cost: Double
+  )
+
+  /** The bars of a diagram split into essential (ascending by birth) and finite, as indices into `diagram`, with the
+    * points.
+    */
+  private def indexedSplit(diagram: Seq[PersistenceBar[Double, ?]]): (Vector[Int], Vector[Int], Vector[Point]) =
+    val points = diagram.map(toPoint).toVector
+    val (essential, finite) = points.indices.partition(i => isEssential(points(i)))
+    (essential.sortBy(points(_).birth).toVector, finite.toVector, points)
+
+  /** A matching that realizes [[wassersteinDistance]] of the same arguments (`None` when the diagrams have different
+    * numbers of essential bars, where the distance is `Infinity` and no matching exists). Essential bars are matched in
+    * order of birth. The finite bars are matched by the Hungarian algorithm on the augmented cost matrix, so the cost
+    * is quadratic in the number of bars in space and cubic in time; for large diagrams use
+    * [[slicedWassersteinDistance]].
+    */
+  def wassersteinMatching(
+    diagram1: Seq[PersistenceBar[Double, ?]],
+    diagram2: Seq[PersistenceBar[Double, ?]],
+    order: Double = 1.0,
+    groundNorm: GroundNorm = GroundNorm.LInfinity
+  ): Option[Matching] =
+    groundNorm.require1()
+    require(order.isFinite && order >= 1.0, s"wassersteinMatching requires a finite order >= 1.0, got $order")
+    require(diagram1.map(_.dim).distinct.size <= 1, "wassersteinMatching requires diagram1 to be single-dimension")
+    require(diagram2.map(_.dim).distinct.size <= 1, "wassersteinMatching requires diagram2 to be single-dimension")
+    val (essential1, finite1, points1) = indexedSplit(diagram1)
+    val (essential2, finite2, points2) = indexedSplit(diagram2)
+    if essential1.size != essential2.size then None
+    else
+      val essentialPairs = essential1.zip(essential2)
+      val essentialPow =
+        essentialPairs.map((i, j) => math.pow(math.abs(points1(i).birth - points2(j).birth), order)).sum
+      val left = finite1.map(points1)
+      val right = finite2.map(points2)
+      val (nL, nR) = (left.size, right.size)
+      val pairs = Vector.newBuilder[(Int, Int)]
+      pairs ++= essentialPairs
+      val leftDiagonal = Vector.newBuilder[Int]
+      val rightDiagonal = Vector.newBuilder[Int]
+      val finitePow =
+        if nL + nR == 0 then 0.0
+        else
+          val matrix = augmentedCostMatrix(left, right, groundNorm).map(_.map(c => math.pow(c, order)))
+          val (rowOfColumn, total) = Hungarian.minCostPerfectMatching(matrix)
+          for j <- 0 until nL + nR do
+            val i = rowOfColumn(j)
+            if i < nL && j < nR then pairs += ((finite1(i), finite2(j)))
+            else if i < nL then leftDiagonal += finite1(i)
+            else if j < nR then rightDiagonal += finite2(j)
+          total
+      Some(
+        Matching(
+          pairs.result(),
+          leftDiagonal.result().sorted,
+          rightDiagonal.result().sorted,
+          math.pow(essentialPow + finitePow, 1.0 / order)
+        )
+      )
+
+  /** A matching that realizes [[bottleneckDistance]] of the same arguments (`None` when the numbers of essential bars
+    * differ). It is a perfect matching of the augmented graph that keeps the pairs within the bottleneck distance,
+    * found by Hopcroft-Karp, so it takes quadratic space in the number of bars; it is one of many optimal matchings.
+    */
+  def bottleneckMatching(
+    diagram1: Seq[PersistenceBar[Double, ?]],
+    diagram2: Seq[PersistenceBar[Double, ?]],
+    groundNorm: GroundNorm = GroundNorm.LInfinity
+  ): Option[Matching] =
+    groundNorm.require1()
+    require(diagram1.map(_.dim).distinct.size <= 1, "bottleneckMatching requires diagram1 to be single-dimension")
+    require(diagram2.map(_.dim).distinct.size <= 1, "bottleneckMatching requires diagram2 to be single-dimension")
+    val (essential1, finite1, points1) = indexedSplit(diagram1)
+    val (essential2, finite2, points2) = indexedSplit(diagram2)
+    if essential1.size != essential2.size then None
+    else
+      val essentialPairs = essential1.zip(essential2)
+      val essentialCost = essentialPairs.map((i, j) => math.abs(points1(i).birth - points2(j).birth)).maxOption
+      val left = finite1.map(points1)
+      val right = finite2.map(points2)
+      val (nL, nR) = (left.size, right.size)
+      val pairs = Vector.newBuilder[(Int, Int)]
+      pairs ++= essentialPairs
+      val leftDiagonal = Vector.newBuilder[Int]
+      val rightDiagonal = Vector.newBuilder[Int]
+      val finiteCost =
+        if nL + nR == 0 then 0.0
+        else
+          val threshold = finiteBottleneck(left, right, groundNorm)
+          val diagonalLeft = left.map(p => diagonalDistance(p.persistence, groundNorm))
+          val diagonalRight = right.map(p => diagonalDistance(p.persistence, groundNorm))
+          def adjacent(i: Int, j: Int): Boolean =
+            if i < nL && j < nR then pointDistance(left(i), right(j), groundNorm) <= threshold
+            else if i < nL then diagonalLeft(i) <= threshold
+            else if j < nR then diagonalRight(j) <= threshold
+            else true
+          val n = nL + nR
+          val matched = HopcroftKarp.maximumMatching(
+            n,
+            n,
+            i => ArraySeq.unsafeWrapArray((0 until n).filter(adjacent(i, _)).toArray)
+          )
+          if matched.contains(-1) then
+            throw new IllegalStateException(
+              s"bottleneckMatching: no perfect matching within the bottleneck distance $threshold"
+            )
+          for i <- 0 until n do
+            val j = matched(i)
+            if i < nL && j < nR then pairs += ((finite1(i), finite2(j)))
+            else if i < nL then leftDiagonal += finite1(i)
+            else if j < nR then rightDiagonal += finite2(j)
+          threshold
+      Some(
+        Matching(
+          pairs.result(),
+          leftDiagonal.result().sorted,
+          rightDiagonal.result().sorted,
+          math.max(essentialCost.getOrElse(0.0), finiteCost)
+        )
+      )
+
   private def byDimension[R](
     diagram1: Seq[PersistenceBar[Double, ?]],
     diagram2: Seq[PersistenceBar[Double, ?]]

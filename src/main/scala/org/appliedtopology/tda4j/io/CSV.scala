@@ -134,10 +134,12 @@ object CSV:
   def readPersistenceDiagram(path: String): Seq[PersistenceBar[Double, Nothing]] =
     parsePersistenceDiagram(FileAccess.readText(path))
 
+  /** One bar as a line of the format (`dimension,lower,upper`), without the line break. */
+  def formatBar(bar: PersistenceBar[Double, ?]): String =
+    s"${bar.dim},${Endpoints.formatEndpoint(bar.lower)},${Endpoints.formatEndpoint(bar.upper)}"
+
   def formatPersistenceDiagram(bars: Seq[PersistenceBar[Double, ?]]): String =
-    bars
-      .map(bar => s"${bar.dim},${Endpoints.formatEndpoint(bar.lower)},${Endpoints.formatEndpoint(bar.upper)}\n")
-      .mkString
+    bars.map(bar => formatBar(bar) + "\n").mkString
 
   def writePersistenceDiagram(path: String, bars: Seq[PersistenceBar[Double, ?]]): Unit =
     FileAccess.writeText(path, formatPersistenceDiagram(bars))

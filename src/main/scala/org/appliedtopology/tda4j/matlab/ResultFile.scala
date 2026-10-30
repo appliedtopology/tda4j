@@ -14,12 +14,15 @@ import scala.collection.mutable
   * "dimensions": [0, 0, 1], "births": [0.0, 0.0, 0.5], "deaths": ["Infinity", 0.3, 1.2],
   * "reported": [0, 2],
   * "representatives": [{"cells": [[0]], "coefficients": [1.0]}, {"cells": [[0, 1], [1, 2], [0, 2]], ...}],
-  * "landmarks": [3, 17],
+  * "landmarks": [3, 17], "relativeTo": [0, 1, 2],
   * "input": {"kind": "points", "points": [[1.0, 0.0], ...]}
   * }
   * }}}
   *
   *   - `dimensions`, `births`, `deaths`: every bar computed, the threshold's hidden ones too.
+  *   - `birthCells`, `deathCells` (optional): the cell that opens and the cell that closes each bar, parallel to
+  *     `dimensions`, a cell as in `cycleVertices`; `[]` where the bar has none (an essential bar's death cell; both
+  *     where the engine recorded no cells). Left out when no bar has a cell.
   *   - `reported`: the bars the threshold let through, as indices into those arrays (default: all of them);
   *     `representatives` is parallel to it (`cells` as in `cycleVertices`, `coefficients` as in `cycleCoefficients`;
   *     `null` for a bar without one).
@@ -46,6 +49,7 @@ private[matlab] object ResultFile:
     reported: Array[Int],
     threshold: Double,
     representative: Int => (Array[Array[Int]], Array[Double]),
+    cells: Int => (Array[Int], Array[Int]),
     source: Option[ResultSource]
   ): String =
     val absolute = FileAccess.absolute(path)
@@ -72,11 +76,19 @@ private[matlab] object ResultFile:
             key("prime"); w.int(s.prime)
         if s.landmarks.nonEmpty then
           key("landmarks"); w.ints(s.landmarks)
+        if s.relativeTo.nonEmpty then
+          key("relativeTo"); w.ints(s.relativeTo)
       }
       key("persistenceThreshold"); w.double(threshold)
       key("dimensions"); w.ints(dims)
       key("births"); w.doubles(births)
       key("deaths"); w.doubles(deaths)
+      val barCells = dims.indices.map(cells)
+      if barCells.exists(_._1.nonEmpty) then
+        key("birthCells")
+        w.sequence(barCells.length)(k => w.ints(barCells(k)._1))
+        key("deathCells")
+        w.sequence(barCells.length)(k => w.ints(barCells(k)._2))
       key("reported"); w.ints(reported)
       key("representatives")
       w.raw("[")
@@ -130,10 +142,13 @@ private[matlab] object ResultFile:
     var field = ""
     var prime = 0
     var landmarks = Array.empty[Int]
+    var relativeTo = Array.empty[Int]
     var threshold = 0.0
     var dims: Option[Array[Int]] = None
     var births: Option[Array[Double]] = None
     var deaths: Option[Array[Double]] = None
+    var birthCells: Option[Array[Array[Int]]] = None
+    var deathCells: Option[Array[Array[Int]]] = None
     var reported: Option[Array[Int]] = None
     var representatives: Option[Array[Option[(Array[Array[Int]], Array[Double])]]] = None
     var input: ResultInput = ResultInput.Abstract("input that was not saved")
@@ -156,6 +171,11 @@ private[matlab] object ResultFile:
           case (Some(c), Some(x))                         =>
             r.fail(s"a representative has ${c.length} cells and ${x.length} coefficients")
           case _ => r.fail("a representative needs \"cells\" and \"coefficients\"")
+
+    def cellList(): Array[Array[Int]] =
+      val b = Array.newBuilder[Array[Int]]
+      r.arr(() => b += r.ints())
+      b.result()
 
     def readInput(): ResultInput =
       var kind: Option[String] = None
@@ -194,10 +214,13 @@ private[matlab] object ResultFile:
       case "field"                => field = r.string()
       case "prime"                => prime = r.readInt()
       case "landmarks"            => landmarks = r.ints()
+      case "relativeTo"           => relativeTo = r.ints()
       case "persistenceThreshold" => threshold = r.readDouble()
       case "dimensions"           => dims = Some(r.ints())
       case "births"               => births = Some(r.doubles())
       case "deaths"               => deaths = Some(r.doubles())
+      case "birthCells"           => birthCells = Some(cellList())
+      case "deathCells"           => deathCells = Some(cellList())
       case "reported"             => reported = Some(r.ints())
       case "representatives"      =>
         val b = Array.newBuilder[Option[(Array[Array[Int]], Array[Double])]]
@@ -230,6 +253,11 @@ private[matlab] object ResultFile:
       throw new IllegalArgumentException(
         s"$path: ${ds.length} dimensions, ${bs.length} births and ${es.length} deaths: one of each per bar"
       )
+    for (name, cells) <- List("birthCells" -> birthCells, "deathCells" -> deathCells); list <- cells do
+      if list.length != ds.length then
+        throw new IllegalArgumentException(s"$path: ${list.length} \"$name\" for ${ds.length} bars: one per bar")
+    if birthCells.isDefined != deathCells.isDefined then
+      throw new IllegalArgumentException(s"$path: \"birthCells\" and \"deathCells\" come together")
     val visible = reported.getOrElse(Array.range(0, ds.length))
     visible.find(k => k < 0 || k >= ds.length).foreach { k =>
       throw new IllegalArgumentException(s"$path: \"reported\" names bar $k, and there are ${ds.length} bars")
@@ -258,5 +286,8 @@ private[matlab] object ResultFile:
       throw new UnsupportedOperationException(
         "a saved result does not keep its complex; compute the result again for its boundary matrix"
       )
-    val source = ResultSource(method, options, complex, cocycles, field, prime, input, landmarks)
-    new PersistenceResult(ds, bs, es, cycleProvider, boundaryMatrix, visible, threshold, Some(source))
+    val source = ResultSource(method, options, complex, cocycles, field, prime, input, landmarks, relativeTo)
+    val cellProvider: Int => (Array[Int], Array[Int]) = (birthCells, deathCells) match
+      case (Some(born), Some(died)) => k => (born(k).clone(), died(k).clone())
+      case _                        => PersistenceResult.noCells
+    new PersistenceResult(ds, bs, es, cycleProvider, boundaryMatrix, visible, threshold, Some(source), cellProvider)

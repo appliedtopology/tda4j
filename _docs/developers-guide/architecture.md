@@ -19,10 +19,12 @@ Its source directories are file organization only (they are not packages), and e
 - **`algebra/`** — `RingModule`, `Field`, `FiniteField`, `Chain` (including the `Cell`/`OrderedCell`/`OrderedBasis`
   contracts), `LinearAlgebra`. The typeclasses and formal-sum machinery everything else builds on.
 - **`cells/`** — `Simplex` and `Cube`, the concrete `OrderedCell` instances, with their default instances in their
-  companions.
+  companions, and `RelativeCell`, a cell of a quotient.
 - **`streams/`** — everything that produces cells in filtration order: `SimplexStream`/`CellStream`, the
   Vietoris-Rips family, `FiniteMetricSpace`, `CubicalStream`/`CubicalImage`, `CechStream`, `WitnessStream`,
-  `DowkerStream`, `UnionFind`, and the dispatchers (`VietorisRips`, `Cech`, `Witness`, `Dowker`, ...).
+  `DowkerStream`, `UnionFind`, and the dispatchers (`VietorisRips`, `Cech`, `Witness`, `Dowker`, ...). Other inputs:
+  `TakensEmbedding`, `GraphMetric`, `WeightedGraph`/`FlagComplex`, `LowerStar`, `DirectedFlagStream`, and `Relative`
+  for the quotient by a subcomplex.
 - **`homology/`** — the persistence algorithms (`Homology.scala`, `PackedRipserCohomology.scala`, `Cohomology.scala`,
   the fast cubical/alpha engines) and circular coordinates.
 - **`barcode/`** — `Barcode`, `PersistenceBar`, `BarcodeEndpoint`, distances and vectorizations.
@@ -513,6 +515,28 @@ cost is about the edges times their common neighbours, so a dense graph (a large
 points in R^3 at the enclosing radius take about ten seconds. The result is stored in rows of sorted neighbours, the
 surviving edges only. Both forms take every decision the same way (`EdgeCollapseDenseSpec`).
 
+### Time series, graphs, functions and directed networks
+
+These are ways into the engines, not new engines. `TakensEmbedding` returns a `PointCloud` (windows of the series), and
+`GraphMetric.geodesic` an `ExplicitMetricSpace` (Dijkstra from every vertex, `n^2` entries; `Infinity` between
+components), so both go through the Vietoris-Rips path unchanged.
+
+`WeightedGraph` is a `FiniteMetricSpace` held as sorted neighbour lists (`n + 2m` numbers), with `Infinity` for a
+non-edge. `Persistence(graph)` does not give it to the Ripser engines, which index a dense matrix, nor to
+`VietorisRips`, whose generators build `n x n` tables; `Input.ofMetricSpace` hands it to `FlagComplex`, which grows
+cliques from the neighbour lists. A clique grows by one vertex above its largest, from the common neighbours of all its
+vertices; each candidate carries the heaviest weight from it to the clique, so a simplex's value is the larger of its
+parent's value and that weight, and two sorted lists are merged per step. `FlagComplexSpec` checks it cell for cell and
+value for value against `VietorisRips` on the dense matrix, and against the Ripser engine's barcode. The engine is
+`Cohomology`.
+
+`LowerStar` lists every face with its value (the largest of its vertices) to `ExplicitStreamBuilder.fromFilteredFacets`
+and with `superlevel` negates the values. `DirectedFlagStream` enumerates ordered cliques depth first into one stream
+whose cells are `DirectedSimplex` (an ordered vertex tuple, boundary by deleting a position with sign `(-1)^i`); its
+oracle is the complex of injective words, whose Betti numbers are known (`DirectedFlagStreamSpec`). Both sort each
+dimension after the values are complete: the sort reads the values through the stream's own ordering, and sorting inside
+the lazy value that builds them would never return.
+
 ### Metric spaces
 
 `FiniteMetricSpace.scala` abstracts "distance + finite point set": `ExplicitMetricSpace` (raw distance
@@ -575,6 +599,12 @@ reference the spec compares against, cell for cell on tie-heavy metrics.
 `TruncatedSimplexStream(stream, maxSimplexDimension)` cuts a stratified simplex stream off above a simplex dimension,
 keeping its order and values; the `Truncated` entry point takes a homological degree instead and is what you should
 call.
+
+`Relative(stream, inSubcomplex)` is the pair `(X, A)` as a stream: the cells of `X` outside `A`, each wrapped in a
+`RelativeCell` that knows `A` and the cell structure of `X`, with a boundary that drops the faces in `A`, the value and
+order of the cell of `X`, and the degree limit of the stream. Every engine then computes the relative homology without
+change. `A` has to be closed under faces; that is documented, not checked. `RelativeSpec` compares the barcode with the
+ranks of `H(X_s, A_s) -> H(X_t, A_t)` from the relative chain groups, at every pair of filtration values.
 
 ### Circular coordinates
 

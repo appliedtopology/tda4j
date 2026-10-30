@@ -4,8 +4,9 @@ name: Release
 # its own `tagRelease`/`pushChanges` steps. This workflow does NOT publish to Maven Central: `sbt release`
 # already does that locally (publishSigned/sonaUpload/sonaRelease), and re-running those here would be a
 # duplicate publish attempt against an already-released coordinate. This workflow only covers what `sbt
-# release` doesn't: building the fat jar, the demo REPL jar and the npm package, attaching every release artifact to a
-# GitHub Release, publishing that version's docs snapshot under its own path on GitHub Pages, and publishing the npm package. `sbt release` publishes both Maven artifacts, `tda4j_3` (JVM)
+# release` doesn't: building the fat jar, the demo REPL jar, the npm package and the Python wheel, attaching every release artifact to a
+# GitHub Release, publishing that version's docs snapshot under its own path on GitHub Pages, and publishing the npm package
+# and (once it is set up) the Python package. `sbt release` publishes both Maven artifacts, `tda4j_3` (JVM)
 # and `tda4j_sjs1_3` (Scala.js).
 
 on:
@@ -59,6 +60,10 @@ jobs:
           node-version: 24
           registry-url: 'https://registry.npmjs.org'
           package-manager-cache: false
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
       - name: Setup sbt launcher
         uses: sbt/setup-sbt@v1
       - name: Derive release version
@@ -112,6 +117,26 @@ jobs:
           # Every command names its project: `tda4j` is the JVM build (fat jar, docs, the JVM Maven artifact), `tda4jJS` the
           # Scala.js build (the npm package).
           sbt --server "set ThisBuild / version := \"$VERSION\" ; tda4j/assembly ; tda4j/publishLocal ; tda4j/packageSrc ; tda4jJS/npmPack ; ++3.8.4! ; tda4j/packageDoc ; tda4j/doc"
+      - name: Build the Python wheel
+        # The wheel carries the fat jar built above and the release's version as a PEP 440 version (python/scripts/set_version.py).
+        # Installed into an empty environment and run, as test.yml's `python-package` job does for every pull request.
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -e
+          python -m pip install build
+          python/scripts/bundle-jar.sh "$(ls target/out/jvm/scala-3.9.0/tda4j/*-${VERSION}-assembly.jar)"
+          python python/scripts/set_version.py "$VERSION"
+          python -m build --wheel python
+          python -m venv /tmp/py-release
+          /tmp/py-release/bin/pip install python/dist/*.whl
+          /tmp/py-release/bin/python - <<'PY'
+          import numpy as np, tda4j
+          bars = tda4j.persistence(np.array([[0, 0], [1, 0], [1, 1], [0, 1.0]]), max_dimension=1).bars
+          loops = int((bars[:, 0] == 1).sum())
+          assert loops == 1, f"expected one loop in the unit square, got {loops}"
+          print("python wheel ok:", len(bars), "bars")
+          PY
       - name: Build the demo REPL jar
         # A separate sbt build (demo/README.md), in its own fresh sbt JVM, which sees the env var below. It resolves
         # `tda4j % VERSION` from ~/.ivy2/local, where the step above just put it, and everything else from Maven Central.
@@ -193,6 +218,7 @@ jobs:
             target/out/jvm/scala-3.9.0/tda4j/*-sources.jar \
             target/out/jvm/scala-3.8.4/tda4j/*-javadoc.jar \
             target/npm/*.tgz \
+            python/dist/*.whl \
             "demo/target/out/jvm/scala-3.9.0/tda4j-demo/tda4j-demo-${VERSION}.jar" \
             "docs-${VERSION}.zip"
       - name: Publish to npm
@@ -207,3 +233,11 @@ jobs:
             *-*) TAG_FLAG="--tag next" ;;
           esac
           npm publish target/npm/*.tgz --access public $TAG_FLAG
+      - name: Publish to PyPI
+        # PyPI Trusted Publishing (no token): a pending publisher for this repository and workflow, set up once on pypi.org
+        # (RELEASE.md, "PyPI"). The step is skipped until the repository variable PUBLISH_TO_PYPI is `true`, so a release
+        # made before that setup still succeeds and attaches the wheel to the GitHub Release.
+        if: vars.PUBLISH_TO_PYPI == 'true'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: python/dist/

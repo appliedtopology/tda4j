@@ -123,7 +123,8 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
         val bars = kept.zip(cycles).toList.map { case (e, (cycle, _)) =>
           val cells = r.cellsByDim(e.dim)
           val rep = Chain.from(cycle.terms.map((i, c) => (cells(i), c)))(using youngestFirst)
-          new PersistenceBar(e.dim, r.lower(e), r.upper(e), Some(rep))
+          val pair = Involution.Pair(e.dim, cells(e.birth), Option.when(e.death >= 0)(r.cellsByDim(e.dim + 1)(e.death)))
+          new PersistenceBar(e.dim, r.lower(e), r.upper(e), Some(rep), Some(pair))
         }
         PersistenceBar.dropZeroLength(bars, includeZeroLength)
 
@@ -149,7 +150,8 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
           val cells = r.cellsByDim(e.dim)
           val rep = Chain.from(e.cocycle.map((i, c) => (cells(i), c)))(using r.olderFirst)
           val death = Option.when(e.death >= 0)(r.cellsByDim(e.dim + 1)(e.death))
-          (PersistenceBar(e.dim, r.lower(e), r.upper(e), Some(rep)), Involution.Pair(e.dim, cells(e.birth), death))
+          val pair = Involution.Pair(e.dim, cells(e.birth), death)
+          (PersistenceBar(e.dim, r.lower(e), r.upper(e), Some(rep), Some(pair)), pair)
         }
         (paired, r.olderFirst)
 
@@ -199,14 +201,18 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
         Ordering.by[CellT, FiltrationT](cellFv).orElse(theStream.filtrationOrdering)
 
       val topDim = grouped.keys.max
-      // A d-cell forces its faces to exist, so a gap means a malformed stream; without this check a missing
-      // dimension would silently reduce as an empty one.
+      // A d-cell of a face-closed complex forces its faces to exist, so a dimension with no cells under cells that have
+      // a boundary means a malformed stream; without this check a missing dimension would silently reduce as an empty
+      // one. A Morse complex (DiscreteMorse) can have no critical cell in a dimension and still have cells above it,
+      // whose Morse boundary is then empty: that is a gap the reduction handles as an empty dimension.
+      val gaps = (0 until topDim).filterNot(grouped.contains)
       require(
-        grouped.keySet == (0 to topDim).toSet,
-        s"CellularCohomologyEngine requires a dimension-contiguous cell set (0..$topDim, no gaps), got " +
-          s"dimensions ${grouped.keySet.toSeq.sorted.mkString(", ")}"
+        gaps.forall(d => grouped.getOrElse(d + 1, Vector.empty).forall(_.boundary[CoefficientT].isEmpty)),
+        s"CellularCohomologyEngine requires a dimension-contiguous cell set (0..$topDim, no gaps) unless the cells above " +
+          s"a gap have no boundary, got dimensions ${grouped.keySet.toSeq.sorted.mkString(", ")}"
       )
-      val cellsByDim: IndexedSeq[Vector[CellT]] = (0 to topDim).map(d => grouped(d).sorted(using cohomologyOrdering))
+      val cellsByDim: IndexedSeq[Vector[CellT]] =
+        (0 to topDim).map(d => grouped.getOrElse(d, Vector.empty).sorted(using cohomologyOrdering))
 
       val idOrdering: Ordering[Int] = Ordering.Int // ascending number = oldest first = a column's leading term
       val fr = summon[CoefficientT is Field]
@@ -699,15 +705,17 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
       val level = levels(barDims(e))
       Chain.from(cocycle(e).map((i, c) => (level.cell(i), c)))(using olderFirst)
 
+    // The cells that open and close bar `e`.
+    private def cellsOf(e: Int): Involution.Pair[CellT] =
+      val dim = barDims(e)
+      val death = Option.when(barDeaths(e) >= 0)(levels(dim + 1).cell(barDeaths(e)))
+      Involution.Pair(dim, levels(dim).cell(barBirths(e)), death)
+
     def pairs
       : (List[(PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]], Involution.Pair[CellT])], Ordering[CellT]) =
       val paired = List.tabulate(count) { e =>
-        val (dim, level) = (barDims(e), levels(barDims(e)))
-        val death = Option.when(barDeaths(e) >= 0)(levels(dim + 1).cell(barDeaths(e)))
-        (
-          PersistenceBar(dim, lower(e), upper(e), Some(cocycleChain(e))),
-          Involution.Pair(dim, level.cell(barBirths(e)), death)
-        )
+        val pair = cellsOf(e)
+        (PersistenceBar(barDims(e), lower(e), upper(e), Some(cocycleChain(e)), Some(pair)), pair)
       }
       (paired, olderFirst)
 
@@ -717,7 +725,7 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
     ): List[PersistenceBar[FiltrationT, Chain[CellT, CoefficientT]]] =
       (0 until count).iterator
         .filter(e => barDims(e) <= limit && (includeZeroLength || !isZeroLength(e)))
-        .map(e => PersistenceBar(barDims(e), lower(e), upper(e), Some(cocycleChain(e))))
+        .map(e => PersistenceBar(barDims(e), lower(e), upper(e), Some(cocycleChain(e)), Some(cellsOf(e))))
         .toList
 
     // The faces of cell `j` of dimension `dim` that are in the stream, with their signs, as `boundary` lists them.
@@ -830,7 +838,7 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
               vcol.terms
           val level = levels(dim)
           val rep = Chain.from(cycle.map((i, c) => (level.cell(i), c)))(using youngestCellFirst)
-          new PersistenceBar(dim, lower(e), upper(e), Some(rep))
+          new PersistenceBar(dim, lower(e), upper(e), Some(rep), Some(cellsOf(e)))
         }
         .toList
 

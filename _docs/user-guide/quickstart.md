@@ -32,12 +32,29 @@ and the options, all with defaults:
 | `maxFiltrationValue` | the minimum enclosing radius | where to stop the filtration; past the default nothing new is born |
 | `complex` | `VietorisRips` | or `Cech`, `AlphaShapes`, for points |
 | `characteristic` | `17` | the coefficients: a prime `p` for the field with `p` elements, `0` for real numbers |
+| `coefficients` | none | the coefficients as an object, in place of `characteristic`: `Coefficients.Rationals` for exact rational numbers |
 | `engine` | `Persistence.Engine.Auto` | Ripser for Vietoris-Rips, `FastCubical` for images, cohomology otherwise (see [engines](homology-computation/choosing-engine.md)) |
 | `representatives` | `Representatives.Cycles` | or `Representatives.Cocycles` (see below) |
 | `includeZeroLength` | `false` | also report bars `[v, v)`, cells paired with cells entering at the same value |
 
 The default field has 17 elements rather than 2: over the field with 2 elements signs disappear, and so do classes
 that only exist with odd coefficients.
+
+`characteristic = 0` computes with floating point numbers, which are equal when they differ by less than a tolerance.
+`coefficients = Coefficients.Rationals` computes with exact fractions instead: no tolerance, no prime that might divide a
+torsion coefficient, and representatives whose coefficients are the exact numbers.
+
+```scala 3
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+
+val points = Array.tabulate(30)(i => Array(math.cos(i * 0.21), math.sin(i * 0.21)))
+Persistence(points, coefficients = Coefficients.Rationals).bettiNumbers
+```
+
+The numerators and denominators can grow as the reductions combine columns, which the residues of a prime field do not.
+If a rational computation takes too much memory, a large prime (`characteristic = 10007`) gives the same bars unless it
+divides a torsion coefficient of the complex.
 
 ### Reading a diagram
 
@@ -85,12 +102,12 @@ import org.appliedtopology.tda4j.*
 val points = Array(Array(0.0, 0.0), Array(0.001, 0.0), Array(1.0, 0.0), Array(0.5, 0.9))
 val diagram = Persistence(points)
 diagram.longerThan(0.1)         // essential bars, and bars that persist for more than 0.1
-diagram.significant()           // longer than 1% of the point cloud's scale, its minimum enclosing radius
-diagram.significant(0.1)        // longer than 10% of it
+diagram.longerThanFraction()    // longer than 1% of the point cloud's scale, its minimum enclosing radius
+diagram.longerThanFraction(0.1) // longer than 10% of it
 ```
 
-`significant()` is what the command line and MATLAB show by default. The same two calls work on any list of bars an
-engine returns: `bars.longerThan(0.1)`, `bars.significant()`.
+`longerThanFraction()` is what the command line and MATLAB show by default. The same two calls work on any list of bars an
+engine returns: `bars.longerThan(0.1)`, `bars.longerThanFraction()`.
 
 ### Representatives
 
@@ -117,6 +134,30 @@ cycle.terms                         // the edges with their coefficients
 val withCocycles = Persistence(points, representatives = Representatives.Cocycles)
 withCocycles.dim(1).longest.get.representative.cells   // a cocycle: 50 edges cutting across the loop
 ```
+
+### The cells that open and close a bar
+
+Besides its representative, a bar knows the two cells of the persistence pairing: `bar.birthCell` is the simplex whose
+entry created the class (of the bar's dimension, entering at the bar's birth) and `bar.deathCell` the one that killed it
+(one dimension up, entering at its death; `None` for a class that never dies). That is GUDHI's `persistence_pairs`, and
+what to use to point at where in the data a feature is born and where it fills in.
+
+```scala 3
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+
+val points = Array.tabulate(30)(i => Array(math.cos(i * 0.21), math.sin(i * 0.21)))
+val loop = Persistence(points).dim(1).longest.get
+loop.birthCell     // Some(a Simplex of two points): the edge whose length is the birth
+loop.deathCell     // Some(a Simplex of three points): the triangle whose entry fills the loop in
+```
+
+Cells are recorded by every engine except the fast ones (`FastCubical`, which `Persistence` chooses for images of
+dimension 2 and up, and `FastAlpha`), whose bars have `cells = None`; for an image, ask for `engine =
+Engine.Cohomology` to get them, as cubes. The same cells are in the results of [MATLAB and Java](matlab.md#the-cells-that-open-and-close-a-bar),
+[Python](python.md), [JavaScript](javascript.md), the [command line](cli.md) and the saved result file. Among cells that enter at the same value, which one is *the* birth cell depends on the order the engine breaks
+ties in (a bar's endpoints, which do not, are the same for every engine); in degree 0 all the vertices enter at 0, so
+the vertex that is born where a component starts is a matter of that convention.
 
 ### Long computations: the cursor
 

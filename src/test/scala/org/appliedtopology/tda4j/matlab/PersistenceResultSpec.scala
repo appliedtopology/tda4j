@@ -81,6 +81,28 @@ class PersistenceResultSpec extends Specification:
     }
   }
 
+  "bettiCurve, silhouette, persistenceEntropy and slicedWassersteinDistance" should {
+    val square1 = FullBarcode.computeFromPoints(square, Array("maxDimension", "1"))
+    val triangle1 = FullBarcode.computeFromPoints(triangle, Array("maxDimension", "1"))
+
+    "have the shape of the request, and the Betti curve starts at the number of points" >> {
+      val curve = square1.bettiCurve(0, 0.0, 2.0, 21)
+      (curve.length must beEqualTo(21)) and (curve.head must beEqualTo(4)) and
+        (curve.last must beEqualTo(1)) and
+        (square1.silhouette(0, 1.0, 0.0, 2.0, 21).length must beEqualTo(21))
+    }
+
+    "give a distance of 0 to itself and a positive one to a different result" >> {
+      (square1.slicedWassersteinDistance(square1, 0, 20) must beEqualTo(0.0)) and
+        (square1.slicedWassersteinDistance(triangle1, 0, 20) must beGreaterThan(0.0))
+    }
+
+    "give an entropy in [0, 1] when normalized" >> {
+      val e = square1.persistenceEntropy(0, true)
+      (e must beGreaterThanOrEqualTo(0.0)) and (e must beLessThanOrEqualTo(1.0))
+    }
+  }
+
   "persistenceImage" should {
     "returns birthResolution x persistenceResolution, non-negative throughout" >> {
       val result = FullBarcode.computeFromPoints(square, Array("maxDimension", "1"))

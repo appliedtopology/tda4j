@@ -21,6 +21,7 @@ const result = persistence(points, { maxDimension: 1 });
 
 result.bars;                // [{ dim: 0, birth: 0, death: Infinity }, { dim: 1, birth: 1, death: 1.41... }, ...]
 result.representative(1);   // { cells: [[0, 1], [1, 2], ...], coefficients: [...] }: the loop of the bar result.bars[1]
+result.barCells(1);         // { birth: [0, 1], death: [0, 1, 2] }: the edge that opens that loop and the triangle that closes it
 result.plotBarcode().svg(); // an SVG document, to put in a page or a file
 ```
 
@@ -40,7 +41,9 @@ other interfaces: `result.allBars` has every bar, and `result.hiddenCount` says 
 | `persistenceFromGrid(shape, values, options)` | an image or voxel grid of any dimension, values in row-major order |
 
 A `Result` also has `bottleneckDistance(other, dimension)`, `wassersteinDistance(other, dimension, order)`,
-`landscape(dimension, numLevels, tMin, tMax, resolution)` and the plots `plotBarcode()`, `plotDiagram()`,
+`slicedWassersteinDistance(other, dimension, directions)`, `wassersteinMatching(other, dimension, order)`, `bottleneckMatching(other, dimension)`, `landscape(dimension, numLevels, tMin, tMax, resolution)`,
+`bettiCurve(dimension, tMin, tMax, resolution)`, `silhouette(dimension, tMin, tMax, resolution, power)`,
+`persistenceEntropy(dimension, normalized)` and the plots `plotBarcode()`, `plotDiagram()`,
 `plotComplex(at)` and `plotRepresentative(i, at)`. A plot has `svg()` and `html()` for the text of a picture or a page,
 `show()` to put it in the page (in a browser) or open it in the default browser (from Node.js), and `save(path)`.
 
@@ -55,8 +58,18 @@ Landmarks, circular coordinates and the text of files have functions of their ow
 |---|---|
 | `selectLandmarks(points, { numLandmarks })` | `{ landmarks, coveringRadius }`; `selectLandmarksFromDistances` for a distance matrix |
 | `persistenceFromLandmarks(points, landmarks, options)` | a `Result` on the witness complex of the landmarks; `persistenceFromDistancesAndLandmarks` for a distance matrix |
+| `relativePersistence(points, subcomplex, options)` | a `Result` for the Vietoris-Rips complex [relative to](relative-persistence.md) the subcomplex on the points `subcomplex` (point numbers from 0); `relativePersistenceFromDistances` for a distance matrix |
+| `inclusionMap(points, subsample, options)`, `simplicialMap(sourcePoints, targetPoints, vertexMap, options)` | the [map on persistent homology](barcode-algebra.md#maps-between-spaces) of the inclusion of a subsample's Vietoris-Rips complex, or of a simplicial map: `{ maxDimension, characteristic, degrees }`, each degree `{ dimension, sourceBars, targetBars, entries, image, kernel, cokernel }` with bars as `[birth, death]`; `inclusionMapFromDistances` and `simplicialMapFromDistances` for distance matrices |
 | `coveringRadius(points, landmarks)` | the covering radius of any landmarks |
 | `eulerCurve(points, { maxSimplexDimension, maxFiltrationValue })` | the [Euler characteristic curve](vectorization.md#the-euler-characteristic-curve) of the Vietoris-Rips complex: an object with `scales`, `values`, `at(t)` and `sample(tMin, tMax, resolution)`; `eulerCurveFromDistances` for a distance matrix |
+| `bootstrapBand(points, { dimension, rounds, alpha, seed, subsampleSize })` | the [resampling band](noise-and-clusters.md) of the bars of one degree: `{ width, threshold, alpha, distances }`; a bar that persists longer than `threshold` survives the resampling |
+| `tomatoClusters(points, k, tau)`, `tomatoDiagram(points, k)` | [ToMATo](noise-and-clusters.md) clustering: the cluster of every point (0 for the highest peak), and `[birth, death]` for the valleys between peaks |
+| `persistentLaplacian(points, dimension, from, to)`, `persistentLaplacianFromDistances(distances, dimension, from, to)` | the [persistent Laplacian](persistent-laplacian.md) of the Vietoris-Rips complex: an object with `matrix`, `eigenvalues` (smallest first), `bettiNumber`, `spectralGap` (`undefined` if every eigenvalue is zero) and `cells` |
+| `morseReduction(points, options)`, `morseReductionFromDistances(distances, options)` | the [discrete Morse reduction](discrete-morse.md) of the Vietoris-Rips complex: `{ cellCounts, criticalCounts, pairCount, criticalCells, bars }`; options `maxDimension`, `maxFiltrationValue`, `strategy` (`"reduction"` or `"coreduction"`), `prime`, `threads` |
+| `zigzagFromSteps(initial, simplices, additions, options)`, `zigzagFromComplexes(complexes, options)` | [zigzag persistence](zigzag-persistence.md) of a sequence of simplicial complexes (simplices as arrays of vertex numbers), given as steps that add or remove one simplex or as a list of complexes: `{ bars, representatives, lastPosition }`; options `maxDimension`, `prime` and, for complexes, `link` (`"none"`, `"union"` or `"intersection"`) |
+| `productBars(first, second, filtration)`, `homBars(first, second)`, `homDimension(first, second)`, `dualBars(bars)` | the [algebra of barcodes](barcode-products.md) on rows `[dimension, birth, death]`: the bars of a product of two filtered complexes (`filtration` `"max"`, the default, or `"sum"`), the internal Hom, the dimension of the space of maps, the dual |
+| `takensEmbedding(series, dimension, delay, stride)`, `takensEmbeddingOfVectors(rows, dimension, delay, stride)` | the sliding-window (Takens) embedding of a time series, or of a series of vectors: the windows as a point cloud; `delay` and `stride` default to 1 |
+| `delayByAutocorrelation(series, maxLag)` | the first lag in `1..maxLag` at which the autocorrelation is zero or negative: a first guess for `delay` |
 | `h1Bars(points)` | the loops of the Vietoris-Rips complex as `[birth, death]`, most persistent first |
 | `circularCoordinates(points, r, { cocycleIndex, prime })` | `{ theta, birth, death, r, prime }`: one angle in [0, 1) per point for loop `cocycleIndex` of `h1Bars`, with `r` between its birth and death |
 | `toroidalCoordinates(points, r, cocycleIndices, { prime, reduce })` | `{ theta, cocycleIndices, basisChange, originalGram, reducedGram, r, prime }`: `theta[c][i]` is coordinate `c` of point `i` |

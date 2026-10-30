@@ -366,6 +366,8 @@ object ParallelPackedCohomology:
     val bars = mutable.ArrayBuffer.empty[(Int, Double, Double)]
     // The column (birth key) of each bar of `bars`, for `cocycle` and for finding its pair.
     val barColumns = mutable.ArrayBuffer.empty[Long]
+    // The row (death key) of each bar of `bars`, -1 for an essential one.
+    val barRows = mutable.ArrayBuffer.empty[Long]
     val reduced = mutable.LongMap.empty[Owner] // by column, for the columns with additions
     val logs = mutable.LongMap.empty[Log]
     val essential = mutable.ArrayBuffer.empty[Long]
@@ -870,15 +872,16 @@ object ParallelPackedCohomology:
         degree.essential ++= unit.essential
         degree.essentialBlocks ++= unit.essentialBlocks
       // Bars of positive length: the owners' pairs, and the essential columns (death block -1).
-      def bar(column: Long, columnBlock: Int, rowBlock: Int): Unit =
+      def bar(column: Long, columnBlock: Int, row: Long, rowBlock: Int): Unit =
         val birth = value(columnBlock)
         val death = if rowBlock < 0 then Double.PositiveInfinity else value(rowBlock)
         if death > birth then
           degree.bars += ((d, birth, death))
           degree.barColumns += column
-      for unit <- units do unit.owners.foreach((_, o) => bar(o.column, o.columnBlock, o.pivotBlock))
-      late.foreach((_, o) => bar(o.column, o.columnBlock, o.pivotBlock))
-      degree.essential.indices.foreach(i => bar(degree.essential(i), degree.essentialBlocks(i), -1))
+          degree.barRows += row
+      for unit <- units do unit.owners.foreach((row, o) => bar(o.column, o.columnBlock, row, o.pivotBlock))
+      late.foreach((row, o) => bar(o.column, o.columnBlock, row, o.pivotBlock))
+      degree.essential.indices.foreach(i => bar(degree.essential(i), degree.essentialBlocks(i), -1L, -1))
 
       // Clearing for the next degree, and its simplices: every canonical cofacet within the threshold.
       val pivotChunks = units.map(_.pivots.result()) :+ latePivots.result()

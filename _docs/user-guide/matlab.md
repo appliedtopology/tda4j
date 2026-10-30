@@ -51,6 +51,16 @@ in a MATLAB tab next to the Scala code.
 | `computeFromPointsAndLandmarks(points, landmarks, options)`, `computeFromDistanceMatrixAndLandmarks(distances, landmarks, options)` | step 2: the witness complex for given landmarks (0-based, non-empty, distinct). Options: `witnessVariant`, `nu`, `engine`, `representativeType`, `maxDimension`, `maxFiltrationValue`, `field`, `prime`, `epsilon`, the bar options, and `complex` only as `witness`. See [witness complexes](topological-spaces/witness-complexes.md) |
 | `coveringRadiusFromPoints(points, landmarks)`, `coveringRadiusFromDistanceMatrix(distances, landmarks)` | the covering radius `R` of a landmark set: the largest distance from a point to its nearest landmark |
 | `eulerCurveFromPoints(points, options)`, `eulerCurveFromDistanceMatrix(distances, options)` | the [Euler characteristic curve](vectorization.md#the-euler-characteristic-curve) of the Vietoris-Rips complex, counted without building it. Options: `maxSimplexDimension` (default `2`), `maxFiltrationValue`, `threads`. Returns an `EulerCurveResult` with `scales()`, `values()`, `at(t)` and `sample(tMin, tMax, resolution)` |
+| `computeRelativeFromPoints(points, subcomplex, options)`, `computeRelativeFromDistanceMatrix(distances, subcomplex, options)` | [relative persistent homology](relative-persistence.md): the Vietoris-Rips complex modulo the subcomplex on the points `subcomplex` (0-based). Options: `engine` (`cohomology`, the default, `naive` or `chunks`), `maxDimension`, `maxFiltrationValue`, `field`, `prime`, `epsilon`, `representativeType`, the bar options and `threads`. The representatives and the cells of the bars are cells outside the subcomplex |
+| `computeInclusionFromPoints(points, subsample, options)`, `computeInclusionFromDistanceMatrix(distances, subsample, options)`, `computeMapFromPoints(sourcePoints, targetPoints, vertexMap, options)`, `computeMapFromDistanceMatrices(…)` | the [map on persistent homology](barcode-algebra.md#maps-between-spaces) induced by the inclusion of the Vietoris-Rips complex of a subsample (0-based point numbers) into the whole, or by a map `vertexMap` of points that does not increase a distance: a `PersistenceMapResult` with `maxDimension()`, `characteristic()` and, per degree `k`, `sourceBars(k)`, `targetBars(k)`, `entries(k)` (rows of source bar, target bar, coefficient) and the barcodes `image(k)`, `kernel(k)`, `cokernel(k)`. Options: `engine` (`ripser`, the default, or `cohomology`), `maxDimension`, `maxFiltrationValue` (shared; by default the target's enclosing radius), `prime`, `threads` |
+| `persistentLaplacianFromPoints(points, dimension, from, to)`, `persistentLaplacianFromDistanceMatrix(distances, dimension, from, to)` | the [persistent Laplacian](persistent-laplacian.md) of the Vietoris-Rips complex: a `PersistentLaplacianResult` with `matrix()`, `eigenvalues()` (smallest first), `bettiNumber()`, `spectralGap()` (`NaN` if every eigenvalue is zero), `hasSpectralGap()` and `cells()` |
+| `morseReductionFromPoints(points, options)`, `morseReductionFromDistanceMatrix(distances, options)` | the [discrete Morse reduction](discrete-morse.md) of the Vietoris-Rips complex: a `MorseReductionResult` with `cellCounts()` and `criticalCounts()` by dimension, `pairCount()`, `criticalCells()` and `bars()` (rows `(dimension, birth, death)`, computed on the critical cells). Options `maxDimension` (2), `maxFiltrationValue`, `strategy` (`reduction` or `coreduction`), `prime` (17) and `threads` |
+| `zigzagFromSteps(initial, simplices, additions, options)`, `zigzagFromComplexes(complexes, options)` | [zigzag persistence](zigzag-persistence.md) of a sequence of simplicial complexes (simplices as arrays of vertex numbers), given as steps that add or remove one simplex or as a list of complexes: a `ZigzagResult` with `toArray()` (rows `(dimension, birth, death)`, death `Inf` for a class that lasts to the end), `cycleVertices(i)`, `cycleCoefficients(i)` of the representative at each bar's birth, `size()` and `lastPosition()`. Options `maxDimension` (2), `prime` (17) and, for complexes, `link` (`none`, `union` or `intersection`) |
+| `productBars(first, second, filtration)`, `homBars(first, second)`, `homDimension(first, second)`, `dualBars(bars)` | the [algebra of barcodes](barcode-products.md): the bars of the homology of a product of two filtered complexes from the bars of the factors (`filtration` is `"max"` or `"sum"`), the internal Hom, the dimension of the space of maps, and the dual. Rows `(dimension, birth, death)` in and out, `result.toArrayUnfiltered()` for the barcode of a result |
+| `bootstrapBand(points, options)` | the [resampling band](noise-and-clusters.md) of the bars of one degree, a `BootstrapBandResult` with `width()`, `threshold()` (bars that persist longer survive the resampling), `alpha()` and `distances()`; options `dimension`, `rounds`, `alpha`, `seed`, `subsampleSize`, `prime`, `maxFiltrationValue`, `threads` |
+| `tomatoClusters(points, k, tau)`, `tomatoDiagram(points, k)` | [ToMATo](noise-and-clusters.md) clustering: the cluster of every point (0 for the highest peak), and the `(birth, death)` of the valleys between peaks, whose persistence is their depth |
+| `takensEmbedding(series, dimension, delay)`, `takensEmbedding(series, dimension, delay, stride)` | the sliding-window (Takens) embedding of a time series: the points are the windows `(x_t, x_{t+delay}, ...)`, for any stride-th start `t`. `takensEmbeddingOfVectors(rows, dimension, delay)` does the same for a series of vectors, one row per time step |
+| `delayByAutocorrelation(series, maxLag)` | the first lag in `1..maxLag` at which the autocorrelation is zero or negative: a first guess for `delay` |
 | `h1Bars(points)` | the loops of the Vietoris-Rips complex: one row `(birth, death)` per persistent H¹ class, most persistent first |
 | `circularCoordinates(points, r)`, `circularCoordinates(points, r, cocycleIndex, prime)` | circular coordinates of loop `cocycleIndex` of `h1Bars` at scale `r` (defaults `0` and `47`, an odd prime); throws `NoIntegerCocycleException` if the class has no integer lift at that prime |
 | `toroidalCoordinates(points, r, cocycleIndices)`, `toroidalCoordinates(points, r, cocycleIndices, prime, reduce)` | toroidal coordinates for several loops alive together at `r`; `reduce` (default `true`) applies lattice reduction |
@@ -72,7 +82,7 @@ for data where a `NaN` can only be a bug.
 | `representativeType` | `cycles`, `cocycles` | `cycles` (every engine gives both except `fast-cubical` and `fast-alpha`, which give cycles; `ripser` and `cohomology` compute cocycles natively and cycles a little more slowly, the others the other way round) |
 | `maxDimension` | integer | `2`: the top homological degree (for an image: its dimension) |
 | `maxFiltrationValue` | number | the minimum enclosing radius (`Infinity` for the general witness complex, which is not a flag complex; `Infinity` for any complex gives the whole complex, and `engine=fast-alpha` takes the whole triangulation and no radius) |
-| `field` | `Z` (a prime field), `R` (floating point) | `Z` |
+| `field` | `Z` (a prime field), `R` (floating point), `Q` (exact rational numbers: the bars are computed exactly and the coefficients of the representatives reported as the nearest `double`) | `Z` |
 | `prime` | prime | `17` |
 | `epsilon` | number | `1e-9`: the tolerance of `field=R` |
 | `minPersistence` | number | unset: an absolute threshold for the reported bars |
@@ -126,9 +136,9 @@ result.toArrayUnfiltered()       % all bars, the same layout as toArray()
 ```
 
 Zero-length bars (`birth == death`) are not computed into the result at all unless `includeZeroLength` is `true`.
-Distances, landscapes and persistence images (`bottleneckDistance`, `wassersteinDistance`, `landscape`,
-`persistenceImage`, see [vectorization](vectorization.md)) always use every bar of the result, so they do not depend on
-its threshold.
+Distances and vectorizations (`bottleneckDistance`, `wassersteinDistance`, `slicedWassersteinDistance`, `landscape`,
+`persistenceImage`, `bettiCurve`, `silhouette`, `persistenceEntropy`, see [vectorization](vectorization.md)) always use
+every bar of the result, so they do not depend on its threshold.
 
 ### Representatives
 
@@ -137,6 +147,15 @@ vertex numbers) and their coefficients: a cycle, or a cocycle with `representati
 For the witness complex the vertices are point numbers, not landmark numbers. For an image, a cell is given by its
 coordinates in the doubled grid (a pixel `(i, j)` is `(2i + 1, 2j + 1)`). The [boundary matrix](boundary-matrix.md) of
 the complex is also available.
+
+### The cells that open and close a bar
+
+`birthCell(i)` is the cell whose entry created the class of bar `i`, and `deathCell(i)` the cell whose entry killed it,
+each in the format of one row of `cycleVertices(i)`. The birth cell has the bar's dimension and enters at its birth; the
+death cell is one dimension up and enters at its death. `deathCell(i)` is empty for an essential bar, and both are empty
+for an engine that records no cells (`fast-cubical`, `fast-alpha`: use `engine=cohomology` for an image). Among cells that
+enter at the same value, which one is the birth cell depends on the engine's order of ties; the bars do not. `save`
+writes the cells of every bar to the result file (`birthCells` and `deathCells`).
 
 ## Result objects
 
@@ -153,16 +172,22 @@ Bars are indexed from 0 in the order of `toArray()`: the reported bars only, as 
 | `persistenceThreshold()` | the persistence a bar had to exceed to be reported (`0`: no threshold) |
 | `toArrayUnfiltered()` | every computed bar, laid out like `toArray()` |
 | `cycleVertices(i)`, `cycleCoefficients(i)` | the representative of bar `i`: its simplices as rows of sorted vertex numbers, and the coefficients (an integer representative over `Z/p`) |
+| `birthCell(i)`, `deathCell(i)` | the cells that open and close bar `i`, as one row of `cycleVertices(i)`; empty for an essential bar's death, and where the engine records no cells |
 | `mostPersistentBar(dimension)` | the index of the reported bar of that dimension with the largest persistence (an essential bar first) |
 | `bottleneckDistance(other, dimension)`, `(other, dimension, groundNorm)` | the bottleneck distance between the bars of that dimension of two results; `groundNorm` is `Inf` (the default) or a finite `p >= 1`. `Inf` if the numbers of essential bars differ |
 | `wassersteinDistance(other, dimension)`, `(…, order)`, `(…, order, groundNorm)` | the Wasserstein distance; `order` defaults to `1` |
+| `wassersteinMatching(other, dimension, order)`, `bottleneckMatching(other, dimension)` | an optimal matching of the bars of that dimension: one row `[i j]` per matched pair (bars numbered from 0 as in `toArrayUnfiltered()` restricted to that dimension), `[i -1]` for a bar of this result sent to the diagonal and `[-1 j]` for one of `other`; no rows if the numbers of essential bars differ |
+| `slicedWassersteinDistance(other, dimension, directions)` | the sliced Wasserstein distance, averaged over `directions` directions; essential bars are left out |
 | `landscape(dimension, numLevels, tMin, tMax, resolution)` | the first `numLevels` persistence landscapes sampled at `resolution` points of `[tMin, tMax]`; row `k` is level `k` |
+| `bettiCurve(dimension, tMin, tMax, resolution)` | the number of bars of that dimension alive at each of `resolution` points of `[tMin, tMax]` |
+| `silhouette(dimension, power, tMin, tMax, resolution)` | the persistence silhouette, weighted by persistence to the power `power`; essential bars are left out |
+| `persistenceEntropy(dimension, normalized)` | the entropy of the bar lengths, in `[0, 1]` when `normalized` is `true` |
 | `persistenceImage(dimension, sigma, birthMin, birthMax, persistenceMin, persistenceMax, birthResolution, persistenceResolution)`, and the same with a final `weightCap` | the persistence image; the weight rises to 1 at the largest persistence, or at `weightCap` |
 | `numCells()`, `boundaryRows()`, `boundaryCols()`, `boundaryValues()`, `columnDimension(j)`, `columnVertices(j)`, `columnFiltrationValue(j)` | the boundary matrix of the complex, see [boundary-matrix export](boundary-matrix.md) |
 | `save(path)` | writes the result as JSON and returns its absolute path |
 | `plot...` | figures, see below |
 
-Distances, landscapes and images use every bar of the result, reported or not. See [vectorization](vectorization.md).
+Distances and vectorizations use every bar of the result, reported or not. See [vectorization](vectorization.md).
 
 **Plots.** Each method returns a figure (or, in 3-D, a scene) that you `view()` in the browser or `save(path)` as `.svg` or
 `.html`, and restyle with the methods of [plotting](plotting.md#from-matlab-and-the-command-line).
