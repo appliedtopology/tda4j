@@ -104,6 +104,10 @@ Testing lessons: F2 hides sign errors; signed-field fixtures need ≥5 vertices 
 elements, `SignedFieldBarcodeSpec`). Two engines agreeing isn't proof if they share a code path: hand-derived fixtures
 are the real oracle.
 
+**`ParallelPackedCohomology`** is JVM-only experimental machinery. Its reduction-log graph is acyclic by construction;
+`cocycle` expands it with an explicit depth-first stack and memo so long substitutions cannot overflow the call stack,
+and reports a cycle as an invariant violation (`ParallelPackedCohomologySpec`, `WORKLOG-code-review-fixes-2026-10-30.md`).
+
 **`BarcodeDistance`/`Vectorization`/`BootstrapBand`/`ToMATo`**: distances (matchings are `None` on an essential-count
 mismatch), sliced Wasserstein, landscapes, images, Betti curves (`birth <= t < death`), silhouettes, entropy on
 `PersistenceBar[Double,_]`. Ground norm matches Hera/GUDHI, images `persim`. Essential bars: matched by birth for distance

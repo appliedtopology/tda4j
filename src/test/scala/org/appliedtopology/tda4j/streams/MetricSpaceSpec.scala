@@ -88,6 +88,29 @@ class MetricSpaceSpec extends mutable.Specification with ScalaCheck:
         (space.neighbors(Array(0.0, 0.0), math.sqrt(0.5)) must be_==(Seq(0, 1, 2, 3))) and
         (space.neighbors(Array(0.0, 0.0), 0.5) must be_==(Seq(1)))
     }
+    "reject ragged coordinates and point-distance queries with different dimensions" >> {
+      val ragged = Array(Array(0.0), Array(0.0, 1.0))
+      (EuclideanMetricSpace(ragged) must throwAn[IllegalArgumentException]) and
+        (EuclideanMetricSpace(Array(Array(0.0))).pointSqDistance(Array(0.0), Array(0.0, 1.0)) must
+          throwAn[IllegalArgumentException])
+    }
+    "own a stable snapshot of coordinates with or without a distance cache" >> {
+      def distancesAfterMutation(cached: Boolean): (Double, Double) =
+        val first = Array(0.0, 0.0)
+        val second = Array(3.0, 4.0)
+        val input = Array(first, second)
+        val space = new EuclideanMetricSpace(input, cacheDistances = cached)
+        val before = space.distance(0, 1)
+        first(0) = 100.0
+        second(1) = 100.0
+        input(1) = Array(1000.0, 1000.0)
+        val returned = space.pts
+        returned(0)(1) = -100.0
+        returned(1) = Array(-1000.0, -1000.0)
+        (before, space.distance(0, 1))
+      (distancesAfterMutation(cached = true) must be_==(5.0 -> 5.0)) and
+        (distancesAfterMutation(cached = false) must be_==(5.0 -> 5.0))
+    }
   }
 
   "An explicit distance matrix is read from its lower triangle, as Ripser and GUDHI read it" >> {

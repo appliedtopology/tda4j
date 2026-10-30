@@ -16,6 +16,9 @@ class UserImportsSpec extends Specification:
   private def stream = VietorisRips(EuclideanMetricSpace(points), 1, Some(2.0))
 
   "one plain `import org.appliedtopology.tda4j.*`" should {
+    "keep engine-only helpers out of the user's flat import surface" in {
+      typeCheckErrors("insertionDiameter(EuclideanMetricSpace(points), Array.emptyIntArray, 0.0, 0)") must not(beEmpty)
+    }
     "find the default simplex instances (no `given` selector needed)" in {
       summon[Simplex[Int] is OrderedCell].dim(∆(1, 2, 3)) must beEqualTo(2)
       summon[Ordering[Simplex[Int]]].compare(∆(1, 2), ∆(1, 3)) must beLessThan(0)

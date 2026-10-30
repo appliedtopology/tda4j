@@ -687,6 +687,83 @@ object ParallelPackedCohomology:
         b += 1
     if threads > 1 then Parallel.ranges(blockCount, 16)(within) else within(0, blockCount)
 
+  private def partitionLevel(
+    space: Space,
+    level: Array[Long],
+    levelBlocks: Array[Int],
+    threads: Int,
+    unitsPerThread: Int
+  ): Array[WorkUnit] =
+    import space.*
+    def blockAt(pos: Int): Int = if wide then levelBlocks(pos) else block(level(pos))
+    val target = math.max(1, level.length / math.max(1, threads * unitsPerThread))
+    val units = mutable.ArrayBuffer.empty[WorkUnit]
+    var start = 0
+    while start < level.length do
+      var end = math.min(level.length, start + target)
+      if threads * unitsPerThread == 1 then end = level.length
+      while end < level.length && blockAt(end) == blockAt(end - 1) do end += 1
+      units += WorkUnit(start, end, blockAt(start), blockAt(end - 1))
+      start = end
+    units.toArray
+
+  private def workUnitOf(units: Array[WorkUnit], unitLowBlocks: Array[Int], block: Int): WorkUnit | Null =
+    var i = java.util.Arrays.binarySearch(unitLowBlocks, block)
+    if i < 0 then i = -i - 2
+    if i >= 0 && units(i).highBlock >= block then units(i) else null
+
+  private def assembleNextLevel(
+    space: Space,
+    current: Array[Long],
+    currentBlocks: Array[Int],
+    k: Int,
+    threads: Int,
+    scratch: ThreadLocal[Scratch]
+  ): (Array[Long], Array[Int], Long) =
+    import space.*
+    val started = System.nanoTime()
+    val chunks = math.max(1, threads * 8)
+    val parts = new Array[Array[Long]](chunks)
+    val blockParts = new Array[Array[Int]](chunks)
+    def currentBlock(pos: Int): Int = if wide then currentBlocks(pos) else block(current(pos))
+    parallel(threads, chunks) { c =>
+      val s = scratch.get()
+      val out = mutable.ArrayBuilder.ofLong()
+      val outBlocks = if wide then mutable.ArrayBuilder.ofInt() else null
+      for pos <- (c * current.length.toLong / chunks).toInt until ((c + 1) * current.length.toLong / chunks).toInt
+      do
+        val column = current(pos)
+        val columnBlock = currentBlock(pos)
+        val idx = index(column)
+        decode(idx, k, s.vs)
+        val top = s.vs(k - 1)
+        startDown(s.cur, s.vs, k)
+        var v = n - 1
+        while v > top do
+          var ok = true
+          var blk = columnBlock
+          var u = 0
+          while ok && u < k do
+            val q = rankDown(s.cur, u, s.vs(u), v)
+            if q < 0 then ok = false else if q + 1 > blk then blk = q + 1
+            u += 1
+          if ok then
+            out += key(blk, idx + binom(k + 1)(v))
+            if wide then outBlocks += blk
+          v -= 1
+      parts(c) = out.result()
+      if wide then blockParts(c) = outBlocks.result()
+    }
+    val next = new Array[Long](parts.map(_.length).sum)
+    val nextBlocks = if wide then new Array[Int](next.length) else null
+    var offset = 0
+    for c <- parts.indices do
+      System.arraycopy(parts(c), 0, next, offset, parts(c).length)
+      if wide then System.arraycopy(blockParts(c), 0, nextBlocks, offset, parts(c).length)
+      offset += parts(c).length
+    if wide then sortWide(next, nextBlocks, edgeA.length + 1, threads) else sort(next, threads)
+    (next, nextBlocks, System.nanoTime() - started)
+
   /** Every bar of degrees `0 .. maxDim`; `unitsPerThread` 1 with `threads` 1 is the sequential reduction. */
   def persistence(
     space: Space,
@@ -715,23 +792,11 @@ object ParallelPackedCohomology:
       val (keysOfLevel, blocksOfLevel) = (level, levelBlocks)
       def levelBlock(pos: Int): Int = if wide then blocksOfLevel(pos) else block(keysOfLevel(pos))
 
-      // Units: contiguous runs of whole blocks, about level.length / (threads * unitsPerThread) columns each.
-      val target = math.max(1, level.length / math.max(1, threads * unitsPerThread))
-      val unitsB = mutable.ArrayBuffer.empty[WorkUnit]
-      var start = 0
-      while start < level.length do
-        var end = math.min(level.length, start + target)
-        if threads * unitsPerThread == 1 then end = level.length
-        while end < level.length && levelBlock(end) == levelBlock(end - 1) do end += 1
-        unitsB += WorkUnit(start, end, levelBlock(start), levelBlock(end - 1))
-        start = end
-      val units = unitsB.toArray
+      // Each unit is a contiguous run of whole blocks, sized to balance the work across threads.
+      val units = partitionLevel(space, keysOfLevel, blocksOfLevel, threads, unitsPerThread)
       stats.units = units.length
       val unitLow = units.map(_.lowBlock)
-      def unitOf(b: Int): WorkUnit | Null =
-        var i = java.util.Arrays.binarySearch(unitLow, b)
-        if i < 0 then i = -i - 2
-        if i >= 0 && units(i).highBlock >= b then units(i) else null
+      def unitOf(b: Int): WorkUnit | Null = workUnitOf(units, unitLow, b)
 
       // Phase 1: each unit youngest first, against its own owners.
       val t1 = System.nanoTime()
@@ -892,48 +957,10 @@ object ParallelPackedCohomology:
         at += chunk.length
       sort(cleared, threads)
       if d < maxDim then
-        val t4 = System.nanoTime()
-        val chunks = math.max(1, threads * 8)
-        val parts = new Array[Array[Long]](chunks)
-        val blockParts = new Array[Array[Int]](chunks)
-        val current = level
-        parallel(threads, chunks) { c =>
-          val s = scratch.get()
-          val out = mutable.ArrayBuilder.ofLong()
-          val outBlocks = if wide then mutable.ArrayBuilder.ofInt() else null
-          for pos <- (c * current.length.toLong / chunks).toInt until ((c + 1) * current.length.toLong / chunks).toInt
-          do
-            val column = current(pos)
-            val columnBlock = levelBlock(pos)
-            val idx = index(column)
-            decode(idx, k, s.vs)
-            val top = s.vs(k - 1)
-            startDown(s.cur, s.vs, k)
-            var v = n - 1
-            while v > top do
-              var ok = true
-              var blk = columnBlock
-              var u = 0
-              while ok && u < k do
-                val q = rankDown(s.cur, u, s.vs(u), v)
-                if q < 0 then ok = false else if q + 1 > blk then blk = q + 1
-                u += 1
-              if ok then
-                out += key(blk, idx + binom(k + 1)(v))
-                if wide then outBlocks += blk
-              v -= 1
-          parts(c) = out.result()
-          if wide then blockParts(c) = outBlocks.result()
-        }
-        level = new Array[Long](parts.map(_.length).sum)
-        levelBlocks = if wide then new Array[Int](level.length) else null
-        at = 0
-        for c <- parts.indices do
-          System.arraycopy(parts(c), 0, level, at, parts(c).length)
-          if wide then System.arraycopy(blockParts(c), 0, levelBlocks, at, parts(c).length)
-          at += parts(c).length
-        if wide then sortWide(level, levelBlocks, edgeA.length + 1, threads) else sort(level, threads)
-        assembleNanos = System.nanoTime() - t4
+        val (next, nextBlocks, elapsed) = assembleNextLevel(space, level, levelBlocks, k, threads, scratch)
+        level = next
+        levelBlocks = nextBlocks
+        assembleNanos = elapsed
       degrees += degree
     val result = degrees.result()
     // Read each log's entries once, here on one thread, so that cocycles can be built from several threads.
@@ -952,19 +979,36 @@ object ParallelPackedCohomology:
       for i <- 0 until count do sum(s.cofKey(i)) = (sum.getOrElse(s.cofKey(i), 0) + f * s.cofCoef(i)) % space.p
     sum.filter(_._2 != 0).toMap
 
-  /** V for a column: the column plus factor * V(added) over its log, recursively. */
+  /** V for a column: the column plus factor * V(added) over its log, expanded depth-first without recursion. */
   def cocycle(degree: Degree, p: Int, column: Long): Map[Long, Int] =
     val memo = mutable.LongMap.empty[Map[Long, Int]]
-    def v(c: Long): Map[Long, Int] = memo.get(c) match
-      case Some(known) => known
-      case None        =>
-        val result = degree.logs.get(c) match
-          case None      => Map(c -> 1)
+    val visiting = mutable.LongMap.empty[Unit]
+    val pending = mutable.Stack((column, false))
+    while pending.nonEmpty do
+      val (c, expanded) = pending.pop()
+      if !memo.contains(c) then
+        degree.logs.get(c) match
+          case None                   => memo(c) = Map(c -> 1)
+          case Some(log) if !expanded =>
+            if visiting.contains(c) then
+              throw IllegalStateException(s"ParallelPackedCohomology: cyclic cocycle log at column $c")
+            visiting(c) = ()
+            pending.push((c, true))
+            val added = log.columns
+            var i = added.length - 1
+            while i >= 0 do
+              if !memo.contains(added(i)) then
+                if visiting.contains(added(i)) then
+                  throw IllegalStateException(s"ParallelPackedCohomology: cyclic cocycle log at column ${added(i)}")
+                pending.push((added(i), false))
+              i -= 1
           case Some(log) =>
             val acc = mutable.LongMap(c -> 1)
             val (added, factors) = (log.columns, log.multipliers)
-            for i <- added.indices; (e, x) <- v(added(i)) do acc(e) = (acc.getOrElse(e, 0) + factors(i) * x) % p
-            acc.filter(_._2 != 0).toMap
-        memo(c) = result
-        result
-    v(column)
+            var i = 0
+            while i < added.length do
+              for (e, x) <- memo(added(i)) do acc(e) = (acc.getOrElse(e, 0) + factors(i) * x) % p
+              i += 1
+            memo(c) = acc.filter(_._2 != 0).toMap
+            visiting.remove(c)
+    memo(column)
