@@ -227,6 +227,9 @@ end PowerDistance
   *   a candidate that `rankTolerance` rules out because of a small pivot is solved again with this smaller tolerance
   *   and kept if the multipliers it ends with satisfy the optimality conditions of the dual against the data. In high
   *   ambient dimension many valid simplices are that ill-conditioned. 0 turns the second attempt off.
+  * @param keepWitnesses
+  *   compute and keep the witness map Phi of every simplex (`AlphaComplexDQP.witness`), one row of the ambient
+  *   dimension per simplex. The alpha streams (`AlphaShapes` with `DQP`) never read it and turn it off.
   */
 final case class AlphaDQPSettings(
   rankTolerance: Double = 1e-6,
@@ -238,7 +241,8 @@ final case class AlphaDQPSettings(
   enforceMonotonicity: Boolean = true,
   parallel: Boolean = Parallel.byDefault,
   verbose: Boolean = false,
-  rescueRankTolerance: Double = 1e-11
+  rescueRankTolerance: Double = 1e-11,
+  keepWitnesses: Boolean = true
 )
 
 // ===========================================================================
@@ -764,8 +768,15 @@ open class AlphaComplexDQP(
   val maxPower: Double,
   val maxDimension: Int,
   private val cellsByDim: IndexedSeq[mutable.IndexedBuffer[Simplex[Int]]],
-  private val weights: mutable.HashMap[Simplex[Int], Double],
-  private val witnesses: mutable.HashMap[Simplex[Int], Array[Double]]
+  // The simplices of dimension k >= 1 as rows of a table, with the row's value and witness (`witnessWidth` doubles a
+  // row, none when the input had no coordinates); the vertices by index, NaN (or null) for a vertex that is not in the
+  // complex.
+  private val tables: IndexedSeq[DelaunayAlphaShapes.FaceTable],
+  private val rowValues: IndexedSeq[AlphaComplexDQPBuilder.DoubleRows],
+  private val vertexValues: Array[Double],
+  private val rowWitnesses: IndexedSeq[AlphaComplexDQPBuilder.DoubleRows],
+  private val vertexWitnesses: Array[Array[Double]],
+  private val witnessWidth: Int
 ):
   def size: Int = cellsByDim.iterator.map(_.size).sum
 
@@ -779,21 +790,42 @@ open class AlphaComplexDQP(
     if k < 0 || k >= cellsByDim.length then IndexedSeq.empty
     else cellsByDim(k).toIndexedSeq
 
-  def contains(cell: Simplex[Int]): Boolean = weights.contains(cell)
+  // The row of `cell` in its dimension's table, or -1; a vertex is its own row.
+  private def rowOf(vs: Array[Int]): Int =
+    val k = vs.length - 1
+    if k == 0 then if vs(0) >= 0 && vs(0) < vertexValues.length && !vertexValues(vs(0)).isNaN then vs(0) else -1
+    else if k >= 1 && k <= maxDimension then tables(k).indexOf(vs)
+    else -1
+
+  private def valueOrNaN(cell: Simplex[Int]): Double =
+    val vs = cell.toArray
+    val row = rowOf(vs)
+    if row < 0 then Double.NaN else if vs.length == 1 then vertexValues(row) else rowValues(vs.length - 1)(row)
+
+  def contains(cell: Simplex[Int]): Boolean = !valueOrNaN(cell).isNaN
 
   /** The weight w(sigma) of Definition 10, i.e. the *power* at the witness. Unweighted: the squared circumradius.
     */
-  def filtrationValue(cell: Simplex[Int]): Double = weights.getOrElse(cell, 0.0)
+  def filtrationValue(cell: Simplex[Int]): Double =
+    val w = valueOrNaN(cell)
+    if w.isNaN then 0.0 else w
 
   /** The alpha radius. Only equals the circumradius when p = 0. */
   def radiusOf(cell: Simplex[Int]): Double =
-    val w = weights.getOrElse(cell, 0.0)
+    val w = filtrationValue(cell)
     if w <= 0.0 then 0.0 else math.sqrt(w)
 
   /** The witness map Phi of Definition 11: the unique minimiser of the power over the face V_sigma. Empty when the
     * input carried no coordinates.
     */
-  def witness(cell: Simplex[Int]): Option[Array[Double]] = witnesses.get(cell)
+  def witness(cell: Simplex[Int]): Option[Array[Double]] =
+    val vs = cell.toArray
+    val row = rowOf(vs)
+    if row < 0 || witnessWidth == 0 then None
+    else if vs.length == 1 then Option(vertexWitnesses(row)).map(_.clone())
+    else
+      val rows = rowWitnesses(vs.length - 1)
+      Some(Array.tabulate(witnessWidth)(j => rows(row * witnessWidth + j)))
 
   def eulerCharacteristic: Long =
     cellsByDim.zipWithIndex.foldLeft(0L) { case (chi, (cells, k)) =>
@@ -805,12 +837,12 @@ open class AlphaComplexDQP(
     */
   lazy val cells: IndexedSeq[Simplex[Int]] =
     cellsByDim.flatten.sorted(using
-      Ordering.by[Simplex[Int], (Double, Int)](c => (weights.getOrElse(c, 0.0), c.size)).orElse(simplexOrdering[Int])
+      Ordering.by[Simplex[Int], (Double, Int)](c => (filtrationValue(c), c.size)).orElse(simplexOrdering[Int])
     )
 
   /** (simplex, filtration value) pairs in filtration order. */
   def barcodeInput: IndexedSeq[(Simplex[Int], Double)] =
-    cells.map(c => (c, weights.getOrElse(c, 0.0)))
+    cells.map(c => (c, filtrationValue(c)))
 
   override def toString: String =
     s"AlphaComplex(n=${space.size}, a1=$maxPower, sizes=${sizeByDimension.mkString("(", ", ", ")")})"
@@ -946,8 +978,10 @@ open class AlphaComplexDQPBuilder(
     val rowValues = Array.fill(maxDimension + 1)(AlphaComplexDQPBuilder.DoubleRows())
     val vertexValues = Array.fill(n)(Double.NaN)
     val byDim = IndexedSeq.fill(maxDimension + 1)(mutable.IndexedBuffer[Simplex[Int]]())
-    val weights = mutable.HashMap[Simplex[Int], Double]()
-    val witnesses = mutable.HashMap[Simplex[Int], Array[Double]]()
+    // The witness of every row, `witnessWidth` doubles a row (none without coordinates), and of every vertex.
+    val witnessWidth = if settings.keepWitnesses && space.hasCoordinates then space.ambientDimension else 0
+    val rowWitnesses = Array.fill(maxDimension + 1)(AlphaComplexDQPBuilder.DoubleRows())
+    val vertexWitnesses = new Array[Array[Double]](n)
 
     // Bound on the working set: rank(A) <= ambient dimension, with slack.
     val wsCap =
@@ -973,7 +1007,7 @@ open class AlphaComplexDQPBuilder(
           byDim(k) += f.cell
           present(k).add(f.vertices)
           rowValues(k).add(f.weight)
-          f.witness.foreach(arr => witnesses(f.cell) = arr)
+          f.witness.foreach(arr => arr.foreach(rowWitnesses(k).add))
         }
       }
 
@@ -1008,6 +1042,12 @@ open class AlphaComplexDQPBuilder(
       val b = vertices.next()
       rowValues(1)(present(1).indexOf(Array(a, b)))
 
+    def edgeWitness(e: Simplex[Int]): Option[Array[Double]] =
+      if witnessWidth == 0 then None
+      else
+        val row = present(1).indexOf(e.toArray)
+        Some(Array.tabulate(witnessWidth)(j => rowWitnesses(1)(row * witnessWidth + j)))
+
     val incidentEdges: Map[Int, IndexedSeq[Simplex[Int]]] =
       if maxDimension >= 1 then
         byDim(1).iterator.flatMap(e => e.toSeq.map(v => v -> e)).toIndexedSeq.groupMap(_._1)(_._2)
@@ -1021,13 +1061,12 @@ open class AlphaComplexDQPBuilder(
           incidentEdges
             .getOrElse(x, IndexedSeq.empty)
             .minByOption(edgeValue)
-            .map(e => (edgeValue(e), witnesses.get(e)))
+            .map(e => (edgeValue(e), edgeWitness(e)))
       chosen.foreach { case (w, witness) =>
         val f = Simplex(x)
         byDim(0) += f
         vertexValues(x) = w
-        weights(f) = w
-        witness.foreach(arr => witnesses(f) = arr)
+        vertexWitnesses(x) = witness.orNull
       }
 
     for k <- 2 to maxDimension do solveDimension(k, buildCandidates(k, nbrs, alive, presentRows))
@@ -1051,7 +1090,7 @@ open class AlphaComplexDQPBuilder(
     // simplices: ascending value, then the vertices in descending lexicographic order (the reverse of
     // `simplexOrdering[Int]`, all of a dimension's simplices having the same size).
     byDim(0).sortInPlace()(using
-      Ordering.by[Simplex[Int], Double](c => weights.getOrElse(c, 0.0)).orElse(simplexOrdering[Int].reverse)
+      Ordering.by[Simplex[Int], Double](c => vertexValues(c.iterator.next())).orElse(simplexOrdering[Int].reverse)
     )
     for k <- 1 to maxDimension do
       val table = present(k)
@@ -1071,13 +1110,20 @@ open class AlphaComplexDQPBuilder(
       Parallel.sort(order, byValueThenVertices)
       val cells = byDim(k).toVector
       byDim(k).clear()
-      order.foreach { r =>
-        val cell = cells(r)
-        byDim(k) += cell
-        weights(cell) = values(r)
-      }
+      order.foreach(r => byDim(k) += cells(r))
 
-    new AlphaComplexDQP(space, maxPower, maxDimension, byDim, weights, witnesses)
+    new AlphaComplexDQP(
+      space,
+      maxPower,
+      maxDimension,
+      byDim,
+      presentRows,
+      ArraySeq.unsafeWrapArray(rowValues),
+      vertexValues,
+      ArraySeq.unsafeWrapArray(rowWitnesses),
+      vertexWitnesses,
+      witnessWidth
+    )
   end compute
 
   // -------------------------------------------------------------------------
@@ -1243,7 +1289,7 @@ open class AlphaComplexDQPBuilder(
     * key makes `.get` return `Some(null)`, not `None`.
     */
   def witnessOf(x: Int, nb: Array[Int], qp: DualQP): Option[Array[Double]] =
-    if !space.hasCoordinates then None
+    if !settings.keepWitnesses || !space.hasCoordinates then None
     else
       val d = space.ambientDimension
       val y = Array.tabulate(d)(space.coordinate(x, _))
@@ -1255,7 +1301,7 @@ open class AlphaComplexDQPBuilder(
       Some(y)
 
   def coordsOf(x: Int): Option[Array[Double]] =
-    if !space.hasCoordinates then None
+    if !settings.keepWitnesses || !space.hasCoordinates then None
     else
       val d = space.ambientDimension
       Some(Array.tabulate(d)(space.coordinate(x, _)))
@@ -1360,7 +1406,8 @@ object AlphaComplexDQPBuilder:
         rows += other.rows
 end AlphaComplexDQPBuilder
 
-open class AlphaShapeDQP(val points: Array[Array[Double]]) extends AlphaShapes:
+open class AlphaShapeDQP(val points: Array[Array[Double]], settings: AlphaDQPSettings = AlphaDQPSettings())
+    extends AlphaShapes:
   override val metricSpace = EuclideanMetricSpace(points)
   // No radius cutoff: matches HelixDelaunay, which always returns the full,
   // untruncated Delaunay complex. A degenerate/near-collinear configuration
@@ -1370,7 +1417,7 @@ open class AlphaShapeDQP(val points: Array[Array[Double]]) extends AlphaShapes:
   // simplices. Callers who want an actually-truncated alpha complex should go
   // through AlphaComplexDQP.euclidean(points, maxRadius, maxDimension, ...) directly.
   val alphaComplexDQP = AlphaComplexDQP
-    .euclidean(points, Double.PositiveInfinity, points.headOption.map(_.length).getOrElse(0))
+    .euclidean(points, Double.PositiveInfinity, points.headOption.map(_.length).getOrElse(0), settings)
 
   // Bounded at alphaComplexDQP.sizeByDimension.length (== the private cellsByDim.length, maxDimension + 1),
   // mirroring cellsOfDimension's own internal `k < 0 || k >= cellsByDim.length` bound exactly -- for any k

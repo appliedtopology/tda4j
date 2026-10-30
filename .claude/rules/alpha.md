@@ -27,6 +27,8 @@ to it (a vertex on the sphere = the same sphere; otherwise a ~1e-16 bar that dep
 `AlphaComplexDQP` implements Carlsson & Carlsson (Sci. Rep. 14:19824, 2024), DAQP-style dual active-set QP;
 `CholeskyWorkspace` hand-rolled incremental Cholesky. Filtration values are squared radii internally; `radiusOf`
 takes sqrt. `AlphaShapeDQP` always untruncated; `AlphaComplexDQP.euclidean(points, maxRadius, ...)` for truncation.
+It keeps a `FaceTable` per dimension with value/witness rows (no `Simplex`-keyed maps); `keepWitnesses = false`, which
+the streams use, drops the witness arrays. From d = 10 Helix beats DQP on time and memory (`WORKLOG-dqp-table-backed-complex.md`).
 
 **`DualQP.solve` numerics**: `rankTolerance=1e-6` (a lower one admits a poisoned factor); ratio-test ties broken
 by global constraint index (Bland's rule). A pivot under it rules a candidate out, which in high dimension dropped
@@ -39,14 +41,12 @@ edges (dim 1 before 0), and a vertex with no incident edges is dropped entirely
 `AlphaComplexDQPRegressionSpec`/`AlphaValidationSpec` (`minTestsOk=2000`).
 
 **`Hyperplane.from` returns a canonically signed normal** (the first coordinate of size at least `0.5/sqrt(d)` is
-positive), whatever the SVD returns; every use that needs a side orients it itself (`reverse`). The sign only breaks
-ties inside exactly cospherical clusters (a 3^4 grid tiles differently with the sign flipped, with the same barcode)
-(`WORKLOG-scalajs-numerics-linear-algebra.md`).
+positive); every use that needs a side orients it itself (`reverse`). The sign only breaks ties inside exactly cospherical
+clusters (`WORKLOG-scalajs-numerics-linear-algebra.md`).
 
-**HelixDelaunay's bootstrap crash is fixed** (`.claude/WORKLOG-helix-bootstrap-fix.md`) via three additive fixes
-routed through one shared `rankAtEpsilon` helper: retry every affinely-independent hyperplane candidate
-(smallest-span first); reject affinely-degenerate candidates outright; project a globally-coplanar cloud onto
-its true affine span first.
+**HelixDelaunay's bootstrap** retries every affinely-independent hyperplane candidate (smallest span first), rejects
+degenerate ones, and projects a globally coplanar cloud onto its affine span, all through `rankAtEpsilon`
+(`.claude/WORKLOG-helix-bootstrap-fix.md`).
 
 **Helix alpha values are computed top-down** (`built`, read by `valueOf`): top cells take the smallest containing circumradius;
 below that a simplex takes its own smallest circumradius (centre in its affine hull, `smallestCircumsphere`, never
@@ -72,9 +72,7 @@ then checked empty; the old candidate scan is only the fallback (`sphereScanFall
 on a few thousand random points and tore the triangulation). EVERY result gets `looksValid` (each point a vertex, no
 facet in 3 tops, every boundary facet on the hull -- Euler characteristic is NOT enough: a partial contractible walk
 passes it); a failure goes to `repairByJitterRetriangulation` (jitter `1e-4` of the spacing, all points when the
-structural check fails; on the PROJECTED points). Exact grids are valid by default at the default epsilon; at a far
-smaller epsilon (`1e-9`) a 3-D grid can still fail to repair (near-coplanar float predicates) and the raw walk is
-returned.
+structural check fails; on the PROJECTED points). Exact grids are valid at the default epsilon; at `1e-9` a 3-D grid can fail to repair and the raw walk is returned.
 **Dispatch with a radius** (`AlphaShapes(points, maxRadius = r)`, the verb's and facade's `maxFiltrationValue`):
 `Default` = the triangulation without a radius, else `prefersDQP` (mean of `k^1.6`, k = neighbours within `2r`, 64
 samples, vs a fitted cost model: DQP `0.004·2.35^(d-2)·k^1.6`, BowyerWatson `b_d (n/1000)^0.2`, b = 0.03/0.1/1.1 for
@@ -93,37 +91,28 @@ outcomes — don't conflate, a naive set-diff can't tell them apart**:
    other way too, still a complete triangulation. Helix is not reliable ground truth for dim≥4 fuzzing on
    degenerate input; `AlphaCrossValidationSpec`'s degenerate comparisons stay diagnostic (`unsafeCompare`/
    `unsafeFuzzCompare`).
-2. Genuine incomplete triangulation (real topological hole), **fixed**. Self-consistency (not diff-vs-DQP) is
-   the discriminator. Two compounding bugs: (a) `handleCosphericalPoints`'s facet-queue excluded the originating
-   facet (fixed — iterate every vertex of the new simplex); (b) its greedy point-pull has no empty-circumsphere
-   check (not fixed, out-of-scope symbolic-perturbation redesign). Worked around at the repair layer:
-   `requireValidTriangulation`'s jitter-and-recompute also triggers on a genuine void on the RAW output.
+2. Genuine incomplete triangulation (real topological hole), **fixed** where it was a bug: `handleCosphericalPoints`'s
+   facet-queue now iterates every vertex of the new simplex. Its greedy point-pull still has no empty-circumsphere check
+   (out of scope: symbolic perturbation), so `requireValidTriangulation`'s jitter-and-recompute also triggers on a
+   genuine void in the RAW output. Self-consistency, not diff-vs-DQP, is the discriminator.
 
-**`FastAlphaHomologyEngine`** — `FastCubicalHomologyEngine`'s dual union-find ported to a `DelaunayAlphaShapes`'
-top simplices (BowyerWatson or Helix); valid any ambient dim≥2, never DQP (no adjacency structure). The "every facet ≤2
-cofaces" precondition is guaranteed by BowyerWatson, NOT by Helix (more likely violated at higher dim/more points) — validated
-explicitly, throws `FastAlphaTriangulationException` rather than a silently-wrong dual graph. Facet dual-edge
-value from `HelixDelaunay.filtrationValue` directly, never recomputed as min over top simplices. At dim≥3, same
-cohomology hybrid as cubical on `LimitedAlphaShapesStream`, capped by `maxDimension` (simplices up to
-`maxDimension + 1`; the dual graph only when the cap reaches `d - 1`; `persistentHomologyTopDegree` is the dual pass alone;
-`WORKLOG-fastalpha-degree-cap.md`); cross-validated at d=3. Wired as
-`engine="fast-alpha"` (alpha with a triangulating backend, project lead signed off on the measured exception rate). Representatives
-use `SignedUnionFind[C]` (`WORKLOG-fast-cubical-representatives.md`); the cubical engine moved to its byte-signed sibling
-`UnitSignedUnionFind` (`WORKLOG-cubical-performance.md`).
-`WORKLOG-alpha-dual-unionfind.md`, `DESIGN-alpha-dual-unionfind.md`.
+**`FastAlphaHomologyEngine`**: `FastCubicalHomologyEngine`'s dual union-find on a `DelaunayAlphaShapes`' top simplices (BowyerWatson
+or Helix); any ambient dim>=2, never DQP (no adjacency). The "every facet has <=2 cofaces" precondition holds for BowyerWatson,
+NOT always for Helix: it is validated and throws `FastAlphaTriangulationException` rather than build a wrong dual graph. Facet
+dual-edge value comes from `HelixDelaunay.filtrationValue`, never a min over top simplices. At dim>=3 the cubical cohomology
+hybrid on `LimitedAlphaShapesStream`, capped by `maxDimension` (the dual graph only when the cap reaches `d - 1`;
+`persistentHomologyTopDegree` is the dual pass alone; `WORKLOG-fastalpha-degree-cap.md`). Wired as `engine="fast-alpha"`
+(project lead signed off on the measured exception rate). Representatives use `SignedUnionFind[C]`
+(`WORKLOG-fast-cubical-representatives.md`, `WORKLOG-cubical-performance.md`). `WORKLOG-alpha-dual-unionfind.md`, `DESIGN-alpha-dual-unionfind.md`.
 
 **`HelixDelaunay(pts, seed, requireValidTriangulation = true)` repairs facet-multiplicity violations** (off by
-default) — nudges near-tied vertices, re-runs the same builder, recomputes circumspheres from ORIGINAL
-coordinates ("simulation of simplicity"). Two earlier designs (coning from an apex; pruning to
-smallest-circumradius claimants) were rejected (wrong boundary cycle / can punch a real hole). **Its own first
-version had the identical failure mode as the rejected pruning design** (~10.5% barcode disagreement at d=3) —
-facet-count self-check alone insufficient; fixed with a second check, `HelixDelaunay.interiorVoidVertices` (a
-genuine Delaunay hull is convex hence contractible, so `H_{d-1}` of the full unfiltered complex must be trivial),
-also triggered on RAW unrepaired input. Not attempted d≥4. `.claude/DESIGN-helix-triangulation-repair.md`.
+default): nudges near-tied vertices, re-runs the builder, recomputes circumspheres from the ORIGINAL coordinates. Coning
+and pruning to the smallest-circumradius claimants were rejected (wrong boundary cycle, can punch a real hole); a facet-count
+self-check alone was insufficient, so `HelixDelaunay.interiorVoidVertices` (the full complex of a Delaunay hull is
+contractible: `H_{d-1}` must be trivial) also triggers it, on RAW input too. Not attempted d>=4. `.claude/DESIGN-helix-triangulation-repair.md`.
 
 **Degeneracy hazard**: cospherical `k` sites give a `(k-1)`-simplex (unit grid in R² → 3-simplices) — correct,
-not a bug; truncating at ambient dimension gives the wrong homotopy type. Honest framing: paper's benchmarks
-mixed vs Ripser/qhull; value is high ambient dimension + exact homology + small complexes, not raw speed.
+not a bug; truncating at ambient dimension gives the wrong homotopy type.
 
 **Backend choice is typed** (`WORKLOG-cursor-and-verb.md`): `AlphaShapes(points: PointCloud, backend: AlphaBackend =
 Default)`, `AlphaBackend.Default | Helix | DQP | BowyerWatson` (parse: `bowyer-watson`/`bowyerwatson`/`bw`); the facade's `alphaBackend` string goes
