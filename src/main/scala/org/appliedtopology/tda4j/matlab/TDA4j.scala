@@ -445,6 +445,35 @@ object TDA4j:
       .map(b => Array(b.birth, b.death))
       .toArray
 
+  /** The sliding-window (Takens) embedding of a time series: one point for every `stride`-th start `t`, the window
+    * `(x_t, x_{t+delay}, ..., x_{t+(dimension-1) delay})`. See `TakensEmbedding`.
+    */
+  def takensEmbedding(series: Array[Double], dimension: Int, delay: Int, stride: Int): Array[Array[Double]] =
+    TakensEmbedding(series.toSeq, dimension, delay, stride).points
+
+  def takensEmbedding(series: Array[Double], dimension: Int, delay: Int): Array[Array[Double]] =
+    takensEmbedding(series, dimension, delay, 1)
+
+  /** The same for a series of vectors, one row per time step: a point is the `dimension` rows of a window, one after
+    * the other.
+    */
+  def takensEmbeddingOfVectors(
+    series: Array[Array[Double]],
+    dimension: Int,
+    delay: Int,
+    stride: Int
+  ): Array[Array[Double]] =
+    TakensEmbedding.multivariate(series.map(_.toSeq).toSeq, dimension, delay, stride).points
+
+  def takensEmbeddingOfVectors(series: Array[Array[Double]], dimension: Int, delay: Int): Array[Array[Double]] =
+    takensEmbeddingOfVectors(series, dimension, delay, 1)
+
+  /** The first lag in `1 to maxLag` at which the autocorrelation of the series is zero or negative: a first guess for
+    * the `delay` of [[takensEmbedding]] (a quarter of the period for a sinusoid).
+    */
+  def delayByAutocorrelation(series: Array[Double], maxLag: Int): Int =
+    TakensEmbedding.delayByAutocorrelation(series.toSeq, maxLag)
+
   /** The loops of the point cloud's Vietoris-Rips complex: one row `(birth, death)` per persistent H¹ class, most
     * persistent first. Row `i` is `cocycleIndex = i` of [[circularCoordinates]]; pick `r` between its birth and death.
     */

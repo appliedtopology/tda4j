@@ -156,6 +156,37 @@ object Exports:
   def tomatoDiagram(points: js.Array[js.Array[Double]], k: Int): js.Array[js.Array[Double]] =
     guarded(grid(TDA4j.tomatoDiagram(matrix(points), k)))
 
+  /** The sliding-window (Takens) embedding of a time series: the window `(x_t, x_{t+delay}, ..., x_{t+(dimension-1)
+    * delay})` for every `stride`-th start `t` (`delay` and `stride` default to 1), as a point cloud.
+    */
+  @JSExportTopLevel("takensEmbedding")
+  def takensEmbedding(
+    series: js.Array[Double],
+    dimension: Int,
+    delay: js.UndefOr[Int] = js.undefined,
+    stride: js.UndefOr[Int] = js.undefined
+  ): js.Array[js.Array[Double]] =
+    guarded(grid(TDA4j.takensEmbedding(series.toArray, dimension, delay.getOrElse(1), stride.getOrElse(1))))
+
+  /** The same for a series of vectors, one array per time step: a point is the `dimension` arrays of a window, one
+    * after the other.
+    */
+  @JSExportTopLevel("takensEmbeddingOfVectors")
+  def takensEmbeddingOfVectors(
+    series: js.Array[js.Array[Double]],
+    dimension: Int,
+    delay: js.UndefOr[Int] = js.undefined,
+    stride: js.UndefOr[Int] = js.undefined
+  ): js.Array[js.Array[Double]] =
+    guarded(grid(TDA4j.takensEmbeddingOfVectors(matrix(series), dimension, delay.getOrElse(1), stride.getOrElse(1))))
+
+  /** The first lag in `1..maxLag` at which the series' autocorrelation is zero or negative: a first guess for the
+    * `delay` of `takensEmbedding` (a quarter of the period for a sinusoid).
+    */
+  @JSExportTopLevel("delayByAutocorrelation")
+  def delayByAutocorrelation(series: js.Array[Double], maxLag: Int): Int =
+    guarded(TDA4j.delayByAutocorrelation(series.toArray, maxLag))
+
   /** The loops of the point cloud's Vietoris-Rips complex: `[birth, death]` for each persistent class of degree 1, the
     * most persistent first. Loop `i` is `cocycleIndex: i` of `circularCoordinates`; pick `r` between its birth and
     * death.

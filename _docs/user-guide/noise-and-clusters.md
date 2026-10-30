@@ -75,3 +75,5 @@ a superlevel filtration (a peak of height `h` is born at `-h`), so `Plot.barcode
 MATLAB has `TDA4j.bootstrapBand(points, {'dimension', '1', 'rounds', '100'})`, whose result has `threshold()`, and
 `TDA4j.tomatoClusters(points, k, tau)` and `TDA4j.tomatoDiagram(points, k)`. JavaScript has `bootstrapBand`,
 `tomatoClusters` and `tomatoDiagram` with the same arguments.
+The command line has `--bootstrap-band` with the `--band-*` flags, and `--tomato` with `--tomato-k` and `--tomato-tau`;
+see [the command line](cli.md#the-resampling-band-and-tomato).

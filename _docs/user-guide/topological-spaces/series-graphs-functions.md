@@ -27,6 +27,10 @@ look at the barcode for a few delays. A signal with two incommensurable periods 
 `dimension = 3` or more and degree 2. For a series of vectors, `TakensEmbedding.multivariate(rows, dimension)` puts the
 rows of a window one after the other, and `stride` skips windows when the series is long.
 
+MATLAB has `TDA4j.takensEmbedding(series, dimension, delay)` and `delayByAutocorrelation(series, maxLag)`, JavaScript has
+`takensEmbedding` and `delayByAutocorrelation`, and the command line reads a file with one sample per line as a series
+with `--takens-dimension` (see [the command line](../cli.md#a-time-series-as-input)).
+
 ### A graph: distances along its edges
 
 When a graph says which points are near each other (a nearest-neighbour graph on a manifold, a road or contact network),

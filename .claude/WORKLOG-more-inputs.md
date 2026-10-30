@@ -121,3 +121,14 @@ tree's, the same as without the vertex; the rank oracle had it right and the han
 
 Not done: a cell type other than `Simplex` has no convenience constructor (the predicate form takes any cells);
 `A` closed under faces is documented and unchecked (the lab principle); the representatives are chains of `RelativeCell`s.
+
+# CLI modes and Takens in the facades (2026-10-30)
+
+`--bootstrap-band`, `--tomato` and `--takens-dimension` (with `--takens-delay`/`--takens-max-lag`) in `TDA4jConf` and
+`TDA4jCLI`, modeled on `--euler-curve`: modes of their own (`checkModes`: at most one, their flags only with them),
+`refuseOtherFlags` names every flag that would change a computation the mode does not do, and the output is what the
+facade call returns (`key=value` lines for the band, labels or `birth,death` lines for ToMATo). Takens is an input
+transformation (`applyTakens`, right after the input is read) so it composes with the diagram, the Euler curve and the
+other two; `--takens-max-lag` is for a one-column series and says the chosen delay on stderr. `TDA4j.takensEmbedding`,
+`takensEmbeddingOfVectors`, `delayByAutocorrelation` are new in the facade (two overloads each, stride optional) and in
+the JS exports and `index.d.ts`. Specs compare each CLI line with the facade call of the same arguments (`ModesCLISpec`).

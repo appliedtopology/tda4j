@@ -232,6 +232,13 @@ export function tomatoClusters(points: number[][], k: number, tau: number): numb
 /** The valleys between the density peaks used by `tomatoClusters` as `[birth, death]`; a bar's persistence is the depth of its valley. */
 export function tomatoDiagram(points: number[][], k: number): number[][];
 
+/** The sliding-window (Takens) embedding of a time series as a point cloud: the window `(x_t, x_{t+delay}, ..., x_{t+(dimension-1) delay})` for every `stride`-th start `t`. `delay` and `stride` default to 1. */
+export function takensEmbedding(series: number[], dimension: number, delay?: number, stride?: number): number[][];
+/** `takensEmbedding` for a series of vectors, one array per time step: a point is the `dimension` arrays of a window, one after the other. */
+export function takensEmbeddingOfVectors(series: number[][], dimension: number, delay?: number, stride?: number): number[][];
+/** The first lag in `1..maxLag` at which the autocorrelation of the series is zero or negative: a first guess for the `delay` of `takensEmbedding`. */
+export function delayByAutocorrelation(series: number[], maxLag: number): number;
+
 /** The loops of a point cloud's Vietoris-Rips complex as `[birth, death]`, the most persistent first. */
 export function h1Bars(points: number[][]): number[][];
 

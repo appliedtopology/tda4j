@@ -55,6 +55,23 @@ class ExportsSpec extends Specification:
     }
   }
 
+  "takensEmbedding, takensEmbeddingOfVectors and delayByAutocorrelation" should
+    "give the windows of a series, with the delay and stride optional, and a delay for a sinusoid" >> {
+      val ramp = js.Array((0 to 5).map(_.toDouble)*)
+      val sine = js.Array((0 until 60).map(t => math.sin(2 * math.Pi * t / 20))*)
+      val rows = js.Array(js.Array(0.0, 10.0), js.Array(1.0, 11.0), js.Array(2.0, 12.0), js.Array(3.0, 13.0))
+      (Exports.takensEmbedding(ramp, 3, 2).map(_.toSeq).toSeq must beEqualTo(
+        Seq(Seq(0.0, 2.0, 4.0), Seq(1.0, 3.0, 5.0))
+      )) and
+        (Exports.takensEmbedding(ramp, 2).length must beEqualTo(5)) and
+        (Exports.takensEmbedding(ramp, 2, 1, 2).length must beEqualTo(3)) and
+        (Exports.takensEmbeddingOfVectors(rows, 2, 2).map(_.toSeq).toSeq must beEqualTo(
+          Seq(Seq(0.0, 10.0, 2.0, 12.0), Seq(1.0, 11.0, 3.0, 13.0))
+        )) and
+        (Exports.delayByAutocorrelation(sine, 15) must beBetween(4, 6)) and
+        (Exports.takensEmbedding(js.Array(1.0, 2.0), 3, 2) must throwA[js.JavaScriptException])
+    }
+
   "eulerCurve" should {
     "give the unit square's steps: four vertices, then four edges close a loop, then the diagonals fill it" >> {
       val square = js.Array(js.Array(0.0, 0.0), js.Array(1.0, 0.0), js.Array(1.0, 1.0), js.Array(0.0, 1.0))

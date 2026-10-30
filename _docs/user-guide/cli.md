@@ -162,6 +162,58 @@ A flag that would change a diagram (`--complex`, `--max-dimension`, `--engine`, 
 `--distance-to`, `--save-result` and the landmark flags are rejected with `--euler-curve`, as are images, relations and
 saved results as input.
 
+## The resampling band and ToMATo
+
+`--bootstrap-band` writes the [resampling band](noise-and-clusters.md) of the bars of one degree of a point cloud in
+place of a diagram, as `key=value` lines: the `width` (a quantile of the bottleneck distances from the resamples to the
+original), and the `threshold`, twice that, above which a bar survives the resampling.
+
+```
+$ tda4j --bootstrap-band --band-rounds 200 --band-seed 1 circle.csv
+dimension=1
+rounds=200
+alpha=0.05
+width=0.08323
+threshold=0.16646
+```
+
+| flag | meaning |
+|---|---|
+| `--bootstrap-band` | write the band instead of the diagram |
+| `--band-dimension` | the degree of the bars; default `1` |
+| `--band-rounds` | the number of resamples; default `100` |
+| `--band-alpha` | the band covers `1 - alpha` of the resamples; default `0.05` |
+| `--band-seed` | the seed of the resampling; default `0` |
+| `--band-subsample-size` | draw this many points without replacement; default all the points, with replacement |
+| `--prime`, `--max-filtration-value`, `--threads`, `--output` | as for a diagram |
+
+`--tomato` clusters a point cloud by [ToMATo](noise-and-clusters.md) instead: `--tomato-k` nearest neighbours give the
+graph and the density, and two density peaks merge when the valley between them is shallower than `--tomato-tau`. With
+`--tomato-tau` it writes the cluster of each point, one number per line (0 for the highest peak); without it, the
+valleys as `birth,death` lines, so that you can choose `--tomato-tau` in a gap.
+
+```
+$ tda4j --tomato --tomato-k 4 blobs.csv                         # the valleys: pick tau between the small ones and the deep one
+$ tda4j --tomato --tomato-k 4 --tomato-tau 100 blobs.csv        # one cluster number per point
+```
+
+Both modes take point clouds only. A flag that would change a diagram, `--plot`, `--distance-to`, `--save-result`, the
+landmark flags and the other modes are rejected with them.
+
+## A time series as input
+
+`--takens-dimension d` reads the input file as a time series, one sample per line (several columns: a series of
+vectors), and computes on the points of its sliding-window (Takens) embedding: the windows of `d` samples, `--takens-delay`
+samples apart (default `1`). For a series of one column, `--takens-max-lag n` chooses the delay instead, as the first lag up to
+`n` at which the autocorrelation is zero or negative, and says which on standard error. It goes with any mode that takes a
+point cloud: a diagram, `--euler-curve`, `--bootstrap-band`, `--tomato`.
+
+```
+$ tda4j --takens-dimension 2 --takens-max-lag 30 --max-dimension 1 signal.csv
+tda4j: delay 10 chosen by autocorrelation (the first lag up to 30 where it is zero or negative)
+...
+```
+
 ## Saved results
 
 `--save-result result.json` also saves the whole result: every bar, the reported bars' representatives, the input and how

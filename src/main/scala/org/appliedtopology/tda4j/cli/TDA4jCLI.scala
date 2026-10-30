@@ -52,7 +52,8 @@ object TDA4jCLI:
         throw new IllegalArgumentException(
           "--save-result is meaningless with --select-landmarks: there is no result here, only a landmark set"
         )
-      val resolved = resolveInput(format, conf.input())
+      checkModes(conf)
+      val resolved = applyTakens(conf, format, resolveInput(format, conf.input()), err)
 
       if conf.selectLandmarks() && conf.landmarksFile.isSupplied then
         throw new IllegalArgumentException(
@@ -143,6 +144,12 @@ object TDA4jCLI:
 
       if conf.eulerCurve() then
         writeEulerCurve(conf, options, format, resolved, out)
+        0
+      else if conf.bootstrapBand() then
+        writeBootstrapBand(conf, options, format, resolved, out)
+        0
+      else if conf.tomato() then
+        writeTomato(conf, options, format, resolved, out)
         0
       else if conf.selectLandmarks() then
         if conf.representatives() then
@@ -408,6 +415,200 @@ object TDA4jCLI:
         try lines.foreach(writer.println)
         finally writer.close()
       case None => lines.foreach(out.println)
+
+  /** `--euler-curve`, `--bootstrap-band` and `--tomato` are modes of their own: at most one, and the flags of a mode
+    * only with it.
+    */
+  private[cli] def checkModes(conf: TDA4jConf): Unit =
+    val chosen = Seq(
+      "--euler-curve" -> conf.eulerCurve(),
+      "--bootstrap-band" -> conf.bootstrapBand(),
+      "--tomato" -> conf.tomato()
+    ).collect { case (flag, true) => flag }
+    if chosen.size > 1 then
+      throw new IllegalArgumentException(s"${chosen.mkString(" and ")} are modes of their own: choose one")
+    val strays = Seq(
+      (
+        "--bootstrap-band",
+        !conf.bootstrapBand(),
+        Seq(
+          "--band-dimension" -> conf.bandDimension.isSupplied,
+          "--band-rounds" -> conf.bandRounds.isSupplied,
+          "--band-alpha" -> conf.bandAlpha.isSupplied,
+          "--band-seed" -> conf.bandSeed.isSupplied,
+          "--band-subsample-size" -> conf.bandSubsampleSize.isSupplied
+        )
+      ),
+      (
+        "--tomato",
+        !conf.tomato(),
+        Seq(
+          "--tomato-k" -> conf.tomatoK.isSupplied,
+          "--tomato-tau" -> conf.tomatoTau.isSupplied
+        )
+      ),
+      (
+        "--takens-dimension",
+        !conf.takensDimension.isSupplied,
+        Seq(
+          "--takens-delay" -> conf.takensDelay.isSupplied,
+          "--takens-max-lag" -> conf.takensMaxLag.isSupplied
+        )
+      )
+    )
+    for (mode, absent, flags) <- strays if absent do
+      val supplied = flags.collect { case (flag, true) => flag }
+      if supplied.nonEmpty then throw new IllegalArgumentException(s"${supplied.mkString(", ")} only go with $mode")
+
+  /** `--takens-dimension`: the input is a time series, one sample per line, and the computation is on its
+    * sliding-window embedding. A series of one column may have its delay chosen by autocorrelation
+    * (`--takens-max-lag`), the choice going to `err`.
+    */
+  private[cli] def applyTakens(
+    conf: TDA4jConf,
+    format: String,
+    resolved: ResolvedInput,
+    err: java.io.PrintStream
+  ): ResolvedInput =
+    conf.takensDimension.toOption match
+      case None            => resolved
+      case Some(dimension) =>
+        resolved match
+          case ResolvedInput.Points(rows) =>
+            if conf.takensDelay.isSupplied && conf.takensMaxLag.isSupplied then
+              throw new IllegalArgumentException(
+                "--takens-delay and --takens-max-lag are alternatives: the first gives the delay, the second chooses it"
+              )
+            val oneColumn = rows.nonEmpty && rows.forall(_.length == 1)
+            if conf.takensMaxLag.isSupplied && !oneColumn then
+              throw new IllegalArgumentException(
+                "--takens-max-lag chooses the delay of a series of one column; for a series of vectors give --takens-delay"
+              )
+            val delay = conf.takensMaxLag.toOption match
+              case Some(lag) =>
+                val chosen = TDA4j.delayByAutocorrelation(rows.map(_(0)), lag)
+                err.println(
+                  s"tda4j: delay $chosen chosen by autocorrelation (the first lag up to $lag where it is zero or negative)"
+                )
+                chosen
+              case None => conf.takensDelay.getOrElse(1)
+            ResolvedInput.Points(
+              if oneColumn then TDA4j.takensEmbedding(rows.map(_(0)), dimension, delay)
+              else TDA4j.takensEmbeddingOfVectors(rows, dimension, delay)
+            )
+          case _ =>
+            throw new IllegalArgumentException(
+              s"--takens-dimension reads a time series, one sample per line, as a point-cloud input; " +
+                s"--input-format=$format reads something else"
+            )
+
+  /** Refuses the flags a mode does not use, naming them: a flag that would change a computation this mode does not do
+    * must not be silently ignored.
+    */
+  private def refuseOtherFlags(
+    mode: String,
+    doing: String,
+    takes: String,
+    conf: TDA4jConf,
+    options: Array[String],
+    allowed: Set[String]
+  ): Unit =
+    val others = Seq(
+      "--plot" -> conf.plot.isSupplied,
+      "--distance-to" -> conf.distanceTo.isSupplied,
+      "--select-landmarks" -> conf.selectLandmarks(),
+      "--landmarks-file" -> conf.landmarksFile.isSupplied,
+      "--representatives" -> conf.representatives(),
+      "--output-format" -> conf.outputFormat.isSupplied,
+      "--save-result" -> conf.saveResult.isSupplied
+    ).collect { case (flag, true) => flag } ++
+      options.grouped(2).map(_(0)).filterNot(allowed).map(flagName)
+    if others.nonEmpty then
+      throw new IllegalArgumentException(
+        s"$mode $doing, and ${others.mkString(", ")} cannot go with it (it takes $takes)"
+      )
+
+  private def writeLines(conf: TDA4jConf, lines: Seq[String], out: java.io.PrintStream): Unit =
+    conf.output.toOption match
+      case Some(path) =>
+        val writer = FileAccess.printWriter(path)
+        try lines.foreach(writer.println)
+        finally writer.close()
+      case None => lines.foreach(out.println)
+
+  private val bootstrapBandOptions = Set("maxFiltrationValue", "threads", "prime")
+
+  /** `--bootstrap-band`: the width and threshold of the resampling band of one degree of a point cloud, as `key=value`
+    * lines.
+    */
+  private[cli] def writeBootstrapBand(
+    conf: TDA4jConf,
+    options: Array[String],
+    format: String,
+    resolved: ResolvedInput,
+    out: java.io.PrintStream
+  ): Unit =
+    refuseOtherFlags(
+      "--bootstrap-band",
+      "resamples a point cloud and compares the diagrams of the Vietoris-Rips complexes",
+      "the --band-* flags, --prime, --max-filtration-value and --threads",
+      conf,
+      options,
+      bootstrapBandOptions
+    )
+    val chosen = options.grouped(2).filter(pair => bootstrapBandOptions(pair(0))).flatten.toArray ++
+      Seq(
+        conf.bandDimension.toOption.map("dimension" -> _.toString),
+        conf.bandRounds.toOption.map("rounds" -> _.toString),
+        conf.bandAlpha.toOption.map("alpha" -> _.toString),
+        conf.bandSeed.toOption.map("seed" -> _.toString),
+        conf.bandSubsampleSize.toOption.map("subsampleSize" -> _.toString)
+      ).flatten.flatMap((key, value) => Seq(key, value))
+    val band = resolved match
+      case ResolvedInput.Points(points) => TDA4j.bootstrapBand(points, chosen)
+      case _                            =>
+        throw new IllegalArgumentException(
+          s"--bootstrap-band needs a point cloud; --input-format=$format reads something else"
+        )
+    writeLines(
+      conf,
+      Seq(
+        s"dimension=${conf.bandDimension.getOrElse(1)}",
+        s"rounds=${band.distances().length}",
+        s"alpha=${band.alpha()}",
+        s"width=${band.width()}",
+        s"threshold=${band.threshold()}"
+      ),
+      out
+    )
+
+  /** `--tomato`: the cluster of every point, or, without `--tomato-tau`, the valleys between the density peaks. */
+  private[cli] def writeTomato(
+    conf: TDA4jConf,
+    options: Array[String],
+    format: String,
+    resolved: ResolvedInput,
+    out: java.io.PrintStream
+  ): Unit =
+    refuseOtherFlags(
+      "--tomato",
+      "clusters a point cloud by the k nearest neighbours",
+      "--tomato-k and --tomato-tau",
+      conf,
+      options,
+      Set.empty
+    )
+    if !conf.tomatoK.isSupplied then
+      throw new IllegalArgumentException("--tomato needs --tomato-k, the number of nearest neighbours")
+    val points = resolved match
+      case ResolvedInput.Points(points) => points
+      case _                            =>
+        throw new IllegalArgumentException(s"--tomato needs a point cloud; --input-format=$format reads something else")
+    val lines = conf.tomatoTau.toOption match
+      case Some(tau) => TDA4j.tomatoClusters(points, conf.tomatoK(), tau).toSeq.map(_.toString)
+      case None      =>
+        "birth,death" +: TDA4j.tomatoDiagram(points, conf.tomatoK()).toSeq.map(bar => s"${bar(0)},${bar(1)}")
+    writeLines(conf, lines, out)
 
   /** Reads a `--landmarks-file` written by `writeLandmarkSelection` above (or hand-edited in the same shape): one
     * 0-based landmark index per line, blank lines and `#`-prefixed comment lines ignored. Parse errors report the

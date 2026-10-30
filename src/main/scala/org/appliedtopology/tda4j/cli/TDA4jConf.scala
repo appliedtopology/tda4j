@@ -354,6 +354,81 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     descr = "for --euler-curve: the largest simplex dimension counted (default: 2)"
   )
 
+  // The resampling band and ToMATo: modes of their own, like the Euler curve. Declared last and without short flags.
+  val bootstrapBand: ScallopOption[Boolean] = opt[Boolean](
+    name = "bootstrap-band",
+    noshort = true,
+    default = Some(false),
+    descr = "instead of the diagram, write the resampling confidence band of the bars of one degree of a point " +
+      "cloud: resample the points, compute each resample's diagram and take the quantile of the bottleneck " +
+      "distances to the original. A bar longer than the threshold survives the resampling. Takes the --band-* " +
+      "flags, --prime, --max-filtration-value and --threads"
+  )
+  val bandDimension: ScallopOption[Int] =
+    opt[Int](
+      name = "band-dimension",
+      noshort = true,
+      descr = "for --bootstrap-band: the degree of the bars (default: 1)"
+    )
+  val bandRounds: ScallopOption[Int] =
+    opt[Int](
+      name = "band-rounds",
+      noshort = true,
+      descr = "for --bootstrap-band: the number of resamples (default: 100)"
+    )
+  val bandAlpha: ScallopOption[Double] = opt[Double](
+    name = "band-alpha",
+    noshort = true,
+    descr = "for --bootstrap-band: the band covers 1 - alpha of the resamples (default: 0.05)"
+  )
+  val bandSeed: ScallopOption[Int] =
+    opt[Int](
+      name = "band-seed",
+      noshort = true,
+      descr = "for --bootstrap-band: the seed of the resampling (default: 0)"
+    )
+  val bandSubsampleSize: ScallopOption[Int] = opt[Int](
+    name = "band-subsample-size",
+    noshort = true,
+    descr =
+      "for --bootstrap-band: draw this many points without replacement (default: all the points, with replacement)"
+  )
+  val tomato: ScallopOption[Boolean] = opt[Boolean](
+    name = "tomato",
+    noshort = true,
+    default = Some(false),
+    descr = "instead of the diagram, cluster a point cloud by ToMATo (Chazal et al.): the k nearest neighbours give " +
+      "the graph and the density, and two density peaks merge when the valley between them is shallower than " +
+      "--tomato-tau. With --tomato-tau, one cluster number per point (0 for the highest peak), one per line; " +
+      "without it, the valleys as 'birth,death' lines, to choose --tomato-tau in a gap. Needs --tomato-k"
+  )
+  val tomatoK: ScallopOption[Int] =
+    opt[Int](name = "tomato-k", noshort = true, descr = "for --tomato: the number of nearest neighbours")
+  val tomatoTau: ScallopOption[Double] = opt[Double](
+    name = "tomato-tau",
+    noshort = true,
+    descr = "for --tomato: the depth below which two peaks merge (the density is minus the mean neighbour distance)"
+  )
+  // A time series as input: the points are the windows of its samples.
+  val takensDimension: ScallopOption[Int] = opt[Int](
+    name = "takens-dimension",
+    noshort = true,
+    descr = "read the input as a time series, one sample per line (several columns: a vector series), and compute " +
+      "on its sliding-window (Takens) embedding: windows of this many samples. With --takens-delay or " +
+      "--takens-max-lag; for point-cloud input formats only"
+  )
+  val takensDelay: ScallopOption[Int] = opt[Int](
+    name = "takens-delay",
+    noshort = true,
+    descr = "for --takens-dimension: the number of samples between the samples of a window (default: 1)"
+  )
+  val takensMaxLag: ScallopOption[Int] = opt[Int](
+    name = "takens-max-lag",
+    noshort = true,
+    descr = "for --takens-dimension, instead of --takens-delay and for a one-column series: choose the delay as the " +
+      "first lag up to this one at which the autocorrelation is zero or negative; the choice goes to stderr"
+  )
+
   val input: ScallopOption[String] =
     trailArg[String](name = "input-file", descr = "input file", required = true)
 

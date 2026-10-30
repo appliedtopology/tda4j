@@ -1,6 +1,7 @@
 package org.appliedtopology.tda4j
 
 import Persistence.Engine
+import SpecThrows.throwWith
 import ZpLinearAlgebra.{nullspace, rank}
 
 import org.specs2.mutable.Specification
@@ -321,12 +322,12 @@ class PersistenceMapSpec extends Specification:
       val points = noisyCircle(10, 3L)
       val d =
         Persistence(points, maxDimension = 2, includeZeroLength = true, representatives = Representatives.Cocycles)
-      PersistenceMap.inclusion(d, d) must throwAn[IllegalArgumentException]("carries cocycles")
+      PersistenceMap.inclusion(d, d) must throwWith[IllegalArgumentException]("carries cocycles")
     }
 
     "be refused when the two are over different fields, saying how to fix it" in {
       val points = noisyCircle(10, 3L)
-      PersistenceMap.inclusion(diagramOf(points, 2), diagramOf(points, 3)) must throwAn[IllegalArgumentException](
+      PersistenceMap.inclusion(diagramOf(points, 2), diagramOf(points, 3)) must throwWith[IllegalArgumentException](
         "same `characteristic`"
       )
     }

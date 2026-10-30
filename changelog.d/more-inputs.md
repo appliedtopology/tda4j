@@ -10,3 +10,8 @@
 - `DirectedFlagStream` and `DirectedSimplex`: the directed flag complex of a weighted directed graph, whose simplices
   are ordered cliques.
 - The user guide page "Time series, graphs and functions".
+- `TDA4j.takensEmbedding`, `takensEmbeddingOfVectors` and `delayByAutocorrelation` in the MATLAB/Java facade, and the
+  same three in JavaScript.
+- The command line has `--bootstrap-band` (with `--band-dimension`, `--band-rounds`, `--band-alpha`, `--band-seed`,
+  `--band-subsample-size`), `--tomato` (with `--tomato-k`, `--tomato-tau`) and `--takens-dimension` (with
+  `--takens-delay` or `--takens-max-lag`), as the facade has them.
