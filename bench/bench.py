@@ -9,7 +9,7 @@
     bench.py constraints RESULTS                         a pip constraints file from the run's env.json
 
 Normally driven by bench/run.sh, which builds the tools and sets the environment variables read here
-(TDA4J_CP, TDA4J_JS, NODE, RIPSER_BIN, RIPSER_COEFF_BIN, JULIA, RIPSERER_PROJECT, JAVAPLEX_JAR, JAVAPLEX_BUILD). A tool
+(TDA4J_CP, TDA4J_JS, NODE, RIPSER_BIN, RIPSER_COEFF_BIN, REDZED_BIN, JULIA, RIPSERER_PROJECT, JAVAPLEX_JAR, JAVAPLEX_BUILD). A tool
 whose variable is unset, or whose Python package is missing, is skipped and listed as `missing`.
 
 The `tda4j-js*` tools are the Scala.js build, packaged as the npm package and run on Node.js
@@ -66,6 +66,7 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 import dipha_io  # noqa: E402
 import phat_io  # noqa: E402
+import redzed_io  # noqa: E402
 RIPSER_BENCH = "https://raw.githubusercontent.com/Ripser/ripser-benchmark/master"
 ROADMAP = "https://raw.githubusercontent.com/n-otter/PH-roadmap/master/data_sets"
 # The cyclooctane conformations (6040 points in R^24; Martin, Thompson, Coutsias and Watson 2010), as JavaPlex's MATLAB
@@ -207,6 +208,10 @@ TOOLS = [
     ("tda4j-parallel-mt", "tda4j", "vr",
      {"engine": "parallel", "reps": "none", "threads": "ALL", "multithreaded": True, "experiment": True}),
     ("ripser.cpp", "ripser", "vr", {}),
+    # RedZeD (Kapulkin and Kershaw, arXiv:2606.06310; C++17, one thread): Z/2 only, Vietoris-Rips only, homology; the output is
+    # the bars, with no representatives. Its input is the binary lower triangle of the distance matrix, made before the run
+    # and not timed (redzed_io.py), as DIPHA's is; it caps the threshold at the enclosing radius itself.
+    ("redzed", "redzed", "vr", {"only_p": 2}),
     # DIPHA (Bauer, Kerber and Reininghaus; MPI): Z/2 only, always the dualized algorithm (as in the Ripser paper's
     # Dockerfile). Its input is a sparse distance matrix with the threshold in it, made before the run and not timed
     # (dipha_io.py); `dipha-mt` is the same under mpiexec with a rank per core, and its memory is the sum over the ranks.
@@ -574,7 +579,7 @@ def last_json(text):
 
 
 # Tools that are run as a binary, once per trial, and print or write their result for the harness to read.
-BINARY_KINDS = ("ripser", "dipha", "phat")
+BINARY_KINDS = ("ripser", "redzed", "dipha", "phat")
 
 
 def parse_binary_output(kind, proc, bars_path, case, matrix=None):
@@ -582,6 +587,8 @@ def parse_binary_output(kind, proc, bars_path, case, matrix=None):
     `matrix` is the boundary matrix PHAT reduced."""
     if kind == "ripser":
         return parse_ripser_output(proc.text, bars_path)
+    if kind == "redzed":
+        return parse_redzed_output(proc.text, bars_path)
     if kind == "dipha":
         return dipha_io.diagram_to_bars(Path(bars_path).with_suffix(".diagram"), bars_path, case.dim)
     if kind == "phat":
@@ -598,6 +605,22 @@ def parse_ripser_output(text, out_path):
         elif line.strip().startswith("[") and dim is not None:
             b, d = line.strip()[1:-1].split(",")
             rows.append((dim, float(b), math.inf if d.strip() == "" else float(d)))
+    return write_bar_rows(rows, out_path)
+
+
+def parse_redzed_output(text, out_path):
+    """RedZeD prints one `H<k> <count> <essential> <checksum>` line per degree, then with `--barcode` a `BAR <k> <birth>
+    <death>` line per bar (`inf` for an essential class). The H lines are not read."""
+    rows = []
+    for line in text.splitlines():
+        if line.startswith("BAR "):
+            _, k, b, d = line.split()
+            rows.append((int(k), float(b), float(d)))
+    return write_bar_rows(rows, out_path)
+
+
+def write_bar_rows(rows, out_path):
+    """Writes (degree, birth, death) rows as `dim<TAB>birth<TAB>death` lines; returns the number of bars per degree."""
     with open(out_path, "w") as f:
         for k, b, d in rows:
             f.write(f"{k}\t{b!r}\t{'inf' if math.isinf(d) else repr(d)}\n")
@@ -618,6 +641,8 @@ def available(kind, opts, python):
         return bool(env.get("TDA4J_JS")) and Path(env["TDA4J_JS"]).exists() and shutil.which(env.get("NODE", "node")) is not None
     if kind == "ripser":
         return bool(env.get("RIPSER_BIN"))
+    if kind == "redzed":
+        return bool(env.get("REDZED_BIN"))
     if kind == "julia":
         return bool(env.get("JULIA")) and bool(env.get(JULIA_TOOLS[opts.get("julia_tool", "ripserer")][0]))
     if kind == "phat":
@@ -696,6 +721,12 @@ def command(kind, name, opts, case, data, p, threshold, warmup, trials, out, arg
         matrix = phat_matrix(case, data, threshold, fmt, fname, dim)
         cmd = [os.environ["PHAT_BIN"], "--binary"] + (["--dualize"] if opts.get("dualize") else [])
         return cmd + [str(matrix), str(Path(out).with_suffix(".pairs"))]
+    if kind == "redzed":
+        source = redzed_io.prepare_input(lambda: np.loadtxt(data / fname, ndmin=2), fmt, data / "redzed" / f"{case.name}.lower")
+        cmd = [os.environ["REDZED_BIN"], str(source), str(dim), "--lower", "--barcode"]
+        if threshold is not None:
+            cmd += ["--threshold", repr(threshold)]
+        return cmd
     if kind == "ripser":
         binary = os.environ["RIPSER_BIN"] if p == 2 else os.environ.get("RIPSER_COEFF_BIN", "")
         if not binary:
@@ -1245,6 +1276,7 @@ def write_env(out, args):
         "python_packages": cmd_out([args.python, "-m", "pip", "freeze"]),
         "julia": cmd_out([os.environ["JULIA"], "--version"]) if os.environ.get("JULIA") else "",
         "ripser_git": cmd_out(["git", "-C", str(Path(os.environ.get("RIPSER_BIN", ".")).parent), "rev-parse", "HEAD"]),
+        "redzed_git": cmd_out(["git", "-C", str(Path(os.environ.get("REDZED_BIN", ".")).parent), "rev-parse", "HEAD"]),
         **revision(classes_directory()),
         **js_revision(os.environ.get("TDA4J_JS_GIT"), checkout_of(classes_directory())),
         "jvm_flags": jvm_flags(args.jvm_heap, args.jvm_opts, getattr(args, "jvm_fixed_heap", False)),

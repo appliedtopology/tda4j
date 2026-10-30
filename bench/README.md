@@ -16,14 +16,14 @@ export JAVAPLEX_JAR=/path/to/javaplex.jar  # optional: TDA4j's predecessor
 # an MPI implementation with mpicxx (apt install libopenmpi-dev openmpi-bin) and cmake add DIPHA and PHAT
 # node 20.16 or newer on PATH (or NODE=/path/to/node) adds the Scala.js build of TDA4j
 
-bench/run.sh setup        # venv + pip tools, FlashCubical, TDA4j (JVM), TDA4j (npm package), ripser.cpp (Z/2 and coefficient builds), Ripserer.jl, JavaPlex, DIPHA, PHAT, Eirene.jl
+bench/run.sh setup        # venv + pip tools, FlashCubical, TDA4j (JVM), TDA4j (npm package), ripser.cpp (Z/2 and coefficient builds), RedZeD, Ripserer.jl, JavaPlex, DIPHA, PHAT, Eirene.jl
 bench/run.sh prepare      # downloads the Ripser-paper data, generates the synthetic sets (seeded)
 bench/run.sh run --fields 2,17 --timeout 3600 --jvm-heap 32g
 ```
 
 Re-running is safe: `setup` and `prepare` skip what exists, and every `run` writes a new results directory (`RESULTS_DIR=...
 bench/run.sh run` names it, so that `--resume` can find it again).
-`bench/run.sh setup tda4j-js` redoes one component (`python flashcubical tda4j tda4j-js ripser julia javaplex dipha phat eirene`), for example after
+`bench/run.sh setup tda4j-js` redoes one component (`python flashcubical tda4j tda4j-js ripser redzed julia javaplex dipha phat eirene`), for example after
 changing the library: the JVM tool uses the compiled classes, the JavaScript one the npm package, and both are rebuilt
 by their own `setup` step. Run the steps one after the other: they use sbt, and two sbt processes on one checkout
 corrupt each other's builds.
@@ -190,7 +190,7 @@ packages at pinned commits (neither is pip-installable with current tools; the P
 
 ## One thread, or all of them
 
-The main tables are single-threaded, as ripser.cpp and GUDHI are: every TDA4j row runs with `sequential=true`, so the
+The main tables are single-threaded, as ripser.cpp, RedZeD and GUDHI are: every TDA4j row runs with `sequential=true`, so the
 library's parallel steps (the Čech, DTM, sparse Rips and witness builders, alpha, `ParallelRipser`) run on the main thread.
 The rows that run on every processor say so in their name and are `multithreaded` in `runs.csv`: `tda4j-parallelverb-mt`
 (`Engine.ParallelRipser` through `Persistence`, with cocycles), `tda4j-parallel-mt` (the bars-only experiment),
@@ -219,12 +219,13 @@ bench/final_run.sh status                                        # while it runs
 | stage | what it does |
 |---|---|
 | `freeze` | requires a clean checkout, records its commit in `$FINAL/commit`, builds the JVM classes and the npm package. Every later stage refuses to run at another commit |
-| `smoke` | `sphere3_192`, `o3_1024`, `dragon2000` at p = 17: every TDA4j row against ripser.cpp; then `random2d_512_v` and `random3d_32_v` at p = 2: TDA4j, CubicalRipser and FlashCubical against GUDHI (`vertices=`), installing FlashCubical first. Stops the run on an error, a barcode that disagrees or a tool that is not installed |
+| `smoke` | `sphere3_192`, `o3_1024`, `dragon2000` at p = 17: every TDA4j row against ripser.cpp; RedZeD against ripser.cpp on the same cases at p = 2; then `random2d_512_v` and `random3d_32_v` at p = 2: TDA4j, CubicalRipser and FlashCubical against GUDHI (`vertices=`), installing FlashCubical first. Stops the run on an error, a barcode that disagrees or a tool that is not installed |
 | `anchors` | reruns `ripser.cpp`, `gudhi` and `giotto-ph-1t` on three cases and compares the times with `BASE`'s (`bench.py anchors`). A row more than 20 % away from the earlier run's means this is not the machine, or not the load, that measured it |
 | `tda4j` | every TDA4j JVM row on every task, including the shipped parallel engine and the bars-only experiment (`clifford50000` too: the experiment takes up to 60,000 points). Resumable |
 | `js` | the Scala.js twins on a subset of the cases at one field. Resumable |
 | `cubicalv` | GUDHI, CubicalRipser and FlashCubical on the `_v` cubical cases at p = 2 (`BASE` has no rows for them; TDA4j's own `_v` rows are in the `tda4j` stage). Resumable |
-| `merge` | `BASE` without its TDA4j rows (they are from the older commit), then `$FINAL/tda4j`, `$FINAL/js` and `$FINAL/cubicalv`: `bench.py merge`. Refuses when the anchors drifted (`ALLOW_DRIFT=1` overrides). Runs `bench.py check` on the result |
+| `redzed` | RedZeD on every Vietoris–Rips case at p = 2 (`BASE` has no rows for it). Resumable |
+| `merge` | `BASE` without its TDA4j rows (they are from the older commit), then `$FINAL/tda4j`, `$FINAL/js`, `$FINAL/cubicalv` and `$FINAL/redzed`: `bench.py merge`. Refuses when the anchors drifted (`ALLOW_DRIFT=1` overrides). Runs `bench.py check` on the result |
 | `sweeps` | the threads, cubical and alpha sweeps. A sweep directory has its own tables and does not merge, so each sweep reruns its external tools too |
 
 The measurement protocol (fields, timeout, warm-up, trials, heap) is `BASE`'s own, read from its `env.json`, unless the
@@ -342,6 +343,7 @@ JVM classes' commit.
 | `tda4j-bw`, `tda4j-helix`, `tda4j-dqp` | named alpha backends | `tda4j` uses the default: Bowyer–Watson up to 4 dimensions, Helix above, DQP for a small radius; these name each. Bowyer–Watson is `unsupported` above 4-D; DQP only runs on a case with a radius (untruncated it is about 100 times slower than Helix); `tda4j-fastalpha` takes no radius |
 | `tda4j-parallel-1t`, `tda4j-parallel-mt` | `PaperBenchmarkDriver engine=parallel threads=N` | the block-parallel experiment `ParallelPackedCohomology` (JVM only): implicit coboundaries, bars only, on 1 thread or every CPU. A simplex is one `Long` key where it fits and a block and an index beyond (o3_4096); it fails on a case whose n × n tables do not fit (clifford50000) |
 | `ripser.cpp` | vanilla build for p = 2, `ripser-coeff` for other primes | the reference for Vietoris–Rips |
+| `redzed` | C++17, built from a pinned commit (`setup redzed`: `g++ -O3 -std=c++17 -DNDEBUG`) | RedZeD (Kapulkin and Kershaw, arXiv:2606.06310; `nkershaw01/RedZeD`, commit `22ef1bf`), Vietoris–Rips only, **Z/2 only**, homology, one thread, bars (`--barcode`) and no representatives. Its input is the binary lower triangle of the distance matrix as float32 (`redzed_io.py`), made once from the float64 distances before the run and not timed, as DIPHA's input is; ripser.cpp's own parse or distance computation is inside its time. It caps the threshold at the enclosing radius itself, drops zero-length bars, and has no overflow check on its 64-bit simplex indices where ripser.cpp throws (the agreement column is the only guard near 2^63 simplices) |
 | `ripser.py`, `giotto-ph-1t`, `giotto-ph-mt` | pip | giotto-ph multithreaded is reported, never the baseline |
 | `gudhi`, `gudhi-collapse` | pip | edge collapse first in the second variant; on the cubical cases `top_dimensional_cells` (T) or `vertices` (the `_v` cases) |
 | `cripser` | pip | CubicalRipser, Z/2 only; `filtration="T"` (or `tcripser`) on the T cases, the V default on the `_v` ones |
@@ -354,9 +356,9 @@ JVM classes' commit.
 | `phat`, `phat-dual` | CMake (`setup phat`) | PHAT at a pinned commit reduces a prebuilt filtered boundary matrix over Z/2 (twist, bit-tree pivot columns; the second on the dual). It builds no complex: `make_phat` writes DIPHA's Vietoris–Rips complex as a boundary matrix beforehand (`data/phat/`, not timed), so these `kernel` rows time the reduction alone (reading the matrix, reducing, writing the pairs) and are never the baseline. A case above `--explicit-max-cells` (1e8, by `cells-reference.csv`) is not written out |
 | `javaplex` | `workers/JavaPlexWorker.java` | written against JavaPlex 4.x's API but **not yet compiled against a real jar** |
 
-PHAT, DIPHA and the plain Eirene row return pairs or bars and no representative; `eirene-cycles`, `oat-cycles` and `dionysus-cocycles`
+PHAT, DIPHA, RedZeD and the plain Eirene row return pairs or bars and no representative; `eirene-cycles`, `oat-cycles` and `dionysus-cocycles`
 read one for every bar. TDA4j always returns a representative with every bar, while most of the others return bars only. `tda4j-cocycles`
-against `ripser.cpp` is the like-for-like comparison. `tda4j` against `ripserer-involuted`, `oat-cycles` compares cycles
+against `ripser.cpp` (and `redzed`, at p = 2) is the like-for-like comparison. `tda4j` against `ripserer-involuted`, `oat-cycles` compares cycles
 with cycles, and `tda4j-cocycles` against `dionysus-cocycles` cocycles with cocycles.
 
 A variant that does more work than another tool (`dionysus-homology` and `dionysus-cocycles` after `dionysus`,

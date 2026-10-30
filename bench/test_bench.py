@@ -37,6 +37,7 @@ import sweep_threads  # noqa: E402  (likewise)
 import count_cells  # noqa: E402
 import dipha_io  # noqa: E402
 import phat_io  # noqa: E402
+import redzed_io  # noqa: E402
 
 
 HERE_BENCH = Path(__file__).resolve().parent
@@ -1203,6 +1204,106 @@ class DiphaPhatEireneTests(unittest.TestCase):
         self.assertEqual(r.returncode, 3, "exit 3 is 'unsupported'")
 
 
+class RedzedTests(unittest.TestCase):
+    """RedZeD: the row, its binary input (the lower triangle as float32), its BAR output, and (with the tool installed,
+    bench/run.sh setup redzed) its barcode against GUDHI's."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.dir = tempfile.TemporaryDirectory()
+        cls.tmp = Path(cls.dir.name)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.dir.cleanup()
+
+    def test_the_row_is_vietoris_rips_z2_only_and_one_thread(self):
+        rows = [(kind, task, opts) for name, kind, task, opts in bench.TOOLS if name == "redzed"]
+        self.assertEqual(rows, [("redzed", "vr", {"only_p": 2})])
+        self.assertIn("redzed", bench.BINARY_KINDS)
+        self.assertNotIn("redzed", bench.KERNEL_TOOLS)
+        case = bench.Case("c", "vr", "c.txt", "points", 2)
+        self.assertIn("Z/2 coefficients only", bench.skip_reason(rows[0][2], case, 3, 1.0, 17))
+        self.assertIsNone(bench.skip_reason(rows[0][2], case, 3, 1.0, 2))
+
+    def test_the_input_is_the_lower_triangle_row_by_row_in_float32_whatever_the_block_size(self):
+        points = np.random.default_rng(3).random((9, 3))
+        d = np.sqrt(((points[:, None] - points[None]) ** 2).sum(-1))
+        expected = d[np.tril_indices(9, -1)].astype("<f4").tobytes()
+        self.assertEqual(len(expected), 4 * 9 * 8 // 2)
+        for block in (1, 17, 10 ** 6):  # a block of one row, of a few, of all of them
+            path = redzed_io.prepare_input(lambda: points, "points", self.tmp / f"points-{block}.lower", block)
+            self.assertEqual(path.read_bytes(), expected, block)
+        self.assertEqual([p.name for p in self.tmp.glob("points-*.part")], [], "the temporary file is renamed away")
+
+    def test_a_distance_matrix_is_read_from_its_lower_triangle_only(self):
+        matrix = np.array([[0, 99, 99, 99], [1, 0, 99, 99], [3, 2, 0, 99], [6, 5, 4, 0]], dtype=float)  # upper triangle junk
+        for block in (1, 2, 10 ** 6):
+            path = redzed_io.prepare_input(lambda: matrix, "distance", self.tmp / f"matrix-{block}.lower", block)
+            self.assertEqual(np.fromfile(path, dtype="<f4").tolist(), [1, 3, 2, 6, 5, 4], block)
+
+    def test_an_input_that_exists_is_kept_and_not_loaded_again(self):
+        path = self.tmp / "kept.lower"
+        redzed_io.prepare_input(lambda: np.array([[0.0], [1.0]]), "points", path)
+
+        def refuse():
+            raise AssertionError("the file exists: nothing to load")
+
+        self.assertEqual(redzed_io.prepare_input(refuse, "points", path), path)
+        self.assertEqual(np.fromfile(path, dtype="<f4").tolist(), [1.0])
+
+    def test_the_command_reads_the_lower_triangle_and_prints_the_bars_up_to_the_case_dimension(self):
+        data = self.tmp / "cmd-data"
+        data.mkdir()
+        np.savetxt(data / "p.txt", np.random.default_rng(1).random((6, 2)))
+        case = bench.Case("cmd", "vr", "p.txt", "points", 2)
+        with mock.patch.dict(os.environ, {"REDZED_BIN": "/tools/redzed"}):
+            cmd = bench.command("redzed", "redzed", {"only_p": 2}, case, data, 2, 0.75, 0, 1, self.tmp / "o.tsv", Namespace())
+            plain = bench.command("redzed", "redzed", {"only_p": 2}, case, data, 2, None, 0, 1, self.tmp / "o.tsv", Namespace())
+        self.assertEqual(cmd, ["/tools/redzed", str(data / "redzed" / "cmd.lower"), "2", "--lower", "--barcode",
+                               "--threshold", "0.75"])
+        self.assertEqual(plain, cmd[:-2], "no threshold: RedZeD's own default, the enclosing radius")
+        self.assertEqual((data / "redzed" / "cmd.lower").stat().st_size, 4 * 6 * 5 // 2)
+
+    def test_the_bars_are_the_bar_lines_and_the_summary_lines_are_ignored(self):
+        text = ("H0 3 1 2.5000000000\nH1 1 0 4.0000000000\n"
+                "BAR 0 0 0.5\nBAR 0 0 1.25\nBAR 0 0 inf\nBAR 1 0.5 0.875\n")
+        out = self.tmp / "redzed.tsv"
+        counts = bench.parse_binary_output("redzed", bench.Proc("ok", 0, 0, text), out, bench.Case("c", "vr", "c", "points", 1))
+        self.assertEqual(counts, {"0": 3, "1": 1})
+        self.assertEqual(bench.read_bars(out), {0: [(0.0, 0.5), (0.0, 1.25), (0.0, math.inf)], 1: [(0.5, 0.875)]})
+
+    def test_it_is_available_when_its_binary_is_named(self):
+        with mock.patch.dict(os.environ, {"REDZED_BIN": "/tools/redzed"}):
+            self.assertTrue(bench.available("redzed", {}, "python"))
+        with mock.patch.dict(os.environ):
+            os.environ.pop("REDZED_BIN", None)
+            self.assertFalse(bench.available("redzed", {}, "python"))
+
+    @unittest.skipUnless(os.environ.get("REDZED_BIN") and importlib.util.find_spec("gudhi"), "REDZED_BIN or gudhi missing")
+    def test_redzed_has_gudhis_barcode_on_points_and_on_a_distance_matrix(self):
+        import gudhi
+        data = self.tmp / "tool-data"
+        data.mkdir()
+        points = np.random.default_rng(5).random((45, 3))
+        np.savetxt(data / "tiny.txt", points, fmt="%.17g")
+        d = np.sqrt(((points[:, None] - points[None]) ** 2).sum(-1))
+        np.savetxt(data / "tiny-d.txt", d, fmt="%.17g")
+        threshold = float(d.max(axis=1).min())
+        tree = gudhi.RipsComplex(points=points, max_edge_length=threshold).create_simplex_tree(max_dimension=3)
+        tree.compute_persistence(homology_coeff_field=2, min_persistence=0)
+        reference = {k: [(float(b), math.inf if e == math.inf else float(e)) for b, e in tree.persistence_intervals_in_dimension(k)]
+                     for k in range(3)}
+        for fname, fmt in (("tiny.txt", "points"), ("tiny-d.txt", "distance")):
+            case = bench.Case("tiny", "vr", fname, fmt, 2)
+            out = self.tmp / f"redzed-{fmt}.tsv"
+            cmd = bench.command("redzed", "redzed", {"only_p": 2}, case, data, 2, threshold, 0, 1, out, Namespace())
+            r = subprocess.run(cmd, capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            bench.parse_binary_output("redzed", bench.Proc("ok", 0, 0, r.stdout), out, case)
+            self.assertLess(bench.agreement(bench.read_bars(out), reference, 2)[0], 1e-6, fmt)
+
+
 def have(module):
     return importlib.util.find_spec(module) is not None
 
@@ -2077,6 +2178,34 @@ class FinalRunScriptTests(unittest.TestCase):
         merge = next(c for c in self.calls() if c.startswith("merge "))
         self.assertEqual(merge, f"merge {self.final}/merged {self.base}:!tda4j* {self.final}/tda4j {self.final}/cubicalv")
 
+    def test_the_redzed_stage_runs_it_at_z2_on_every_vietoris_rips_case_and_the_merge_takes_its_rows(self):
+        self.script("freeze")
+        self.log.unlink()
+        r = self.script("redzed")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("setup redzed", self.calls())
+        run = next(c for c in self.calls() if c.startswith("run "))
+        for option in ("--tools redzed", "--fields 2 ", "--timeout 7200.0", "--resume"):
+            self.assertIn(option, run)
+        self.assertNotIn("--cases", run, "every case: the tool only has Vietoris-Rips rows")
+        (self.final / "tda4j").mkdir(parents=True, exist_ok=True)
+        write_results(self.final / "tda4j", [result_row("c", "tda4j")])
+        write_results(self.final / "redzed", [result_row("c", "redzed")])
+        (self.final / "anchors.verdict").write_text("ok\n")
+        self.assertEqual(self.script("merge").returncode, 0)
+        merge = next(c for c in self.calls() if c.startswith("merge "))
+        self.assertEqual(merge, f"merge {self.final}/merged {self.base}:!tda4j* {self.final}/tda4j {self.final}/redzed")
+
+    def test_the_smoke_stage_checks_redzed_against_ripser_at_z2_with_a_missing_tool_an_error(self):
+        self.script("freeze")
+        self.log.unlink()
+        self.assertEqual(self.script("smoke").returncode, 0)
+        runs = [c for c in self.calls() if c.startswith("run ")]
+        z2 = next(c for c in runs if "--tools redzed,ripser.cpp" in c)
+        self.assertIn("--cases sphere3_192,o3_1024,dragon2000", z2)
+        self.assertIn("--fields 2 ", z2)
+        self.assertIn("setup redzed", self.calls())
+
     def test_the_smoke_stage_checks_the_v_cases_at_z2_with_a_missing_tool_an_error(self):
         self.script("freeze")
         self.log.unlink()
@@ -2099,7 +2228,7 @@ class FinalRunScriptTests(unittest.TestCase):
     def test_the_plan_lists_every_stage_and_runs_nothing(self):
         r = self.script("plan")
         self.assertEqual(r.returncode, 0, r.stderr)
-        for stage in ("freeze", "smoke", "anchors", "tda4j", "js", "cubicalv", "merge", "sweeps"):
+        for stage in ("freeze", "smoke", "anchors", "tda4j", "js", "cubicalv", "redzed", "merge", "sweeps"):
             self.assertIn(f"=== {stage}", r.stdout)
         self.assertIn("sweep-threads", r.stdout)
         self.assertEqual(self.calls(), [])
@@ -2115,7 +2244,7 @@ class FinalRunScriptTests(unittest.TestCase):
         for name in ("JS_CASES", "SMOKE_CASES", "ANCHOR_CASES", "SMOKE_V_CASES"):
             self.assertLessEqual(set(default(name).split(",")), cases, name)
         tools = {t[0] for t in bench.TOOLS}
-        for name in ("ANCHOR_TOOLS", "CUBICALV_TOOLS"):
+        for name in ("ANCHOR_TOOLS", "CUBICALV_TOOLS", "REDZED_TOOLS"):
             self.assertLessEqual(set(default(name).split(",")), tools, name)
         v_cases = {c.name for c in bench.CASES if dict(c.params).get("construction") == "V"}
         self.assertEqual({c for c in cases if bench.tool_selected(c, default("CUBICALV_CASES"))}, v_cases,
