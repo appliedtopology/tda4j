@@ -6,7 +6,7 @@
 
 # tda4j
 
-Persistent homology and topological data analysis on the JVM and in JavaScript: from Scala, Java, MATLAB, JavaScript, TypeScript and the command line.
+Persistent homology and topological data analysis on the JVM and in JavaScript: from Scala, Java, MATLAB, Python, JavaScript, TypeScript and the command line.
 
 tda4j computes persistent homology of point clouds (Vietoris-Rips, Čech, alpha, witness, Dowker, DTM and sparse Rips
 complexes), images (cubical complexes), simplicial sets and nerves of groups, monoids and categories. Every barcode
@@ -47,6 +47,18 @@ From MATLAB, `javaaddpath('tda4j-VERSION-assembly.jar')` and the same calls
 ([MATLAB and Java](https://tda4j.appliedtopology.org/user-guide/matlab.html)). From the command line,
 `java -jar tda4j-VERSION-assembly.jar --max-dimension 1 points.csv`. The jar is on the
 [releases](https://github.com/appliedtopology/tda4j/releases) page.
+
+From Python (3.10 or newer, with Java 21 or newer installed):
+
+```
+pip install tda4j
+```
+
+```python
+import numpy as np, tda4j
+result = tda4j.persistence(np.array([[0, 0], [1, 0], [1, 1], [0, 1]]), max_dimension=1)
+result.bars   # rows (dimension, birth, death)
+```
 
 From JavaScript or TypeScript (browsers, and Node.js 20.16 or newer):
 

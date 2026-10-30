@@ -59,6 +59,9 @@ tda4j implements Ripser's algorithm (clearing, cohomology, apparent pairs) as it
 | `ripser(D, distance_matrix=True)` | `Persistence(ExplicitMetricSpace(rows))` |
 | `result['dgms'][d]` | `diagram.dim(d).triples` (degree, birth, death), death `Infinity` for an essential bar |
 
+In Python, [the `tda4j` package](python.md) takes the same arguments as keywords: `tda4j.persistence(X, max_dimension=k,
+max_filtration_value=t, prime=p).diagram(d)` is `ripser(X, maxdim=k, thresh=t, coeff=p)['dgms'][d]`.
+
 Beyond Ripser, tda4j returns a representative for every bar, so the bars from a Ripser-style run come with the cycles
 (or, with `representatives = Representatives.Cocycles`, the cocycles) that witness them. Write a diagram in a format
 other tools read with `--output-format gudhi`, `dipha` or `csv`.
@@ -79,5 +82,8 @@ other tools read with `--output-format gudhi`, `dipha` or `csv`.
 | `gudhi.bottleneck_distance(a, b)`, `gudhi.wasserstein.wasserstein_distance` | `BarcodeDistance.bottleneckDistance(a.bars, b.bars)`, `BarcodeDistance.wassersteinDistance(a.bars, b.bars, order)`, see [vectorization](vectorization.md) |
 | `gudhi.representations` landscapes and images | `Vectorization.landscape`, `Vectorization.persistenceImage` |
 | `read_points_from_off_file`, persistence files | `Gudhi.readOff`, `Gudhi.readPersistenceDiagram` and `Gudhi.writePersistenceDiagram` ([files](input-output.md)) |
+
+In Python, `tda4j.persistence(X, max_dimension=k, prime=p).diagram(d)` is the Rips line above (`max_dimension` is `k`, not
+`k + 1`), and `tda4j.persistence(X, complex="alpha", max_dimension=k)` the alpha one ([Python](python.md)).
 
 Names and defaults change between versions of these libraries; check the ones you use against your version.

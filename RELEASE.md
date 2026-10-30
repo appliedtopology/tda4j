@@ -28,6 +28,7 @@ the docs steps set `TDA4J_SCALA_VERSION=3.8.4` (read by `scalaVersion` in `build
 | Library jar | `sbt tda4j/package` (part of `publishSigned`): `tda4j_3`, plots included (`org.appliedtopology.tda4j.plot`) | Maven Central |
 | Scala.js library | `tda4jJS/package` (part of `publishSigned`): `tda4j_sjs1_3`, the same sources linked by Scala.js users' builds; no MiMa check until a second release of the series exists | Maven Central |
 | npm package | `sbt tda4jJS/npmPack` → `target/npm/tda4j-<version>.tgz`: the optimized link as ES modules, `npm/package.json` with the version filled in, `npm/index.d.ts`, `npm/README.md`; the `test.yml` job `npm-package` installs it into an empty project and runs the library and the `tda4j` command | npm (`release.yml`, once `NPM_TOKEN` exists, see "npm" below) + GitHub Release |
+| Python wheel | `python/scripts/bundle-jar.sh` puts the fat jar into `python/`, `python/scripts/set_version.py X.Y.Z` writes the PEP 440 version, `python -m build --wheel python` → `python/dist/tda4j-<version>-py3-none-any.whl` (about 30 MB, the jar inside); the `test.yml` job `python-package` installs it on Python 3.10 and 3.13 and runs `python/tests` against the installed package | PyPI (`release.yml`, once the repository variable `PUBLISH_TO_PYPI` is `true`, see "PyPI" below) + GitHub Release |
 | Sources jar | `publishMavenStyle := true` + sbt's default `publishArtifact` behavior (`Compile / packageSrc`) | Maven Central + GitHub Release |
 | Scaladoc jar | sbt's default `Compile / packageDoc` | Maven Central + GitHub Release |
 | Fat jar (CLI/MATLAB) | `sbt tda4j/assembly` → `target/out/jvm/scala-3.9.0/tda4j/tda4j-<version>-assembly.jar` (name from `assembly / assemblyJarName` in `build.sbt`); CI's `test` job builds it and runs it on a sample for every pull request | GitHub Release only (not published to Maven — fat jars with bundled deps are a poor Maven citizen) |
@@ -163,6 +164,13 @@ a snapshot after 90 days.
   tarball, attaches it to the GitHub Release and skips the publish step; `npm publish --access public` of that tarball
   by hand does the same.
 
+- **PyPI** (optional until the first Python release): no secret, PyPI's Trusted Publishing. Once, on [pypi.org](https://pypi.org/manage/account/publishing/),
+  add a *pending publisher* for the project name `tda4j` (check first that the name is free): owner `appliedtopology`, repository `tda4j`,
+  workflow `release.yml`, no environment. Then set the repository *variable* (not secret) `PUBLISH_TO_PYPI` to `true`. Until both
+  are done, `release.yml` builds the wheel, installs it into an empty environment and runs it, attaches it to the GitHub Release and
+  skips the publish step; `twine upload python/dist/*.whl` of that wheel by hand does the same. A version with a suffix becomes
+  a PEP 440 pre-release (`0.8.0-RC1` is `0.8.0rc1`, `-SNAPSHOT` or any other suffix `.dev0`), which `pip` does not install without `--pre`.
+
 - **`SONATYPE_USERNAME`** and **`SONATYPE_PASSWORD`** (secrets of the environment `sonatype`, for `snapshot.yml` only): the
   user name and password of a Central Portal user token (not the account's own login), as in the credentials file above.
   [Snapshots](#snapshots) says where to make the token and what else to switch on once.
@@ -201,16 +209,18 @@ The tag push from step 3 triggers `.github/workflows/release.yml`, which:
    name the fat jar and pack the npm package under the tag's version, the one the demo build and the release globs ask for.
    Builds the demo REPL jar (`sbt assembly` in `demo/`, with `TDA4J_VERSION` the tag's version and sbt's disk cache off) against that local
    publish, so it does not wait for Maven Central to serve the version `sbt release` has just published, and runs it on
-   a four-point square, checking for the five bars.
+   a four-point square, checking for the five bars. Builds the Python wheel around the fat jar (`python/scripts/set_version.py`
+   sets the version), installs it into an empty environment and checks that the unit square has one loop.
 3. Commits the freshly-built docs directly into a `gh-pages` worktree, under `/X.Y.Z/`, alongside whatever's already
    there (the site root is `docs.yml`'s build of `scala`), and pushes.
 4. Zips this version's docs (`target/out/jvm/scala-3.8.4/tda4j/api`, the site step 3 just published) into
    `docs-X.Y.Z.zip`.
 5. Runs `gh release create` on the pushed tag, title `TDA4j X.Y.Z`, `--generate-notes`, `--prerelease` while
-   the version is still `0.x`, with the fat jar, sources jar, scaladoc jar, npm tarball, demo REPL jar, and docs zip
+   the version is still `0.x`, with the fat jar, sources jar, scaladoc jar, npm tarball, Python wheel, demo REPL jar, and docs zip
    attached.
 6. Publishes the npm tarball with `npm publish --access public` when the `NPM_TOKEN` secret exists (a version with a
    suffix, such as `0.8.0-RC1`, under the tag `next`, so `npm install @appliedtopology/tda4j` keeps giving the last full release).
+7. Publishes the Python wheel to PyPI when the repository variable `PUBLISH_TO_PYPI` is `true`.
 
 If it fails partway (e.g. a transient GitHub API error), it's safe to just re-run the workflow from the
 Actions tab — nothing it does touches Maven, and `gh release create`/the docs `git push` are both safe to

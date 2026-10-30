@@ -66,6 +66,7 @@ needed, see "Givens"). The core's source directories are **file organization onl
 - **two platforms**: sbt 2's project matrix builds the JVM (`tda4j`) and Scala.js (`tda4jJS`); JS-only code is in
   `src/*/scalajs`, JVM-only in `src/*/scalajvm`, and `src/{main,test}/scala` compiles for BOTH (no JVM-only library, no
   `java.nio.file`/`java.io.File`/threads there). Seams, limits: `rules/scalajs.md`.
+- `python/` (the `tda4j` wheel, not a package): JPype over the `matlab` facade.
 - `demo/` (not a package): a SEPARATE sbt build for a talk's REPL jar (`demo/README.md`, `WORKLOG-demo-jar.md`,
   `WORKLOG-demo-release.md`); the root build neither builds nor sees it, `release.yml` attaches it.
 - Tests mirror this. `src/test/scala/tda4juser/` is deliberately OUTSIDE the package: it checks what a user's code
@@ -114,8 +115,7 @@ sbt -DrunBenchmarks=true tda4j/test   # also run benchmark/profiling specs — N
 No `sbt` on `PATH`: `.claude/scripts/install-sbt.sh`. A cloud Setup script
 should hold `.claude/scripts/cloud-setup-script.sh` (installer plus warmed dependencies), else a session starts cold (~1 h).
 
-No linter beyond scalafmt; tests are specs2. CI jobs (`test` with a fat-jar smoke run, `test-js`, `npm-package`,
-`docs-build`, `mima`, `lint`, `changelog`) and their local equivalents: steward skill; a weekly `coverage.yml` maps coverage. A binary
+No linter beyond scalafmt; tests are specs2. CI jobs (`test.yml`, `lint.yml`) and their local equivalents: steward skill; a weekly `coverage.yml` maps coverage. A binary
 break is not a strong requirement before 1.0 (project lead). The ~319 `-Wunused:all` warnings stay
 (`WORKLOG-compiler-warnings.md`). Docs build with 3.8.4 (a FRESH sbt server only: `rules/docs-and-tutorials.md`). After
 `sbt package` or a docs build a test compile can miss main classes ("Not found: TDAlab"): `sbt clean`. **scalafmt only sees git-tracked files**: `git add` a new file before `scalafmtAll`.
@@ -147,7 +147,6 @@ the verb, MATLAB and the CLI take `includeZeroLength` (default `false`; `rules/e
 lead: never F₂ by default -- it hides signs and odd torsion); also the MATLAB/CLI default. The verb runs to the end;
 long runs use an engine's **cursor**, which is kept on purpose: `advanceFor(budget)`, `processedCells`/`totalCells`,
 `diagramAt(f)` exact at any `f` wherever the cursor is, `snapshotAt(f)` (`rules/engines.md` query contract).
-Engines also have inferring companion forms: `SimplicialHomologyEngine.persistentHomology(stream)`.
 
 **`into` parameter types** (`Optional[Double]`, `PointCloud`): public numeric options take `2.0`, `2`, `Some(2.0)` or
 `None`; point inputs take `Array[Array[Double]]`, `Seq[Seq[Double]]`, `Seq[Array[Double]]`. Use them for new public
@@ -244,6 +243,7 @@ file before changing that subsystem; this table is the index, in case a rule did
 | `rules/filtered-complexes.md` | Cech, witness, Dowker, DTM, sparse Rips, edge collapse | those files |
 | `rules/alpha.md` | alpha complexes (DQP, Helix, fast alpha) | `alpha/`, alpha files |
 | `rules/facade.md` | MATLAB facade, CLI, file I/O, the persistence threshold (which bars are reported) | `matlab/`, `cli/`, `io/` |
+| `rules/python.md` | the Python package: facade mirror, options, wheel, CI | `python/` |
 | `rules/scalajs.md` | the Scala.js build: platform seams, shared-code limits, the JS API and npm package | `scalajs/`, `scalajvm/`, `build.sbt`, `npm/` |
 | `rules/docs-and-tutorials.md` | docs site, tutorial pages (the docs are the tests), language tabs | `_docs/`, tutorial specs, `build.sbt` |
 | `rules/plotting.md` | the `plot` subpackage: scene model, tweaks, looks, live viewer, gallery | `plot/` (main and test) |
@@ -273,7 +273,7 @@ file before changing that subsystem; this table is the index, in case a rule did
 - Performance claims need isolated A/B measurement (`git stash` A/B, median of trials, one engine per JVM);
   machine noise here often exceeds small effects — report unconfirmed effects as unconfirmed.
 - **A new user-visible capability** (complex, engine, option): each session that lands a chunk of it checks
-  `matlab.TDA4j`, `cli.TDA4jConf` (1:1 mirror), `_docs/developers-guide/`, `_docs/user-guide/`. Refactors and bug fixes
+  `matlab.TDA4j`, `cli.TDA4jConf` (1:1 mirror), `python/` (a gap fails `test_facade_coverage.py`), `_docs/developers-guide/`, `_docs/user-guide/`. Refactors and bug fixes
   with no new surface are exempt.
 - **Open items are GitHub issues** (project lead, 2026-10-11; labels and workflow in `CONTRIBUTING.md`): a question,
   limitation or unverified claim a session leaves gets an issue, linked from its worklog and PR; a user-visible change

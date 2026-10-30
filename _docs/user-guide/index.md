@@ -42,6 +42,6 @@ spaces are an add-on with one more import, `import org.appliedtopology.tda4j.sse
   a map of spaces induces.
 * [Pairs of spaces](relative-persistence.md): relative persistent homology.
 * [Linear algebra, graphs and neighbours](utilities.md): dense matrices, row reduction, spanning trees, nearest-neighbour search.
-* **Without Scala**: [MATLAB and Java](matlab.md), [JavaScript and TypeScript](javascript.md), the [command line](cli.md).
+* **Without Scala**: [MATLAB and Java](matlab.md), [Python](python.md), [JavaScript and TypeScript](javascript.md), the [command line](cli.md).
 * [Troubleshooting](troubleshooting.md) and a [glossary](glossary.md).
 * [Coming from JavaPlex, Ripser or GUDHI](coming-from-other-libraries.md): the calls you know, and what differs.

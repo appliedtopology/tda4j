@@ -175,3 +175,41 @@ the field is pinned by `1/2` being `0.5` in the diagram's field.
 Measured once (not an A/B): random 3-D clouds, 40 and 80 points, degrees 0..2, Ripser and Cohomology engines: the rational
 run took as long as the Z/17 run (26 against 37 ms, 78 against 78 ms, 41 against 68 ms, 174 against 186 ms), so no slowdown
 is claimed or ruled out for larger complexes; coefficient growth was not looked at.
+
+# Python package (2026-10-30)
+
+`python/` is the `tda4j` wheel: JPype over `org.appliedtopology.tda4j.matlab.TDA4j`, NumPy in and out (`rules/python.md`).
+Chosen over a Py4J gateway or a native binding because the facade already takes and returns only `double[][]`, `int[]` and
+`String[]`, which JPype converts without copies on the way in and with one pass on the way out, and because a wheel that
+only bundles the fat jar has nothing to compile and no platform tags (`py3-none-any`, about 30 MB). The project lead's
+condition was "if it is easy to do and easy to maintain": the maintenance cost is the mirror rule (a facade method gets a
+Python function), made mechanical by `tests/test_facade_coverage.py` (reflection over the public facade and result classes
+against the calls the package makes; the reflection also sees Scala's `private[matlab]` members, which `INTERNAL` filters).
+
+Conversions are in `_jvm.py`: `points_in` (`np.ascontiguousarray(..., float64)` then `JArray(JDouble, 2)`), `options_in`
+(snake_case to camelCase; booleans `true`/`false`; numpy scalars through `int`/`float`, because `repr(np.float64(0.1))` is
+`np.float64(0.1)` under NumPy 2; `inf` as `Infinity`), `matrix_out` (a Python loop over `double[][]` rows: fine to a few
+hundred thousand bars, the only part that would need a flat accessor in the facade if a user hits it). Errors:
+`IllegalArgumentException` is `ValueError`, so the facade's messages (which list the accepted options) reach the user
+unchanged; the options list is lowercased there because `parseOptions` lowercases.
+
+Found while testing: a frozen dataclass with NumPy fields has an `__eq__` that raises (`eq=False`); `Result.cells()` is in
+the engine's order (VR layers: all edges, then all triangles), not globally sorted by filtration value, so the invariant
+to test is "every face enters no later than its cell"; the degree-0 birth cell of an image is a corner vertex of the lowest
+pixel, not the pixel; circular/toroidal coordinates refuse a symmetric lattice (a genuine tie), so a torus fixture needs
+noise; ToMATo with an enormous `tau` still gives one cluster per connected component of the neighbour graph, so a
+"merges everything" test needs a connected sample.
+
+Checks: 75 tests in `python/tests` (unit square by hand, `∂∂ = 0` and face-before-coface on `boundary()`, a cycle's
+boundary summing to zero, bar cells, Takens windows by index arithmetic, an Euler curve counted by hand, bottleneck and
+Wasserstein of a square against its double by hand, relative modulo one point, the inclusion map's loop story, image
+orientation, save/load round trip). Mutants caught: boundary rows and cols swapped, Takens delay and stride swapped, points
+read column-major, a boolean option written `True`, the death cell of an essential bar left empty, a facade call renamed.
+The wheel was built and the tests run against the installed copy from a clean venv on Python 3.10, 3.11 and 3.13 (the CI job
+`python-package` does 3.13 and 3.10).
+
+Not done, on purpose or for lack of a decision: PyPI publishing is wired (`release.yml`, Trusted Publishing, repository
+variable `PUBLISH_TO_PYPI`) but needs the pending publisher created on pypi.org by an owner, and the name `tda4j` checked
+for availability; `TDA4j.layout` (free-form boards) is not wrapped; the typed Scala API (streams, engines, cursors) and
+`sset` are not reachable from Python, by design (the package is the facade's); free-threaded Python and several JVMs per
+process are untested (JPype starts one JVM per process).
