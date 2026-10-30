@@ -207,7 +207,7 @@ jobs:
       - name: Run the pure-Python tests of the sources
         run: |
           python -m pip install pytest numpy jpype1
-          TDA4J_JAR=$(ls "$PWD"/python/src/tda4j/jars/*-assembly.jar) python -m pytest python/tests/test_release_scripts.py -q
+          PYTHONPATH="$PWD/python/src" TDA4J_JAR=$(ls "$PWD"/python/src/tda4j/jars/*-assembly.jar) python -m pytest python/tests/test_release_scripts.py -q
 
   # Compiles every Scala fence in `_docs`. The tutorial specs run the same fences inside `test`; this job is what catches a
   # broken fence in a page that has no spec, and a broken site build.
