@@ -56,7 +56,8 @@ object ParallelPackedCohomology:
       val bs = mutable.ArrayBuilder.ofInt()
       val ls = mutable.ArrayBuilder.ofDouble()
       for b <- 0 until n; a <- 0 until b do
-        val l = distance(a, b)
+        val l =
+          distance(b, a) // the larger first, as ripser.cpp and `ExplicitMetricSpace` read it; a row of a cached matrix
         if l <= threshold then
           require(
             as.length < MaxEdges,

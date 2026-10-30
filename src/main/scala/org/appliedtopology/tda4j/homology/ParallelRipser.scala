@@ -35,7 +35,13 @@ private[tda4j] object ParallelRipser:
     withPairs: Boolean
   ): ParallelRipserRun =
     val n = metricSpace.size
-    val space = ParallelPackedCohomology.Space(n, metricSpace.distance(_, _), threshold, maxDimension, characteristic)
+    val space = ParallelPackedCohomology.Space(
+      n,
+      LayeredInorderSimplexStream.distanceOf(metricSpace),
+      threshold,
+      maxDimension,
+      characteristic
+    )
     val threads = Parallel.threads
     val result =
       if threads == 1 then ParallelPackedCohomology.persistence(space, 1, 1, true, withPairs)

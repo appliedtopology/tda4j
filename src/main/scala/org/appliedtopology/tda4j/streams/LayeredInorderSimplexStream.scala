@@ -24,7 +24,7 @@ open class LayeredInorderSimplexStream(
   import LayeredInorderSimplexStream.*
 
   lazy val generator: Generator =
-    Generator(metricSpace.size, metricSpace.distance(_, _), resolvedMaxFiltrationValue, candidates)
+    Generator(metricSpace.size, distanceOf(metricSpace), resolvedMaxFiltrationValue, candidates)
 
   private val layers = mutable.ArrayBuffer.empty[Layer]
 
@@ -43,6 +43,15 @@ open class LayeredInorderSimplexStream(
   }
 
 object LayeredInorderSimplexStream:
+
+  /** `space.distance` as a function of two `Int`s that does not box them: a call through `FiniteMetricSpace[Int]` goes
+    * to the generic `distance(VertexT, VertexT)` and allocates two `Integer`s per pair, which the pass over all
+    * `n^2 / 2` pairs of [[Generator]] pays for, while a class that declares `distance(Int, Int)` is called directly.
+    */
+  def distanceOf(space: FiniteMetricSpace[Int]): (Int, Int) => Double = space match
+    case euclidean: EuclideanMetricSpace => (a, b) => euclidean.distance(a, b)
+    case explicit: ExplicitMetricSpace   => (a, b) => explicit.distance(a, b)
+    case other                           => (a, b) => other.distance(a, b)
 
   /** How the candidate vertices of a simplex (those within its diameter of all its vertices) are found. */
   enum Candidates:
@@ -405,7 +414,10 @@ object LayeredInorderSimplexStream:
         i += 1
       new FlagGenerator(n, threshold, candidates, Edges(keptA.result, keptB.result, keptWeight.result), deadline)
 
-    /** The edges of the complete graph on `0 until n` with `distance` as weight, those within `threshold`. */
+    /** The edges of the complete graph on `0 until n` with `distance` as weight, those within `threshold`. The distance
+      * is asked as `distance(larger, smaller)`, the lower triangle that ripser.cpp and [[ExplicitMetricSpace]] read,
+      * and which is along a row of a cached matrix.
+      */
     def edgesWithin(n: Int, distance: (Int, Int) => Double, threshold: Double): Edges =
       val as = IntBuffer()
       val bs = IntBuffer()
@@ -414,7 +426,7 @@ object LayeredInorderSimplexStream:
       while b < n do
         var a = 0
         while a < b do
-          val d = distance(a, b)
+          val d = distance(b, a)
           if d <= threshold then
             as += a
             bs += b

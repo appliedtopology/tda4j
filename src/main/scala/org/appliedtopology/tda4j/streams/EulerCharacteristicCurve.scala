@@ -84,7 +84,7 @@ object EulerCharacteristicCurve:
     require(maxSimplexDimension >= 0, s"maxSimplexDimension must be >= 0, got $maxSimplexDimension")
     val n = metricSpace.size
     val threshold = maxFiltrationValue.getOrElse(metricSpace.minimumEnclosingRadius)
-    val edges = LayeredInorderSimplexStream.Generator(n, metricSpace.distance(_, _), threshold)
+    val edges = LayeredInorderSimplexStream.Generator(n, LayeredInorderSimplexStream.distanceOf(metricSpace), threshold)
     val jumps = new Array[Long](edges.edgeCount)
     if maxSimplexDimension >= 1 && edges.edgeCount > 0 then
       val chunks = math.max(1, math.min(Parallel.threads * 8, edges.edgeCount / 256))
