@@ -271,6 +271,14 @@ export function tomatoDiagram(points: number[][], k: number): number[][];
 export function takensEmbedding(series: number[], dimension: number, delay?: number, stride?: number): number[][];
 /** `takensEmbedding` for a series of vectors, one array per time step: a point is the `dimension` arrays of a window, one after the other. */
 export function takensEmbeddingOfVectors(series: number[][], dimension: number, delay?: number, stride?: number): number[][];
+/** The barcode of the homology of the product of two filtered complexes from the barcodes of the factors, rows `[dimension, birth, death]` (every dimension of each): a cell of the product enters at the larger (`"max"`, the default) or the sum (`"sum"`) of the values of its two factors. */
+export function productBars(first: number[][], second: number[][], filtration?: "max" | "sum"): number[][];
+/** The internal Hom of two barcodes, rows `[dimension, birth, death]`: the module of maps from the first to the second shifted by `t`; a bar of dimension `p` and one of dimension `q` give a bar of dimension `q - p`. */
+export function homBars(first: number[][], second: number[][]): number[][];
+/** The dimension of the space of maps of persistence modules between two barcodes, degree by degree. */
+export function homDimension(first: number[][], second: number[][]): number;
+/** The dual of a barcode: the row `[dimension, birth, death]` of `[b, d)` becomes `[dimension, -d, -b]`, the interval `(-d, -b]` (`-Infinity` as the first end for a bar that never dies). */
+export function dualBars(bars: number[][]): number[][];
 /** The first lag in `1..maxLag` at which the autocorrelation of the series is zero or negative: a first guess for the `delay` of `takensEmbedding`. */
 export function delayByAutocorrelation(series: number[], maxLag: number): number;
 

@@ -72,6 +72,20 @@ class ExportsSpec extends Specification:
         (Exports.takensEmbedding(js.Array(1.0, 2.0), 3, 2) must throwA[js.JavaScriptException])
     }
 
+  "productBars, homBars, homDimension and dualBars" should
+    "give the worked examples: the Tor class of a product with the sum, [2, 5) as Hom, and a reflected bar" >> {
+      val segment = js.Array(js.Array(0.0, 0.0, 1.0), js.Array(0.0, 0.0, Double.PositiveInfinity))
+      val (a, b) = (js.Array(js.Array(0.0, 0.0, 3.0)), js.Array(js.Array(0.0, 1.0, 5.0)))
+      (Exports.productBars(segment, segment).length must beEqualTo(4)) and
+        (Exports.productBars(segment, segment, "sum").map(_.toSeq).toSeq must contain(Seq(1.0, 1.0, 2.0))) and
+        (Exports.homBars(a, b).map(_.toSeq).toSeq must beEqualTo(Seq(Seq(0.0, 2.0, 5.0)))) and
+        (Exports.homDimension(b, a) must beEqualTo(1)) and
+        (Exports.dualBars(js.Array(js.Array(1.0, 1.0, 4.0))).map(_.toSeq).toSeq must beEqualTo(
+          Seq(Seq(1.0, -4.0, -1.0))
+        )) and
+        (Exports.productBars(segment, segment, "mean") must throwA[js.JavaScriptException])
+    }
+
   "relativePersistence" should {
     "drop the essential bar of degree 0 modulo one point, and take a distance matrix" >> {
       val points = circle(12)

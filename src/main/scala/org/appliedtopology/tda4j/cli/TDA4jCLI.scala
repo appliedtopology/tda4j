@@ -113,6 +113,33 @@ object TDA4jCLI:
               "text format is (one 'dim <k>: bottleneck=... wasserstein=...' line per dimension)"
           )
 
+      if conf.barcodeOp.isSupplied then
+        val op = conf.barcodeOp()
+        if !barcodeOps.contains(op) then
+          throw new IllegalArgumentException(
+            s"unrecognized --barcode-op '$op'; expected one of ${barcodeOps.mkString(", ")}"
+          )
+        if op != "dual" && !conf.barcodeWith.isSupplied then
+          throw new IllegalArgumentException(s"--barcode-op $op needs --barcode-with, the second barcode")
+        if op == "dual" && conf.barcodeWith.isSupplied then
+          throw new IllegalArgumentException("--barcode-op dual takes one barcode: --barcode-with does not go with it")
+        val others = Seq(
+          "--distance-to" -> conf.distanceTo.isSupplied,
+          "--select-landmarks" -> conf.selectLandmarks(),
+          "--representatives" -> conf.representatives(),
+          "--bar-cells" -> conf.barCells(),
+          "--plot" -> conf.plot.isSupplied,
+          "--min-persistence" -> conf.minPersistence.isSupplied,
+          "--min-persistence-fraction" -> conf.minPersistenceFraction.isSupplied,
+          "--output-format" -> (conf.outputFormat() != "text")
+        ).collect { case (flag, true) => flag }
+        if others.nonEmpty then
+          throw new IllegalArgumentException(
+            s"${others.mkString(", ")} cannot go with --barcode-op: it writes the bars of the barcode algebra, whole, as text"
+          )
+      else if conf.barcodeWith.isSupplied then
+        throw new IllegalArgumentException("--barcode-with goes with --barcode-op")
+
       // --complex is meaningless for a cubical grid (TDA4j.computeFromCubicalImage has no "complex" option at
       // all -- it would otherwise be silently ignored rather than validated, the exact "two flags can disagree
       // and nothing notices" trap this CLI's whole design (buildOptions's own doc above) exists to avoid). Same
@@ -242,6 +269,7 @@ object TDA4jCLI:
         conf.saveResult.foreach(result.save)
         if conf.plot.isSupplied then writePlot(conf, result, loaded, err)
         else if conf.distanceTo.isSupplied then writeDistance(conf, result, out)
+        else if conf.barcodeOp.isSupplied then writeBarcodeOp(conf, result, out)
         else
           writeOutput(conf, result, out)
           noteHiddenBars(result, loaded, err)
@@ -839,6 +867,22 @@ object TDA4jCLI:
         try lines.foreach(writer.println)
         finally writer.close()
       case None => lines.foreach(out.println)
+
+  private val barcodeOps = Seq("product-max", "product-sum", "hom", "hom-dimension", "dual")
+
+  /** `--barcode-op`: the bars of the barcode algebra of this run's whole diagram (and that of `--barcode-with`), one
+    * `dimension,birth,death` line each; `hom-dimension` writes the number of maps.
+    */
+  private[cli] def writeBarcodeOp(conf: TDA4jConf, result: PersistenceResult, out: java.io.PrintStream): Unit =
+    val first = toBarsUnfiltered(result).toList
+    def second = CSV.readPersistenceDiagram(conf.barcodeWith()).toList
+    val lines = conf.barcodeOp() match
+      case "product-max" => Barcode.kunneth(first, second, ProductComplex.Combine.Max).map(CSV.formatBar)
+      case "product-sum" => Barcode.kunneth(first, second, ProductComplex.Combine.Sum).map(CSV.formatBar)
+      case "hom"         => Barcode.hom(first, second).map(CSV.formatBar)
+      case "dual"        => Barcode.dual(first).map(CSV.formatBar)
+      case _             => List(Barcode.homDimension(first, second).toString)
+    writeLines(conf, lines, out)
 
   private[cli] def writeOutput(conf: TDA4jConf, result: PersistenceResult, out: java.io.PrintStream): Unit =
     val bars = toBars(result)

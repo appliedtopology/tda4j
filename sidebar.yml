@@ -62,6 +62,7 @@ subsection:
       - page: user-guide/circular-coordinates.md
       - page: user-guide/input-output.md
       - page: user-guide/barcode-algebra.md
+      - page: user-guide/barcode-products.md
       - page: user-guide/relative-persistence.md
       - page: user-guide/utilities.md
       - page: user-guide/vectorization.md

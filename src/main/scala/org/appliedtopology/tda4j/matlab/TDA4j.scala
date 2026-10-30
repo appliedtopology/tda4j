@@ -681,6 +681,54 @@ object TDA4j:
   def delayByAutocorrelation(series: Array[Double], maxLag: Int): Int =
     TakensEmbedding.delayByAutocorrelation(series.toSeq, maxLag)
 
+  // Bars as rows (dimension, birth, death), `Inf` for a bar that never dies: what `PersistenceResult.bars` returns.
+  private def barsOf(name: String, rows: Array[Array[Double]]): List[PersistenceBar[Double, Nothing]] =
+    rows.toList.zipWithIndex.map { (row, i) =>
+      require(
+        row.length == 3 && row(0) == math.rint(row(0)) && row(0) >= 0 && !row(1).isNaN && !row(2).isNaN,
+        s"$name: row $i must be (dimension, birth, death) with a whole dimension from 0, got ${row.mkString("(", ", ", ")")}"
+      )
+      if row(2).isPosInfinity then PersistenceBar[Double](row(0).toInt, row(1))
+      else PersistenceBar[Double](row(0).toInt, row(1), row(2))
+    }
+
+  private def rowsOf(bars: Seq[PersistenceBar[Double, ?]]): Array[Array[Double]] =
+    bars.map(b => Array(b.dim.toDouble, b.birth, b.death)).toArray
+
+  /** The barcode of the homology of the product of two filtered complexes from the barcodes of the two factors (rows
+    * `(dimension, birth, death)`, as `PersistenceResult.bars` returns them, every dimension of each): a cell of the
+    * product enters at the larger (`filtration` = `max`, the default) or the sum (`sum`) of the values of its two
+    * factors. Right in the dimensions below the highest dimension both barcodes were computed to. See
+    * `Barcode.kunneth`.
+    */
+  def productBars(first: Array[Array[Double]], second: Array[Array[Double]], filtration: String): Array[Array[Double]] =
+    val combine = filtration.toLowerCase match
+      case "max" => ProductComplex.Combine.Max
+      case "sum" => ProductComplex.Combine.Sum
+      case other => throw new IllegalArgumentException(s"filtration must be max or sum, got '$other'")
+    rowsOf(Barcode.kunneth(barsOf("productBars", first), barsOf("productBars", second), combine))
+
+  def productBars(first: Array[Array[Double]], second: Array[Array[Double]]): Array[Array[Double]] =
+    productBars(first, second, "max")
+
+  /** The internal Hom of two barcodes (rows `(dimension, birth, death)`): the module of maps from the first to the
+    * second shifted by `t`, its bars in dimension `q - p` for a bar of dimension `p` and one of dimension `q`. See
+    * `Barcode.hom`.
+    */
+  def homBars(first: Array[Array[Double]], second: Array[Array[Double]]): Array[Array[Double]] =
+    rowsOf(Barcode.hom(barsOf("homBars", first), barsOf("homBars", second)))
+
+  /** The dimension of the space of maps of persistence modules, degree by degree, between two barcodes. */
+  def homDimension(first: Array[Array[Double]], second: Array[Array[Double]]): Int =
+    Barcode.homDimension(barsOf("homDimension", first), barsOf("homDimension", second))
+
+  /** The dual of a barcode: the row `(dimension, birth, death)` of `[b, d)` is `(dimension, -d, -b)`, the interval
+    * `(-d, -b]` of the persistence module `t -> (M_{-t})*`. `-Inf` as the first end for a bar that never dies. See
+    * `Barcode.dual`.
+    */
+  def dualBars(bars: Array[Array[Double]]): Array[Array[Double]] =
+    rowsOf(Barcode.dual(barsOf("dualBars", bars)))
+
   /** The loops of the point cloud's Vietoris-Rips complex: one row `(birth, death)` per persistent H¹ class, most
     * persistent first. Row `i` is `cocycleIndex = i` of [[circularCoordinates]]; pick `r` between its birth and death.
     */

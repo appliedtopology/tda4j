@@ -160,6 +160,21 @@ bar, whatever the threshold.
 | `--distance-order` | the order of the Wasserstein distance; default `1.0` |
 | `--distance-ground-norm` | the ground norm on the birth-death plane: a finite `p >= 1`; default `L∞` |
 
+## The algebra of barcodes
+
+`--barcode-op` writes a barcode computed from the diagram of this run (every bar, whatever the threshold), one
+`dimension,birth,death` line per bar, instead of the diagram. The second barcode, for the operations that take two, is a csv
+file as `--output-format=csv` writes it. See [products, Hom and duals](barcode-products.md).
+
+| `--barcode-op` | writes |
+|---|---|
+| `product-max`, `product-sum` | the barcode of the product of the filtered complexes of the two diagrams, a cell entering at the larger or the sum of its factors' values |
+| `hom` | the internal Hom from this diagram to the one in `--barcode-with` |
+| `hom-dimension` | the dimension of the space of maps from this diagram to that one: a number |
+| `dual` | the dual of this diagram: no second diagram |
+
+`--barcode-with` is the second barcode.
+
 ## The Euler characteristic curve
 
 `--euler-curve` writes the [Euler characteristic curve](vectorization.md#the-euler-characteristic-curve) of the

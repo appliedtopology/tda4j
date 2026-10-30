@@ -163,6 +163,8 @@ abstract class Lab(characteristic: Int, precision: Double = 1e-9):
     PointCloudComplex,
     PositiveInfinity,
     PowerDistance,
+    ProductCell,
+    ProductComplex,
     RadiusLimitedAlphaShapes,
     RecursiveStackSimplexEnumerator,
     RecursiveStackVietorisRipsSimplexStream,

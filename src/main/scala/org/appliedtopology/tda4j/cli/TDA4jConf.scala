@@ -236,6 +236,21 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
       "--distance-to"
   )
 
+  // The algebra of barcodes, as in Barcode.
+  val barcodeOp: ScallopOption[String] = opt[String](
+    name = "barcode-op",
+    descr = "instead of the diagram, write a barcode computed from it: product-max or product-sum (the barcode of the " +
+      "product of two filtered complexes, from the diagram of each, with --barcode-with), hom (the internal Hom from " +
+      "this diagram to that of --barcode-with), hom-dimension (the number of maps from this diagram to that one) or " +
+      "dual. One 'dimension,birth,death' line per bar (--output-format text only)"
+  )
+  val barcodeWith: ScallopOption[String] = opt[String](
+    name = "barcode-with",
+    descr =
+      "for --barcode-op: the second barcode, a csv file of 'dimension,birth,death' lines as --output-format=csv " +
+        "writes them (the first barcode is the diagram this run computes, whole: --min-persistence does not apply)"
+  )
+
   // Plots and saved results. Declared last and without short flags: Scallop gives a letter to the first option declared
   // with it, so an earlier declaration would take a short flag users already type.
   val plot: ScallopOption[String] = opt[String](

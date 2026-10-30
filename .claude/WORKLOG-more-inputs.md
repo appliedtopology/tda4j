@@ -215,3 +215,17 @@ for availability; `TDA4j.layout` (free-form boards) is not wrapped; the typed Sc
 process are untested (JPype starts one JVM per process).
 
 The limits this arc leaves (maps on cubical complexes, `PersistenceMap` computing its own diagrams, rational coefficient growth, PyPI setup, the unwrapped `layout`) are filed as #272; bar cells from the fast engines are #271.
+
+## Products, Hom and duals (2026-10-30)
+
+Asked for by Mikael with zigzag, Morse and the Laplacian ("I don't care much which order"). Order taken: this first, because
+the Künneth theorem gives an oracle that uses the engines.
+
+- Hand derivations that the specs then confirmed: `[I[a,b), I[c,d)] = I[max(c-a, d-b), d-a)` (nonzero maps `I[a,b) -> I[c-t, d-t)` iff
+  `c-t <= a < d-t <= b`); Day convolution of intervals `[a+c, a+c+min(b-a,d-c))`; `Tor_1^{k[R≥0]}` of two finite intervals `[max(b+c,a+d), b+d)`.
+- `Sum` filtration needs the Tor term, and circles alone cannot show it (a bar that never dies is free): the Tor class appears
+  only between bars that die, the H_0 bars of Rips complexes among them. The two-segment product is the smallest case.
+- Spec slips worth knowing: a `private val p` in a specs2 `Specification` collides with specs2's own `p` (Fragments); `hom` is graded
+  (`q - p`), so comparing with `homDimension` needs `.filter(_.dim == 0)`.
+- Not done: the product's bars through the facades (`ProductCell` has no vertex-array form). Facade `productBars` works on rows.
+

@@ -59,6 +59,7 @@ The wheel carries the library's jar, so there is nothing else to install; from a
 | `bootstrap_band(points, **options)` | the [resampling band](noise-and-clusters.md) of the bars of one degree |
 | `tomato_clusters(points, k, tau)`, `tomato_diagram(points, k)` | [ToMATo](noise-and-clusters.md) clustering: the cluster of every point, and the valleys between peaks |
 | `takens_embedding(series, dimension, delay=1, stride=1)`, `delay_by_autocorrelation(series, max_lag)` | the sliding-window embedding of a time series (or of a series of vectors) as a point cloud, and a first guess for its `delay` |
+| `product_bars(first, second, filtration="max")`, `hom_bars(first, second)`, `hom_dimension(first, second)`, `dual_bars(bars)` | the [algebra of barcodes](barcode-products.md): the bars of a product of two filtered complexes from the bars of the factors, the internal Hom, the dimension of the space of maps, the dual; each barcode is a result (all of its bars) or an array of rows `(dimension, birth, death)` |
 | `h1_bars(points)`, `circular_coordinates(points, r)`, `toroidal_coordinates(points, r, cocycle_indices)` | [circular and toroidal coordinates](circular-coordinates.md) |
 | `load_result(path)` | a result saved by `result.save(path)`, by the other interfaces, or by `--save-result` |
 

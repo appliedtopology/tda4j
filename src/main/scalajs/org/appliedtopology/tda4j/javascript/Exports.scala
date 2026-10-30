@@ -290,6 +290,40 @@ object Exports:
   def delayByAutocorrelation(series: js.Array[Double], maxLag: Int): Int =
     guarded(TDA4j.delayByAutocorrelation(series.toArray, maxLag))
 
+  /** The barcode of the homology of the product of two filtered complexes from the barcodes of the factors (rows
+    * `[dimension, birth, death]`): a cell of the product enters at the larger (`filtration: "max"`, the default) or the
+    * sum (`"sum"`) of the values of its two factors.
+    */
+  @JSExportTopLevel("productBars")
+  def productBars(
+    first: js.Array[js.Array[Double]],
+    second: js.Array[js.Array[Double]],
+    filtration: js.UndefOr[String] = js.undefined
+  ): js.Array[js.Array[Double]] =
+    guarded(grid(TDA4j.productBars(matrix(first), matrix(second), filtration.getOrElse("max"))))
+
+  /** The internal Hom of two barcodes (rows `[dimension, birth, death]`): the module of maps from the first to the
+    * second shifted by `t`; a bar of dimension `p` and one of dimension `q` give a bar of dimension `q - p`.
+    */
+  @JSExportTopLevel("homBars")
+  def homBars(
+    first: js.Array[js.Array[Double]],
+    second: js.Array[js.Array[Double]]
+  ): js.Array[js.Array[Double]] =
+    guarded(grid(TDA4j.homBars(matrix(first), matrix(second))))
+
+  /** The dimension of the space of maps of persistence modules between two barcodes, degree by degree. */
+  @JSExportTopLevel("homDimension")
+  def homDimension(first: js.Array[js.Array[Double]], second: js.Array[js.Array[Double]]): Int =
+    guarded(TDA4j.homDimension(matrix(first), matrix(second)))
+
+  /** The dual of a barcode: the row `[dimension, birth, death]` of `[b, d)` becomes `[dimension, -d, -b]`, the interval
+    * `(-d, -b]` (`-Infinity` as the first end for a bar that never dies).
+    */
+  @JSExportTopLevel("dualBars")
+  def dualBars(bars: js.Array[js.Array[Double]]): js.Array[js.Array[Double]] =
+    guarded(grid(TDA4j.dualBars(matrix(bars))))
+
   /** The loops of the point cloud's Vietoris-Rips complex: `[birth, death]` for each persistent class of degree 1, the
     * most persistent first. Loop `i` is `cocycleIndex: i` of `circularCoordinates`; pick `r` between its birth and
     * death.

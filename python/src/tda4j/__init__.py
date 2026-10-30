@@ -69,9 +69,12 @@ __all__ = [
     "covering_radius",
     "covering_radius_from_distances",
     "delay_by_autocorrelation",
+    "dual_bars",
     "euler_curve",
     "euler_curve_from_distances",
     "h1_bars",
+    "hom_bars",
+    "hom_dimension",
     "inclusion_map",
     "inclusion_map_from_distances",
     "jar_path",
@@ -82,6 +85,7 @@ __all__ = [
     "persistence_from_image",
     "persistence_from_landmarks",
     "persistence_from_relation",
+    "product_bars",
     "relative_persistence",
     "relative_persistence_from_distances",
     "select_landmarks",
@@ -356,6 +360,50 @@ def delay_by_autocorrelation(series, max_lag: int) -> int:
     """The first lag in ``1..max_lag`` where the autocorrelation of the series is zero or negative: a first guess for the
     ``delay`` of ``takens_embedding``."""
     return int(_java().delayByAutocorrelation(_jvm.doubles_in(series), int(max_lag)))
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# algebra of barcodes: products, Hom and duals
+# ---------------------------------------------------------------------------------------------------------------------
+
+def _bars_in(bars, name: str):
+    """Rows ``(dimension, birth, death)`` from a result (all of its bars, also the short ones) or any array of rows."""
+    if hasattr(bars, "all_bars"):
+        bars = bars.all_bars
+    array = np.asarray(bars, dtype=np.float64)
+    if array.size == 0:
+        array = np.empty((0, 3))
+    return _jvm.points_in(array, name)
+
+
+@translating
+def product_bars(first, second, filtration: str = "max") -> np.ndarray:
+    """The bars of the homology of the product of two filtered complexes, from the barcodes of the factors (each a
+    result or an array of rows ``(dimension, birth, death)``, every dimension of it). A cell of the product enters at
+    the larger (``filtration="max"``, the default) or the sum (``"sum"``) of the values of its two factors. Right in
+    the dimensions below the highest dimension both were computed to."""
+    return _jvm.matrix_out(_java().productBars(_bars_in(first, "first"), _bars_in(second, "second"), str(filtration)), 3)
+
+
+@translating
+def hom_bars(first, second) -> np.ndarray:
+    """The internal Hom of two barcodes (results or arrays of rows ``(dimension, birth, death)``): the module of maps from
+    the first to the second shifted by ``t``. A bar of dimension ``p`` and one of dimension ``q`` give a bar of dimension
+    ``q - p``."""
+    return _jvm.matrix_out(_java().homBars(_bars_in(first, "first"), _bars_in(second, "second")), 3)
+
+
+@translating
+def hom_dimension(first, second) -> int:
+    """The dimension of the space of maps of persistence modules from ``first`` to ``second``, degree by degree."""
+    return int(_java().homDimension(_bars_in(first, "first"), _bars_in(second, "second")))
+
+
+@translating
+def dual_bars(bars) -> np.ndarray:
+    """The dual of a barcode: the row ``(dimension, birth, death)`` of ``[b, d)`` becomes ``(dimension, -d, -b)``, the
+    interval ``(-d, -b]`` (``-inf`` as the first end for a bar that never dies)."""
+    return _jvm.matrix_out(_java().dualBars(_bars_in(bars, "bars")), 3)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
