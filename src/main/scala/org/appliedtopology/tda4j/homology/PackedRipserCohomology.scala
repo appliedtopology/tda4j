@@ -26,8 +26,9 @@ def insertionDiameter(
   *
   * Reports degrees `0 .. maxDimension`, each bar with its representative cocycle over `DiameterIndex` cells: decode a
   * cell of a degree-`k` bar with `vertices(cell, k + 1)`. `maxFiltrationValue` defaults to the minimum enclosing
-  * radius, past which nothing new is born. `useApparentPairs = false` and `useEmergentPairs = false` turn off the
-  * apparent-pair and the emergent-pair shortcut, which change no output (for benchmarking). An emergent pair is a
+  * radius, past which nothing new is born. `useApparentPairs = false`, `useEmergentPairs = false` and `useUnionFind =
+  * false` turn off the apparent-pair shortcut, the emergent-pair shortcut and the pairing of degree 0 by union-find
+  * over the edges (the elder rule, as Ripser does it), which change no output (for benchmarking). An emergent pair is a
   * column whose oldest cofacet of the same diameter is the pivot of no earlier column: it is paired with that cofacet
   * without being reduced, and kept only as the simplex that makes it (rebuilt if a later column needs it), which saves
   * the memory of its stored column.
@@ -53,7 +54,9 @@ open class PackedRipserCohomologyEngine[CoefficientT: Field](
   // None: two words exactly when one Long cannot hold the indices.
   wideIndices: Option[Boolean] = None,
   // Pair a column with its oldest same-diameter cofacet without reducing it, when no earlier column has that cofacet.
-  useEmergentPairs: Boolean = true
+  useEmergentPairs: Boolean = true,
+  // Degree 0 by union-find over the edges instead of by reducing the vertices' coboundaries.
+  useUnionFind: Boolean = true
 ):
 
   private val resolvedMaxFiltrationValue: Double =
@@ -467,15 +470,17 @@ open class PackedRipserCohomologyEngine[CoefficientT: Field](
 
   private var _apparentPairCount: Int = 0
 
-  /** How many simplices the last run paired directly as apparent pairs, without reducing their coboundary. */
+  /** How many simplices of degrees 1 and up the last run paired directly as apparent pairs, without reducing their
+    * coboundary (degree 0 is paired by union-find).
+    */
   // Distinct from `substitutionCount`, which counts the lazy fallback when another column needs an apparent pair's
   // column as a pivot (WORKLOG-o3-1024-fractal-r-session-2026-09-25.md).
   def apparentPairCount: Int = _apparentPairCount
 
   private var _emergentPairCount: Int = 0
 
-  /** How many simplices the last run paired as emergent pairs: their oldest same-diameter cofacet was no earlier
-    * column's pivot, so the coboundary was already reduced and was never put on the working column.
+  /** How many simplices of degrees 1 and up the last run paired as emergent pairs: their oldest same-diameter cofacet
+    * was no earlier column's pivot, so the coboundary was already reduced and was never put on the working column.
     */
   def emergentPairCount: Int = _emergentPairCount
 
@@ -808,6 +813,59 @@ open class PackedRipserCohomologyEngine[CoefficientT: Field](
     val p = pairing(cocycles, zeroLengthCocycles)
     List.tabulate(p.size)(k => (p.bar(k), p.pair(k)))
 
+  /** Degree 0 by the elder rule instead of by reducing the vertices' coboundaries (Ripser pairs it the same way): the
+    * edges come oldest first, and an edge that joins two components kills the younger one, the root with the smaller
+    * vertex number, paired with that edge. The pairs are those of the reduction, which pivots every column on its
+    * oldest edge. The cocycle of a bar is the indicator of the component that dies, just before its death edge (the
+    * reduction's V-column: each of its additions folds in the component of an earlier pair), and of the final component
+    * for a vertex that never dies. The death edges are the cleared columns of degree 1. Apparent and emergent pairs are
+    * not counted in degree 0.
+    */
+  private def pairVertices(
+    rows: Pairing,
+    edges: Level,
+    youngestFirst: Array[Int],
+    cocycles: Boolean,
+    zeroLengthCocycles: Boolean,
+    nextCleared: ClearedSet,
+    nextKeys: WideKeys
+  ): Unit =
+    val n = metricSpace.size
+    val forest = MergeForest(n)
+    // The edge, by its place in `edges`, that ends each vertex's component; -1 for the roots that survive.
+    val killedBy = Array.fill(n)(-1)
+    var merges = 0
+    var position = 0
+    var r = edges.size - 1
+    while r >= 0 && merges < n - 1 do
+      val o = youngestFirst(r)
+      val ends = vertices(DiameterIndex(edges.diameters(o), edges.indices(o), if wide then edges.highs(o) else 0L), 2)
+      val ra = forest.find(ends(0))
+      val rb = forest.find(ends(1))
+      if ra != rb then
+        val (dead, alive) = if ra < rb then (ra, rb) else (rb, ra)
+        forest.kill(dead, alive, position)
+        killedBy(dead) = o
+        merges += 1
+      position += 1
+      r -= 1
+    forest.seal()
+    var v = 0
+    while v < n do
+      val sigma = DiameterIndex(0.0, v.toLong, 0L)
+      val o = killedBy(v)
+      val row =
+        if o < 0 then rows.add(0, sigma, Double.PositiveInfinity, -1L, 0L, false)
+        else
+          val high = if wide then edges.highs(o) else 0L
+          nextCleared += newKey(nextKeys, edges.indices(o), high)
+          rows.add(0, sigma, edges.diameters(o), edges.indices(o), high, false)
+      val zeroLength = o >= 0 && edges.diameters(o) == 0.0
+      if cocycles && (zeroLengthCocycles || !zeroLength) then
+        val component = forest.members(v, forest.diedAt(v))
+        rows.cocycles(row.toLong) = Chain.from(component.toSeq.map(w => (DiameterIndex(0.0, w.toLong, 0L), fr.one)))
+      v += 1
+
   private def pairing(cocycles: Boolean, zeroLengthCocycles: Boolean): Pairing =
     _substitutionCount = 0
     _totalSimplexCount = 0
@@ -834,33 +892,60 @@ open class PackedRipserCohomologyEngine[CoefficientT: Field](
     var level = Level(metricSpace.size, wide)
     for v <- 0 until metricSpace.size do level.add(0.0, v.toLong, 0L)
 
+    // A degree's simplices youngest first: diameter descending, then the smaller index first (indices are distinct in
+    // a level). Read backwards, the order the pivots rank them in: oldest first.
+    def youngestFirst(lv: Level): Array[Int] =
+      val levelD = lv.diameters
+      val levelI = lv.indices
+      val levelH = lv.highs
+      if !wide then
+        SortIndices.sort(
+          lv.size,
+          (a, b) =>
+            levelI(a) != levelI(b) && {
+              val c = java.lang.Double.compare(levelD(a), levelD(b))
+              if c != 0 then c > 0 else levelI(a) < levelI(b)
+            }
+        )
+      else
+        SortIndices.sort(
+          lv.size,
+          (a, b) =>
+            (levelI(a) != levelI(b) || levelH(a) != levelH(b)) && {
+              val c = java.lang.Double.compare(levelD(a), levelD(b))
+              if c != 0 then c > 0
+              else if levelH(a) != levelH(b) then levelH(a) < levelH(b)
+              else levelI(a) < levelI(b)
+            }
+        )
+    // The canonical cofacets (added vertex above the largest) of every simplex of `lv` within the threshold.
+    def canonicalCofacets(lv: Level, size: Int): Level =
+      val next = Level(lv.size, wide)
+      var k = 0
+      while k < lv.size do
+        val sigma = DiameterIndex(lv.diameters(k), lv.indices(k), if lv.highs != null then lv.highs(k) else 0L)
+        eachCofacetOf(sigma, vertices(sigma, size), allCofacets = false) { (diameter, index, high, _, _) =>
+          next.add(diameter, index, high)
+          true
+        }
+        k += 1
+      next
+    // With degree 0 by union-find: the edges (degree 1's level) sorted for it, kept for degree 1.
+    var edges: Level = null
+    var presorted: Array[Int] = null
+
     for d <- 0 to maxDimension do
       val size = d + 1
-      // packedOrdering.reverse: diameter descending, then the smaller index first (indices are distinct in a level).
       val levelD = level.diameters
       val levelI = level.indices
       val levelH = level.highs
+      val byUnionFind = d == 0 && useUnionFind
+      // Degree 0 by union-find (below) reduces no column.
       val order =
-        if !wide then
-          SortIndices.sort(
-            level.size,
-            (a, b) =>
-              levelI(a) != levelI(b) && {
-                val c = java.lang.Double.compare(levelD(a), levelD(b))
-                if c != 0 then c > 0 else levelI(a) < levelI(b)
-              }
-          )
-        else
-          SortIndices.sort(
-            level.size,
-            (a, b) =>
-              (levelI(a) != levelI(b) || levelH(a) != levelH(b)) && {
-                val c = java.lang.Double.compare(levelD(a), levelD(b))
-                if c != 0 then c > 0
-                else if levelH(a) != levelH(b) then levelH(a) < levelH(b)
-                else levelI(a) < levelI(b)
-              }
-          )
+        if byUnionFind then Array.emptyIntArray
+        else if presorted != null then presorted
+        else youngestFirst(level)
+      presorted = null
       _totalSimplexCount += level.size
       rows.reserve(level.size)
 
@@ -942,6 +1027,11 @@ open class PackedRipserCohomologyEngine[CoefficientT: Field](
           nextCleared += key
           report(sigma, pivot.diameter, pivot.index, pivot.high, reductionLog)
 
+      if byUnionFind then
+        edges = canonicalCofacets(level, size)
+        presorted = youngestFirst(edges)
+        pairVertices(rows, edges, presorted, cocycles, zeroLengthCocycles, nextCleared, nextKeys)
+
       for
         o <- order
         if !activeCleared.contains(keyOf(activeKeys, levelI(o), if levelH != null then levelH(o) else 0L))
@@ -986,17 +1076,8 @@ open class PackedRipserCohomologyEngine[CoefficientT: Field](
         rows.cocycles(row.toLong) = expandV(rows.birth(row), log, seedOf, logOf, memo, keyOfCell)
 
       // The next degree's simplices: the canonical cofacets (added vertex above the largest) within the threshold.
-      if d < maxDimension then
-        val next = Level(level.size, wide)
-        var k = 0
-        while k < level.size do
-          val sigma = DiameterIndex(levelD(k), levelI(k), if levelH != null then levelH(k) else 0L)
-          eachCofacetOf(sigma, vertices(sigma, size), allCofacets = false) { (diameter, index, high, _, _) =>
-            next.add(diameter, index, high)
-            true
-          }
-          k += 1
-        level = next
+      if d < maxDimension then level = if byUnionFind then edges else canonicalCofacets(level, size)
+      edges = null
 
       nextCleared.seal()
       activeCleared = nextCleared

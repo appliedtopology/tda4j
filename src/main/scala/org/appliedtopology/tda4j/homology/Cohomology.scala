@@ -26,12 +26,21 @@ import scala.util.hashing.MurmurHash3
   * column that needs an addition becomes a `Chain`, and only the cells of the representatives returned are looked up
   * again. The bars and representatives are exactly those of reducing the cells themselves.
   *
+  * Degree 0 is paired by union-find over the edges (the elder rule) when every edge is `c·(v - u)` between two cells of
+  * the stream, or has a boundary that vanishes (a loop): no vertex's coboundary is reduced then, and a bar's cocycle is
+  * the indicator of the component that dies. A complex with any other edge (a Morse complex can have one) reduces
+  * degree 0 like every other degree. The pairs and representatives are the same either way.
+  *
   * @param packSimplices
   *   reduce simplices with `Int` vertices on flat arrays (see above). `false` reduces the cells themselves, with the
   *   same results, more slowly; [[reducesPacked]] tells which a stream gets.
+  * @param useUnionFind
+  *   pair degree 0 by union-find where the complex allows (see above). `false` reduces the vertices' coboundaries, with
+  *   the same results (for benchmarking and for checking the two against each other).
   */
 open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, FiltrationT: Ordering](
-  val packSimplices: Boolean = true
+  val packSimplices: Boolean = true,
+  val useUnionFind: Boolean = true
 ):
 
   private var largest: Option[FiltrationT] = None
@@ -183,6 +192,30 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
       i += 1
     m
 
+  /** The numbers of the two vertices of each edge (`2 * j` and `2 * j + 1` for edge `j`, both -1 for an edge whose
+    * boundary vanishes), or `None` if some edge is not `c·(v - u)` between two cells numbered in `numberOf`.
+    */
+  private def edgeEnds(edges: Vector[CellT], numberOf: mutable.HashMap[CellT, Int]): Option[Array[Int]] =
+    val ends = new Array[Int](2 * edges.length)
+    var j = 0
+    var ok = true
+    while ok && j < edges.length do
+      val boundary = edges(j).boundary[CoefficientT]
+      EdgeBoundary.shape(boundary) match
+        case EdgeBoundary.ZeroBoundary =>
+          ends(2 * j) = -1
+          ends(2 * j + 1) = -1
+        case EdgeBoundary.JoinsTwo =>
+          val a = numberOf.getOrElse(boundary(0)._1, -1)
+          val b = numberOf.getOrElse(boundary(1)._1, -1)
+          if a < 0 || b < 0 then ok = false
+          else
+            ends(2 * j) = a
+            ends(2 * j + 1) = b
+        case _ => ok = false
+      j += 1
+    Option.when(ok)(ends)
+
   // The coboundary reduction (Bauer's Ripser without its Vietoris-Rips shortcuts) over dense cell numbers: each
   // dimension's cells sorted oldest first under the engine's order, a cell's number its position. The reduction then
   // compares and hashes `Int`s instead of cells, with the same pivots, bars and V-columns as reducing over the cells
@@ -221,48 +254,78 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
       // cleared(i): cell i of the current dimension is the death of a bar one dimension down, so it opens no class.
       var cleared = new Array[Boolean](cellsByDim(0).length)
 
+      // Degree 0 by the elder rule: the edges oldest first, an edge that joins two components kills the younger one (the
+      // root with the larger number), paired with that edge. The reduction's pairs are these, since each column pivots
+      // on its oldest edge, and the V-column of a bar is the indicator of the component that dies: each addition folds
+      // in a component of an earlier pair, and a scalar `c` of an edge's boundary `c·(v - u)` cancels in the ratio of
+      // the two leading coefficients, which is -1.
+      def unionFindZero(vertexCount: Int, edgeCount: Int, ends: Array[Int], nextCleared: Array[Boolean]): Unit =
+        val forest = MergeForest(vertexCount)
+        var merges = 0
+        var j = 0
+        while j < edgeCount && merges < vertexCount - 1 do
+          if ends(2 * j) >= 0 then
+            val ra = forest.find(ends(2 * j))
+            val rb = forest.find(ends(2 * j + 1))
+            if ra != rb then
+              val (dead, alive) = if ra > rb then (ra, rb) else (rb, ra)
+              forest.kill(dead, alive, j)
+              nextCleared(j) = true
+              merges += 1
+          j += 1
+        forest.seal()
+        var i = vertexCount - 1
+        while i >= 0 do // youngest first
+          val death = forest.diedAt(i)
+          val component = forest.members(i, death)
+          entries += Entry(0, i, if death == Int.MaxValue then -1 else death, component.toSeq.map(w => (w, fr.one)))
+          i -= 1
+
       for d <- 0 to topDim do
         val cells = cellsByDim(d)
         val up = if d < topDim then cellsByDim(d + 1) else Vector.empty
-
-        // This dimension's coboundary block only: built here, dropped at the end of the iteration. Faces outside the
-        // stream are skipped; they would never be reduced.
-        val coboundary = Array.fill(cells.length)(mutable.ArrayBuffer.empty[(Int, CoefficientT)])
-        var j = 0
-        while j < up.length do
-          up(j).boundary[CoefficientT].foreach { case (face, c) =>
-            numberOf.get(face).foreach(i => coboundary(i) += ((j, c)))
-          }
-          j += 1
-
         val nextCleared = new Array[Boolean](up.length)
-        val basis = mutable.HashMap.empty[Int, Chain[Int, CoefficientT]]
-        val generators = mutable.HashMap.empty[Int, Seq[(Int, CoefficientT)]]
-        var i = cells.length - 1
-        while i >= 0 do // youngest first
-          if !cleared(i) then
-            val z = Chain.from(coboundary(i).toSeq)(using idOrdering)
-            val (reduced, log) =
-              Chain.reduceBy(z, basis, Chain.empty[Int, CoefficientT](using idOrdering))(using idOrdering)
-            // V-column: i minus the V-columns of the pivots the reduction used, with their coefficients.
-            val acc = mutable.HashMap(i -> fr.one)
-            log.rawEntries.foreach { case (pivot, coeff) =>
-              generators
-                .getOrElse(
-                  pivot,
-                  throw new IllegalStateException(s"pivot $pivot has a basis entry but no generators entry")
-                )
-                .foreach { case (k, c) => acc(k) = fr.minus(acc.getOrElse(k, fr.zero), fr.times(coeff, c)) }
+
+        val ends = if d == 0 && useUnionFind && up.nonEmpty then edgeEnds(up, numberOf) else None
+        if ends.isDefined then unionFindZero(cells.length, up.length, ends.get, nextCleared)
+        else
+          // This dimension's coboundary block only: built here, dropped at the end of the iteration. Faces outside the
+          // stream are skipped; they would never be reduced.
+          val coboundary = Array.fill(cells.length)(mutable.ArrayBuffer.empty[(Int, CoefficientT)])
+          var j = 0
+          while j < up.length do
+            up(j).boundary[CoefficientT].foreach { case (face, c) =>
+              numberOf.get(face).foreach(i => coboundary(i) += ((j, c)))
             }
-            val vterms = acc.toSeq.filterNot((_, c) => fr.isEqual(c, fr.zero))
-            if reduced.isZero() then entries += Entry(d, i, -1, vterms)
-            else
-              val pivot = reduced.leadingCell.get
-              basis(pivot) = reduced
-              generators(pivot) = vterms
-              nextCleared(pivot) = true
-              entries += Entry(d, i, pivot, vterms)
-          i -= 1
+            j += 1
+
+          val basis = mutable.HashMap.empty[Int, Chain[Int, CoefficientT]]
+          val generators = mutable.HashMap.empty[Int, Seq[(Int, CoefficientT)]]
+          var i = cells.length - 1
+          while i >= 0 do // youngest first
+            if !cleared(i) then
+              val z = Chain.from(coboundary(i).toSeq)(using idOrdering)
+              val (reduced, log) =
+                Chain.reduceBy(z, basis, Chain.empty[Int, CoefficientT](using idOrdering))(using idOrdering)
+              // V-column: i minus the V-columns of the pivots the reduction used, with their coefficients.
+              val acc = mutable.HashMap(i -> fr.one)
+              log.rawEntries.foreach { case (pivot, coeff) =>
+                generators
+                  .getOrElse(
+                    pivot,
+                    throw new IllegalStateException(s"pivot $pivot has a basis entry but no generators entry")
+                  )
+                  .foreach { case (k, c) => acc(k) = fr.minus(acc.getOrElse(k, fr.zero), fr.times(coeff, c)) }
+              }
+              val vterms = acc.toSeq.filterNot((_, c) => fr.isEqual(c, fr.zero))
+              if reduced.isZero() then entries += Entry(d, i, -1, vterms)
+              else
+                val pivot = reduced.leadingCell.get
+                basis(pivot) = reduced
+                generators(pivot) = vterms
+                nextCleared(pivot) = true
+                entries += Entry(d, i, pivot, vterms)
+            i -= 1
 
         if d < topDim then numberOf = numberCells(up)
         cleared = nextCleared
@@ -577,14 +640,12 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
       cocycle.foreach(cocycles(count) = _)
       count += 1
 
-    // The coboundary block of dimension `d`: column i (a cell of `d` not cleared) is rows(offsets(i) until
-    // offsets(i + 1)), cofacet numbers ascending, each as `2 * number + (1 if its sign is -1)`. Records the youngest
-    // facet of every cell one dimension up.
-    private def coboundaries(d: Int, cleared: Array[Boolean]): (Array[Int], Array[Int]) =
+    // The numbers in dimension `d` of the faces of every cell of dimension `d + 1`, `d + 2` per cell in the order of the
+    // vertex removed (-1 for a face outside the stream). Records the youngest facet of every cell one dimension up.
+    private def facesAbove(d: Int): Array[Int] =
       val (lower, upper) = (levels(d), levels(d + 1))
       val width = d + 2
       val faces = new Array[Int](upper.size * width)
-      val offsets = new Array[Int](lower.size + 1)
       val youngest = new Array[Int](upper.size)
       lower.prepare() // before the lookups below share it
       // The faces of every cell above, found independently of each other (the lookups only read the index) ...
@@ -602,7 +663,15 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
           j += 1
       }
       youngestFacet(d + 1) = youngest
-      // ... and counted per column, then written into their columns. A task takes a range of columns and reads every
+      faces
+
+    // The coboundary block of dimension `d`: column i (a cell of `d` not cleared) is rows(offsets(i) until
+    // offsets(i + 1)), cofacet numbers ascending, each as `2 * number + (1 if its sign is -1)`.
+    private def coboundaries(d: Int, cleared: Array[Boolean], faces: Array[Int]): (Array[Int], Array[Int]) =
+      val (lower, upper) = (levels(d), levels(d + 1))
+      val width = d + 2
+      val offsets = new Array[Int](lower.size + 1)
+      // The faces are counted per column, then written into their columns. A task takes a range of columns and reads every
       // face in order, so the tasks write to disjoint places and each column lists its cofacets in ascending order,
       // however many tasks there are (a pass that reads everything costs far less than scattering writes from one).
       val parts = if faces.length < (1 << 12) then 1 else math.min(Parallel.threads, 8)
@@ -636,56 +705,101 @@ open class CellularCohomologyEngine[CellT: OrderedCell, CoefficientT: Field, Fil
       }
       (offsets, rows)
 
+    // Degree 0 by the elder rule (see `reduction`): the edges oldest first, an edge that joins two components kills the
+    // younger one (the larger root number), paired with that edge. `faces` are the edges' faces, none outside the stream.
+    private def pairVerticesByUnionFind(faces: Array[Int], nextCleared: Array[Boolean]): Unit =
+      val vertexCount = levels(0).size
+      val edgeCount = levels(1).size
+      val forest = MergeForest(vertexCount)
+      var merges = 0
+      var j = 0
+      while j < edgeCount && merges < vertexCount - 1 do
+        val ra = forest.find(faces(2 * j))
+        val rb = forest.find(faces(2 * j + 1))
+        if ra != rb then
+          val (dead, alive) = if ra > rb then (ra, rb) else (rb, ra)
+          forest.kill(dead, alive, j)
+          nextCleared(j) = true
+          merges += 1
+        j += 1
+      forest.seal()
+      var i = vertexCount - 1
+      while i >= 0 do // youngest first
+        val death = forest.diedAt(i)
+        val component = forest.members(i, death)
+        found(
+          0,
+          i,
+          if death == Int.MaxValue then -1 else death,
+          Option.when(component.length > 1)(component.toSeq.map(w => (w, one)))
+        )
+        i -= 1
+
+    private def allInStream(faces: Array[Int]): Boolean =
+      var k = 0
+      while k < faces.length && faces(k) >= 0 do k += 1
+      k == faces.length
+
     locally:
       val idOrdering: Ordering[Int] = Ordering.Int // ascending number = oldest first = a column's leading term
       var cleared = new Array[Boolean](levels(0).size)
       for d <- 0 to math.min(topDim, limit) do
         val size = levels(d).size
+        // The faces of the edges, when degree 0 is paired by union-find: kept to reduce the columns instead if some edge
+        // has a face outside the stream.
+        val edgeFaces = if d == 0 && useUnionFind && d < topDim then facesAbove(0) else null
+        val byUnionFind = edgeFaces != null && allInStream(edgeFaces)
         val (offsets, rows) =
-          if d < topDim then coboundaries(d, cleared) else (new Array[Int](size + 1), Array.empty[Int])
+          if byUnionFind then (Array.emptyIntArray, Array.emptyIntArray)
+          else if d < topDim then coboundaries(d, cleared, if edgeFaces != null then edgeFaces else facesAbove(d))
+          else (new Array[Int](size + 1), Array.empty[Int])
         val upSize = if d < topDim then levels(d + 1).size else 0
-        // owner(j): the column whose pivot is row j, or -1. Columns that needed an addition also keep their reduced
-        // column and V-column, under their pivot; the others are their own coboundary and their own cell.
-        val owner = Array.fill(upSize)(-1)
-        val basis = mutable.HashMap.empty[Int, Chain[Int, CoefficientT]]
-        val generators = mutable.HashMap.empty[Int, Seq[(Int, CoefficientT)]]
-        def column(i: Int): Seq[(Int, CoefficientT)] =
-          (offsets(i) until offsets(i + 1)).map(k => (rows(k) >>> 1, if (rows(k) & 1) == 0 then one else minusOne))
-        // A column no addition touched, as `reduction` stores it.
-        def untouched(pivot: Int): Option[Chain[Int, CoefficientT]] =
-          Option.when(owner(pivot) >= 0)(
-            Chain.from(column(owner(pivot)).map((j, c) => (j, fr.plus(fr.zero, c))))(using idOrdering)
-          )
         val nextCleared = new Array[Boolean](upSize)
-        var i = size - 1
-        while i >= 0 do // youngest first
-          if !cleared(i) then
-            if offsets(i) == offsets(i + 1) then found(d, i, -1)
-            else if owner(rows(offsets(i)) >>> 1) < 0 then
-              val pivot = rows(offsets(i)) >>> 1
-              owner(pivot) = i
-              nextCleared(pivot) = true
-              found(d, i, pivot)
-            else
-              val z = Chain.from(column(i))(using idOrdering)
-              val (reduced, log) =
-                Chain.reduceBy(z, basis, Chain.empty[Int, CoefficientT](using idOrdering), untouched)(using idOrdering)
-              val acc = mutable.HashMap(i -> fr.one)
-              log.rawEntries.foreach { case (pivot, coeff) =>
-                generators
-                  .getOrElse(pivot, Seq((owner(pivot), fr.one)))
-                  .foreach { case (k, c) => acc(k) = fr.minus(acc.getOrElse(k, fr.zero), fr.times(coeff, c)) }
-              }
-              val vterms = acc.toSeq.filterNot((_, c) => fr.isEqual(c, fr.zero))
-              if reduced.isZero() then found(d, i, -1, Some(vterms))
-              else
-                val pivot = reduced.leadingCell.get
-                basis(pivot) = reduced
-                generators(pivot) = vterms
+        if byUnionFind then pairVerticesByUnionFind(edgeFaces, nextCleared)
+        else
+          // owner(j): the column whose pivot is row j, or -1. Columns that needed an addition also keep their reduced
+          // column and V-column, under their pivot; the others are their own coboundary and their own cell.
+          val owner = Array.fill(upSize)(-1)
+          val basis = mutable.HashMap.empty[Int, Chain[Int, CoefficientT]]
+          val generators = mutable.HashMap.empty[Int, Seq[(Int, CoefficientT)]]
+          def column(i: Int): Seq[(Int, CoefficientT)] =
+            (offsets(i) until offsets(i + 1)).map(k => (rows(k) >>> 1, if (rows(k) & 1) == 0 then one else minusOne))
+          // A column no addition touched, as `reduction` stores it.
+          def untouched(pivot: Int): Option[Chain[Int, CoefficientT]] =
+            Option.when(owner(pivot) >= 0)(
+              Chain.from(column(owner(pivot)).map((j, c) => (j, fr.plus(fr.zero, c))))(using idOrdering)
+            )
+          var i = size - 1
+          while i >= 0 do // youngest first
+            if !cleared(i) then
+              if offsets(i) == offsets(i + 1) then found(d, i, -1)
+              else if owner(rows(offsets(i)) >>> 1) < 0 then
+                val pivot = rows(offsets(i)) >>> 1
                 owner(pivot) = i
                 nextCleared(pivot) = true
-                found(d, i, pivot, Some(vterms))
-          i -= 1
+                found(d, i, pivot)
+              else
+                val z = Chain.from(column(i))(using idOrdering)
+                val (reduced, log) =
+                  Chain.reduceBy(z, basis, Chain.empty[Int, CoefficientT](using idOrdering), untouched)(using
+                    idOrdering
+                  )
+                val acc = mutable.HashMap(i -> fr.one)
+                log.rawEntries.foreach { case (pivot, coeff) =>
+                  generators
+                    .getOrElse(pivot, Seq((owner(pivot), fr.one)))
+                    .foreach { case (k, c) => acc(k) = fr.minus(acc.getOrElse(k, fr.zero), fr.times(coeff, c)) }
+                }
+                val vterms = acc.toSeq.filterNot((_, c) => fr.isEqual(c, fr.zero))
+                if reduced.isZero() then found(d, i, -1, Some(vterms))
+                else
+                  val pivot = reduced.leadingCell.get
+                  basis(pivot) = reduced
+                  generators(pivot) = vterms
+                  owner(pivot) = i
+                  nextCleared(pivot) = true
+                  found(d, i, pivot, Some(vterms))
+            i -= 1
         cleared = nextCleared
 
     private val barDims = dims.result()

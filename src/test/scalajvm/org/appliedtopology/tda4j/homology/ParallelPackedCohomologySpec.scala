@@ -116,8 +116,83 @@ class ParallelPackedCohomologySpec extends Specification with ScalaCheck:
           }
           wrong.take(3) must beEmpty
         }
-        .and(r.degrees.map(_.logs.size).sum must beGreaterThan(0))
     }
+
+  // Degree 0 is not reduced (union-find over the edges in order), so it is checked against a plain column reduction of
+  // the vertices' coboundaries in the same order of edges: youngest vertex first (the smaller id), a column's pivot its
+  // oldest edge. A pair is (vertex, rank of the death edge or -1), and a cocycle the V-column, by vertex.
+  private def degreeZeroByReduction(sp: Space, p: Int): Seq[(Int, Int, Seq[(Int, Int)])] =
+    def inverse(a: Int): Int = (1 until p).find(b => a * b % p == 1).get
+    val incident = Array.fill(sp.n)(Seq.newBuilder[(Int, Int)])
+    for r <- sp.edgeA.indices do
+      // The faces of the edge {a < b}: removing a leaves b with sign +, removing b leaves a with sign -.
+      incident(sp.edgeB(r)) += ((r, 1))
+      incident(sp.edgeA(r)) += ((r, p - 1))
+    val owner = scala.collection.mutable.Map.empty[Int, (Map[Int, Int], Map[Int, Int])]
+    def plus(a: Map[Int, Int], b: Map[Int, Int], f: Int): Map[Int, Int] =
+      (a.keySet ++ b.keySet).iterator
+        .map(k => k -> (a.getOrElse(k, 0) + f * b.getOrElse(k, 0)) % p)
+        .filter(_._2 != 0)
+        .toMap
+    (0 until sp.n).map { v =>
+      var column = incident(v).result().toMap
+      var cocycle = Map(v -> 1)
+      var done = false
+      var pair = -1
+      while !done do
+        if column.isEmpty then done = true
+        else
+          val pivot = column.keys.min
+          owner.get(pivot) match
+            case None =>
+              owner(pivot) = (column, cocycle)
+              pair = pivot
+              done = true
+            case Some((c, z)) =>
+              val f = (p - column(pivot) * inverse(c(pivot)) % p) % p
+              column = plus(column, c, f)
+              cocycle = plus(cocycle, z, f)
+      (v, pair, cocycle.toSeq.sorted)
+    }
+
+  private def degreeZeroByEngine(sp: Space, p: Int): Seq[(Int, Int, Seq[(Int, Int)])] =
+    val zero = reduce(sp, 3, 4).degrees(0)
+    zero.pairs.toSeq
+      .map { (column, row) =>
+        val cocycle = ParallelPackedCohomology.cocycle(zero, p, column).toSeq.map((k, c) => (sp.index(k).toInt, c))
+        (sp.index(column).toInt, if row < 0 then -1 else sp.block(row) - 1, cocycle.sorted)
+      }
+      .sortBy(_._1)
+
+  private def degreeZeroAgrees(
+    metricSpace: FiniteMetricSpace[Int],
+    threshold: Double = Double.PositiveInfinity,
+    p: Int = 17
+  ): TestResult =
+    val sp = space(metricSpace, 1, threshold, p)
+    firstDifference(degreeZeroByEngine(sp, p), degreeZeroByReduction(sp, p)) must beNone
+
+  // With no ties the order of edges is the reference engine's too: its degree 0 is the same, bar for bar.
+  private def degreeZeroMatchesReference(metricSpace: FiniteMetricSpace[Int], threshold: Double, p: Int): TestResult =
+    val field = FiniteField(p)
+    import field.given
+    val sp = space(metricSpace, 1, threshold, p)
+    val zero = reduce(sp, 3, 4).degrees(0)
+    val mine = zero.bars.indices
+      .map { i =>
+        val vertices = ParallelPackedCohomology.cocycle(zero, p, zero.barColumns(i)).keys.map(sp.index(_).toInt).toSeq
+        (zero.bars(i)._2, zero.bars(i)._3, vertices.sorted)
+      }
+      .sortBy(b => (b._2, b._3.toString))
+    val reference = RipserCohomologyEngine[field.Fp](metricSpace, 0, true, Some(threshold))
+      .persistentCohomology()
+      .filter(_.dim == 0)
+      .map { b =>
+        val vertices = b.representative.rawEntries.map(_._1.head).sorted
+        (BlockParallelReduction.endpoint(b.lower), BlockParallelReduction.endpoint(b.upper), vertices)
+      }
+      .sortBy(b => (b._2, b._3.toString))
+    firstDifference(mine, reference) must beNone
 
   "ParallelPackedCohomology" should {
     "pair like its sequential run and give the packed engine's bars on points in general position" in
@@ -134,6 +209,29 @@ class ParallelPackedCohomologySpec extends Specification with ScalaCheck:
     "pair like its sequential run on random integer distances" in
       forAll(Gen.chooseNum(5, 10), Gen.long) { (n, seed) =>
         agrees(integerMetric(n, seed))
+      }.set(minTestsOk = TestPlatform.propertyCases(30))
+
+    "give degree 0 by union-find the column reduction's pairs and cocycles on points in general position" in
+      forAll(matrixGen(Gen.double, Gen.chooseNum(2, 4), Gen.chooseNum(6, 14))) { pts =>
+        val metricSpace = EuclideanMetricSpace(pts)
+        val tight = 0.4 * metricSpace.minimumEnclosingRadius
+        degreeZeroAgrees(metricSpace)
+          .and(degreeZeroAgrees(metricSpace, tight))
+          .and(degreeZeroMatchesReference(metricSpace, metricSpace.minimumEnclosingRadius, 17))
+          .and(degreeZeroMatchesReference(metricSpace, tight, 3))
+      }.set(minTestsOk = TestPlatform.propertyCases(30))
+
+    "give degree 0 by union-find the column reduction's pairs and cocycles on tie-heavy metrics, over F_17 and F_2" in
+      TestResult.foreach(Seq(17, 2)) { p =>
+        degreeZeroAgrees(octagon, p = p)
+          .and(degreeZeroAgrees(grid, p = p))
+          .and(degreeZeroAgrees(grid, threshold = 1.5, p = p))
+          .and(degreeZeroAgrees(integerMetric(9, 7L), p = p))
+      }
+
+    "give degree 0 by union-find the column reduction's pairs and cocycles on random integer distances" in
+      forAll(Gen.chooseNum(5, 12), Gen.long) { (n, seed) =>
+        degreeZeroAgrees(integerMetric(n, seed))
       }.set(minTestsOk = TestPlatform.propertyCases(30))
 
     "pair and log the same with two-word keys on points in general position" in
@@ -172,6 +270,13 @@ class ParallelPackedCohomologySpec extends Specification with ScalaCheck:
             )
           )
       }
+
+    // The cocycle check above reads the reduction logs of degrees 1 and 2 (degree 0 has none): some must exist.
+    "log reductions in degrees 1 and 2 on 40 points in the plane" in {
+      val rng = scala.util.Random(3)
+      val cloud = EuclideanMetricSpace(Array.fill(40)(Array(rng.nextDouble(), rng.nextDouble())))
+      reduce(space(cloud, 2, 0.5, 17), 3, 4).degrees.map(_.logs.size).sum must beGreaterThan(0)
+    }
 
     // Otherwise the examples above would pass with every column in phase 2b, or none deferred. In general position a
     // pair inside a block has length zero, so phase 1 pairs only those; most are apparent pairs.

@@ -73,6 +73,22 @@ class CohomologyNumberingSpec extends Specification:
         same[RealProjectiveGenerator, f3.Fp, Int](SimplicialSetStream(space))
       (rp(2) must beTrue).and(rp(4) must beTrue)
     }
+    // Morse boundaries are `c·(v - u)` with `c` another unit than 1 where a gradient path passes a pair with a negative
+    // incidence, or sums of more than two vertices; the first is paired by union-find, the second reduced by columns.
+    "match it on discrete Morse complexes, whose edges are not all the difference of two vertices" in {
+      val grid = for i <- 0 until 4; j <- 0 until 3 yield Array(i.toDouble, j.toDouble)
+      val rnd = new scala.util.Random(5)
+      val cloud = Array.fill(14)(Array(rnd.nextDouble(), rnd.nextDouble()))
+      val results = for
+        points <- Seq(grid.toArray, cloud)
+        strategy <- Seq(DiscreteMorse.Strategy.Reduction, DiscreteMorse.Strategy.Coreduction)
+        morse = DiscreteMorse(
+          VietorisRips(EuclideanMetricSpace(points), maxDimension = 2, maxFiltrationValue = 100.0),
+          strategy
+        )
+      yield same[MorseCell[Simplex[Int]], ff.Fp, Double](morse.stream)
+      results must contain(beTrue).forall
+    }
     "match it over the reals" in {
       given (Double is Field) = Field.DoubleApproximated(1e-9)
       val triangles = for i <- 0 until 7; (a, b) <- Seq((1, 3), (3, 2)) yield Simplex(i, (i + a) % 7, (i + b) % 7)
