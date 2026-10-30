@@ -47,11 +47,11 @@ object Coefficients:
     /** `numerator / denominator` in lowest terms. */
     def apply(numerator: BigInt, denominator: BigInt): Rational =
       require(denominator.signum != 0, "tda4j: a rational number with denominator 0")
-      val g = numerator.gcd(denominator)
-      val sign = denominator.signum
-      if g == 1 && sign > 0 then new Rational(numerator, denominator)
+      // The gcd carries the denominator's sign, so dividing by it makes the denominator positive.
+      val g = numerator.gcd(denominator) * denominator.signum
+      if g == 1 then new Rational(numerator, denominator)
       else if numerator.signum == 0 then zero
-      else new Rational(numerator / g * sign, denominator / g * sign)
+      else new Rational(numerator / g, denominator / g)
 
     def apply(integer: BigInt): Rational = new Rational(integer, 1)
     def apply(numerator: Long, denominator: Long): Rational = apply(BigInt(numerator), BigInt(denominator))

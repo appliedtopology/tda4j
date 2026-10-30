@@ -31,6 +31,17 @@ class RationalSpec extends Specification with PlatformScalaCheck:
         (Rational(6, 3).toString must beEqualTo("2")) and (Rational(-1, 2).toString must beEqualTo("-1/2"))
     }
 
+    "reduce a fraction of any signs to a positive denominator, lowest terms and the same value" in {
+      val parts = Gen.choose(-(1L << 40), 1L << 40)
+      AsResult(
+        org.scalacheck.Prop.forAll(parts, parts.suchThat(_ != 0)) { (n, d) =>
+          val reduced = Rational(n, d)
+          (reduced.denominator.signum > 0) && (reduced.numerator.gcd(reduced.denominator) == 1) &&
+          (BigInt(n) * reduced.denominator == reduced.numerator * BigInt(d))
+        }
+      )
+    }
+
     "add exactly what a Double cannot: 1/3 + 1/6 is 1/2, and 10^30 + 1 is not 10^30" in {
       import field.*
       val big = Rational(BigInt(10).pow(30))
