@@ -10,13 +10,13 @@
 </div>
 <div class="main-signature mono-small-block">
  <div class="signature">
-  <span class="modifiers"><span t="k">open </span></span><span class="kind"><span t="k">class </span></span><a href="PackedCubicalCohomologyEngine.html" t="n" class="documentableName ">PackedCubicalCohomologyEngine</a>[<span t="k"></span><span data-unresolved-link="" t="t">C</span>](<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">grid</span>: <a href="CubicalGridStream.html" t="t">CubicalGridStream</a>, <span t="k"></span><span data-unresolved-link="" t="n">topDim</span>: <span data-unresolved-link="" t="t">Int</span>, <span t="k"></span><span data-unresolved-link="" t="n">ranks</span>: <a href="GridRanks.html" t="t">GridRanks</a>, <span t="k"></span><span data-unresolved-link="" t="n">useApparentPairs</span>: <span data-unresolved-link="" t="t">Boolean</span> = ...)(<span t="k">using </span><span t="k"></span><span data-unresolved-link="" t="n">evidence$1</span>: <a href="Field.html" t="t">Field</a> { <span t="k">type </span>Self<span t="k"> = </span><span data-unresolved-link="" t="t">C</span>; })
+  <span class="modifiers"><span t="k">open </span></span><span class="kind"><span t="k">class </span></span><a href="PackedCubicalCohomologyEngine.html" t="n" class="documentableName ">PackedCubicalCohomologyEngine</a>[<span t="k"></span><span data-unresolved-link="" t="t">C</span>](<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">grid</span>: <a href="CubicalGridStream.html" t="t">CubicalGridStream</a>, <span t="k"></span><span data-unresolved-link="" t="n">topDim</span>: <span data-unresolved-link="" t="t">Int</span>, <span t="k"></span><span data-unresolved-link="" t="n">ranks</span>: <a href="GridRanks.html" t="t">GridRanks</a>, <span t="k"></span><span data-unresolved-link="" t="n">useApparentPairs</span>: <span data-unresolved-link="" t="t">Boolean</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">useUnionFind</span>: <span data-unresolved-link="" t="t">Boolean</span> = ...)(<span t="k">using </span><span t="k"></span><span data-unresolved-link="" t="n">evidence$1</span>: <a href="Field.html" t="t">Field</a> { <span t="k">type </span>Self<span t="k"> = </span><span data-unresolved-link="" t="t">C</span>; })
  </div>
 </div>
 <div class="cover">
  <div class="doc">
   <p>Persistent cohomology of a cubical grid by Bauer's Ripser algorithm on the grid itself: what <a href="CellularCohomologyEngine.html">CellularCohomologyEngine</a> computes on a <a href="CubicalGridStream.html">CubicalGridStream</a>, or on its cells up to dimension <code>topDim</code> as a <a href="LimitedCubicalGridStream.html">LimitedCubicalGridStream</a> shows them -- the same bars, pairs, cocycles and cycles, term for term and in the same list order -- without a <code>Cube</code>, a hash of one or a <code>Chain</code> inside the reduction.</p>
-  <p>A cell is its index in the doubled grid (KMM encoding, see <a href="../tda4j.html#Cube-0">Cube</a>). Within a dimension cells are ordered by the rank of their value (<a href="GridRanks.html">GridRanks</a>) and then by index: the generic engine's order there, value ascending, then the encoding ascending. Boundaries and coboundaries come from index arithmetic. Clearing as in the generic engine; apparent pairs (a cell whose oldest same-value cofacet has it as its youngest same-value facet) are paired without a reduction and their columns rebuilt when another column needs them, which changes no output (<code>useApparentPairs = false</code> turns them off). Cycles come from the involution on the same pairs, specialised to packed cells as <a href="PackedRipserCohomologyEngine.html">PackedRipserCohomologyEngine</a> does it. A cell every pixel around which is masked (NaN) is not in the complex: it has rank <a href="GridRanks.html#masked-0">GridRanks.masked</a>, and is never listed nor met as a cofacet.</p>
+  <p>A cell is its index in the doubled grid (KMM encoding, see <a href="../tda4j.html#Cube-0">Cube</a>). Within a dimension cells are ordered by the rank of their value (<a href="GridRanks.html">GridRanks</a>) and then by index: the generic engine's order there, value ascending, then the encoding ascending. Boundaries and coboundaries come from index arithmetic. Clearing as in the generic engine; apparent pairs (a cell whose oldest same-value cofacet has it as its youngest same-value facet) are paired without a reduction and their columns rebuilt when another column needs them, which changes no output (<code>useApparentPairs = false</code> turns them off). Degree 0 is paired by union-find over the edges, the elder rule, with the indicator of the dying component as the cocycle (<code>useUnionFind = false</code> reduces the vertices' coboundaries instead, with the same output). Cycles come from the involution on the same pairs, specialised to packed cells as <a href="PackedRipserCohomologyEngine.html">PackedRipserCohomologyEngine</a> does it. A cell every pixel around which is masked (NaN) is not in the complex: it has rank <a href="GridRanks.html#masked-0">GridRanks.masked</a>, and is never listed nor met as a cofacet.</p>
  </div>
  <section id="attributes">
   <h2 class="h500">Attributes</h2>
@@ -37,7 +37,7 @@
     Source
    </dt>
    <dd class="body-medium">
-    <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/PackedCubicalCohomology.scala#L19" target="_blank">PackedCubicalCohomology.scala</a>
+    <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/PackedCubicalCohomology.scala#L21" target="_blank">PackedCubicalCohomology.scala</a>
    </dd>
    <dt class="body-small">
     Graph
@@ -127,7 +127,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/PackedCubicalCohomology.scala#L671" target="_blank">PackedCubicalCohomology.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/PackedCubicalCohomology.scala#L754" target="_blank">PackedCubicalCohomology.scala</a>
               </dd>
              </dl>
             </div>
@@ -162,7 +162,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/PackedCubicalCohomology.scala#L684" target="_blank">PackedCubicalCohomology.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/PackedCubicalCohomology.scala#L767" target="_blank">PackedCubicalCohomology.scala</a>
               </dd>
              </dl>
             </div>

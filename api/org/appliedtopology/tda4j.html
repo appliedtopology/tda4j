@@ -2396,7 +2396,7 @@
           <button class="icon-button ar show-content"></button>
           <div class="header monospace mono-medium">
            <div class="signature">
-            <span class="modifiers"><span t="k">open </span></span><span class="kind"><span t="k">class </span></span><a href="tda4j/CellularCohomologyEngine.html" t="n" class="documentableName ">CellularCohomologyEngine</a>[<span t="k"></span><span data-unresolved-link="" t="t">CellT</span>, <span t="k"></span><span data-unresolved-link="" t="t">CoefficientT</span>, <span t="k"></span><span data-unresolved-link="" t="t">FiltrationT</span>](<span t="k"></span><span t="k">val </span><span data-unresolved-link="" t="n">packSimplices</span>: <span data-unresolved-link="" t="t">Boolean</span> = ...)(<span t="k">using </span><span t="k"></span><span data-unresolved-link="" t="n">evidence$1</span>: <a href="tda4j/OrderedCell.html" t="t">OrderedCell</a> { <span t="k">type </span>Self<span t="k"> = </span><span data-unresolved-link="" t="t">CellT</span>; }, <span t="k"></span><span data-unresolved-link="" t="n">evidence$2</span>: <a href="tda4j/Field.html" t="t">Field</a> { <span t="k">type </span>Self<span t="k"> = </span><span data-unresolved-link="" t="t">CoefficientT</span>; }, <span t="k"></span><span data-unresolved-link="" t="n">evidence$3</span>: <span data-unresolved-link="" t="t">Ordering</span>[<span data-unresolved-link="" t="t">FiltrationT</span>])
+            <span class="modifiers"><span t="k">open </span></span><span class="kind"><span t="k">class </span></span><a href="tda4j/CellularCohomologyEngine.html" t="n" class="documentableName ">CellularCohomologyEngine</a>[<span t="k"></span><span data-unresolved-link="" t="t">CellT</span>, <span t="k"></span><span data-unresolved-link="" t="t">CoefficientT</span>, <span t="k"></span><span data-unresolved-link="" t="t">FiltrationT</span>](<span t="k"></span><span t="k">val </span><span data-unresolved-link="" t="n">packSimplices</span>: <span data-unresolved-link="" t="t">Boolean</span> = ..., <span t="k">val </span><span data-unresolved-link="" t="n">useUnionFind</span>: <span data-unresolved-link="" t="t">Boolean</span> = ...)(<span t="k">using </span><span t="k"></span><span data-unresolved-link="" t="n">evidence$1</span>: <a href="tda4j/OrderedCell.html" t="t">OrderedCell</a> { <span t="k">type </span>Self<span t="k"> = </span><span data-unresolved-link="" t="t">CellT</span>; }, <span t="k"></span><span data-unresolved-link="" t="n">evidence$2</span>: <a href="tda4j/Field.html" t="t">Field</a> { <span t="k">type </span>Self<span t="k"> = </span><span data-unresolved-link="" t="t">CoefficientT</span>; }, <span t="k"></span><span data-unresolved-link="" t="n">evidence$3</span>: <span data-unresolved-link="" t="t">Ordering</span>[<span data-unresolved-link="" t="t">FiltrationT</span>])
            </div>
           </div>
          </div>
@@ -2414,6 +2414,7 @@
               <p>The coboundary is built by inverting the boundaries of the stream's cells, so the stream is read in full first. There is no <code>maxDim</code>: the stream decides the top degree. For degrees <code>0 .. k</code>, pass a stream with cells up to dimension <code>k + 1</code> (<code>LimitedCofaceSimplexStream(stream, k + 1)</code> for a coface stream) and ignore the degree-<code>(k + 1)</code> bars.</p>
               <p>Representatives: every bar carries its V-column. For an essential bar it is a cocycle of the whole complex; for a finite bar its coboundary is the bar's reduced column, which is born at or after the bar's death, so it is a cocycle on the subcomplex before the death. <code>coboundaryOfChain</code> checks either.</p>
               <p>Simplices with <code>Int</code> vertices (every complex the library builds: alpha, Čech, witness, Dowker, explicit streams) are reduced on flat arrays: each dimension's vertex tuples, a table from a tuple to its cell (the vertices side by side in one <code>Long</code> when they fit, else a hash of them), and each coboundary block as compressed columns of signs. Only a column that needs an addition becomes a <code>Chain</code>, and only the cells of the representatives returned are looked up again. The bars and representatives are exactly those of reducing the cells themselves.</p>
+              <p>Degree 0 is paired by union-find over the edges (the elder rule) when every edge is <code>c·(v - u)</code> between two cells of the stream, or has a boundary that vanishes (a loop): no vertex's coboundary is reduced then, and a bar's cocycle is the indicator of the component that dies. A complex with any other edge (a Morse complex can have one) reduces degree 0 like every other degree. The pairs and representatives are the same either way.</p>
              </div>
              <h2 class="h200">Value parameters</h2>
              <dl class="attributes attributes-small">
@@ -2422,6 +2423,12 @@
               </dt>
               <dd class="body-medium">
                <p>reduce simplices with <code>Int</code> vertices on flat arrays (see above). <code>false</code> reduces the cells themselves, with the same results, more slowly; <a href="tda4j/CellularCohomologyEngine.html#reducesPacked-fffffcd0">reducesPacked</a> tells which a stream gets.</p>
+              </dd>
+              <dt class="body-small">
+               useUnionFind
+              </dt>
+              <dd class="body-medium">
+               <p>pair degree 0 by union-find where the complex allows (see above). <code>false</code> reduces the vertices' coboundaries, with the same results (for benchmarking and for checking the two against each other).</p>
               </dd>
              </dl>
              <h2 class="h200">Attributes</h2>
@@ -2436,7 +2443,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Cohomology.scala#L33" target="_blank">Cohomology.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Cohomology.scala#L41" target="_blank">Cohomology.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -2717,7 +2724,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Homology.scala#L1230" target="_blank">Homology.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Homology.scala#L1209" target="_blank">Homology.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -4296,7 +4303,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Homology.scala#L1227" target="_blank">Homology.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Homology.scala#L1206" target="_blank">Homology.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -9719,7 +9726,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/PackedCubicalCohomology.scala#L822" target="_blank">PackedCubicalCohomology.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/PackedCubicalCohomology.scala#L905" target="_blank">PackedCubicalCohomology.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -13556,7 +13563,7 @@
           <button class="icon-button ar show-content"></button>
           <div class="header monospace mono-medium">
            <div class="signature">
-            <span class="modifiers"><span t="k">open </span></span><span class="kind"><span t="k">class </span></span><a href="tda4j/PackedCubicalCohomologyEngine.html" t="n" class="documentableName ">PackedCubicalCohomologyEngine</a>[<span t="k"></span><span data-unresolved-link="" t="t">C</span>](<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">grid</span>: <a href="tda4j/CubicalGridStream.html" t="t">CubicalGridStream</a>, <span t="k"></span><span data-unresolved-link="" t="n">topDim</span>: <span data-unresolved-link="" t="t">Int</span>, <span t="k"></span><span data-unresolved-link="" t="n">ranks</span>: <a href="tda4j/GridRanks.html" t="t">GridRanks</a>, <span t="k"></span><span data-unresolved-link="" t="n">useApparentPairs</span>: <span data-unresolved-link="" t="t">Boolean</span> = ...)(<span t="k">using </span><span t="k"></span><span data-unresolved-link="" t="n">evidence$1</span>: <a href="tda4j/Field.html" t="t">Field</a> { <span t="k">type </span>Self<span t="k"> = </span><span data-unresolved-link="" t="t">C</span>; })
+            <span class="modifiers"><span t="k">open </span></span><span class="kind"><span t="k">class </span></span><a href="tda4j/PackedCubicalCohomologyEngine.html" t="n" class="documentableName ">PackedCubicalCohomologyEngine</a>[<span t="k"></span><span data-unresolved-link="" t="t">C</span>](<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">grid</span>: <a href="tda4j/CubicalGridStream.html" t="t">CubicalGridStream</a>, <span t="k"></span><span data-unresolved-link="" t="n">topDim</span>: <span data-unresolved-link="" t="t">Int</span>, <span t="k"></span><span data-unresolved-link="" t="n">ranks</span>: <a href="tda4j/GridRanks.html" t="t">GridRanks</a>, <span t="k"></span><span data-unresolved-link="" t="n">useApparentPairs</span>: <span data-unresolved-link="" t="t">Boolean</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">useUnionFind</span>: <span data-unresolved-link="" t="t">Boolean</span> = ...)(<span t="k">using </span><span t="k"></span><span data-unresolved-link="" t="n">evidence$1</span>: <a href="tda4j/Field.html" t="t">Field</a> { <span t="k">type </span>Self<span t="k"> = </span><span data-unresolved-link="" t="t">C</span>; })
            </div>
           </div>
          </div>
@@ -13571,7 +13578,7 @@
             <div class="cover">
              <div class="doc">
               <p>Persistent cohomology of a cubical grid by Bauer's Ripser algorithm on the grid itself: what <a href="tda4j/CellularCohomologyEngine.html">CellularCohomologyEngine</a> computes on a <a href="tda4j/CubicalGridStream.html">CubicalGridStream</a>, or on its cells up to dimension <code>topDim</code> as a <a href="tda4j/LimitedCubicalGridStream.html">LimitedCubicalGridStream</a> shows them -- the same bars, pairs, cocycles and cycles, term for term and in the same list order -- without a <code>Cube</code>, a hash of one or a <code>Chain</code> inside the reduction.</p>
-              <p>A cell is its index in the doubled grid (KMM encoding, see <a href="tda4j.html#Cube-0">Cube</a>). Within a dimension cells are ordered by the rank of their value (<a href="tda4j/GridRanks.html">GridRanks</a>) and then by index: the generic engine's order there, value ascending, then the encoding ascending. Boundaries and coboundaries come from index arithmetic. Clearing as in the generic engine; apparent pairs (a cell whose oldest same-value cofacet has it as its youngest same-value facet) are paired without a reduction and their columns rebuilt when another column needs them, which changes no output (<code>useApparentPairs = false</code> turns them off). Cycles come from the involution on the same pairs, specialised to packed cells as <a href="tda4j/PackedRipserCohomologyEngine.html">PackedRipserCohomologyEngine</a> does it. A cell every pixel around which is masked (NaN) is not in the complex: it has rank <a href="tda4j/GridRanks.html#masked-0">GridRanks.masked</a>, and is never listed nor met as a cofacet.</p>
+              <p>A cell is its index in the doubled grid (KMM encoding, see <a href="tda4j.html#Cube-0">Cube</a>). Within a dimension cells are ordered by the rank of their value (<a href="tda4j/GridRanks.html">GridRanks</a>) and then by index: the generic engine's order there, value ascending, then the encoding ascending. Boundaries and coboundaries come from index arithmetic. Clearing as in the generic engine; apparent pairs (a cell whose oldest same-value cofacet has it as its youngest same-value facet) are paired without a reduction and their columns rebuilt when another column needs them, which changes no output (<code>useApparentPairs = false</code> turns them off). Degree 0 is paired by union-find over the edges, the elder rule, with the indicator of the dying component as the cocycle (<code>useUnionFind = false</code> reduces the vertices' coboundaries instead, with the same output). Cycles come from the involution on the same pairs, specialised to packed cells as <a href="tda4j/PackedRipserCohomologyEngine.html">PackedRipserCohomologyEngine</a> does it. A cell every pixel around which is masked (NaN) is not in the complex: it has rank <a href="tda4j/GridRanks.html#masked-0">GridRanks.masked</a>, and is never listed nor met as a cofacet.</p>
              </div>
              <h2 class="h200">Attributes</h2>
              <dl class="attributes attributes-small">
@@ -13591,7 +13598,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/PackedCubicalCohomology.scala#L19" target="_blank">PackedCubicalCohomology.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/PackedCubicalCohomology.scala#L21" target="_blank">PackedCubicalCohomology.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -13649,7 +13656,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/PackedCubicalCohomology.scala#L813" target="_blank">PackedCubicalCohomology.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/PackedCubicalCohomology.scala#L896" target="_blank">PackedCubicalCohomology.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -13689,7 +13696,7 @@
           <button class="icon-button ar show-content"></button>
           <div class="header monospace mono-medium">
            <div class="signature">
-            <span class="modifiers"><span t="k">open </span></span><span class="kind"><span t="k">class </span></span><a href="tda4j/PackedRipserCohomologyEngine.html" t="n" class="documentableName ">PackedRipserCohomologyEngine</a>[<span t="k"></span><span data-unresolved-link="" t="t">CoefficientT</span>](<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">metricSpace</span>: <a href="tda4j/FiniteMetricSpace.html" t="t">FiniteMetricSpace</a>[<span data-unresolved-link="" t="t">Int</span>], <span t="k"></span><span data-unresolved-link="" t="n">maxDimension</span>: <span data-unresolved-link="" t="t">Int</span>, <span t="k"></span><span data-unresolved-link="" t="n">useApparentPairs</span>: <span data-unresolved-link="" t="t">Boolean</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">maxFiltrationValue</span>: <span data-unresolved-link="" t="t">Option</span>[<span data-unresolved-link="" t="t">Double</span>] = ..., <span t="k"></span><span data-unresolved-link="" t="n">neighbourLists</span>: <span data-unresolved-link="" t="t">Option</span>[<span data-unresolved-link="" t="t">Boolean</span>] = ..., <span t="k"></span><span data-unresolved-link="" t="n">wideIndices</span>: <span data-unresolved-link="" t="t">Option</span>[<span data-unresolved-link="" t="t">Boolean</span>] = ..., <span t="k"></span><span data-unresolved-link="" t="n">useEmergentPairs</span>: <span data-unresolved-link="" t="t">Boolean</span> = ...)(<span t="k">using </span><span t="k"></span><span data-unresolved-link="" t="n">evidence$1</span>: <a href="tda4j/Field.html" t="t">Field</a> { <span t="k">type </span>Self<span t="k"> = </span><span data-unresolved-link="" t="t">CoefficientT</span>; })
+            <span class="modifiers"><span t="k">open </span></span><span class="kind"><span t="k">class </span></span><a href="tda4j/PackedRipserCohomologyEngine.html" t="n" class="documentableName ">PackedRipserCohomologyEngine</a>[<span t="k"></span><span data-unresolved-link="" t="t">CoefficientT</span>](<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">metricSpace</span>: <a href="tda4j/FiniteMetricSpace.html" t="t">FiniteMetricSpace</a>[<span data-unresolved-link="" t="t">Int</span>], <span t="k"></span><span data-unresolved-link="" t="n">maxDimension</span>: <span data-unresolved-link="" t="t">Int</span>, <span t="k"></span><span data-unresolved-link="" t="n">useApparentPairs</span>: <span data-unresolved-link="" t="t">Boolean</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">maxFiltrationValue</span>: <span data-unresolved-link="" t="t">Option</span>[<span data-unresolved-link="" t="t">Double</span>] = ..., <span t="k"></span><span data-unresolved-link="" t="n">neighbourLists</span>: <span data-unresolved-link="" t="t">Option</span>[<span data-unresolved-link="" t="t">Boolean</span>] = ..., <span t="k"></span><span data-unresolved-link="" t="n">wideIndices</span>: <span data-unresolved-link="" t="t">Option</span>[<span data-unresolved-link="" t="t">Boolean</span>] = ..., <span t="k"></span><span data-unresolved-link="" t="n">useEmergentPairs</span>: <span data-unresolved-link="" t="t">Boolean</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">useUnionFind</span>: <span data-unresolved-link="" t="t">Boolean</span> = ...)(<span t="k">using </span><span t="k"></span><span data-unresolved-link="" t="n">evidence$1</span>: <a href="tda4j/Field.html" t="t">Field</a> { <span t="k">type </span>Self<span t="k"> = </span><span data-unresolved-link="" t="t">CoefficientT</span>; })
            </div>
           </div>
          </div>
@@ -13704,7 +13711,7 @@
             <div class="cover">
              <div class="doc">
               <p>Persistent cohomology of the Vietoris-Rips complex of a metric space by Bauer's Ripser algorithm (arXiv:1908.02518): the fast engine for Vietoris-Rips, and the MATLAB/CLI default there. Cells are packed as (diameter, combinatorial index) pairs (<a href="tda4j/PackedRipserCohomologyEngine$DiameterIndex.html">DiameterIndex</a>, Ripser's <code>diameter_index_t</code>); clearing, apparent pairs, emergent pairs and the enclosing-radius cutoff as in Ripser.</p>
-              <p>Reports degrees <code>0 .. maxDimension</code>, each bar with its representative cocycle over <code>DiameterIndex</code> cells: decode a cell of a degree-<code>k</code> bar with <code>vertices(cell, k + 1)</code>. <code>maxFiltrationValue</code> defaults to the minimum enclosing radius, past which nothing new is born. <code>useApparentPairs = false</code> and <code>useEmergentPairs = false</code> turn off the apparent-pair and the emergent-pair shortcut, which change no output (for benchmarking). An emergent pair is a column whose oldest cofacet of the same diameter is the pivot of no earlier column: it is paired with that cofacet without being reduced, and kept only as the simplex that makes it (rebuilt if a later column needs it), which saves the memory of its stored column.</p>
+              <p>Reports degrees <code>0 .. maxDimension</code>, each bar with its representative cocycle over <code>DiameterIndex</code> cells: decode a cell of a degree-<code>k</code> bar with <code>vertices(cell, k + 1)</code>. <code>maxFiltrationValue</code> defaults to the minimum enclosing radius, past which nothing new is born. <code>useApparentPairs = false</code>, <code>useEmergentPairs = false</code> and <code>useUnionFind = false</code> turn off the apparent-pair shortcut, the emergent-pair shortcut and the pairing of degree 0 by union-find over the edges (the elder rule, as Ripser does it), which change no output (for benchmarking). An emergent pair is a column whose oldest cofacet of the same diameter is the pivot of no earlier column: it is paired with that cofacet without being reduced, and kept only as the simplex that makes it (rebuilt if a later column needs it), which saves the memory of its stored column.</p>
               <p>Under a threshold that keeps few of the pairs (a large point cloud with a small <code>maxFiltrationValue</code>), cofacets are found from each vertex's list of neighbours within the threshold instead of by trying every vertex, as Ripser does with a sparse distance matrix. The lists are built when at most a quarter of all pairs are within the threshold (<code>neighbourLists = Some(true)</code> or <code>Some(false)</code> decides it instead); the output is the same either way.</p>
               <p>The combinatorial index of a simplex is one <code>Long</code> while the indices of every simplex up to dimension <code>maxDimension + 1</code> fit in one, and two words (<a href="tda4j/WideSimplexIndexing.html">WideSimplexIndexing</a>, up to 126 bits) beyond: for 16,000 points to degree 3, or 122,000 to degree 2. The choice is made before the run (<code>wideIndices</code> decides it instead) and changes no output.</p>
              </div>
@@ -13720,7 +13727,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/PackedRipserCohomology.scala#L45" target="_blank">PackedRipserCohomology.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/PackedRipserCohomology.scala#L46" target="_blank">PackedRipserCohomology.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -14496,7 +14503,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Homology.scala#L1223" target="_blank">Homology.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Homology.scala#L1202" target="_blank">Homology.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -14557,7 +14564,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Homology.scala#L1238" target="_blank">Homology.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Homology.scala#L1217" target="_blank">Homology.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes

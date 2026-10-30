@@ -7,7 +7,7 @@
 </div>
 <div class="main-signature mono-small-block">
  <div class="signature">
-  <span class="modifiers"><span t="k">open </span></span><span class="kind"><span t="k">class </span></span><a href="CellularCohomologyEngine.html" t="n" class="documentableName ">CellularCohomologyEngine</a>[<span t="k"></span><span data-unresolved-link="" t="t">CellT</span>, <span t="k"></span><span data-unresolved-link="" t="t">CoefficientT</span>, <span t="k"></span><span data-unresolved-link="" t="t">FiltrationT</span>](<span t="k"></span><span t="k">val </span><span data-unresolved-link="" t="n">packSimplices</span>: <span data-unresolved-link="" t="t">Boolean</span> = ...)(<span t="k">using </span><span t="k"></span><span data-unresolved-link="" t="n">evidence$1</span>: <a href="OrderedCell.html" t="t">OrderedCell</a> { <span t="k">type </span>Self<span t="k"> = </span><span data-unresolved-link="" t="t">CellT</span>; }, <span t="k"></span><span data-unresolved-link="" t="n">evidence$2</span>: <a href="Field.html" t="t">Field</a> { <span t="k">type </span>Self<span t="k"> = </span><span data-unresolved-link="" t="t">CoefficientT</span>; }, <span t="k"></span><span data-unresolved-link="" t="n">evidence$3</span>: <span data-unresolved-link="" t="t">Ordering</span>[<span data-unresolved-link="" t="t">FiltrationT</span>])
+  <span class="modifiers"><span t="k">open </span></span><span class="kind"><span t="k">class </span></span><a href="CellularCohomologyEngine.html" t="n" class="documentableName ">CellularCohomologyEngine</a>[<span t="k"></span><span data-unresolved-link="" t="t">CellT</span>, <span t="k"></span><span data-unresolved-link="" t="t">CoefficientT</span>, <span t="k"></span><span data-unresolved-link="" t="t">FiltrationT</span>](<span t="k"></span><span t="k">val </span><span data-unresolved-link="" t="n">packSimplices</span>: <span data-unresolved-link="" t="t">Boolean</span> = ..., <span t="k">val </span><span data-unresolved-link="" t="n">useUnionFind</span>: <span data-unresolved-link="" t="t">Boolean</span> = ...)(<span t="k">using </span><span t="k"></span><span data-unresolved-link="" t="n">evidence$1</span>: <a href="OrderedCell.html" t="t">OrderedCell</a> { <span t="k">type </span>Self<span t="k"> = </span><span data-unresolved-link="" t="t">CellT</span>; }, <span t="k"></span><span data-unresolved-link="" t="n">evidence$2</span>: <a href="Field.html" t="t">Field</a> { <span t="k">type </span>Self<span t="k"> = </span><span data-unresolved-link="" t="t">CoefficientT</span>; }, <span t="k"></span><span data-unresolved-link="" t="n">evidence$3</span>: <span data-unresolved-link="" t="t">Ordering</span>[<span data-unresolved-link="" t="t">FiltrationT</span>])
  </div>
 </div>
 <div class="cover">
@@ -16,6 +16,7 @@
   <p>The coboundary is built by inverting the boundaries of the stream's cells, so the stream is read in full first. There is no <code>maxDim</code>: the stream decides the top degree. For degrees <code>0 .. k</code>, pass a stream with cells up to dimension <code>k + 1</code> (<code>LimitedCofaceSimplexStream(stream, k + 1)</code> for a coface stream) and ignore the degree-<code>(k + 1)</code> bars.</p>
   <p>Representatives: every bar carries its V-column. For an essential bar it is a cocycle of the whole complex; for a finite bar its coboundary is the bar's reduced column, which is born at or after the bar's death, so it is a cocycle on the subcomplex before the death. <code>coboundaryOfChain</code> checks either.</p>
   <p>Simplices with <code>Int</code> vertices (every complex the library builds: alpha, Čech, witness, Dowker, explicit streams) are reduced on flat arrays: each dimension's vertex tuples, a table from a tuple to its cell (the vertices side by side in one <code>Long</code> when they fit, else a hash of them), and each coboundary block as compressed columns of signs. Only a column that needs an addition becomes a <code>Chain</code>, and only the cells of the representatives returned are looked up again. The bars and representatives are exactly those of reducing the cells themselves.</p>
+  <p>Degree 0 is paired by union-find over the edges (the elder rule) when every edge is <code>c·(v - u)</code> between two cells of the stream, or has a boundary that vanishes (a loop): no vertex's coboundary is reduced then, and a bar's cocycle is the indicator of the component that dies. A complex with any other edge (a Morse complex can have one) reduces degree 0 like every other degree. The pairs and representatives are the same either way.</p>
  </div>
  <section id="attributes">
   <h2 class="h500">Value parameters</h2>
@@ -25,6 +26,12 @@
    </dt>
    <dd class="body-medium">
     <p>reduce simplices with <code>Int</code> vertices on flat arrays (see above). <code>false</code> reduces the cells themselves, with the same results, more slowly; <a href="CellularCohomologyEngine.html#reducesPacked-fffffcd0">reducesPacked</a> tells which a stream gets.</p>
+   </dd>
+   <dt class="body-small">
+    useUnionFind
+   </dt>
+   <dd class="body-medium">
+    <p>pair degree 0 by union-find where the complex allows (see above). <code>false</code> reduces the vertices' coboundaries, with the same results (for benchmarking and for checking the two against each other).</p>
    </dd>
   </dl>
   <h2 class="h500">Attributes</h2>
@@ -39,7 +46,7 @@
     Source
    </dt>
    <dd class="body-medium">
-    <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Cohomology.scala#L33" target="_blank">Cohomology.scala</a>
+    <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Cohomology.scala#L41" target="_blank">Cohomology.scala</a>
    </dd>
    <dt class="body-small">
     Graph
@@ -129,7 +136,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Cohomology.scala#L849" target="_blank">Cohomology.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Cohomology.scala#L963" target="_blank">Cohomology.scala</a>
               </dd>
              </dl>
             </div>
@@ -164,7 +171,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Cohomology.scala#L42" target="_blank">Cohomology.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Cohomology.scala#L51" target="_blank">Cohomology.scala</a>
               </dd>
              </dl>
             </div>
@@ -199,7 +206,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Cohomology.scala#L134" target="_blank">Cohomology.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Cohomology.scala#L143" target="_blank">Cohomology.scala</a>
               </dd>
              </dl>
             </div>
@@ -234,7 +241,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Cohomology.scala#L58" target="_blank">Cohomology.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Cohomology.scala#L67" target="_blank">Cohomology.scala</a>
               </dd>
              </dl>
             </div>
@@ -269,7 +276,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Cohomology.scala#L87" target="_blank">Cohomology.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Cohomology.scala#L96" target="_blank">Cohomology.scala</a>
               </dd>
              </dl>
             </div>
@@ -304,7 +311,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Cohomology.scala#L78" target="_blank">Cohomology.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Cohomology.scala#L87" target="_blank">Cohomology.scala</a>
               </dd>
              </dl>
             </div>
@@ -342,7 +349,37 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Cohomology.scala#L34" target="_blank">Cohomology.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Cohomology.scala#L42" target="_blank">Cohomology.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="useUnionFind-0">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">val </span></span><a href="CellularCohomologyEngine.html#useUnionFind-0" t="n" class="documentableName ">useUnionFind</a>: <span data-unresolved-link="" t="t">Boolean</span>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="cover">
+             <div class="doc"></div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/Cohomology.scala#L43" target="_blank">Cohomology.scala</a>
               </dd>
              </dl>
             </div>
