@@ -160,10 +160,18 @@ on the same heap, which returns exactly what the generic involution returns. The
 one diameter: a metric that is not symmetric by construction (anything but `EuclideanMetricSpace` and
 `ExplicitMetricSpace`, which reads its lower triangle) is read as `d(max(i, j), min(i, j))`, the same triangle.
 
+**Degree 0 by union-find.** Engine 4 does not reduce the vertices' coboundaries. It generates the edges within the
+threshold and sorts them once (for this pass and for degree 1), then goes through them oldest first with a union-find:
+an edge that joins two components kills the one whose oldest vertex is younger, and the pair is that vertex with that
+edge. These are the pairs the reduction finds, since each column pivots on its oldest edge. A bar's cocycle is the
+indicator function of the component that dies, as it stands just before its edge (the final component for a vertex that
+never dies), and the death edges are the cleared columns of degree 1. `useUnionFind = false` reduces the columns
+instead, with the same output. Engine 3 always reduces them: it is the oracle.
+
 **Counters.** Engines 3 and 4 report what their last run did:
 - `apparentPairCount`, the simplices paired as apparent pairs with no reduction
-  of their coboundary;
-- `emergentPairCount` (engine 4 only), the simplices paired as emergent pairs;
+  of their coboundary (in engine 4, of degrees 1 and up: degree 0 is paired by union-find);
+- `emergentPairCount` (engine 4 only), the simplices of degrees 1 and up paired as emergent pairs;
 - `substitutionCount`, how often another column needed an apparent pair's
   column as a pivot and had it rebuilt;
 - `totalSimplexCount`, the simplices the run assembled over all dimensions.
@@ -200,6 +208,13 @@ representative (`PackedCubicalCohomologyEngine` does the same on a truncated gri
 full complex; finite bars carry representatives valid over their persistence
 interval.
 
+**Degree 0 by union-find.** When every edge's boundary is `c·(v - u)` between two cells of the stream, or has no entries
+(a loop, listed as nothing or as `(v, c), (v, -c)`), degree 0 is paired by a union-find over the edges instead of by
+reducing the vertices' coboundaries: the elder rule, with the indicator of the dying component as the cocycle, as in
+engine 4. A stream with another kind of edge (a Morse complex or a hand-built chain complex may have one), or an edge
+with a face outside the stream, reduces degree 0 like every other degree. `CellularCohomologyEngine(useUnionFind =
+false)` always reduces; `PackedCubicalCohomologyEngine` takes the same option.
+
 **Simplices on flat arrays.** When the cells are simplices with `Int` vertices and the cell instance is the library's
 own (`simplexIsOrderedCell`, which every complex the library builds uses), the engine works on arrays instead of
 `Simplex` objects: each dimension's vertex tuples in the engine's order, a table from a tuple to its cell number (the
@@ -218,8 +233,9 @@ each degree cut into units of whole edge blocks (a simplex's block is its first 
 computes them (its key is one `Long` where the block and the index fit, else the block beside the index; the index
 itself is still one `Long`). Both give exactly the pairs of a sequential reduction.
 `BlockParallelReduction` builds its matrices in full, returns bars only and `Persistence` does not call it.
-`ParallelPackedCohomology` with `cocycles = true` keeps a `Log` per reduced column (the columns added to it and their
-factors; an apparent pair has none), from which `cocycle(degree, p, column)` builds a bar's cocycle, and with `keepPairs`
+`ParallelPackedCohomology` pairs degree 0 by union-find over the edges in order (a `MergeForest` keeps the merge history,
+so a bar's cocycle is read off it when asked for), and reduces the other degrees. With `cocycles = true` it keeps a `Log`
+per reduced column (the columns added to it and their factors; an apparent pair has none), from which `cocycle(degree, p, column)` builds a bar's cocycle, and with `keepPairs`
 the pairing. `Persistence.Engine.ParallelRipser` runs it: `Persistence.Input.parallelRipser` calls the seam
 `ParallelRipser.run` (shared code: 8 units per thread of `Parallel.threads`, run by `Parallel.tasks`, which pulls them
 from a counter on the JVM and runs them in order on Scala.js; `Auto` only asks with several threads, which JavaScript never has) and gets a `ParallelRipserRun`, the engine's keys and logs without its types, which is

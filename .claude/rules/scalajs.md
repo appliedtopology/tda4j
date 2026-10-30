@@ -50,7 +50,8 @@ generated `LibraryVersion`); no `.par` (use `Parallel`); no `Path` in a public s
 (`rules/algebra.md`). `Long` is emulated on Scala.js and slow: the packed engines run, not fast. `java.util.Arrays.sort(a, from, to)` allocates a scratch
 array as long as the WHOLE `a` on every call (merge sort over boxing accessors), so a loop of range sorts is quadratic: sort a range
 with `Parallel.sortInts` (`sortLongs(a, from, to)` for `Long` keys: `ParallelPackedCohomology`'s block sort), or keep the keys in `Int` (`WORKLOG-js-scaling.md`). A JS-versus-JVM benchmark compares the same
-entry point on both (facade with facade, verb with verb); the npm API is the facade.
+entry point on both (facade with facade, verb with verb); the npm API is the facade. `java.util.ArrayDeque` used as a stack (`push`/`pop`) repeats
+elements once it grows on Scala.js: keep a stack or queue in an `Int` array, or `mutable.ArrayDeque` (`MergeForest.members`, `WORKLOG-h0-union-find.md`).
 
 ## The seams
 
