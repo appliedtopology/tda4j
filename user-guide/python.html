@@ -1,0 +1,269 @@
+<!DOCTYPE html><html data-githubContributorsUrl="https://api.github.com/repos/appliedtopology/tda4j" data-githubContributorsFilename="_docs/user-guide/python.md" data-pathToRoot="../" data-rawLocation="user-guide/python" data-dynamicSideMenu="false"><head><meta charset="utf-8"></meta><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"></meta><title>Using it from Python</title><link rel="canonical" href="https://tda4j.appliedtopology.org/user-guide/python.html"></link><link rel="shortcut icon" type="image/x-icon" href="../favicon.ico"></link><script type="text/javascript" src="../scripts/theme.js"></script><script type="text/javascript" src="../scripts/searchData.js" defer="true"></script><script type="text/javascript" src="../scripts/scastieConfiguration.js" defer="true"></script><link rel="stylesheet" href="../styles/theme/bundle.css"></link><link rel="stylesheet" href="../styles/theme/components/bundle.css"></link><link rel="stylesheet" href="../styles/theme/components/button/bundle.css"></link><link rel="stylesheet" href="../styles/theme/layout/bundle.css"></link><link rel="stylesheet" href="../styles/nord-light.css"></link><link rel="stylesheet" href="../styles/dotty-icons.css"></link><link rel="stylesheet" href="../styles/filter-bar.css"></link><link rel="stylesheet" href="../styles/code-snippets.css"></link><link rel="stylesheet" href="../styles/searchbar.css"></link><link rel="stylesheet" href="../styles/social-links.css"></link><link rel="stylesheet" href="../styles/versions-dropdown.css"></link><link rel="stylesheet" href="../styles/content-contributors.css"></link><link rel="stylesheet" href="../styles/fontawesome.css"></link><script type="text/javascript" src="../hljs/highlight.pack.js" defer="true"></script><script type="text/javascript" src="../scripts/hljs-scala3.js" defer="true"></script><script type="text/javascript" src="../scripts/ux.js" defer="true"></script><script type="text/javascript" src="../scripts/common/component.js" defer="true"></script><script type="text/javascript" src="../scripts/common/utils.js" defer="true"></script><script type="text/javascript" src="../scripts/components/FilterBar.js" defer="true"></script><script type="text/javascript" src="../scripts/components/DocumentableList.js" defer="true"></script><script type="text/javascript" src="../scripts/components/Input.js" defer="true"></script><script type="text/javascript" src="../scripts/components/FilterGroup.js" defer="true"></script><script type="text/javascript" src="../scripts/components/Filter.js" defer="true"></script><script type="text/javascript" src="../scripts/scaladoc-scalajs.js" defer="true"></script><script type="text/javascript" src="../scripts/contributors.js" defer="true"></script><script type="text/javascript" src="https://code.jquery.com/jquery-3.5.1.min.js" defer="true"></script><script type="text/javascript" src="https://d3js.org/d3.v6.min.js" defer="true"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/graphlib-dot@0.6.2/dist/graphlib-dot.min.js" defer="true"></script><script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/dagre-d3/0.6.1/dagre-d3.min.js" defer="true"></script><script type="text/javascript" src="https://scastie.scala-lang.org/embedded.js" defer="true"></script><script type="text/javascript" src="../scripts/data.js" defer="true"></script><link rel="stylesheet" href="../styles/staticsitestyles.css"></link><script>var pathToRoot = "../";</script><style>
+     :root {
+          /* text */
+          --text-primary: #205976;
+          --text-secondary: #866504;
+          --text-text-tertiary: #206f6f;
+          --text-text-inverted: #eef3f5;
+
+          /* background */
+          --background-default: #f8f7f4;
+          --background-subtle: var(--grey2);
+          --background-neutral: var(--grey3);
+     }
+     :root.theme-dark {
+
+          /* text */
+          --text-primary: #81bde0;
+          --text-secondary: #f0c647;
+          --text-text-tertiary: #75c7c7;
+          --text-text-inverted: #1a262b;
+
+          /* background */
+          --background-default: #161b1e;
+          --background-subtle: var(--grey2);
+          --background-neutral: var(--grey3);
+
+
+     }
+     :is(#content h1, h2, h3, h4, h5, h6, .h50, .h100, .h200, .h300, .h400, .h500, .h600, .h700) {
+          color: var(--text-secondary);
+     }
+     /* The large logo comes in a light and a dark version (brand/large-logo.svg, large-logo-dark.svg); the page holds both. */
+     .logo-dark { display: none; }
+     :root.theme-dark .logo-light { display: none; }
+     :root.theme-dark .logo-dark { display: inline; }
+</style>
+<style>
+     /* Language tabsets: <div class="tabset"><div class="tab" data-lang="Scala">...</div>...</div>; see WORKLOG-tutorial-tabs.md */
+     .tabset { margin: 1em 0; }
+     .tabset > .tab-bar { display: flex; gap: 0.25em; border-bottom: 1px solid var(--text-primary); }
+     .tabset > .tab-bar > button { background: none; border: 1px solid transparent; border-bottom: none; padding: 0.3em 0.9em; cursor: pointer; color: var(--text-primary); font: inherit; }
+     .tabset > .tab-bar > button[aria-selected="true"] { border-color: var(--text-primary); background: var(--background-subtle); font-weight: bold; }
+     .tabset.js-ready > .tab:not(.active) { display: none; }
+     .tabset > .tab > *:first-child { margin-top: 0.5em; }
+     div.mermaid { overflow-x: auto; margin: 1em 0; }
+</style>
+<script>
+     // Builds a tab bar for each .tabset from its .tab children's data-lang, and keeps every tabset on the page (and on later pages) on the same language.
+     document.addEventListener("DOMContentLoaded", function () {
+          var KEY = "tda4j-language";
+          var saved = null;
+          try { saved = localStorage.getItem(KEY); } catch (e) {}
+          var sets = Array.prototype.slice.call(document.querySelectorAll(".tabset"));
+          function show(lang) {
+               sets.forEach(function (set) {
+                    var tabs = Array.prototype.slice.call(set.children).filter(function (c) { return c.classList.contains("tab"); });
+                    var chosen = tabs.some(function (t) { return t.dataset.lang === lang; }) ? lang : tabs[0].dataset.lang;
+                    tabs.forEach(function (t) { t.classList.toggle("active", t.dataset.lang === chosen); });
+                    set.querySelectorAll(".tab-bar > button").forEach(function (b) { b.setAttribute("aria-selected", b.textContent === chosen ? "true" : "false"); });
+               });
+          }
+          sets.forEach(function (set) {
+               var bar = document.createElement("div");
+               bar.className = "tab-bar";
+               bar.setAttribute("role", "tablist");
+               Array.prototype.slice.call(set.children).filter(function (c) { return c.classList.contains("tab"); }).forEach(function (t) {
+                    var b = document.createElement("button");
+                    b.type = "button";
+                    b.setAttribute("role", "tab");
+                    b.textContent = t.dataset.lang;
+                    b.addEventListener("click", function () {
+                         try { localStorage.setItem(KEY, t.dataset.lang); } catch (e) {}
+                         show(t.dataset.lang);
+                    });
+                    bar.appendChild(b);
+               });
+               set.insertBefore(bar, set.firstChild);
+               set.classList.add("js-ready");
+          });
+          show(saved);
+     });
+</script>
+<script>
+     // Mermaid diagrams. Scaladoc renders a ```mermaid fence as <pre><code class="language-mermaid">, which mermaid does not
+     // pick up by itself. On a page that has one, load mermaid (pinned; only there, it is 2.5 MB) and draw each block in
+     // the site's light or dark theme, redrawing when the reader switches. If the script cannot load, the source stays.
+     document.addEventListener("DOMContentLoaded", function () {
+          var codes = Array.prototype.slice.call(document.querySelectorAll("pre > code.language-mermaid"));
+          if (!codes.length) return;
+          var script = document.createElement("script");
+          script.src = "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js";
+          script.onload = function () {
+               var diagrams = codes.map(function (code) {
+                    var div = document.createElement("div");
+                    div.className = "mermaid";
+                    div.dataset.source = code.textContent;
+                    code.parentNode.replaceWith(div);
+                    return div;
+               });
+               var drawnDark = null;
+               function draw() {
+                    var dark = document.documentElement.classList.contains("theme-dark");
+                    if (dark === drawnDark) return;
+                    drawnDark = dark;
+                    mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: dark ? "dark" : "default" });
+                    diagrams.forEach(function (d) {
+                         d.removeAttribute("data-processed");
+                         d.textContent = d.dataset.source;
+                    });
+                    // Mermaid scales a diagram down to the column, which makes a wide one unreadable (its useMaxWidth setting
+                    // does not reach class diagrams). Shrink to fit only down to 70% of natural size; wider than that, keep
+                    // 70% and scroll sideways.
+                    mermaid.run({ nodes: diagrams }).then(function () {
+                         diagrams.forEach(function (d) {
+                              var svg = d.querySelector("svg");
+                              var box = svg && svg.viewBox && svg.viewBox.baseVal;
+                              if (!box || !box.width) return;
+                              var width = Math.max(Math.min(box.width, d.clientWidth), 0.7 * box.width);
+                              svg.style.maxWidth = "none";
+                              svg.setAttribute("width", width);
+                              svg.setAttribute("height", box.height * width / box.width);
+                         });
+                    });
+               }
+               draw();
+               new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+          };
+          document.head.appendChild(script);
+     });
+</script></head><body><div id=""><div id="header" class="body-small"><div class="header-container-left"><a href="../" class="logo-container"><span id="project-logo" class="project-logo"><img src="../project-logo/header-icon.svg"></img></span><span id="dark-project-logo" class="project-logo"><img src="../project-logo/header-icon.svg"></img></span><span class="project-name h300">tda4j</span></a><span onclick="dropdownHandler(event)" class="text-button with-arrow" id="dropdown-trigger"><a><div class="projectVersion">dev</div></a></span><div id="version-dropdown" class="dropdown-menu"></div></div><div class="header-container-right"><button id="search-toggle" class="icon-button"></button><a href="https://appliedtopology.org" class="text-button">Applied Topology</a><a href="https://scastie.scala-lang.org/?inputs=%7B%22_isWorksheetMode%22%3A%20true%2C%20%22code%22%3A%20%22import%20scala.language.experimental.modularity%5Cnimport%20org.appliedtopology.tda4j.*%5Cnval%20d%20%3D%20Persistence%28Seq%28Seq%280.0%2C%200.0%29%2C%20Seq%281.0%2C%200.0%29%2C%20Seq%281.0%2C%201.0%29%2C%20Seq%280.0%2C%201.0%29%29%29%5Cnd.bars.map%28b%20%3D%3E%20%28b.dim%2C%20b.birth%2C%20b.death%29%29%5Cn%22%2C%20%22target%22%3A%20%7B%22scalaVersion%22%3A%20%223.9.0%22%2C%20%22tpe%22%3A%20%22Scala3%22%7D%2C%20%22libraries%22%3A%20%5B%5D%2C%20%22librariesFromList%22%3A%20%5B%5D%2C%20%22sbtConfigExtra%22%3A%20%22scalacOptions%20%2B%2B%3D%20Seq%28%5C%22-deprecation%5C%22%2C%20%5C%22-encoding%5C%22%2C%20%5C%22UTF-8%5C%22%2C%20%5C%22-feature%5C%22%2C%20%5C%22-unchecked%5C%22%2C%20%5C%22-source%3Afuture%5C%22%2C%20%5C%22-language%3Aexperimental.modularity%5C%22%2C%20%5C%22-language%3AimplicitConversions%5C%22%2C%20%5C%22-language%3AadhocExtensions%5C%22%29%5CnlibraryDependencies%20%2B%3D%20%5C%22org.appliedtopology%5C%22%20%25%25%20%5C%22tda4j%5C%22%20%25%20%5C%220.6.2%5C%22%5Cn%22%2C%20%22sbtPluginsConfigExtra%22%3A%20%22%22%2C%20%22isShowingInUserProfile%22%3A%20true%7D" class="text-button">Playground</a><span id="theme-toggle" class="icon-button"></span><span id="mobile-menu-toggle" class="icon-button hamburger"></span></div></div><div id="mobile-menu"><div class="mobile-menu-header body-small"><span class="mobile-menu-logo"><span id="project-logo" class="project-logo"><img src="../project-logo/header-icon.svg"></img></span><span id="dark-project-logo" class="project-logo"><img src="../project-logo/header-icon.svg"></img></span><span class="project-name h300">tda4j</span></span><button id="mobile-menu-close" class="icon-button close"></button></div><div class="mobile-menu-container body-medium"><input id="mobile-scaladoc-searchbar-input" class="scaladoc-searchbar-input" type="search" placeholder="Find anything"></input><a href="https://appliedtopology.org" class="mobile-menu-item">Applied Topology</a><a href="https://scastie.scala-lang.org/?inputs=%7B%22_isWorksheetMode%22%3A%20true%2C%20%22code%22%3A%20%22import%20scala.language.experimental.modularity%5Cnimport%20org.appliedtopology.tda4j.*%5Cnval%20d%20%3D%20Persistence%28Seq%28Seq%280.0%2C%200.0%29%2C%20Seq%281.0%2C%200.0%29%2C%20Seq%281.0%2C%201.0%29%2C%20Seq%280.0%2C%201.0%29%29%29%5Cnd.bars.map%28b%20%3D%3E%20%28b.dim%2C%20b.birth%2C%20b.death%29%29%5Cn%22%2C%20%22target%22%3A%20%7B%22scalaVersion%22%3A%20%223.9.0%22%2C%20%22tpe%22%3A%20%22Scala3%22%7D%2C%20%22libraries%22%3A%20%5B%5D%2C%20%22librariesFromList%22%3A%20%5B%5D%2C%20%22sbtConfigExtra%22%3A%20%22scalacOptions%20%2B%2B%3D%20Seq%28%5C%22-deprecation%5C%22%2C%20%5C%22-encoding%5C%22%2C%20%5C%22UTF-8%5C%22%2C%20%5C%22-feature%5C%22%2C%20%5C%22-unchecked%5C%22%2C%20%5C%22-source%3Afuture%5C%22%2C%20%5C%22-language%3Aexperimental.modularity%5C%22%2C%20%5C%22-language%3AimplicitConversions%5C%22%2C%20%5C%22-language%3AadhocExtensions%5C%22%29%5CnlibraryDependencies%20%2B%3D%20%5C%22org.appliedtopology%5C%22%20%25%25%20%5C%22tda4j%5C%22%20%25%20%5C%220.6.2%5C%22%5Cn%22%2C%20%22sbtPluginsConfigExtra%22%3A%20%22%22%2C%20%22isShowingInUserProfile%22%3A%20true%7D" class="mobile-menu-item">Playground</a><span id="mobile-theme-toggle" class="mobile-menu-item mode"></span></div></div><span id="mobile-sidebar-toggle" class="floating-button"></span><div id="leftColumn" class="body-small"><div class="switcher-container"><a id="docs-nav-button" class="switcher h100 selected" href="../index.html">Docs</a><a id="api-nav-button" class="switcher h100 " href="../api/index.html">API</a></div><nav id="docs-nav" class="side-menu"><div class="ni n0"><span class="nh de"><button class="ar icon-button "></button><a href="../tutorials/index.html"><span>Tutorials for TDA4j</span></a></span><div class="ni n1 "><span class="nh de"><a href="../tutorials/all-ways-to-call.html"><span>All the ways to call TDA4j</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../tutorials/find-a-loop.html"><span>Finding a loop in noisy data</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../tutorials/choosing-a-complex.html"><span>Choosing a complex</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../tutorials/noise-and-outliers.html"><span>Noise and outliers</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../tutorials/circular-and-toroidal-coordinates.html"><span>Circular and toroidal coordinates</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../tutorials/comparing-barcodes.html"><span>Comparing barcodes</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../tutorials/images.html"><span>Topology of an image</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../tutorials/networks-and-relations.html"><span>Networks and relations</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../tutorials/telling-spaces-apart.html"><span>Telling spaces apart</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../tutorials/persistent-group-cohomology.html"><span>Persistent group cohomology</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../tutorials/scaling-up.html"><span>Scaling up</span></a></span></div></div><div class="ni n0"><span class="nh de"><button class="ar icon-button "></button><a href="../developers-guide/index.html"><span>Developer&apos;s Guide for TDA4j</span></a></span><div class="ni n1 "><span class="nh de"><a href="../developers-guide/scala3-primer.html"><span>A Scala 3.7+ primer for this codebase</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../developers-guide/architecture.html"><span>Architecture: from algebra to persistence</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../developers-guide/public-api.html"><span>The public API: the verb, diagrams and labs</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../developers-guide/persistence-engines.html"><span>Persistence engines: what to trust, and why</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../developers-guide/alpha-complex.html"><span>Alpha complex: Bowyer-Watson, Helix and DQP</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../developers-guide/nerves.html"><span>Nerves and group homology</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../developers-guide/plotting.html"><span>Plotting internals</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../developers-guide/performance.html"><span>Measuring performance</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../developers-guide/degeneracies.html"><span>Degeneracy behaviors that look like bugs but aren&apos;t</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../developers-guide/gotchas.html"><span>Hard-won invariants you must not break</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../developers-guide/class-diagrams.html"><span>Mapping the library: class diagrams</span></a></span></div></div><div class="ni n0 expanded"><span class="nh h100 expanded cs de"><button class="ar icon-button expanded"></button><a href="index.html"><span>User Guide for TDA4j</span></a></span><div class="ni n1 "><span class="nh de"><a href="installation.html"><span>Installation</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="quickstart.html"><span>Quickstart</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="cli.html"><span>Command-line tool: `tda4j`</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="matlab.html"><span>Calling from MATLAB or Java</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="javascript.html"><span>Using it from JavaScript</span></a></span></div><div class="ni n1 expanded"><span class="nh h100 selected de"><a href="#"><span>Using it from Python</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="coming-from-other-libraries.html"><span>Coming from JavaPlex, Ripser or GUDHI</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="troubleshooting.html"><span>Troubleshooting</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="glossary.html"><span>Glossary</span></a></span></div><div class="ni n1"><span class="nh de"><button class="ar icon-button "></button><a href="user-guide/topological-spaces/index.html"><span>Complexes</span></a></span><div class="ni n2 "><span class="nh de"><a href="user-guide/topological-spaces/vietoris-rips.html"><span>Vietoris-Rips complexes</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="user-guide/topological-spaces/cech-complexes.html"><span>Čech complexes</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="user-guide/topological-spaces/alpha-complexes.html"><span>Alpha complexes</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="user-guide/topological-spaces/sparse-vietoris-rips.html"><span>Sparse Rips complexes</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="user-guide/topological-spaces/witness-complexes.html"><span>Witness complexes</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="user-guide/topological-spaces/dowker-complexes.html"><span>Dowker complexes</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="user-guide/topological-spaces/cubical-complexes.html"><span>Cubical complexes and images</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="user-guide/topological-spaces/simplicial-sets.html"><span>Simplicial sets</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="user-guide/topological-spaces/series-graphs-functions.html"><span>Time series, graphs and functions</span></a></span></div></div><div class="ni n1"><span class="nh de"><button class="ar icon-button "></button><a href="user-guide/homology-computation/index.html"><span>Homology computation</span></a></span><div class="ni n2 "><span class="nh de"><a href="user-guide/homology-computation/choosing-engine.html"><span>Which persistence engine?</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="user-guide/homology-computation/fast-cubical.html"><span>The fast cubical engine</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="user-guide/homology-computation/fast-alpha-complexes.html"><span>The fast alpha engine</span></a></span></div></div><div class="ni n1 "><span class="nh de"><a href="boundary-matrix.html"><span>Boundary-matrix export</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="circular-coordinates.html"><span>Circular and toroidal coordinates</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="input-output.html"><span>Loading and saving data</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="barcode-algebra.html"><span>Maps between barcodes</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="barcode-products.html"><span>Products, Hom and duals of barcodes</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="persistent-laplacian.html"><span>The persistent Laplacian</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="discrete-morse.html"><span>Discrete Morse theory</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="zigzag-persistence.html"><span>Zigzag persistence</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="relative-persistence.html"><span>Pairs of spaces</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="utilities.html"><span>Linear algebra, graphs and neighbours</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="vectorization.html"><span>Comparing diagrams and turning them into vectors</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="noise-and-clusters.html"><span>Telling features from noise, and clustering</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="plotting.html"><span>Plotting</span></a></span></div></div></nav></div><div id="footer" class="body-small"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div><div id="scaladoc-searchBar"></div><div id="main"><div class="breadcrumbs container"><a href="../index.html">tda4j</a>/<a href="index.html">User Guide for TDA4j</a>/<a href="python.html">Using it from Python</a></div><div id="content" class="body-medium"><div><main>
+ <p>The <code>tda4j</code> Python package is the <a href="matlab.html">MATLAB and Java interface</a> with NumPy in and out: the same library, running in a JVM that the package starts for you. Python 3.10 or newer, and Java 21 or newer on the machine.</p>
+ <div class="snippet mono-small-block">
+  <pre><code class="language-"><span line-number="1" class=""><span class="tooltip-container"></span>pip install tda4j
+</span></code></pre>
+  <div class="buttons"></div>
+ </div>
+ <div class="snippet mono-small-block">
+  <pre><code class="language-python"><span line-number="1" class=""><span class="tooltip-container"></span>import numpy as np
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import tda4j
+</span><span line-number="3" class=""><span class="tooltip-container"></span>
+</span><span line-number="4" class=""><span class="tooltip-container"></span>square = np.array([[0, 0], [1, 0], [1, 1], [0, 1]])
+</span><span line-number="5" class=""><span class="tooltip-container"></span>result = tda4j.persistence(square, max_dimension=1)
+</span><span line-number="6" class=""><span class="tooltip-container"></span>
+</span><span line-number="7" class=""><span class="tooltip-container"></span>result.bars                # rows (dimension, birth, death); death is inf for a class that never dies
+</span><span line-number="8" class=""><span class="tooltip-container"></span>result.diagram(1)          # [[1.0, 1.414...]]: the loop, as (birth, death)
+</span><span line-number="9" class=""><span class="tooltip-container"></span>result.representative(4)   # the loop of the last bar: its edges and their coefficients
+</span><span line-number="10" class=""><span class="tooltip-container"></span>result.bar_cells(4)        # (2, 3) and (0, 1, 2): the edge that opens that loop and the triangle that closes it
+</span><span line-number="11" class=""><span class="tooltip-container"></span>result.plot_barcode()      # a figure; in a notebook it shows itself, `.save("barcode.svg")` writes it
+</span></code></pre>
+  <div class="buttons"></div>
+ </div>
+ <p>The wheel carries the library's jar, so there is nothing else to install; from a source checkout, build the jar with <code>sbt tda4j/assembly</code> and set <code>TDA4J_JAR</code> to it (the <code>python/README.md</code> in the repository has the steps).</p>
+ <section id="conventions">
+  <h3 class="h400"><a href="#conventions" class="anchor"></a>Conventions</h3>
+  <ul>
+   <li><strong>Options</strong> are keyword arguments in snake_case, and they are the options of the MATLAB and Java interface: <code>max_dimension=1</code> is <code>maxDimension</code>, <code>max_filtration_value</code>, <code>prime=3</code> (the default is 17), <code>complex="alpha"</code>, <code>engine</code>, <code>field="Q"</code> (exact rationals; <code>"R"</code> for the reals), <code>representative_type="cocycles"</code>, <code>include_zero_length=True</code>, <code>min_persistence</code>. A value can be a number, a string or a boolean; <code>None</code> leaves the option unset. A name that is not an option raises <code>ValueError</code> and lists the accepted ones. The defaults are the interface's: degrees 0 to 2, a bar shorter than 1% of the scale of the data is hidden (<code>result.all_bars</code> has every bar, <code>result.hidden_count</code> says how many were left out).</li>
+   <li><strong>Arrays</strong> can be anything NumPy reads as numbers: arrays of any layout and type, lists, tuples. A point cloud has one row per point; one-dimensional data is a column (<code>x.reshape(-1, 1)</code>).</li>
+   <li><strong>Numbering</strong> is from 0 everywhere: bars, points, cells, cocycle indices. A bar is its row in <code>result.bars</code>.</li>
+   <li><strong>Errors</strong> from the library are Python errors: <code>ValueError</code> for a bad argument, <code>IndexError</code>, <code>NotImplementedError</code>, and <code>tda4j.Tda4jError</code> for the rest.</li>
+   <li><strong>The JVM</strong> starts when the first function needs it. To give it a bigger heap, which is the limit on how large a computation can be, start it yourself before that: <code>tda4j.start_jvm(["-Xmx16g"])</code>. <code>JAVA_HOME</code> chooses the Java.</li>
+  </ul>
+ </section>
+ <section id="functions">
+  <h3 class="h400"><a href="#functions" class="anchor"></a>Functions</h3>
+  <table>
+   <thead>
+    <tr>
+     <th>function</th>
+     <th>input</th>
+    </tr>
+   </thead>
+   <tbody>
+    <tr>
+     <td><code>persistence(points, **options)</code></td>
+     <td>a point cloud, one row per point; any <code>complex</code></td>
+    </tr>
+    <tr>
+     <td><code>persistence_from_distances(distances, **options)</code></td>
+     <td>a square distance matrix</td>
+    </tr>
+    <tr>
+     <td><code>persistence_from_image(image, **options)</code></td>
+     <td>an image or voxel grid of any dimension, as a cubical complex; <code>nan</code> is missing data</td>
+    </tr>
+    <tr>
+     <td><code>persistence_from_relation(relation, **options)</code></td>
+     <td>the Dowker complex of a relation, a matrix that need not be square</td>
+    </tr>
+    <tr>
+     <td><code>persistence_from_landmarks(points, landmarks, **options)</code></td>
+     <td>the witness complex on the landmarks; <code>persistence_from_distances_and_landmarks</code> for a distance matrix</td>
+    </tr>
+    <tr>
+     <td><code>relative_persistence(points, subcomplex, **options)</code></td>
+     <td>the Vietoris-Rips complex <a href="relative-persistence.html">relative to</a> the subcomplex on the points <code>subcomplex</code>; <code>relative_persistence_from_distances</code> for a distance matrix</td>
+    </tr>
+    <tr>
+     <td><code>inclusion_map(points, subsample, **options)</code>, <code>simplicial_map(source_points, target_points, vertex_map, **options)</code></td>
+     <td>the <a href="barcode-algebra.html#maps-between-spaces">map on persistent homology</a> a subsample or a simplicial map induces: a <code>MapResult</code> with, in each degree, <code>source_bars</code>, <code>target_bars</code>, <code>entries</code>, <code>image</code>, <code>kernel</code>, <code>cokernel</code>; <code>inclusion_map_from_distances</code>, <code>simplicial_map_from_distances</code> for distance matrices</td>
+    </tr>
+    <tr>
+     <td><code>select_landmarks(points, num_landmarks)</code>, <code>covering_radius(points, landmarks)</code></td>
+     <td>landmarks by farthest-point sampling, and the covering radius of any landmarks; <code>..._from_distances</code> for distance matrices</td>
+    </tr>
+    <tr>
+     <td><code>euler_curve(points, **options)</code></td>
+     <td>the <a href="vectorization.html#the-euler-characteristic-curve">Euler characteristic curve</a> of the Vietoris-Rips complex: call it, <code>curve(t)</code>, or <code>curve.sample(t_min, t_max, n)</code></td>
+    </tr>
+    <tr>
+     <td><code>bootstrap_band(points, **options)</code></td>
+     <td>the <a href="noise-and-clusters.html">resampling band</a> of the bars of one degree</td>
+    </tr>
+    <tr>
+     <td><code>tomato_clusters(points, k, tau)</code>, <code>tomato_diagram(points, k)</code></td>
+     <td><a href="noise-and-clusters.html">ToMATo</a> clustering: the cluster of every point, and the valleys between peaks</td>
+    </tr>
+    <tr>
+     <td><code>takens_embedding(series, dimension, delay=1, stride=1)</code>, <code>delay_by_autocorrelation(series, max_lag)</code></td>
+     <td>the sliding-window embedding of a time series (or of a series of vectors) as a point cloud, and a first guess for its <code>delay</code></td>
+    </tr>
+    <tr>
+     <td><code>persistent_laplacian(points, dimension, start, stop)</code>, <code>persistent_laplacian_from_distances(distances, dimension, start, stop)</code></td>
+     <td>the <a href="persistent-laplacian.html">persistent Laplacian</a> of the Vietoris-Rips complex: <code>matrix</code>, <code>eigenvalues</code> (ascending), <code>betti_number</code>, <code>spectral_gap</code> (<code>None</code> if every eigenvalue is zero) and <code>cells</code></td>
+    </tr>
+    <tr>
+     <td><code>morse_reduction(points, **options)</code>, <code>morse_reduction_from_distances(distances, **options)</code></td>
+     <td>the <a href="discrete-morse.html">discrete Morse reduction</a> of the Vietoris-Rips complex: <code>cell_counts</code> and <code>critical_counts</code> by dimension, <code>pair_count</code>, <code>critical_cells</code> and <code>bars</code> (computed on the critical cells); options <code>max_dimension</code>, <code>max_filtration_value</code>, <code>strategy</code> (<code>"reduction"</code> or <code>"coreduction"</code>), <code>prime</code>, <code>threads</code></td>
+    </tr>
+    <tr>
+     <td><code>zigzag_from_steps(initial, simplices, additions, **options)</code>, <code>zigzag_from_complexes(complexes, **options)</code></td>
+     <td><a href="zigzag-persistence.html">zigzag persistence</a> of a sequence of simplicial complexes (simplices as lists of vertex numbers), given as steps that add or remove one simplex or as a list of complexes: <code>bars</code> (rows <code>(dimension, birth, death)</code>), <code>representatives</code> (a cycle at each bar's birth) and <code>last_position</code>; options <code>max_dimension</code>, <code>prime</code> and, for complexes, <code>link</code> (<code>"none"</code>, <code>"union"</code> or <code>"intersection"</code>)</td>
+    </tr>
+    <tr>
+     <td><code>product_bars(first, second, filtration="max")</code>, <code>hom_bars(first, second)</code>, <code>hom_dimension(first, second)</code>, <code>dual_bars(bars)</code></td>
+     <td>the <a href="barcode-products.html">algebra of barcodes</a>: the bars of a product of two filtered complexes from the bars of the factors, the internal Hom, the dimension of the space of maps, the dual; each barcode is a result (all of its bars) or an array of rows <code>(dimension, birth, death)</code></td>
+    </tr>
+    <tr>
+     <td><code>h1_bars(points)</code>, <code>circular_coordinates(points, r)</code>, <code>toroidal_coordinates(points, r, cocycle_indices)</code></td>
+     <td><a href="circular-coordinates.html">circular and toroidal coordinates</a></td>
+    </tr>
+    <tr>
+     <td><code>load_result(path)</code></td>
+     <td>a result saved by <code>result.save(path)</code>, by the other interfaces, or by <code>--save-result</code></td>
+    </tr>
+   </tbody>
+  </table>
+ </section>
+ <section id="what-a-result-has">
+  <h3 class="h400"><a href="#what-a-result-has" class="anchor"></a>What a result has</h3>
+  <ul>
+   <li><code>bars</code>, <code>all_bars</code>, <code>diagram(dimension)</code>, <code>hidden_count</code>, <code>persistence_threshold</code>, and <code>len(result)</code>.</li>
+   <li><code>representative(i)</code>: a <code>Representative</code> with <code>cells</code> (tuples of vertex numbers) and <code>coefficients</code>. For an image a cell is a cube in doubled coordinates (see <a href="matlab.html#representatives">MATLAB and Java</a>).</li>
+   <li><code>bar_cells(i)</code>: the cell that created the bar and the cell that destroyed it (<code>None</code> for a bar that never dies); see <a href="quickstart.html">the quickstart</a> for which engines record them.</li>
+   <li><code>bottleneck_distance</code>, <code>wasserstein_distance</code>, <code>sliced_wasserstein_distance</code>, <code>bottleneck_matching</code>, <code>wasserstein_matching</code>, each against another result and a dimension.</li>
+   <li><code>landscape</code>, <code>betti_curve</code>, <code>silhouette</code>, <code>persistence_entropy</code>, <code>persistence_image</code> (see <a href="vectorization.html">vectorization</a>).</li>
+   <li><code>boundary()</code> and <code>cells()</code>: the filtered complex as a boundary matrix in coordinate form, and its cells.</li>
+   <li><code>plot_barcode()</code>, <code>plot_diagram()</code>, <code>plot_landscape(dim)</code>, <code>plot_persistence_image(dim)</code>, <code>plot_input()</code>, <code>plot_complex(at)</code>, <code>plot_representative(i)</code> and the <code>_3d</code> variants return a <code>Plot</code>: <code>svg()</code> and <code>html()</code> give its text, <code>save(path)</code> writes an <code>.svg</code> or <code>.html</code> file, <code>view()</code> opens it in the library's live viewer, and a notebook shows it. <code>tda4j.side(a, b)</code> puts plots in one row, and <code>tda4j.set_plot_defaults("palette=print")</code> changes the look of the next ones.</li>
+   <li><code>save(path)</code>, to be read back by <code>load_result</code>.</li>
+  </ul>
+ </section>
+ <section id="coming-from-ripserpy-or-gudhi">
+  <h3 class="h400"><a href="#coming-from-ripserpy-or-gudhi" class="anchor"></a>Coming from ripser.py or GUDHI</h3>
+  <p><code>tda4j.persistence(X, max_dimension=1, prime=2).diagram(1)</code> is <code>ripser(X, maxdim=1)['dgms'][1]</code>; the defaults that differ (the coefficients, and the top degree of GUDHI) are in <a href="coming-from-other-libraries.html">Coming from JavaPlex, Ripser or GUDHI</a>.</p>
+ </section>
+ <section id="what-is-not-in-the-package">
+  <h3 class="h400"><a href="#what-is-not-in-the-package" class="anchor"></a>What is not in the package</h3>
+  <p>The package is the interface of <a href="matlab.html">MATLAB and Java</a>, so what that interface does not have, Python does not: the typed Scala API, with its streams, engines and cursors, and the simplicial sets and group nerves of the <code>sset</code> add-on. A board of plots with a free layout (<code>TDA4j.layout</code>) is not wrapped yet; <code>tda4j.side</code> puts plots in a row.</p>
+ </section>
+</main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#conventions">Conventions</a></li><li><a href="#functions">Functions</a></li><li><a href="#what-a-result-has">What a result has</a></li><li><a href="#coming-from-ripserpy-or-gudhi">Coming from ripser.py or GUDHI</a></li><li><a href="#what-is-not-in-the-package">What is not in the package</a></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>
