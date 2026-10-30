@@ -3,7 +3,7 @@
 # See bench/README.md. Idempotent: re-running skips what is already built or downloaded.
 #
 #   bench/run.sh setup [tool...]    build/install every tool into $WORKDIR, or only the named ones:
-#                                   python flashcubical tda4j tda4j-js ripser julia javaplex dipha phat eirene dowker
+#                                   python flashcubical tda4j tda4j-js ripser redzed julia javaplex dipha phat eirene dowker
 #   bench/run.sh prepare            download and generate the data sets into $WORKDIR/data
 #   bench/run.sh run [bench.py run options...]   e.g. --tasks vr --fields 2,17 --timeout 3600
 #   bench/run.sh all [options...]   setup + prepare + run
@@ -79,6 +79,17 @@ setup_ripser() {
   if [ ! -d "$TOOLS/ripser" ]; then git clone --depth 1 https://github.com/Ripser/ripser.git "$TOOLS/ripser"; fi
   (cd "$TOOLS/ripser" && make ripser ripser-coeff)
   "$TOOLS/ripser/ripser" --help >/dev/null 2>&1 || true
+}
+
+setup_redzed() {
+  log "RedZeD (Kapulkin and Kershaw; C++17, Z/2) at a pinned commit"
+  if ! command -v g++ >/dev/null; then echo "WARNING: RedZeD needs a C++17 compiler: redzed will be reported as missing"; return; fi
+  if [ ! -d "$TOOLS/redzed" ]; then git clone https://github.com/nkershaw01/RedZeD.git "$TOOLS/redzed"; fi
+  # "Updated readme", 2026-10-30; the repository has no tags or releases. The flags are the README's, with no -march=native,
+  # as for ripser.cpp's Makefile.
+  (cd "$TOOLS/redzed" && git checkout --quiet 22ef1bf8696bccad02b041a83863d12d4bd92766) \
+    && g++ -O3 -std=c++17 -DNDEBUG -o "$TOOLS/redzed/redzed" "$TOOLS/redzed/python/cpp/redzed.cpp" \
+    || { echo "WARNING: RedZeD did not build; it will be reported as missing"; return; }
 }
 
 setup_julia() {
@@ -278,6 +289,8 @@ export_env() {
   export RIPSER_COEFF_BIN="$TOOLS/ripser/ripser-coeff"
   [ -x "$RIPSER_BIN" ] || unset RIPSER_BIN
   [ -x "$RIPSER_COEFF_BIN" ] || unset RIPSER_COEFF_BIN
+  export REDZED_BIN="$TOOLS/redzed/redzed"
+  [ -x "$REDZED_BIN" ] || unset REDZED_BIN
   if [ -s "$TOOLS/julia.path" ]; then
     export JULIA="$(cat "$TOOLS/julia.path")" RIPSERER_PROJECT="$TOOLS/julia"
   fi
@@ -302,7 +315,7 @@ case "$cmd" in
   # TDA4j first: the optional tools after it only warn when they fail.
   setup)
     components=("$@")
-    if [ ${#components[@]} -eq 0 ]; then components=(python flashcubical tda4j tda4j-js ripser julia javaplex dipha phat eirene); fi
+    if [ ${#components[@]} -eq 0 ]; then components=(python flashcubical tda4j tda4j-js ripser redzed julia javaplex dipha phat eirene); fi
     for component in "${components[@]}"; do
       case "$component" in
         python) setup_python ;;
@@ -310,13 +323,14 @@ case "$cmd" in
         tda4j) setup_tda4j ;;
         tda4j-js) setup_tda4j_js ;;
         ripser) setup_ripser ;;
+        redzed) setup_redzed ;;
         julia) setup_julia ;;
         javaplex) setup_javaplex ;;
         dipha) setup_dipha ;;
         phat) setup_phat ;;
         eirene) setup_eirene ;;
         dowker) setup_dowker ;;
-        *) echo "unknown component '$component' (python flashcubical tda4j tda4j-js ripser julia javaplex dipha phat eirene dowker)"; exit 2 ;;
+        *) echo "unknown component '$component' (python flashcubical tda4j tda4j-js ripser redzed julia javaplex dipha phat eirene dowker)"; exit 2 ;;
       esac
     done
     ;;
