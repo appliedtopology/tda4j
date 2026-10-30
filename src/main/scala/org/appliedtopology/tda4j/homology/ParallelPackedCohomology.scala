@@ -354,31 +354,11 @@ object ParallelPackedCohomology:
     var nanos1 = 0L
     var nanos2a = 0L
     var nanos2b = 0L
-    // The tree merge, by depth (0 = the top merge): wall time of the merges' work summed, of the longest merge, the
-    // deferred columns that went through a merge, and the additions they made.
-    var treeBusy: Array[Long] = Array.empty
-    var treeLongest: Array[Long] = Array.empty
-    var treeColumns: Array[Long] = Array.empty
-    var treeAdds: Array[Long] = Array.empty
-    var nanosTree = 0L
-    // The columns each unit deferred, in filtration order of the units.
-    var deferredByUnit: Array[Int] = Array.empty
-    // Phases 2a and 2b together, or the tree merge with the pass after it.
-    var nanosMerge = 0L
     override def toString: String =
-      val tree =
-        if treeBusy.isEmpty then ""
-        else
-          f"\n    tree merge ${nanosTree / 1e6}%.1f ms wall; by depth (busy / longest ms, columns, additions): " +
-            treeBusy.indices
-              .map(d =>
-                f"$d: ${treeBusy(d) / 1e6}%.1f / ${treeLongest(d) / 1e6}%.1f, ${treeColumns(d)}, ${treeAdds(d)}"
-              )
-              .mkString("; ")
       f"degree $degree: $columns%,d columns ($cleared%,d cleared), $units units; assemble+sort ${nanosAssemble / 1e6}%.1f ms, " +
         f"phase 1 ${nanos1 / 1e6}%.1f, 2a ${nanos2a / 1e6}%.1f, 2b ${nanos2b / 1e6}%.1f ms; apparent $apparent%,d, " +
         f"claimed in phase 1 $claimed1%,d, deferred $deferred%,d ($finished2a%,d finished in 2a); " +
-        f"additions $adds1%,d + $adds2a%,d + $adds2b%,d" + tree
+        f"additions $adds1%,d + $adds2a%,d + $adds2b%,d"
 
   /** One degree's pairs (birth key, death key or -1), its owners with reduced columns, its logs. */
   open class Degree(val degree: Int, val stats: Stats):
@@ -707,21 +687,13 @@ object ParallelPackedCohomology:
         b += 1
     if threads > 1 then Parallel.ranges(blockCount, 16)(within) else within(0, blockCount)
 
-  /** How the deferred columns are finished once every unit has reduced its own columns: `Serial` as the worklog's
-    * phases 2a (in parallel, against the units' pairs) and 2b (one by one); `Tree` merges the units pairwise in a
-    * binary tree, the merges of one level in parallel.
-    */
-  enum Merge:
-    case Serial, Tree
-
   /** Every bar of degrees `0 .. maxDim`; `unitsPerThread` 1 with `threads` 1 is the sequential reduction. */
   def persistence(
     space: Space,
     threads: Int,
     unitsPerThread: Int,
     cocycles: Boolean,
-    keepPairs: Boolean = false,
-    merge: Merge = Merge.Serial
+    keepPairs: Boolean = false
   ): Result =
     import space.*
     // `initialValue`, not `ThreadLocal.withInitial`: the latter is not in Scala.js's java.lang.
@@ -819,198 +791,79 @@ object ParallelPackedCohomology:
       stats.apparent = units.map(_.apparent).sum
       stats.claimed1 = units.map(_.claimed).sum
       stats.adds1 = units.map(_.additions).sum
-      stats.deferredByUnit = units.map(_.deferred.length)
 
-      // Owners claimed after phase 1 (by deferred columns), for a pivot whose block is in no unit; `latePivots` their rows.
-      val late = mutable.LongMap.empty[Owner]
-      val latePivots = mutable.ArrayBuilder.ofLong()
-      def serialMerge(): Unit =
-        // Phase 2a: the deferred columns, in parallel, while their pivots belong to the units' pairs.
-        // Youngest first: by block, then key, descending.
-        val deferred = units
-          .flatMap(_.deferred)
-          .sortWith((a, b) => a.columnBlock > b.columnBlock || a.columnBlock == b.columnBlock && a.column > b.column)
-        stats.deferred = deferred.length
-        val t2 = System.nanoTime()
-        val lookupUnits: (Long, Int) => Owner | Null = (row, rowBlock) =>
-          val u = unitOf(rowBlock)
-          if u == null then null else u.owners.getOrNull(row)
-        val emptied = new Array[Boolean](deferred.length)
-        val adds2a = new Array[Long](deferred.length)
-        val slice = math.max(1, math.min(32, deferred.length / math.max(1, threads * 8)))
-        parallel(threads, (deferred.length + slice - 1) / slice) { c =>
-          val s = scratch.get()
-          for i <- c * slice until math.min(deferred.length, (c + 1) * slice) do
-            val df = deferred(i)
-            s.heap.clear()
-            for j <- df.keys.indices do
-              s.heap.push(df.keys(j), if df.blocks != null then df.blocks(j) else 0, df.coefs(j))
-            s.added = 0
-            // An unowned pivot here may still be owned by a deferred column: stop and leave it to phase 2b.
-            val row = run(space, s, k, lookupUnits, Int.MaxValue, df.log)
-            adds2a(i) = s.added
-            df.additions = s.added
-            if row == -1L then emptied(i) = true
-            val (ks, cs, bs) = s.heap.drain(p)
-            df.keys = ks
-            df.coefs = cs
-            df.blocks = bs
-        }
-        stats.nanos2a = System.nanoTime() - t2
-        stats.adds2a = adds2a.sum
-        stats.finished2a = emptied.count(identity)
-
-        // Phase 2b: one by one, youngest first, against every owner so far.
-        val t3 = System.nanoTime()
-        val lookupAll: (Long, Int) => Owner | Null = (row, rowBlock) =>
-          val o = lookupUnits(row, rowBlock)
-          if o != null then o else late.getOrNull(row)
+      // Phase 2a: the deferred columns, in parallel, while their pivots belong to the units' pairs.
+      // Youngest first: by block, then key, descending.
+      val deferred = units
+        .flatMap(_.deferred)
+        .sortWith((a, b) => a.columnBlock > b.columnBlock || a.columnBlock == b.columnBlock && a.column > b.column)
+      stats.deferred = deferred.length
+      val t2 = System.nanoTime()
+      val lookupUnits: (Long, Int) => Owner | Null = (row, rowBlock) =>
+        val u = unitOf(rowBlock)
+        if u == null then null else u.owners.getOrNull(row)
+      val emptied = new Array[Boolean](deferred.length)
+      val adds2a = new Array[Long](deferred.length)
+      val slice = math.max(1, math.min(32, deferred.length / math.max(1, threads * 8)))
+      parallel(threads, (deferred.length + slice - 1) / slice) { c =>
         val s = scratch.get()
-        var adds2b = 0L
-        for i <- deferred.indices do
+        for i <- c * slice until math.min(deferred.length, (c + 1) * slice) do
           val df = deferred(i)
-          val log = df.log
-          val row =
-            if emptied(i) then -1L
-            else
-              s.heap.clear()
-              for j <- df.keys.indices do
-                s.heap.push(df.keys(j), if df.blocks != null then df.blocks(j) else 0, df.coefs(j))
-              s.added = 0
-              val r = run(space, s, k, lookupAll, Int.MaxValue, log)
-              adds2b += s.added
-              r
-          if log != null && log.length > 0 then degree.logs(df.column) = log
-          if row < 0 then
-            degree.essential += df.column
-            degree.essentialBlocks += df.columnBlock
-            if keepPairs then degree.pairs += ((df.column, -1L))
-          else
-            val rowBlock = s.rowBlock
-            val (ks, cs, bs) = s.heap.drain(p)
-            val owner = Owner(df.column, df.columnBlock, ks, cs, bs, rowBlock)
-            degree.reduced(df.column) = owner
-            late(row) = owner
-            latePivots += row
-            if keepPairs then degree.pairs += ((df.column, row))
-        stats.nanos2b = System.nanoTime() - t3
-        stats.adds2b = adds2b
-      def treeMerge(): Unit =
-        import java.util.concurrent.atomic.{AtomicInteger, AtomicLongArray}
-        stats.deferred = units.map(_.deferred.length).sum
-        val busy = new AtomicLongArray(64)
-        val longest = new AtomicLongArray(64)
-        val columnsAt = new AtomicLongArray(64)
-        val addsAt = new AtomicLongArray(64)
-        val deepest = new AtomicInteger(0)
-        val lookup: (Long, Int) => Owner | Null = (row, rowBlock) =>
-          val u = unitOf(rowBlock)
-          if u != null then u.owners.getOrNull(row) else late.synchronized(late.getOrNull(row))
-        // One deferred column on, against `lookup` and up to `highBlock`: true when it is finished, as a pair or as an
-        // essential class (its pair, log and owner go to the units, which only one merge at a time touches), false
-        // when its pivot is still beyond `highBlock`.
-        def advance(df: Deferred, highBlock: Int, s: Scratch): Boolean =
           s.heap.clear()
           for j <- df.keys.indices do
             s.heap.push(df.keys(j), if df.blocks != null then df.blocks(j) else 0, df.coefs(j))
           s.added = 0
-          val row = run(space, s, k, lookup, highBlock, df.log)
-          if row == DEFER then
-            val (ks, cs, bs) = s.heap.drain(p)
-            df.keys = ks
-            df.coefs = cs
-            df.blocks = bs
-            false
+          // An unowned pivot here may still be owned by a deferred column: stop and leave it to phase 2b.
+          val row = run(space, s, k, lookupUnits, Int.MaxValue, df.log)
+          adds2a(i) = s.added
+          df.additions = s.added
+          if row == -1L then emptied(i) = true
+          val (ks, cs, bs) = s.heap.drain(p)
+          df.keys = ks
+          df.coefs = cs
+          df.blocks = bs
+      }
+      stats.nanos2a = System.nanoTime() - t2
+      stats.adds2a = adds2a.sum
+      stats.finished2a = emptied.count(identity)
+
+      // Phase 2b: one by one, youngest first, against every owner so far.
+      val t3 = System.nanoTime()
+      val late = mutable.LongMap.empty[Owner]
+      val latePivots = mutable.ArrayBuilder.ofLong()
+      val lookupAll: (Long, Int) => Owner | Null = (row, rowBlock) =>
+        val o = lookupUnits(row, rowBlock)
+        if o != null then o else late.getOrNull(row)
+      val s = scratch.get()
+      var adds2b = 0L
+      for i <- deferred.indices do
+        val df = deferred(i)
+        val log = df.log
+        val row =
+          if emptied(i) then -1L
           else
-            val own = unitOf(df.columnBlock)
-            if df.log != null && df.log.length > 0 then
-              if own != null then own.logs(df.column) = df.log else late.synchronized(degree.logs(df.column) = df.log)
-            if row < 0 then
-              if own != null then
-                own.essential += df.column
-                own.essentialBlocks += df.columnBlock
-                if keepPairs then own.pairs += ((df.column, -1L))
-              else
-                late.synchronized {
-                  degree.essential += df.column
-                  degree.essentialBlocks += df.columnBlock
-                  if keepPairs then degree.pairs += ((df.column, -1L))
-                }
-            else
-              val rowBlock = s.rowBlock
-              val (ks, cs, bs) = s.heap.drain(p)
-              val owner = Owner(df.column, df.columnBlock, ks, cs, bs, rowBlock)
-              val target = unitOf(rowBlock)
-              if target != null then
-                target.owners(row) = owner
-                target.pivots += row
-              else
-                late.synchronized {
-                  late(row) = owner
-                  latePivots += row
-                }
-              if own != null then
-                own.reduced(df.column) = owner
-                if keepPairs then own.pairs += ((df.column, row))
-              else
-                late.synchronized {
-                  degree.reduced(df.column) = owner
-                  if keepPairs then degree.pairs += ((df.column, row))
-                }
-            true
-        // The deferred columns of units lo until hi whose pivots lie beyond those units' blocks, youngest first. The
-        // two halves are done, so the left half's deferred columns (older: they go after the right half's) meet the
-        // right half's pairs, which are final; nothing else reads or writes the units of this merge.
-        def solve(lo: Int, hi: Int, depth: Int): mutable.ArrayBuffer[Deferred] =
-          // No units at all: a degree with no columns.
-          if hi - lo <= 0 then mutable.ArrayBuffer.empty[Deferred]
-          else if hi - lo == 1 then units(lo).deferred
-          else
-            val mid = (lo + hi) >>> 1
-            var left: mutable.ArrayBuffer[Deferred] = null
-            var right: mutable.ArrayBuffer[Deferred] = null
-            if threads == 1 then
-              left = solve(lo, mid, depth + 1)
-              right = solve(mid, hi, depth + 1)
-            else Parallel.both({ left = solve(lo, mid, depth + 1) }, { right = solve(mid, hi, depth + 1) })
-            val t = System.nanoTime()
-            val highBlock = units(hi - 1).highBlock
-            val s = scratch.get()
-            val out = mutable.ArrayBuffer.empty[Deferred]
-            out ++= right
-            var adds = 0L
-            for df <- left do
-              if !advance(df, highBlock, s) then out += df
-              adds += s.added
-            val nanos = System.nanoTime() - t
-            busy.addAndGet(depth, nanos)
-            var seen = longest.get(depth)
-            while nanos > seen && !longest.compareAndSet(depth, seen, nanos) do seen = longest.get(depth)
-            columnsAt.addAndGet(depth, left.length.toLong)
-            addsAt.addAndGet(depth, adds)
-            deepest.accumulateAndGet(depth, math.max)
-            out
-        val t0 = System.nanoTime()
-        val rest = solve(0, units.length, 0)
-        // Pivots beyond every unit's blocks (degree 0, whose rows are edges): one by one, as phase 2b.
-        val t1 = System.nanoTime()
-        val s = scratch.get()
-        var adds = 0L
-        for df <- rest do
-          advance(df, Int.MaxValue, s)
-          adds += s.added
-        stats.nanos2b = System.nanoTime() - t1
-        stats.adds2b = adds
-        stats.nanosTree = System.nanoTime() - t0
-        val depths = deepest.get + 1
-        stats.treeBusy = Array.tabulate(depths)(busy.get)
-        stats.treeLongest = Array.tabulate(depths)(longest.get)
-        stats.treeColumns = Array.tabulate(depths)(columnsAt.get)
-        stats.treeAdds = Array.tabulate(depths)(addsAt.get)
-        stats.adds2a = stats.treeAdds.sum
-      val tm0 = System.nanoTime()
-      if merge == Merge.Serial then serialMerge() else treeMerge()
-      stats.nanosMerge = System.nanoTime() - tm0
+            s.heap.clear()
+            for j <- df.keys.indices do
+              s.heap.push(df.keys(j), if df.blocks != null then df.blocks(j) else 0, df.coefs(j))
+            s.added = 0
+            val r = run(space, s, k, lookupAll, Int.MaxValue, log)
+            adds2b += s.added
+            r
+        if log != null && log.length > 0 then degree.logs(df.column) = log
+        if row < 0 then
+          degree.essential += df.column
+          degree.essentialBlocks += df.columnBlock
+          if keepPairs then degree.pairs += ((df.column, -1L))
+        else
+          val rowBlock = s.rowBlock
+          val (ks, cs, bs) = s.heap.drain(p)
+          val owner = Owner(df.column, df.columnBlock, ks, cs, bs, rowBlock)
+          degree.reduced(df.column) = owner
+          late(row) = owner
+          latePivots += row
+          if keepPairs then degree.pairs += ((df.column, row))
+      stats.nanos2b = System.nanoTime() - t3
+      stats.adds2b = adds2b
 
       for unit <- units do
         degree.pairs ++= unit.pairs

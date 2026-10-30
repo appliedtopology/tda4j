@@ -1,7 +1,7 @@
 package org.appliedtopology.tda4j
 
 import BlockParallelReductionSpec.{grid, integerMetric, octagon}
-import ParallelPackedCohomology.{coboundaryOf, cocycle, persistence, Merge, Result, Space}
+import ParallelPackedCohomology.{coboundaryOf, cocycle, persistence, Result, Space}
 
 import org.scalacheck.Gen
 import org.scalacheck.Prop.forAll
@@ -29,10 +29,8 @@ class ParallelPackedCohomologySpec extends Specification with ScalaCheck:
   ) =
     Space(metricSpace.size, metricSpace.distance(_, _), threshold, maxDim, p, ripserApparent, forceWide = wide)
 
-  private def reduce(sp: Space, threads: Int, unitsPerThread: Int, merge: Merge = Merge.Serial): Result =
-    Parallel.withThreads(threads)(
-      persistence(sp, threads, unitsPerThread, cocycles = true, keepPairs = true, merge = merge)
-    )
+  private def reduce(sp: Space, threads: Int, unitsPerThread: Int): Result =
+    Parallel.withThreads(threads)(persistence(sp, threads, unitsPerThread, cocycles = true, keepPairs = true))
 
   // The first place two sequences differ, if any (a `must beEqualTo` on whole arrays renders both into its message).
   private def firstDifference[A](a: Seq[A], b: Seq[A]): Option[String] =
@@ -53,8 +51,8 @@ class ParallelPackedCohomologySpec extends Specification with ScalaCheck:
     val sp = space(metricSpace, maxDim, threshold, p)
     val sequential = reduce(sp, 1, 1)
     TestResult
-      .foreach(for m <- Merge.values.toSeq; (t, u) <- parallel yield (t, u, m)) { (t, u, m) =>
-        val r = reduce(sp, t, u, m)
+      .foreach(parallel) { (t, u) =>
+        val r = reduce(sp, t, u)
         TestResult.foreach(r.degrees.zip(sequential.degrees)) { (a, b) =>
           firstDifference(a.pairs.sorted.toSeq, b.pairs.sorted.toSeq) must beNone
         } and (firstDifference(logs(r), logs(sequential)) must beNone)
@@ -103,8 +101,8 @@ class ParallelPackedCohomologySpec extends Specification with ScalaCheck:
   // delta(V) = R for every column the reduction changed: R its stored reduced column, or zero for an essential one.
   private def cocyclesValid(metricSpace: FiniteMetricSpace[Int], p: Int, wide: Boolean = false): TestResult =
     val sp = space(metricSpace, 2, Double.PositiveInfinity, p, wide = wide)
-    TestResult.foreach(for m <- Merge.values.toSeq; (t, u) <- Seq((1, 1), (3, 1000)) yield (t, u, m)) { (t, u, m) =>
-      val r = reduce(sp, t, u, m)
+    TestResult.foreach(Seq((1, 1), (3, 1000))) { (t, u) =>
+      val r = reduce(sp, t, u)
       TestResult
         .foreach(r.degrees) { d =>
           val essential = d.essential.toSet

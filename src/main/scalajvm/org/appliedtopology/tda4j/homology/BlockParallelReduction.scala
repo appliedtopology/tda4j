@@ -25,12 +25,12 @@ import scala.util.Random
   * java -cp \$CP org.appliedtopology.tda4j.BlockParallelReduction <dataset> <n> <maxDim> <threshold|mer> <method> [trials] [seed] [p]
   * }}}
   *
-  * `dataset` is `cube<d>` (uniform in the unit cube of R^d), `torus` or `sphere` (in R^3, with noise), `scales` (eight
-  * noisy circles of radii 0.03 * 2^i, far apart), or `alpha:<cloud>` for the cloud's alpha complex instead (blocks by
-  * filtration value, `fromStream`; threshold ignored); `method` is `seq`, `blocks-<threads>`,
-  * `chunks-<threads>-<columns>`, `packed` (`PackedRipserCohomologyEngine`, pairs only), `packed-cocycles`, `verb`
-  * (alpha: `AlphaShapes`, then `Persistence`), `check` (every method agrees) or `dump <file>` (the points as CSV, for
-  * C++ Ripser). Each run builds the matrices once and reduces `trials` times; times are medians.
+  * `dataset` is `cube<d>` (uniform in the unit cube of R^d), `torus` or `sphere` (in R^3, with noise), or
+  * `alpha:<cloud>` for the cloud's alpha complex instead (blocks by filtration value, `fromStream`; threshold ignored);
+  * `method` is `seq`, `blocks-<threads>`, `chunks-<threads>-<columns>`, `packed` (`PackedRipserCohomologyEngine`, pairs
+  * only), `packed-cocycles`, `verb` (alpha: `AlphaShapes`, then `Persistence`), `check` (every method agrees) or
+  * `dump <file>` (the points as CSV, for C++ Ripser). Each run builds the matrices once and reduces `trials` times;
+  * times are medians.
   */
 object BlockParallelReduction:
 
@@ -538,22 +538,13 @@ object BlockParallelReduction:
           0.4 * math.sin(t) + noise()
         )
       }
-    // Eight noisy circles of radii 0.03 * 2^i, far apart: an H1 class is born at every scale of the edge order.
-    case "scales" =>
-      Array.tabulate(n) { i =>
-        val c = i % 8
-        val radius = 0.03 * math.pow(2, c)
-        val a = 2 * math.Pi * rng.nextDouble()
-        val noise = () => 0.03 * radius * rng.nextGaussian()
-        Array(100.0 * c + radius * math.cos(a) + noise(), radius * math.sin(a) + noise(), noise())
-      }
     case "sphere" =>
       Array.fill(n) {
         val v = Array.fill(3)(rng.nextGaussian())
         val r = math.sqrt(v.map(x => x * x).sum)
         v.map(x => x / r + 0.03 * rng.nextGaussian())
       }
-    case other => throw IllegalArgumentException(s"unknown dataset $other: cube<d>, torus, sphere or scales")
+    case other => throw IllegalArgumentException(s"unknown dataset $other: cube<d>, torus or sphere")
 
   def method(name: String): Method = name.split('-').toList match
     case List("seq")              => Method.Sequential
