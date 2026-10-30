@@ -213,3 +213,5 @@ variable `PUBLISH_TO_PYPI`) but needs the pending publisher created on pypi.org 
 for availability; `TDA4j.layout` (free-form boards) is not wrapped; the typed Scala API (streams, engines, cursors) and
 `sset` are not reachable from Python, by design (the package is the facade's); free-threaded Python and several JVMs per
 process are untested (JPype starts one JVM per process).
+
+The limits this arc leaves (maps on cubical complexes, `PersistenceMap` computing its own diagrams, rational coefficient growth, PyPI setup, the unwrapped `layout`) are filed as #272; bar cells from the fast engines are #271.
