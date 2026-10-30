@@ -264,6 +264,34 @@ export function morseReduction(points: number[][], options?: MorseReductionOptio
 /** `morseReduction` for a finite metric space given as its full matrix of distances. */
 export function morseReductionFromDistances(distances: number[][], options?: MorseReductionOptions): MorseReduction;
 
+/** Options of `zigzagFromSteps` and `zigzagFromComplexes`. */
+export interface ZigzagOptions {
+  /** The top degree of the bars (default 2). */
+  maxDimension?: number;
+  prime?: number;
+}
+
+/** Options of `zigzagFromComplexes`. */
+export interface ZigzagComplexesOptions extends ZigzagOptions {
+  /** How consecutive complexes are joined: by inclusion (`"none"`, default, one has to be inside the next), or through their union or intersection, which takes a position of its own. */
+  link?: "none" | "union" | "intersection";
+}
+
+/** The zigzag persistent homology of a sequence of complexes. */
+export interface Zigzag {
+  /** The bars as rows `[dimension, birth, death]` over the positions `0..lastPosition`: a class that is present from position `birth` to `death - 1`, `Infinity` for one still present at the end. */
+  bars: number[][];
+  /** For each bar, a cycle in the complex at its birth: the simplices as arrays of vertex numbers and their coefficients. */
+  representatives: { cells: number[][]; coefficients: number[] }[];
+  /** The number of steps, or one less than the number of complexes. */
+  lastPosition: number;
+}
+
+/** The zigzag persistent homology of the complexes from `initial` by adding (`additions[k]` true) or removing the simplex `simplices[k]` at step `k`; a simplex is added after its facets and removed before the simplices it is a facet of. */
+export function zigzagFromSteps(initial: number[][], simplices: number[][], additions: boolean[], options?: ZigzagOptions): Zigzag;
+/** The zigzag persistent homology of a list of complexes (arrays of simplices), each included in the next or the next in it, unless `link` joins them through their union or intersection. */
+export function zigzagFromComplexes(complexes: number[][][], options?: ZigzagComplexesOptions): Zigzag;
+
 /** Options of `bootstrapBand`. */
 export interface BootstrapBandOptions {
   /** The degree of the bars (default 1). */

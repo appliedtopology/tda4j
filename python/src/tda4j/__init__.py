@@ -43,6 +43,7 @@ from ._results import (
     Representative,
     Result,
     ToroidalCoordinates,
+    Zigzag,
 )
 
 try:
@@ -67,6 +68,7 @@ __all__ = [
     "Result",
     "Tda4jError",
     "ToroidalCoordinates",
+    "Zigzag",
     "bootstrap_band",
     "circular_coordinates",
     "clear_plot_defaults",
@@ -107,6 +109,8 @@ __all__ = [
     "tomato_clusters",
     "tomato_diagram",
     "toroidal_coordinates",
+    "zigzag_from_complexes",
+    "zigzag_from_steps",
 ]
 
 
@@ -398,6 +402,61 @@ def morse_reduction_from_distances(distances, **options) -> MorseReduction:
     return _morse(
         _java().morseReductionFromDistanceMatrix(_jvm.points_in(distances, "distances"), _jvm.options_in(options))
     )
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# zigzag persistence
+# ---------------------------------------------------------------------------------------------------------------------
+
+def _simplices_in(simplices, name: str):
+    """A ``int[][]`` of simplices, each a sequence of vertex numbers."""
+    rows = [[int(v) for v in simplex] for simplex in simplices]
+    if any(not row for row in rows):
+        raise ValueError(f"tda4j: {name} must be simplices with at least one vertex each")
+    return jpype.JArray(jpype.JInt, 2)(rows)
+
+
+def _zigzag(java) -> Zigzag:
+    return Zigzag(
+        bars=_jvm.matrix_out(java.toArray(), 3),
+        representatives=[
+            Representative(
+                [tuple(int(v) for v in cell) for cell in java.cycleVertices(i)],
+                _jvm.vector_out(java.cycleCoefficients(i)),
+            )
+            for i in range(int(java.size()))
+        ],
+        last_position=int(java.lastPosition()),
+    )
+
+
+@translating
+def zigzag_from_steps(initial, simplices, additions, **options) -> Zigzag:
+    """Zigzag persistent homology of the sequence of complexes that starts at ``initial`` (a list of simplices, each a
+    sequence of vertex numbers) and in step ``k`` adds the simplex ``simplices[k]`` if ``additions[k]`` is true and
+    removes it otherwise. A simplex is added after its facets and removed before the simplices it is a facet of. A bar
+    ``(dimension, birth, death)`` is a class present in the homology at the positions ``birth`` to ``death - 1``.
+    Options: ``max_dimension`` (2) and ``prime`` (17)."""
+    flags = [bool(a) for a in additions]
+    return _zigzag(
+        _java().zigzagFromSteps(
+            _simplices_in(initial, "initial"),
+            _simplices_in(simplices, "simplices"),
+            jpype.JArray(jpype.JBoolean)(flags),
+            _jvm.options_in(options),
+        )
+    )
+
+
+@translating
+def zigzag_from_complexes(complexes, **options) -> Zigzag:
+    """Zigzag persistent homology of a list of complexes (each a list of simplices), each included in the next or the next
+    in it. With ``link="union"`` or ``link="intersection"`` two consecutive complexes are joined through their union or
+    intersection, which takes a position of its own. Options: ``link``, ``max_dimension`` (2) and ``prime`` (17)."""
+    nested = [[[int(v) for v in simplex] for simplex in complex_] for complex_ in complexes]
+    if any(not simplex for complex_ in nested for simplex in complex_):
+        raise ValueError("tda4j: complexes must contain simplices with at least one vertex each")
+    return _zigzag(_java().zigzagFromComplexes(jpype.JArray(jpype.JInt, 3)(nested), _jvm.options_in(options)))
 
 
 # ---------------------------------------------------------------------------------------------------------------------

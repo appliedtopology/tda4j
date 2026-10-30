@@ -271,3 +271,35 @@ the Künneth theorem gives an oracle that uses the engines.
   dividing by the incidence versus multiplying (the incidences are +-1).
 - Limits: cocycles are not lifted (the other chain map, `Psi`, is not derived); the matching is greedy, not minimal; a user-supplied matching
   is not checked for acyclicity; cubical and alpha streams were not tried.
+
+## Zigzag persistence (2026-10-30)
+
+- Algorithm: Carlsson-de Silva, left to right at the level of homology. Positions `0..n`, a bar `[b, d)` is a class in `H(K_b..K_{d-1})`
+  and in neither neighbour. One arrow at a time, only the dimensions `d` and `d-1` of the changed cells are recomputed, by sparse
+  elimination (`Echelon` with payloads) on the boundary matrices of the larger complex. Forward arrow: image coordinates of the live
+  generators reduced in list order, the dependent ones die. Backward arrow: coordinates of the smaller complex's homology basis in the
+  generators of the larger, echelon with the latest generator in the list as the leading one, non-pivot generators die, the pivot ones
+  continue with preimage chains, and kernel elements are born.
+- The first version kept the generators in order of birth and appended the kernel-born ones. It gave the right Betti number at every
+  position and failed two other oracles (the mirror under reversal and the rank invariant). The fix is the Carlsson-de Silva order: a class
+  born in the kernel of a backward arrow goes to the FRONT of the list, so that "a later generator absorbs an earlier one" holds. The Betti
+  oracle alone would not have found it.
+- The first version of the rank-invariant oracle was wrong, not the implementation: a limit element was mapped to the colimit by the sum of
+  its components, which is zero over Z/2 and produced negative multiplicities. The map goes through one component. The oracle counts the bars
+  containing `[i, j]` as the rank of the limit-to-colimit map through that component and recovers multiplicities by inclusion-exclusion; it
+  shares no code with the algorithm (nullspaces over Z/p written for the spec).
+- Oracles (`ZigzagPersistenceSpec`): Betti numbers at every position over Z/2, Z/3, Z/5; the generalized rank invariant on random zigzags
+  of 7 steps on 4 vertices over Z/3; all-forward equals `Persistence` on an `ExplicitStreamBuilder` with value = index; the mirror under
+  reversal; `ofComplexes` equals `apply`; representatives are cycles of the complex at the birth, over Q and Z/101; hand examples (a loop
+  closed and opened again, a filled triangle losing its 2-cell, the union of two paths); error cases (a missing facet, non-nested complexes
+  without a link).
+- Mutants killed, 7 of 7: kernel generators appended instead of prepended, the forward reduction in reverse order, min instead of max in the
+  backward echelon, death at position + 1, only dimension `d` recomputed, birth at position - 1, a wrong sign in the cycle basis.
+- Facades: `TDA4j.zigzagFromSteps`/`zigzagFromComplexes` (`ZigzagResult`), `Exports.zigzagFromSteps`/`zigzagFromComplexes`,
+  `tda4j.zigzag_from_steps`/`zigzag_from_complexes`; specs in `ZigzagFacadeSpec`, the JS `ExportsSpec`, `python/tests/test_zigzag.py`. No CLI
+  form: the input is a sequence of complexes, not a file of points. Time-varying point clouds are reached through `ofComplexes` with
+  `Link.Union` on vertices that keep their numbers; there is no function that builds the complexes from a moving cloud.
+- Limits: each arrow reduces the touched dimensions again (a few thousand cells in them is the intended range, not measured beyond the
+  random fixtures of the spec); no cocycle representatives; the representative is at the birth only, it is not pushed along the bar;
+  `Link.Union` doubles the number of positions. Not compared against Dionysus or another zigzag implementation: the oracles above are the only
+  evidence.

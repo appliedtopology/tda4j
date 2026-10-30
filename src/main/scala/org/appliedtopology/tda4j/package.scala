@@ -207,7 +207,9 @@ abstract class Lab(characteristic: Int, precision: Double = 1e-9):
     Witness,
     WitnessCofaceSimplexStream,
     WitnessGeometry,
-    WitnessMetricSpace
+    WitnessMetricSpace,
+    ZigzagPersistence,
+    ZigzagStep
   }
   export org.appliedtopology.tda4j.sset.{
     BettiNumbers,

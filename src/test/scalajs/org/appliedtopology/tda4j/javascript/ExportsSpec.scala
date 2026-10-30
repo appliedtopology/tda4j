@@ -110,6 +110,35 @@ class ExportsSpec extends Specification:
         (Exports.morseReduction(grid, options("strategy" -> "greedy")) must throwA[js.JavaScriptException])
     }
 
+  "zigzagFromSteps" should
+    "close and open a loop as the facade does, and zigzagFromComplexes needs a link for a union" >> {
+      def simplex(vertices: Int*) = js.Array(vertices*)
+      val simplices = js.Array(
+        simplex(0),
+        simplex(1),
+        simplex(2),
+        simplex(0, 1),
+        simplex(1, 2),
+        simplex(0, 2),
+        simplex(0, 2)
+      )
+      val additions = js.Array(true, true, true, true, true, true, false)
+      val steps = dynamic(Exports.zigzagFromSteps(js.Array(), simplices, additions))
+      val facade = org.appliedtopology.tda4j.matlab.TDA4j
+        .zigzagFromSteps(Array.empty[Array[Int]], simplices.toArray.map(_.toArray), additions.toArray)
+      val bars = steps.bars.asInstanceOf[js.Array[js.Array[Double]]].toSeq.map(_.toSeq)
+      val first = js.Array(simplex(0), simplex(1), simplex(2), simplex(0, 1), simplex(1, 2))
+      val second = js.Array(simplex(0), simplex(1), simplex(2), simplex(1, 2), simplex(0, 2))
+      val joined = dynamic(Exports.zigzagFromComplexes(js.Array(first, second), options("link" -> "union")))
+      (bars must beEqualTo(facade.toArray().toSeq.map(_.toSeq))) and
+        (steps.lastPosition.asInstanceOf[Int] must beEqualTo(7)) and
+        (steps.representatives.asInstanceOf[js.Array[js.Any]].length must beEqualTo(bars.size)) and
+        (joined.bars.asInstanceOf[js.Array[js.Array[Double]]].toSeq.map(_.toSeq) must contain(Seq(1.0, 1.0, 2.0))) and
+        (Exports.zigzagFromComplexes(js.Array(first, second)) must throwA[js.JavaScriptException]) and
+        (Exports
+          .zigzagFromSteps(js.Array(), js.Array(simplex(0, 1)), js.Array(true)) must throwA[js.JavaScriptException])
+    }
+
   "relativePersistence" should {
     "drop the essential bar of degree 0 modulo one point, and take a distance matrix" >> {
       val points = circle(12)

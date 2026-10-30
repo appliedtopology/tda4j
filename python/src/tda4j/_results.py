@@ -432,6 +432,18 @@ class MorseReduction:
 
 
 @dataclass(frozen=True, eq=False)
+class Zigzag:
+    """The zigzag persistent homology of a sequence of complexes (see ``zigzag_from_steps``): ``bars`` has a row
+    ``(dimension, birth, death)`` for each bar, a class present in the homology at the positions ``birth`` to
+    ``death - 1`` of the sequence and at neither neighbour, ``inf`` for one still present at ``last_position``;
+    ``representatives[i]`` is a cycle in the complex at the birth of bar ``i``."""
+
+    bars: np.ndarray
+    representatives: list
+    last_position: int
+
+
+@dataclass(frozen=True, eq=False)
 class BootstrapBand:
     """The resampling confidence band of the bars of one degree: a bar that persists longer than ``threshold`` survives
     the resampling at level ``alpha``; ``distances`` are the bottleneck distances the rounds measured."""

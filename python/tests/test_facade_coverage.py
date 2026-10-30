@@ -30,6 +30,7 @@ NOT_WRAPPED = {
     "PersistentLaplacianResult": {},
     "BootstrapBandResult": {},
     "LandmarkSelectionResult": {},
+    "ZigzagResult": {},
 }
 
 # public in the bytecode, internal in Scala (`private[matlab]`, compiler-generated)

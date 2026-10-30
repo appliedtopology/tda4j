@@ -320,6 +320,62 @@ object Exports:
       )
       .asInstanceOf[js.Object]
 
+  /** The zigzag persistent homology of a sequence of complexes given as steps from the complex `initial` (an array of
+    * simplices, each an array of vertex numbers): step `k` adds the simplex `simplices[k]` if `additions[k]` is true
+    * and removes it otherwise. A simplex is added after its facets and removed before the simplices it is a facet of.
+    * Options: `maxDimension` (default 2) and `prime` (default 17). Returns `{ bars, representatives, lastPosition }`:
+    * the bars as rows `[dimension, birth, death]` over the positions `0..lastPosition` (death `Infinity` for a class
+    * still there at the end), and for each bar a representative `{ cells, coefficients }`, a cycle in the complex at
+    * its birth.
+    */
+  @JSExportTopLevel("zigzagFromSteps")
+  def zigzagFromSteps(
+    initial: js.Array[js.Array[Int]],
+    simplices: js.Array[js.Array[Int]],
+    additions: js.Array[Boolean],
+    options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
+  ): js.Object =
+    guarded(
+      zigzagObject(
+        TDA4j.zigzagFromSteps(
+          initial.map(_.toArray).toArray,
+          simplices.map(_.toArray).toArray,
+          additions.toArray,
+          optionArray(options)
+        )
+      )
+    )
+
+  /** The zigzag persistent homology of a list of complexes, each an array of simplices (arrays of vertex numbers), each
+    * included in the next or the next in it. With the option `link` set to `"union"` or `"intersection"`, two
+    * consecutive complexes are joined through their union or intersection, which takes a position of its own. Options:
+    * `link`, `maxDimension` and `prime`. The result is that of [[zigzagFromSteps]].
+    */
+  @JSExportTopLevel("zigzagFromComplexes")
+  def zigzagFromComplexes(
+    complexes: js.Array[js.Array[js.Array[Int]]],
+    options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
+  ): js.Object =
+    guarded(
+      zigzagObject(
+        TDA4j.zigzagFromComplexes(complexes.map(_.map(_.toArray).toArray).toArray, optionArray(options))
+      )
+    )
+
+  private def zigzagObject(result: matlab.ZigzagResult): js.Object =
+    js.Dynamic
+      .literal(
+        bars = js.Array(result.toArray().map(row => js.Array(row*))*),
+        representatives = js.Array((0 until result.size()).map { i =>
+          js.Dynamic.literal(
+            cells = js.Array(result.cycleVertices(i).map(cell => js.Array(cell*))*),
+            coefficients = js.Array(result.cycleCoefficients(i)*)
+          )
+        }*),
+        lastPosition = result.lastPosition()
+      )
+      .asInstanceOf[js.Object]
+
   /** The persistent Laplacian of the Vietoris-Rips complex of a point cloud, on the simplices of dimension `dimension`
     * that have entered by `from`, for the complex at `to` (`from <= to`).
     */

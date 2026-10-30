@@ -635,6 +635,88 @@ object TDA4j:
     val complex = VietorisRips(metricSpace, maxDimension = dimension, maxFiltrationValue = to)
     new PersistentLaplacianResult(PersistentLaplacian(complex, dimension, from, to))
 
+  private val zigzagStepKeys = Set("maxdimension", "prime")
+  private val zigzagComplexKeys = Set("maxdimension", "prime", "link")
+
+  /** The zigzag persistent homology of a sequence of complexes given by steps from the complex `initial` (simplices as
+    * arrays of vertex numbers): step `k` adds the simplex `simplices(k)` if `additions(k)` is true and removes it
+    * otherwise. A simplex is added after its facets and removed before the simplices it is a facet of. Options
+    * `maxDimension` (the top degree of the bars, default `2`) and `prime` (default 17), and no others. See
+    * [[ZigzagResult]] and `ZigzagPersistence`.
+    */
+  def zigzagFromSteps(
+    initial: Array[Array[Int]],
+    simplices: Array[Array[Int]],
+    additions: Array[Boolean],
+    options: Array[String]
+  ): ZigzagResult =
+    require(
+      simplices.length == additions.length,
+      s"zigzagFromSteps: ${simplices.length} simplices but ${additions.length} additions"
+    )
+    val opts = parseOptionsWithKeys(options, zigzagStepKeys)
+    val steps = simplices.zip(additions).toSeq.map { (vertices, add) =>
+      if add then ZigzagStep.Add(simplexOf(vertices)) else ZigzagStep.Remove(simplexOf(vertices))
+    }
+    zigzagResult(
+      ZigzagPersistence(
+        steps,
+        initial = initial.toSeq.map(simplexOf),
+        maxDimension = opts.get("maxdimension").fold(2)(parseIntOption("maxDimension", _)),
+        characteristic = opts.get("prime").fold(FiniteField.DefaultPrime)(parseIntOption("prime", _))
+      )
+    )
+
+  def zigzagFromSteps(
+    initial: Array[Array[Int]],
+    simplices: Array[Array[Int]],
+    additions: Array[Boolean]
+  ): ZigzagResult = zigzagFromSteps(initial, simplices, additions, Array.empty[String])
+
+  /** The zigzag persistent homology of a list of complexes (each an array of simplices, as arrays of vertex numbers),
+    * each included in the next or the next in it, or joined through the union (option `link` `union`) or the
+    * intersection (`intersection`) of two consecutive complexes, which then takes a position of its own. Options
+    * `maxDimension`, `prime` and `link` (`none`, the default, `union` or `intersection`), and no others.
+    */
+  def zigzagFromComplexes(complexes: Array[Array[Array[Int]]], options: Array[String]): ZigzagResult =
+    val opts = parseOptionsWithKeys(options, zigzagComplexKeys)
+    val link = opts.get("link").map(_.toLowerCase) match
+      case None | Some("none")  => ZigzagPersistence.Link.None
+      case Some("union")        => ZigzagPersistence.Link.Union
+      case Some("intersection") => ZigzagPersistence.Link.Intersection
+      case Some(other)          =>
+        throw new IllegalArgumentException(
+          s"option 'link' must be 'none', 'union' or 'intersection', got '$other'"
+        )
+    zigzagResult(
+      ZigzagPersistence.ofComplexes(
+        complexes.toSeq.map(_.toSeq.map(simplexOf)),
+        link = link,
+        maxDimension = opts.get("maxdimension").fold(2)(parseIntOption("maxDimension", _)),
+        characteristic = opts.get("prime").fold(FiniteField.DefaultPrime)(parseIntOption("prime", _))
+      )
+    )
+
+  def zigzagFromComplexes(complexes: Array[Array[Array[Int]]]): ZigzagResult =
+    zigzagFromComplexes(complexes, Array.empty[String])
+
+  private def simplexOf(vertices: Array[Int]): Simplex[Int] =
+    require(vertices.nonEmpty, "a simplex needs at least one vertex")
+    Simplex.from(vertices.toList)
+
+  private def zigzagResult(diagram: PersistenceDiagram[Simplex[Int]]): ZigzagResult =
+    import diagram.given
+    val field = summon[diagram.Coefficient is Field]
+    val bars = diagram.bars
+    new ZigzagResult(
+      bars.map(b => Array(b.dim.toDouble, b.birth, b.death)).toArray,
+      bars.map { bar =>
+        val terms = bar.representative.terms
+        (terms.map((cell, _) => cell.toList.toArray).toArray, terms.map((_, k) => field.toDouble(k)).toArray)
+      }.toArray,
+      diagram.lastFiltrationValue.toInt
+    )
+
   private val morseKeys = Set("maxdimension", "maxfiltrationvalue", "strategy", "prime", "threads")
 
   /** The discrete Morse reduction of the Vietoris-Rips complex of a point cloud: see [[MorseReductionResult]] and
