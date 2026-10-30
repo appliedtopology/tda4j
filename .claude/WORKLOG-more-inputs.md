@@ -101,3 +101,23 @@ bars, so it can be a source and not a target.
 Not done: relative persistence (next), the MATLAB/CLI/JS exposure of maps (their result format has no place for them), a
 map from a cell map given on cubical cells with orientation (the general `cellMap` form takes any cells, but only the
 simplicial form has a sign convention built in), and a `PersistenceMap` that computes its own diagrams from two inputs.
+
+# Relative persistence (2026-10-30)
+
+`Relative(stream, inSubcomplex)` wraps each cell of `X` outside `A` in `RelativeCell(cell)(context)` (the second parameter
+list is not part of equality); the `OrderedCell` instance in `RelativeCell`'s companion takes the dimension and order from
+the context's ambient instance and drops the faces in `A` from the boundary. The filtration value, the filtration order
+and `homologyDegreeLimit` are those of the stream, mapped through `.cell`. Chosen over the cone `X ∪ CA`: the cone gives
+the relative homology only in degrees >= 1 (in degree 0 the unreduced homology of the cone has one more class than the
+pair for t past the first cell of `A`, and before it there is no cone), so its barcode differs in degree 0.
+
+Oracles: (disc, circle), the cone on a pentagon with the circle at 0 and the cone at 1: one essential bar in degree 2 born
+at 1, over Z/2, Z/3 and Z/17, for the generic cohomology, naive and chunked engines. The rank of `H(X_s, A_s) -> H(X_t, A_t)`
+from the relative chain groups over `Z/p` (`RelativeSpec.disagreement`), at all pairs of filtration values of a Rips
+complex of 8 points modulo three of them, degrees 0 to 2, three engines, Z/2 and Z/3. (X, vertex): the reduced homology.
+My first expectation for it, that a degree-0 class dies at the bottleneck distance to the vertex, was wrong: the
+dimension of `H_0(X_t) / <[v]>` drops once per edge of the minimum spanning tree, so the deaths are the minimum spanning
+tree's, the same as without the vertex; the rank oracle had it right and the hand-derived expectation did not.
+
+Not done: a cell type other than `Simplex` has no convenience constructor (the predicate form takes any cells);
+`A` closed under faces is documented and unchecked (the lab principle); the representatives are chains of `RelativeCell`s.

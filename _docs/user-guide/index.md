@@ -38,7 +38,9 @@ spaces are an add-on with one more import, `import org.appliedtopology.tda4j.sse
   [telling features from noise, and clustering](noise-and-clusters.md),
   [circular and toroidal coordinates](circular-coordinates.md), the [boundary matrix](boundary-matrix.md).
 * [Files](input-output.md): CSV, Ripser, DIPHA, GUDHI and Perseus formats.
-* [Maps between barcodes](barcode-algebra.md): image, kernel and cokernel of a map of persistence modules.
+* [Maps between barcodes](barcode-algebra.md): image, kernel and cokernel of a map of persistence modules, and the map
+  a map of spaces induces.
+* [Pairs of spaces](relative-persistence.md): relative persistent homology.
 * [Linear algebra, graphs and neighbours](utilities.md): dense matrices, row reduction, spanning trees, nearest-neighbour search.
 * **Without Scala**: [MATLAB and Java](matlab.md), [JavaScript and TypeScript](javascript.md), the [command line](cli.md).
 * [Troubleshooting](troubleshooting.md) and a [glossary](glossary.md).

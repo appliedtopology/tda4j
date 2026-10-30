@@ -166,6 +166,8 @@ abstract class Lab(characteristic: Int, precision: Double = 1e-9):
     RadiusLimitedAlphaShapes,
     RecursiveStackSimplexEnumerator,
     RecursiveStackVietorisRipsSimplexStream,
+    Relative,
+    RelativeCell,
     Representatives,
     RingModule,
     Ripser,

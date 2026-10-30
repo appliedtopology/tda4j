@@ -19,11 +19,12 @@ Its source directories are file organization only (they are not packages), and e
 - **`algebra/`** — `RingModule`, `Field`, `FiniteField`, `Chain` (including the `Cell`/`OrderedCell`/`OrderedBasis`
   contracts), `LinearAlgebra`. The typeclasses and formal-sum machinery everything else builds on.
 - **`cells/`** — `Simplex` and `Cube`, the concrete `OrderedCell` instances, with their default instances in their
-  companions.
+  companions, and `RelativeCell`, a cell of a quotient.
 - **`streams/`** — everything that produces cells in filtration order: `SimplexStream`/`CellStream`, the
   Vietoris-Rips family, `FiniteMetricSpace`, `CubicalStream`/`CubicalImage`, `CechStream`, `WitnessStream`,
   `DowkerStream`, `UnionFind`, and the dispatchers (`VietorisRips`, `Cech`, `Witness`, `Dowker`, ...). Other inputs:
-  `TakensEmbedding`, `GraphMetric`, `WeightedGraph`/`FlagComplex`, `LowerStar` and `DirectedFlagStream`.
+  `TakensEmbedding`, `GraphMetric`, `WeightedGraph`/`FlagComplex`, `LowerStar`, `DirectedFlagStream`, and `Relative`
+  for the quotient by a subcomplex.
 - **`homology/`** — the persistence algorithms (`Homology.scala`, `PackedRipserCohomology.scala`, `Cohomology.scala`,
   the fast cubical/alpha engines) and circular coordinates.
 - **`barcode/`** — `Barcode`, `PersistenceBar`, `BarcodeEndpoint`, distances and vectorizations.
@@ -598,6 +599,12 @@ reference the spec compares against, cell for cell on tie-heavy metrics.
 `TruncatedSimplexStream(stream, maxSimplexDimension)` cuts a stratified simplex stream off above a simplex dimension,
 keeping its order and values; the `Truncated` entry point takes a homological degree instead and is what you should
 call.
+
+`Relative(stream, inSubcomplex)` is the pair `(X, A)` as a stream: the cells of `X` outside `A`, each wrapped in a
+`RelativeCell` that knows `A` and the cell structure of `X`, with a boundary that drops the faces in `A`, the value and
+order of the cell of `X`, and the degree limit of the stream. Every engine then computes the relative homology without
+change. `A` has to be closed under faces; that is documented, not checked. `RelativeSpec` compares the barcode with the
+ranks of `H(X_s, A_s) -> H(X_t, A_t)` from the relative chain groups, at every pair of filtration values.
 
 ### Circular coordinates
 
