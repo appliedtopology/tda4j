@@ -5,7 +5,7 @@ import scala.compiletime.asMatchable
 
 // The diameter of `sigma` plus vertex `v`: max of sigma's diameter and the distances from `v` to sigma's vertices
 // (Ripser's cofacet recurrence, O(d)). `vertices` is sigma's vertex array, decoded once per enumeration by the caller.
-def insertionDiameter(
+private[tda4j] def insertionDiameter(
   metricSpace: FiniteMetricSpace[Int],
   vertices: Array[Int],
   sigmaFv: Double,

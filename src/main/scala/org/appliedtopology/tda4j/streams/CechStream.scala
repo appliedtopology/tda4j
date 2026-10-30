@@ -77,7 +77,7 @@ object CechFiltration:
       val coords = scratch.points
       var i = 0
       while i < width do
-        coords(i) = euclideanMetricSpace.pts(vertices(from + i))
+        coords(i) = euclideanMetricSpace.pointAt(vertices(from + i))
         i += 1
       val ball = MinimumEnclosingBall(coords)
       val raw = ball.radius

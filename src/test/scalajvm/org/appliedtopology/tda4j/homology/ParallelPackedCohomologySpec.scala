@@ -1,7 +1,7 @@
 package org.appliedtopology.tda4j
 
 import BlockParallelReductionSpec.{grid, integerMetric, octagon}
-import ParallelPackedCohomology.{coboundaryOf, cocycle, persistence, Result, Space}
+import ParallelPackedCohomology.{coboundaryOf, cocycle, persistence, Degree, Log, Result, Space, Stats}
 
 import org.scalacheck.Gen
 import org.scalacheck.Prop.forAll
@@ -276,6 +276,25 @@ class ParallelPackedCohomologySpec extends Specification with ScalaCheck:
       val rng = scala.util.Random(3)
       val cloud = EuclideanMetricSpace(Array.fill(40)(Array(rng.nextDouble(), rng.nextDouble())))
       reduce(space(cloud, 2, 0.5, 17), 3, 4).degrees.map(_.logs.size).sum must beGreaterThan(0)
+    }
+
+    "expand a deep cocycle log without using the call stack, and reject a cycle" in {
+      val depth = 30000
+      val degree = Degree(0, Stats(0, depth + 1, 0))
+      var column = 1L
+      while column <= depth do
+        val log = Log()
+        log.add(column - 1, 0)
+        degree.logs(column) = log
+        column += 1
+      val expanded = cocycle(degree, 17, depth.toLong)
+
+      val cyclic = Degree(0, Stats(0, 1, 0))
+      val cycle = Log()
+      cycle.add(0L, 1)
+      cyclic.logs(0L) = cycle
+      (expanded must beEqualTo(Map(depth.toLong -> 1))) and
+        (cocycle(cyclic, 17, 0L) must throwA[IllegalStateException])
     }
 
     // Otherwise the examples above would pass with every column in phase 2b, or none deferred. In general position a

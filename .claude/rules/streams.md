@@ -107,9 +107,14 @@ A loop over all pairs `a < b` asks `distance(b, a)` (a row of the cache), and ta
 `LayeredInorderSimplexStream.distanceOf(space)`, which calls the concrete `distance(Int, Int)` of `EuclideanMetricSpace`
 and `ExplicitMetricSpace` instead of the boxing generic one (edge pass 2-7x, `WORKLOG-vr-leftovers.md`).
 
-**`EuclideanMetricSpace` caches all n^2 distances only up to `MaxCachedPoints = 8192` (512 MB)**; above that, and with
-`cacheDistances = false`, distances are computed on demand. Before the cap, n^2 overflowed `Int` at 46,341 points
-(clifford50000 died at startup). Never collect all pairwise distances into a collection (the verb's scale is a loop).
+**`EuclideanMetricSpace` owns a stable coordinate snapshot**: direct construction rejects ragged/non-finite coordinates,
+`pts` returns defensive copies, and public point-to-point distance checks matching dimensions. Internal loops use the
+captured coordinates so caller mutation cannot stale the cache or change uncached distances; Cech uses the restricted
+`pointAt` view to avoid cloning in its inner loop (`MetricSpaceSpec`, `WORKLOG-code-review-fixes-2026-10-30.md`,
+`WORKLOG-code-review-verification-2026-10-30.md`). It
+caches all n^2 distances only up to `MaxCachedPoints = 8192` (512 MB); above that, and with `cacheDistances = false`,
+distances are computed on demand. Before the cap, n^2 overflowed `Int` at 46,341 points (clifford50000 died at startup).
+Never collect all pairwise distances into a collection (the verb's scale is a loop).
 
 **`FiniteMetricSpace.minimumEnclosingRadius`** (default radius of the verb and the streams; the scale of `longerThanFraction()`): an allocation-free
 scan that stops on a point once its farthest distance reaches the best so far; `EuclideanMetricSpace` overrides the hook `scanEnclosingRadius`

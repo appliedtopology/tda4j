@@ -352,4 +352,14 @@ class PersistenceMapSpec extends Specification:
         .inclusion(diagramOf(points, 17), diagramOf(points.take(8), 17)) must throwAn[IllegalArgumentException]
     }
   }
+
+  "integer coefficients" should {
+    "convert Int.MinValue correctly in a finite field" in {
+      val points = Array(Array(0.0))
+      val diagram = Persistence(points, maxDimension = 0, maxFiltrationValue = 2.0, characteristic = 17)
+      val scaledIdentity = PersistenceMap(diagram, diagram)(cell => Seq((cell, Int.MinValue)))
+      (scaledIdentity.entries(0).size must beEqualTo(1)) and
+        (diagram.coefficientField.toDouble(scaledIdentity.entries(0).head._3) must beEqualTo(8.0))
+    }
+  }
 end PersistenceMapSpec

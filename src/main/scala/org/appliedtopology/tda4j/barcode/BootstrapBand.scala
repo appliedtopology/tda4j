@@ -65,7 +65,8 @@ object BootstrapBand:
         maxFiltrationValue = maxFiltrationValue,
         complex = complex,
         characteristic = characteristic,
-        representatives = Representatives.Cocycles
+        representatives = Representatives.Cocycles,
+        computeAllRepresentatives = false
       ).dim(dimension).bars.filterNot(_.death.isPosInfinity)
     val original = finiteBars(points)
     val random = new scala.util.Random(seed)
