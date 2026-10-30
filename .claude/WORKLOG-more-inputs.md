@@ -299,6 +299,8 @@ the Künneth theorem gives an oracle that uses the engines.
   `tda4j.zigzag_from_steps`/`zigzag_from_complexes`; specs in `ZigzagFacadeSpec`, the JS `ExportsSpec`, `python/tests/test_zigzag.py`. No CLI
   form: the input is a sequence of complexes, not a file of points. Time-varying point clouds are reached through `ofComplexes` with
   `Link.Union` on vertices that keep their numbers; there is no function that builds the complexes from a moving cloud.
+- The full Scala.js run caught one example of the spec: `throwAn[...](".*Link\\.Union.*")` reports a mismatch for a message that contains the text
+  on Scala.js (the known specs2 difference `SpecThrows.throwWith` exists for). The spec uses `throwWith`; the JVM run had passed.
 - Limits: each arrow reduces the touched dimensions again (a few thousand cells in them is the intended range, not measured beyond the
   random fixtures of the spec); no cocycle representatives; the representative is at the birth only, it is not pushed along the bar;
   `Link.Union` doubles the number of positions. Not compared against Dionysus or another zigzag implementation: the oracles above are the only

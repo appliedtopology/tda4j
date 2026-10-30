@@ -2,6 +2,7 @@ package org.appliedtopology.tda4j
 
 import ZigzagStep.{Add, Remove}
 import Persistence.Engine
+import SpecThrows.throwWith
 
 import org.specs2.mutable.Specification
 
@@ -177,7 +178,7 @@ class ZigzagPersistenceSpec extends Specification:
       (ZigzagPersistence(Seq(Add(e01))) must throwAn[IllegalArgumentException]) and // facets missing
         (ZigzagPersistence(Seq(Remove(v0)), initial = Seq(v0, v1, e01)) must throwAn[IllegalArgumentException]) and
         (ZigzagPersistence(Seq(Add(v0), Add(v0))) must throwAn[IllegalArgumentException]) and
-        (ZigzagPersistence.ofComplexes(twoPaths) must throwAn[IllegalArgumentException](".*Link\\.Union.*"))
+        (ZigzagPersistence.ofComplexes(twoPaths) must throwWith[IllegalArgumentException]("Link\\.Union"))
     }
   }
 
