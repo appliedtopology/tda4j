@@ -58,7 +58,9 @@ object BootstrapBand:
           s"BootstrapBand: a subsample takes between 2 and ${points.size} points, got $size"
         )
       case Resampling.Bootstrap => require(points.size >= 2, "BootstrapBand: needs at least 2 points")
-    def finiteBars(cloud: PointCloud) =
+    // Only the endpoints are compared, so no representative is built (`computeAllRepresentatives = false`) and none is
+    // kept: a bar left lazy would hold the whole run of its engine alive, `original`'s for every round.
+    def finiteBars(cloud: PointCloud): Seq[PersistenceBar[Double, Unit]] =
       Persistence(
         cloud,
         maxDimension = dimension,
@@ -67,7 +69,10 @@ object BootstrapBand:
         characteristic = characteristic,
         representatives = Representatives.Cocycles,
         computeAllRepresentatives = false
-      ).dim(dimension).bars.filterNot(_.death.isPosInfinity)
+      ).dim(dimension)
+        .bars
+        .filterNot(_.death.isPosInfinity)
+        .map(bar => PersistenceBar[Double, Unit](bar.dim, bar.lower, bar.upper))
     val original = finiteBars(points)
     val random = new scala.util.Random(seed)
     val n = points.size

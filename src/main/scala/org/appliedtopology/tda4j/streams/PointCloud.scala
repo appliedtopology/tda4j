@@ -6,21 +6,27 @@ package org.appliedtopology.tda4j
   * `PointCloud` is expected (`into`), so callers never need to care which collection their points are in.
   */
 into final case class PointCloud(points: Array[Array[Double]]):
-  require(
-    points.forall(_.length == ambientDimension),
-    s"PointCloud: the points have different numbers of coordinates (the first has $ambientDimension, point " +
-      s"${points.indexWhere(_.length != ambientDimension)} has ${points.find(_.length != ambientDimension).map(_.length).getOrElse(0)})"
-  )
-  require(
-    points.forall(_.forall(_.isFinite)),
-    s"PointCloud: point ${points.indexWhere(!_.forall(_.isFinite))} has a coordinate that is NaN or infinite"
-  )
+  PointCloud.check(points, "PointCloud")
   def size: Int = points.length
   def ambientDimension: Int = if points.isEmpty then 0 else points.head.length
   lazy val metricSpace: EuclideanMetricSpace = new EuclideanMetricSpace(points)
 // format: on
 
 object PointCloud:
+  // Every way into the library's Euclidean machinery checks its points here, so the messages agree: `owner` names the
+  // class the user called. Returns normally when all rows have the first row's length and every entry is finite.
+  // `private[tda4j]` keeps a generic helper name out of every user's wildcard import of the flat package.
+  private[tda4j] def check(points: Array[Array[Double]], owner: String): Unit =
+    val dimension = if points.isEmpty then 0 else points.head.length
+    val ragged = points.indexWhere(_.length != dimension)
+    require(
+      ragged < 0,
+      s"$owner: the points have different numbers of coordinates (the first has $dimension, point $ragged has " +
+        s"${points(ragged).length})"
+    )
+    val bad = points.indexWhere(!_.forall(_.isFinite))
+    require(bad < 0, s"$owner: point $bad has a coordinate that is NaN or infinite")
+
   given fromArrays: Conversion[Array[Array[Double]], PointCloud] = PointCloud(_)
   given fromSeqs: Conversion[Seq[Seq[Double]], PointCloud] = s => PointCloud(s.map(_.toArray).toArray)
   given fromSeqOfArrays: Conversion[Seq[Array[Double]], PointCloud] = s => PointCloud(s.toArray)

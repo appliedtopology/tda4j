@@ -278,6 +278,30 @@ class ParallelPackedCohomologySpec extends Specification with ScalaCheck:
       reduce(space(cloud, 2, 0.5, 17), 3, 4).degrees.map(_.logs.size).sum must beGreaterThan(0)
     }
 
+    // Hand-derived over F_17: V(2) = e2 + 3 V(0); V(3) = e3 + 5 V(0) + 16 V(2); V(4) = e4 + 2 V(3) + 7 V(1). Column 0 is
+    // reached by two paths in V(3), and its coefficient 5 + 16 * 3 = 53 = 2 only comes out if both are summed.
+    "expand a cocycle log to the column plus each added column's cocycle times its factor, shared columns summed" in {
+      val degree = Degree(1, Stats(1, 5, 0))
+      def log(column: Long, added: (Long, Int)*): Unit =
+        val entries = Log()
+        added.foreach((other, factor) => entries.add(other, factor))
+        degree.logs(column) = entries
+      log(2L, (0L, 3))
+      log(3L, (0L, 5), (2L, 16))
+      log(4L, (3L, 2), (1L, 7))
+      (cocycle(degree, 17, 2L) must beEqualTo(Map(2L -> 1, 0L -> 3))) and
+        (cocycle(degree, 17, 3L) must beEqualTo(Map(3L -> 1, 2L -> 16, 0L -> 2))) and
+        (cocycle(degree, 17, 4L) must beEqualTo(Map(4L -> 1, 3L -> 2, 2L -> 15, 1L -> 7, 0L -> 4)))
+    }
+
+    "read a degree-0 cocycle from its components, not from reduction logs" in {
+      val degree = Degree(0, Stats(0, 2, 0))
+      degree.components = column => Map(column -> 1, column + 1 -> 1)
+      cocycle(degree, 17, 4L) must beEqualTo(Map(4L -> 1, 5L -> 1))
+    }
+
+    // Factor 0 keeps every cocycle a single term, so a chain this deep stays cheap: this one checks the call stack, the
+    // example above the values.
     "expand a deep cocycle log without using the call stack, and reject a cycle" in {
       val depth = 30000
       val degree = Degree(0, Stats(0, depth + 1, 0))

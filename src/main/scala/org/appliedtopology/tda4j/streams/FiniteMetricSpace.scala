@@ -169,10 +169,11 @@ open class ExplicitMetricSpace(val dist: Seq[Seq[Double]]) extends FiniteMetricS
   def elements: Iterable[Int] = Range(0, size)
   override def contains(x: Int): Boolean = 0 <= x & x < size
 
-/** The Euclidean distances between the rows of `pts` (all of the same length).
+/** The Euclidean distances between the rows of `coordinates` (all of the same length, all entries finite).
   *
-  * Coordinates are copied on construction. [[pts]] returns a defensive copy, so mutating either the input arrays or a
-  * returned array does not change this metric space or its caches.
+  * The space owns a snapshot of the coordinates, taken on construction: changing the arrays passed in, or an array
+  * returned by [[pts]] or [[point]], changes neither the distances nor the minimum enclosing radius nor the
+  * vantage-point tree. Ragged or non-finite input is rejected, naming the first offending point.
   *
   * @param cacheDistances
   *   compute all pairwise distances on first use and look them up afterwards (default `true`). That is `n^2` doubles,
@@ -185,24 +186,19 @@ open class ExplicitMetricSpace(val dist: Seq[Seq[Double]]) extends FiniteMetricS
 open class EuclideanMetricSpace(coordinates: Array[Array[Double]], val cacheDistances: Boolean = true)
     extends FiniteMetricSpace[Int]:
   private val pointCoordinates = coordinates.map(_.clone())
-  private val ambientDimension = if pointCoordinates.isEmpty then 0 else pointCoordinates.head.length
-  require(
-    pointCoordinates.forall(_.length == ambientDimension),
-    s"EuclideanMetricSpace: the points have different numbers of coordinates (the first has $ambientDimension, " +
-      s"point ${pointCoordinates.indexWhere(_.length != ambientDimension)} has " +
-      s"${pointCoordinates.find(_.length != ambientDimension).map(_.length).getOrElse(0)})"
-  )
-  require(
-    pointCoordinates.forall(_.forall(_.isFinite)),
-    s"EuclideanMetricSpace: point ${pointCoordinates.indexWhere(!_.forall(_.isFinite))} has a coordinate that is NaN or infinite"
-  )
+  PointCloud.check(pointCoordinates, "EuclideanMetricSpace")
 
-  /** A defensive copy of the points captured when this metric space was constructed. */
+  /** A copy of all the points: `n` arrays are allocated on every call, so read single points with [[point]]. */
   def pts: Array[Array[Double]] = pointCoordinates.map(_.clone())
 
-  // Restricted because returning owned arrays publicly would let callers invalidate this space's lazy caches.
+  /** A copy of the coordinates of point `index`. */
+  def point(index: Int): Array[Double] = pointCoordinates(index).clone()
+
+  // Not public: the arrays are the space's own, and a caller who wrote to one would invalidate its lazy caches. Hot
+  // consumers inside the library (the Cech stream reads a point per vertex) read them without copying.
   private[tda4j] def pointAt(index: Int): Array[Double] = pointCoordinates(index)
 
+  /** The squared distance between two points, which must have the same number of coordinates. */
   def pointSqDistance(x: Array[Double], y: Array[Double]): Double =
     require(
       x.length == y.length,
