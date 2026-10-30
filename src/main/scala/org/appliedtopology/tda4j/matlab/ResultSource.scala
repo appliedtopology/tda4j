@@ -12,7 +12,7 @@ package org.appliedtopology.tda4j.matlab
   * @param cocycles
   *   whether the representatives are cocycles (option `representativeType`)
   * @param field
-  *   `Z` (a prime field), `R` (the reals), or empty when a loaded file does not say
+  *   `Z` (a prime field), `R` (the reals), `Q` (the rationals), or empty when a loaded file does not say
   * @param prime
   *   the prime of field `Z`
   * @param landmarks
@@ -64,7 +64,10 @@ private[matlab] object ResultSource:
     landmarks: Array[Int] = Array.emptyIntArray,
     relativeTo: Array[Int] = Array.emptyIntArray
   ): ResultSource =
-    val reals = opts.get("field").exists(_.equalsIgnoreCase("r"))
+    val field = opts.get("field").map(_.toUpperCase) match
+      case Some("R") => "R"
+      case Some("Q") => "Q"
+      case _         => "Z"
     val prime =
       opts.get("prime").flatMap(_.toIntOption).getOrElse(org.appliedtopology.tda4j.FiniteField.DefaultPrime)
     ResultSource(
@@ -72,7 +75,7 @@ private[matlab] object ResultSource:
       options.clone(),
       complex,
       opts.get("representativetype").exists(_.equalsIgnoreCase("cocycles")),
-      if reals then "R" else "Z",
+      field,
       prime,
       input,
       landmarks.clone(),

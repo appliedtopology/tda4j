@@ -32,12 +32,29 @@ and the options, all with defaults:
 | `maxFiltrationValue` | the minimum enclosing radius | where to stop the filtration; past the default nothing new is born |
 | `complex` | `VietorisRips` | or `Cech`, `AlphaShapes`, for points |
 | `characteristic` | `17` | the coefficients: a prime `p` for the field with `p` elements, `0` for real numbers |
+| `coefficients` | none | the coefficients as an object, in place of `characteristic`: `Coefficients.Rationals` for exact rational numbers |
 | `engine` | `Persistence.Engine.Auto` | Ripser for Vietoris-Rips, `FastCubical` for images, cohomology otherwise (see [engines](homology-computation/choosing-engine.md)) |
 | `representatives` | `Representatives.Cycles` | or `Representatives.Cocycles` (see below) |
 | `includeZeroLength` | `false` | also report bars `[v, v)`, cells paired with cells entering at the same value |
 
 The default field has 17 elements rather than 2: over the field with 2 elements signs disappear, and so do classes
 that only exist with odd coefficients.
+
+`characteristic = 0` computes with floating point numbers, which are equal when they differ by less than a tolerance.
+`coefficients = Coefficients.Rationals` computes with exact fractions instead: no tolerance, no prime that might divide a
+torsion coefficient, and representatives whose coefficients are the exact numbers.
+
+```scala 3
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+
+val points = Array.tabulate(30)(i => Array(math.cos(i * 0.21), math.sin(i * 0.21)))
+Persistence(points, coefficients = Coefficients.Rationals).bettiNumbers
+```
+
+The numerators and denominators can grow as the reductions combine columns, which the residues of a prime field do not.
+If a rational computation takes too much memory, a large prime (`characteristic = 10007`) gives the same bars unless it
+divides a torsion coefficient of the complex.
 
 ### Reading a diagram
 

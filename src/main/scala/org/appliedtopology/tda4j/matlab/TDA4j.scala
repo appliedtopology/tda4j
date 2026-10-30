@@ -67,13 +67,14 @@ private object EngineKind:
       )
 
 private enum CoefficientKind:
-  case Z, R
+  case Z, R, Q
 
 private object CoefficientKind:
   def parse(raw: String): CoefficientKind = raw.toLowerCase match
     case "z"   => Z
     case "r"   => R
-    case other => throw new IllegalArgumentException(s"unrecognized field '$other'; expected 'Z' or 'R'")
+    case "q"   => Q
+    case other => throw new IllegalArgumentException(s"unrecognized field '$other'; expected 'Z', 'R' or 'Q'")
 
 /** TDA4j for MATLAB (through its built-in Java support) and plain Java: every method takes and returns only `int`,
   * `double`, `String`, arrays of those, and result objects ([[PersistenceResult]], [[LandmarkSelectionResult]],
@@ -1054,6 +1055,9 @@ object TDA4j:
         val epsilon = opts.get("epsilon").map(parseDoubleOption("epsilon", _)).getOrElse(1e-9)
         given Double is Field = Field.DoubleApproximated(epsilon)
         compute[Double](identity)
+      case CoefficientKind.Q =>
+        import Coefficients.Rationals.given
+        compute[Coefficients.Rational](_.toDouble)
 
   /** The persistence threshold, resolved from `minPersistence`/`minPersistenceFraction` -- validated BEFORE any
     * computation starts (a typo should not cost a long Vietoris-Rips run), applied to the finished result by the thin
@@ -2232,6 +2236,16 @@ object TDA4j:
         val epsilon = opts.get("epsilon").map(parseDoubleOption("epsilon", _)).getOrElse(1e-9)
         given Double is Field = Field.DoubleApproximated(epsilon)
         computeCubicalGeneric[Double](stream, engine, cycles, maxDimension, wantsZeroLength(opts), identity)
+      case CoefficientKind.Q =>
+        import Coefficients.Rationals.given
+        computeCubicalGeneric[Coefficients.Rational](
+          stream,
+          engine,
+          cycles,
+          maxDimension,
+          wantsZeroLength(opts),
+          _.toDouble
+        )
 
   private def computeCubicalGeneric[C](
     stream: CubicalGridStream,

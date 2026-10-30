@@ -61,6 +61,10 @@ object Image:
   * @param characteristic
   *   the coefficient field: a prime `p` for `Z/p` (default `FiniteField.DefaultPrime`, 17), or `0` for real
   *   coefficients.
+  * @param coefficients
+  *   the coefficient field as an object, for the one `characteristic` cannot name: `Coefficients.Rationals` for exact
+  *   rational numbers. When given it replaces `characteristic`, which must then be left alone or agree with it
+  *   (`Coefficients.Rationals` has characteristic 0).
   * @param engine
   *   `Persistence.Engine.Auto` (default) picks one for the input and `representatives`; see [[Persistence.Engine]].
   *   Most users never set it.
@@ -144,7 +148,7 @@ object Persistence:
       maxDimension: Int,
       maxFiltrationValue: Option[Double],
       complex: PointCloudComplex,
-      characteristic: Int,
+      coefficients: Coefficients,
       includeZeroLength: Boolean,
       cycles: Boolean
     ): PersistenceDiagram[CellT] =
@@ -220,12 +224,11 @@ object Persistence:
           maxDimension: Int,
           maxFiltrationValue: Option[Double],
           complex: PointCloudComplex,
-          characteristic: Int,
+          coefficients: Coefficients,
           includeZeroLength: Boolean,
           cycles: Boolean
         ) =
           require(complex eq VietorisRips, "Persistence: engine = Ripser needs complex = VietorisRips")
-          val coefficients = Coefficients(characteristic)
           import coefficients.given
           val engine =
             PackedRipserCohomologyEngine[coefficients.C](ms, maxDimension, maxFiltrationValue = maxFiltrationValue)
@@ -375,8 +378,17 @@ object Persistence:
     includeZeroLength: Boolean = false,
     representatives: Representatives = Representatives.Cycles,
     computeAllRepresentatives: Boolean = true,
-    threads: Optional[Int] = Optional.empty
+    threads: Optional[Int] = Optional.empty,
+    coefficients: Optional[Coefficients] = Optional.empty
   ): PersistenceDiagram[CellT] =
+    val field = coefficients.toOption match
+      case Some(chosen) =>
+        require(
+          characteristic == FiniteField.DefaultPrime || characteristic == chosen.characteristic,
+          s"Persistence: characteristic = $characteristic and coefficients = $chosen disagree; give one of them"
+        )
+        chosen
+      case None => Coefficients(characteristic)
     threads.toOption match
       case Some(n) =>
         require(n >= 1, s"Persistence: threads must be at least 1, got $n")
@@ -386,7 +398,7 @@ object Persistence:
             maxDimension,
             maxFiltrationValue,
             complex,
-            characteristic,
+            field,
             engine,
             includeZeroLength,
             representatives,
@@ -399,7 +411,7 @@ object Persistence:
           maxDimension,
           maxFiltrationValue,
           complex,
-          characteristic,
+          field,
           engine,
           includeZeroLength,
           representatives,
@@ -411,7 +423,7 @@ object Persistence:
     maxDimension: Optional[Int],
     maxFiltrationValue: Optional[Double],
     complex: PointCloudComplex,
-    characteristic: Int,
+    coefficients: Coefficients,
     engine: Engine,
     includeZeroLength: Boolean,
     representatives: Representatives,
@@ -426,7 +438,7 @@ object Persistence:
           if Parallel.threads > 1 && input.parallelRipserApplies(
               complex,
               requested.getOrElse(DefaultMaxDimension),
-              characteristic,
+              coefficients.characteristic,
               includeZeroLength,
               cycles
             )
@@ -446,7 +458,7 @@ object Persistence:
         requested.getOrElse(DefaultMaxDimension),
         maxFiltrationValue.toOption,
         complex,
-        characteristic,
+        coefficients.characteristic,
         includeZeroLength,
         cycles,
         computeAllRepresentatives
@@ -456,7 +468,7 @@ object Persistence:
         requested.getOrElse(DefaultMaxDimension),
         maxFiltrationValue.toOption,
         complex,
-        characteristic,
+        coefficients,
         includeZeroLength,
         cycles
       )
@@ -468,7 +480,7 @@ object Persistence:
         )
       )
       require(grid.ambientDim >= 2, "Persistence: engine = FastCubical needs an image of dimension 2 or more")
-      fastCubical(grid, requested.getOrElse(DefaultMaxDimension), characteristic, includeZeroLength)
+      fastCubical(grid, requested.getOrElse(DefaultMaxDimension), coefficients, includeZeroLength)
         .asInstanceOf[PersistenceDiagram[CellT]]
     else
       val stream = input.stream(requested.getOrElse(DefaultMaxDimension), maxFiltrationValue.toOption, complex)
@@ -484,7 +496,7 @@ object Persistence:
       compute(
         stream,
         degree,
-        characteristic,
+        coefficients,
         chosen,
         input.scale,
         includeZeroLength,
@@ -494,10 +506,9 @@ object Persistence:
   private def fastCubical(
     grid: CubicalGridStream,
     maxDimension: Int,
-    characteristic: Int,
+    coefficients: Coefficients,
     includeZeroLength: Boolean
   ): PersistenceDiagram[Cube] =
-    val coefficients = Coefficients(characteristic)
     import coefficients.given
     val bars = FastCubicalHomologyEngine[coefficients.C]().persistentHomology(grid, includeZeroLength, maxDimension)
     PersistenceDiagram[Cube, coefficients.C](
@@ -518,13 +529,12 @@ object Persistence:
   private def compute[CellT: OrderedCell](
     stream: StratifiedCellStream[CellT, Double],
     maxDimension: Int,
-    characteristic: Int,
+    coefficients: Coefficients,
     engine: Engine,
     scale: Option[Double],
     includeZeroLength: Boolean,
     cycles: Boolean
   ): PersistenceDiagram[CellT] =
-    val coefficients = Coefficients(characteristic)
     import coefficients.given
     val (bars, last) = engine match
       case Engine.Chunks =>

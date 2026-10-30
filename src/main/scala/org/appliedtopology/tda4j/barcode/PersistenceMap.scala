@@ -22,7 +22,8 @@ import scala.collection.mutable
   * The map must send each cell to a chain of cells that have already entered the target by the time the cell enters the
   * source (it preserves the filtration). Both diagrams need representative cycles and the cells of their bars (the
   * default of `Persistence`); the target must keep its zero-length bars, `includeZeroLength = true`, because their
-  * representatives are part of what the reduction reads. They must be over the same field: the same `characteristic`.
+  * representatives are part of what the reduction reads. They must be over the same field: the same `characteristic`
+  * (or the same `coefficients`).
   *
   * @see
   *   [[MapAlgebra]] for the image, kernel and cokernel of a map of barcodes that you write down yourself
@@ -130,6 +131,11 @@ object PersistenceMap:
       p == q,
       s"PersistenceMap: the source is over ${describe(p)} and the target over ${describe(q)}; compute both diagrams with the same `characteristic`"
     )
+    // Characteristic 0 is the reals and the rationals alike, which are different types: the cast below needs one field.
+    require(
+      p != 0 || source.coefficientField.getClass == target.coefficientField.getClass,
+      "PersistenceMap: the source and the target are over different fields of characteristic 0 (the real and the rational numbers); compute both diagrams with the same `characteristic` or `coefficients`"
+    )
     // The same prime, so the coefficients of the target are those of the source: `Z/p` is `Int` underneath whichever
     // `FiniteField` instance made it.
     val sameField = target.asInstanceOf[PersistenceDiagram.Of[T, C]]
@@ -179,7 +185,7 @@ object PersistenceMap:
     if fr.isEqual(x, fr.zero) then n else 0
 
   private def describe(characteristic: Int): String =
-    if characteristic == 0 then "the real numbers" else s"Z/$characteristic"
+    if characteristic == 0 then "a field of characteristic 0" else s"Z/$characteristic"
 
   /** `n` in the field, the sum of `n` ones (or minus ones). */
   private def integer[C](n: Int)(using fr: C is Field): C =

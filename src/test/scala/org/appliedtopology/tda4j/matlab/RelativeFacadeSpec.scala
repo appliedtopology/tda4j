@@ -1,6 +1,8 @@
 package org.appliedtopology.tda4j
 package matlab
 
+import SpecThrows.throwWith
+
 import org.specs2.mutable.Specification
 
 /** `TDA4j.computeRelativeFromPoints` and `computeRelativeFromDistanceMatrix`: the Vietoris-Rips pair modulo the
@@ -110,9 +112,9 @@ class RelativeFacadeSpec extends Specification:
     "refuse a vertex that is not a point, an engine it does not have, and an option for another complex" in {
       def run(subset: Array[Int], options: String*) =
         TDA4j.computeRelativeFromPoints(points, subset, options.toArray)
-      (run(Array(9)) must throwA[IllegalArgumentException](message = "1-based")) and
-        (run(Array(-1)) must throwA[IllegalArgumentException](message = "out of range")) and
-        (run(subcomplex, "engine", "ripser") must throwA[IllegalArgumentException](message = "relative")) and
-        (run(subcomplex, "complex", "alpha") must throwA[IllegalArgumentException](message = "unrecognized option"))
+      (run(Array(9)) must throwWith[IllegalArgumentException]("1-based")) and
+        (run(Array(-1)) must throwWith[IllegalArgumentException]("out of range")) and
+        (run(subcomplex, "engine", "ripser") must throwWith[IllegalArgumentException]("relative")) and
+        (run(subcomplex, "complex", "alpha") must throwWith[IllegalArgumentException]("unrecognized option"))
     }
   }

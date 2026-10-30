@@ -78,7 +78,7 @@ for data where a `NaN` can only be a bug.
 | `representativeType` | `cycles`, `cocycles` | `cycles` (every engine gives both except `fast-cubical` and `fast-alpha`, which give cycles; `ripser` and `cohomology` compute cocycles natively and cycles a little more slowly, the others the other way round) |
 | `maxDimension` | integer | `2`: the top homological degree (for an image: its dimension) |
 | `maxFiltrationValue` | number | the minimum enclosing radius (`Infinity` for the general witness complex, which is not a flag complex; `Infinity` for any complex gives the whole complex, and `engine=fast-alpha` takes the whole triangulation and no radius) |
-| `field` | `Z` (a prime field), `R` (floating point) | `Z` |
+| `field` | `Z` (a prime field), `R` (floating point), `Q` (exact rational numbers: the bars are computed exactly and the coefficients of the representatives reported as the nearest `double`) | `Z` |
 | `prime` | prime | `17` |
 | `epsilon` | number | `1e-9`: the tolerance of `field=R` |
 | `minPersistence` | number | unset: an absolute threshold for the reported bars |

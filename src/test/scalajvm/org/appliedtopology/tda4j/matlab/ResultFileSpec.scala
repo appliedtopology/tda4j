@@ -235,6 +235,13 @@ class ResultFileSpec extends Specification:
       Files.writeString(Paths.get(path), text)
       path
 
+    "say it is over the rationals, with no prime" >> {
+      val result = TDA4j.computeFromPoints(noisyCircle, Array("maxDimension", "1", "field", "Q"))
+      val path = tempPath(".json")
+      result.save(path)
+      (read(path) must contain("\"field\": \"Q\"")) and (read(path) must not(contain("\"prime\""))) and
+        (sameArrays(TDA4j.loadResult(path).toArray(), result.toArray()) must beTrue)
+    }
     "keep what a relative result is relative to" >> {
       val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.0, 1.0), Array(1.0, 1.0))
       val result = TDA4j.computeRelativeFromPoints(points, Array(0, 1), Array("maxDimension", "1"))

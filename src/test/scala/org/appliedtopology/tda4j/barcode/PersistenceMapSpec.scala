@@ -193,6 +193,19 @@ class PersistenceMapSpec extends Specification:
         (seventeen.cokernel(1) must beEmpty)
     }
 
+    "multiply the loop by exactly 2 over the rationals, an isomorphism" in {
+      def over(stream: StratifiedCellStream[Simplex[Int], Double]) =
+        Persistence(stream, maxDimension = 2, coefficients = Coefficients.Rationals, includeZeroLength = true)
+      val map = PersistenceMap.inclusion(
+        over(stream(vertices ++ boundaryEdges)),
+        over(stream(vertices ++ allEdges ++ triangles))
+      )
+      val inf = Double.PositiveInfinity
+      (map.entries(1).map((_, _, c) => c.toString).map(_.stripPrefix("-")) must beEqualTo(List("2"))) and
+        (map.image(1).map(_.toTriple) must beEqualTo(List((1, 0.0, inf)))) and (map.kernel(1) must beEmpty) and
+        (map.cokernel(1) must beEmpty)
+    }
+
     "be the identity on the connected components over every field" in {
       primes.map(run).map(m => m.image(0).map(_.toTriple)) must beEqualTo(
         primes.map(_ => List((0, 0.0, Double.PositiveInfinity)))

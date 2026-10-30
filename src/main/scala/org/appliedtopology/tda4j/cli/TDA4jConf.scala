@@ -117,7 +117,10 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
       "--min-persistence 0"
   )
   val field: ScallopOption[String] =
-    opt[String](name = "field", descr = "Z (default, a prime finite field) or R (floating point)")
+    opt[String](
+      name = "field",
+      descr = "Z (default, a prime finite field), R (floating point) or Q (exact rational numbers)"
+    )
   val prime: ScallopOption[Int] = opt[Int](name = "prime", descr = "prime for --field=Z (default: 17)")
   val epsilon: ScallopOption[Double] = opt[Double](name = "epsilon", descr = "tolerance for --field=R (default: 1e-9)")
   // Boolean-valued options are Strings: Scallop's opt[Boolean] is always supplied (false when absent), which would

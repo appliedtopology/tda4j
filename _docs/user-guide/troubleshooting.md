@@ -21,7 +21,7 @@ does the same for the whole project.
 ### The answer differs between runs with different coefficients
 
 The default field has 17 elements. Classes that exist only with odd torsion appear over `characteristic = 17` and
-not over 2; use `characteristic = 0` for real coefficients. Compare like with like when checking against another
+not over 2; use `characteristic = 0` for real coefficients, or `coefficients = Coefficients.Rationals` for exact ones. Compare like with like when checking against another
 library, which often defaults to the field with 2 elements.
 
 ### `OutOfMemoryError`, or a computation that does not finish

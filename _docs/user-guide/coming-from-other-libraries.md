@@ -38,7 +38,7 @@ and interval objects by one call.
 | `Plex4.createLazyWitnessStream(selector, k + 1, maxDistance, numDivisions)` | `Witness(metricSpace, landmarks, maxDimension = k, maxFiltrationValue = maxDistance)`; `Witness.Variant.Lazy` is the default |
 | `Plex4.createWitnessStream(...)` | `Witness(..., variant = Witness.Variant.General)` |
 | `Plex4.createExplicitSimplexStream()`, `addVertex`, `addElement`, `finalizeStream()` | `ExplicitStreamBuilder.fromFacets(facets)` or `fromFilteredFacets(Seq((value, facet), ...))` |
-| `Plex4.getRationalSimplicialAlgorithm(...)` | `characteristic = 0`: floating point, not exact rationals |
+| `Plex4.getRationalSimplicialAlgorithm(...)` | `coefficients = Coefficients.Rationals` for exact rationals (`characteristic = 0` is floating point); MATLAB `'field', 'Q'` |
 | `Plex4.createBarcodePlot(intervals, caption, end)` | `Plot.barcode(diagram).save("barcode.svg")`; MATLAB `result.plotBarcode().save('barcode.svg')` |
 
 A JavaPlex discretization step is gone: there is no `numDivisions`, and the values in a barcode are the real filtration values.

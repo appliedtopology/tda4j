@@ -54,7 +54,7 @@ The [file formats page](input-output.md) describes the formats.
 | `--threads` | integer, at least 1 | all the processors; `1` is the sequential computation. The bars do not depend on it; where tied simplices give a choice, the representatives can |
 | `--max-dimension` | integer | `2`; for an image, its dimension |
 | `--max-filtration-value` | number | the minimum enclosing radius; in the units of the complex (a diameter for `vr`, a radius for `cech` and `alpha`) |
-| `--field` | `Z` (a prime field), `R` (floating point) | `Z` |
+| `--field` | `Z` (a prime field), `R` (floating point), `Q` (exact rational numbers) | `Z` |
 | `--prime` | prime | `17`, for `--field Z` |
 | `--epsilon` | number | `1e-9`, the tolerance of `--field R` |
 | `--representative-type` | `cycles`, `cocycles` | `cycles`; every engine gives both except `fast-cubical` and `fast-alpha` (cycles only) |

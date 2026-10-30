@@ -1,6 +1,8 @@
 package org.appliedtopology.tda4j
 package matlab
 
+import SpecThrows.throwWith
+
 import org.specs2.mutable.Specification
 
 /** `TDA4j.computeInclusionFromPoints` and its relatives: the map of persistent homology induced by a map of
@@ -130,20 +132,16 @@ class MapFacadeSpec extends Specification:
       val points = cloud(5, 1L)
       def inclusion(subsample: Array[Int], options: String*) =
         TDA4j.computeInclusionFromPoints(points, subsample, options.toArray)
-      (TDA4j.computeMapFromPoints(near, far, Array(0, 1)) must throwA[IllegalArgumentException](
-        message = "not a map of persistence modules"
+      (TDA4j.computeMapFromPoints(near, far, Array(0, 1)) must throwWith[IllegalArgumentException](
+        "not a map of persistence modules"
       )) and
-        (TDA4j.computeMapFromPoints(near, far, Array(0)) must throwA[IllegalArgumentException](message =
-          "one for each"
+        (TDA4j.computeMapFromPoints(near, far, Array(0)) must throwWith[IllegalArgumentException]("one for each")) and
+        (TDA4j.computeMapFromPoints(near, far, Array(0, 2)) must throwWith[IllegalArgumentException](
+          "outside the target"
         )) and
-        (TDA4j.computeMapFromPoints(near, far, Array(0, 2)) must throwA[IllegalArgumentException](
-          message = "outside the target"
-        )) and
-        (inclusion(Array(0, 1), "engine", "naive") must throwA[IllegalArgumentException](message =
-          "die with their bars"
-        )) and
-        (inclusion(Array(5)) must throwA[IllegalArgumentException](message = "1-based")) and
-        (inclusion(Array.empty[Int]) must throwA[IllegalArgumentException](message = "at least one"))
+        (inclusion(Array(0, 1), "engine", "naive") must throwWith[IllegalArgumentException]("die with their bars")) and
+        (inclusion(Array(5)) must throwWith[IllegalArgumentException]("1-based")) and
+        (inclusion(Array.empty[Int]) must throwWith[IllegalArgumentException]("at least one"))
     }
 
     "hand out copies" in {

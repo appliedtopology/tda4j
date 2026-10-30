@@ -153,3 +153,25 @@ of each would need its own textbook oracle (#271).
 Facade-vs-verb check: for each of `ripser`, `naive`, `chunks`, `cohomology` and each kind of representative the facade's
 cells are the verb's for the same engine. Across engines the pairs differ (ties: all vertices enter at 0, an edge and its
 triangle at one value), which `BarCellsSpec` pins per engine, so no cross-engine equality is asserted.
+
+# Exact rational coefficients (2026-10-30)
+
+`Coefficients.Rational` (nested in the `Coefficients` companion: a top-level `Rational` would join every user's wildcard
+import) is a `BigInt` pair in lowest terms with a positive denominator, equal values for equal numbers, `Field.hash` its
+hash; `Coefficients.Rationals` is the runtime selector (characteristic 0, like the reals). The verb takes it as
+`coefficients: Optional[Coefficients]`, which replaces `characteristic` (the default characteristic alongside it is
+tolerated, another one is an error); inside, `solve`/`compute`/`fastCubical`/`Input.ripser` take `Coefficients` where they
+took the Int, and only the block-parallel engine keeps the prime (`coefficients.characteristic` is 0 for Q, which
+`ParallelRipser.supports` refuses). `PersistenceMap` compares the field class when the characteristic is 0, because the
+unchecked cast it uses would turn a real/rational mix into a `ClassCastException`. Facades: `field=Q` (and `--field Q`);
+a coefficient is reported as the nearest `double`.
+
+Oracles: field laws on random fractions with parts up to 2^40 and the 10^30 + 1 case; the 6-vertex projective plane
+(Betti 1,1,1 over Z/2, 1,0,0 over Z/3 and Q, for Cohomology, Naive and Chunks); the bars over Q equal those over Z/10007 on
+random clouds for every engine and both kinds of representative; representatives closed exactly; the Möbius band map
+multiplies the loop by exactly 2. The tests do not distinguish Q from the default Z/17 by bars alone (no torsion at 17), so
+the field is pinned by `1/2` being `0.5` in the diagram's field.
+
+Measured once (not an A/B): random 3-D clouds, 40 and 80 points, degrees 0..2, Ripser and Cohomology engines: the rational
+run took as long as the Z/17 run (26 against 37 ms, 78 against 78 ms, 41 against 68 ms, 174 against 186 ms), so no slowdown
+is claimed or ruled out for larger complexes; coefficient growth was not looked at.
