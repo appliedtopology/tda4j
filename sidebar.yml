@@ -50,6 +50,7 @@ subsection:
           - page: user-guide/topological-spaces/dowker-complexes.md
           - page: user-guide/topological-spaces/cubical-complexes.md
           - page: user-guide/topological-spaces/simplicial-sets.md
+          - page: user-guide/topological-spaces/series-graphs-functions.md
       - index: user-guide/homology-computation/index.md
         directory: user-guide/homology-computation
         subsection:

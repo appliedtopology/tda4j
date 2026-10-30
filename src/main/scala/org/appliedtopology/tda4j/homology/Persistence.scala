@@ -198,15 +198,24 @@ object Persistence:
     private def ofMetricSpace(ms: FiniteMetricSpace[Int], points: Option[PointCloud]): Input[Simplex[Int]] =
       new Input[Simplex[Int]]:
         require(ms.size > 0, "Persistence: the input has no points")
-        def stream(maxDimension: Int, maxFiltrationValue: Option[Double], complex: PointCloudComplex) =
+        def stream(
+          maxDimension: Int,
+          maxFiltrationValue: Option[Double],
+          complex: PointCloudComplex
+        ): StratifiedCellStream[Simplex[Int], Double] =
           points match
             case Some(pc) => complex.fromPoints(pc, maxDimension, maxFiltrationValue)
             case None     =>
               require(complex eq VietorisRips, "Persistence: a metric space only supports complex = VietorisRips")
-              VietorisRips(ms, maxDimension, maxFiltrationValue)
+              ms match
+                // The flag complex of the listed edges, grown from the neighbour lists: no n x n matrix.
+                case graph: WeightedGraph => FlagComplex(graph, maxDimension, maxFiltrationValue)
+                case _                    => VietorisRips(ms, maxDimension, maxFiltrationValue)
         lazy val scale = Some(ms.minimumEnclosingRadius)
         def cells = summon[Simplex[Int] is OrderedCell]
-        override def ripserApplies(complex: PointCloudComplex) = complex eq VietorisRips
+        // The Ripser engines index a dense matrix; a graph goes to the cohomology engine on its flag complex.
+        override def ripserApplies(complex: PointCloudComplex) =
+          (complex eq VietorisRips) && !ms.isInstanceOf[WeightedGraph]
         override def ripser(
           maxDimension: Int,
           maxFiltrationValue: Option[Double],
@@ -243,7 +252,7 @@ object Persistence:
           includeZeroLength: Boolean,
           cycles: Boolean
         ) =
-          (complex eq VietorisRips) && !includeZeroLength &&
+          (complex eq VietorisRips) && !ms.isInstanceOf[WeightedGraph] && !includeZeroLength &&
             ParallelRipser.supports(ms.size, maxDimension, characteristic, cycles)
         override def parallelRipser(
           maxDimension: Int,

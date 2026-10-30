@@ -29,7 +29,8 @@ spaces are an add-on with one more import, `import org.appliedtopology.tda4j.sse
   (with DTM weighting and edge collapse), [Čech](topological-spaces/cech-complexes.md),
   [alpha](topological-spaces/alpha-complexes.md), [sparse Rips](topological-spaces/sparse-vietoris-rips.md),
   [witness](topological-spaces/witness-complexes.md), [Dowker](topological-spaces/dowker-complexes.md),
-  [cubical](topological-spaces/cubical-complexes.md), and [simplicial sets](topological-spaces/simplicial-sets.md).
+  [cubical](topological-spaces/cubical-complexes.md), [simplicial sets](topological-spaces/simplicial-sets.md), and
+  [time series, graphs, functions and directed networks](topological-spaces/series-graphs-functions.md).
 * **Engines** ([overview](homology-computation/index.md)): [which one to use](homology-computation/choosing-engine.md),
   the [fast cubical](homology-computation/fast-cubical.md) and [fast alpha](homology-computation/fast-alpha-complexes.md)
   engines.

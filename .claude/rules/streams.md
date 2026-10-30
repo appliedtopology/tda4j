@@ -105,3 +105,12 @@ symmetric by construction as `d(max, min)`. A non-symmetric file (fractal-r) the
 scan that stops on a point once its farthest distance reaches the best so far; `EuclideanMetricSpace` overrides the hook `scanEnclosingRadius`
 on squared distances (exact: sqrt is monotone) so the n^2 distance cache is not filled. `MetricSpaceSpec` pins the value against the
 definition (cached or not, as a matrix, with infinite distances) and the distance count. `WORKLOG-enclosing-radius.md`.
+
+## Graph and series inputs
+
+`TakensEmbedding` gives a `PointCloud`; `GraphMetric.geodesic` a dense metric space (`Infinity` between components).
+`WeightedGraph` (neighbour lists, `Infinity` for a non-edge) is routed by `Input.ofMetricSpace` to `FlagComplex`, never to
+the Ripser engines or the dense VR generators; `VietorisRips(graph)` is correct but builds `n x n` tables. Cell streams
+that sort a dimension by their own `filtrationOrdering` (`FlagComplex`, `DirectedFlagStream`) keep values and the sorted
+dimensions in separate `lazy val`s: sorting inside the lazy val that builds the values never returns. The directed flag
+oracle is the complex of injective words (Betti numbers [1,1], [1,0,2], [1,0,0,9]). `WORKLOG-more-inputs.md`.

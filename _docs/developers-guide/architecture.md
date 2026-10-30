@@ -22,7 +22,8 @@ Its source directories are file organization only (they are not packages), and e
   companions.
 - **`streams/`** — everything that produces cells in filtration order: `SimplexStream`/`CellStream`, the
   Vietoris-Rips family, `FiniteMetricSpace`, `CubicalStream`/`CubicalImage`, `CechStream`, `WitnessStream`,
-  `DowkerStream`, `UnionFind`, and the dispatchers (`VietorisRips`, `Cech`, `Witness`, `Dowker`, ...).
+  `DowkerStream`, `UnionFind`, and the dispatchers (`VietorisRips`, `Cech`, `Witness`, `Dowker`, ...). Other inputs:
+  `TakensEmbedding`, `GraphMetric`, `WeightedGraph`/`FlagComplex`, `LowerStar` and `DirectedFlagStream`.
 - **`homology/`** — the persistence algorithms (`Homology.scala`, `PackedRipserCohomology.scala`, `Cohomology.scala`,
   the fast cubical/alpha engines) and circular coordinates.
 - **`barcode/`** — `Barcode`, `PersistenceBar`, `BarcodeEndpoint`, distances and vectorizations.
@@ -504,6 +505,28 @@ and the vertex that dominated at one time is tested only against the vertices th
 cost is about the edges times their common neighbours, so a dense graph (a large radius) is the expensive case: 1,200
 points in R^3 at the enclosing radius take about ten seconds. The result is stored in rows of sorted neighbours, the
 surviving edges only. Both forms take every decision the same way (`EdgeCollapseDenseSpec`).
+
+### Time series, graphs, functions and directed networks
+
+These are ways into the engines, not new engines. `TakensEmbedding` returns a `PointCloud` (windows of the series), and
+`GraphMetric.geodesic` an `ExplicitMetricSpace` (Dijkstra from every vertex, `n^2` entries; `Infinity` between
+components), so both go through the Vietoris-Rips path unchanged.
+
+`WeightedGraph` is a `FiniteMetricSpace` held as sorted neighbour lists (`n + 2m` numbers), with `Infinity` for a
+non-edge. `Persistence(graph)` does not give it to the Ripser engines, which index a dense matrix, nor to
+`VietorisRips`, whose generators build `n x n` tables; `Input.ofMetricSpace` hands it to `FlagComplex`, which grows
+cliques from the neighbour lists. A clique grows by one vertex above its largest, from the common neighbours of all its
+vertices; each candidate carries the heaviest weight from it to the clique, so a simplex's value is the larger of its
+parent's value and that weight, and two sorted lists are merged per step. `FlagComplexSpec` checks it cell for cell and
+value for value against `VietorisRips` on the dense matrix, and against the Ripser engine's barcode. The engine is
+`Cohomology`.
+
+`LowerStar` lists every face with its value (the largest of its vertices) to `ExplicitStreamBuilder.fromFilteredFacets`
+and with `superlevel` negates the values. `DirectedFlagStream` enumerates ordered cliques depth first into one stream
+whose cells are `DirectedSimplex` (an ordered vertex tuple, boundary by deleting a position with sign `(-1)^i`); its
+oracle is the complex of injective words, whose Betti numbers are known (`DirectedFlagStreamSpec`). Both sort each
+dimension after the values are complete: the sort reads the values through the stream's own ordering, and sorting inside
+the lazy value that builds them would never return.
 
 ### Metric spaces
 

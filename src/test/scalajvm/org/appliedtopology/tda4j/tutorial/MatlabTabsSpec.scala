@@ -136,9 +136,9 @@ class MatlabTabsSpec extends Specification:
         List(1.0, 0.064, 0.9)
       )
       val bright = List(List(0.0, -1.099, Double.PositiveInfinity), List(0.0, -0.9, -0.063), List(1.0, -1.004, -0.001))
-      (significant("true", "naive") must beEqualTo(dark))
-        .and(significant("true", "fast-cubical") must beEqualTo(dark))
-        .and(significant("false", "naive") must beEqualTo(bright))
+      (longerThanFraction("true", "naive") must beEqualTo(dark))
+        .and(longerThanFraction("true", "fast-cubical") must beEqualTo(dark))
+        .and(longerThanFraction("false", "naive") must beEqualTo(bright))
     }
     "have 221 bars in the full barcode" in {
       TDA4j.computeFromImage(pixels, Array("sublevel", "true")).toArrayUnfiltered().length must beEqualTo(221)
