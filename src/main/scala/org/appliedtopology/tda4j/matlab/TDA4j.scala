@@ -266,6 +266,212 @@ object TDA4j:
       ResultSource("computeFromRelation", options, opts, "dowker", ResultInput.Abstract("relation"))
     )
 
+  private val relativeKeys = Set(
+    "engine",
+    "representativetype",
+    "maxdimension",
+    "maxfiltrationvalue",
+    "field",
+    "prime",
+    "epsilon",
+    "minpersistence",
+    "minpersistencefraction",
+    "includezerolength",
+    "threads"
+  )
+
+  /** Relative persistent homology of the Vietoris-Rips complex of a point cloud modulo the subcomplex on some of its
+    * points: the bars of `H(X_t, A_t)`, where `X` is the complex and `A` the simplices all of whose vertices are among
+    * `subcomplex` (0-based row numbers). Two cases to know: modulo the whole cloud there is nothing, and modulo one
+    * point of a connected cloud, whose points all enter together, the result is the reduced homology (the one bar of
+    * the whole complex in degree 0 is gone). Options: `engine` (`cohomology`, the default, `naive` or `chunks`),
+    * `maxDimension` (default 2), `maxFiltrationValue`, `field`, `prime`, `epsilon`, `representativeType`, the bar
+    * options and `threads`, and no others. The representatives and the cells of the bars are cells of `X` outside `A`.
+    */
+  def computeRelativeFromPoints(
+    points: Array[Array[Double]],
+    subcomplex: Array[Int],
+    options: Array[String]
+  ): PersistenceResult =
+    validatePoints(points)
+    val metricSpace = EuclideanMetricSpace(points)
+    validateSubcomplex(subcomplex, metricSpace.size)
+    val opts = parseOptionsWithKeys(options, relativeKeys)
+    dispatchRelative(opts, metricSpace, subcomplex).withSource(
+      ResultSource(
+        "computeRelativeFromPoints",
+        options,
+        opts,
+        "vr",
+        ResultInput.Points(points.map(_.clone())),
+        relativeTo = subcomplex
+      )
+    )
+
+  def computeRelativeFromPoints(points: Array[Array[Double]], subcomplex: Array[Int]): PersistenceResult =
+    computeRelativeFromPoints(points, subcomplex, Array.empty[String])
+
+  /** [[computeRelativeFromPoints]] for a square, symmetric distance matrix. */
+  def computeRelativeFromDistanceMatrix(
+    distances: Array[Array[Double]],
+    subcomplex: Array[Int],
+    options: Array[String]
+  ): PersistenceResult =
+    validateSquare(distances)
+    validateSubcomplex(subcomplex, distances.length)
+    val opts = parseOptionsWithKeys(options, relativeKeys)
+    dispatchRelative(opts, explicitMetricSpace(distances), subcomplex).withSource(
+      ResultSource(
+        "computeRelativeFromDistanceMatrix",
+        options,
+        opts,
+        "vr",
+        ResultInput.Abstract("distance-matrix"),
+        relativeTo = subcomplex
+      )
+    )
+
+  def computeRelativeFromDistanceMatrix(distances: Array[Array[Double]], subcomplex: Array[Int]): PersistenceResult =
+    computeRelativeFromDistanceMatrix(distances, subcomplex, Array.empty[String])
+
+  private val mapKeys = Set("engine", "maxdimension", "maxfiltrationvalue", "prime", "threads")
+
+  /** The map on persistent homology induced by the simplicial map of Vietoris-Rips complexes that sends point `i` of
+    * `sourcePoints` to point `vertexMap(i)` of `targetPoints`, with its image, kernel and cokernel as barcodes: see
+    * [[PersistenceMapResult]]. The map has to preserve the filtration -- never increase a distance, as an inclusion of
+    * a subsample does not -- or the computation says so. Options: `engine` (`ripser`, the default, or `cohomology`),
+    * `maxDimension` (default 2), `maxFiltrationValue` (shared by both complexes; by default the target's minimum
+    * enclosing radius), `prime` (default 17) and `threads`.
+    */
+  def computeMapFromPoints(
+    sourcePoints: Array[Array[Double]],
+    targetPoints: Array[Array[Double]],
+    vertexMap: Array[Int],
+    options: Array[String]
+  ): PersistenceMapResult =
+    validatePoints(sourcePoints)
+    validatePoints(targetPoints)
+    mapBetween(
+      EuclideanMetricSpace(sourcePoints),
+      EuclideanMetricSpace(targetPoints),
+      vertexMap,
+      parseOptionsWithKeys(options, mapKeys)
+    )
+
+  def computeMapFromPoints(
+    sourcePoints: Array[Array[Double]],
+    targetPoints: Array[Array[Double]],
+    vertexMap: Array[Int]
+  ): PersistenceMapResult = computeMapFromPoints(sourcePoints, targetPoints, vertexMap, Array.empty[String])
+
+  /** [[computeMapFromPoints]] for two finite metric spaces given as full matrices of distances. */
+  def computeMapFromDistanceMatrices(
+    sourceDistances: Array[Array[Double]],
+    targetDistances: Array[Array[Double]],
+    vertexMap: Array[Int],
+    options: Array[String]
+  ): PersistenceMapResult =
+    validateSquare(sourceDistances)
+    validateSquare(targetDistances)
+    mapBetween(
+      explicitMetricSpace(sourceDistances),
+      explicitMetricSpace(targetDistances),
+      vertexMap,
+      parseOptionsWithKeys(options, mapKeys)
+    )
+
+  /** The map induced by the inclusion of the Vietoris-Rips complex of a subsample, the points of `points` numbered by
+    * `subsample` (0-based), into that of all of them: what survives from the subsample in the whole sample, and what
+    * only the whole sample sees. Options as in [[computeMapFromPoints]].
+    */
+  def computeInclusionFromPoints(
+    points: Array[Array[Double]],
+    subsample: Array[Int],
+    options: Array[String]
+  ): PersistenceMapResult =
+    validatePoints(points)
+    validateSubsample(subsample, points.length)
+    computeMapFromPoints(subsample.map(points), points, subsample, options)
+
+  def computeInclusionFromPoints(points: Array[Array[Double]], subsample: Array[Int]): PersistenceMapResult =
+    computeInclusionFromPoints(points, subsample, Array.empty[String])
+
+  /** [[computeInclusionFromPoints]] for a full matrix of distances. */
+  def computeInclusionFromDistanceMatrix(
+    distances: Array[Array[Double]],
+    subsample: Array[Int],
+    options: Array[String]
+  ): PersistenceMapResult =
+    validateSquare(distances)
+    validateSubsample(subsample, distances.length)
+    computeMapFromDistanceMatrices(
+      subsample.map(i => subsample.map(j => distances(i)(j))),
+      distances,
+      subsample,
+      options
+    )
+
+  private def mapBetween(
+    source: FiniteMetricSpace[Int],
+    target: FiniteMetricSpace[Int],
+    vertexMap: Array[Int],
+    opts: Map[String, String]
+  ): PersistenceMapResult =
+    if vertexMap.length != source.size then
+      throw new IllegalArgumentException(
+        s"vertexMap has ${vertexMap.length} entries, and the source has ${source.size} points: one for each"
+      )
+    vertexMap.foreach { v =>
+      if v < 0 || v >= target.size then
+        throw new IllegalArgumentException(
+          s"vertexMap sends a point to $v, outside the target's 0 to ${target.size - 1}"
+        )
+    }
+    val engine = opts.getOrElse("engine", "ripser").toLowerCase match
+      case "ripser"     => Persistence.Engine.Ripser
+      case "cohomology" => Persistence.Engine.Cohomology
+      case other        =>
+        throw new IllegalArgumentException(
+          s"engine=$other is not offered for a map: it reads the cycles that die with their bars, which ripser " +
+            "(the default) and cohomology give"
+        )
+    val maxDimension = opts.get("maxdimension").map(parseIntOption("maxDimension", _)).getOrElse(2)
+    val prime = opts.get("prime").map(parseIntOption("prime", _)).getOrElse(FiniteField.DefaultPrime)
+    val limit = opts.get("maxfiltrationvalue").map(parseDoubleOption("maxFiltrationValue", _))
+    withThreads(opts) {
+      // One value for both: the bars are cut off at the same scale, and the target keeps the bars that never exist,
+      // whose representatives the map is read from.
+      def diagram(space: FiniteMetricSpace[Int]) =
+        Persistence(
+          space,
+          maxDimension = maxDimension,
+          maxFiltrationValue = limit.getOrElse(target.minimumEnclosingRadius),
+          characteristic = prime,
+          engine = engine,
+          includeZeroLength = true
+        )
+      val from = diagram(source)
+      val to = diagram(target)
+      val map = PersistenceMap.simplicial(from, to)(i => vertexMap(i))
+      import from.given
+      val field = summon[from.Coefficient is Field]
+      def rows[A](bars: List[PersistenceBar[Double, A]]): Array[Array[Double]] =
+        bars.map(b => Array(b.birth, b.death)).toArray
+      new PersistenceMapResult(
+        prime,
+        (0 to map.maxDimension).map { k =>
+          PersistenceMapResult.Degree(
+            rows(map.sourceBars(k)),
+            rows(map.targetBars(k)),
+            map.entries(k).map((i, j, c) => Array(i.toDouble, j.toDouble, field.toDouble(c))).toArray,
+            rows(map.image(k)),
+            rows(map.kernel(k)),
+            rows(map.cokernel(k))
+          )
+        }
+      )
+    }
+
   /** A result saved by `PersistenceResult.save` (or `tda4j --save-result`), with its bars, threshold, reported
     * representatives and input, so it plots like the result it was. Its boundary matrix is not saved.
     */
@@ -700,6 +906,25 @@ object TDA4j:
           "as two distinct landmarks at distance zero from each other)"
       )
 
+  private def validateSubsample(subsample: Array[Int], n: Int): Unit =
+    if subsample.isEmpty then throw new IllegalArgumentException("the subsample must have at least one point")
+    subsample.foreach { v =>
+      if v == n then
+        throw new IllegalArgumentException(
+          s"subsample point $v is out of range [0, $n) -- indices are 0-based; did you pass a 1-based index?"
+        )
+      if v < 0 || v >= n then throw new IllegalArgumentException(s"subsample point $v is out of range [0, $n)")
+    }
+
+  private def validateSubcomplex(vertices: Array[Int], n: Int): Unit =
+    vertices.foreach { v =>
+      if v == n then
+        throw new IllegalArgumentException(
+          s"subcomplex vertex $v is out of range [0, $n) -- indices are 0-based; did you pass a 1-based index?"
+        )
+      if v < 0 || v >= n then throw new IllegalArgumentException(s"subcomplex vertex $v is out of range [0, $n)")
+    }
+
   private def validatePoints(points: Array[Array[Double]]): Unit =
     if points.isEmpty then throw new IllegalArgumentException("points must have at least one row")
     val d = points(0).length
@@ -1065,6 +1290,77 @@ object TDA4j:
           toDouble
         )
       }
+
+  private def dispatchRelative(
+    opts: Map[String, String],
+    metricSpace: FiniteMetricSpace[Int],
+    subcomplex: Array[Int]
+  ): PersistenceResult =
+    val threshold = parseThresholdSpec(opts)
+    withThreads(opts)(threshold(computeRelative(opts, metricSpace, subcomplex), metricSpace.minimumEnclosingRadius))
+
+  private def computeRelative(
+    opts: Map[String, String],
+    metricSpace: FiniteMetricSpace[Int],
+    subcomplex: Array[Int]
+  ): PersistenceResult =
+    val engine = EngineKind.parse(opts.getOrElse("engine", "cohomology"))
+    if engine != EngineKind.Naive && engine != EngineKind.Chunks && engine != EngineKind.Cohomology then
+      throw new IllegalArgumentException(
+        s"engine=${opts("engine")} is not offered for a relative computation, which reads the pair as a stream of " +
+          "cells: use engine=cohomology (the default), engine=naive or engine=chunks"
+      )
+    val cycles = wantsCycles(opts, engine)
+    val maxDimension = opts.get("maxdimension").map(parseIntOption("maxDimension", _)).getOrElse(2)
+    val maxFiltrationValue = opts.get("maxfiltrationvalue").map(parseDoubleOption("maxFiltrationValue", _))
+    val includeZeroLength = wantsZeroLength(opts)
+    dispatchByField(opts) { [C] => (toDouble: C => Double) =>
+      computeRelativeGeneric[C](
+        metricSpace,
+        subcomplex.toSet,
+        engine,
+        cycles,
+        maxDimension,
+        maxFiltrationValue,
+        includeZeroLength,
+        toDouble
+      )
+    }
+
+  private def computeRelativeGeneric[C](
+    metricSpace: FiniteMetricSpace[Int],
+    subcomplex: Set[Int],
+    engine: EngineKind,
+    cycles: Boolean,
+    maxDimension: Int,
+    maxFiltrationValue: Option[Double],
+    includeZeroLength: Boolean,
+    toDouble: C => Double
+  )(using C is Field): PersistenceResult =
+    // The cells one dimension above the top degree reported are the scaffolding that tells a cycle from a boundary, as
+    // for the Vietoris-Rips complex itself.
+    val stream =
+      Relative.ofVertices(vrStream(metricSpace, maxFiltrationValue, maxDimension + 1), subcomplex)
+    // A cell of the pair is a cell of the complex outside the subcomplex: its vertices are the simplex's.
+    val cellVertices: (Int, RelativeCell[Simplex[Int]]) => Array[Int] = (_, relative) =>
+      relative.cell.underlying.toArray
+    val boundaryMatrixOf =
+      () =>
+        buildBoundaryMatrix[RelativeCell[Simplex[Int]], C](
+          stream.iterator.toIndexedSeq,
+          cellVertices,
+          toDouble,
+          stream.filtrationValue
+        )
+    val bars = engine match
+      case EngineKind.Naive =>
+        naiveFor[RelativeCell[Simplex[Int]], C](cycles).barcode(stream, includeZeroLength = includeZeroLength)
+      case EngineKind.Chunks =>
+        chunksFor[RelativeCell[Simplex[Int]], C](maxDimension, cycles)
+          .barcode(stream, includeZeroLength = includeZeroLength)
+      case _ =>
+        cohomologyFor[RelativeCell[Simplex[Int]], C](cycles).barcode(stream, includeZeroLength = includeZeroLength)
+    fromBars[RelativeCell[Simplex[Int]], C](bars, cellVertices, toDouble, maxDimension, boundaryMatrixOf)
 
   /** The Vietoris-Rips complex of `space` as the engines other than Ripser read it: cells to dimension
     * `maxDimension + 1`, the scaffolding the boundary matrix and the dimension-capped engines need. Built as

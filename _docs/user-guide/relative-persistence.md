@@ -36,3 +36,16 @@ filtration values they have in `X`, so `A_t` is `A` intersected with `X_t`.
 A single vertex gives the reduced homology: for a connected complex whose vertices all enter at the start, the one
 essential bar of degree 0 is gone and everything else stays. If you want what a sample adds to a subsample, with the
 map between the two, see [maps between spaces](barcode-algebra.md#maps-between-spaces).
+
+## From the other interfaces
+
+The Vietoris-Rips pair is also an entry point of the interfaces that do not run Scala: you give the points (or the
+distances) and the numbers of the points that span the subcomplex.
+
+| interface | call |
+|---|---|
+| [MATLAB and Java](matlab.md) | `TDA4j.computeRelativeFromPoints(points, subcomplex, options)`; `computeRelativeFromDistanceMatrix` |
+| [JavaScript](javascript.md) | `relativePersistence(points, subcomplex, options)`; `relativePersistenceFromDistances` |
+| [Command line](cli.md#relative-persistence) | `tda4j --relative-to 0,3,5 points.csv` |
+
+Each takes the options of the Vietoris-Rips computation, and a saved result remembers what it was relative to.

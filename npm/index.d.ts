@@ -161,6 +161,39 @@ export function persistenceFromLandmarks(points: number[][], landmarks: number[]
 /** `persistenceFromLandmarks` for a finite metric space given as its full matrix of distances. */
 export function persistenceFromDistancesAndLandmarks(distances: number[][], landmarks: number[], options?: Options): Result;
 
+/** The relative persistent homology of the Vietoris-Rips complex of a point cloud modulo the subcomplex on the points `subcomplex` (point numbers from 0): the bars of H(X_t, A_t). The representatives and the cells of the bars are cells outside the subcomplex. */
+export function relativePersistence(points: number[][], subcomplex: number[], options?: Options): Result;
+/** `relativePersistence` for a finite metric space given as its full matrix of distances. */
+export function relativePersistenceFromDistances(distances: number[][], subcomplex: number[], options?: Options): Result;
+
+/** The map on persistent homology in one degree: the bars as `[birth, death]` rows, the matrix as `[source bar, target bar, coefficient]` rows (the bars as positions in `sourceBars` and `targetBars`), and the barcodes of its image, kernel and cokernel. */
+export interface MapDegree {
+  dimension: number;
+  sourceBars: number[][];
+  targetBars: number[][];
+  entries: number[][];
+  image: number[][];
+  kernel: number[][];
+  cokernel: number[][];
+}
+
+/** The map on persistent homology induced by a map of Vietoris-Rips complexes, degree by degree from 0 to `maxDimension`. */
+export interface HomologyMap {
+  maxDimension: number;
+  /** The prime of the coefficient field Z/p. */
+  characteristic: number;
+  degrees: MapDegree[];
+}
+
+/** The map induced by the inclusion of the Vietoris-Rips complex of a subsample (point numbers from 0) into that of the whole point cloud. Options: `engine` ("ripser" or "cohomology"), `maxDimension`, `maxFiltrationValue` (shared; by default the whole cloud's enclosing radius), `prime`, `threads`. */
+export function inclusionMap(points: number[][], subsample: number[], options?: Options): HomologyMap;
+/** `inclusionMap` for a finite metric space given as its full matrix of distances. */
+export function inclusionMapFromDistances(distances: number[][], subsample: number[], options?: Options): HomologyMap;
+/** The map induced by the simplicial map of Vietoris-Rips complexes that sends point `i` of `sourcePoints` to point `vertexMap[i]` of `targetPoints`. It must not increase a distance. */
+export function simplicialMap(sourcePoints: number[][], targetPoints: number[][], vertexMap: number[], options?: Options): HomologyMap;
+/** `simplicialMap` between two finite metric spaces given as full matrices of distances. */
+export function simplicialMapFromDistances(sourceDistances: number[][], targetDistances: number[][], vertexMap: number[], options?: Options): HomologyMap;
+
 export interface LandmarkSelection {
   /** Point numbers from 0. */
   landmarks: number[];

@@ -2,7 +2,7 @@ package org.appliedtopology.tda4j
 package cli
 
 import org.appliedtopology.tda4j.*
-import org.appliedtopology.tda4j.matlab.{LandmarkSelectionResult, PersistenceResult, TDA4j}
+import org.appliedtopology.tda4j.matlab.{LandmarkSelectionResult, PersistenceMapResult, PersistenceResult, TDA4j}
 import org.appliedtopology.tda4j.plot.{
   Board,
   Figure,
@@ -119,6 +119,24 @@ object TDA4jCLI:
       // reasoning for the two witness-recipe flags: a cubical grid/Dowker relation has no landmarks to select or
       // supply, and --complex is equally meaningless for a Dowker relation (TDA4j.computeFromRelation has its
       // own, separate, much smaller option set -- see that method's own doc).
+      if conf.relativeTo.isSupplied then
+        if conf.selectLandmarks() || conf.landmarksFile.isSupplied then
+          throw new IllegalArgumentException(
+            "--relative-to computes the pair of Vietoris-Rips complexes, which has no landmarks: " +
+              "--select-landmarks and --landmarks-file are for the witness complex"
+          )
+        resolved match
+          case ResolvedInput.Points(_) | ResolvedInput.Distances(_) => ()
+          case ResolvedInput.Result(_)                              =>
+            throw new IllegalArgumentException(
+              s"${conf.input()} is a saved result, computed already: --relative-to would change the computation. " +
+                "Compute again from the original input"
+            )
+          case _ =>
+            throw new IllegalArgumentException(
+              s"--relative-to takes a point cloud or a distance matrix (the Vietoris-Rips complex), not --input-format=$format"
+            )
+
       resolved match
         case ResolvedInput.Result(_) =>
           val flags = options.grouped(2).map(pair => flagName(pair(0))).toSeq ++
@@ -162,6 +180,9 @@ object TDA4jCLI:
       else if conf.tomato() then
         writeTomato(conf, options, format, resolved, out)
         0
+      else if conf.inclusionOf.isSupplied then
+        writeInclusion(conf, options, format, resolved, out)
+        0
       else if conf.selectLandmarks() then
         if conf.representatives() then
           throw new IllegalArgumentException(
@@ -190,6 +211,13 @@ object TDA4jCLI:
         0
       else
         val result = conf.landmarksFile.toOption match
+          case _ if conf.relativeTo.isSupplied =>
+            val subcomplex = parseVertexList("--relative-to", conf.relativeTo())
+            resolved match
+              case ResolvedInput.Points(points)       => TDA4j.computeRelativeFromPoints(points, subcomplex, options)
+              case ResolvedInput.Distances(distances) =>
+                TDA4j.computeRelativeFromDistanceMatrix(distances, subcomplex, options)
+              case _ => throw new IllegalStateException("unreachable: rejected by the --relative-to guard above")
           case Some(path) =>
             val landmarks = readLandmarksFile(path)
             resolved match
@@ -406,6 +434,7 @@ object TDA4jCLI:
       "--landmarks-file" -> conf.landmarksFile.isSupplied,
       "--representatives" -> conf.representatives(),
       "--bar-cells" -> conf.barCells(),
+      "--relative-to" -> conf.relativeTo.isSupplied,
       "--output-format" -> conf.outputFormat.isSupplied,
       "--save-result" -> conf.saveResult.isSupplied
     ).collect { case (flag, true) => flag } ++
@@ -432,14 +461,15 @@ object TDA4jCLI:
         finally writer.close()
       case None => lines.foreach(out.println)
 
-  /** `--euler-curve`, `--bootstrap-band` and `--tomato` are modes of their own: at most one, and the flags of a mode
-    * only with it.
+  /** `--euler-curve`, `--bootstrap-band`, `--tomato` and `--inclusion-of` are modes of their own: at most one, and the
+    * flags of a mode only with it.
     */
   private[cli] def checkModes(conf: TDA4jConf): Unit =
     val chosen = Seq(
       "--euler-curve" -> conf.eulerCurve(),
       "--bootstrap-band" -> conf.bootstrapBand(),
-      "--tomato" -> conf.tomato()
+      "--tomato" -> conf.tomato(),
+      "--inclusion-of" -> conf.inclusionOf.isSupplied
     ).collect { case (flag, true) => flag }
     if chosen.size > 1 then
       throw new IllegalArgumentException(s"${chosen.mkString(" and ")} are modes of their own: choose one")
@@ -536,6 +566,7 @@ object TDA4jCLI:
       "--landmarks-file" -> conf.landmarksFile.isSupplied,
       "--representatives" -> conf.representatives(),
       "--bar-cells" -> conf.barCells(),
+      "--relative-to" -> conf.relativeTo.isSupplied,
       "--output-format" -> conf.outputFormat.isSupplied,
       "--save-result" -> conf.saveResult.isSupplied
     ).collect { case (flag, true) => flag } ++
@@ -626,6 +657,56 @@ object TDA4jCLI:
       case None      =>
         "birth,death" +: TDA4j.tomatoDiagram(points, conf.tomatoK()).toSeq.map(bar => s"${bar(0)},${bar(1)}")
     writeLines(conf, lines, out)
+
+  private val inclusionOptions = Set("engine", "maxDimension", "maxFiltrationValue", "prime", "threads")
+
+  /** `--inclusion-of`: the image, kernel and cokernel, per degree, of the map induced by the inclusion of a subsample's
+    * Vietoris-Rips complex into the input's, one bar a line: `image 1: [birth,death)`.
+    */
+  private[cli] def writeInclusion(
+    conf: TDA4jConf,
+    options: Array[String],
+    format: String,
+    resolved: ResolvedInput,
+    out: java.io.PrintStream
+  ): Unit =
+    refuseOtherFlags(
+      "--inclusion-of",
+      "writes the map on persistent homology of the inclusion of a subsample's Vietoris-Rips complex",
+      "--max-dimension, --max-filtration-value, --prime, --engine as ripser or cohomology, and --threads",
+      conf,
+      options,
+      inclusionOptions
+    )
+    val subsample = parseVertexList("--inclusion-of", conf.inclusionOf())
+    val map = resolved match
+      case ResolvedInput.Points(points)       => TDA4j.computeInclusionFromPoints(points, subsample, options)
+      case ResolvedInput.Distances(distances) =>
+        TDA4j.computeInclusionFromDistanceMatrix(distances, subsample, options)
+      case _ =>
+        throw new IllegalArgumentException(
+          s"--inclusion-of needs a point cloud or a distance matrix; --input-format=$format reads something else"
+        )
+    writeLines(conf, inclusionLines(map), out)
+
+  private[cli] def inclusionLines(map: PersistenceMapResult): Seq[String] =
+    for
+      k <- 0 to map.maxDimension()
+      (kind, bars) <- Seq("image" -> map.image(k), "kernel" -> map.kernel(k), "cokernel" -> map.cokernel(k))
+      bar <- bars
+    yield s"$kind $k: [${bar(0)},${if bar(1).isPosInfinity then "∞" else bar(1).toString})"
+
+  /** `flag`'s comma-separated 0-based point numbers, `0,1,2`. */
+  private[cli] def parseVertexList(flag: String, text: String): Array[Int] =
+    text
+      .split(",")
+      .map(_.trim)
+      .filter(_.nonEmpty)
+      .map(item =>
+        item.toIntOption.getOrElse(
+          throw new IllegalArgumentException(s"$flag: expected comma-separated point numbers like 0,1,2, got '$text'")
+        )
+      )
 
   /** Reads a `--landmarks-file` written by `writeLandmarkSelection` above (or hand-edited in the same shape): one
     * 0-based landmark index per line, blank lines and `#`-prefixed comment lines ignored. Parse errors report the

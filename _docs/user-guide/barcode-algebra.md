@@ -122,3 +122,19 @@ What the diagrams have to be:
   too.
 - **A map that preserves the filtration:** every cell enters the target no later than it enters the source. A map that
   does not is refused when a cycle lands on cells that are not there yet, or is not a chain map.
+
+### From the other interfaces
+
+The map of a subsample's Vietoris-Rips complex into the whole sample's is an entry point of the interfaces that do not run
+Scala. They compute both diagrams with the right engine, the shared `maxFiltrationValue` (by default the sample's
+enclosing radius) and the zero-length bars the target needs, and give the bars of the image, kernel and cokernel and the
+matrix.
+
+| interface | call |
+|---|---|
+| [MATLAB and Java](matlab.md) | `TDA4j.computeInclusionFromPoints(points, subsample, options)` returns a `PersistenceMapResult` with `image(k)`, `kernel(k)`, `cokernel(k)`, `sourceBars(k)`, `targetBars(k)` and `entries(k)`; `computeInclusionFromDistanceMatrix`; `computeMapFromPoints(sourcePoints, targetPoints, vertexMap, options)` and `computeMapFromDistanceMatrices` for any map that does not increase a distance |
+| [JavaScript](javascript.md) | `inclusionMap(points, subsample, options)`, `simplicialMap(sourcePoints, targetPoints, vertexMap, options)` and their `...FromDistances`: an object with the bars and matrix of each degree |
+| [Command line](cli.md#the-map-of-a-subsample) | `tda4j --inclusion-of 0,6,12,18 points.csv` writes the bars of the image, kernel and cokernel |
+
+The options are `engine` (`ripser`, the default, or `cohomology`: the engines whose cycles die with their bars),
+`maxDimension` (default 2), `maxFiltrationValue`, `prime` (default 17) and `threads`.

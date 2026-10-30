@@ -72,6 +72,67 @@ class ExportsSpec extends Specification:
         (Exports.takensEmbedding(js.Array(1.0, 2.0), 3, 2) must throwA[js.JavaScriptException])
     }
 
+  "relativePersistence" should {
+    "drop the essential bar of degree 0 modulo one point, and take a distance matrix" >> {
+      val points = circle(12)
+      val absolute = Exports.persistence(points, options("maxDimension" -> 1, "minPersistence" -> 0))
+      val relative =
+        Exports.relativePersistence(points, js.Array(0), options("maxDimension" -> 1, "minPersistence" -> 0))
+      val distances = js.Array(
+        points.toSeq.map(p => js.Array(points.toSeq.map(q => math.hypot(p(0) - q(0), p(1) - q(1)))*))*
+      )
+      val byMatrix =
+        Exports.relativePersistenceFromDistances(
+          distances,
+          js.Array(0),
+          options("maxDimension" -> 1, "minPersistence" -> 0)
+        )
+      def essential(r: Result) = r.bars.count(b => dynamic(b).death.asInstanceOf[Double].isInfinite)
+      (essential(absolute) must beEqualTo(1)) and (essential(relative) must beEqualTo(0)) and
+        (byMatrix.bars.length must beEqualTo(relative.bars.length))
+    }
+    "say which point is not there" >> {
+      Exports.relativePersistence(circle(5), js.Array(7)) must throwWith[js.JavaScriptException]("out of range")
+    }
+  }
+
+  "inclusionMap and simplicialMap" should {
+    "tell the square's loop from the circle's: the image from the side, the kernel after the circle's loop, the cokernel before" >> {
+      val points = circle(24)
+      val subsample = js.Array(0, 6, 12, 18)
+      val map = dynamic(Exports.inclusionMap(points, subsample, options("maxFiltrationValue" -> 2.5)))
+      val loop = dynamic(map.degrees.asInstanceOf[js.Array[js.Object]](1))
+      def bars(name: String) =
+        dynamic(loop.selectDynamic(name).asInstanceOf[js.Object]).asInstanceOf[js.Array[js.Array[Double]]]
+      val between = dynamic(
+        Exports.simplicialMap(
+          js.Array(subsample.map(points.apply).toSeq*),
+          points,
+          subsample,
+          options("maxFiltrationValue" -> 2.5)
+        )
+      )
+      (map.maxDimension.asInstanceOf[Int] must beEqualTo(2)) and (map.characteristic.asInstanceOf[Int] must beEqualTo(
+        17
+      )) and
+        (bars("image").length must beEqualTo(1)) and (bars("kernel").length must beEqualTo(1)) and
+        (bars("cokernel").length must beEqualTo(1)) and
+        (bars("image")(0)(0) must beCloseTo(math.sqrt(2.0), 1e-9)) and
+        (bars("kernel")(0)(0) must beEqualTo(bars("image")(0)(1))) and
+        (bars("cokernel")(0)(1) must beCloseTo(math.sqrt(2.0), 1e-9)) and
+        (js.JSON.stringify(between.degrees) must beEqualTo(js.JSON.stringify(map.degrees)))
+    }
+    "take distances, and say what is wrong with the subsample" >> {
+      val points = circle(8)
+      val distances =
+        js.Array(points.toSeq.map(p => js.Array(points.toSeq.map(q => math.hypot(p(0) - q(0), p(1) - q(1)))*))*)
+      val byDistances =
+        dynamic(Exports.inclusionMapFromDistances(distances, js.Array(0, 4), options("maxDimension" -> 1)))
+      (byDistances.maxDimension.asInstanceOf[Int] must beEqualTo(1)) and
+        (Exports.inclusionMap(points, js.Array(8)) must throwWith[js.JavaScriptException]("1-based"))
+    }
+  }
+
   "eulerCurve" should {
     "give the unit square's steps: four vertices, then four edges close a loop, then the diagonals fill it" >> {
       val square = js.Array(js.Array(0.0, 0.0), js.Array(1.0, 0.0), js.Array(1.0, 1.0), js.Array(0.0, 1.0))

@@ -17,6 +17,8 @@ package org.appliedtopology.tda4j.matlab
   *   the prime of field `Z`
   * @param landmarks
   *   the witness complex's landmarks, when they were passed in (empty otherwise)
+  * @param relativeTo
+  *   the vertices of the subcomplex a relative computation was modulo (empty otherwise)
   */
 private[matlab] final case class ResultSource(
   method: String,
@@ -26,7 +28,8 @@ private[matlab] final case class ResultSource(
   field: String,
   prime: Int,
   input: ResultInput,
-  landmarks: Array[Int]
+  landmarks: Array[Int],
+  relativeTo: Array[Int]
 )
 
 /** The input a result's cells live on. */
@@ -58,7 +61,8 @@ private[matlab] object ResultSource:
     opts: Map[String, String],
     complex: String,
     input: ResultInput,
-    landmarks: Array[Int] = Array.empty
+    landmarks: Array[Int] = Array.emptyIntArray,
+    relativeTo: Array[Int] = Array.emptyIntArray
   ): ResultSource =
     val reals = opts.get("field").exists(_.equalsIgnoreCase("r"))
     val prime =
@@ -71,5 +75,6 @@ private[matlab] object ResultSource:
       if reals then "R" else "Z",
       prime,
       input,
-      landmarks.clone()
+      landmarks.clone(),
+      relativeTo.clone()
     )

@@ -198,6 +198,18 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     descr = "step 2 of the two-step witness complex: read the landmarks from this file (as written by " +
       "--select-landmarks) instead of selecting them; implies --complex witness"
   )
+  val relativeTo: ScallopOption[String] = opt[String](
+    name = "relative-to",
+    descr = "relative persistent homology of the Vietoris-Rips complex of a point cloud or a distance matrix modulo " +
+      "the subcomplex on these points: comma-separated 0-based point numbers, e.g. 0,1,2 (--engine takes naive, " +
+      "chunks or cohomology; --complex is not offered)"
+  )
+  val inclusionOf: ScallopOption[String] = opt[String](
+    name = "inclusion-of",
+    descr = "instead of the diagram, write the image, kernel and cokernel of the map on persistent homology induced " +
+      "by the inclusion of the Vietoris-Rips complex of a subsample into that of the input: comma-separated 0-based " +
+      "point numbers of the subsample, e.g. 0,5,9"
+  )
 
   // Diagram distances, as in BarcodeDistance.
   val distanceTo: ScallopOption[String] = opt[String](

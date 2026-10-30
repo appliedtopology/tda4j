@@ -123,6 +123,30 @@ rejected with `--select-landmarks` (no diagram) and `--distance-to` (distances a
 | `--min-persistence` | report only bars longer than this; `0` reports every bar of positive length. Essential bars are always reported |
 | `--min-persistence-fraction` | the same as a fraction of the input's scale (the minimum enclosing radius, or the range of values of an image or relation); default `0.01` |
 
+## Relative persistence
+
+`--relative-to 0,3,5` computes the [relative persistent homology](relative-persistence.md) of the Vietoris-Rips complex of
+a point cloud or a distance matrix modulo the subcomplex on those points (0-based, comma-separated): the bars of
+`H(X_t, A_t)`, written like any diagram. It takes the flags of the Vietoris-Rips computation (`--max-dimension`,
+`--max-filtration-value`, `--field`, `--prime`, `--representative-type`, `--engine` as `cohomology`, `naive` or `chunks`,
+the bar flags and `--threads`), and refuses `--complex`, the landmark flags, images, relations and saved results.
+
+```
+$ tda4j --relative-to 0,3,5 --max-dimension 1 points.csv
+```
+
+## The map of a subsample
+
+`--inclusion-of 0,6,12,18` writes the [map on persistent homology](barcode-algebra.md#maps-between-spaces) of the
+inclusion of the Vietoris-Rips complex of those points (0-based, comma-separated) into that of the whole input, a point
+cloud or a distance matrix: the bars of its image, kernel and cokernel, a line a bar, `image 1: [1.41,1.73)`. It takes
+`--max-dimension`, `--max-filtration-value` (shared by both complexes; by default the input's enclosing radius),
+`--prime`, `--engine` as `ripser` or `cohomology` and `--threads`, and refuses the flags of any other computation.
+
+```
+$ tda4j --inclusion-of 0,6,12,18 --max-filtration-value 2.5 --max-dimension 1 circle.csv
+```
+
 ## Comparing diagrams
 
 `--distance-to saved-diagram` prints the bottleneck and Wasserstein distances per dimension to a diagram saved earlier,

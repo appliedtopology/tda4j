@@ -235,6 +235,15 @@ class ResultFileSpec extends Specification:
       Files.writeString(Paths.get(path), text)
       path
 
+    "keep what a relative result is relative to" >> {
+      val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.0, 1.0), Array(1.0, 1.0))
+      val result = TDA4j.computeRelativeFromPoints(points, Array(0, 1), Array("maxDimension", "1"))
+      val path = tempPath(".json")
+      result.save(path)
+      val again = tempPath(".json")
+      TDA4j.loadResult(path).save(again)
+      (read(path) must contain("\"relativeTo\": [0,1]")) and (read(again) must beEqualTo(read(path)))
+    }
     "accept the minimal file: the format, its version and the bars" >> {
       val r = TDA4j.loadResult(
         write(

@@ -14,7 +14,7 @@ import scala.collection.mutable
   * "dimensions": [0, 0, 1], "births": [0.0, 0.0, 0.5], "deaths": ["Infinity", 0.3, 1.2],
   * "reported": [0, 2],
   * "representatives": [{"cells": [[0]], "coefficients": [1.0]}, {"cells": [[0, 1], [1, 2], [0, 2]], ...}],
-  * "landmarks": [3, 17],
+  * "landmarks": [3, 17], "relativeTo": [0, 1, 2],
   * "input": {"kind": "points", "points": [[1.0, 0.0], ...]}
   * }
   * }}}
@@ -76,6 +76,8 @@ private[matlab] object ResultFile:
             key("prime"); w.int(s.prime)
         if s.landmarks.nonEmpty then
           key("landmarks"); w.ints(s.landmarks)
+        if s.relativeTo.nonEmpty then
+          key("relativeTo"); w.ints(s.relativeTo)
       }
       key("persistenceThreshold"); w.double(threshold)
       key("dimensions"); w.ints(dims)
@@ -140,6 +142,7 @@ private[matlab] object ResultFile:
     var field = ""
     var prime = 0
     var landmarks = Array.empty[Int]
+    var relativeTo = Array.empty[Int]
     var threshold = 0.0
     var dims: Option[Array[Int]] = None
     var births: Option[Array[Double]] = None
@@ -211,6 +214,7 @@ private[matlab] object ResultFile:
       case "field"                => field = r.string()
       case "prime"                => prime = r.readInt()
       case "landmarks"            => landmarks = r.ints()
+      case "relativeTo"           => relativeTo = r.ints()
       case "persistenceThreshold" => threshold = r.readDouble()
       case "dimensions"           => dims = Some(r.ints())
       case "births"               => births = Some(r.doubles())
@@ -282,7 +286,7 @@ private[matlab] object ResultFile:
       throw new UnsupportedOperationException(
         "a saved result does not keep its complex; compute the result again for its boundary matrix"
       )
-    val source = ResultSource(method, options, complex, cocycles, field, prime, input, landmarks)
+    val source = ResultSource(method, options, complex, cocycles, field, prime, input, landmarks, relativeTo)
     val cellProvider: Int => (Array[Int], Array[Int]) = (birthCells, deathCells) match
       case (Some(born), Some(died)) => k => (born(k).clone(), died(k).clone())
       case _                        => PersistenceResult.noCells

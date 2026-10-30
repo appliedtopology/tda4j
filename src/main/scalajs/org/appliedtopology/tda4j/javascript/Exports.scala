@@ -73,6 +73,109 @@ object Exports:
       Result(TDA4j.computeFromDistanceMatrixAndLandmarks(matrix(distances), landmarks.toArray, optionArray(options)))
     )
 
+  /** The relative persistent homology of the Vietoris-Rips complex of a point cloud modulo the subcomplex on the points
+    * `subcomplex` (point numbers, from 0): the bars of `H(X_t, A_t)`. See `relativePersistence` in the user guide.
+    */
+  @JSExportTopLevel("relativePersistence")
+  def relativePersistence(
+    points: js.Array[js.Array[Double]],
+    subcomplex: js.Array[Int],
+    options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
+  ): Result =
+    guarded(Result(TDA4j.computeRelativeFromPoints(matrix(points), subcomplex.toArray, optionArray(options))))
+
+  /** [[relativePersistence]] for a finite metric space given as its full matrix of distances. */
+  @JSExportTopLevel("relativePersistenceFromDistances")
+  def relativePersistenceFromDistances(
+    distances: js.Array[js.Array[Double]],
+    subcomplex: js.Array[Int],
+    options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
+  ): Result =
+    guarded(
+      Result(TDA4j.computeRelativeFromDistanceMatrix(matrix(distances), subcomplex.toArray, optionArray(options)))
+    )
+
+  /** The map on persistent homology induced by the inclusion of the Vietoris-Rips complex of a subsample (`subsample`:
+    * point numbers, from 0) into that of the whole point cloud: see `inclusionMap` in the user guide. Returns
+    * `{ maxDimension, characteristic, degrees }` with, for each degree, `{ dimension, sourceBars, targetBars, entries,
+    * image, kernel, cokernel }`.
+    */
+  @JSExportTopLevel("inclusionMap")
+  def inclusionMap(
+    points: js.Array[js.Array[Double]],
+    subsample: js.Array[Int],
+    options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
+  ): js.Object =
+    guarded(mapObject(TDA4j.computeInclusionFromPoints(matrix(points), subsample.toArray, optionArray(options))))
+
+  /** [[inclusionMap]] for a finite metric space given as its full matrix of distances. */
+  @JSExportTopLevel("inclusionMapFromDistances")
+  def inclusionMapFromDistances(
+    distances: js.Array[js.Array[Double]],
+    subsample: js.Array[Int],
+    options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
+  ): js.Object =
+    guarded(
+      mapObject(TDA4j.computeInclusionFromDistanceMatrix(matrix(distances), subsample.toArray, optionArray(options)))
+    )
+
+  /** The map induced by the simplicial map of Vietoris-Rips complexes that sends point `i` of `sourcePoints` to point
+    * `vertexMap[i]` of `targetPoints`; the result is that of [[inclusionMap]].
+    */
+  @JSExportTopLevel("simplicialMap")
+  def simplicialMap(
+    sourcePoints: js.Array[js.Array[Double]],
+    targetPoints: js.Array[js.Array[Double]],
+    vertexMap: js.Array[Int],
+    options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
+  ): js.Object =
+    guarded(
+      mapObject(
+        TDA4j.computeMapFromPoints(matrix(sourcePoints), matrix(targetPoints), vertexMap.toArray, optionArray(options))
+      )
+    )
+
+  /** [[simplicialMap]] between two finite metric spaces given as full matrices of distances. */
+  @JSExportTopLevel("simplicialMapFromDistances")
+  def simplicialMapFromDistances(
+    sourceDistances: js.Array[js.Array[Double]],
+    targetDistances: js.Array[js.Array[Double]],
+    vertexMap: js.Array[Int],
+    options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
+  ): js.Object =
+    guarded(
+      mapObject(
+        TDA4j.computeMapFromDistanceMatrices(
+          matrix(sourceDistances),
+          matrix(targetDistances),
+          vertexMap.toArray,
+          optionArray(options)
+        )
+      )
+    )
+
+  private def rowsOf(rows: Array[Array[Double]]): js.Array[js.Array[Double]] =
+    js.Array(rows.toSeq.map(row => js.Array(row*))*)
+
+  private def mapObject(map: matlab.PersistenceMapResult): js.Object =
+    js.Dynamic
+      .literal(
+        maxDimension = map.maxDimension(),
+        characteristic = map.characteristic(),
+        degrees = js.Array((0 to map.maxDimension()).map { k =>
+          js.Dynamic.literal(
+            dimension = k,
+            sourceBars = rowsOf(map.sourceBars(k)),
+            targetBars = rowsOf(map.targetBars(k)),
+            entries = rowsOf(map.entries(k)),
+            image = rowsOf(map.image(k)),
+            kernel = rowsOf(map.kernel(k)),
+            cokernel = rowsOf(map.cokernel(k))
+          )
+        }*)
+      )
+      .asInstanceOf[js.Object]
+
   /** Picks landmarks from a point cloud: options `numLandmarks` (required), `landmarkSelector` (`"maxmin"` or
     * `"random"`) and `landmarkSeed`. Returns `{ landmarks, coveringRadius }`, the landmarks as point numbers from 0 and
     * the covering radius `R` (compute with `maxFiltrationValue: 2 * R`, the JavaPlex tutorials' recipe).

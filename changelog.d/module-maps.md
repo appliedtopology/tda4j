@@ -25,3 +25,7 @@
   same `characteristic` and `maxFiltrationValue`, and zero-length bars in the target.
 - `PersistenceDiagram.representativesDieWithTheirBars`: whether a diagram's finite cycles are boundaries from their
   bar's death on.
+- The map of a subsample's Vietoris-Rips complex into the sample's from every interface: `TDA4j.computeInclusionFromPoints`,
+  `computeInclusionFromDistanceMatrix`, `computeMapFromPoints` and `computeMapFromDistanceMatrices` returning a
+  `PersistenceMapResult` (MATLAB, Java); `inclusionMap`, `simplicialMap` and their `...FromDistances` (JavaScript);
+  `--inclusion-of` (command line).
