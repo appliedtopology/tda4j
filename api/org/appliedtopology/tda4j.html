@@ -1764,7 +1764,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L288" target="_blank">FiniteMetricSpace.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L313" target="_blank">FiniteMetricSpace.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -7152,7 +7152,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L248" target="_blank">FiniteMetricSpace.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L273" target="_blank">FiniteMetricSpace.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -7192,7 +7192,7 @@
           <button class="icon-button ar show-content"></button>
           <div class="header monospace mono-medium">
            <div class="signature">
-            <span class="signature-short"><span class="modifiers"><span t="k">open </span></span><span class="kind"><span t="k">class </span></span><a href="tda4j/EuclideanMetricSpace.html" t="n" class="documentableName ">EuclideanMetricSpace</a>(<span t="k"></span><span t="k">val </span><span data-unresolved-link="" t="n">pts</span>: <span data-unresolved-link="" t="t">Array</span>[<span data-unresolved-link="" t="t">Array</span>[<span data-unresolved-link="" t="t">Double</span>]], <span t="k">val </span><span data-unresolved-link="" t="n">cacheDistances</span>: <span data-unresolved-link="" t="t">Boolean</span> = ...)<span t="k"> extends </span><a href="tda4j/FiniteMetricSpace.html" t="t">FiniteMetricSpace</a>[<span data-unresolved-link="" t="t">Int</span>]</span><span class="signature-long"></span>
+            <span class="signature-short"><span class="modifiers"><span t="k">open </span></span><span class="kind"><span t="k">class </span></span><a href="tda4j/EuclideanMetricSpace.html" t="n" class="documentableName ">EuclideanMetricSpace</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">coordinates</span>: <span data-unresolved-link="" t="t">Array</span>[<span data-unresolved-link="" t="t">Array</span>[<span data-unresolved-link="" t="t">Double</span>]], <span t="k">val </span><span data-unresolved-link="" t="n">cacheDistances</span>: <span data-unresolved-link="" t="t">Boolean</span> = ...)<span t="k"> extends </span><a href="tda4j/FiniteMetricSpace.html" t="t">FiniteMetricSpace</a>[<span data-unresolved-link="" t="t">Int</span>]</span><span class="signature-long"></span>
            </div>
           </div>
          </div>
@@ -7202,11 +7202,12 @@
            <div class="originInfo"></div>
            <div class="memberDocumentation">
             <div class="documentableBrief doc">
-             <p>The Euclidean distances between the rows of <code>pts</code> (all of the same length).</p>
+             <p>The Euclidean distances between the rows of <code>coordinates</code> (all of the same length, all entries finite).</p>
             </div>
             <div class="cover">
              <div class="doc">
-              <p>The Euclidean distances between the rows of <code>pts</code> (all of the same length).</p>
+              <p>The Euclidean distances between the rows of <code>coordinates</code> (all of the same length, all entries finite).</p>
+              <p>The space owns a snapshot of the coordinates, taken on construction: changing the arrays passed in, or an array returned by <a href="tda4j/EuclideanMetricSpace.html#pts-0">pts</a> or <a href="tda4j/EuclideanMetricSpace.html#point-fffff1a2">point</a>, changes neither the distances nor the minimum enclosing radius nor the vantage-point tree. Ragged or non-finite input is rejected, naming the first offending point.</p>
              </div>
              <h2 class="h200">Value parameters</h2>
              <dl class="attributes attributes-small">
@@ -7235,7 +7236,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L182" target="_blank">FiniteMetricSpace.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L186" target="_blank">FiniteMetricSpace.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -13727,7 +13728,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/PackedRipserCohomology.scala#L46" target="_blank">PackedRipserCohomology.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/PackedRipserCohomology.scala#L48" target="_blank">PackedRipserCohomology.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -15009,7 +15010,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/PointCloud.scala#L23" target="_blank">PointCloud.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/PointCloud.scala#L15" target="_blank">PointCloud.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -15083,7 +15084,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/PointCloud.scala#L33" target="_blank">PointCloud.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/PointCloud.scala#L39" target="_blank">PointCloud.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -17581,7 +17582,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L299" target="_blank">FiniteMetricSpace.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L324" target="_blank">FiniteMetricSpace.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -17709,7 +17710,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L261" target="_blank">FiniteMetricSpace.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L286" target="_blank">FiniteMetricSpace.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -18552,7 +18553,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L272" target="_blank">FiniteMetricSpace.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L297" target="_blank">FiniteMetricSpace.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -19874,42 +19875,6 @@
               </dt>
               <dd class="body-medium">
                <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/cells/CubicalOrderedCell.scala#L11" target="_blank">CubicalOrderedCell.scala</a>
-              </dd>
-             </dl>
-            </div>
-           </div>
-          </div>
-         </div>
-        </div>
-        <div class="documentableElement" id="insertionDiameter-fffffeb2">
-         <div class="documentableElement-expander">
-          <button class="icon-button ar show-content"></button>
-          <div class="header monospace mono-medium">
-           <div class="signature">
-            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="tda4j.html#insertionDiameter-fffffeb2" t="n" class="documentableName ">insertionDiameter</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">metricSpace</span>: <a href="tda4j/FiniteMetricSpace.html" t="t">FiniteMetricSpace</a>[<span data-unresolved-link="" t="t">Int</span>], <span t="k"></span><span data-unresolved-link="" t="n">vertices</span>: <span data-unresolved-link="" t="t">Array</span>[<span data-unresolved-link="" t="t">Int</span>], <span t="k"></span><span data-unresolved-link="" t="n">sigmaFv</span>: <span data-unresolved-link="" t="t">Double</span>, <span t="k"></span><span data-unresolved-link="" t="n">v</span>: <span data-unresolved-link="" t="t">Int</span>): <span data-unresolved-link="" t="t">Double</span>
-           </div>
-          </div>
-         </div>
-         <div class="docs">
-          <span class="modifiers"></span>
-          <div>
-           <div class="originInfo"></div>
-           <div class="memberDocumentation">
-            <div class="cover">
-             <div class="doc"></div>
-             <h2 class="h200">Attributes</h2>
-             <dl class="attributes attributes-small">
-              <dt class="body-small">
-               Experimental
-              </dt>
-              <dd class="body-medium">
-               true
-              </dd>
-              <dt class="body-small">
-               Source
-              </dt>
-              <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/PackedRipserCohomology.scala#L8" target="_blank">PackedRipserCohomology.scala</a>
               </dd>
              </dl>
             </div>
