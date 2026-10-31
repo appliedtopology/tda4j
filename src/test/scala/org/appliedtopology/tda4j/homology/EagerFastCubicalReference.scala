@@ -260,8 +260,11 @@ class EagerFastCubicalReference[CoefficientT: Field]:
             // than relying on the birthOf comparison alone to break this specific tie correctly.
             val (youngRoot, oldRoot) =
               if seniority(ra) != seniority(rb) then if seniority(ra) < seniority(rb) then (ra, rb) else (rb, ra)
-              else if seniority(ra) == 1 then (ra, rb) // two masked regions: the facet's lower side dies
-              else if birthOf(ra) <= birthOf(rb) then (ra, rb)
+              // Equal births, and two masked regions, leave the choice open: the smaller region dies (the production
+              // engine's rule, so its representative is the cheaper one to write), the facet's lower side on a tie.
+              else if seniority(ra) == 1 || birthOf(ra) == birthOf(rb) then
+                if chainOf(ra).size <= chainOf(rb).size then (ra, rb) else (rb, ra)
+              else if birthOf(ra) < birthOf(rb) then (ra, rb)
               else (rb, ra)
             // Orientation: `facet`'s own boundary gives its coefficient toward EACH of its (up to two) cofaces
             // directly (cubeIsOrderedCell's alternating-rank sign rule) -- look up its coefficient toward

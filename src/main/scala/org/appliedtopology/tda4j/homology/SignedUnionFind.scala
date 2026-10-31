@@ -89,6 +89,8 @@ open class UnitSignedUnionFind(size: Int):
   private val firstChild: Array[Int] = Array.fill(size)(-1)
   private val nextSibling: Array[Int] = Array.fill(size)(-1)
   private val mergeFlip: Array[Byte] = Array.fill[Byte](size)(1)
+  // The number of elements of each root's component (meaningful for roots only).
+  private val count: Array[Int] = Array.fill(size)(1)
   private var path: Array[Int] = new Array[Int](64)
   private var stackNodes: Array[Int] = new Array[Int](64)
   private var stackSigns: Array[Byte] = new Array[Byte](64)
@@ -126,6 +128,10 @@ open class UnitSignedUnionFind(size: Int):
     mergeFlip(young) = flip.toByte
     nextSibling(young) = firstChild(old)
     firstChild(old) = young
+    count(old) += count(young)
+
+  /** The number of elements of the component of root `root`: what `foreachMember(root)` visits. */
+  def sizeOf(root: Int): Int = count(root)
 
   /** `f(member, sign relative to root)` for every element merged (directly or not) into `root`, `root` included, in the
     * order of `SignedUnionFind.members`. Exact for a root that is still a root, or was merged away.
