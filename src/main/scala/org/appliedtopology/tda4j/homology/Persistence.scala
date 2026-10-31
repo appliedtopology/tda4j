@@ -74,8 +74,8 @@ object Image:
   *   `Representatives.Cycles` (default) or `Representatives.Cocycles`.
   * @param computeAllRepresentatives
   *   read only by `Engine.ParallelRipser`: `true` (default) builds every bar's representative before returning, as the
-  *   other engines do; `false` builds each when it is first read (`bar.representative.terms`), which costs nothing for
-  *   the bars you never look at.
+  *   other engines do; `false` builds each cocycle when it is first read (`bar.representative.terms`), which costs
+  *   nothing for the bars you never look at. Cycles are assembled together on the first cycle read.
   * @param threads
   *   how many threads the computation may use, the representatives built later included (default: all the processors).
   *   `1` is the sequential computation, and makes `Engine.Auto` choose `Engine.Ripser`. The bars do not depend on it.

@@ -107,6 +107,8 @@ Testing lessons: F2 hides sign errors; signed-field fixtures need ≥5 vertices 
 elements, `SignedFieldBarcodeSpec`). Two engines agreeing isn't proof if they share a code path: hand-derived fixtures
 are the real oracle.
 
+`ParallelPackedCohomology.cocycle` expands logs with an explicit stack and throws on a cyclic one (`WORKLOG-code-review-followup.md`).
+
 ## Cross-engine benchmark
 
 `EngineComparisonBenchmarkSpec` times every (construction x engine) pairing; alpha and VR bar counts are never compared (radius vs diameter).

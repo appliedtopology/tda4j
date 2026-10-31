@@ -42,6 +42,7 @@ paths:
 - **Both diagrams need the same `characteristic` and `maxFiltrationValue`** (the default is the enclosing radius, different
   for a subsample). The target needs `includeZeroLength = true` (so `ParallelRipser` can only be a source). The coefficients
   of the target are cast to the source's: the same prime means the same `Int` underneath.
+- Integer coefficients in a cell map convert by repeated doubling, with the magnitude taken in `Long` so `Int.MinValue` works (`PersistenceMapSpec`, `WORKLOG-code-review-followup.md`).
 - **A sign mutation test.** `simplicial` sorts the image vertices and signs by the permutation; the spec numbers the target
   by a random permutation so the signs differ from simplex to simplex (an overall sign changes no rank and would pass).
 

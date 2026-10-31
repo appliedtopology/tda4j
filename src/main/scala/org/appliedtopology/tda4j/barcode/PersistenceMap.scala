@@ -189,8 +189,14 @@ object PersistenceMap:
 
   /** `n` in the field, the sum of `n` ones (or minus ones). */
   private def integer[C](n: Int)(using fr: C is Field): C =
-    val unit = if n >= 0 then fr.one else fr.negate(fr.one)
-    (0 until math.abs(n)).foldLeft(fr.zero)((sum, _) => fr.plus(sum, unit))
+    var magnitude = math.abs(n.toLong)
+    var addend = if n >= 0 then fr.one else fr.negate(fr.one)
+    var sum = fr.zero
+    while magnitude > 0 do
+      if (magnitude & 1L) != 0 then sum = fr.plus(sum, addend)
+      magnitude = magnitude >>> 1
+      if magnitude > 0 then addend = fr.plus(addend, addend)
+    sum
 
   private def degreeOf[S, T, C](
     k: Int,

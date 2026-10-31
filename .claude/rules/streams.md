@@ -107,6 +107,8 @@ A loop over all pairs `a < b` asks `distance(b, a)` (a row of the cache), and ta
 `LayeredInorderSimplexStream.distanceOf(space)`, which calls the concrete `distance(Int, Int)` of `EuclideanMetricSpace`
 and `ExplicitMetricSpace` instead of the boxing generic one (edge pass 2-7x, `WORKLOG-vr-leftovers.md`).
 
+**`EuclideanMetricSpace` owns a snapshot of its points**: ragged or non-finite input is rejected, `pts` and `point(i)` copy, and the Cech stream reads `pointAt` without copying (`WORKLOG-code-review-followup.md`).
+
 **`EuclideanMetricSpace` caches all n^2 distances only up to `MaxCachedPoints = 8192` (512 MB)**; above that, and with
 `cacheDistances = false`, distances are computed on demand. Before the cap, n^2 overflowed `Int` at 46,341 points
 (clifford50000 died at startup). Never collect all pairwise distances into a collection (the verb's scale is a loop).

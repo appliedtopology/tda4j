@@ -169,7 +169,11 @@ open class ExplicitMetricSpace(val dist: Seq[Seq[Double]]) extends FiniteMetricS
   def elements: Iterable[Int] = Range(0, size)
   override def contains(x: Int): Boolean = 0 <= x & x < size
 
-/** The Euclidean distances between the rows of `pts` (all of the same length).
+/** The Euclidean distances between the rows of `coordinates` (all of the same length, all entries finite).
+  *
+  * The space owns a snapshot of the coordinates, taken on construction: changing the arrays passed in, or an array
+  * returned by [[pts]] or [[point]], changes neither the distances nor the minimum enclosing radius nor the
+  * vantage-point tree. Ragged or non-finite input is rejected, naming the first offending point.
   *
   * @param cacheDistances
   *   compute all pairwise distances on first use and look them up afterwards (default `true`). That is `n^2` doubles,
@@ -179,11 +183,32 @@ open class ExplicitMetricSpace(val dist: Seq[Seq[Double]]) extends FiniteMetricS
   *   Vietoris-Rips computation, so the cache usually pays off where it fits.
   */
 
-open class EuclideanMetricSpace(val pts: Array[Array[Double]], val cacheDistances: Boolean = true)
+open class EuclideanMetricSpace(coordinates: Array[Array[Double]], val cacheDistances: Boolean = true)
     extends FiniteMetricSpace[Int]:
+  private val pointCoordinates = coordinates.map(_.clone())
+  PointCloud.check(pointCoordinates, "EuclideanMetricSpace")
+
+  /** A copy of all the points: `n` arrays are allocated on every call, so read single points with [[point]]. */
+  def pts: Array[Array[Double]] = pointCoordinates.map(_.clone())
+
+  /** A copy of the coordinates of point `index`. */
+  def point(index: Int): Array[Double] = pointCoordinates(index).clone()
+
+  // Not public: the arrays are the space's own, and a caller who wrote to one would invalidate its lazy caches. Hot
+  // consumers inside the library (the Cech stream reads a point per vertex) read them without copying.
+  private[tda4j] def pointAt(index: Int): Array[Double] = pointCoordinates(index)
+
+  /** The squared distance between two points, which must have the same number of coordinates. */
   def pointSqDistance(x: Array[Double], y: Array[Double]): Double =
+    require(
+      x.length == y.length,
+      s"EuclideanMetricSpace.pointSqDistance: points have different numbers of coordinates (${x.length} and ${y.length})"
+    )
+    squaredDistance(x, y)
+
+  private def squaredDistance(x: Array[Double], y: Array[Double]): Double =
     var acc: Double = 0.0
-    val n = math.min(x.length, y.length)
+    val n = x.length
     var i = 0
     while i < n do
       val d: Double = x(i) - y(i)
@@ -191,7 +216,7 @@ open class EuclideanMetricSpace(val pts: Array[Array[Double]], val cacheDistance
       i += 1
     acc
 
-  def size: Int = pts.size
+  def size: Int = pointCoordinates.size
   def elements: Iterable[Int] = Range(0, size)
   override def contains(x: Int): Boolean = 0 <= x & x < size
 
@@ -208,7 +233,7 @@ open class EuclideanMetricSpace(val pts: Array[Array[Double]], val cacheDistance
     while i < n do
       var j = i
       while j < n do
-        val d = sqrt(pointSqDistance(pts(i), pts(j)))
+        val d = sqrt(squaredDistance(pointCoordinates(i), pointCoordinates(j)))
         cache(i * n + j) = d
         cache(j * n + i) = d
         j += 1
@@ -216,7 +241,7 @@ open class EuclideanMetricSpace(val pts: Array[Array[Double]], val cacheDistance
     cache
 
   def distance(x: Int, y: Int): Double =
-    if useCache then distanceCache(x * size + y) else sqrt(pointSqDistance(pts(x), pts(y)))
+    if useCache then distanceCache(x * size + y) else sqrt(squaredDistance(pointCoordinates(x), pointCoordinates(y)))
 
   // On squared distances, which gives the same radius (the square root is monotone and exactly rounded) without
   // filling the n^2 distance cache or taking a root per pair: an alpha complex never asks for the cache.
@@ -228,7 +253,7 @@ open class EuclideanMetricSpace(val pts: Array[Array[Double]], val cacheDistance
       var farthest = 0.0
       var j = 0
       while j < n && farthest < best do
-        val d = pointSqDistance(pts(i), pts(j))
+        val d = squaredDistance(pointCoordinates(i), pointCoordinates(j))
         if d > farthest then farthest = d
         j += 1
       if farthest < best then best = farthest
@@ -240,7 +265,7 @@ open class EuclideanMetricSpace(val pts: Array[Array[Double]], val cacheDistance
   lazy val vpdf: (Array[Double], Array[Double]) => Double = (x, y) => sqrt(pointSqDistance(x, y))
 
   /** A vantage-point tree over the points. */
-  lazy val vpt: VantagePointTree[Array[Double]] = VantagePointTree(pts.toSeq, vpdf)
+  lazy val vpt: VantagePointTree[Array[Double]] = VantagePointTree(pointCoordinates.map(_.clone()).toSeq, vpdf)
 
   /** The indices of the points within distance `eps` of `qp` (ascending), `qp` itself need not be one of them. */
   def neighbors(qp: Array[Double], eps: Double): Seq[Int] = vpt.indicesWithinDistance(qp, eps)
