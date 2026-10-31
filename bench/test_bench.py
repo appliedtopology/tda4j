@@ -626,6 +626,105 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(rows[0]["series"], "d")
 
 
+class RadiusPathTests(unittest.TestCase):
+    def test_the_radii_are_fractions_of_the_enclosing_radius(self):
+        self.assertEqual(sweep_alpha.parse_radii("0.25, 0.5,1"), [0.25, 0.5, 1.0])
+        self.assertEqual(sweep_alpha.parse_radii(""), [])
+        for bad in ("0", "-0.5", "half"):
+            with self.assertRaises(ValueError):
+                sweep_alpha.parse_radii(bad)
+
+    def test_the_enclosing_radius_is_the_smallest_largest_distance_from_a_point(self):
+        # on a line at 0, 1, 3 the largest distances from a point are 3, 2, 3: the point at 1 encloses with radius 2
+        self.assertEqual(sweep_alpha.enclosing_radius(np.array([[0.0], [1.0], [3.0]])), 2.0)
+        square = np.array([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]])
+        self.assertAlmostEqual(sweep_alpha.enclosing_radius(square), math.sqrt(2.0))
+
+    def test_the_radius_path_sweeps_fractions_with_tools_that_take_a_radius(self):
+        preset = sweep_alpha.PATHS["radius"]
+        self.assertEqual(sweep_alpha.parse_radii(preset["radii"])[-1], 1.0, "the enclosing radius is the anchor")
+        self.assertGreater(len(sweep_alpha.parse_radii(preset["radii"])), 2)
+        self.assertEqual(preset["shapes"], "interior")
+        no_radius = {name for name, _, _, opts in bench.TOOLS if opts.get("no_radius")}
+        chosen = set(preset["tools"].split(","))
+        self.assertTrue({"tda4j", "tda4j-helix", "tda4j-dqp", "gudhi"} <= chosen)
+        self.assertFalse(chosen & no_radius, "the fast alpha engine takes no radius")
+
+    def test_a_tool_that_takes_no_radius_is_left_out_of_a_radius_cell_only(self):
+        tools = [("tda4j", "tda4j", {}), ("tda4j-fastalpha", "tda4j", {"no_radius": True})]
+        self.assertEqual([t[0] for t in sweep_alpha.tools_for_radius(tools, 0.5)], ["tda4j"])
+        self.assertEqual([t[0] for t in sweep_alpha.tools_for_radius(tools, None)], ["tda4j", "tda4j-fastalpha"])
+
+    def _run(self, radius):
+        seen = []
+        saved = sweep_alpha.bench.command, sweep_alpha.bench.run_proc
+        sweep_alpha.bench.command = lambda kind, name, opts, case, data, p, thr, w, t, out, args: (
+            seen.append((case.name, thr, str(out))) or ["x"])
+        sweep_alpha.bench.run_proc = lambda cmd, timeout, log, **kw: sweep_alpha.bench.Proc(
+            "ok", 1.0, 100.0, '{"times_s": [1.0], "bars": {"0": 1}}')
+        try:
+            with tempfile.TemporaryDirectory() as d:
+                (Path(d) / "sweepalpha").mkdir()
+                (Path(d) / "bars").mkdir()
+                args = Namespace(data=d, dim=2, field=17, py_mem_gb=0, timeout=10, warm_cap=0, trials=0, count=False)
+                row = sweep_alpha.run_cell("tda4j-dqp", "tda4j", {}, "interior", 10, 5, 0, "d", args, None, Path(d),
+                                           radius)
+                x = sweep_alpha.points("interior", 10, 5, 0)
+        finally:
+            sweep_alpha.bench.command, sweep_alpha.bench.run_proc = saved
+        return seen[0], row, sweep_alpha.enclosing_radius(x)
+
+    def test_a_radius_cell_gives_the_tool_that_fraction_of_the_enclosing_radius(self):
+        (name, threshold, out), row, enclosing = self._run(0.5)
+        self.assertAlmostEqual(threshold, 0.5 * enclosing)
+        self.assertEqual(row["radius"], "0.5")
+        self.assertIn("r0.5", name, "the barcode, log and cell count of a radius do not overwrite another's")
+        self.assertTrue(out.endswith("r0.5__tda4j-dqp.tsv"), out)
+
+    def test_a_cell_without_a_radius_runs_as_before(self):
+        (name, threshold, out), row, _ = self._run(None)
+        self.assertIsNone(threshold)
+        self.assertEqual(row["radius"], "")
+        self.assertNotIn("_r", name)
+        self.assertTrue(out.endswith("interior_10_5_0__tda4j-dqp.tsv"), out)
+
+    def test_the_tables_have_one_block_per_radius(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d)
+            (out / "bars").mkdir()
+            rows = [dict(shape="interior", n="40", d="9", series="d", seed="0", tool=t, status="ok", reason="",
+                         degenerate="False", densest_facet="2", cold_wall_s="1", cold_s=str(c), warm_median_s="",
+                         rss_mb="100", rss_src="x", heap_peak_mb="", old_peak_mb="", bars="{}", cells="", radius=r)
+                    for r, c in (("0.25", 1.5), ("1.0", 7.5)) for t in ("tda4j", "tda4j-dqp")]
+            with open(out / "sweep.csv", "w", newline="") as f:
+                w = csv.DictWriter(f, fieldnames=sweep_alpha.COLUMNS)
+                w.writeheader()
+                w.writerows(rows)
+            sweep_alpha.summarize(out)
+            text = (out / "sweep.md").read_text()
+        self.assertIn("radius 0.25 of the enclosing radius", text)
+        self.assertIn("radius 1.0 of the enclosing radius", text)
+        self.assertIn("| d = 9 | 1.5 | 1.5 |", text)
+        self.assertIn("| d = 9 | 7.5 | 7.5 |", text)
+
+    def test_an_old_sweep_csv_without_a_radius_column_still_summarizes(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d)
+            (out / "bars").mkdir()
+            columns = [c for c in sweep_alpha.COLUMNS if c != "radius"]
+            row = dict(shape="interior", n="40", d="9", series="d", seed="0", tool="tda4j", status="ok", reason="",
+                       degenerate="False", densest_facet="2", cold_wall_s="1", cold_s="2", warm_median_s="",
+                       rss_mb="100", rss_src="x", heap_peak_mb="", old_peak_mb="", bars="{}", cells="")
+            with open(out / "sweep.csv", "w", newline="") as f:
+                w = csv.DictWriter(f, fieldnames=columns)
+                w.writeheader()
+                w.writerow(row)
+            sweep_alpha.summarize(out)
+            text = (out / "sweep.md").read_text()
+        self.assertIn("interior points of the unit cube, n = 40", text)
+        self.assertNotIn("enclosing radius", text)
+
+
 class CyclooctaneTests(unittest.TestCase):
     def test_the_vietoris_rips_and_alpha_cases_share_the_data_and_the_radii_match(self):
         cases = {c.name: c for c in bench.CASES}
@@ -686,8 +785,10 @@ class SweepLoopTests(unittest.TestCase):
         calls = []
         with tempfile.TemporaryDirectory() as d:
             saved = sweep_alpha.run_cell, sweep_alpha.bench.available, sys.argv
-            sweep_alpha.run_cell = lambda name, kind, opts, shape, n, dd, seed, series, args, bench_args, out: (
-                calls.append((name, shape, n, dd, seed)) or fake(name, shape, n, dd, seed))
+            self.radii = []
+            sweep_alpha.run_cell = lambda name, kind, opts, shape, n, dd, seed, series, args, bench_args, out, radius=None: (
+                calls.append((name, shape, n, dd, seed)) or self.radii.append(radius) or
+                fake(name, shape, n, dd, seed, radius))
             sweep_alpha.bench.available = lambda kind, opts, python: True
             sys.argv = ["sweep_alpha.py", "--data", d, "--out", str(Path(d) / "out"), "--dims", "5,6,7,8", "--points", "40",
                         "--shapes", "interior", "--seeds", "2", "--tools", "tda4j-helix,tda4j-dqp", *argv_extra]
@@ -709,7 +810,7 @@ class SweepLoopTests(unittest.TestCase):
         return base
 
     def test_a_series_stops_at_its_first_timeout_and_the_other_tools_go_on(self):
-        def fake(name, shape, n, d, seed):
+        def fake(name, shape, n, d, seed, radius=None):
             return self.row(name, shape, n, d, seed, "timeout" if name == "tda4j-helix" and d >= 7 else "ok")
         calls, rows, md = self.run_sweep(fake)
         self.assertEqual([c for c in calls if c[0] == "tda4j-helix" and c[3] >= 7], [("tda4j-helix", "interior", 40, 7, 0)],
@@ -719,7 +820,7 @@ class SweepLoopTests(unittest.TestCase):
 
 
     def test_a_grid_series_stops_along_n_and_its_tables_are_by_d(self):
-        def fake(name, shape, n, d, seed):
+        def fake(name, shape, n, d, seed, radius=None):
             return self.row(name, shape, n, d, seed, "timeout" if name == "tda4j-helix" and n >= 100 else "ok",
                             series="n")
         calls, rows, md = self.run_sweep(fake, ["--dims", "", "--points", "", "--grid", "11:40,100,300;14:40"])
@@ -731,8 +832,27 @@ class SweepLoopTests(unittest.TestCase):
         self.assertRegex(md, r"\| n = 100 \|[^\n]*timeout")
         self.assertNotIn("thesis", md.lower())
 
+    def test_each_radius_is_a_cell_of_its_own_and_a_timeout_stops_only_its_radius(self):
+        def fake(name, shape, n, d, seed, radius=None):
+            late = name == "tda4j-helix" and radius == 0.5 and d >= 7
+            return self.row(name, shape, n, d, seed, "timeout" if late else "ok", radius=f"{radius:g}")
+        calls, rows, md = self.run_sweep(fake, ["--radii", "0.5,1", "--seeds", "1"])
+        helix = [(c[3], r) for c, r in zip(calls, self.radii) if c[0] == "tda4j-helix"]
+        self.assertEqual(helix, [(5, 0.5), (5, 1.0), (6, 0.5), (6, 1.0), (7, 0.5), (7, 1.0), (8, 1.0)],
+                         "d = 8 at the half radius is not run after the timeout at d = 7; the whole radius 1 is")
+        self.assertIn("### interior points of the unit cube, n = 40, radius 0.5 of the enclosing radius", md)
+        self.assertIn("### interior points of the unit cube, n = 40, radius 1 of the enclosing radius", md)
+
+    def test_a_tool_without_a_radius_is_not_run_in_a_radius_sweep(self):
+        def fake(name, shape, n, d, seed, radius=None):
+            return self.row(name, shape, n, d, seed)
+        calls, _, _ = self.run_sweep(fake, ["--radii", "0.5", "--tools", "tda4j-dqp,tda4j-fastalpha", "--seeds", "1"])
+        self.assertEqual({c[0] for c in calls}, {"tda4j-dqp"})
+        calls, _, _ = self.run_sweep(fake, ["--tools", "tda4j-dqp,tda4j-fastalpha", "--seeds", "1"])
+        self.assertEqual({c[0] for c in calls}, {"tda4j-dqp", "tda4j-fastalpha"})
+
     def test_extra_cells_ignore_the_stop(self):
-        def fake(name, shape, n, d, seed):
+        def fake(name, shape, n, d, seed, radius=None):
             return self.row(name, shape, n, d, seed, "timeout" if name == "tda4j-helix" else "ok")
         calls, _, _ = self.run_sweep(fake, ["--extra", "800:11:interior"])
         self.assertIn(("tda4j-helix", "interior", 800, 11, 0), calls)
