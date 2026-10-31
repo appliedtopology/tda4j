@@ -7,7 +7,7 @@
 </div>
 <div class="main-signature mono-small-block">
  <div class="signature">
-  <span class="modifiers"><span t="k">final case </span></span><span class="kind"><span t="k">class </span></span><a href="AlphaDQPSettings.html" t="n" class="documentableName ">AlphaDQPSettings</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">rankTolerance</span>: <span data-unresolved-link="" t="t">Double</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">feasibilityTolerance</span>: <span data-unresolved-link="" t="t">Double</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">zeroTolerance</span>: <span data-unresolved-link="" t="t">Double</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">equalityTolerance</span>: <span data-unresolved-link="" t="t">Double</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">maxIterationsPerQP</span>: <span data-unresolved-link="" t="t">Int</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">workingSetCapacity</span>: <span data-unresolved-link="" t="t">Int</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">enforceMonotonicity</span>: <span data-unresolved-link="" t="t">Boolean</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">parallel</span>: <span data-unresolved-link="" t="t">Boolean</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">verbose</span>: <span data-unresolved-link="" t="t">Boolean</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">rescueRankTolerance</span>: <span data-unresolved-link="" t="t">Double</span> = ...)
+  <span class="modifiers"><span t="k">final case </span></span><span class="kind"><span t="k">class </span></span><a href="AlphaDQPSettings.html" t="n" class="documentableName ">AlphaDQPSettings</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">rankTolerance</span>: <span data-unresolved-link="" t="t">Double</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">feasibilityTolerance</span>: <span data-unresolved-link="" t="t">Double</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">zeroTolerance</span>: <span data-unresolved-link="" t="t">Double</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">equalityTolerance</span>: <span data-unresolved-link="" t="t">Double</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">maxIterationsPerQP</span>: <span data-unresolved-link="" t="t">Int</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">workingSetCapacity</span>: <span data-unresolved-link="" t="t">Int</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">enforceMonotonicity</span>: <span data-unresolved-link="" t="t">Boolean</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">parallel</span>: <span data-unresolved-link="" t="t">Boolean</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">verbose</span>: <span data-unresolved-link="" t="t">Boolean</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">rescueRankTolerance</span>: <span data-unresolved-link="" t="t">Double</span> = ..., <span t="k"></span><span data-unresolved-link="" t="n">keepWitnesses</span>: <span data-unresolved-link="" t="t">Boolean</span> = ...)
  </div>
 </div>
 <div class="cover">
@@ -34,6 +34,12 @@
    </dt>
    <dd class="body-medium">
     <p>a constraint counts as violated when its slack exceeds this fraction of max|U|.</p>
+   </dd>
+   <dt class="body-small">
+    keepWitnesses
+   </dt>
+   <dd class="body-medium">
+    <p>compute and keep the witness map Phi of every simplex (<code>AlphaComplexDQP.witness</code>), one row of the ambient dimension per simplex. The alpha streams (<code>AlphaShapes</code> with <code>DQP</code>) never read it and turn it off.</p>
    </dd>
    <dt class="body-small">
     maxIterationsPerQP
@@ -90,7 +96,7 @@
     Source
    </dt>
    <dd class="body-medium">
-    <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/alpha/AlphaComplexDQP.scala#L231" target="_blank">AlphaComplexDQP.scala</a>
+    <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/alpha/AlphaComplexDQP.scala#L234" target="_blank">AlphaComplexDQP.scala</a>
    </dd>
    <dt class="body-small">
     Graph
