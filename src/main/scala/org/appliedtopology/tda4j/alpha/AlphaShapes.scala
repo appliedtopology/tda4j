@@ -147,17 +147,19 @@ object AlphaShapes extends PointCloudComplex:
             "consumes AlphaShapeDQP's output) -- this option would be a silent no-op there."
         )
         val ambient = points.points.headOption.map(_.length).getOrElse(0)
+        // The streams never read the witness map; not keeping it saves a row of doubles a simplex.
+        val noWitnesses = AlphaDQPSettings(keepWitnesses = false)
         val topDimension = maxDimension.toOption.fold(ambient)(k => math.min(ambient, k + 1))
         radius match
           case None =>
-            if topDimension == ambient then AlphaShapeDQP(points.points)
+            if topDimension == ambient then AlphaShapeDQP(points.points, AlphaDQPSettings(keepWitnesses = false))
             else
               AlphaComplexDQPStream(
                 points.points,
-                AlphaComplexDQP.euclidean(points.points, Double.PositiveInfinity, topDimension)
+                AlphaComplexDQP.euclidean(points.points, Double.PositiveInfinity, topDimension, noWitnesses)
               )
           case Some(r) =>
-            AlphaComplexDQPStream(points.points, AlphaComplexDQP.euclidean(points.points, r, topDimension))
+            AlphaComplexDQPStream(points.points, AlphaComplexDQP.euclidean(points.points, r, topDimension, noWitnesses))
 
   /** The backend that triangulates all the points: BowyerWatson up to 4 dimensions, Helix above. */
   def triangulation(points: PointCloud): AlphaBackend =

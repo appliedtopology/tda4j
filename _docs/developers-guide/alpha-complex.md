@@ -155,6 +155,16 @@ simplices degenerate configurations legitimately produce — see [Degeneracies](
 Callers who want a radius-truncated alpha complex should call `AlphaComplexDQP.euclidean(points,
 maxRadius, maxDimension, settings)` directly.
 
+### Storage
+
+The simplices of each dimension are kept in an open-addressing table of int arrays
+(`DelaunayAlphaShapes.FaceTable`, the same as the triangulation backends use), with the value of each simplex in a
+parallel `Double` row; lookups probe the table instead of hashing a `Simplex`. By default each simplex also keeps its
+witness, the point of its restricted Voronoi cell that the value comes from (`AlphaComplexDQP.witness`), which costs one
+row of the ambient dimension per simplex. `AlphaDQPSettings(keepWitnesses = false)` drops it; `AlphaShapes` builds its
+streams that way, because they never read it. In high ambient dimension the witnesses and the `Simplex` objects are most
+of the memory of a DQP complex, which is one reason Helix is the better backend from about ten dimensions on.
+
 ### Numerical robustness
 
 - `rankTolerance` defaults to `1e-6`; smaller tolerances can destabilize the

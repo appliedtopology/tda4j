@@ -58,7 +58,7 @@ object AlphaProfileDriver:
     if opts.get("backend").contains("dqp") then
       // The dual quadratic program has no triangulation: time the simplices and their values, then the reduction.
       val stream = timed("dqp complex up to dimension " + (dim + 1)) {
-        val s = AlphaShapes(pts, AlphaBackend.DQP, maxDimension = dim)
+        val s = AlphaShapes.upToEnclosingRadius(pts, AlphaBackend.DQP, maxDimension = dim)
         val counts = (0 to dim + 1).map(k => s.iterateDimension(k).size)
         println("  simplices per dimension: " + counts.zipWithIndex.map((c, k) => s"$k:$c").mkString(" "))
         s
