@@ -47,6 +47,13 @@ open class CubicalGridStream(
       coord >= 0 && coord <= 2 * shape(i)
     }
 
+  /** Whether `c` lies on the boundary of the grid, the rectangle or box the pixels fill: along some axis it is the
+    * point at the first or the last lattice coordinate (a pixel never is). A face of a boundary cube is a boundary
+    * cube, so these cubes form the subcomplex that [[Relative.ofBoundary]] divides out.
+    */
+  def onBoundary(c: Cube): Boolean =
+    (0 until ambientDim).exists(i => c.encoded(i) == 0 || c.encoded(i) == 2 * shape(i))
+
   // Every cell's value, precomputed once into a flat array over the doubled-coordinate grid (cell with encoding `e` at
   // index sum_i e(i) * weight(i)): engines consult `filtrationValue` on every comparison, so it must be an array lookup,
   // not a hash of a `Cube` (`.claude/WORKLOG-fast-cubical-representatives.md`). The minimum over the top cells

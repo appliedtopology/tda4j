@@ -39,6 +39,18 @@ object Relative:
         case d if stream.iterateDimension.isDefinedAt(d) =>
           stream.iterateDimension(d).filterNot(inSubcomplex).map(RelativeCell(_)(context))
 
+  /** `grid` modulo its boundary, `H(X_t, X_t ∩ ∂X)` for the image or volume `X` the grid fills: the cubes that are not
+    * on the boundary ([[CubicalGridStream.onBoundary]]). A curve that runs from boundary to boundary is a cycle of the
+    * pair, like a closed one. The image itself is the top class, born when its last pixel enters.
+    *
+    * {{{
+    * val grid = CubicalImage.fromGrayscale2D(pixels)
+    * Persistence(Relative.ofBoundary(grid), maxDimension = 2)
+    * }}}
+    */
+  def ofBoundary(grid: CubicalGridStream): StratifiedCellStream[RelativeCell[Cube], Double] =
+    apply(grid, grid.onBoundary)
+
   /** `stream` of simplices modulo the subcomplex of the simplices all of whose vertices are in `vertices`. */
   def ofVertices[VertexT: Ordering](
     stream: StratifiedCellStream[Simplex[VertexT], Double],

@@ -41,7 +41,12 @@ green: equality with `EagerFastCubicalReference`/`EagerFastAlphaReference`, term
 (every top-degree representative non-zero, closed, born with its bar) -- equality alone once passed a shared bug that
 read the merge flip from the facet's own boundary (always 0), zeroing every representative of a merge away from `∞`.
 The flip's coefficients are coboundary entries: `facet` looked up in the TOP cell's boundary.
-`WORKLOG-fast-cubical-engine.md`, `WORKLOG-fast-cubical-representatives.md`.
+**Equal births: the smaller component dies** (`UnitSignedUnionFind.sizeOf`; two masked regions likewise), else a tiling's equal
+maxima kill the large region again and again (Truchet 1026²: 87 s, now 4 s). Any bars come out the same, only the cycle differs, so
+`EagerFastCubicalReference` carries the same rule and `FastCubicalTieBreakSpec` pins the cost (`representativeCellsWalked`, a
+`private[tda4j]` measurement) on a comb of equal peaks. Not fixed: a large region that is the YOUNGER by value still dies whole
+(`FastCubicalProfileDriver ... spikes`: 125M cells at 512²), #293; `FastAlphaHomologyEngine` keeps the old `<=` rule, #294.
+`WORKLOG-fast-cubical-engine.md`, `WORKLOG-fast-cubical-representatives.md`, `WORKLOG-fast-cubical-ties.md`.
 
 **Order in rank space, compare on values** (`WORKLOG-cubical-performance.md`): both union-finds order cells by pixel
 RANK (`GridRanks`: dense ranks under `java.lang.Double.compare`; a cell's rank is the minimum over its containing
@@ -104,3 +109,9 @@ its upper bound, reduction logs are primitive arrays (`Log`). In a hot loop: no 
 collection, not need** (the sweep's warm run is several computations in one JVM): the bench's default is the compact
 policy (serial collector, heap following the live data), the one to compare memory with; quote the heap a run needs
 (`-Xmx` where it still runs at its speed), not RSS alone.
+
+**Relative to the boundary** (`WORKLOG-truchet-tiles.md`): `Relative.ofBoundary(grid)` divides out `grid.onBoundary` (cubes with a point
+coordinate at the first or last lattice position; closed under faces) and runs the general cohomology engine (18.6 s at 256², #291).
+`FastCubical` takes it as a plain image: bars of degrees 0 and 1 of the pair = bars of the image in a frame one pixel wide below every
+value, minus the bars born at the frame's value; the pair's top class is born where the frame's loop dies (`RelativeSpec`, tie-heavy
+and masked images). The fast path's representatives cost the sum of the dying regions' sizes, kept small on a tiling by the equal-births rule above.

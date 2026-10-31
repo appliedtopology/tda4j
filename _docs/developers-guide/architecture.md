@@ -610,6 +610,13 @@ order of the cell of `X`, and the degree limit of the stream. Every engine then 
 change. `A` has to be closed under faces; that is documented, not checked. `RelativeSpec` compares the barcode with the
 ranks of `H(X_s, A_s) -> H(X_t, A_t)` from the relative chain groups, at every pair of filtration values.
 
+`Relative.ofBoundary(grid)` is `Relative(grid, grid.onBoundary)`: the cubes with a point coordinate at the first or last
+lattice position of some axis, a set closed under faces. The fast cubical engine takes only a `CubicalGridStream`, so a
+pair of a 2-D image and its boundary goes to it as the image in a frame of pixels below every value: the frame adds one
+component and one loop, born at the frame's value, and the other bars of degrees 0 and 1 are the bars of the pair
+(`RelativeSpec`, on random images with ties and masked pixels). The top class of the pair is born where the frame's loop
+dies.
+
 ### Circular coordinates
 
 `CircularCoordinates` constructs circle-valued coordinates from persistent

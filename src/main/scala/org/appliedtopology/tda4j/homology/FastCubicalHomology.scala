@@ -21,7 +21,9 @@ import scala.collection.mutable
   * Representatives: each top cell carries a sign in its dual component, kept consistent as components merge (the sign
   * flip is solved from the merging facet's two boundary coefficients, both `±1`) so that interior facets cancel; when a
   * component dies, its representative is the boundary of its signed sum of top cells. A merge costs nearly constant
-  * time; a representative costs time proportional to its region, and only reported bars get one.
+  * time; a representative costs time proportional to its region, and only reported bars get one. Of two components born
+  * at the same value either may die, with the same bars: the smaller one does, so that a tiling's many equal maxima do
+  * not make one large region die after another.
   */
 open class FastCubicalHomologyEngine[CoefficientT: Field]:
   private val fr = summon[CoefficientT is Field]
@@ -50,12 +52,20 @@ open class FastCubicalHomologyEngine[CoefficientT: Field]:
   ): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
     compute(stream, includeZeroLength, representatives = false)
 
+  // `private[tda4j]` on purpose (invariant-bearing mutable state): a measurement for the specs, set by each call of
+  // `persistentHomology` -- the top cells of every dying region that a representative was written from.
+  /** The number of top cells in the regions walked to write the top degree's representatives in the last computation:
+    * what that part costs, in cells (`FastCubicalTieBreakSpec`).
+    */
+  private[tda4j] var representativeCellsWalked: Long = 0L
+
   private def compute(
     stream: CubicalGridStream,
     includeZeroLength: Boolean,
     representatives: Boolean,
     maxDimension: Optional[Int] = Optional.empty
   ): List[PersistenceBar[Double, Chain[Cube, CoefficientT]]] =
+    representativeCellsWalked = 0L
     require(
       stream.ambientDim >= 2,
       s"FastCubicalHomologyEngine requires ambient dimension >= 2, got ${stream.ambientDim}"
@@ -501,6 +511,13 @@ open class FastCubicalHomologyEngine[CoefficientT: Field]:
     val uf = UnitSignedUnionFind(numTop + 1)
     val bars = mutable.ArrayBuffer.empty[PersistenceBar[Double, Chain[Cube, CoefficientT]]]
 
+    // The representative of a dying region, counting the cells walked to write it (`representativeCellsWalked`).
+    def represent(youngRoot: Int, flip: Int): Option[Chain[Cube, CoefficientT]] =
+      if representatives then
+        representativeCellsWalked += uf.sizeOf(youngRoot)
+        Some(regionBoundary(uf, youngRoot, flip))
+      else None
+
     // Which side of a merge is elder: `∞`, then a component holding a masked pixel (its root: a root is its component's
     // eldest member), then by birth.
     def seniority(root: Int): Int = if root == infinityId then 2 else if pixelRank(root) == masked then 1 else 0
@@ -525,10 +542,13 @@ open class FastCubicalHomologyEngine[CoefficientT: Field]:
         // special-cased rather than left to the birth comparison.
         val sa = seniority(ra)
         val sb = seniority(rb)
+        // Equal births (and two masked regions, both there from the start) leave the choice open, and any choice gives the
+        // same bars; the smaller region dies, so the region walked for a representative is the smaller one: a tiling's
+        // many equal maxima otherwise make the large region die over and over (#290). Then the facet's lower side.
         val aIsYounger =
           if sa != sb then sa < sb
-          else if sa == 1 then true // two masked regions, both there from the start: the facet's lower side dies
-          else birthOf(ra) <= birthOf(rb)
+          else if sa == 1 || birthOf(ra) == birthOf(rb) then uf.sizeOf(ra) <= uf.sizeOf(rb)
+          else birthOf(ra) < birthOf(rb)
         val youngRoot = if aIsYounger then ra else rb
         val oldRoot = if aIsYounger then rb else ra
         val youngTopId = if aIsYounger then a else b
@@ -555,14 +575,14 @@ open class FastCubicalHomologyEngine[CoefficientT: Field]:
               d - 1,
               endpoint(true)(v),
               PositiveInfinity(),
-              Option.when(representatives)(regionBoundary(uf, youngRoot, flip))
+              represent(youngRoot, flip)
             )
           else if includeZeroLength || v != birthOf(youngRoot) then
             bars += new PersistenceBar(
               d - 1,
               endpoint(true)(v),
               endpoint(false)(birthOf(youngRoot)),
-              Option.when(representatives)(regionBoundary(uf, youngRoot, flip))
+              represent(youngRoot, flip)
             )
         uf.union(youngRoot, oldRoot, flip)
       k += 1

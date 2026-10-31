@@ -278,7 +278,13 @@ from the start, like the outside of the grid, and a masked region that dies
 gives an essential bar.
 
 Representatives are reconstructed from the active dual components so the
-result remains compatible with the rest of the persistence API.
+result remains compatible with the rest of the persistence API. A bar's cycle is
+the boundary of the region that dies, summed from its top cells, so a bar costs
+the size of its region. Of two components born at the same value either may die
+and the bars are the same; the smaller one does, so that a tiling, with an equal
+maximum in every tile, does not make the large region die over and over. A large
+region can still die when it is the younger of two by value, and is then walked
+whole.
 
 Its pieces are public:
 
@@ -286,7 +292,7 @@ Its pieces are public:
   flip)` hangs one root under another and multiplies the young component's orientations by `flip`; `find` composes
   orientations along the path; `members(root)` lists a frozen region with its orientations relative to the root, which
   is how a representative is read off. `UnitSignedUnionFind(size)` is the same with orientations `±1` kept in bytes,
-  exact whenever every flip is `±1` as in the cubical dual.
+  exact whenever every flip is `±1` as in the cubical dual, and it counts each component's elements (`sizeOf(root)`).
 - `DoubledGrid` walks the doubled grid (coordinate `2a` is the point `a`, `2a + 1` the interval `[a, a + 1]`) one
   prefix at a time, so a caller can run a tight loop along the last axis.
 - `GridCellOrder` is the order `PackedCubicalCohomologyEngine` puts on the cubes of one grid: the rank of a cell's

@@ -28,10 +28,31 @@ chains of `RelativeCell`s, the cell of `X` being `cell`.
 | call | the subcomplex `A` |
 |---|---|
 | `Relative.ofVertices(stream, vertices)` | the simplices all of whose vertices are in the set |
+| `Relative.ofBoundary(grid)` | the cubes on the boundary of an image or volume (`grid.onBoundary`) |
 | `Relative(stream, inSubcomplex)` | the cells for which `inSubcomplex(cell)` holds, for cells of any kind |
 
 `A` has to be closed under faces: a face of a cell in `A` is in `A`. This is not checked. The cells of `A` keep the
 filtration values they have in `X`, so `A_t` is `A` intersected with `X_t`.
+
+## An image relative to its boundary
+
+A curve that runs from one edge of a picture to another is not a cycle of the picture, but it is a cycle of the picture
+modulo its edge. `Relative.ofBoundary` takes the grid of an image and divides out the cubes on its boundary:
+
+```scala 3
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+
+val pixels = Array.tabulate(7, 7)((row, column) => if row == 3 then 0.0 else 1.0)   // a line from edge to edge, value 0
+val grid = CubicalImage.fromGrayscale2D(pixels)
+
+Persistence(Image(pixels), maxDimension = 1).dim(1).size                // 0: the line is no loop
+Persistence(Relative.ofBoundary(grid), maxDimension = 2).dim(1).size    // 1: the line is a cycle of the pair
+```
+
+The pair of a picture and its boundary has its top class, the picture itself, from the value where the last pixel enters. For
+a large image there is a faster way to the same bars of degrees 0 and 1, through the fast cubical engine; the
+[Truchet tutorial](../tutorials/truchet-tiles.md) shows it on a random tiling of arcs, whose long bars are exactly its curves.
 
 A single vertex gives the reduced homology: for a connected complex whose vertices all enter at the start, the one
 essential bar of degree 0 is gone and everything else stays. If you want what a sample adds to a subsample, with the
