@@ -4,7 +4,8 @@ what do the ambient dimension and the point count cost each backend?
 
     bench/run.sh sweep-alpha [--dims 5,6,7,8,10,12,15,20,25] [--points 40,60] [--shapes interior,surface]
                              [--grid "11:40,100,300,900"] [--extra 800:11:interior] [--seeds 3] [--timeout 1800]
-                             [--jvm-heap 64g] [--py-mem-gb 128] [--count] [--validity "interior:4:25:1000;..."]
+                             [--radii 0.25,0.5,1] [--jvm-heap 64g] [--py-mem-gb 128] [--count]
+                             [--validity "interior:4:25:1000;..."]
 
 `run.sh setup` must have run. The inputs are random points of the unit cube [0,1]^d, the kind the Helix thesis uses (as it
 was described to us): n points uniform in the interior, or on the surface (a facet chosen uniformly, one coordinate fixed
@@ -13,9 +14,16 @@ fixed d (`d:n,n,..;d:n,..`); `--extra n:d:shape` single cells such as 800 points
 `--seeds` independent draws: cold, and warm when the cold run took under `--warm-cap` seconds. A tool's series stops at its
 first timeout or out-of-memory (a series runs along d, or along n for a grid); a timeout costs `--timeout`.
 
-`--path top|four|plane` runs one of the three sweeps the benchmark is read by: the whole barcode up to degree d - 1 in R^d (the
-top degree is where the fast alpha engine's dual union-find needs no reduction), degrees up to 4 in R^d, and the plane with
-the point count raised until each tool gives up. `--dim` sets the highest degree directly (a number, or `top`; at most d - 1).
+`--path top|four|plane|radius` runs one of the four sweeps the benchmark is read by: the whole barcode up to degree d - 1 in R^d (the
+top degree is where the fast alpha engine's dual union-find needs no reduction), degrees up to 4 in R^d, the plane with
+the point count raised until each tool gives up, and the radius sweep. `--dim` sets the highest degree directly (a number,
+or `top`; at most d - 1).
+
+`--radii f,f,..` runs every cell once per fraction f of the enclosing radius (the smallest over the points of the largest
+distance from a point: where TDA4j's alpha complex stops without a radius), handing each tool the radius f times that. A
+tool that takes no radius (the fast alpha engine) is left out. The triangulations build the whole complex whatever the
+radius and filter it; the dual quadratic program builds only what lies within it, so the radius is where the backends'
+costs separate. The tables have one block per radius.
 
 Tools: `tda4j` (the default: Helix without a radius above 4-D), `tda4j-helix`, `tda4j-fastalpha` (Helix's triangulation, then
 the dual union-find for the top degree and the cohomology engine for the degrees up to `--dim` below it),
@@ -66,8 +74,8 @@ TOOL_NAMES = ["tda4j", "tda4j-helix", "tda4j-fastalpha", "tda4j-fastalpha-top", 
               "tda4j-js", "tda4j-js-helix", "tda4j-js-fastalpha", "tda4j-js-dqp"]
 TOP_ONLY = ("tda4j-fastalpha-top",)  # the tools that report only degree d - 1
 REFERENCES = ["gudhi", "tda4j-cech", "tda4j-dqp"]  # the barcode a row is compared with: the first that finished
-COLUMNS = ["shape", "n", "d", "series", "seed", "tool", "status", "reason", "degenerate", "densest_facet", "cold_wall_s",
-           "cold_s", "warm_median_s", "rss_mb", "rss_src", "heap_peak_mb", "old_peak_mb", "bars", "cells"]
+COLUMNS = ["shape", "n", "d", "series", "radius", "seed", "tool", "status", "reason", "degenerate", "densest_facet",
+           "cold_wall_s", "cold_s", "warm_median_s", "rss_mb", "rss_src", "heap_peak_mb", "old_peak_mb", "bars", "cells"]
 COUNTED = ("tda4j", "gudhi")  # the tools whose complex is counted per draw: TDA4j's own stream and GUDHI's simplex tree
 
 
@@ -100,6 +108,32 @@ def parse_extra(text):
     return out
 
 
+def parse_radii(text):
+    """`0.25,0.5,1` -> [0.25, 0.5, 1.0]: fractions of the enclosing radius, each above zero."""
+    out = [float(t) for t in text.split(",") if t.strip()]
+    if any(not f > 0 for f in out):
+        raise ValueError(f"--radii {text}: the fractions of the enclosing radius are above 0")
+    return out
+
+
+def enclosing_radius(x):
+    """The smallest over the points of the largest distance from that point: past it the union of balls is contractible,
+    and it is where TDA4j's alpha complex stops when it is given no radius."""
+    diff = x[:, None, :] - x[None, :, :]
+    return float(np.sqrt((diff ** 2).sum(axis=-1)).max(axis=1).min())
+
+
+def tools_for_radius(tools, radius):
+    """The tools that run in a cell with this radius fraction (None: no radius): those that take a radius, or all."""
+    return [t for t in tools if radius is None or not t[2].get("no_radius")]
+
+
+def cell_tag(shape, n, d, seed, radius=""):
+    """The name of a draw's output files; a radius fraction (its text) is part of it, so the cells of a sweep over the
+    radius do not overwrite each other's barcodes."""
+    return f"{shape}_{n}_{d}_{seed}" + (f"_r{radius}" if radius else "")
+
+
 def parse_grid(text):
     """`11:40,100;14:40` -> [(11, [40, 100]), (14, [40])]: a dimension and the point counts to run in it."""
     out = []
@@ -115,7 +149,7 @@ def degree_for(dim, d):
     return d - 1 if dim == "top" else min(int(dim), d - 1)
 
 
-# `--path`: the three sweeps the alpha benchmark is read by. Each sets the options still at their defaults.
+# `--path`: the four sweeps the alpha benchmark is read by. Each sets the options still at their defaults.
 PATHS = {
     # the whole barcode, up to the top degree d - 1: where the fast alpha engine's dual union-find does the top degree
     "top": {"dim": "top", "dims": "3,4,5,6,7,8,9,10,12", "points": "40,60"},
@@ -124,33 +158,41 @@ PATHS = {
     # the plane, the point count raised until each tool gives up: the case the dual union-find needs no reduction for
     "plane": {"dim": "top", "dims": "", "points": "", "shapes": "interior",
               "grid": "2:1000,3000,10000,30000,100000,300000,1000000,3000000"},
+    # a radius at a quarter, a half, three quarters and all of the enclosing radius, where the dual quadratic program
+    # builds only what lies within it and the triangulations all of it (the fast alpha engine takes no radius)
+    "radius": {"dim": "top", "dims": "8,9,10", "points": "40,60", "shapes": "interior",
+               "radii": "0.25,0.5,0.75,1", "tools": "tda4j,tda4j-helix,tda4j-dqp,gudhi"},
 }
 
 
-def run_cell(name, kind, opts, shape, n, d, seed, series, args, bench_args, out):
-    """One tool on one draw: a cold run, then a warm one if the cold computation was quick. Returns a row."""
+def run_cell(name, kind, opts, shape, n, d, seed, series, args, bench_args, out, radius=None):
+    """One tool on one draw: a cold run, then a warm one if the cold computation was quick. Returns a row. `radius` is a
+    fraction of the draw's enclosing radius, which the tool gets as its largest radius; None: as the tool defaults."""
     x = points(shape, n, d, seed)
+    fraction = f"{radius:g}" if radius is not None else ""
+    threshold = radius * enclosing_radius(x) if radius is not None else None
     rel = f"sweepalpha/{shape}_{n}_{d}_{seed}.txt"
     path = Path(args.data) / rel
     if not path.exists():
         np.savetxt(path, x, fmt="%.17g")
     task = "cech" if name == "tda4j-cech" else "alpha"
-    case = bench.Case(f"{shape}{d}d_{n}_s{seed}", task, rel, "points", degree_for(args.dim, d))
-    bars = out / "bars" / f"{shape}_{n}_{d}_{seed}__{name}.tsv"
-    tag = f"{shape}_{n}_{d}_{seed}__{name}"
+    case = bench.Case(f"{shape}{d}d_{n}_s{seed}" + (f"_r{fraction}" if fraction else ""), task, rel, "points",
+                      degree_for(args.dim, d))
+    tag = f"{cell_tag(shape, n, d, seed, fraction)}__{name}"
+    bars = out / "bars" / f"{tag}.tsv"
     caps = {"address_space_mb": args.py_mem_gb * 1024} if kind == "py" and args.py_mem_gb else {}
     data = Path(args.data)
-    cold = bench.run_proc(bench.command(kind, name, opts, case, data, args.field, None, 0, 1, bars, bench_args),
+    cold = bench.run_proc(bench.command(kind, name, opts, case, data, args.field, threshold, 0, 1, bars, bench_args),
                           args.timeout, out / "logs" / (tag + "__cold"), **caps)
     j = bench.last_json(cold.text) if cold.status == "ok" else None
-    row = {"shape": shape, "n": n, "d": d, "series": series or "", "seed": seed, "tool": name, "status": cold.status,
+    row = {"shape": shape, "n": n, "d": d, "series": series or "", "radius": fraction, "seed": seed, "tool": name, "status": cold.status,
            "reason": cold.reason, "degenerate": str(is_degenerate(x)), "densest_facet": densest_facet(x),
            "cold_wall_s": f"{cold.wall:.3f}", "cold_s": f"{j['times_s'][0]:.4f}" if j else "", "warm_median_s": "",
            "rss_mb": f"{cold.rss_mb:.0f}", "rss_src": cold.rss_src,
            "heap_peak_mb": j.get("heap_peak_mb", "") if j else "", "old_peak_mb": j.get("old_peak_mb", "") if j else "",
            "bars": json.dumps(j["bars"]) if j else "", "cells": ""}
     if j and j["times_s"][0] < args.warm_cap and args.trials > 0:
-        warm = bench.run_proc(bench.command(kind, name, opts, case, data, args.field, None, 1, args.trials, bars,
+        warm = bench.run_proc(bench.command(kind, name, opts, case, data, args.field, threshold, 1, args.trials, bars,
                                             bench_args), args.timeout * (args.trials + 1),
                               out / "logs" / (tag + "__warm"), **caps)
         jw = bench.last_json(warm.text) if warm.status == "ok" else None
@@ -162,17 +204,17 @@ def run_cell(name, kind, opts, shape, n, d, seed, series, args, bench_args, out)
         elif warm.status != "ok":
             row["status"], row["reason"] = warm.status, "warm run: " + warm.reason
     if row["status"] == "ok" and name in COUNTED and args.count:
-        row["cells"] = cell_counts(name, case, data / rel, args, out)
+        row["cells"] = cell_counts(name, case, data / rel, args, out, threshold)
     return row
 
 
-def cell_counts(name, case, path, args, out):
+def cell_counts(name, case, path, args, out, threshold=None):
     """The cells of dimension 0 to dim + 1 of the complex `name` built on this draw (`count_cells.py`: TDA4j's stream
     iterated and not reduced, or GUDHI's simplex tree), as JSON; empty if the count did not finish."""
     cargs = Namespace(python=args.python, timeout=args.timeout, jvm_heap=args.jvm_heap, jvm_opts=args.jvm_opts,
                       jvm_fixed_heap=args.jvm_fixed_heap, gudhi_python_ok=True, gudhi_mem_gb=args.py_mem_gb)
     count = count_cells.count_gudhi if name == "gudhi" else count_cells.count_tda4j
-    r = count(case, path, None, cargs, out)
+    r = count(case, path, threshold, cargs, out)
     return r["cells"] if r and r["status"] == "ok" else ""
 
 
@@ -218,11 +260,15 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--path", default="", choices=[""] + list(PATHS),
                     help="a preset sweep: `top` (degrees up to d - 1 in R^d), `four` (degrees up to 4 in R^d), `plane` "
-                         "(R^2, the point count raised until each tool gives up); it sets the options you did not give")
+                         "(R^2, the point count raised until each tool gives up), `radius` (a fraction of the enclosing "
+                         "radius, d = 8 to 10); it sets the options you did not give")
     ap.add_argument("--dims", default="5,6,7,8,10,12,15,20,25", help="the dimensions of the sweep over d")
     ap.add_argument("--points", default="40,60", help="the point counts of the sweep over d")
     ap.add_argument("--shapes", default="interior,surface")
     ap.add_argument("--grid", default="", help="sweeps over n at fixed d: d:n,n,..;d:n,.. (default: none)")
+    ap.add_argument("--radii", default="",
+                    help="fractions of the enclosing radius, e.g. 0.25,0.5,1: every cell runs once per fraction, each "
+                         "tool given that radius (default: none, each tool stops where it defaults to)")
     ap.add_argument("--extra", default="", help="single cells n:d:shape, run on their own, e.g. 800:11:interior")
     ap.add_argument("--seeds", type=int, default=3)
     ap.add_argument("--dim", default="2",
@@ -283,26 +329,29 @@ def main():
     bench_args = Namespace(jvm_heap=args.jvm_heap, jvm_opts=args.jvm_opts, jvm_fixed_heap=args.jvm_fixed_heap,
                            node_heap=args.node_heap,
                            node_opts=args.node_opts, python=args.python, javaplex_divisions=1000)
-    stopped = set()  # (series, tool): timed out or ran out of memory at a smaller cell of the series
+    radii = parse_radii(args.radii) or [None]
+    stopped = set()  # (series, radius, tool): timed out or ran out of memory at a smaller cell of the series
     with open(out / "sweep.csv", "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=COLUMNS)
         w.writeheader()
         for shape, n, d, series in plan(args):
-            for name, kind, opts in tools:
-                if series is not None and (series, name) in stopped:
-                    continue
-                for seed in range(args.seeds):
-                    row = run_cell(name, kind, opts, shape, n, d, seed, series[0] if series else None, args,
-                                   bench_args, out)
-                    w.writerow(row)
-                    f.flush()
-                    best = row["warm_median_s"] or row["cold_s"]
-                    print(f"{shape:8s} n={n:<4d} d={d:<3d} seed={seed} {name:20s} {row['status']:12s} "
-                          f"{(best + ' s') if best else row['reason'][:70]}  rss={row['rss_mb']}MB", flush=True)
-                    if row["status"] in ("timeout", "oom"):
-                        if series is not None:
-                            stopped.add((series, name))
-                        break
+            for radius in radii:
+                for name, kind, opts in tools_for_radius(tools, radius):
+                    if series is not None and (series, radius, name) in stopped:
+                        continue
+                    for seed in range(args.seeds):
+                        row = run_cell(name, kind, opts, shape, n, d, seed, series[0] if series else None, args,
+                                       bench_args, out, radius)
+                        w.writerow(row)
+                        f.flush()
+                        best = row["warm_median_s"] or row["cold_s"]
+                        at = f" r={row['radius']}" if row["radius"] else ""
+                        print(f"{shape:8s} n={n:<4d} d={d:<3d}{at} seed={seed} {name:20s} {row['status']:12s} "
+                              f"{(best + ' s') if best else row['reason'][:70]}  rss={row['rss_mb']}MB", flush=True)
+                        if row["status"] in ("timeout", "oom"):
+                            if series is not None:
+                                stopped.add((series, radius, name))
+                            break
     if args.validity:
         validity_runs(args, out)
     summarize(out)
@@ -315,10 +364,12 @@ def summarize(out, bottleneck=None):
     with open(out / "sweep.csv") as f:
         rows = list(csv.DictReader(f))
     tools = list(dict.fromkeys(r["tool"] for r in rows))
-    cells = list(dict.fromkeys((r["shape"], int(r["n"]), int(r["d"]), r["series"]) for r in rows))
+    for r in rows:  # a sweep.csv from before the radius sweep has no such column
+        r["radius"] = r.get("radius") or ""
+    cells = list(dict.fromkeys((r["shape"], int(r["n"]), int(r["d"]), r["series"], r["radius"]) for r in rows))
     by = {}
     for r in rows:
-        by.setdefault((r["shape"], int(r["n"]), int(r["d"]), r["tool"]), []).append(r)
+        by.setdefault((r["shape"], int(r["n"]), int(r["d"]), r["radius"], r["tool"]), []).append(r)
 
     def seconds(r):
         return float(r["warm_median_s"] or r["cold_s"]) if (r["warm_median_s"] or r["cold_s"]) else None
@@ -339,11 +390,12 @@ def summarize(out, bottleneck=None):
         mark = "≤" if any(r["rss_src"] == "rusage" for r in ok) else ""
         return f"{mark}{rss:.0f}" + (f" ({max(heaps):.0f})" if heaps else "")
 
-    def reference_for(shape, n, d, tool, seed):
+    def reference_for(shape, n, d, radius, tool, seed):
         """The first reference other than `tool` that finished on this draw: (name, its barcode) or None."""
         for ref in REFERENCES:
-            if ref != tool and any(x["seed"] == seed and x["status"] == "ok" for x in by.get((shape, n, d, ref), [])):
-                bars = bench.read_bars(out / "bars" / f"{shape}_{n}_{d}_{seed}__{ref}.tsv")
+            if ref != tool and any(x["seed"] == seed and x["status"] == "ok"
+                                   for x in by.get((shape, n, d, radius, ref), [])):
+                bars = bench.read_bars(out / "bars" / f"{cell_tag(shape, n, d, seed, radius)}__{ref}.tsv")
                 if bars is not None:
                     return ref, bars
         return None
@@ -351,8 +403,9 @@ def summarize(out, bottleneck=None):
     def distance_cell(shape, n, d, tool, rs):
         worst, ref_name, dagger = None, "", False
         for r in rs:
-            found = reference_for(shape, n, d, tool, r["seed"]) if r["status"] == "ok" else None
-            mine = bench.read_bars(out / "bars" / f"{shape}_{n}_{d}_{r['seed']}__{tool}.tsv") if found else None
+            found = reference_for(shape, n, d, r["radius"], tool, r["seed"]) if r["status"] == "ok" else None
+            mine = bench.read_bars(
+                out / "bars" / f"{cell_tag(shape, n, d, r['seed'], r['radius'])}__{tool}.tsv") if found else None
             if mine is None:
                 continue
             ref, theirs = found
@@ -369,11 +422,12 @@ def summarize(out, bottleneck=None):
         text = "0" if worst == 0 else f"{worst:.2g}"
         return f"{text}{'†' if dagger and worst > 1e-5 else ''} ({ref_name})"
 
-    def group_of(shape, n, d, series):
+    def group_of(shape, n, d, series, radius):
         """(title, row label) of a cell."""
+        at = f", radius {radius} of the enclosing radius" if radius else ""
         if series == "n":
-            return f"{shape} points of the unit cube, d = {d}", f"n = {n}"
-        return f"{shape} points of the unit cube, n = {n}", f"d = {d}"
+            return f"{shape} points of the unit cube, d = {d}{at}", f"n = {n}"
+        return f"{shape} points of the unit cube, n = {n}{at}", f"d = {d}"
 
     def cells_cell(shape, n, d, tool, rs):
         """Total cells of the counted complex (median over draws), by dimension of the first draw."""
@@ -395,10 +449,10 @@ def summarize(out, bottleneck=None):
         for group in dict.fromkeys(group_of(*c)[0] for c in cells):
             members = [c for c in cells if group_of(*c)[0] == group]
             lines += [f"### {group}", "", "| | " + " | ".join(tools) + " |", "|---|" + "---|" * len(tools)]
-            for s, n, d, series in members:
-                degenerate = any(r["degenerate"] == "True" for t in tools for r in by.get((s, n, d, t), []))
-                label = group_of(s, n, d, series)[1] + ("†" if degenerate else "")
-                body = " | ".join(cell(s, n, d, t, by.get((s, n, d, t), [])) for t in tools)
+            for s, n, d, series, radius in members:
+                degenerate = any(r["degenerate"] == "True" for t in tools for r in by.get((s, n, d, radius, t), []))
+                label = group_of(s, n, d, series, radius)[1] + ("†" if degenerate else "")
+                body = " | ".join(cell(s, n, d, t, by.get((s, n, d, radius, t), [])) for t in tools)
                 lines.append(f"| {label} | {body} |")
             lines.append("")
     if (out / "validity.csv").exists():
