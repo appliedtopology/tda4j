@@ -104,3 +104,9 @@ its upper bound, reduction logs are primitive arrays (`Log`). In a hot loop: no 
 collection, not need** (the sweep's warm run is several computations in one JVM): the bench's default is the compact
 policy (serial collector, heap following the live data), the one to compare memory with; quote the heap a run needs
 (`-Xmx` where it still runs at its speed), not RSS alone.
+
+**Relative to the boundary** (`WORKLOG-truchet-tiles.md`): `Relative.ofBoundary(grid)` divides out `grid.onBoundary` (cubes with a point
+coordinate at the first or last lattice position; closed under faces) and runs the general cohomology engine (18.6 s at 256², #291).
+`FastCubical` takes it as a plain image: bars of degrees 0 and 1 of the pair = bars of the image in a frame one pixel wide below every
+value, minus the bars born at the frame's value; the pair's top class is born where the frame's loop dies (`RelativeSpec`, tie-heavy
+and masked images). The fast path's representatives cost the sum of the dying regions' sizes: 91 s at 1024² on a Truchet tiling (#290).

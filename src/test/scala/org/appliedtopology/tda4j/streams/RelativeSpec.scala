@@ -84,6 +84,101 @@ class RelativeSpec extends Specification:
     }
   }
 
+  "a grid modulo its boundary" should {
+    def grid(shape: IndexedSeq[Int], value: Int => Double) =
+      CubicalImage.fromFlatArray(shape, IndexedSeq.tabulate(shape.product)(value))
+
+    "keep the cubes off the boundary, which are (2n - 1) along each axis of n pixels" in {
+      val shapes = List(IndexedSeq(1, 1), IndexedSeq(1, 4), IndexedSeq(3, 2), IndexedSeq(5, 4), IndexedSeq(2, 3, 2))
+      val failures = for
+        shape <- shapes
+        found = Relative.ofBoundary(grid(shape, _ => 0.0)).iterator.size
+        expected = shape.map(2 * _ - 1).product
+        if found != expected
+      yield s"$shape: $found cubes, $expected expected"
+      failures must beEmpty
+    }
+
+    "have the homology of the pair (ball, sphere): one class in the top degree, born with the last pixel, over every field" in {
+      // Everything is there at 0 except the pixel in the far corner: a ball without a corner, relative to a sphere
+      // without a patch, has no homology, and the corner completes the pair.
+      val failures = for
+        shape <- List(IndexedSeq(4), IndexedSeq(3, 3), IndexedSeq(4, 2), IndexedSeq(3, 3, 3))
+        p <- List(2, 3, 17)
+        pair = Relative.ofBoundary(grid(shape, i => if i == shape.product - 1 then 2.0 else 0.0))
+        found = triples(Persistence(pair, maxDimension = shape.size, characteristic = p))
+        if found != List((shape.size, 2.0, infinity))
+      yield s"$shape p=$p: $found"
+      failures must beEmpty
+    }
+
+    "count a curve that runs from boundary to boundary as a cycle, which the image alone does not" in {
+      // A white line along row 5 (left edge to right edge) and a white ring around the black pixel (2, 3), on black.
+      val white = Set((5, 0), (5, 1), (5, 2), (5, 3), (5, 4), (5, 5), (5, 6)) ++
+        (for r <- 1 to 3; c <- 2 to 4 if (r, c) != (2, 3) yield (r, c))
+      val pixels = IndexedSeq.tabulate(49)(i => if white((i / 7, i % 7)) then 0.0 else 1.0)
+      val shape = IndexedSeq(7, 7)
+      val failures = for
+        p <- List(2, 3, 17)
+        relative = triples(
+          Persistence(
+            Relative.ofBoundary(CubicalImage.fromFlatArray(shape, pixels)),
+            maxDimension = 2,
+            characteristic = p
+          )
+        )
+        absolute = triples(Persistence(Image(pixels, shape), maxDimension = 2, characteristic = p))
+        // the ring is a component of its own until the black pixels enter; the line touches the boundary
+        problem <- List(
+          Option.when(relative != List((0, 0.0, 1.0), (1, 0.0, 1.0), (1, 0.0, 1.0), (2, 1.0, infinity)))(
+            s"relative $relative"
+          ),
+          Option.when(absolute.count(t => t._1 == 1) != 1)(s"absolute $absolute")
+        ).flatten
+      yield s"p=$p: $problem"
+      failures must beEmpty
+    }
+
+    "have the bars of the image in a frame lower than every pixel, without the frame's own bars" in {
+      // Collapsing the frame gives the pair: degree 0 loses the frame's essential bar, degree 1 the bar that starts at
+      // the frame's value, and the top class is born where that bar ends (never, with a masked pixel left).
+      val failures = for
+        seed <- 1L to 40L
+        rng = new scala.util.Random(seed)
+        rows = 1 + rng.nextInt(5)
+        columns = 1 + rng.nextInt(5)
+        pixels = IndexedSeq.tabulate(rows * columns)(i =>
+          if i > 0 && rng.nextInt(10) == 0 then Double.NaN else rng.nextInt(4).toDouble
+        )
+        framed = IndexedSeq.tabulate((rows + 2) * (columns + 2)) { i =>
+          val (r, c) = (i / (columns + 2), i % (columns + 2))
+          if r == 0 || c == 0 || r == rows + 1 || c == columns + 1 then -1.0 else pixels((r - 1) * columns + c - 1)
+        }
+        p = 2 + (seed % 2).toInt
+        relative = triples(
+          Persistence(
+            Relative.ofBoundary(CubicalImage.fromFlatArray(IndexedSeq(rows, columns), pixels)),
+            maxDimension = 2,
+            characteristic = p
+          )
+        )
+        withFrame = triples(
+          Persistence(
+            Image(framed, IndexedSeq(rows + 2, columns + 2)),
+            maxDimension = 1,
+            characteristic = p,
+            engine = Engine.FastCubical
+          )
+        )
+        (frameBars, rest) = withFrame.partition(_._2 == -1.0)
+        top = frameBars.collect { case (1, _, death) if !death.isInfinite => (2, death, infinity) }
+        expected = (rest ++ top).sorted
+        if relative != expected
+      yield s"seed $seed ($rows x $columns): relative $relative, expected $expected"
+      failures must beEmpty
+    }
+  }
+
   /** The first disagreement of the library's barcode of the pair (Rips complex of `points`, its subcomplex on `subset`)
     * with the ranks of `H(X_s, A_s) -> H(X_t, A_t)`, over every pair of filtration values of the complex.
     */

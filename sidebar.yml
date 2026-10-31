@@ -10,6 +10,7 @@ subsection:
       - page: tutorials/circular-and-toroidal-coordinates.md
       - page: tutorials/comparing-barcodes.md
       - page: tutorials/images.md
+      - page: tutorials/truchet-tiles.md
       - page: tutorials/networks-and-relations.md
       - page: tutorials/telling-spaces-apart.md
       - page: tutorials/persistent-group-cohomology.md

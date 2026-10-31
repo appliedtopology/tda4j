@@ -26,6 +26,8 @@ complete lists of options. Every number quoted here is checked by a test that ru
 **Other kinds of data**
 
 * [Topology of an image](images.md): sublevel and superlevel sets, and the fast cubical engine.
+* [Curves in a Truchet pattern](truchet-tiles.md): counting the curves of a random tiling, closed or running off the edge, with
+  homology relative to the boundary of the picture.
 * [Networks and relations](networks-and-relations.md): Dowker complexes of a people-and-clubs table, and Dowker duality.
 
 **Spaces and algebra**
