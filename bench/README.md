@@ -108,15 +108,18 @@ in the interior or on the surface, over the dimensions 5, 6, 7, 8, 10, 12, 15, 2
 sphere are deliberately not sampled: they are all cospherical, and every Delaunay-based tool then triangulates the one
 degenerate cell its own way.
 
-Three presets (`--path`) cover what the sweep is read by, each setting the options you do not give:
+Four presets (`--path`) cover what the sweep is read by, each setting the options you do not give:
 
 | `--path` | what it runs |
 |---|---|
 | `top` | R^d for d = 3 to 12, every degree up to d - 1: the whole barcode, where the fast alpha engine's dual union-find does the top degree and `tda4j-fastalpha-top` computes that degree alone |
 | `four` | R^d for d = 5 to 15, degrees up to 4: more than the default sweep's 2, less than the whole barcode |
 | `plane` | R^2, the point count from 1 000 to 3 000 000 (`--grid`), degrees 0 and 1: the point count is raised until each tool gives up |
+| `radius` | R^d for d = 8 to 10, n = 40 and 60, interior points, every degree up to d - 1, at a quarter, a half, three quarters and all of the enclosing radius (`--radii`) for `tda4j`, `tda4j-helix`, `tda4j-dqp` and `gudhi`: the triangulations build the whole complex whatever the radius, the dual quadratic program only what lies within it |
 
 Without `--path`, `--dim` (a number, or `top`; at most d - 1) sets the highest degree, 2 by default.
+
+`--radii 0.25,0.5,1` runs every cell once per fraction of the enclosing radius (the smallest over the points of the largest distance from a point), giving each tool that radius as its largest; a tool that takes no radius (the fast alpha engine) is left out. `sweep.md` has one block per radius, and `sweep.csv` a `radius` column.
 
 Tools: `tda4j`, `tda4j-helix`, `tda4j-fastalpha`, `tda4j-fastalpha-top` (the top degree alone), `tda4j-dqp`, `tda4j-cech`, `gudhi`, and the `tda4j-js` twins. A barcode is
 compared with the first of GUDHI, the Cech complex and the dual-QP that finished on the same draw. GUDHI (CGAL) is the other
@@ -133,6 +136,7 @@ out-of-memory. The defaults assume a machine like the compute server's (`--jvm-h
 ```sh
 bench/run.sh sweep-alpha --seeds 1 --dims 5,6,7,8 --points 40 --shapes interior   # a quick look
 bench/run.sh sweep-alpha --seeds 1 --path top                                       # the whole barcode in R^d
+bench/run.sh sweep-alpha --seeds 1 --path radius                                    # time and memory against the radius
 bench/run.sh sweep-alpha --extra 800:11:interior                                    # the whole grid
 ```
 
