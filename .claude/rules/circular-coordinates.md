@@ -30,6 +30,15 @@ exactly the asked-for loops are alive. `WORKLOG-circular-from-diagram.md`. A Dow
 points (`Dowker.lift`) with the points' Dowker complex as `input` gives every point a coordinate; that complex is dense
 (14 s at 400 points capped at `r`, out of memory uncapped), `WORKLOG-dual-witness-complex.md`.
 
+**Sparse coordinates** (Perea 2020, arXiv:1809.09269; `sparse(diagram, relation, ...)`, `sparseToroidal`, `numLandmarks = n`
+on `h1Bars`/`compute`/`computeToroidal` and the MATLAB/Python/JS mirrors): class and harmonic smoothing on the Dowker
+complex of the relation (the cover's nerve restricted to the data, no Rips-at-2α transfer), then `extendToPoints`: point
+`x` gets `g(j) - sum_k phi_k(x) h(j -> k)`, `j` its nearest landmark, `phi_k` proportional to `max(r - R(k)(x), 0)`.
+Orientation: this file's `h = z - d0 g`, so `g(b) - g(a) = -h(a -> b)` mod 1 (Perea's tau is `-g`); the sign is what the
+continuity spec (`SparseCircularCoordinatesSpec`, steps < 0.02 on 300 points) catches. `numLandmarks` caps the nerve
+where one point sees every landmark (a cone: no loops after). Unweighted smoothing (Perea's edge weights not used).
+Scale: 20,000 points / 50 landmarks ~4 s. `WORKLOG-sparse-circular-coordinates.md`.
+
 **Toroidal coordinates** (`computeToroidal`, Scoccola et al. 2022, arXiv:2212.07201): combines `k` *simultaneously*-alive
 H¹ classes (common `r`, same connected component of `K_r`, checked) into one torus-valued map: `LatticeReduction` (LLL,
 `delta=3/4`) of the classes' harmonic-cochain Gram matrix's Cholesky factor, the unimodular `U` applied to the per-class

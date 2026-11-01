@@ -58,6 +58,19 @@ def test_circular_coordinates_of_a_circle_are_evenly_spaced_angles(circle):
     assert result.prime == 47
 
 
+def test_sparse_circular_coordinates_give_every_point_an_angle_from_a_few_landmarks(circle):
+    points = circle(200)
+    birth, death = tda4j.h1_bars(points, num_landmarks=12)[0]
+    result = tda4j.circular_coordinates(points, (birth + death) / 2, num_landmarks=12)
+    steps = np.diff(np.append(result.theta, result.theta[0]))
+    steps = steps - np.rint(steps)
+    assert np.all(np.isfinite(result.theta))
+    assert np.abs(steps).max() < 0.05
+    assert abs(abs(steps.sum()) - 1.0) < 1e-6
+    torus = tda4j.toroidal_coordinates(points, (birth + death) / 2, [0], num_landmarks=12)
+    assert torus.theta.shape == (1, 200)
+
+
 def test_a_prime_without_an_integer_lift_is_reported_as_the_library_error_that_says_so(circle):
     points = circle(30)
     birth, death = tda4j.h1_bars(points)[0]

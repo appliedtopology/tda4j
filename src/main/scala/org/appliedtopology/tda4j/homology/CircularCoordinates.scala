@@ -23,12 +23,22 @@ open class NoIntegerCocycleException(message: String) extends RuntimeException(m
   * Vietoris-Rips complex. `CircularCoordinates(diagram, input, ...)` takes a [[PersistenceDiagram]] you already have,
   * of any complex and from any engine, together with what it was computed from, and reads the bar, its field and (when
   * the diagram carries cocycles) its cocycle from the diagram.
+  *
+  * '''Sparse coordinates''' (Perea, "Sparse Circular Coordinates via Principal Z-Bundles", Abel Symposia 15, 2020,
+  * arXiv:1809.09269) need only a few landmarks for any number of points. The loop is found on the nerve of the balls of
+  * radius `r` around the landmarks, which is the Dowker complex of the landmark-to-point distances; the harmonic
+  * coordinate `g` is computed on the landmarks, and a point `x` gets `g(j) - sum_k phi_k(x) h(j, k)`, where `j` is its
+  * nearest landmark, `h` the harmonic cocycle and `phi_k(x)` proportional to `max(r - d(x, l_k), 0)`. The cocycle
+  * condition on the nerve makes this independent of the choice of `j`, so the map is continuous. `numLandmarks = n` on
+  * [[h1Bars]], [[compute]] and [[computeToroidal]] chooses it with `n` maxmin landmarks; [[sparse]] and
+  * [[sparseToroidal]] take a Dowker diagram and its relation, for landmarks or a cover of your own.
   */
 object CircularCoordinates:
 
   /** `theta`: ambient point index (matching the `metricSpace` passed to `compute`) to its circle coordinate in `[0, 1)`
     * -- only for points in the connected component of `K_r` containing the chosen class (see the class doc); a point
-    * outside that component has no entry at all, not a sentinel value. `birth`/`death` are the chosen bar's own
+    * outside that component has no entry at all, not a sentinel value. For sparse coordinates, the points that the
+    * balls of radius `r` around that component's landmarks cover. `birth`/`death` are the chosen bar's own
     * full-filtration endpoints (`death = Double.PositiveInfinity` for an essential bar); `r` and `prime` echo the
     * parameters `compute` was called with.
     */
@@ -47,11 +57,21 @@ object CircularCoordinates:
     endpointValue(bar.upper) - endpointValue(bar.lower)
 
   /** The `(birth, death)` of every persistent H¹ class of the Vietoris-Rips complex of `metricSpace`, most persistent
-    * first: index `i` is `cocycleIndex = i` in [[compute]]. Call this first to choose `r`.
+    * first: index `i` is `cocycleIndex = i` in [[compute]]. Call this first to choose `r`. With `numLandmarks = n`,
+    * those of the nerve of the balls around `n` maxmin landmarks, which [[compute]] with the same `numLandmarks` uses:
+    * there a scale is a ball's radius.
     */
   def h1Bars(
     metricSpace: FiniteMetricSpace[Int],
-    maxFiltrationValue: Optional[Double] = Optional.empty
+    maxFiltrationValue: Optional[Double] = Optional.empty,
+    numLandmarks: Int = 0
+  ): IndexedSeq[(Double, Double)] =
+    if numLandmarks > 0 then h1Bars(landmarkCover(metricSpace, numLandmarks, maxFiltrationValue.toOption, 47)._1)
+    else vietorisRipsH1Bars(metricSpace, maxFiltrationValue)
+
+  private def vietorisRipsH1Bars(
+    metricSpace: FiniteMetricSpace[Int],
+    maxFiltrationValue: Optional[Double]
   ): IndexedSeq[(Double, Double)] =
     given Double is Field = Field.DoubleApproximated(1e-9)
     val stream = LimitedCofaceSimplexStream(
@@ -80,22 +100,32 @@ object CircularCoordinates:
     *   classes with no lift). If [[NoIntegerCocycleException]] is thrown for a class that is not torsion, try a larger
     *   one.
     * @param maxFiltrationValue
-    *   the truncation of the full computation that finds the classes (default: the minimum enclosing radius).
+    *   the truncation of the full computation that finds the classes (default: the minimum enclosing radius; with
+    *   landmarks, the radius at which one point sees them all).
+    * @param numLandmarks
+    *   `0` (the default) for the coordinates of the complex on every point; `n` for Perea's sparse coordinates over `n`
+    *   maxmin landmarks (the class doc), much cheaper for many points. The classes and `r` are then those of
+    *   `h1Bars(metricSpace, numLandmarks = n)`.
     */
   def compute(
     metricSpace: FiniteMetricSpace[Int],
     r: Double,
     cocycleIndex: Int = 0,
     prime: Int = 47,
-    maxFiltrationValue: Optional[Double] = Optional.empty
+    maxFiltrationValue: Optional[Double] = Optional.empty,
+    numLandmarks: Int = 0
   ): Result =
     require(
       prime % 2 != 0 && isPrime(prime),
       s"circular coordinates need an odd prime (p=2 can hide torsion classes with no real/integer lift), got $prime"
     )
-    val ff = new FiniteField(prime)
-    import ff.given
-    computeGeneric[ff.Fp](metricSpace, r, cocycleIndex, prime, maxFiltrationValue.toOption, _.toInt)
+    if numLandmarks > 0 then
+      val (diagram, relation) = landmarkCover(metricSpace, numLandmarks, maxFiltrationValue.toOption, prime)
+      sparse(diagram, relation, cocycleIndex, r)
+    else
+      val ff = new FiniteField(prime)
+      import ff.given
+      computeGeneric[ff.Fp](metricSpace, r, cocycleIndex, prime, maxFiltrationValue.toOption, _.toInt)
 
   private def computeGeneric[C: Field](
     metricSpace: FiniteMetricSpace[Int],
@@ -257,6 +287,9 @@ object CircularCoordinates:
     * @param reduce
     *   `false` returns the coordinates of the classes as given, without recombining them (`basisChange` is then the
     *   identity).
+    * @param numLandmarks
+    *   `0` (the default) for the complex on every point, `n` for Perea's sparse coordinates over `n` maxmin landmarks,
+    *   as in [[compute]].
     */
   def computeToroidal(
     metricSpace: FiniteMetricSpace[Int],
@@ -264,15 +297,20 @@ object CircularCoordinates:
     cocycleIndices: Seq[Int],
     prime: Int = 47,
     reduce: Boolean = true,
-    maxFiltrationValue: Optional[Double] = Optional.empty
+    maxFiltrationValue: Optional[Double] = Optional.empty,
+    numLandmarks: Int = 0
   ): ToroidalResult =
     require(
       prime % 2 != 0 && isPrime(prime),
       s"circular coordinates need an odd prime (p=2 can hide torsion classes with no real/integer lift), got $prime"
     )
-    val ff = new FiniteField(prime)
-    import ff.given
-    computeToroidalGeneric[ff.Fp](metricSpace, r, cocycleIndices, prime, reduce, maxFiltrationValue.toOption, _.toInt)
+    if numLandmarks > 0 then
+      val (diagram, relation) = landmarkCover(metricSpace, numLandmarks, maxFiltrationValue.toOption, prime)
+      sparseToroidal(diagram, relation, cocycleIndices, r, reduce)
+    else
+      val ff = new FiniteField(prime)
+      import ff.given
+      computeToroidalGeneric[ff.Fp](metricSpace, r, cocycleIndices, prime, reduce, maxFiltrationValue.toOption, _.toInt)
 
   private def computeToroidalGeneric[C: Field](
     metricSpace: FiniteMetricSpace[Int],
@@ -392,7 +430,8 @@ object CircularCoordinates:
         val result = LatticeReduction.reduce(gram)
         (result.basisChange, result.reducedGram)
 
-    val points: IndexedSeq[Int] = sharedComponent.toIndexedSeq.map(_.underlying.head)
+    // The points with a coordinate: the component's vertices, or for sparse coordinates the points its balls cover.
+    val points: IndexedSeq[Int] = classData.head.theta.keys.toIndexedSeq
     val newTheta: IndexedSeq[Map[Int, Double]] = (0 until k).map { col =>
       points.map { point =>
         val combined = (0 until k).map(row => basisChange(row)(col) * classData(row).theta(point)).sum
@@ -651,6 +690,133 @@ object CircularCoordinates:
       }
 
     Smoothed(r, prime, births.zip(deaths).toIndexedSeq, classes)
+
+  // ---- Sparse coordinates (Perea) ------------------------------------------------------------------------------------
+
+  /** Perea's sparse circular coordinates for one H¹ bar of the Dowker diagram of `relation` (see the class doc): rows
+    * are landmarks, or any cover, columns the points, and `relation(l)(x) < r` puts point `x` in the cover set of `l`.
+    * The coordinate is computed on the nerve of the cover at `r`, and every point that cover sets of the loop's
+    * connected component hold gets one.
+    *
+    * {{{
+    * val geometry = WitnessGeometry(metricSpace, landmarks)   // the distances from each landmark to every point
+    * val diagram = Persistence(Dowker(geometry.D, maxDimension = 1))
+    * CircularCoordinates.sparse(diagram, geometry.D).theta     // a coordinate for every point
+    * }}}
+    *
+    * @param diagram
+    *   the diagram of `Dowker(relation, ...)` (on the rows, `dual = false`), with degrees up to at least 1, over `Z/p`
+    *   for an odd prime `p`. With cocycles its own are used, otherwise they are recovered as in [[apply]].
+    * @param bar
+    *   the bar, counted among the diagram's H¹ bars from the most persistent, as in [[h1Bars]].
+    * @param r
+    *   the radius of the cover sets; it must lie in `[birth, death)` of the bar (default: the middle of the bar).
+    */
+  def sparse(
+    diagram: PersistenceDiagram[Simplex[Int]],
+    relation: Array[Array[Double]],
+    bar: Int = 0,
+    r: Optional[Double] = Optional.empty
+  ): Result =
+    import diagram.given
+    val s = sparseClasses[diagram.Coefficient](diagram, relation, Seq(bar), r.toOption)
+    Result(s.classes.head.theta, s.bounds.head._1, s.bounds.head._2, s.r, s.prime)
+
+  /** [[toroidal]] with sparse coordinates: several H¹ bars of the Dowker diagram of `relation`, alive together at `r`,
+    * combined into one torus-valued map on every point the cover holds, as [[sparse]] does for one.
+    */
+  def sparseToroidal(
+    diagram: PersistenceDiagram[Simplex[Int]],
+    relation: Array[Array[Double]],
+    bars: Seq[Int],
+    r: Optional[Double] = Optional.empty,
+    reduce: Boolean = true
+  ): ToroidalResult =
+    import diagram.given
+    val s = sparseClasses[diagram.Coefficient](diagram, relation, bars, r.toOption)
+    combineClasses(s.classes, bars, reduce, s.r, s.prime)
+
+  /** The classes smoothed on the nerve of the cover at `r`, each extended to the points. */
+  private def sparseClasses[C: Field](
+    diagram: PersistenceDiagram.Of[Simplex[Int], C],
+    relation: Array[Array[Double]],
+    indices: Seq[Int],
+    requestedR: Option[Double]
+  ): Smoothed =
+    val geometry = DowkerGeometry(relation) // checks the relation
+    val nerve = new Persistence.Input[Simplex[Int]]:
+      def stream(maxDimension: Int, maxFiltrationValue: Option[Double], complex: PointCloudComplex) =
+        Dowker(relation, maxDimension, maxFiltrationValue.getOrElse(Double.PositiveInfinity))
+      def scale = None
+      def cells = summon[Simplex[Int] is OrderedCell]
+    val onNerve = smoothClasses[C](diagram, nerve, indices, requestedR, VietorisRips)
+    val onPoints = onNerve.classes.map(extendToPoints(_, geometry.relation, onNerve.r))
+    require(
+      onPoints.forall(_.theta.nonEmpty),
+      s"no point is within r=${onNerve.r} of a landmark of the loop: choose a larger r inside the bar"
+    )
+    onNerve.copy(classes = onPoints)
+
+  /** Perea's formula (11), in this file's orientation (`g(b) - g(a) = z - h` on the edge `[a, b]`): the point `x`, in
+    * the cover set of its nearest landmark `j`, gets `g(j) - sum_k phi_k(x) h(j -> k)`, with the partition of unity
+    * `phi_k(x)` proportional to `max(r - relation(k)(x), 0)` (his (13)). Any `j` whose set holds `x` gives the same
+    * value mod 1, because `h` is a cocycle on the triangles the sets of `x` span.
+    */
+  private def extendToPoints(cls: ClassData, relation: Array[Array[Double]], r: Double): ClassData =
+    val rows = relation.length
+    val columns = relation(0).length
+    val inComponent = Array.tabulate(rows)(l => cls.component.contains(Simplex(l)))
+    def harmonicFrom(j: Int, k: Int): Double =
+      val h = cls.harmonic.getOrElse(
+        Simplex(math.min(j, k), math.max(j, k)),
+        throw new IllegalStateException(s"the edge {$j, $k} of the nerve at r=$r has no harmonic value")
+      )
+      if j < k then h else -h
+    val weight = new Array[Double](rows)
+    val theta = mutable.HashMap.empty[Int, Double]
+    var x = 0
+    while x < columns do
+      var total = 0.0
+      var nearest = -1
+      var l = 0
+      while l < rows do
+        val w = r - relation(l)(x)
+        weight(l) = if w > 0 then w else 0.0
+        total += weight(l)
+        if weight(l) > 0 && (nearest < 0 || weight(l) > weight(nearest)) then nearest = l
+        l += 1
+      if nearest >= 0 && inComponent(nearest) then
+        var value = cls.theta(nearest)
+        l = 0
+        while l < rows do
+          if l != nearest && weight(l) > 0 then value -= weight(l) / total * harmonicFrom(nearest, l)
+          l += 1
+        theta(x) = value - math.floor(value)
+      x += 1
+    cls.copy(theta = theta.toMap)
+
+  /** `n` maxmin landmarks of `metricSpace`, their distances to every point, and the Dowker diagram of those distances
+    * with cocycles over `Z/prime`: what `numLandmarks = n` computes on. Cut at `maxFiltrationValue`, or where one point
+    * is within reach of every landmark, after which the nerve is a cone and has no loops.
+    */
+  private def landmarkCover(
+    metricSpace: FiniteMetricSpace[Int],
+    numLandmarks: Int,
+    maxFiltrationValue: Option[Double],
+    prime: Int
+  ): (PersistenceDiagram[Simplex[Int]], Array[Array[Double]]) =
+    require(
+      numLandmarks <= metricSpace.size,
+      s"numLandmarks must be at most the number of points, ${metricSpace.size}, got $numLandmarks"
+    )
+    val relation = WitnessGeometry(metricSpace, LandmarkSelector.maxmin(metricSpace, numLandmarks).landmarks).D
+    val cone = relation(0).indices.map(x => relation.iterator.map(_(x)).max).min
+    val diagram = Persistence(
+      Dowker(relation, maxDimension = 1, maxFiltrationValue = maxFiltrationValue.getOrElse(cone)),
+      characteristic = prime,
+      representatives = Representatives.Cocycles
+    )
+    (diagram, relation)
 
   private def bfsComponent(
     seed: Simplex[Int],

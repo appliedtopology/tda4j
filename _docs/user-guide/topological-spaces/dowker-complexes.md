@@ -62,8 +62,10 @@ well. MATLAB, the command line and Python take the option `representativesOn` (`
 A diagram of cocycles (`representatives = Representatives.Cocycles`) lifts the same way, by the transpose of the map
 that goes back from the points to the landmarks: each cocycle becomes a cocycle of the points' complex for the same bar.
 That is what circular coordinates read, so the coordinates of every point come from a computation on the landmarks:
-`CircularCoordinates(Dowker.lift(cocycles, geometry.D), Dowker(geometry.D, maxDimension = 1, dual = true))`, with an
-example on the [circular coordinates](../circular-coordinates.md) page. A lifted cocycle has a value on every simplex
+`CircularCoordinates(Dowker.lift(cocycles, geometry.D), Dowker(geometry.D, maxDimension = 1, dual = true))`. For many
+points, `CircularCoordinates.sparse(diagram, geometry.D)` is the cheaper choice: Perea's sparse coordinates, computed on
+the landmarks and spread to the points by a partition of unity (see the
+[circular coordinates](../circular-coordinates.md) page). A lifted cocycle has a value on every simplex
 of its degree on the points' side below the bar's death, so it is much larger than the cocycle on the landmarks, too
 large to hold in degree 2 for many points. Each of its values on an edge is the sum of two values of the landmark
 cocycle; if the sum leaves the range that the prime field lifts back to the integers, `CircularCoordinates` says the

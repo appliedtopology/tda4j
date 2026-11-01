@@ -638,6 +638,18 @@ dies.
 H¹ classes. It uses persistent cohomology to obtain a cocycle and harmonic
 smoothing to produce coordinates on the relevant connected component.
 
+Sparse coordinates (Perea 2020; `sparse`, `sparseToroidal`, and `numLandmarks`
+on the point-cloud entry points) compute the class on the Dowker complex of a
+relation from cover sets (landmarks) to points, which is the nerve of the
+cover restricted to the data, and smooth it there. `extendToPoints` then gives
+each covered point `g(j) - sum_k phi_k(x) h(j -> k)` (Perea's formula (11) in
+this file's orientation), with `j` its nearest landmark and `phi` the
+partition of unity proportional to `max(r - relation(k)(x), 0)`. The value does
+not depend on `j` because `h` is a cocycle on the triangles that the sets
+holding `x` span; the continuity spec checks exactly that. `combineClasses`
+reads the points from the classes' `theta`, so the toroidal reduction serves
+both routes.
+
 ### Toroidal coordinates
 
 `CircularCoordinates.computeToroidal` extends circular coordinates to several

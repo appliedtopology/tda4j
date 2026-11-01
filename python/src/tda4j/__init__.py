@@ -548,17 +548,24 @@ def dual_bars(bars) -> np.ndarray:
 # ---------------------------------------------------------------------------------------------------------------------
 
 @translating
-def h1_bars(points) -> np.ndarray:
+def h1_bars(points, num_landmarks: int = 0) -> np.ndarray:
     """The loops of the Vietoris-Rips complex as ``(birth, death)`` rows, most persistent first: the numbering that
-    ``circular_coordinates`` and ``toroidal_coordinates`` use."""
-    return _jvm.matrix_out(_java().h1Bars(_jvm.points_in(points)), 2)
+    ``circular_coordinates`` and ``toroidal_coordinates`` use. With ``num_landmarks``, the loops of the balls around
+    that many maxmin landmarks, which the coordinates with the same ``num_landmarks`` use."""
+    return _jvm.matrix_out(_java().h1Bars(_jvm.points_in(points), int(num_landmarks)), 2)
 
 
 @translating
-def circular_coordinates(points, r: float, cocycle_index: int = 0, prime: int = 47) -> CircularCoordinates:
+def circular_coordinates(
+    points, r: float, cocycle_index: int = 0, prime: int = 47, num_landmarks: int = 0
+) -> CircularCoordinates:
     """One angle in [0, 1) per point for loop ``cocycle_index`` of ``h1_bars``, at a scale ``r`` between its birth and
-    death. Raises ``Tda4jError`` if the class has no integer lift at ``prime``: retry with a larger prime."""
-    result = _java().circularCoordinates(_jvm.points_in(points), float(r), int(cocycle_index), int(prime))
+    death. ``num_landmarks`` (default 0, every point) computes Perea's sparse coordinates over that many maxmin
+    landmarks, for many points. Raises ``Tda4jError`` if the class has no integer lift at ``prime``: retry with a
+    larger prime."""
+    result = _java().circularCoordinates(
+        _jvm.points_in(points), float(r), int(cocycle_index), int(prime), int(num_landmarks)
+    )
     return CircularCoordinates(
         _jvm.vector_out(result.theta()),
         float(result.birth()),
@@ -571,12 +578,18 @@ def circular_coordinates(points, r: float, cocycle_index: int = 0, prime: int = 
 
 @translating
 def toroidal_coordinates(
-    points, r: float, cocycle_indices, prime: int = 47, reduce: bool = True
+    points, r: float, cocycle_indices, prime: int = 47, reduce: bool = True, num_landmarks: int = 0
 ) -> ToroidalCoordinates:
     """One angle per point for each of several loops of ``h1_bars`` alive together at ``r`` (``reduce`` applies the
-    lattice reduction): ``theta[c][i]`` is coordinate ``c`` of point ``i``."""
+    lattice reduction, ``num_landmarks`` Perea's sparse coordinates): ``theta[c][i]`` is coordinate ``c`` of point
+    ``i``."""
     result = _java().toroidalCoordinates(
-        _jvm.points_in(points), float(r), _jvm.ints_in(cocycle_indices, "cocycle_indices"), int(prime), bool(reduce)
+        _jvm.points_in(points),
+        float(r),
+        _jvm.ints_in(cocycle_indices, "cocycle_indices"),
+        int(prime),
+        bool(reduce),
+        int(num_landmarks),
     )
     count = int(result.dimension())
     n = len(points)
