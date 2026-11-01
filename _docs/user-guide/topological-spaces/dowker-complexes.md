@@ -56,9 +56,18 @@ onPoints.dim(1).longest.get.representative.cells.toVector
 
 A loop through landmarks `l0, l1, l2, ...` becomes the loop `l0, w01, l1, w12, l2, ...`, where `w01` is the point
 that sees both `l0` and `l1` soonest. Each edge of it lies in one landmark's ball of radius `t`, so it is also a cycle of
-the Čech complex of all the points at `t`. The diagram must carry cycles, the default; for one computed with
-`dual = true`, pass `dual = true` to `lift` as well. MATLAB, the command line and Python take the option
-`representativesOn` (`rows` or `columns`).
+the Čech complex of all the points at `t`. For a diagram computed with `dual = true`, pass `dual = true` to `lift` as
+well. MATLAB, the command line and Python take the option `representativesOn` (`rows` or `columns`).
+
+A diagram of cocycles (`representatives = Representatives.Cocycles`) lifts the same way, by the transpose of the map
+that goes back from the points to the landmarks: each cocycle becomes a cocycle of the points' complex for the same bar.
+That is what circular coordinates read, so the coordinates of every point come from a computation on the landmarks:
+`CircularCoordinates(Dowker.lift(cocycles, geometry.D), Dowker(geometry.D, maxDimension = 1, dual = true))`, with an
+example on the [circular coordinates](../circular-coordinates.md) page. A lifted cocycle has a value on every simplex
+of its degree on the points' side below the bar's death, so it is much larger than the cocycle on the landmarks, too
+large to hold in degree 2 for many points. Each of its values on an edge is the sum of two values of the landmark
+cocycle; if the sum leaves the range that the prime field lifts back to the integers, `CircularCoordinates` says the
+cocycle has no integer lift, and a larger `characteristic` gives it room.
 
 For a plain yes-or-no relation, `DowkerGeometry.fromBoolean(table)` gives the classical, unfiltered Dowker complex. The
 complex is not a flag complex, so the Ripser engine does not apply. The [networks tutorial](../../tutorials/networks-and-relations.md)

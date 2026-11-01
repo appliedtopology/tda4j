@@ -189,8 +189,8 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
   val representativesOn: ScallopOption[String] = opt[String](
     name = "representatives-on",
     descr = "rows or columns, for --input-format=csv-relation: the side of the relation the representatives are on " +
-      "(default: the side the complex is built on, see --dual). The other side's are the same bars' cycles carried " +
-      "there by Dowker duality (with landmark-to-point distances: cycles through the points)"
+      "(default: the side the complex is built on, see --dual). The other side's are the same bars' cycles or " +
+      "cocycles carried there by Dowker duality (with landmark-to-point distances: on the points)"
   )
 
   // These two choose which facade entry point runs; they are not facade options. --select-landmarks is a plain

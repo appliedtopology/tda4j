@@ -95,16 +95,72 @@ open class DowkerGeometry(val relation: Array[Array[Double]]):
     * point that witnesses the edge `l0 l1`. [[Dowker.lift]] does it for every bar of a diagram.
     */
   def lift[C: Field as field](chain: Chain[Simplex[Int], C]): Chain[Simplex[Int], C] =
-    val images = mutable.HashMap.empty[Simplex[Int], Map[Simplex[Int], C]]
-    def add(into: mutable.HashMap[Simplex[Int], C], cell: Simplex[Int], c: C): Unit =
-      into(cell) = into.get(cell).fold(c)(field.plus(_, c))
-    def nonzero(of: mutable.HashMap[Simplex[Int], C]): Map[Simplex[Int], C] =
-      of.iterator.filterNot((_, c) => field.isEqual(c, field.zero)).toMap
-    def image(sigma: Simplex[Int]): Map[Simplex[Int], C] = images.get(sigma) match
-      case Some(known) => known
+    val image = DowkerGeometry.Images[C](this)
+    val total = mutable.HashMap.empty[Simplex[Int], C]
+    for (sigma, c) <- chain.terms do
+      requireOnRows(sigma, "lift takes a chain of the complex on the rows")
+      for (tau, d) <- image(sigma) do
+        total(tau) = total.get(tau).fold(field.times(c, d))(field.plus(_, field.times(c, d)))
+    // The cells' own order, not the chain's: a chain of a stream may be ordered by that stream's filtration, which
+    // knows nothing of the columns.
+    Chain.from(total.iterator.filterNot((_, c) => field.isEqual(c, field.zero)).toSeq)
+
+  /** `cocycle`, a cocycle of the complex on the rows, carried to the complex on the columns: its value on a simplex
+    * `tau` of the columns is its value on the image of `tau` under the chain map back to the rows (`dual.lift`). It is
+    * evaluated on every simplex of the columns, of the dimension of `cocycle`, whose value is below `before`, and is
+    * zero elsewhere. Of a cocycle of the row complex at every `t < before` this makes a cocycle of the column complex
+    * at every `t < before`, and the map is an isomorphism of persistent cohomology: the cocycle of a bar `[b, d)`,
+    * lifted with `before = d`, is a cocycle of the same bar on the other side, a nonzero class from `b` on and a
+    * coboundary before. Its integer values are sums of at most `(k+1)!` values of `cocycle`, for a `k`-cocycle.
+    *
+    * The column complex is much larger than the row complex when there are many more columns than rows, as for
+    * landmark-to-point distances, where the result is a cochain on the points: [[Dowker.lift]] does it for every bar of
+    * a diagram of cocycles, and `CircularCoordinates` reads the result.
+    */
+  def liftCocycle[C: Field as field](cocycle: Chain[Simplex[Int], C], before: Double): Chain[Simplex[Int], C] =
+    val values = mutable.HashMap.empty[Simplex[Int], C]
+    for (sigma, c) <- cocycle.terms do
+      requireOnRows(sigma, "liftCocycle takes a cocycle of the complex on the rows")
+      values(sigma) = values.get(sigma).fold(c)(field.plus(_, c))
+    if values.isEmpty then Chain.from(Seq.empty[(Simplex[Int], C)])
+    else
+      val k = values.keysIterator.next().size - 1
+      require(values.keysIterator.forall(_.size == k + 1), "a cocycle has cells of one dimension only")
+      val back = DowkerGeometry.Images[C](dual)
+      val lifted = dual.simplicesBelow(k, before).flatMap { tau =>
+        val value = back(tau).foldLeft(field.zero) { case (acc, (sigma, d)) =>
+          values.get(sigma).fold(acc)(c => field.plus(acc, field.times(c, d)))
+        }
+        if field.isEqual(value, field.zero) then None else Some(tau -> value)
+      }
+      Chain.from(lifted.toSeq)
+
+  /** The `k`-simplices on the rows whose value is below `before`: every `k+1` rows that one column sees below it. */
+  private def simplicesBelow(k: Int, before: Double): Iterator[Simplex[Int]] =
+    val seen = mutable.HashSet.empty[Simplex[Int]]
+    (0 until numWitnesses).iterator.flatMap { w =>
+      val ball = (0 until numLeft).filter(x => relation(x)(w) < before)
+      ball.combinations(k + 1).map(c => Simplex(c*)).filter(seen.add)
+    }
+
+  private def requireOnRows(sigma: Simplex[Int], what: String): Unit =
+    require(
+      sigma.nonEmpty && sigma.forall(x => 0 <= x && x < numLeft),
+      s"$sigma is not a simplex on the rows of this relation, which has $numLeft rows: $what (for a diagram " +
+        "computed with dual = true, lift with the dual geometry)"
+    )
+
+object DowkerGeometry:
+  /** The images of simplices under [[lift]], each computed once: a vertex goes to its best witness, a simplex to the
+    * cone from its best witness over the image of its boundary.
+    */
+  private class Images[C: Field as field](geometry: DowkerGeometry):
+    private val known = mutable.HashMap.empty[Simplex[Int], Map[Simplex[Int], C]]
+    def apply(sigma: Simplex[Int]): Map[Simplex[Int], C] = known.get(sigma) match
+      case Some(image) => image
       case None        =>
-        val apex = bestWitness(sigma)
-        val result =
+        val apex = geometry.bestWitness(sigma)
+        val image =
           if sigma.size == 1 then Map(Simplex(apex) -> field.one)
           else
             val cone = mutable.HashMap.empty[Simplex[Int], C]
@@ -112,27 +168,16 @@ open class DowkerGeometry(val relation: Array[Array[Double]]):
             // the sorted simplex, and zero when apex is one of the w_i.
             for
               (vertex, i) <- sigma.iterator.zipWithIndex
-              (tau, c) <- image((sigma.underlying - vertex).asSimplex)
+              (tau, c) <- apply((sigma.underlying - vertex).asSimplex)
               if !tau.contains(apex)
             do
-              val sign = (i + tau.iterator.count(_ < apex)) % 2 == 0
-              add(cone, (tau.underlying + apex).asSimplex, if sign then c else field.negate(c))
-            nonzero(cone)
-        images(sigma) = result
-        result
-    val total = mutable.HashMap.empty[Simplex[Int], C]
-    for (sigma, c) <- chain.terms do
-      require(
-        sigma.nonEmpty && sigma.forall(x => 0 <= x && x < numLeft),
-        s"$sigma is not a simplex on the rows of this relation, which has $numLeft rows: lift takes a chain of the " +
-          "complex on the rows (for a diagram computed with dual = true, lift with the dual geometry)"
-      )
-      for (tau, d) <- image(sigma) do add(total, tau, field.times(c, d))
-    // The cells' own order, not the chain's: a chain of a stream may be ordered by that stream's filtration, which
-    // knows nothing of the columns.
-    Chain.from(nonzero(total).toSeq)
+              val term = if (i + tau.iterator.count(_ < apex)) % 2 == 0 then c else field.negate(c)
+              val cell = (tau.underlying + apex).asSimplex
+              cone(cell) = cone.get(cell).fold(term)(field.plus(_, term))
+            cone.iterator.filterNot((_, c) => field.isEqual(c, field.zero)).toMap
+        known(sigma) = image
+        image
 
-object DowkerGeometry:
   def apply(relation: Array[Array[Double]]): DowkerGeometry = new DowkerGeometry(relation)
   def apply(relation: Seq[Seq[Double]]): DowkerGeometry = new DowkerGeometry(relation.map(_.toArray).toArray)
 

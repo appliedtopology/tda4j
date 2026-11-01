@@ -88,14 +88,15 @@ witness variant, equal to none (lazy `nu=0` is its flag complex; `WORKLOG-dual-w
 generic coface loop. `.fromBoolean` lifts an unfiltered relation (`true`→`0.0`, `false`→`+Infinity`).
 
 **`keptByThresholdAndCriterion`'s `<=` admits `+Infinity <= +Infinity`** — safe elsewhere only because no other
-stream computes a genuinely infinite value; Dowker's boolean encoding does, on purpose ("never witnessed").
+stream computes an infinite value; Dowker's boolean encoding does ("never witnessed").
 `DowkerCofaceSimplexStream` overrides it to also require `.isFinite`; without it an untruncated stream silently becomes
 the complete simplex.
 
 **Duality is the point** (`.dual`, the transpose relation): X-side and Y-side barcodes agree exactly **without zero-length
 bars** (with `includeZeroLength = true` the sides' `H_0` births differ; Chowdhury-Mémoli 2018). `DowkerGeometry.lift`
 (Dowker's chain map, best witness + cone) carries a bar's cycle to the same bar's cycle on the other side, at its
-birth: `Dowker.lift`, facade `representativesOn`; cycles only (`DowkerLiftSpec`, `WORKLOG-dual-witness-complex.md`).
+birth; `liftCocycle` (transpose of `dual.lift`) a cocycle, below the death. `Dowker.lift`,
+facade `representativesOn` (`DowkerLiftSpec`, `WORKLOG-dual-witness-complex.md`).
 
 Own MATLAB/CLI entry point (`computeFromRelation`/`--input-format csv-relation`), not a `complex=` value — a
 relation doesn't fit the point-cloud/distance-matrix dispatch. `engine` defaults `cohomology`, refuses `ripser`/

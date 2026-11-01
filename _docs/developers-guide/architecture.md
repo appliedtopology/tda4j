@@ -473,8 +473,12 @@ map that sends each barycentre to a best witness, so a simplex of the image lies
 in the column complex at the value of the simplex it came from, and the map is
 an isomorphism of persistence modules. `Dowker.lift` applies it to every
 representative of a diagram, and the facade's `representativesOn` option to the
-bars before they become a result. Cocycles are refused: carrying a cocycle back
-needs the map in the other direction.
+bars before they become a result. A cocycle needs the map in the other
+direction: `DowkerGeometry.liftCocycle` evaluates it on the image of each simplex
+of the other side under `dual.lift`, for every simplex of its dimension below
+the bar's death (`simplicesBelow`: every subset of one witness's ball), which is
+the transpose of that chain map and again an isomorphism, of persistent
+cohomology.
 
 ### Sheehy's sparse Vietoris-Rips filtration
 

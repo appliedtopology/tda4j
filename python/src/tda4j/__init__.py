@@ -167,8 +167,8 @@ def persistence_from_relation(relation, **options) -> Result:
     ``x`` and column ``w``, smaller being stronger and ``inf`` meaning never. The matrix need not be square.
 
     ``dual=True`` builds the complex on the columns (the same bars). ``representatives_on="rows"`` or ``"columns"`` puts
-    the representative cycles on that side; with distances from landmarks (rows) to points (columns), ``"columns"``
-    gives cycles through the points."""
+    the representatives (cycles, or cocycles with ``representative_type="cocycles"``) on that side; with distances from
+    landmarks (rows) to points (columns), ``"columns"`` puts them on the points."""
     return Result(_java().computeFromRelation(_jvm.points_in(relation, "relation"), _jvm.options_in(options)))
 
 

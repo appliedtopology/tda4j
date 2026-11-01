@@ -1481,12 +1481,25 @@ class TDA4jSpec extends mutable.Specification:
         (loopEdges(back).flatMap(identity) == Set(0, 1, 2) must beTrue)
     }
 
-    "reject representativesOn with cocycles, and a value other than rows or columns" in {
-      (FullBarcode.computeFromRelation(
+    "representativesOn=columns with cocycles gives the landmark cocycle on the points, dual to the hexagon there" in {
+      def onColumns(more: String*) = FullBarcode.computeFromRelation(
         landmarkToPoint,
-        Array("representativesOn", "columns", "representativeType", "cocycles")
-      ) must throwWith[IllegalArgumentException]("cocycles")) and
-        (FullBarcode.computeFromRelation(landmarkToPoint, Array("representativesOn", "points")) must
-          throwWith[IllegalArgumentException]("rows"))
+        Array("maxDimension", "1", "representativesOn", "columns") ++ more
+      )
+      val cocycles = onColumns("representativeType", "cocycles")
+      val cycles = onColumns()
+      def terms(r: PersistenceResult): Map[List[Int], Long] =
+        val i = r.mostPersistentBar(1)
+        r.cycleVertices(i).map(_.sorted.toList).zip(r.cycleCoefficients(i).map(math.round)).toMap
+      val cocycle = terms(cocycles)
+      val pairing = terms(cycles).iterator.map((edge, c) => c * cocycle.getOrElse(edge, 0L)).sum
+      (triples(cocycles.toArray()) must beEqualTo(triples(cycles.toArray()))) and
+        (cocycle.keys.forall(edge => edge.size == 2 && edge.forall(v => 0 <= v && v < 6)) must beTrue) and
+        (Math.floorMod(pairing, 17L) must not(beEqualTo(0L)))
+    }
+
+    "reject a value of representativesOn other than rows or columns" in {
+      FullBarcode.computeFromRelation(landmarkToPoint, Array("representativesOn", "points")) must
+        throwWith[IllegalArgumentException]("rows")
     }
   }

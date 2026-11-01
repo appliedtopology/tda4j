@@ -259,7 +259,7 @@ object TDA4j:
     * Options: `engine` (`naive`, the default, or `cohomology`: the complex is not a flag complex), `maxDimension`
     * (default 2), `maxFiltrationValue` (default `Infinity`), `dual` (`true` for the complex on the columns, which has
     * the same diagram), `representativesOn` (`rows` or `columns`: the side the representatives are on, by default the
-    * side the complex is built on; the other side's are Dowker's image of them, cycles only), `field`, `prime`,
+    * side the complex is built on; the other side's are Dowker's image of them, cycles or cocycles), `field`, `prime`,
     * `epsilon`, and the bar options. The bars' birth and death cells and the boundary matrix are always those of the
     * side the complex is built on.
     */
@@ -2334,11 +2334,6 @@ object TDA4j:
       case Some(other)     =>
         throw new IllegalArgumentException(s"representativesOn must be 'rows' or 'columns', got '$other'")
     val liftRepresentatives = onColumns != dual
-    if liftRepresentatives && !cycles then
-      throw new IllegalArgumentException(
-        "representativesOn moves cycles to the other side of the relation, not cocycles: leave out " +
-          "representativeType=cocycles, or leave out representativesOn"
-      )
     dispatchByField(opts) { [C] => (toDouble: C => Double) =>
       computeDowker[C](
         relation,
@@ -2370,12 +2365,18 @@ object TDA4j:
     val geometry =
       val base = DowkerGeometry(relation)
       if dual then base.dual else base
-    // representativesOn the other side: each cycle carried there by Dowker's chain map; the bar's cells stay those of
-    // the complex built, like the boundary matrix.
+    val resolvedMaxFiltrationValue = maxFiltrationValue.getOrElse(Double.PositiveInfinity)
+    // representativesOn the other side: each cycle carried there by Dowker's chain map, each cocycle by its transpose
+    // (on the other side's cells below the bar's death, or below the threshold for a bar that does not die); the bar's
+    // cells stay those of the complex built, like the boundary matrix.
     def onTheSideAsked(bars: List[PersistenceBar[Double, Chain[Simplex[Int], C]]]) =
       if !liftRepresentatives then bars
-      else bars.map(bar => bar.copy(annotation = bar.annotation.map(geometry.lift(_))))
-    val resolvedMaxFiltrationValue = maxFiltrationValue.getOrElse(Double.PositiveInfinity)
+      else if cycles then bars.map(bar => bar.copy(annotation = bar.annotation.map(geometry.lift(_))))
+      else
+        bars.map { bar =>
+          val before = if bar.death.isPosInfinity then Math.nextUp(resolvedMaxFiltrationValue) else bar.death
+          bar.copy(annotation = bar.annotation.map(geometry.liftCocycle(_, before)))
+        }
     val cellVertices: (Int, Simplex[Int]) => Array[Int] = (_, cell) => cell.underlying.toArray
     val streamForBoundary = LimitedCofaceSimplexStream(
       DowkerCofaceSimplexStream(geometry, resolvedMaxFiltrationValue),

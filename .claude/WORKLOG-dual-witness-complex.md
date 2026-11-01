@@ -58,3 +58,38 @@ using the nerve map, "relaxed strong witness complex" as the name for the nu = 1
 - `DowkerLiftSpec`: on random relations, both directions, over F_17: bars unchanged, lifted rep is a cycle, every cell
   in the other complex at birth, not a boundary at the last value before death, a boundary at death. Mutations checked:
   dropping the cone sign fails both properties; a fixed apex (column 0) fails them and the hexagon fixture.
+
+## Cocycles and circular coordinates (2026-11-01, Mikael: "We will want the cocycles and circular coordinates as well")
+
+- `DowkerGeometry.liftCocycle(cocycle, before)`: (psi* alpha)(tau) = alpha(dual.lift(tau)) for every k-simplex tau of the
+  other side with value < `before` (`simplicesBelow`: every (k+1)-subset of one witness's strict ball, deduplicated).
+  `dual.lift` is a filtered chain quasi-isomorphism, so its transpose is an isomorphism of persistent cohomology:
+  delta(psi* alpha)(rho) = (delta alpha)(psi rho), and psi rho lies on rows cells of value <= f(rho) < d. The image
+  builder moved to a companion-private `DowkerGeometry.Images` so both directions share it (`dual.Images` was not a
+  legal path: `dual` is a lazy val).
+- `Dowker.lift` on a cocycle diagram: `before` = the death, or `nextUp(lastFiltrationValue)` for a bar that does not die.
+  The facade uses `nextUp(maxFiltrationValue)` instead (it knows the cap; `+Infinity` when uncapped).
+- The engine's own cocycles carry cells from the death on (outside the complex they are cocycles of); the spec's control
+  restricts them below the death before checking. Checked properties, both directions, F_17: bars unchanged; every cell a
+  k-simplex below `before`; delta = 0 on every (k+1)-simplex below `before`; not a coboundary at the birth; a coboundary
+  at the last value before the birth.
+- Circular coordinates need no new entry point: `CircularCoordinates(Dowker.lift(cocycles, D), Dowker(D, 1, dual = true))`
+  goes through the existing diagram route (centered integer lift, exact check on the points' triangles at r, harmonic
+  smoothing on the points' edges). Spec: 48 points on a circle, 8 landmarks numbered out of circle order, equals the
+  points' own Dowker computation up to sign and rotation, winds once.
+- Mutation lesson: dropping the sign in the pullback passed the circle test at first. The engine's circle cocycle is one
+  cut edge, so every lifted edge had the same orientation pattern and the error was a global sign, which a
+  "same up to reflection" comparison accepts. Fixed by also lifting alpha + delta(beta) (beta = 1 on odd landmarks):
+  the same class, nonzero on every edge with both signs; now the mutation fails it (not a cocycle mod 17).
+- Integer lift: a lifted value on an edge is a sum of two landmark values, so it can leave (-p/2, p/2) and the centered
+  lift then fails the exact check (`NoIntegerCocycleException`, message says retry with a larger prime). Not seen in the
+  specs or the docs example at p = 17; documented, not engineered around.
+- Cost (JVM, unit circle, 12 maxmin landmarks, one run each, warm): n = 120: persistence 0.01 s, lift 0.15 s, lifted H1
+  cocycle 1,471 edges, circular coordinates 0.46 s capped at r / 0.64 s uncapped. n = 400: lift 0.73 s, 15,626 edges,
+  circular coordinates 13.8 s capped at r, uncapped out of memory (2 GB) in the coface stream's triangles. The points'
+  complex at r is dense (an edge for every two points in one ball), and the triangles are read only for the exact
+  integer check. Docs say "a few hundred points".
+- Scalable alternatives, not built (put to Mikael): a Dowker-specific route that verifies the integer cocycle on the
+  landmark side (psi* of an integer cocycle is one) and smooths on the points' edges only (no triangles; still quadratic
+  in ball size); or Perea's sparse circular coordinates (2020: harmonic coordinate on the landmarks, extended to points by
+  a partition of unity over the landmark balls, O(n L)), which is the standard answer for many points.
