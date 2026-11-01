@@ -50,7 +50,7 @@ The wheel carries the library's jar, so there is nothing else to install; from a
 | `persistence(points, **options)` | a point cloud, one row per point; any `complex` |
 | `persistence_from_distances(distances, **options)` | a square distance matrix |
 | `persistence_from_image(image, **options)` | an image or voxel grid of any dimension, as a cubical complex; `nan` is missing data |
-| `persistence_from_relation(relation, **options)` | the Dowker complex of a relation, a matrix that need not be square |
+| `persistence_from_relation(relation, **options)` | the Dowker complex of a relation, a matrix that need not be square; `dual=True` builds it on the columns, `representatives_on="columns"` puts the representatives there |
 | `persistence_from_landmarks(points, landmarks, **options)` | the witness complex on the landmarks; `persistence_from_distances_and_landmarks` for a distance matrix |
 | `relative_persistence(points, subcomplex, **options)` | the Vietoris-Rips complex [relative to](relative-persistence.md) the subcomplex on the points `subcomplex`; `relative_persistence_from_distances` for a distance matrix |
 | `inclusion_map(points, subsample, **options)`, `simplicial_map(source_points, target_points, vertex_map, **options)` | the [map on persistent homology](barcode-algebra.md#maps-between-spaces) a subsample or a simplicial map induces: a `MapResult` with, in each degree, `source_bars`, `target_bars`, `entries`, `image`, `kernel`, `cokernel`; `inclusion_map_from_distances`, `simplicial_map_from_distances` for distance matrices |

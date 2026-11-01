@@ -77,6 +77,7 @@ Options for one complex:
 | `--landmark-seed` | `witness` | integer | `0`, for `random` |
 | `--nu` | lazy `witness` | `0`, `1`, `2` | `2` |
 | `--dual` | relations | `true`, `false` | `false`; the Dowker complex on the columns, with the same diagram |
+| `--representatives-on` | relations | `rows`, `columns` | the side the complex is built on; the other side gives the same bars' cycles carried there by Dowker duality (with landmark-to-point distances, cycles through the points) |
 | `--sublevel` | images | `true`, `false` | `true`; `false` is the superlevel filtration |
 | `--nan-mask` | images | `true`, `false` | `true`: a `NaN` pixel is masked; `false`: it is an error |
 

@@ -25,11 +25,9 @@ not reducing them, was about 90 % of their time**. Invariants:
 - On the `Simplex` path keep per-cell work to ONE hash lookup (a `TreeSet`'s own `hashCode`/`equals` allocate):
   `FiltrationCache` hashes by traversal; `MemoizedFiltration` answers a hit before it checks the domain;
   `FiltrationOrdering.canonical` calls `applyOrElse` once per cell. No `isDefinedAt`-then-`apply` pairs or `Simplex`-keyed
-  `HashMap`s. A hash linear in the vertices collides for every equal vertex sum (sparse Rips ran 7+ minutes): mix each
-  element (MurmurHash3's finalizer).
+  `HashMap`s. Mix each element into a hash (MurmurHash3's finalizer): a linear one collides on equal vertex sums.
 - `Persistence` takes the largest value from `CellularCohomologyEngine.largestFiltrationValue`; iterating again rebuilds.
-- Against GUDHI's Delaunay-Cech, Cech stays orders of magnitude slower (every `dim + 2`-subset is a cell); `AlphaShapes`
-  gives the same barcode of a Euclidean point cloud.
+- Cech is orders of magnitude slower than GUDHI's Delaunay-Cech; `AlphaShapes` gives the same barcode for Euclidean points.
 - **Flat layers (#206, `WORKLOG-rare-complex-performance.md`)**: a stream whose `flatFiltration` is defined builds each
   dimension on arrays (`FlatLayerStream.Layer`: ascending vertex tuples, values, cohomology order = value ascending then
   colex ascending) and the cohomology engine reads them without a `Simplex`, a `cohomologyOrder` pass or a second read.
@@ -49,14 +47,14 @@ not reducing them, was about 90 % of their time**. Invariants:
 - A flag-like hook gets the parent's value (`parentValue`) and only adds the new vertex's edges; an edge ignores it.
 - **State kept across a run of candidates** (`FlatFiltration.perRun`, `WORKLOG-flat-values.md`, #206): the candidates of one
   parent come together, the parent's vertices after the new one. Dowker keeps the per-witness maxima over the parent's
-  rows (a candidate costs one row, 2.4 to 4.2 times faster layers). A hook that keeps state returns a fresh object from
+  rows. A hook that keeps state returns a fresh object from
   `perRun` (the stream calls it once per task) and its `value` stays stateless.
 - **Cech's value cache is a `VertexSetValues`** (vertex array to value, 64 locked shards; never a `Simplex`-keyed map).
   `CechFiltration.Values` serves the `Simplex` function and the array hook from ONE cache, because a value depends on
   which facets are cached when it is first asked (the floor, the interior vertex reusing its facet's radius): two caches
   would give ULP-different values. `CechValuesSpec` feeds the earlier `Simplex`-keyed formula the same calls, with faces
-  left out, and compares bits. About 4 times faster layers.
-- Left (#206): the general witness complex on arrays; Scala.js timings.
+  left out, and compares bits.
+- Left (#206): general witness on arrays; JS timings.
 
 ## Cech complexes
 
@@ -95,8 +93,9 @@ stream computes a genuinely infinite value; Dowker's boolean encoding does, on p
 the complete simplex.
 
 **Duality is the point** (`.dual`, the transpose relation): X-side and Y-side barcodes agree exactly **without zero-length
-bars** (the default; with `includeZeroLength = true` they differ, as each vertex records one `H_0` birth and the sides
-have different vertex counts; Chowdhury-Mémoli 2018).
+bars** (with `includeZeroLength = true` the sides' `H_0` births differ; Chowdhury-Mémoli 2018). `DowkerGeometry.lift`
+(Dowker's chain map, best witness + cone) carries a bar's cycle to the same bar's cycle on the other side, at its
+birth: `Dowker.lift`, facade `representativesOn`; cycles only (`DowkerLiftSpec`, `WORKLOG-dual-witness-complex.md`).
 
 Own MATLAB/CLI entry point (`computeFromRelation`/`--input-format csv-relation`), not a `complex=` value — a
 relation doesn't fit the point-cloud/distance-matrix dispatch. `engine` defaults `cohomology`, refuses `ripser`/

@@ -164,7 +164,11 @@ def persistence_from_image(image, **options) -> Result:
 @translating
 def persistence_from_relation(relation, **options) -> Result:
     """Persistent homology of the Dowker complex of a relation: ``relation[x, w]`` is the strength of the tie between row
-    ``x`` and column ``w``, smaller being stronger and ``inf`` meaning never. The matrix need not be square."""
+    ``x`` and column ``w``, smaller being stronger and ``inf`` meaning never. The matrix need not be square.
+
+    ``dual=True`` builds the complex on the columns (the same bars). ``representatives_on="rows"`` or ``"columns"`` puts
+    the representative cycles on that side; with distances from landmarks (rows) to points (columns), ``"columns"``
+    gives cycles through the points."""
     return Result(_java().computeFromRelation(_jvm.points_in(relation, "relation"), _jvm.options_in(options)))
 
 

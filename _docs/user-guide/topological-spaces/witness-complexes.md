@@ -25,7 +25,8 @@ of a landmark); `LandmarkSelector.random(metricSpace, n, seed)` is cheaper, with
 metric space, so from a distance matrix too.
 
 The vertices of the complex are **landmark numbers** `0 until landmarks.size`; `landmarks(i)` is the point that
-landmark `i` is. A common choice of `maxFiltrationValue` is `2R`, as in the JavaPlex tutorials.
+landmark `i` is. For representatives that run through the data points instead, compute the Dowker complex of the
+landmark-to-point distances and lift them: see [Dowker complexes](dowker-complexes.md). A common choice of `maxFiltrationValue` is `2R`, as in the JavaPlex tutorials.
 
 Two variants:
 

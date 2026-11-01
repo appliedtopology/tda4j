@@ -27,7 +27,7 @@ rows.triples.sorted == columns.triples.sorted                               // t
 
 **Duality.** The complex on the rows and the complex on the columns (`dual = true`) have the same persistent homology
 (Chowdhury and Mémoli's functorial Dowker theorem). So build whichever side is smaller; the representatives are on
-the side you built.
+the side you built, and `Dowker.lift(diagram, relation)` moves them to the other side (below).
 
 **Landmarks and witnesses.** With the distances from a few landmarks (rows) to all the data points (columns) as the
 relation, `WitnessGeometry(metricSpace, landmarks).D`, a set of landmarks is a simplex at `t` when one data point is
@@ -36,6 +36,29 @@ point. It is contained in every [witness complex](witness-complexes.md) at every
 `Witness(nu = 0)` has the same edges and fills in every triangle whose edges are present, and the general variant lets
 a witness of a `k`-simplex reach `t` beyond its `(k+1)`-th nearest landmark. Its dual is the complex on all the data
 points whose simplices are the sets that fit in one landmark's ball of radius `t`: far larger, with the same barcode.
+
+**Representatives on the other side.** The complex on the landmarks is small, but its representatives are cycles
+through landmarks. `Dowker.lift` carries each one to the other side of the relation by the map behind Dowker duality,
+keeping the bars: here, to a cycle through the data points themselves, at the bar's birth.
+
+```scala 3
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+
+val points = Array.tabulate(200)(i => Array(math.cos(i * 0.07), math.sin(i * 0.07)))
+val metricSpace = EuclideanMetricSpace(points)
+val landmarks = LandmarkSelector.maxmin(metricSpace, numLandmarks = 20).landmarks
+val geometry = WitnessGeometry(metricSpace, landmarks)   // the distances from each landmark to every point
+val diagram = Persistence(Dowker(geometry.D, maxDimension = 1))
+val onPoints = Dowker.lift(diagram, geometry.D)          // the same bars, each cycle on the points' own numbers
+onPoints.dim(1).longest.get.representative.cells.toVector
+```
+
+A loop through landmarks `l0, l1, l2, ...` becomes the loop `l0, w01, l1, w12, l2, ...`, where `w01` is the point
+that sees both `l0` and `l1` soonest. Each edge of it lies in one landmark's ball of radius `t`, so it is also a cycle of
+the Čech complex of all the points at `t`. The diagram must carry cycles, the default; for one computed with
+`dual = true`, pass `dual = true` to `lift` as well. MATLAB, the command line and Python take the option
+`representativesOn` (`rows` or `columns`).
 
 For a plain yes-or-no relation, `DowkerGeometry.fromBoolean(table)` gives the classical, unfiltered Dowker complex. The
 complex is not a flag complex, so the Ripser engine does not apply. The [networks tutorial](../../tutorials/networks-and-relations.md)

@@ -107,6 +107,42 @@ object Dowker:
     val geometry = if dual then DowkerGeometry(relation).dual else DowkerGeometry(relation)
     Truncated.ofCofaces(DowkerCofaceSimplexStream(geometry, maxFiltrationValue), maxDimension)
 
+  /** The same diagram with every representative moved to the other side of the relation ([[DowkerGeometry.lift]]): from
+    * the rows to the columns, or with `dual = true` (for a diagram computed with `dual = true`) from the columns to the
+    * rows. The bars are the same; each representative is a cycle of the other side's complex at the bar's birth that
+    * represents the same bar there. Build the complex on the smaller side and read the representatives on the side you
+    * want:
+    *
+    * {{{
+    * val geometry = WitnessGeometry(metricSpace, landmarks)   // landmarks (rows) to every point (columns)
+    * val diagram = Persistence(Dowker(geometry.D, maxDimension = 1))
+    * val onPoints = Dowker.lift(diagram, geometry.D)          // representatives on the points' own numbers
+    * }}}
+    *
+    * The diagram must carry cycles (`representatives = Representatives.Cycles`, the default of `Persistence`). The
+    * lifted bars record no birth and death cells: those are cells of the side the diagram was computed on.
+    */
+  def lift(
+    diagram: PersistenceDiagram[Simplex[Int]],
+    relation: Array[Array[Double]],
+    dual: Boolean = false
+  ): PersistenceDiagram.Of[Simplex[Int], diagram.Coefficient] =
+    require(
+      !diagram.representatives.contains(Representatives.Cocycles),
+      "Dowker.lift moves cycles, and this diagram carries cocycles: compute it with representatives = " +
+        "Representatives.Cycles (the default)"
+    )
+    import diagram.given
+    val geometry = if dual then DowkerGeometry(relation).dual else DowkerGeometry(relation)
+    PersistenceDiagram[Simplex[Int], diagram.Coefficient](
+      diagram.bars.map(bar => bar.copy(annotation = bar.annotation.map(geometry.lift(_)), cells = None)),
+      diagram.maxDimension,
+      diagram.lastFiltrationValue,
+      diagram.scale,
+      diagram.representatives,
+      diagram.representativesDieWithTheirBars
+    )
+
 /** The distance-to-measure-weighted Rips complex (Anai et al.); `p` is `1.0` (default) or `2.0`. */
 object DtmRips:
 

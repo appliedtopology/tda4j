@@ -1455,4 +1455,38 @@ class TDA4jSpec extends mutable.Specification:
       allReadable(naiveResult) must beTrue
       allReadable(cohomologyResult) must beTrue
     }
+
+    // Landmarks at the corners of a triangle (points 0, 1, 2), its edge midpoints (3, 4, 5) the other witnesses:
+    // the loop on the landmarks becomes the hexagon through all six points on the columns (DowkerLiftSpec).
+    val h = math.sqrt(3.0) / 2
+    val trianglePoints =
+      Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, h), Array(0.5, 0.0), Array(0.75, h / 2), Array(0.25, h / 2))
+    val landmarkToPoint = WitnessGeometry(EuclideanMetricSpace(trianglePoints), IndexedSeq(0, 1, 2)).D
+    def loopEdges(r: PersistenceResult): Set[List[Int]] =
+      r.cycleVertices(r.mostPersistentBar(1)).map(_.sorted.toList).toSet
+
+    "representativesOn=columns gives the same bars with each cycle on the columns: the landmark loop on the points" in {
+      val onRows = FullBarcode.computeFromRelation(landmarkToPoint, Array("maxDimension", "1"))
+      val onColumns =
+        FullBarcode.computeFromRelation(landmarkToPoint, Array("maxDimension", "1", "representativesOn", "columns"))
+      val back = FullBarcode.computeFromRelation(
+        landmarkToPoint,
+        Array("maxDimension", "1", "dual", "true", "representativesOn", "rows")
+      )
+      (triples(onColumns.toArray()) must beEqualTo(triples(onRows.toArray()))) and
+        (loopEdges(onRows) must beEqualTo(Set(List(0, 1), List(1, 2), List(0, 2)))) and
+        (loopEdges(onColumns) must beEqualTo(
+          Set(List(0, 3), List(1, 3), List(1, 4), List(2, 4), List(2, 5), List(0, 5))
+        )) and
+        (loopEdges(back).flatMap(identity) == Set(0, 1, 2) must beTrue)
+    }
+
+    "reject representativesOn with cocycles, and a value other than rows or columns" in {
+      (FullBarcode.computeFromRelation(
+        landmarkToPoint,
+        Array("representativesOn", "columns", "representativeType", "cocycles")
+      ) must throwA[IllegalArgumentException]("cocycles")) and
+        (FullBarcode.computeFromRelation(landmarkToPoint, Array("representativesOn", "points")) must
+          throwA[IllegalArgumentException]("rows"))
+    }
   }

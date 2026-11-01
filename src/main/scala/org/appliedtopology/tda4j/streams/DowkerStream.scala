@@ -1,6 +1,7 @@
 package org.appliedtopology.tda4j
 
 import scala.collection.immutable
+import scala.collection.mutable
 
 /** The filtered Dowker complex of a relation `R: L x W -> [0, Infinity]` between two finite sets (C. H. Dowker,
   * "Homology groups of relations", Ann. of Math. 56 (1952); filtered as in Chowdhury and Mémoli, "A functorial Dowker
@@ -67,6 +68,69 @@ open class DowkerGeometry(val relation: Array[Array[Double]]):
   /** The transposed relation: the columns become the vertices, witnessed by the rows. */
   lazy val dual: DowkerGeometry =
     new DowkerGeometry(Array.tabulate(numWitnesses, numLeft)((w, x) => relation(x)(w)))
+
+  /** The column that sees every row of `sigma` soonest: the `w` attaining [[filtrationValue]], the lowest on ties. */
+  def bestWitness(sigma: Simplex[Int]): Int =
+    var best = Double.PositiveInfinity
+    var bestColumn = 0
+    var w = 0
+    while w < numWitnesses do
+      val dmax = sigma.iterator.map(x => relation(x)(w)).max
+      if dmax < best then
+        best = dmax
+        bestColumn = w
+      w += 1
+    bestColumn
+
+  /** `chain`, a chain of the complex on the rows, carried to the complex on the columns ([[dual]]) by the chain map
+    * behind Dowker duality: a vertex goes to its [[bestWitness]], and a simplex `sigma` to the cone from
+    * `bestWitness(sigma)` over the image of its boundary. Every simplex of the image is witnessed, on the column side,
+    * by a row of `chain` within the value of the simplex of `chain` it came from, so a cycle of the row complex at `t`
+    * goes to a cycle of the column complex at `t`. The map is an isomorphism of persistent homology: a representative
+    * of a bar goes to a representative of the same bar on the other side, and a cycle that dies at `d` to one that dies
+    * at `d`. A `k`-simplex has at most `(k+1)!` simplices in its image.
+    *
+    * For landmark-to-point distances (`WitnessGeometry.D`) the columns are the points, so this puts a landmark cycle on
+    * the data: a loop through landmarks `l0, l1, ...` becomes the loop `l0, w01, l1, w12, ...`, where `w01` is the
+    * point that witnesses the edge `l0 l1`. [[Dowker.lift]] does it for every bar of a diagram.
+    */
+  def lift[C: Field as field](chain: Chain[Simplex[Int], C]): Chain[Simplex[Int], C] =
+    val images = mutable.HashMap.empty[Simplex[Int], Map[Simplex[Int], C]]
+    def add(into: mutable.HashMap[Simplex[Int], C], cell: Simplex[Int], c: C): Unit =
+      into(cell) = into.get(cell).fold(c)(field.plus(_, c))
+    def nonzero(of: mutable.HashMap[Simplex[Int], C]): Map[Simplex[Int], C] =
+      of.iterator.filterNot((_, c) => field.isEqual(c, field.zero)).toMap
+    def image(sigma: Simplex[Int]): Map[Simplex[Int], C] = images.get(sigma) match
+      case Some(known) => known
+      case None        =>
+        val apex = bestWitness(sigma)
+        val result =
+          if sigma.size == 1 then Map(Simplex(apex) -> field.one)
+          else
+            val cone = mutable.HashMap.empty[Simplex[Int], C]
+            // The face without the i-th vertex has sign (-1)^i; [apex, w_0 < ... < w_j] is (-1)^(#w_i < apex) times
+            // the sorted simplex, and zero when apex is one of the w_i.
+            for
+              (vertex, i) <- sigma.iterator.zipWithIndex
+              (tau, c) <- image((sigma.underlying - vertex).asSimplex)
+              if !tau.contains(apex)
+            do
+              val sign = (i + tau.iterator.count(_ < apex)) % 2 == 0
+              add(cone, (tau.underlying + apex).asSimplex, if sign then c else field.negate(c))
+            nonzero(cone)
+        images(sigma) = result
+        result
+    val total = mutable.HashMap.empty[Simplex[Int], C]
+    for (sigma, c) <- chain.terms do
+      require(
+        sigma.nonEmpty && sigma.forall(x => 0 <= x && x < numLeft),
+        s"$sigma is not a simplex on the rows of this relation, which has $numLeft rows: lift takes a chain of the " +
+          "complex on the rows (for a diagram computed with dual = true, lift with the dual geometry)"
+      )
+      for (tau, d) <- image(sigma) do add(total, tau, field.times(c, d))
+    // The cells' own order, not the chain's: a chain of a stream may be ordered by that stream's filtration, which
+    // knows nothing of the columns.
+    Chain.from(nonzero(total).toSeq)
 
 object DowkerGeometry:
   def apply(relation: Array[Array[Double]]): DowkerGeometry = new DowkerGeometry(relation)

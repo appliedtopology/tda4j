@@ -39,3 +39,22 @@ are in `DowkerStreamSpec`. Fixed: `dowker-complexes.md`, `networks-and-relations
 
 Unverified (memory only, said so in the doc): Ball Mapper's exact definition, Perea's sparse circular coordinates
 using the nerve map, "relaxed strong witness complex" as the name for the nu = 1 shifted Dowker complex.
+
+## The lift, built (same day, Mikael: "let's build it")
+
+- `DowkerGeometry.bestWitness(sigma)` (argmin column, lowest on ties) and `DowkerGeometry.lift(chain)`: psi(v) =
+  bestWitness(v); psi(sigma) = cone(bestWitness(sigma), psi(boundary sigma)), memoized per simplex. This is sd followed
+  by the vertex map barycentre -> best witness, so it is a chain map; every simplex of psi(sigma) is witnessed (column
+  side) by a vertex of the bottom face of its flag within f(sigma). Sign: [apex, w_0 < ... < w_j] is
+  (-1)^(#w_i < apex) times the sorted simplex, zero if apex is among the w_i.
+- The lifted chain is built with the cells' intrinsic `Ordering[Simplex[Int]]`, not the input chain's: a stream chain
+  may be ordered by that stream's filtration, which knows nothing of the columns.
+- `Dowker.lift(diagram, relation, dual = false)`: bars unchanged, representatives lifted, `cells = None` (the bar's
+  cells belong to the side built), refuses `Representatives.Cocycles` (cocycles need the map the other way: pull back
+  along sd of the column complex, or the nearest-landmark vertex map with an R loss in the metric case; not built).
+  `representativesDieWithTheirBars` is kept: psi(boundary c) = boundary psi(c) with psi(c) at the death value.
+- Facade `representativesOn` (`rows`/`columns`, default the side built) on `computeFromRelation`, CLI
+  `--representatives-on`, Python via the pass-through options. The bar cells and boundary matrix stay the built side's.
+- `DowkerLiftSpec`: on random relations, both directions, over F_17: bars unchanged, lifted rep is a cycle, every cell
+  in the other complex at birth, not a boundary at the last value before death, a boundary at death. Mutations checked:
+  dropping the cone sign fails both properties; a fixed apex (column 0) fails them and the hexagon fixture.
