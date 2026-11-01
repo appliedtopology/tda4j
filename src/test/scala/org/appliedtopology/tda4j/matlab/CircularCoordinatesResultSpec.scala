@@ -49,6 +49,21 @@ class CircularCoordinatesResultSpec extends Specification:
       short.theta().toSeq must beEqualTo(long.theta().toSeq)
     }
 
+    "with numLandmarks, Perea's sparse coordinates: the loops and the angles of CircularCoordinates with landmarks" >> {
+      val points = circlePoints(120)
+      val bars = TDA4j.h1Bars(points, 10)
+      val r = bars(0)(0) + (bars(0)(1) - bars(0)(0)) * 0.5
+      val viaFacade = TDA4j.circularCoordinates(points, r, 0, 47, 10)
+      val viaDirect = CircularCoordinates.compute(EuclideanMetricSpace(points), r, numLandmarks = 10)
+      val toroidal = TDA4j.toroidalCoordinates(points, r, Array(0), 47, true, 10)
+      (bars.map(_.toSeq).toSeq must beEqualTo(
+        CircularCoordinates.h1Bars(EuclideanMetricSpace(points), numLandmarks = 10).map((b, d) => Seq(b, d))
+      )) and
+        (viaFacade.theta().toSeq must beEqualTo((0 until 120).map(viaDirect.theta))) and
+        (toroidal.theta(0).length must beEqualTo(120)) and
+        (TDA4j.h1Bars(points, 0).map(_.toSeq).toSeq must beEqualTo(TDA4j.h1Bars(points).map(_.toSeq).toSeq))
+    }
+
     "throws NoIntegerCocycleException as a RuntimeException a MATLAB caller can still catch generically, not " +
       "just IllegalArgumentException" >> {
         // Not exercised via an actual torsion fixture (hard to construct from a Euclidean point cloud -- see

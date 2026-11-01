@@ -70,9 +70,9 @@ Landmarks, circular coordinates and the text of files have functions of their ow
 | `productBars(first, second, filtration)`, `homBars(first, second)`, `homDimension(first, second)`, `dualBars(bars)` | the [algebra of barcodes](barcode-products.md) on rows `[dimension, birth, death]`: the bars of a product of two filtered complexes (`filtration` `"max"`, the default, or `"sum"`), the internal Hom, the dimension of the space of maps, the dual |
 | `takensEmbedding(series, dimension, delay, stride)`, `takensEmbeddingOfVectors(rows, dimension, delay, stride)` | the sliding-window (Takens) embedding of a time series, or of a series of vectors: the windows as a point cloud; `delay` and `stride` default to 1 |
 | `delayByAutocorrelation(series, maxLag)` | the first lag in `1..maxLag` at which the autocorrelation is zero or negative: a first guess for `delay` |
-| `h1Bars(points)` | the loops of the Vietoris-Rips complex as `[birth, death]`, most persistent first |
-| `circularCoordinates(points, r, { cocycleIndex, prime })` | `{ theta, birth, death, r, prime }`: one angle in [0, 1) per point for loop `cocycleIndex` of `h1Bars`, with `r` between its birth and death |
-| `toroidalCoordinates(points, r, cocycleIndices, { prime, reduce })` | `{ theta, cocycleIndices, basisChange, originalGram, reducedGram, r, prime }`: `theta[c][i]` is coordinate `c` of point `i` |
+| `h1Bars(points, { numLandmarks })` | the loops of the Vietoris-Rips complex as `[birth, death]`, most persistent first; with `numLandmarks`, those of the balls around that many maxmin landmarks |
+| `circularCoordinates(points, r, { cocycleIndex, prime, numLandmarks })` | `{ theta, birth, death, r, prime }`: one angle in [0, 1) per point for loop `cocycleIndex` of `h1Bars`, with `r` between its birth and death; `numLandmarks` gives Perea's sparse coordinates |
+| `toroidalCoordinates(points, r, cocycleIndices, { prime, reduce, numLandmarks })` | `{ theta, cocycleIndices, basisChange, originalGram, reducedGram, r, prime }`: `theta[c][i]` is coordinate `c` of point `i` |
 | `parsePointCloud(text)`, `parseOff(text)` | the points of a CSV or Ripser point-cloud text, or of a GUDHI OFF text |
 | `parseDistanceMatrix(text, format)` | a full matrix from a text in `"full"` (default), `"lower"`, `"ripser-lower"`, `"ripser-upper"`, `"ripser-dense"` or `"ripser-sparse"` format |
 

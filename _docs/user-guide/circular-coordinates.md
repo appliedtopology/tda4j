@@ -60,31 +60,61 @@ has the class recovered by one more cohomology computation of that complex, matc
 `input` is not what the diagram was computed from, the cocycle will not fit it, and the error says to pass the same
 complex.
 
-**From landmarks, on every point.** The Dowker complex of the distances from a few landmarks to every point has the
-loops of the point cloud at a fraction of its size. Compute the diagram on the landmarks with cocycles, move them to the
-points with `Dowker.lift`, and pass the complex on the points as the `input`: every point gets a coordinate.
+When shorter loops nested inside the one you chose are also alive at `r`, its class is only defined up to adding theirs,
+and each engine picks its own representative, so the coordinate you get depends on the engine (every choice is a valid
+circle map). Choose `r` where only the loops you ask for are alive to get the same answer from every route.
+
+### Many points: sparse coordinates
+
+The complex on every point grows quickly with the number of points. Perea's sparse coordinates (Perea 2020) need only
+a few landmarks: the loop is found on the nerve of the balls of radius `r` around the landmarks, the angle is computed
+on the landmarks, and every point the balls cover gets an angle by a partition of unity over the balls that hold it.
+`numLandmarks` chooses them, by maxmin sampling, on `h1Bars`, `compute` and `computeToroidal`:
 
 ```scala 3
 import scala.language.experimental.modularity
 import org.appliedtopology.tda4j.*
 
-val points = Array.tabulate(120)(i => Array(math.cos(i * 0.0524), math.sin(i * 0.0524)))
+val random = new scala.util.Random(7)
+val points = Array.fill(5000) {
+  val a = random.nextDouble() * 2 * math.Pi
+  Array(math.cos(a) + 0.05 * random.nextGaussian(), math.sin(a) + 0.05 * random.nextGaussian())
+}
 val metricSpace = EuclideanMetricSpace(points)
-val geometry = WitnessGeometry(metricSpace, LandmarkSelector.maxmin(metricSpace, numLandmarks = 10).landmarks)
 
-val onLandmarks = Persistence(Dowker(geometry.D, maxDimension = 1), representatives = Representatives.Cocycles)
-val onPoints = Dowker(geometry.D, maxDimension = 1, dual = true)   // the complex on the points
-CircularCoordinates(Dowker.lift(onLandmarks, geometry.D), onPoints).theta.size   // 120
+val loops = CircularCoordinates.h1Bars(metricSpace, numLandmarks = 30)   // the loops of the landmarks' balls
+val (birth, death) = loops.head
+val coordinate = CircularCoordinates.compute(metricSpace, r = (birth + death) / 2, numLandmarks = 30)
+coordinate.theta.size                                                     // 5000
 ```
 
-The complex on the points is dense: two points are joined as soon as one landmark's ball holds both, and the call
-checks the cocycle on every triangle of it at `r`. That suits a few hundred points; for more, cut the complex on the
-points at `r` with `maxFiltrationValue`, or expect it not to fit in memory. The
-[Dowker complexes](topological-spaces/dowker-complexes.md) page says what the lift does.
+The bars and `r` are now those of the balls around the landmarks, so `r` is a ball's radius: take both from `h1Bars` with
+the same `numLandmarks`. A point that no ball of radius `r` holds has no angle, so choose `r` above the distance from
+every point to its nearest landmark. The cost grows with the number of points times the number of landmarks: 20,000
+points with 50 landmarks take a few seconds.
 
-When shorter loops nested inside the one you chose are also alive at `r`, its class is only defined up to adding theirs,
-and each engine picks its own representative, so the coordinate you get depends on the engine (every choice is a valid
-circle map). Choose `r` where only the loops you ask for are alive to get the same answer from every route.
+For landmarks of your own, or any cover given as a relation from cover sets to points, compute the Dowker diagram of the
+relation and pass both to `sparse`: `CircularCoordinates.sparse(diagram, relation)`, or `sparseToroidal(diagram,
+relation, bars = Seq(0, 1))` for several loops. Row `l` and column `x` of the relation put point `x` in the set of `l`
+when the value is below `r`; the [Dowker complexes](topological-spaces/dowker-complexes.md) page explains the nerve.
+
+```scala 3
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+
+val points = Array.tabulate(400)(i => Array(math.cos(i * 0.0157), math.sin(i * 0.0157)))
+val metricSpace = EuclideanMetricSpace(points)
+val geometry = WitnessGeometry(metricSpace, IndexedSeq.tabulate(16)(_ * 25))   // every 25th point a landmark
+val diagram = Persistence(Dowker(geometry.D, maxDimension = 1))                 // the loops of the landmarks' balls
+CircularCoordinates.sparse(diagram, geometry.D).theta.size                     // 400
+```
+
+The sparse angle is not the one computed on the complex of every point, but it represents the same loop. To get that
+one from landmarks, move the landmark diagram's cocycles to the points with `Dowker.lift` and pass the complex on the
+points as the input: `CircularCoordinates(Dowker.lift(cocycles, geometry.D), Dowker(geometry.D, maxDimension = 1,
+dual = true))`, with `cocycles` computed with `representatives = Representatives.Cocycles`. That complex joins two
+points as soon as one landmark's ball holds both, and the call checks the cocycle on every triangle of it at `r`, so it
+suits a few hundred points.
 
 ### Toroidal coordinates
 
@@ -117,4 +147,7 @@ for the loops. The
 known angles.
 
 From MATLAB: `TDA4j.h1Bars(points)`, `circularCoordinates(points, r)`, `toroidalCoordinates(points, r, indices)`, with
-indices counted from 0.
+indices counted from 0. Sparse coordinates take the number of landmarks as one more argument:
+`h1Bars(points, numLandmarks)`, `circularCoordinates(points, r, cocycleIndex, prime, numLandmarks)` and
+`toroidalCoordinates(points, r, indices, prime, reduce, numLandmarks)`; Python and JavaScript take `num_landmarks` and
+the option `numLandmarks`.

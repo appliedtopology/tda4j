@@ -197,9 +197,13 @@ roles, and supported complex types.
 classDiagram
     class CircularCoordinates {
         <<object>>
-        h1Bars(metricSpace, maxFiltrationValue) IndexedSeq~(Double, Double)~
-        compute(metricSpace, r, cocycleIndex, prime, maxFiltrationValue) Result
-        computeToroidal(metricSpace, r, cocycleIndices, prime, reduce, maxFiltrationValue) ToroidalResult
+        h1Bars(metricSpace, maxFiltrationValue, numLandmarks) IndexedSeq~(Double, Double)~
+        compute(metricSpace, r, cocycleIndex, prime, maxFiltrationValue, numLandmarks) Result
+        computeToroidal(metricSpace, r, cocycleIndices, prime, reduce, maxFiltrationValue, numLandmarks) ToroidalResult
+        apply(diagram, input, bar, r, complex) Result
+        toroidal(diagram, input, bars, r, complex, reduce) ToroidalResult
+        sparse(diagram, relation, bar, r) Result
+        sparseToroidal(diagram, relation, bars, r, reduce) ToroidalResult
     }
     class Result {
         theta: Map~Int, Double~
@@ -235,7 +239,9 @@ classDiagram
 A standalone construction rather than a persistence engine.
 `compute` produces circle-valued coordinates from one persistent H¹ class;
 `computeToroidal` extends this to several simultaneous classes using
-`LatticeReduction`.
+`LatticeReduction`. `apply` and `toroidal` start from a diagram; `sparse` and
+`sparseToroidal` (and `numLandmarks > 0`) give Perea's sparse coordinates from a
+cover's Dowker diagram.
 
 ## Metric spaces (`FiniteMetricSpace.scala`)
 

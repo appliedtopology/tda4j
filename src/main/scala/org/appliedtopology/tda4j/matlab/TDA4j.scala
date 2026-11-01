@@ -901,9 +901,19 @@ object TDA4j:
   /** The loops of the point cloud's Vietoris-Rips complex: one row `(birth, death)` per persistent H¹ class, most
     * persistent first. Row `i` is `cocycleIndex = i` of [[circularCoordinates]]; pick `r` between its birth and death.
     */
-  def h1Bars(points: Array[Array[Double]]): Array[Array[Double]] =
+  def h1Bars(points: Array[Array[Double]]): Array[Array[Double]] = h1Bars(points, 0)
+
+  /** [[h1Bars]] for Perea's sparse coordinates over `numLandmarks` maxmin landmarks (`0`: every point): the loops of
+    * the nerve of the balls around the landmarks, numbered as [[circularCoordinates]] and [[toroidalCoordinates]] with
+    * the same `numLandmarks` take them; a scale is then a ball's radius.
+    */
+  def h1Bars(points: Array[Array[Double]], numLandmarks: Int): Array[Array[Double]] =
     validatePoints(points)
-    CircularCoordinates.h1Bars(EuclideanMetricSpace(points)).map((b, d) => Array(b, d)).toArray
+    require(numLandmarks >= 0, s"numLandmarks must be 0 (every point) or positive, got $numLandmarks")
+    CircularCoordinates
+      .h1Bars(EuclideanMetricSpace(points), numLandmarks = numLandmarks)
+      .map((b, d) => Array(b, d))
+      .toArray
 
   def circularCoordinates(points: Array[Array[Double]], r: Double): CircularCoordinatesResult =
     circularCoordinates(points, r, 0, 47)
@@ -917,9 +927,23 @@ object TDA4j:
     r: Double,
     cocycleIndex: Int,
     prime: Int
+  ): CircularCoordinatesResult = circularCoordinates(points, r, cocycleIndex, prime, 0)
+
+  /** [[circularCoordinates]] with `numLandmarks` (`0`: every point, the default): Perea's sparse coordinates over that
+    * many maxmin landmarks, for many points. Loops and scales are those of `h1Bars(points, numLandmarks)`; a point no
+    * landmark ball of the loop holds at `r` gets `NaN`.
+    */
+  def circularCoordinates(
+    points: Array[Array[Double]],
+    r: Double,
+    cocycleIndex: Int,
+    prime: Int,
+    numLandmarks: Int
   ): CircularCoordinatesResult =
     validatePoints(points)
-    val result = CircularCoordinates.compute(EuclideanMetricSpace(points), r, cocycleIndex, prime)
+    require(numLandmarks >= 0, s"numLandmarks must be 0 (every point) or positive, got $numLandmarks")
+    val result =
+      CircularCoordinates.compute(EuclideanMetricSpace(points), r, cocycleIndex, prime, numLandmarks = numLandmarks)
     val thetaArray = Array.fill(points.length)(Double.NaN)
     result.theta.foreach((i, t) => thetaArray(i) = t)
     new CircularCoordinatesResult(points.map(_.clone()), thetaArray, result.birth, result.death, result.r, result.prime)
@@ -940,10 +964,29 @@ object TDA4j:
     cocycleIndices: Array[Int],
     prime: Int,
     reduce: Boolean
+  ): ToroidalCoordinatesResult = toroidalCoordinates(points, r, cocycleIndices, prime, reduce, 0)
+
+  /** [[toroidalCoordinates]] with `numLandmarks` (`0`: every point): Perea's sparse coordinates over that many maxmin
+    * landmarks, as in [[circularCoordinates]].
+    */
+  def toroidalCoordinates(
+    points: Array[Array[Double]],
+    r: Double,
+    cocycleIndices: Array[Int],
+    prime: Int,
+    reduce: Boolean,
+    numLandmarks: Int
   ): ToroidalCoordinatesResult =
     validatePoints(points)
-    val result =
-      CircularCoordinates.computeToroidal(EuclideanMetricSpace(points), r, cocycleIndices.toIndexedSeq, prime, reduce)
+    require(numLandmarks >= 0, s"numLandmarks must be 0 (every point) or positive, got $numLandmarks")
+    val result = CircularCoordinates.computeToroidal(
+      EuclideanMetricSpace(points),
+      r,
+      cocycleIndices.toIndexedSeq,
+      prime,
+      reduce,
+      numLandmarks = numLandmarks
+    )
     val thetaArrays = result.theta.map { thetaMap =>
       val arr = Array.fill(points.length)(Double.NaN)
       thetaMap.foreach((i, t) => arr(i) = t)

@@ -436,16 +436,24 @@ object Exports:
 
   /** The loops of the point cloud's Vietoris-Rips complex: `[birth, death]` for each persistent class of degree 1, the
     * most persistent first. Loop `i` is `cocycleIndex: i` of `circularCoordinates`; pick `r` between its birth and
-    * death.
+    * death. The option `numLandmarks` (default 0, every point) gives the loops of the balls around that many maxmin
+    * landmarks instead, which the coordinates with the same `numLandmarks` use (Perea's sparse coordinates).
     */
   @JSExportTopLevel("h1Bars")
-  def h1Bars(points: js.Array[js.Array[Double]]): js.Array[js.Array[Double]] =
-    guarded(grid(TDA4j.h1Bars(matrix(points))))
+  def h1Bars(
+    points: js.Array[js.Array[Double]],
+    options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
+  ): js.Array[js.Array[Double]] = guarded {
+    val chosen = numbers(options, Set("numLandmarks"))
+    grid(TDA4j.h1Bars(matrix(points), chosen.get("numLandmarks").fold(0)(integer("numLandmarks", _))))
+  }
 
   /** Circular coordinates of a point cloud at scale `r`: one angle in `[0, 1)` per point for the loop `cocycleIndex`
-    * (option, default 0) of `h1Bars`, over the field with `prime` elements (option, an odd prime, default 47). Returns
-    * `{ theta, birth, death, r, prime }`, where `theta[i]` is `NaN` for a point outside the loop's connected component.
-    * Throws if the loop has no integer lift at `prime`: use a larger prime.
+    * (option, default 0) of `h1Bars`, over the field with `prime` elements (option, an odd prime, default 47). The
+    * option `numLandmarks` (default 0, every point) computes Perea's sparse coordinates over that many maxmin
+    * landmarks, for many points. Returns `{ theta, birth, death, r, prime }`, where `theta[i]` is `NaN` for a point
+    * outside the loop's connected component (or, with landmarks, no landmark ball of the loop holds). Throws if the
+    * loop has no integer lift at `prime`: use a larger prime.
     */
   @JSExportTopLevel("circularCoordinates")
   def circularCoordinates(
@@ -453,12 +461,13 @@ object Exports:
     r: Double,
     options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
   ): js.Object = guarded {
-    val chosen = numbers(options, Set("cocycleIndex", "prime"))
+    val chosen = numbers(options, Set("cocycleIndex", "prime", "numLandmarks"))
     val result = TDA4j.circularCoordinates(
       matrix(points),
       r,
       chosen.get("cocycleIndex").fold(0)(integer("cocycleIndex", _)),
-      chosen.get("prime").fold(47)(integer("prime", _))
+      chosen.get("prime").fold(47)(integer("prime", _)),
+      chosen.get("numLandmarks").fold(0)(integer("numLandmarks", _))
     )
     js.Dynamic
       .literal(
@@ -472,8 +481,8 @@ object Exports:
   }
 
   /** Toroidal coordinates of a point cloud at scale `r`: `k` angles per point, combining the loops `cocycleIndices` of
-    * `h1Bars` that are alive together at `r`. Options: `prime` (default 47) and `reduce` (lattice reduction of the
-    * coordinates, default `true`). Returns
+    * `h1Bars` that are alive together at `r`. Options: `prime` (default 47), `reduce` (lattice reduction of the
+    * coordinates, default `true`) and `numLandmarks` (default 0, every point; Perea's sparse coordinates). Returns
     * `{ theta, cocycleIndices, basisChange, originalGram, reducedGram, r, prime }`, where `theta[c][i]` is coordinate
     * `c` of point `i`.
     */
@@ -485,14 +494,18 @@ object Exports:
     options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
   ): js.Object = guarded {
     val dictionary = options.getOrElse(js.Dictionary[js.Any]())
-    val unknown = dictionary.keys.filterNot(Set("prime", "reduce")).toSeq
-    require(unknown.isEmpty, s"unknown option ${unknown.mkString(", ")}; the options are prime and reduce")
+    val unknown = dictionary.keys.filterNot(Set("prime", "reduce", "numLandmarks")).toSeq
+    require(
+      unknown.isEmpty,
+      s"unknown option ${unknown.mkString(", ")}; the options are prime, reduce and numLandmarks"
+    )
     val prime = dictionary.get("prime").fold(47)(integer("prime", _))
+    val numLandmarks = dictionary.get("numLandmarks").fold(0)(integer("numLandmarks", _))
     val reduce = dictionary.get("reduce").fold(true) { value =>
       require(js.typeOf(value) == "boolean", s"option reduce must be a boolean, not a ${js.typeOf(value)}")
       value.asInstanceOf[Boolean]
     }
-    val result = TDA4j.toroidalCoordinates(matrix(points), r, cocycleIndices.toArray, prime, reduce)
+    val result = TDA4j.toroidalCoordinates(matrix(points), r, cocycleIndices.toArray, prime, reduce, numLandmarks)
     js.Dynamic
       .literal(
         theta = js.Array((0 until result.dimension()).map(c => js.Array(result.theta(c)*))*),

@@ -241,6 +241,18 @@ class ExportsSpec extends Specification:
         (steps.forall(s => math.abs(s - 1.0 / n) < 0.02) must beTrue) and
         (coordinates.prime.asInstanceOf[Int] must beEqualTo(47))
     }
+    "with numLandmarks, give every point of a circle an angle from 10 landmarks, going once around" >> {
+      val n = 120
+      val points = circle(n)
+      val loops = Exports.h1Bars(points, options("numLandmarks" -> 10))
+      val r = (loops(0)(0) + loops(0)(1)) / 2
+      val theta = dynamic(Exports.circularCoordinates(points, r, options("numLandmarks" -> 10))).theta
+        .asInstanceOf[js.Array[Double]]
+      val steps = (0 until n).map(i => theta((i + 1) % n) - theta(i)).map(d => d - math.rint(d))
+      (theta.forall(t => t >= 0.0 && t < 1.0) must beTrue) and
+        (steps.map(math.abs).max must beLessThan(0.05)) and
+        (math.abs(math.abs(steps.sum) - 1.0) must beLessThan(1e-6))
+    }
     "refuse an option it does not have" >> {
       Exports.circularCoordinates(circle(12), 0.5, options("primes" -> 5)) must throwWith[js.JavaScriptException](
         "unknown option primes"
