@@ -12,7 +12,7 @@
 </div>
 <div class="cover">
  <div class="doc">
-  <p><code>theta</code>: ambient point index (matching the <code>metricSpace</code> passed to <code>compute</code>) to its circle coordinate in <code>[0, 1)</code> -- only for points in the connected component of <code>K_r</code> containing the chosen class (see the class doc); a point outside that component has no entry at all, not a sentinel value. <code>birth</code>/<code>death</code> are the chosen bar's own full-filtration endpoints (<code>death = Double.PositiveInfinity</code> for an essential bar); <code>r</code> and <code>prime</code> echo the parameters <code>compute</code> was called with.</p>
+  <p><code>theta</code>: ambient point index (matching the <code>metricSpace</code> passed to <code>compute</code>) to its circle coordinate in <code>[0, 1)</code> -- only for points in the connected component of <code>K_r</code> containing the chosen class (see the class doc); a point outside that component has no entry at all, not a sentinel value. For sparse coordinates, the points that the balls of radius <code>r</code> around that component's landmarks cover. <code>birth</code>/<code>death</code> are the chosen bar's own full-filtration endpoints (<code>death = Double.PositiveInfinity</code> for an essential bar); <code>r</code> and <code>prime</code> echo the parameters <code>compute</code> was called with.</p>
  </div>
  <section id="attributes">
   <h2 class="h500">Attributes</h2>
@@ -21,7 +21,7 @@
     Source
    </dt>
    <dd class="body-medium">
-    <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/CircularCoordinates.scala#L35" target="_blank">CircularCoordinates.scala</a>
+    <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/CircularCoordinates.scala#L45" target="_blank">CircularCoordinates.scala</a>
    </dd>
    <dt class="body-small">
     Graph

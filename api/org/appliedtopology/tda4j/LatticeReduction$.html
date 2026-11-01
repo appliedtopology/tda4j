@@ -12,7 +12,7 @@
 </div>
 <div class="cover">
  <div class="doc">
-  <p>Lenstra-Lenstra-Lovász lattice basis reduction of a Gram matrix (Scoccola, Gakhar, Bush, Schonsheck, Rask, Zhou, Perea, "Toroidal Coordinates: Decorrelating Circular Coordinates With Lattice Reduction", arXiv:2212.07201, Algorithm 4). Given the Gram matrix <code>G</code> of <code>k</code> independent vectors, factor <code>G = C Cᵀ</code> (Cholesky), run LLL on the rows of <code>C</code>, and return the unimodular integer change of basis: the shortest, most nearly orthogonal basis of the same lattice. <a href="CircularCoordinates$.html#computeToroidal-56a">CircularCoordinates.computeToroidal</a> uses it to choose among the equally valid bases of a group of H¹ classes.</p>
+  <p>Lenstra-Lenstra-Lovász lattice basis reduction of a Gram matrix (Scoccola, Gakhar, Bush, Schonsheck, Rask, Zhou, Perea, "Toroidal Coordinates: Decorrelating Circular Coordinates With Lattice Reduction", arXiv:2212.07201, Algorithm 4). Given the Gram matrix <code>G</code> of <code>k</code> independent vectors, factor <code>G = C Cᵀ</code> (Cholesky), run LLL on the rows of <code>C</code>, and return the unimodular integer change of basis: the shortest, most nearly orthogonal basis of the same lattice. <a href="CircularCoordinates$.html#computeToroidal-fffff26b">CircularCoordinates.computeToroidal</a> uses it to choose among the equally valid bases of a group of H¹ classes.</p>
   <p>The Gram-Schmidt step projects onto the orthogonalized vectors, as in the textbook algorithm. DREiMac's <code>_gram_schmidt</code> projects onto the original ones, which agrees for <code>k = 2</code> but not for <code>k &gt;= 3</code>, so results can differ from DREiMac's there.</p>
  </div>
  <section id="attributes">

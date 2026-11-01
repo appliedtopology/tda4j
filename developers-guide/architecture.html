@@ -433,6 +433,7 @@
  <section id="circular-coordinates">
   <h3 class="h400"><a href="#circular-coordinates" class="anchor"></a>Circular coordinates</h3>
   <p><code>CircularCoordinates</code> constructs circle-valued coordinates from persistent H¹ classes. It uses persistent cohomology to obtain a cocycle and harmonic smoothing to produce coordinates on the relevant connected component.</p>
+  <p>Sparse coordinates (Perea 2020; <code>sparse</code>, <code>sparseToroidal</code>, and <code>numLandmarks</code> on the point-cloud entry points) compute the class on the Dowker complex of a relation from cover sets (landmarks) to points, which is the nerve of the cover restricted to the data, and smooth it there. <code>extendToPoints</code> then gives each covered point <code>g(j) - sum_k phi_k(x) h(j -&gt; k)</code> (Perea's formula (11) in this file's orientation), with <code>j</code> its nearest landmark and <code>phi</code> the partition of unity proportional to <code>max(r - relation(k)(x), 0)</code>. The value does not depend on <code>j</code> because <code>h</code> is a cocycle on the triangles that the sets holding <code>x</code> span; the continuity spec checks exactly that. <code>combineClasses</code> reads the points from the classes' <code>theta</code>, so the toroidal reduction serves both routes.</p>
  </section>
  <section id="toroidal-coordinates">
   <h3 class="h400"><a href="#toroidal-coordinates" class="anchor"></a>Toroidal coordinates</h3>

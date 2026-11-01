@@ -246,16 +246,16 @@
      <td>the first lag in <code>1..maxLag</code> at which the autocorrelation is zero or negative: a first guess for <code>delay</code></td>
     </tr>
     <tr>
-     <td><code>h1Bars(points)</code></td>
-     <td>the loops of the Vietoris-Rips complex: one row <code>(birth, death)</code> per persistent H¹ class, most persistent first</td>
+     <td><code>h1Bars(points)</code>, <code>h1Bars(points, numLandmarks)</code></td>
+     <td>the loops of the Vietoris-Rips complex: one row <code>(birth, death)</code> per persistent H¹ class, most persistent first; with <code>numLandmarks</code>, the loops of the balls around that many maxmin landmarks, for sparse coordinates</td>
     </tr>
     <tr>
-     <td><code>circularCoordinates(points, r)</code>, <code>circularCoordinates(points, r, cocycleIndex, prime)</code></td>
-     <td>circular coordinates of loop <code>cocycleIndex</code> of <code>h1Bars</code> at scale <code>r</code> (defaults <code>0</code> and <code>47</code>, an odd prime); throws <code>NoIntegerCocycleException</code> if the class has no integer lift at that prime</td>
+     <td><code>circularCoordinates(points, r)</code>, <code>circularCoordinates(points, r, cocycleIndex, prime)</code>, <code>circularCoordinates(points, r, cocycleIndex, prime, numLandmarks)</code></td>
+     <td>circular coordinates of loop <code>cocycleIndex</code> of <code>h1Bars</code> at scale <code>r</code> (defaults <code>0</code> and <code>47</code>, an odd prime); throws <code>NoIntegerCocycleException</code> if the class has no integer lift at that prime; <code>numLandmarks &gt; 0</code> gives Perea's sparse coordinates over that many landmarks, for many points</td>
     </tr>
     <tr>
-     <td><code>toroidalCoordinates(points, r, cocycleIndices)</code>, <code>toroidalCoordinates(points, r, cocycleIndices, prime, reduce)</code></td>
-     <td>toroidal coordinates for several loops alive together at <code>r</code>; <code>reduce</code> (default <code>true</code>) applies lattice reduction</td>
+     <td><code>toroidalCoordinates(points, r, cocycleIndices)</code>, <code>toroidalCoordinates(points, r, cocycleIndices, prime, reduce)</code>, <code>toroidalCoordinates(points, r, cocycleIndices, prime, reduce, numLandmarks)</code></td>
+     <td>toroidal coordinates for several loops alive together at <code>r</code>; <code>reduce</code> (default <code>true</code>) applies lattice reduction; <code>numLandmarks</code> as for <code>circularCoordinates</code></td>
     </tr>
     <tr>
      <td><code>loadResult(path)</code></td>

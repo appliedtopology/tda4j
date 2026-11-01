@@ -312,43 +312,47 @@
    <pre><code class="language-mermaid"><span line-number="1" class=""><span class="tooltip-container"></span>classDiagram
 </span><span line-number="2" class=""><span class="tooltip-container"></span>    class CircularCoordinates {
 </span><span line-number="3" class=""><span class="tooltip-container"></span>        &lt;&lt;object&gt;&gt;
-</span><span line-number="4" class=""><span class="tooltip-container"></span>        h1Bars(metricSpace, maxFiltrationValue) IndexedSeq~(Double, Double)~
-</span><span line-number="5" class=""><span class="tooltip-container"></span>        compute(metricSpace, r, cocycleIndex, prime, maxFiltrationValue) Result
-</span><span line-number="6" class=""><span class="tooltip-container"></span>        computeToroidal(metricSpace, r, cocycleIndices, prime, reduce, maxFiltrationValue) ToroidalResult
-</span><span line-number="7" class=""><span class="tooltip-container"></span>    }
-</span><span line-number="8" class=""><span class="tooltip-container"></span>    class Result {
-</span><span line-number="9" class=""><span class="tooltip-container"></span>        theta: Map~Int, Double~
-</span><span line-number="10" class=""><span class="tooltip-container"></span>        birth: Double
-</span><span line-number="11" class=""><span class="tooltip-container"></span>        death: Double
-</span><span line-number="12" class=""><span class="tooltip-container"></span>        r: Double
-</span><span line-number="13" class=""><span class="tooltip-container"></span>        prime: Int
-</span><span line-number="14" class=""><span class="tooltip-container"></span>    }
-</span><span line-number="15" class=""><span class="tooltip-container"></span>    class ToroidalResult {
-</span><span line-number="16" class=""><span class="tooltip-container"></span>        theta: IndexedSeq~Map~Int, Double~~
-</span><span line-number="17" class=""><span class="tooltip-container"></span>        cocycleIndices: IndexedSeq~Int~
-</span><span line-number="18" class=""><span class="tooltip-container"></span>        basisChange: Array~Array~Int~~
-</span><span line-number="19" class=""><span class="tooltip-container"></span>        originalGram: Array~Array~Double~~
-</span><span line-number="20" class=""><span class="tooltip-container"></span>        reducedGram: Array~Array~Double~~
-</span><span line-number="21" class=""><span class="tooltip-container"></span>        r: Double
-</span><span line-number="22" class=""><span class="tooltip-container"></span>        prime: Int
-</span><span line-number="23" class=""><span class="tooltip-container"></span>    }
-</span><span line-number="24" class=""><span class="tooltip-container"></span>    class NoIntegerCocycleException {
-</span><span line-number="25" class=""><span class="tooltip-container"></span>        &lt;&lt;RuntimeException&gt;&gt;
-</span><span line-number="26" class=""><span class="tooltip-container"></span>    }
-</span><span line-number="27" class=""><span class="tooltip-container"></span>    class LatticeReduction {
-</span><span line-number="28" class=""><span class="tooltip-container"></span>        &lt;&lt;object&gt;&gt;
-</span><span line-number="29" class=""><span class="tooltip-container"></span>        reduce(gram, delta) Result
-</span><span line-number="30" class=""><span class="tooltip-container"></span>        isReduced(gram, delta, tol) Boolean
-</span><span line-number="31" class=""><span class="tooltip-container"></span>    }
-</span><span line-number="32" class=""><span class="tooltip-container"></span>    CircularCoordinates --&gt; Result : returns (compute)
-</span><span line-number="33" class=""><span class="tooltip-container"></span>    CircularCoordinates --&gt; ToroidalResult : returns (computeToroidal)
-</span><span line-number="34" class=""><span class="tooltip-container"></span>    CircularCoordinates ..&gt; CellularCohomologyEngine : computes K_r's cohomology with
-</span><span line-number="35" class=""><span class="tooltip-container"></span>    CircularCoordinates ..&gt; NoIntegerCocycleException : throws (no ℤ-lift at prime)
-</span><span line-number="36" class=""><span class="tooltip-container"></span>    CircularCoordinates ..&gt; LatticeReduction : reduces the chosen classes' Gram matrix with
+</span><span line-number="4" class=""><span class="tooltip-container"></span>        h1Bars(metricSpace, maxFiltrationValue, numLandmarks) IndexedSeq~(Double, Double)~
+</span><span line-number="5" class=""><span class="tooltip-container"></span>        compute(metricSpace, r, cocycleIndex, prime, maxFiltrationValue, numLandmarks) Result
+</span><span line-number="6" class=""><span class="tooltip-container"></span>        computeToroidal(metricSpace, r, cocycleIndices, prime, reduce, maxFiltrationValue, numLandmarks) ToroidalResult
+</span><span line-number="7" class=""><span class="tooltip-container"></span>        apply(diagram, input, bar, r, complex) Result
+</span><span line-number="8" class=""><span class="tooltip-container"></span>        toroidal(diagram, input, bars, r, complex, reduce) ToroidalResult
+</span><span line-number="9" class=""><span class="tooltip-container"></span>        sparse(diagram, relation, bar, r) Result
+</span><span line-number="10" class=""><span class="tooltip-container"></span>        sparseToroidal(diagram, relation, bars, r, reduce) ToroidalResult
+</span><span line-number="11" class=""><span class="tooltip-container"></span>    }
+</span><span line-number="12" class=""><span class="tooltip-container"></span>    class Result {
+</span><span line-number="13" class=""><span class="tooltip-container"></span>        theta: Map~Int, Double~
+</span><span line-number="14" class=""><span class="tooltip-container"></span>        birth: Double
+</span><span line-number="15" class=""><span class="tooltip-container"></span>        death: Double
+</span><span line-number="16" class=""><span class="tooltip-container"></span>        r: Double
+</span><span line-number="17" class=""><span class="tooltip-container"></span>        prime: Int
+</span><span line-number="18" class=""><span class="tooltip-container"></span>    }
+</span><span line-number="19" class=""><span class="tooltip-container"></span>    class ToroidalResult {
+</span><span line-number="20" class=""><span class="tooltip-container"></span>        theta: IndexedSeq~Map~Int, Double~~
+</span><span line-number="21" class=""><span class="tooltip-container"></span>        cocycleIndices: IndexedSeq~Int~
+</span><span line-number="22" class=""><span class="tooltip-container"></span>        basisChange: Array~Array~Int~~
+</span><span line-number="23" class=""><span class="tooltip-container"></span>        originalGram: Array~Array~Double~~
+</span><span line-number="24" class=""><span class="tooltip-container"></span>        reducedGram: Array~Array~Double~~
+</span><span line-number="25" class=""><span class="tooltip-container"></span>        r: Double
+</span><span line-number="26" class=""><span class="tooltip-container"></span>        prime: Int
+</span><span line-number="27" class=""><span class="tooltip-container"></span>    }
+</span><span line-number="28" class=""><span class="tooltip-container"></span>    class NoIntegerCocycleException {
+</span><span line-number="29" class=""><span class="tooltip-container"></span>        &lt;&lt;RuntimeException&gt;&gt;
+</span><span line-number="30" class=""><span class="tooltip-container"></span>    }
+</span><span line-number="31" class=""><span class="tooltip-container"></span>    class LatticeReduction {
+</span><span line-number="32" class=""><span class="tooltip-container"></span>        &lt;&lt;object&gt;&gt;
+</span><span line-number="33" class=""><span class="tooltip-container"></span>        reduce(gram, delta) Result
+</span><span line-number="34" class=""><span class="tooltip-container"></span>        isReduced(gram, delta, tol) Boolean
+</span><span line-number="35" class=""><span class="tooltip-container"></span>    }
+</span><span line-number="36" class=""><span class="tooltip-container"></span>    CircularCoordinates --&gt; Result : returns (compute)
+</span><span line-number="37" class=""><span class="tooltip-container"></span>    CircularCoordinates --&gt; ToroidalResult : returns (computeToroidal)
+</span><span line-number="38" class=""><span class="tooltip-container"></span>    CircularCoordinates ..&gt; CellularCohomologyEngine : computes K_r's cohomology with
+</span><span line-number="39" class=""><span class="tooltip-container"></span>    CircularCoordinates ..&gt; NoIntegerCocycleException : throws (no ℤ-lift at prime)
+</span><span line-number="40" class=""><span class="tooltip-container"></span>    CircularCoordinates ..&gt; LatticeReduction : reduces the chosen classes' Gram matrix with
 </span></code></pre>
    <div class="buttons"></div>
   </div>
-  <p>A standalone construction rather than a persistence engine. <code>compute</code> produces circle-valued coordinates from one persistent H¹ class; <code>computeToroidal</code> extends this to several simultaneous classes using <code>LatticeReduction</code>.</p>
+  <p>A standalone construction rather than a persistence engine. <code>compute</code> produces circle-valued coordinates from one persistent H¹ class; <code>computeToroidal</code> extends this to several simultaneous classes using <code>LatticeReduction</code>. <code>apply</code> and <code>toroidal</code> start from a diagram; <code>sparse</code> and <code>sparseToroidal</code> (and <code>numLandmarks &gt; 0</code>) give Perea's sparse coordinates from a cover's Dowker diagram.</p>
  </section>
  <section id="metric-spaces-finitemetricspacescala">
   <h2 class="h500"><a href="#metric-spaces-finitemetricspacescala" class="anchor"></a>Metric spaces (<code>FiniteMetricSpace.scala</code>)</h2>

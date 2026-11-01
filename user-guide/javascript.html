@@ -244,15 +244,15 @@
      <td>the first lag in <code>1..maxLag</code> at which the autocorrelation is zero or negative: a first guess for <code>delay</code></td>
     </tr>
     <tr>
-     <td><code>h1Bars(points)</code></td>
-     <td>the loops of the Vietoris-Rips complex as <code>[birth, death]</code>, most persistent first</td>
+     <td><code>h1Bars(points, { numLandmarks })</code></td>
+     <td>the loops of the Vietoris-Rips complex as <code>[birth, death]</code>, most persistent first; with <code>numLandmarks</code>, those of the balls around that many maxmin landmarks</td>
     </tr>
     <tr>
-     <td><code>circularCoordinates(points, r, { cocycleIndex, prime })</code></td>
-     <td><code>{ theta, birth, death, r, prime }</code>: one angle in [0, 1) per point for loop <code>cocycleIndex</code> of <code>h1Bars</code>, with <code>r</code> between its birth and death</td>
+     <td><code>circularCoordinates(points, r, { cocycleIndex, prime, numLandmarks })</code></td>
+     <td><code>{ theta, birth, death, r, prime }</code>: one angle in [0, 1) per point for loop <code>cocycleIndex</code> of <code>h1Bars</code>, with <code>r</code> between its birth and death; <code>numLandmarks</code> gives Perea's sparse coordinates</td>
     </tr>
     <tr>
-     <td><code>toroidalCoordinates(points, r, cocycleIndices, { prime, reduce })</code></td>
+     <td><code>toroidalCoordinates(points, r, cocycleIndices, { prime, reduce, numLandmarks })</code></td>
      <td><code>{ theta, cocycleIndices, basisChange, originalGram, reducedGram, r, prime }</code>: <code>theta[c][i]</code> is coordinate <code>c</code> of point <code>i</code></td>
     </tr>
     <tr>
