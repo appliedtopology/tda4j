@@ -286,7 +286,32 @@
      <div class="buttons"></div>
     </div>
    </div>
+   <div class="tab" data-lang="Python">
+    <div class="snippet mono-small-block">
+     <pre><code class="language-python"><span line-number="1" class=""><span class="tooltip-container"></span>import numpy as np
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import tda4j
+</span><span line-number="3" class=""><span class="tooltip-container"></span>
+</span><span line-number="4" class=""><span class="tooltip-container"></span>points = np.loadtxt("_docs/tutorials/data/noisy-circle.csv", delimiter=",")
+</span><span line-number="5" class=""><span class="tooltip-container"></span>
+</span><span line-number="6" class=""><span class="tooltip-container"></span># Each entry: the value of the `complex` option, and any extra options it needs
+</span><span line-number="7" class=""><span class="tooltip-container"></span>settings = {
+</span><span line-number="8" class=""><span class="tooltip-container"></span>    "vr": {},
+</span><span line-number="9" class=""><span class="tooltip-container"></span>    "cech": {},
+</span><span line-number="10" class=""><span class="tooltip-container"></span>    "alpha": {},
+</span><span line-number="11" class=""><span class="tooltip-container"></span>    "sparse-rips": {"sparse_epsilon": 0.5},
+</span><span line-number="12" class=""><span class="tooltip-container"></span>    "witness": {"num_landmarks": 15},
+</span><span line-number="13" class=""><span class="tooltip-container"></span>}
+</span><span line-number="14" class=""><span class="tooltip-container"></span>
+</span><span line-number="15" class=""><span class="tooltip-container"></span>for name, extra in settings.items():
+</span><span line-number="16" class=""><span class="tooltip-container"></span>    result = tda4j.persistence(points, max_dimension=1, complex=name, **extra)
+</span><span line-number="17" class=""><span class="tooltip-container"></span>    loops = result.diagram(1)
+</span><span line-number="18" class=""><span class="tooltip-container"></span>    birth, death = loops[np.argmax(loops[:, 1] - loops[:, 0])]
+</span><span line-number="19" class=""><span class="tooltip-container"></span>    print(f"{name:&lt;12} {result.num_cells:6d} simplices, loop [{birth:.3f}, {death:.3f})")
+</span></code></pre>
+     <div class="buttons"></div>
+    </div>
+   </div>
   </div>
-  <p>In MATLAB a complex is a value of the <code>complex</code> option rather than a function, and <code>numCells()</code> is the number of simplices the engine had to process.</p>
+  <p>In MATLAB and Python a complex is a value of the <code>complex</code> option rather than a function, and <code>numCells()</code> (<code>num_cells</code> in Python) is the number of simplices the engine had to process.</p>
  </section>
 </main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#the-five-complexes">The five complexes</a><ul><li><a href="#vietoris-rips-the-default">Vietoris-Rips: the default</a></li><li><a href="#čech-the-geometrically-exact-one">Čech: the geometrically exact one</a></li><li><a href="#alpha-čech-without-the-bulk">Alpha: Čech without the bulk</a></li><li><a href="#sparse-rips-rips-for-many-points">Sparse Rips: Rips for many points</a></li><li><a href="#witness-a-few-landmarks-all-the-points">Witness: a few landmarks, all the points</a></li></ul></li><li><a href="#which-one">Which one?</a></li><li><a href="#the-whole-script">The whole script</a></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>

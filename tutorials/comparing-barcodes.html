@@ -320,7 +320,39 @@
      <div class="buttons"></div>
     </div>
    </div>
+   <div class="tab" data-lang="Python">
+    <div class="snippet mono-small-block">
+     <pre><code class="language-python"><span line-number="1" class=""><span class="tooltip-container"></span>import numpy as np
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import tda4j
+</span><span line-number="3" class=""><span class="tooltip-container"></span>
+</span><span line-number="4" class=""><span class="tooltip-container"></span>def barcode(name):
+</span><span line-number="5" class=""><span class="tooltip-container"></span>    points = np.loadtxt(f"_docs/tutorials/data/{name}.csv", delimiter=",")
+</span><span line-number="6" class=""><span class="tooltip-container"></span>    return tda4j.persistence(points, max_dimension=1)
+</span><span line-number="7" class=""><span class="tooltip-container"></span>
+</span><span line-number="8" class=""><span class="tooltip-container"></span>circle_a, circle_b, eight = barcode("noisy-circle"), barcode("noisy-circle-b"), barcode("figure-eight")
+</span><span line-number="9" class=""><span class="tooltip-container"></span>
+</span><span line-number="10" class=""><span class="tooltip-container"></span># Distances between the dimension-1 bars (the second argument is the dimension)
+</span><span line-number="11" class=""><span class="tooltip-container"></span>circle_a.bottleneck_distance(circle_b, 1)       # 0.040
+</span><span line-number="12" class=""><span class="tooltip-container"></span>circle_a.bottleneck_distance(eight, 1)          # 0.556
+</span><span line-number="13" class=""><span class="tooltip-container"></span>circle_b.bottleneck_distance(eight, 1)          # 0.518
+</span><span line-number="14" class=""><span class="tooltip-container"></span>circle_a.wasserstein_distance(circle_b, 1)      # 0.045
+</span><span line-number="15" class=""><span class="tooltip-container"></span>circle_a.wasserstein_distance(eight, 1)         # 0.864
+</span><span line-number="16" class=""><span class="tooltip-container"></span>circle_b.wasserstein_distance(eight, 1)         # 0.830
+</span><span line-number="17" class=""><span class="tooltip-container"></span>
+</span><span line-number="18" class=""><span class="tooltip-container"></span># Landscapes: the first 3 levels, sampled at 100 points of [0, 2]
+</span><span line-number="19" class=""><span class="tooltip-container"></span>landscape = lambda result: result.landscape(1, 3, 0, 2, 100)
+</span><span line-number="20" class=""><span class="tooltip-container"></span>np.linalg.norm(landscape(circle_a) - landscape(circle_b))     # 0.279
+</span><span line-number="21" class=""><span class="tooltip-container"></span>np.linalg.norm(landscape(circle_a) - landscape(eight))        # 2.430
+</span><span line-number="22" class=""><span class="tooltip-container"></span>
+</span><span line-number="23" class=""><span class="tooltip-container"></span># Persistence images: sigma 0.1, birth and persistence both over [0, 2], 40 x 40 pixels, weight capped at 1
+</span><span line-number="24" class=""><span class="tooltip-container"></span>image = lambda result: result.persistence_image(1, 0.1, (0, 2), (0, 2), (40, 40), weight_cap=1.0)
+</span><span line-number="25" class=""><span class="tooltip-container"></span>np.linalg.norm(image(circle_a) - image(circle_b))             # 0.080
+</span><span line-number="26" class=""><span class="tooltip-container"></span>np.linalg.norm(image(circle_a) - image(eight))                # 0.163
+</span></code></pre>
+     <div class="buttons"></div>
+    </div>
+   </div>
   </div>
-  <p>Through the facade, distances, landscapes and images always use the <em>complete</em> barcode of each result, including the short bars the Scala script set aside with <code>longerThanFraction()</code>. The bottleneck distance does not notice them; the Wasserstein distance, a sum, does, so it comes out slightly larger here (0.045 against 0.040, and 0.830 against 0.826).</p>
+  <p>Through the facade (MATLAB and Python), distances, landscapes and images always use the <em>complete</em> barcode of each result, including the short bars the Scala script set aside with <code>longerThanFraction()</code>. The bottleneck distance does not notice them; the Wasserstein distance, a sum, does, so it comes out slightly larger here (0.045 against 0.040, and 0.830 against 0.826).</p>
  </section>
 </main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#one-diagram-per-cloud">One diagram per cloud</a></li><li><a href="#distances-between-diagrams">Distances between diagrams</a></li><li><a href="#barcodes-as-vectors">Barcodes as vectors</a></li><li><a href="#on-the-command-line">On the command line</a></li><li><a href="#the-whole-script">The whole script</a></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>

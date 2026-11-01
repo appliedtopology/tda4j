@@ -230,8 +230,26 @@
      <div class="buttons"></div>
     </div>
    </div>
+   <div class="tab" data-lang="Python">
+    <div class="snippet mono-small-block">
+     <pre><code class="language-python"><span line-number="1" class=""><span class="tooltip-container"></span>import numpy as np
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import tda4j
+</span><span line-number="3" class=""><span class="tooltip-container"></span>
+</span><span line-number="4" class=""><span class="tooltip-container"></span>points = np.loadtxt("_docs/tutorials/data/noisy-circle.csv", delimiter=",")
+</span><span line-number="5" class=""><span class="tooltip-container"></span>result = tda4j.persistence(points, max_dimension=1)
+</span><span line-number="6" class=""><span class="tooltip-container"></span>
+</span><span line-number="7" class=""><span class="tooltip-container"></span>result.plot_barcode().view()
+</span><span line-number="8" class=""><span class="tooltip-container"></span>loop = result.most_persistent_bar(1)       # the row of the loop's bar in result.bars (counting from 0)
+</span><span line-number="9" class=""><span class="tooltip-container"></span>result.plot_representative(loop, at=result.bars[loop, 1]).save("loop.svg")   # its 18 edges over the complex
+</span><span line-number="10" class=""><span class="tooltip-container"></span>
+</span><span line-number="11" class=""><span class="tooltip-container"></span>result.save("circle.json")                 # everything, to plot again later
+</span><span line-number="12" class=""><span class="tooltip-container"></span>result = tda4j.load_result("circle.json")
+</span></code></pre>
+     <div class="buttons"></div>
+    </div>
+   </div>
   </div>
-  <p>Call the methods with dot syntax (<code>fig.view()</code>, <code>fig.save('loop.svg')</code>): <code>save</code> and <code>view</code> are also MATLAB functions. MATLAB itself is not run by the test suite; the same calls are made from Scala.</p>
+  <p>In MATLAB, call the methods with dot syntax (<code>fig.view()</code>, <code>fig.save('loop.svg')</code>): <code>save</code> and <code>view</code> are also MATLAB functions. MATLAB itself is not run by the test suite; the same calls are made from Scala. In Python the methods are <code>plot_barcode()</code>, <code>plot_diagram()</code>, ... on the result, and the figure has <code>svg()</code>, <code>html()</code>, <code>save(path)</code> and <code>view()</code>; a notebook shows a figure by itself. The tweaks that take plain arguments are methods of a Python figure too, in snake_case (<code>with_title("...")</code>, <code>with_x_scale("sqrt")</code>, <code>with_size(800, 600)</code>), and <code>tda4j.set_plot_defaults("palette=print")</code> changes the look of all later plots, with the <a href="#defaults-for-every-plot-a-given-look">settings</a> of the MATLAB <code>setPlotDefaults</code>.</p>
   <table>
    <thead>
     <tr>
@@ -1126,6 +1144,20 @@
 </span><span line-number="5" class=""><span class="tooltip-container"></span>
 </span><span line-number="6" class=""><span class="tooltip-container"></span>result.plotDiagram().withTitle('A noisy circle').withXLabel('birth').withYLabel('death').withSize(800, 600).save('diagram.svg');
 </span><span line-number="7" class=""><span class="tooltip-container"></span>result.plotBarcode().withXScale('sqrt').withTextScale(1.3).save('barcode.svg');
+</span></code></pre>
+     <div class="buttons"></div>
+    </div>
+   </div>
+   <div class="tab" data-lang="Python">
+    <div class="snippet mono-small-block">
+     <pre><code class="language-python"><span line-number="1" class=""><span class="tooltip-container"></span>import numpy as np
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import tda4j
+</span><span line-number="3" class=""><span class="tooltip-container"></span>
+</span><span line-number="4" class=""><span class="tooltip-container"></span>points = np.loadtxt("_docs/tutorials/data/noisy-circle.csv", delimiter=",")
+</span><span line-number="5" class=""><span class="tooltip-container"></span>result = tda4j.persistence(points, max_dimension=1)
+</span><span line-number="6" class=""><span class="tooltip-container"></span>
+</span><span line-number="7" class=""><span class="tooltip-container"></span>result.plot_diagram().with_title("A noisy circle").with_x_label("birth").with_y_label("death").with_size(800, 600).save("diagram.svg")
+</span><span line-number="8" class=""><span class="tooltip-container"></span>result.plot_barcode().with_x_scale("sqrt").with_text_scale(1.3).save("barcode.svg")
 </span></code></pre>
      <div class="buttons"></div>
     </div>

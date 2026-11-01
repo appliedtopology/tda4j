@@ -229,7 +229,28 @@
      <div class="buttons"></div>
     </div>
    </div>
+   <div class="tab" data-lang="Python">
+    <div class="snippet mono-small-block">
+     <pre><code class="language-python"><span line-number="1" class=""><span class="tooltip-container"></span>import numpy as np
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import tda4j
+</span><span line-number="3" class=""><span class="tooltip-container"></span>
+</span><span line-number="4" class=""><span class="tooltip-container"></span># 6 people (rows) and 7 clubs (columns); inf means "never a member"
+</span><span line-number="5" class=""><span class="tooltip-container"></span>relation = np.full((6, 7), np.inf)
+</span><span line-number="6" class=""><span class="tooltip-container"></span>for person in range(6):
+</span><span line-number="7" class=""><span class="tooltip-container"></span>    relation[person, person] = 1                # the person's own club, from time 1
+</span><span line-number="8" class=""><span class="tooltip-container"></span>    relation[person, (person + 1) % 6] = 2      # the next person's club, from time 2
+</span><span line-number="9" class=""><span class="tooltip-container"></span>relation[:, 6] = 5                              # a club everyone joins at time 5
+</span><span line-number="10" class=""><span class="tooltip-container"></span>
+</span><span line-number="11" class=""><span class="tooltip-container"></span>people = tda4j.persistence_from_relation(relation, max_dimension=1)
+</span><span line-number="12" class=""><span class="tooltip-container"></span>clubs = tda4j.persistence_from_relation(relation, max_dimension=1, dual=True)
+</span><span line-number="13" class=""><span class="tooltip-container"></span>
+</span><span line-number="14" class=""><span class="tooltip-container"></span>people.bars                            # seven bars, one of them the loop (1, 2, 5)
+</span><span line-number="15" class=""><span class="tooltip-container"></span>clubs.bars                             # exactly the same seven bars
+</span></code></pre>
+     <div class="buttons"></div>
+    </div>
+   </div>
   </div>
-  <p><code>computeFromRelation</code> takes the relation as a matrix, with <code>Inf</code> for pairs that are never related; <code>dual</code> selects the transposed relation.</p>
+  <p><code>computeFromRelation</code> (<code>persistence_from_relation</code> in Python) takes the relation as a matrix, with <code>Inf</code> (<code>np.inf</code>) for pairs that are never related; <code>dual</code> selects the transposed relation.</p>
  </section>
 </main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#the-data">The data</a></li><li><a href="#the-dowker-complex-of-the-people">The Dowker complex of the people</a></li><li><a href="#the-other-side-of-the-table">The other side of the table</a></li><li><a href="#on-your-own-tables">On your own tables</a></li><li><a href="#the-whole-script">The whole script</a></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>

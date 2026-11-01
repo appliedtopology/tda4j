@@ -234,7 +234,36 @@
      <div class="buttons"></div>
     </div>
    </div>
+   <div class="tab" data-lang="Python">
+    <div class="snippet mono-small-block">
+     <pre><code class="language-python"><span line-number="1" class=""><span class="tooltip-container"></span>import numpy as np
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import tda4j
+</span><span line-number="3" class=""><span class="tooltip-container"></span>
+</span><span line-number="4" class=""><span class="tooltip-container"></span>points = np.loadtxt("_docs/tutorials/data/circle-with-outliers.csv", delimiter=",")
+</span><span line-number="5" class=""><span class="tooltip-container"></span>
+</span><span line-number="6" class=""><span class="tooltip-container"></span>def loop_lengths(result):
+</span><span line-number="7" class=""><span class="tooltip-container"></span>    """The lengths (death - birth) of the loops, longest first."""
+</span><span line-number="8" class=""><span class="tooltip-container"></span>    bars = result.all_bars
+</span><span line-number="9" class=""><span class="tooltip-container"></span>    loops = bars[bars[:, 0] == 1]
+</span><span line-number="10" class=""><span class="tooltip-container"></span>    return np.sort(loops[:, 2] - loops[:, 1])[::-1]
+</span><span line-number="11" class=""><span class="tooltip-container"></span>
+</span><span line-number="12" class=""><span class="tooltip-container"></span>vr = tda4j.persistence(points)
+</span><span line-number="13" class=""><span class="tooltip-container"></span>dtm = tda4j.persistence(points, max_dimension=1, complex="dtm-rips", dtm_k=8, dtm_p=1.0)
+</span><span line-number="14" class=""><span class="tooltip-container"></span>loop_lengths(vr)[:2]                   # 0.901  0.127
+</span><span line-number="15" class=""><span class="tooltip-container"></span>loop_lengths(dtm)[:2]                  # 0.815  0.005
+</span><span line-number="16" class=""><span class="tooltip-container"></span>
+</span><span line-number="17" class=""><span class="tooltip-container"></span># Which points make up the two longest Vietoris-Rips loops? Points 70 onwards (counted from 0) are the outliers
+</span><span line-number="18" class=""><span class="tooltip-container"></span>bars = vr.bars
+</span><span line-number="19" class=""><span class="tooltip-container"></span>loops = np.flatnonzero(bars[:, 0] == 1)
+</span><span line-number="20" class=""><span class="tooltip-container"></span>longest_two = loops[np.argsort(bars[loops, 1] - bars[loops, 2])[:2]]
+</span><span line-number="21" class=""><span class="tooltip-container"></span>for i in longest_two:
+</span><span line-number="22" class=""><span class="tooltip-container"></span>    on_cycle = {vertex for edge in vr.representative(i).cells for vertex in edge}
+</span><span line-number="23" class=""><span class="tooltip-container"></span>    print(len(on_cycle), "points,", sum(v &gt;= 70 for v in on_cycle), "of them outliers")   # 25 and 8, then 7 and 5
+</span></code></pre>
+     <div class="buttons"></div>
+    </div>
+   </div>
   </div>
-  <p>The MATLAB entry point takes <code>dtmK</code> and <code>dtmP</code> for the DTM-weighted Rips complex; it does not expose the weights themselves, so the average-weight comparison above has no MATLAB counterpart.</p>
+  <p>The MATLAB and Python entry points take <code>dtmK</code> and <code>dtmP</code> (<code>dtm_k</code>, <code>dtm_p</code>) for the DTM-weighted Rips complex; they do not expose the weights themselves, so the average-weight comparison above has no counterpart there.</p>
  </section>
 </main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#what-vietoris-rips-makes-of-it">What Vietoris-Rips makes of it</a></li><li><a href="#weighting-by-density">Weighting by density</a></li><li><a href="#choosing-k">Choosing k</a></li><li><a href="#the-whole-script">The whole script</a></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>

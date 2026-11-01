@@ -251,8 +251,37 @@
      <div class="buttons"></div>
     </div>
    </div>
+   <div class="tab" data-lang="Python">
+    <div class="snippet mono-small-block">
+     <pre><code class="language-python"><span line-number="1" class=""><span class="tooltip-container"></span>import numpy as np
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import tda4j
+</span><span line-number="3" class=""><span class="tooltip-container"></span>
+</span><span line-number="4" class=""><span class="tooltip-container"></span>points = np.loadtxt("_docs/tutorials/data/noisy-circle.csv", delimiter=",")
+</span><span line-number="5" class=""><span class="tooltip-container"></span>
+</span><span line-number="6" class=""><span class="tooltip-container"></span># Vietoris-Rips in degrees 0 to 2, with cycles as representatives (the defaults)
+</span><span line-number="7" class=""><span class="tooltip-container"></span>result = tda4j.persistence(points)
+</span><span line-number="8" class=""><span class="tooltip-container"></span>
+</span><span line-number="9" class=""><span class="tooltip-container"></span># Short bars (up to 1% of the enclosing radius) are hidden by default
+</span><span line-number="10" class=""><span class="tooltip-container"></span>bars = result.bars                     # 61 rows (dimension, birth, death)
+</span><span line-number="11" class=""><span class="tooltip-container"></span>result.hidden_count                    # 3 more, shorter than the threshold
+</span><span line-number="12" class=""><span class="tooltip-container"></span>
+</span><span line-number="13" class=""><span class="tooltip-container"></span>result.diagram(1)                      # [[0.595 1.707]]: the loop, as (birth, death)
+</span><span line-number="14" class=""><span class="tooltip-container"></span>h0 = result.diagram(0)
+</span><span line-number="15" class=""><span class="tooltip-container"></span>longest_gap = max(death - birth for birth, death in h0 if np.isfinite(death))   # 0.484
+</span><span line-number="16" class=""><span class="tooltip-container"></span>
+</span><span line-number="17" class=""><span class="tooltip-container"></span># The representative cycle of the loop. A bar is its row in `bars`, counted from 0
+</span><span line-number="18" class=""><span class="tooltip-container"></span>k = int(np.flatnonzero(bars[:, 0] == 1)[0])
+</span><span line-number="19" class=""><span class="tooltip-container"></span>edges = result.representative(k).cells     # 18 edges, each a pair of row numbers of the CSV (from 0)
+</span><span line-number="20" class=""><span class="tooltip-container"></span>
+</span><span line-number="21" class=""><span class="tooltip-container"></span># Cutting the complex off early
+</span><span line-number="22" class=""><span class="tooltip-container"></span>short = tda4j.persistence(points, max_filtration_value=1.0)
+</span><span line-number="23" class=""><span class="tooltip-container"></span>short.diagram(1)                       # [[0.595 inf]]: born, not dead by the cut-off
+</span></code></pre>
+     <div class="buttons"></div>
+    </div>
+   </div>
   </div>
-  <p>The MATLAB tab makes the same calls through the <code>TDA4j</code> facade. It shows the bars <code>longerThanFraction()</code> keeps (pass <code>'minPersistence', '0'</code> for all of them), and it counts bars from 0, so <code>cycleVertices(k)</code> takes the bar's row number minus 1.</p>
+  <p>The MATLAB and Python tabs make the same calls through the <code>TDA4j</code> facade. They show the bars <code>longerThanFraction()</code> keeps (pass <code>'minPersistence', '0'</code> in MATLAB, <code>min_persistence=0</code> in Python, for all of them). A bar is counted from 0, so MATLAB's <code>cycleVertices(k)</code> takes the bar's row number minus 1, and Python's <code>representative(k)</code> takes its index in <code>bars</code>.</p>
  </section>
  <section id="where-to-go-next">
   <h2 class="h500"><a href="#where-to-go-next" class="anchor"></a>Where to go next</h2>
