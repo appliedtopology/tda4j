@@ -155,11 +155,40 @@ shortBars(shortBars(:,1) == 1, :)      % [1 0.595 Inf]: born, not dead by the cu
 ```
 
 </div>
+<div class="tab" data-lang="Python">
+
+```python
+import numpy as np
+import tda4j
+
+points = np.loadtxt("_docs/tutorials/data/noisy-circle.csv", delimiter=",")
+
+# Vietoris-Rips in degrees 0 to 2, with cycles as representatives (the defaults)
+result = tda4j.persistence(points)
+
+# Short bars (up to 1% of the enclosing radius) are hidden by default
+bars = result.bars                     # 61 rows (dimension, birth, death)
+result.hidden_count                    # 3 more, shorter than the threshold
+
+result.diagram(1)                      # [[0.595 1.707]]: the loop, as (birth, death)
+h0 = result.diagram(0)
+longest_gap = max(death - birth for birth, death in h0 if np.isfinite(death))   # 0.484
+
+# The representative cycle of the loop. A bar is its row in `bars`, counted from 0
+k = int(np.flatnonzero(bars[:, 0] == 1)[0])
+edges = result.representative(k).cells     # 18 edges, each a pair of row numbers of the CSV (from 0)
+
+# Cutting the complex off early
+short = tda4j.persistence(points, max_filtration_value=1.0)
+short.diagram(1)                       # [[0.595 inf]]: born, not dead by the cut-off
+```
+
+</div>
 </div>
 
-The MATLAB tab makes the same calls through the `TDA4j` facade. It shows the bars `longerThanFraction()` keeps (pass
-`'minPersistence', '0'` for all of them), and it counts bars from 0, so `cycleVertices(k)` takes the bar's row number
-minus 1.
+The MATLAB and Python tabs make the same calls through the `TDA4j` facade. They show the bars `longerThanFraction()` keeps
+(pass `'minPersistence', '0'` in MATLAB, `min_persistence=0` in Python, for all of them). A bar is counted from 0, so
+MATLAB's `cycleVertices(k)` takes the bar's row number minus 1, and Python's `representative(k)` takes its index in `bars`.
 
 ## Where to go next
 

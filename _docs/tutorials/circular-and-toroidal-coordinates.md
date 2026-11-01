@@ -184,6 +184,34 @@ plot(theta1, theta2, '.');
 ```
 
 </div>
+<div class="tab" data-lang="Python">
+
+```python
+import numpy as np
+import tda4j
+
+# A circle
+points = np.loadtxt("_docs/tutorials/data/noisy-circle.csv", delimiter=",")
+bars = tda4j.h1_bars(points)            # one row (birth, death) per H1 class, most persistent first
+bars                                    # [[0.595 1.707]]: one loop
+r = (bars[0, 0] + bars[0, 1]) / 2
+coordinate = tda4j.circular_coordinates(points, r)   # the most persistent class, over the field with 47 elements
+theta = coordinate.theta                # one value in [0, 1) per point: a fraction of a turn
+
+truth = np.arctan2(points[:, 1], points[:, 0]) / (2 * np.pi) % 1
+# plotted against each other, `truth` and `theta` form a diagonal line, up to the sign and the offset
+# the coordinate is free to choose; coordinate.plot() draws the points colored by their angle
+
+# A torus
+torus_points = np.loadtxt("_docs/tutorials/data/flat-torus.csv", delimiter=",")
+torus_bars = tda4j.h1_bars(torus_points)   # runs on the whole complex; this entry point has no max_filtration_value
+torus_bars[:4]                          # two long bars, then a drop
+r = (torus_bars[:2, 0].max() + torus_bars[:2, 1].min()) / 2    # a scale where both long bars are alive
+coordinates = tda4j.toroidal_coordinates(torus_points, r, [0, 1])   # classes 0 and 1 (counted from 0)
+theta1, theta2 = coordinates.theta      # one value per point for each of the two circle coordinates
+```
+
+</div>
 </div>
 
-`h1Bars` returns the bars most persistent first, and `circularCoordinates`/`toroidalCoordinates` take the class numbers counted from 0, like every Java index. Unlike the Scala version, these MATLAB entry points cannot cap the complex with `maxFiltrationValue`, so the torus takes noticeably longer.
+`h1Bars` (`h1_bars`) returns the bars most persistent first, and `circularCoordinates`/`toroidalCoordinates` (`circular_coordinates`, `toroidal_coordinates`) take the class numbers counted from 0, like every Java index. Unlike the Scala version, these entry points cannot cap the complex with `maxFiltrationValue`, so the torus takes noticeably longer. In Python `coordinates.theta` has one row per coordinate, so `theta1, theta2 = coordinates.theta` unpacks the two.

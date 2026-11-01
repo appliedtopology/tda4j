@@ -3,7 +3,7 @@ layout: main
 title: All the ways to call TDA4j
 ---
 
-TDA4j can be used from the command line, MATLAB, Scala, a lab and an engine run by hand. This page does the same three
+TDA4j can be used from the command line, MATLAB, Python, Scala, a lab and an engine run by hand. This page does the same three
 tasks each way:
 
 1. Build a hollow octahedron by hand (6 vertices, 12 edges, 8 triangles) and compute its homology. It is a 2-sphere, so
@@ -59,6 +59,35 @@ plot(cos(2*pi*theta), sin(2*pi*theta), 'o');
 ```
 
 Two details worth knowing: MATLAB passes the Java `String[]` of options as a cell array of character vectors, and a MATLAB `double` matrix becomes a Java `double[][]` automatically.
+
+## Python
+
+The [`tda4j` package](../user-guide/python.md) runs the same library behind NumPy arrays, with the options as keyword
+arguments in snake_case. Python can handle all three tasks, and counts from 0 (the octahedron's vertices are 0 to 5).
+
+```python
+import numpy as np
+import tda4j
+
+# Task 1: the octahedron is the flag complex of its own edge graph, so a distance matrix is enough.
+# Vertices 0..5; the antipodal pairs (0,1), (2,3), (4,5) are NOT joined by an edge.
+D = 1 - np.eye(6)                       # every pair at distance 1 ...
+for a, b in [(0, 1), (2, 3), (4, 5)]:
+    D[a, b] = D[b, a] = 2               # ... except the antipodal pairs, which are never adjacent at scale 1
+octahedron = tda4j.persistence_from_distances(D, max_dimension=2, max_filtration_value=1.5)
+octahedron.bars[np.isinf(octahedron.bars[:, 2])]    # the bars that never die: one (0, 0, inf), one (2, 1, inf)
+
+# Task 2: Vietoris-Rips barcode of the points in the file
+points = np.loadtxt("_docs/tutorials/examplepoints.csv", delimiter=",")
+result = tda4j.persistence(points, max_dimension=1)
+result.bars[result.bars[:, 0] == 1]     # the one loop, about (1, 0.261, 1.732)
+result.hidden_count                     # number of negligible bars that were left out (see the options table)
+
+# Task 3: circular coordinates
+birth, death = tda4j.h1_bars(points)[0]     # the most persistent H1 class
+r = birth + 0.5 * (death - birth)           # a scale at which it is alive
+theta = tda4j.circular_coordinates(points, r).theta     # one angle in [0, 1) per point
+```
 
 ## Scala REPL
 

@@ -132,6 +132,35 @@ end
 ```
 
 </div>
+<div class="tab" data-lang="Python">
+
+```python
+import numpy as np
+import tda4j
+
+points = np.loadtxt("_docs/tutorials/data/circle-with-outliers.csv", delimiter=",")
+
+def loop_lengths(result):
+    """The lengths (death - birth) of the loops, longest first."""
+    bars = result.all_bars
+    loops = bars[bars[:, 0] == 1]
+    return np.sort(loops[:, 2] - loops[:, 1])[::-1]
+
+vr = tda4j.persistence(points)
+dtm = tda4j.persistence(points, max_dimension=1, complex="dtm-rips", dtm_k=8, dtm_p=1.0)
+loop_lengths(vr)[:2]                   # 0.901  0.127
+loop_lengths(dtm)[:2]                  # 0.815  0.005
+
+# Which points make up the two longest Vietoris-Rips loops? Points 70 onwards (counted from 0) are the outliers
+bars = vr.bars
+loops = np.flatnonzero(bars[:, 0] == 1)
+longest_two = loops[np.argsort(bars[loops, 1] - bars[loops, 2])[:2]]
+for i in longest_two:
+    on_cycle = {vertex for edge in vr.representative(i).cells for vertex in edge}
+    print(len(on_cycle), "points,", sum(v >= 70 for v in on_cycle), "of them outliers")   # 25 and 8, then 7 and 5
+```
+
+</div>
 </div>
 
-The MATLAB entry point takes `dtmK` and `dtmP` for the DTM-weighted Rips complex; it does not expose the weights themselves, so the average-weight comparison above has no MATLAB counterpart.
+The MATLAB and Python entry points take `dtmK` and `dtmP` (`dtm_k`, `dtm_p`) for the DTM-weighted Rips complex; they do not expose the weights themselves, so the average-weight comparison above has no counterpart there.

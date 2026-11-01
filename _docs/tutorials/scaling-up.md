@@ -123,6 +123,33 @@ isequal(sortrows(round(collapsed.toArray() * 1e6)), answers{1})   % true: the sa
 ```
 
 </div>
+<div class="tab" data-lang="Python">
+
+```python
+import numpy as np
+import tda4j
+
+points = np.loadtxt("_docs/tutorials/data/noisy-circle.csv", delimiter=",")
+
+def rounded(result):
+    """The bars rounded to 1e-6 and sorted, so that the barcodes of different engines can be compared."""
+    return sorted(map(tuple, np.round(result.bars * 1e6)))
+
+# Four engines; min_persistence=0 reports every bar, like the Scala script
+answers = [
+    rounded(tda4j.persistence(points, max_dimension=1, min_persistence=0, engine=engine))
+    for engine in ["naive", "chunks", "cohomology", "ripser"]
+]
+[len(a) for a in answers]              # 61 bars from each
+all(a == answers[0] for a in answers)  # True: the engines agree
+
+# Edge collapse: remove the edges of the Vietoris-Rips graph that cannot matter, before any triangle is built
+collapsed = tda4j.persistence(points, max_dimension=1, min_persistence=0, edge_collapse=True)
+collapsed.num_cells                    # 1547 simplices instead of 24711
+rounded(collapsed) == answers[0]       # True: the same barcode
+```
+
+</div>
 </div>
 
-The `engine` option takes `naive`, `chunks`, `cohomology` and `ripser`, and `edgeCollapse` applies to the Vietoris-Rips complex only.
+The `engine` option takes `naive`, `chunks`, `cohomology` and `ripser`, and `edgeCollapse` (`edge_collapse` in Python) applies to the Vietoris-Rips complex only.

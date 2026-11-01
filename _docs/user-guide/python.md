@@ -4,11 +4,28 @@ title: Using it from Python
 ---
 
 The `tda4j` Python package is the [MATLAB and Java interface](matlab.md) with NumPy in and out: the same library, running in
-a JVM that the package starts for you. Python 3.10 or newer, and Java 21 or newer on the machine.
+a JVM that the package starts for you. It needs Python 3.10 or newer, and Java 21 or newer on the machine (`java` on the
+`PATH`, or `JAVA_HOME`).
+
+### Install
+
+The package is not on PyPI yet, so `pip install tda4j` does not find it. Take `tda4j-VERSION-py3-none-any.whl` from the
+[releases](https://github.com/appliedtopology/tda4j/releases) and install that:
 
 ```
-pip install tda4j
+pip install tda4j-VERSION-py3-none-any.whl
 ```
+
+The wheel carries the library's jar, so there is nothing else to install. For the development version, build the wheel from
+a [source checkout](installation.md#from-source) (Java 21 and sbt 2):
+
+```
+sbt tda4j/assembly              # the fat jar
+python/scripts/bundle-jar.sh    # copies it into the package
+pip install python/
+```
+
+Without bundling, `TDA4J_JAR=/path/to/tda4j-VERSION-assembly.jar` points the package at a jar. A first call:
 
 ```python
 import numpy as np
@@ -24,9 +41,6 @@ result.bar_cells(4)        # (2, 3) and (0, 1, 2): the edge that opens that loop
 result.plot_barcode()      # a figure; in a notebook it shows itself, `.save("barcode.svg")` writes it
 ```
 
-The wheel carries the library's jar, so there is nothing else to install; from a source checkout, build the jar with
-`sbt tda4j/assembly` and set `TDA4J_JAR` to it (the `python/README.md` in the repository has the steps).
-
 ### Conventions
 
 * **Options** are keyword arguments in snake_case, and they are the options of the MATLAB and Java interface: `max_dimension=1`
@@ -36,7 +50,8 @@ The wheel carries the library's jar, so there is nothing else to install; from a
   option raises `ValueError` and lists the accepted ones. The defaults are the interface's: degrees 0 to 2, a bar shorter
   than 1% of the scale of the data is hidden (`result.all_bars` has every bar, `result.hidden_count` says how many were left out).
 * **Arrays** can be anything NumPy reads as numbers: arrays of any layout and type, lists, tuples. A point cloud has one row
-  per point; one-dimensional data is a column (`x.reshape(-1, 1)`).
+  per point (`np.loadtxt("points.csv", delimiter=",")` reads a CSV, `frame.to_numpy()` a pandas frame); one-dimensional
+  data is a column (`x.reshape(-1, 1)`).
 * **Numbering** is from 0 everywhere: bars, points, cells, cocycle indices. A bar is its row in `result.bars`.
 * **Errors** from the library are Python errors: `ValueError` for a bad argument, `IndexError`, `NotImplementedError`, and
   `tda4j.Tda4jError` for the rest.
@@ -79,9 +94,16 @@ The wheel carries the library's jar, so there is nothing else to install; from a
 * `boundary()` and `cells()`: the filtered complex as a boundary matrix in coordinate form, and its cells.
 * `plot_barcode()`, `plot_diagram()`, `plot_landscape(dim)`, `plot_persistence_image(dim)`, `plot_input()`, `plot_complex(at)`,
   `plot_representative(i)` and the `_3d` variants return a `Plot`: `svg()` and `html()` give its text, `save(path)` writes an
-  `.svg` or `.html` file, `view()` opens it in the library's live viewer, and a notebook shows it. `tda4j.side(a, b)`
+  `.svg` or `.html` file, `view()` opens it in the library's live viewer, and a notebook shows it. The [tweaks](plotting.md) that
+  take plain arguments are methods in snake_case that return a new plot: `plot.with_title("A circle").with_size(800, 600)`. `tda4j.side(a, b)`
   puts plots in one row, and `tda4j.set_plot_defaults("palette=print")` changes the look of the next ones.
 * `save(path)`, to be read back by `load_result`.
+
+### Tutorials
+
+Most [tutorials](../tutorials/index.md) show their code in a Python tab beside the Scala and MATLAB ones, starting with
+[finding a loop](../tutorials/find-a-loop.md), and [All the ways to call TDA4j](../tutorials/all-ways-to-call.md#python)
+does three small tasks in each language.
 
 ### Coming from ripser.py or GUDHI
 
@@ -91,5 +113,8 @@ The wheel carries the library's jar, so there is nothing else to install; from a
 ### What is not in the package
 
 The package is the interface of [MATLAB and Java](matlab.md), so what that interface does not have, Python does not: the typed
-Scala API, with its streams, engines and cursors, and the simplicial sets and group nerves of the `sset` add-on. A
-board of plots with a free layout (`TDA4j.layout`) is not wrapped yet; `tda4j.side` puts plots in a row.
+Scala API, with its streams, engines and cursors, and the simplicial sets and group nerves of the `sset` add-on. The
+tutorials on [Truchet tiles](../tutorials/truchet-tiles.md), [cup products](../tutorials/telling-spaces-apart.md) and
+[group cohomology](../tutorials/persistent-group-cohomology.md) are in that part, and have no Python tab. The
+tweaks of a plot that take Scala values (`withPoints(size = 3.5)`, a `Palette`) and a board of plots with a free layout
+(`TDA4j.layout`) are not wrapped; `tda4j.set_plot_defaults` changes the look of every plot, and `tda4j.side` puts plots in a row.

@@ -7,12 +7,14 @@ title: Tutorials for TDA4j
 
 Each tutorial takes one question and one or two small data sets, and works through to an answer, showing the code and
 what it prints. They assume no topology beyond the idea of a hole; the [user guide](../user-guide/index.md) has the
-complete lists of options. Every number quoted here is checked by a test that runs the same code; the MATLAB tabs are checked as the same calls made from Java, not in MATLAB itself.
+complete lists of options. Where the MATLAB and Python interfaces cover the task, the code is also shown in MATLAB and Python tabs
+(a choice of language stays chosen on the other pages). Every number quoted here is checked by a test that runs the same code; the
+Python tabs are run as they stand, and the MATLAB tabs are checked as the same calls made from Java, not in MATLAB itself.
 
 **Start here**
 
 * [All the ways to call TDA4j](all-ways-to-call.md): the same three tasks (a hand-built octahedron, a barcode from a file, circular
-  coordinates) from the command line, MATLAB, Scala, a lab, and an engine run by hand.
+  coordinates) from the command line, MATLAB, Python, Scala, a lab, and an engine run by hand.
 * [Finding a loop in noisy data](find-a-loop.md): a first barcode, how to read it, and which bars to ignore.
 
 **Point clouds**

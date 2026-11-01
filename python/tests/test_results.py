@@ -119,6 +119,17 @@ def test_plots_are_pictures_that_can_be_saved(tmp_path, square):
     assert "<svg" in result.plot_barcode(order="persistence").svg()
 
 
+def test_the_tweaks_of_a_plot_are_methods_that_return_a_new_plot(square):
+    figure = tda4j.persistence(square, max_dimension=1).plot_diagram()
+    tweaked = figure.with_title("A unit square").with_size(800, 600)
+    assert "A unit square" in tweaked.svg() and 'width="800"' in tweaked.svg() and 'height="600"' in tweaked.svg()
+    assert "A unit square" not in figure.svg()  # the figure itself is unchanged
+    with pytest.raises(AttributeError, match="no tweak 'with_nothing'"):
+        figure.with_nothing("x")
+    with pytest.raises(AttributeError):
+        figure.not_a_tweak
+
+
 def test_a_saved_result_reads_back_with_its_bars_and_representatives(tmp_path, circle):
     result = tda4j.persistence(circle(10), max_dimension=1)
     path = result.save(tmp_path / "result.json")
@@ -127,6 +138,16 @@ def test_a_saved_result_reads_back_with_its_bars_and_representatives(tmp_path, c
     i = loop_row(result)
     assert again.representative(i).cells == result.representative(i).cells
     assert again.bar_cells(i) == result.bar_cells(i)
+
+
+def test_a_relative_path_means_the_directory_python_is_in_not_the_one_the_jvm_started_in(tmp_path, monkeypatch, square):
+    # os.chdir moves Python (a notebook does it) but not the JVM's idea of its directory: relative paths are made absolute
+    monkeypatch.chdir(tmp_path)
+    result = tda4j.persistence(square, max_dimension=1)
+    assert result.save("result.json") == str(tmp_path / "result.json") and (tmp_path / "result.json").is_file()
+    assert np.array_equal(tda4j.load_result("result.json").bars, result.bars)
+    result.plot_barcode().save("barcode.svg")
+    assert (tmp_path / "barcode.svg").is_file()
 
 
 def test_loading_a_file_that_is_not_there_is_a_file_not_found_error(tmp_path):

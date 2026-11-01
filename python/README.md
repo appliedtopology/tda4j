@@ -26,7 +26,8 @@ It runs the library in a JVM, which starts when the first function needs it, so 
 (`JAVA_HOME` or `java` on the `PATH`). The wheel carries the library's jar; there is nothing to compile. To give the JVM
 a bigger heap, call `tda4j.start_jvm(["-Xmx16g"])` before the first computation.
 
-Documentation: <https://tda4j.appliedtopology.org/user-guide/python.html>. MIT license; source and issues:
+Documentation: <https://tda4j.appliedtopology.org/user-guide/python.html>, and the
+[tutorials](https://tda4j.appliedtopology.org/tutorials/), which show each task in a Python tab. MIT license; source and issues:
 <https://github.com/appliedtopology/tda4j>.
 
 ## From a source checkout

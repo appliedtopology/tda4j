@@ -127,6 +127,27 @@ clubs.toArray()         % exactly the same seven bars
 ```
 
 </div>
+<div class="tab" data-lang="Python">
+
+```python
+import numpy as np
+import tda4j
+
+# 6 people (rows) and 7 clubs (columns); inf means "never a member"
+relation = np.full((6, 7), np.inf)
+for person in range(6):
+    relation[person, person] = 1                # the person's own club, from time 1
+    relation[person, (person + 1) % 6] = 2      # the next person's club, from time 2
+relation[:, 6] = 5                              # a club everyone joins at time 5
+
+people = tda4j.persistence_from_relation(relation, max_dimension=1)
+clubs = tda4j.persistence_from_relation(relation, max_dimension=1, dual=True)
+
+people.bars                            # seven bars, one of them the loop (1, 2, 5)
+clubs.bars                             # exactly the same seven bars
+```
+
+</div>
 </div>
 
-`computeFromRelation` takes the relation as a matrix, with `Inf` for pairs that are never related; `dual` selects the transposed relation.
+`computeFromRelation` (`persistence_from_relation` in Python) takes the relation as a matrix, with `Inf` (`np.inf`) for pairs that are never related; `dual` selects the transposed relation.

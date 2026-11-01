@@ -170,6 +170,9 @@ a snapshot after 90 days.
   are done, `release.yml` builds the wheel, installs it into an empty environment and runs it, attaches it to the GitHub Release and
   skips the publish step; `twine upload python/dist/*.whl` of that wheel by hand does the same. A version with a suffix becomes
   a PEP 440 pre-release (`0.8.0-RC1` is `0.8.0rc1`, `-SNAPSHOT` or any other suffix `.dev0`), which `pip` does not install without `--pre`.
+  When the project is live on PyPI, the docs stop saying that it is not: in `README.md`, `_docs/user-guide/installation.md`,
+  `_docs/user-guide/python.md` and `_docs/user-guide/troubleshooting.md` (search for "not on PyPI"), `pip install tda4j-VERSION-py3-none-any.whl`
+  becomes `pip install tda4j`.
 
 - **`SONATYPE_USERNAME`** and **`SONATYPE_PASSWORD`** (secrets of the environment `sonatype`, for `snapshot.yml` only): the
   user name and password of a Central Portal user token (not the account's own login), as in the credentials file above.

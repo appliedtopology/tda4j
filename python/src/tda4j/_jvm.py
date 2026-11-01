@@ -19,7 +19,7 @@ import numpy as np
 FACADE = "org.appliedtopology.tda4j.matlab.TDA4j"
 
 _NO_JAR = (
-    "tda4j: no tda4j jar found. A wheel from PyPI carries one; from a source checkout, build it with "
+    "tda4j: no tda4j jar found. A wheel carries one; from a source checkout, build it with "
     "`sbt tda4j/assembly` and point TDA4J_JAR at target/out/jvm/scala-*/tda4j/tda4j-*-assembly.jar."
 )
 
@@ -128,6 +128,13 @@ def translating(target):
 # ---------------------------------------------------------------------------------------------------------------------
 # data going in
 # ---------------------------------------------------------------------------------------------------------------------
+
+def path_in(path) -> str:
+    """An absolute path, relative to Python's working directory. The JVM keeps the directory it started in as its own
+    (``os.chdir`` does not move it, and a relative path it reads or writes would mean two places), so paths are made
+    absolute here."""
+    return os.path.abspath(os.fspath(path))
+
 
 def points_in(points, name: str = "points"):
     """A ``double[][]`` from anything NumPy reads as a 2-D array with one row per point."""

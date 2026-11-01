@@ -123,6 +123,24 @@ TDA4j.eulerCurveFromPoints(points, {'maxSimplexDimension', '3', 'maxFiltrationVa
 ```
 
 </div>
+<div class="tab" data-lang="Python">
+
+```python
+import numpy as np
+import tda4j
+
+i = np.arange(30)
+points = np.column_stack([np.cos(i * 0.21), np.sin(i * 0.21)])
+
+curve = tda4j.euler_curve(points)       # simplices up to dimension 2, scales up to the enclosing radius
+curve(0.5)                              # the Euler characteristic at scale 0.5
+curve.sample(0, 1, 50)                  # 50 evenly spaced samples
+curve.scales, curve.values              # the steps themselves
+
+tda4j.euler_curve(points, max_simplex_dimension=3, max_filtration_value=1.0)
+```
+
+</div>
 </div>
 
 `maxSimplexDimension` (default 2) is the dimension of the largest simplices counted and `maxFiltrationValue` the largest
@@ -132,9 +150,9 @@ counts the cells of any other stream, an alpha complex or a cubical one for inst
 
 From JavaScript, `eulerCurve(points, { maxSimplexDimension: 3 })` returns an object with `scales` and `values` and the
 methods `at(t)` and `sample(tMin, tMax, resolution)`; `eulerCurveFromDistances` takes a distance matrix. From the command
-line, `tda4j --euler-curve points.csv` writes one `scale,value` line for each scale where the curve steps. MATLAB, JavaScript
-and the command line take a distance matrix as well as points (`eulerCurveFromDistanceMatrix`, `eulerCurveFromDistances`,
-`--input-format csv-distances`).
+line, `tda4j --euler-curve points.csv` writes one `scale,value` line for each scale where the curve steps. MATLAB, Python,
+JavaScript and the command line take a distance matrix as well as points (`eulerCurveFromDistanceMatrix`,
+`euler_curve_from_distances`, `eulerCurveFromDistances`, `--input-format csv-distances`).
 
 The [comparing barcodes](../tutorials/comparing-barcodes.md) tutorial uses the four diagram operations above. From MATLAB, these are methods of a
 result: `r1.bottleneckDistance(r2, dim)`, `wassersteinDistance`, `slicedWassersteinDistance`, `landscape`, `persistenceImage`,

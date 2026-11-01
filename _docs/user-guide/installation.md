@@ -82,13 +82,15 @@ See the [JavaScript page](javascript.md).
 
 ## Python
 
+Download `tda4j-VERSION-py3-none-any.whl` from the [releases](https://github.com/appliedtopology/tda4j/releases):
+
 ```
-pip install tda4j
+pip install tda4j-VERSION-py3-none-any.whl
 ```
 
 The wheel carries the library's jar and starts a JVM when the first function needs it, so Java 21 or newer has to be
-installed. The wheel is also attached to each [release](https://github.com/appliedtopology/tda4j/releases). See the
-[Python page](python.md).
+installed. The package is not on PyPI yet, so `pip install tda4j` does not find it. See the [Python page](python.md) for
+a first call and for building the wheel from a [source checkout](#from-source).
 
 ## Try it without installing anything to your project
 

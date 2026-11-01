@@ -188,6 +188,38 @@ norm(imageA(:) - imageEight(:))             % 0.163
 ```
 
 </div>
+<div class="tab" data-lang="Python">
+
+```python
+import numpy as np
+import tda4j
+
+def barcode(name):
+    points = np.loadtxt(f"_docs/tutorials/data/{name}.csv", delimiter=",")
+    return tda4j.persistence(points, max_dimension=1)
+
+circle_a, circle_b, eight = barcode("noisy-circle"), barcode("noisy-circle-b"), barcode("figure-eight")
+
+# Distances between the dimension-1 bars (the second argument is the dimension)
+circle_a.bottleneck_distance(circle_b, 1)       # 0.040
+circle_a.bottleneck_distance(eight, 1)          # 0.556
+circle_b.bottleneck_distance(eight, 1)          # 0.518
+circle_a.wasserstein_distance(circle_b, 1)      # 0.045
+circle_a.wasserstein_distance(eight, 1)         # 0.864
+circle_b.wasserstein_distance(eight, 1)         # 0.830
+
+# Landscapes: the first 3 levels, sampled at 100 points of [0, 2]
+landscape = lambda result: result.landscape(1, 3, 0, 2, 100)
+np.linalg.norm(landscape(circle_a) - landscape(circle_b))     # 0.279
+np.linalg.norm(landscape(circle_a) - landscape(eight))        # 2.430
+
+# Persistence images: sigma 0.1, birth and persistence both over [0, 2], 40 x 40 pixels, weight capped at 1
+image = lambda result: result.persistence_image(1, 0.1, (0, 2), (0, 2), (40, 40), weight_cap=1.0)
+np.linalg.norm(image(circle_a) - image(circle_b))             # 0.080
+np.linalg.norm(image(circle_a) - image(eight))                # 0.163
+```
+
+</div>
 </div>
 
-Through the facade, distances, landscapes and images always use the *complete* barcode of each result, including the short bars the Scala script set aside with `longerThanFraction()`. The bottleneck distance does not notice them; the Wasserstein distance, a sum, does, so it comes out slightly larger here (0.045 against 0.040, and 0.830 against 0.826).
+Through the facade (MATLAB and Python), distances, landscapes and images always use the *complete* barcode of each result, including the short bars the Scala script set aside with `longerThanFraction()`. The bottleneck distance does not notice them; the Wasserstein distance, a sum, does, so it comes out slightly larger here (0.045 against 0.040, and 0.830 against 0.826).

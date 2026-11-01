@@ -211,6 +211,39 @@ size(dark.toArrayUnfiltered(), 1)                                 % 221 bars in 
 ```
 
 </div>
+<div class="tab" data-lang="Python">
+
+```python
+import jpype
+import numpy as np
+import tda4j
+
+# The same image as the Scala script, with noise from the same Java random number generator
+tda4j.start_jvm()
+random = jpype.JClass("java.util.Random")(5)
+row, column = np.mgrid[0:28, 0:28]
+ring = np.hypot(row - 12, column - 12)
+blob = np.hypot(row - 23, column - 23)
+signal = np.where((ring >= 6) & (ring <= 8), 1.0, np.where(blob <= 2.5, 0.8, 0.0))
+noise = np.array([random.nextDouble() for _ in range(28 * 28)]).reshape(28, 28)
+pixels = signal + 0.1 * noise
+
+# min_persistence=0.3 keeps the bars longer than 0.3, like dark.longerThan(0.3) in the Scala script
+dark = tda4j.persistence_from_image(pixels, sublevel=True, min_persistence=0.3)
+dark.bars               # four rows: (0, 0, inf), (0, 0.001, 1.002), (1, 0.062, 1.099), (1, 0.064, 0.900)
+
+# With sublevel=False the facade works on the negated image: births and deaths are NEGATED intensities
+bright = tda4j.persistence_from_image(pixels, sublevel=False, min_persistence=0.3)
+bright.bars             # three rows: (0, -1.099, inf), (0, -0.900, -0.063), (1, -1.004, -0.001)
+
+# The fast engine gives the same bars
+fast = tda4j.persistence_from_image(pixels, sublevel=True, engine="fast-cubical", min_persistence=0.3)
+rows = lambda result: sorted(map(tuple, result.bars))
+rows(fast) == rows(dark)                       # True
+len(dark.all_bars)      # 221 bars in the full barcode
+```
+
+</div>
 </div>
 
-The facade takes an image as a matrix and has the engine choice as an option. `sublevel` false filters the *negated* image, which is why the bright features have negative births and deaths.
+The facade takes an image as a matrix (a NumPy array in Python, of any dimension) and has the engine choice as an option. `sublevel` false filters the *negated* image, which is why the bright features have negative births and deaths.
