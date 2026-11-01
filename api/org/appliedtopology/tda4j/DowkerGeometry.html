@@ -21,7 +21,7 @@
 </span></code></pre>
    <div class="buttons"></div>
   </div>
-  <p><code>R</code> need not come from a metric. The unfiltered Dowker complex is the case <code>R(x, w)</code> in <code>{0, Infinity}</code> (<a href="DowkerGeometry$.html#fromBoolean-75c">DowkerGeometry.fromBoolean</a>); the witness complex with <code>nu = 0</code> is the case <code>R</code> = landmark-to-witness distances.</p>
+  <p><code>R</code> need not come from a metric. The unfiltered Dowker complex is the case <code>R(x, w)</code> in <code>{0, Infinity}</code> (<a href="DowkerGeometry$.html#fromBoolean-75c">DowkerGeometry.fromBoolean</a>). With <code>R</code> the landmark-to-witness distances (<code>WitnessGeometry.D</code>) it is the Čech complex of the landmarks with the balls' common point required to be a witness. That is contained in every witness complex but is none of them: the lazy witness complex with <code>nu = 0</code> is its flag complex (the same edges).</p>
   <p>The filtration is monotone (<code>f(tau) &amp;lt;= f(sigma)</code> for <code>tau</code> a face of <code>sigma</code>, since the max over a subset is smaller for every <code>w</code>), vertices have values <code>min_w R(x, w)</code> that are generally nonzero, and the complex is not a flag complex, so the Ripser engines do not apply (MATLAB and the CLI also do not offer chunks for relations).</p>
   <p>'''Duality''': the complexes of <code>R</code> (on the rows) and of its transpose (<a href="DowkerGeometry.html#dual-0">dual</a>, on the columns) are homotopy equivalent at every <code>t</code>, and their persistence modules are isomorphic, so their barcodes agree. This holds for the barcodes without zero-length bars, the default: with <code>includeZeroLength = true</code> the two sides differ, since each vertex contributes an H₀ birth and the sides have different numbers of vertices.</p>
  </div>
@@ -44,7 +44,7 @@
     Source
    </dt>
    <dd class="body-medium">
-    <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/DowkerStream.scala#L24" target="_blank">DowkerStream.scala</a>
+    <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/DowkerStream.scala#L27" target="_blank">DowkerStream.scala</a>
    </dd>
    <dt class="body-small">
     Graph
@@ -107,6 +107,41 @@ node3 -> node2;
          <button class="icon-button show-content expand"></button>
          <h4 class="groupHeader h200">Concrete methods</h4>
         </div>
+        <div class="documentableElement" id="bestWitness-516">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="DowkerGeometry.html#bestWitness-516" t="n" class="documentableName ">bestWitness</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">sigma</span>: <a href="../tda4j.html#Simplex-0" t="t">Simplex</a>[<span data-unresolved-link="" t="t">Int</span>]): <span data-unresolved-link="" t="t">Int</span>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>The column that sees every row of <code>sigma</code> soonest: the <code>w</code> attaining <a href="DowkerGeometry.html#filtrationValue-c82">filtrationValue</a>, the lowest on ties.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p>The column that sees every row of <code>sigma</code> soonest: the <code>w</code> attaining <a href="DowkerGeometry.html#filtrationValue-c82">filtrationValue</a>, the lowest on ties.</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/DowkerStream.scala#L73" target="_blank">DowkerStream.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
         <div class="documentableElement" id="filtrationValue-fffff4fb">
          <div class="documentableElement-expander">
           <button class="icon-button ar show-content"></button>
@@ -134,7 +169,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/DowkerStream.scala#L34" target="_blank">DowkerStream.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/DowkerStream.scala#L37" target="_blank">DowkerStream.scala</a>
               </dd>
              </dl>
             </div>
@@ -169,7 +204,79 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/DowkerStream.scala#L51" target="_blank">DowkerStream.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/DowkerStream.scala#L54" target="_blank">DowkerStream.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="lift-fffff924">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="DowkerGeometry.html#lift-fffff924" t="n" class="documentableName ">lift</a>[<span t="k"></span><span data-unresolved-link="" t="t">C</span>](<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">chain</span>: <a href="Chain.html" t="t">Chain</a>[<a href="../tda4j.html#Simplex-0" t="t">Simplex</a>[<span data-unresolved-link="" t="t">Int</span>], <span data-unresolved-link="" t="t">C</span>])(<span t="k">using </span><span t="k"></span><span data-unresolved-link="" t="n">field</span>: <a href="Field.html" t="t">Field</a> { <span t="k">type </span>Self<span t="k"> = </span><span data-unresolved-link="" t="t">C</span>; }): <a href="Chain.html" t="t">Chain</a>[<a href="../tda4j.html#Simplex-0" t="t">Simplex</a>[<span data-unresolved-link="" t="t">Int</span>], <span data-unresolved-link="" t="t">C</span>]
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p><code>chain</code>, a chain of the complex on the rows, carried to the complex on the columns (<a href="DowkerGeometry.html#dual-0">dual</a>) by the chain map behind Dowker duality: a vertex goes to its <a href="DowkerGeometry.html#bestWitness-516">bestWitness</a>, and a simplex <code>sigma</code> to the cone from <code>bestWitness(sigma)</code> over the image of its boundary. Every simplex of the image is witnessed, on the column side, by a row of <code>chain</code> within the value of the simplex of <code>chain</code> it came from, so a cycle of the row complex at <code>t</code> goes to a cycle of the column complex at <code>t</code>. The map is an isomorphism of persistent homology: a representative of a bar goes to a representative of the same bar on the other side, and a cycle that dies at <code>d</code> to one that dies at <code>d</code>. A <code>k</code>-simplex has at most <code>(k+1)!</code> simplices in its image.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p><code>chain</code>, a chain of the complex on the rows, carried to the complex on the columns (<a href="DowkerGeometry.html#dual-0">dual</a>) by the chain map behind Dowker duality: a vertex goes to its <a href="DowkerGeometry.html#bestWitness-516">bestWitness</a>, and a simplex <code>sigma</code> to the cone from <code>bestWitness(sigma)</code> over the image of its boundary. Every simplex of the image is witnessed, on the column side, by a row of <code>chain</code> within the value of the simplex of <code>chain</code> it came from, so a cycle of the row complex at <code>t</code> goes to a cycle of the column complex at <code>t</code>. The map is an isomorphism of persistent homology: a representative of a bar goes to a representative of the same bar on the other side, and a cycle that dies at <code>d</code> to one that dies at <code>d</code>. A <code>k</code>-simplex has at most <code>(k+1)!</code> simplices in its image.</p>
+              <p>For landmark-to-point distances (<code>WitnessGeometry.D</code>) the columns are the points, so this puts a landmark cycle on the data: a loop through landmarks <code>l0, l1, ...</code> becomes the loop <code>l0, w01, l1, w12, ...</code>, where <code>w01</code> is the point that witnesses the edge <code>l0 l1</code>. <a href="Dowker$.html#lift-a83">Dowker.lift</a> does it for every bar of a diagram.</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/DowkerStream.scala#L97" target="_blank">DowkerStream.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="liftCocycle-97d">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="DowkerGeometry.html#liftCocycle-97d" t="n" class="documentableName ">liftCocycle</a>[<span t="k"></span><span data-unresolved-link="" t="t">C</span>](<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">cocycle</span>: <a href="Chain.html" t="t">Chain</a>[<a href="../tda4j.html#Simplex-0" t="t">Simplex</a>[<span data-unresolved-link="" t="t">Int</span>], <span data-unresolved-link="" t="t">C</span>], <span t="k"></span><span data-unresolved-link="" t="n">before</span>: <span data-unresolved-link="" t="t">Double</span>)(<span t="k">using </span><span t="k"></span><span data-unresolved-link="" t="n">field</span>: <a href="Field.html" t="t">Field</a> { <span t="k">type </span>Self<span t="k"> = </span><span data-unresolved-link="" t="t">C</span>; }): <a href="Chain.html" t="t">Chain</a>[<a href="../tda4j.html#Simplex-0" t="t">Simplex</a>[<span data-unresolved-link="" t="t">Int</span>], <span data-unresolved-link="" t="t">C</span>]
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p><code>cocycle</code>, a cocycle of the complex on the rows, carried to the complex on the columns: its value on a simplex <code>tau</code> of the columns is its value on the image of <code>tau</code> under the chain map back to the rows (<code>dual.lift</code>). It is evaluated on every simplex of the columns, of the dimension of <code>cocycle</code>, whose value is below <code>before</code>, and is zero elsewhere. Of a cocycle of the row complex at every <code>t &amp;lt; before</code> this makes a cocycle of the column complex at every <code>t &amp;lt; before</code>, and the map is an isomorphism of persistent cohomology: the cocycle of a bar <code>[b, d)</code>, lifted with <code>before = d</code>, is a cocycle of the same bar on the other side, a nonzero class from <code>b</code> on and a coboundary before. Its integer values are sums of at most <code>(k+1)!</code> values of <code>cocycle</code>, for a <code>k</code>-cocycle.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p><code>cocycle</code>, a cocycle of the complex on the rows, carried to the complex on the columns: its value on a simplex <code>tau</code> of the columns is its value on the image of <code>tau</code> under the chain map back to the rows (<code>dual.lift</code>). It is evaluated on every simplex of the columns, of the dimension of <code>cocycle</code>, whose value is below <code>before</code>, and is zero elsewhere. Of a cocycle of the row complex at every <code>t &amp;lt; before</code> this makes a cocycle of the column complex at every <code>t &amp;lt; before</code>, and the map is an isomorphism of persistent cohomology: the cocycle of a bar <code>[b, d)</code>, lifted with <code>before = d</code>, is a cocycle of the same bar on the other side, a nonzero class from <code>b</code> on and a coboundary before. Its integer values are sums of at most <code>(k+1)!</code> values of <code>cocycle</code>, for a <code>k</code>-cocycle.</p>
+              <p>The column complex is much larger than the row complex when there are many more columns than rows, as for landmark-to-point distances, where the result is a cochain on the points: <a href="Dowker$.html#lift-a83">Dowker.lift</a> does it for every bar of a diagram of cocycles, and <code>CircularCoordinates</code> reads the result.</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/DowkerStream.scala#L120" target="_blank">DowkerStream.scala</a>
               </dd>
              </dl>
             </div>
@@ -212,7 +319,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/DowkerStream.scala#L66" target="_blank">DowkerStream.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/DowkerStream.scala#L69" target="_blank">DowkerStream.scala</a>
               </dd>
              </dl>
             </div>
@@ -242,7 +349,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/DowkerStream.scala#L25" target="_blank">DowkerStream.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/DowkerStream.scala#L28" target="_blank">DowkerStream.scala</a>
               </dd>
              </dl>
             </div>
@@ -272,7 +379,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/DowkerStream.scala#L26" target="_blank">DowkerStream.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/DowkerStream.scala#L29" target="_blank">DowkerStream.scala</a>
               </dd>
              </dl>
             </div>
@@ -302,7 +409,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/DowkerStream.scala#L24" target="_blank">DowkerStream.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/DowkerStream.scala#L27" target="_blank">DowkerStream.scala</a>
               </dd>
              </dl>
             </div>

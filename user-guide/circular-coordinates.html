@@ -166,6 +166,22 @@
   </div>
   <p>The <code>input</code> is what the diagram was computed from, as <code>Persistence</code> took it (points, a metric space or a stream), and <code>complex</code> the construction a point cloud was turned into; the diagram does not remember them. Choose the loop with <code>bar</code> (counted in the order of <code>h1Bars(diagram)</code>) and the scale with <code>r</code>, between its birth and death. The field is the diagram's own, so its <code>characteristic</code> must be an odd prime (the default, 17, will do); over 2 or the reals the cocycle has no integer lift, and the call says so.</p>
   <p>With <code>representatives = Representatives.Cocycles</code> the cocycle of the bar is read off the diagram, restricted to the complex at <code>r</code> and checked exactly over the integers. A diagram of cycles, which is what <code>Persistence</code> gives by default, has the class recovered by one more cohomology computation of that complex, matched to the bar by its birth. If the <code>input</code> is not what the diagram was computed from, the cocycle will not fit it, and the error says to pass the same complex.</p>
+  <p><strong>From landmarks, on every point.</strong> The Dowker complex of the distances from a few landmarks to every point has the loops of the point cloud at a fraction of its size. Compute the diagram on the landmarks with cocycles, move them to the points with <code>Dowker.lift</code>, and pass the complex on the points as the <code>input</code>: every point gets a coordinate.</p>
+  <div class="snippet mono-small-block" scala-snippet="" runnable="">
+   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import scala.language.experimental.modularity
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.*
+</span><span line-number="3" class=""><span class="tooltip-container"></span>
+</span><span line-number="4" class=""><span class="tooltip-container"></span>val points = Array.tabulate(120)(i =&gt; Array(math.cos(i * 0.0524), math.sin(i * 0.0524)))
+</span><span line-number="5" class=""><span class="tooltip-container"></span>val metricSpace = EuclideanMetricSpace(points)
+</span><span line-number="6" class=""><span class="tooltip-container"></span>val geometry = WitnessGeometry(metricSpace, LandmarkSelector.maxmin(metricSpace, numLandmarks = 10).landmarks)
+</span><span line-number="7" class=""><span class="tooltip-container"></span>
+</span><span line-number="8" class=""><span class="tooltip-container"></span>val onLandmarks = Persistence(Dowker(geometry.D, maxDimension = 1), representatives = Representatives.Cocycles)
+</span><span line-number="9" class=""><span class="tooltip-container"></span>val onPoints = Dowker(geometry.D, maxDimension = 1, dual = true)   // the complex on the points
+</span><span line-number="10" class=""><span class="tooltip-container"></span>CircularCoordinates(Dowker.lift(onLandmarks, geometry.D), onPoints).theta.size   // 120
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+  <p>The complex on the points is dense: two points are joined as soon as one landmark's ball holds both, and the call checks the cocycle on every triangle of it at <code>r</code>. That suits a few hundred points; for more, cut the complex on the points at <code>r</code> with <code>maxFiltrationValue</code>, or expect it not to fit in memory. The <a href="user-guide/topological-spaces/dowker-complexes.html">Dowker complexes</a> page says what the lift does.</p>
   <p>When shorter loops nested inside the one you chose are also alive at <code>r</code>, its class is only defined up to adding theirs, and each engine picks its own representative, so the coordinate you get depends on the engine (every choice is a valid circle map). Choose <code>r</code> where only the loops you ask for are alive to get the same answer from every route.</p>
  </section>
  <section id="toroidal-coordinates">

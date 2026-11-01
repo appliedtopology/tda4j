@@ -131,6 +131,52 @@ node3 -> node2;
           </div>
          </div>
         </div>
+        <div class="documentableElement" id="lift-a83">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="Dowker$.html#lift-a83" t="n" class="documentableName ">lift</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">diagram</span>: <a href="PersistenceDiagram.html" t="t">PersistenceDiagram</a>[<a href="../tda4j.html#Simplex-0" t="t">Simplex</a>[<span data-unresolved-link="" t="t">Int</span>]], <span t="k"></span><span data-unresolved-link="" t="n">relation</span>: <span data-unresolved-link="" t="t">Array</span>[<span data-unresolved-link="" t="t">Array</span>[<span data-unresolved-link="" t="t">Double</span>]], <span t="k"></span><span data-unresolved-link="" t="n">dual</span>: <span data-unresolved-link="" t="t">Boolean</span> = ...): <a href="PersistenceDiagram$.html#Of-0" t="t">Of</a>[<a href="../tda4j.html#Simplex-0" t="t">Simplex</a>[<span data-unresolved-link="" t="t">Int</span>], diagram.<a href="PersistenceDiagram.html#Coefficient-0" t="t">Coefficient</a>]
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>The same diagram with every representative moved to the other side of the relation: from the rows to the columns, or with <code>dual = true</code> (for a diagram computed with <code>dual = true</code>) from the columns to the rows. The bars are the same. A cycle goes by <a href="DowkerGeometry.html#lift-fffff924">DowkerGeometry.lift</a> to a cycle of the other side's complex at the bar's birth that represents the same bar there; a cocycle goes by <a href="DowkerGeometry.html#liftCocycle-97d">DowkerGeometry.liftCocycle</a> to a cocycle of the other side's complex below the bar's death, again of the same bar. Build the complex on the smaller side and read the representatives on the side you want:</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p>The same diagram with every representative moved to the other side of the relation: from the rows to the columns, or with <code>dual = true</code> (for a diagram computed with <code>dual = true</code>) from the columns to the rows. The bars are the same. A cycle goes by <a href="DowkerGeometry.html#lift-fffff924">DowkerGeometry.lift</a> to a cycle of the other side's complex at the bar's birth that represents the same bar there; a cocycle goes by <a href="DowkerGeometry.html#liftCocycle-97d">DowkerGeometry.liftCocycle</a> to a cocycle of the other side's complex below the bar's death, again of the same bar. Build the complex on the smaller side and read the representatives on the side you want:</p>
+              <div class="snippet mono-small-block">
+               <pre><code class="language-"><span line-number="1" class=""><span class="tooltip-container"></span>val geometry = WitnessGeometry(metricSpace, landmarks)   // landmarks (rows) to every point (columns)
+</span><span line-number="2" class=""><span class="tooltip-container"></span>val diagram = Persistence(Dowker(geometry.D, maxDimension = 1))
+</span><span line-number="3" class=""><span class="tooltip-container"></span>val onPoints = Dowker.lift(diagram, geometry.D)          // representatives on the points' own numbers
+</span><span line-number="4" class=""><span class="tooltip-container"></span>
+</span><span line-number="5" class=""><span class="tooltip-container"></span>val cocycles = Persistence(Dowker(geometry.D, maxDimension = 1), representatives = Representatives.Cocycles)
+</span><span line-number="6" class=""><span class="tooltip-container"></span>CircularCoordinates(Dowker.lift(cocycles, geometry.D), Dowker(geometry.D, maxDimension = 1, dual = true))
+</span></code></pre>
+               <div class="buttons"></div>
+              </div>
+              <p>The last line gives every point a circle coordinate from a computation on the landmarks: <code>CircularCoordinates</code> takes the lifted diagram with the complex on the points. A lifted cocycle is a cochain on every simplex of its dimension on the other side below the bar's death (below the diagram's last value, for a bar that does not die), which for many points and degree 2 is large. The lifted bars record no birth and death cells: those are cells of the side the diagram was computed on.</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Complexes.scala#L132" target="_blank">Complexes.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
        </div>
       </section>
      </div>

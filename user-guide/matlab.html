@@ -186,7 +186,7 @@
     </tr>
     <tr>
      <td><code>computeFromRelation(relation, options)</code></td>
-     <td>the Dowker complex of a relation: <code>relation(x, w)</code> is the strength of the tie between row <code>x</code> and column <code>w</code> (smaller is stronger, <code>Infinity</code> for never, non-negative); it need not be square or symmetric. Options: <code>engine</code> (<code>naive</code>, the default, or <code>cohomology</code>), <code>maxDimension</code>, <code>maxFiltrationValue</code> (default <code>Infinity</code>), <code>dual</code>, <code>field</code>, <code>prime</code>, <code>epsilon</code>, and the bar options</td>
+     <td>the Dowker complex of a relation: <code>relation(x, w)</code> is the strength of the tie between row <code>x</code> and column <code>w</code> (smaller is stronger, <code>Infinity</code> for never, non-negative); it need not be square or symmetric. Options: <code>engine</code> (<code>naive</code>, the default, or <code>cohomology</code>), <code>maxDimension</code>, <code>maxFiltrationValue</code> (default <code>Infinity</code>), <code>dual</code>, <code>representativesOn</code> (<code>rows</code> or <code>columns</code>: the side the representatives are on, by default the side built; with landmark-to-point distances <code>columns</code> gives cycles or cocycles on the points, see <a href="user-guide/topological-spaces/dowker-complexes.html">Dowker complexes</a>), <code>field</code>, <code>prime</code>, <code>epsilon</code>, and the bar options</td>
     </tr>
     <tr>
      <td><code>selectLandmarksFromPoints(points, options)</code>, <code>selectLandmarksFromDistanceMatrix(distances, options)</code></td>

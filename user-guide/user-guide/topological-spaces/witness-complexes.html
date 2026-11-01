@@ -144,7 +144,7 @@
    <div class="buttons"></div>
   </div>
   <p><code>LandmarkSelector.maxmin</code> picks landmarks by furthest-point sampling (every point ends up within the covering radius <code>R</code> of a landmark); <code>LandmarkSelector.random(metricSpace, n, seed)</code> is cheaper, with no such guarantee. Both work from any metric space, so from a distance matrix too.</p>
-  <p>The vertices of the complex are <strong>landmark numbers</strong> <code>0 until landmarks.size</code>; <code>landmarks(i)</code> is the point that landmark <code>i</code> is. A common choice of <code>maxFiltrationValue</code> is <code>2R</code>, as in the JavaPlex tutorials.</p>
+  <p>The vertices of the complex are <strong>landmark numbers</strong> <code>0 until landmarks.size</code>; <code>landmarks(i)</code> is the point that landmark <code>i</code> is. For representatives that run through the data points instead, compute the Dowker complex of the landmark-to-point distances and lift them: see <a href="dowker-complexes.html">Dowker complexes</a>. A common choice of <code>maxFiltrationValue</code> is <code>2R</code>, as in the JavaPlex tutorials.</p>
   <p>Two variants:</p>
   <ul>
    <li><strong><code>Witness.Variant.Lazy</code></strong> (the default; JavaPlex's <code>LazyWitnessStream</code>): a flag complex, so every engine applies, including Ripser on the <code>WitnessMetricSpace</code>. <code>nu</code> (0, 1 or 2, default 2) sets how forgiving a witness is.</li>

@@ -174,13 +174,13 @@
 </span></code></pre>
    <div class="buttons"></div>
   </div>
-  <p>The barcodes are <strong>exactly the same</strong>. This is <strong>Dowker duality</strong>, a theorem: the complex of the rows and the complex of the columns of a relation have the same persistent homology. (The two complexes are different, and so are their zero-length bars, which carry no information and are left out.) In practice it is a freedom: build the complex on whichever side is smaller (people or clubs, genes or drugs) and you get the same loops. It is also a good check on your data pipeline: if the two sides ever disagree, something is wrong with the table.</p>
+  <p>The barcodes are <strong>exactly the same</strong>. This is <strong>Dowker duality</strong>, a theorem: the complex of the rows and the complex of the columns of a relation have the same persistent homology. (The two complexes are different, and so are their zero-length bars, which carry no information and are left out.) In practice it is a freedom: build the complex on whichever side is smaller (people or clubs, genes or drugs) and you get the same loops. The representatives follow the side you built, and <code>Dowker.lift(people, relation)</code> carries them across: the loop of people becomes a loop of clubs. It is also a good check on your data pipeline: if the two sides ever disagree, something is wrong with the table.</p>
  </section>
  <section id="on-your-own-tables">
   <h2 class="h500"><a href="#on-your-own-tables" class="anchor"></a>On your own tables</h2>
   <ul>
    <li>A <strong>boolean</strong> relation (member or not, no strengths) is the special case where every cost is 0 or never; <code>DowkerGeometry.fromBoolean</code> builds one for you, and the barcode degenerates to the classical Dowker complex, a plain simplicial complex with no filtration.</li>
-   <li>A <strong>distance matrix between two different sets</strong> is a perfectly good relation, and so is the matrix of distances from landmarks to witnesses (that is the witness complex, see <a href="choosing-a-complex.html">Choosing a complex</a>).</li>
+   <li>A <strong>distance matrix between two different sets</strong> is a perfectly good relation, and so is the matrix of distances from a few landmarks to all the data points: a set of landmarks is then a simplex when one data point is close to all of them, a stricter cousin of the witness complex of <a href="choosing-a-complex.html">Choosing a complex</a> (the <a href="../user-guide/user-guide/topological-spaces/dowker-complexes.html">user guide</a> has the difference).</li>
    <li>The command line reads a relation from a CSV file with <code>--input-format csv-relation</code> (and <code>--dual</code> for the other side), and MATLAB has <code>computeFromRelation</code>; both are described in the <a href="../user-guide/user-guide/topological-spaces/dowker-complexes.html">user guide</a>.</li>
   </ul>
  </section>
