@@ -177,7 +177,7 @@ jobs:
       - name: Setup sbt launcher
         uses: sbt/setup-sbt@v1
       - name: Setup Python 3.13
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: "3.13"
       - name: Build the fat jar and the wheel
@@ -195,7 +195,7 @@ jobs:
           cp -r python/tests "$RUNNER_TEMP/py-tests"
           cd "$RUNNER_TEMP" && "$RUNNER_TEMP/py313/bin/python" -m pytest py-tests -q
       - name: Setup Python 3.10
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: "3.10"
       - name: Test the wheel on Python 3.10
