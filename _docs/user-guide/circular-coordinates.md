@@ -60,6 +60,28 @@ has the class recovered by one more cohomology computation of that complex, matc
 `input` is not what the diagram was computed from, the cocycle will not fit it, and the error says to pass the same
 complex.
 
+**From landmarks, on every point.** The Dowker complex of the distances from a few landmarks to every point has the
+loops of the point cloud at a fraction of its size. Compute the diagram on the landmarks with cocycles, move them to the
+points with `Dowker.lift`, and pass the complex on the points as the `input`: every point gets a coordinate.
+
+```scala 3
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+
+val points = Array.tabulate(120)(i => Array(math.cos(i * 0.0524), math.sin(i * 0.0524)))
+val metricSpace = EuclideanMetricSpace(points)
+val geometry = WitnessGeometry(metricSpace, LandmarkSelector.maxmin(metricSpace, numLandmarks = 10).landmarks)
+
+val onLandmarks = Persistence(Dowker(geometry.D, maxDimension = 1), representatives = Representatives.Cocycles)
+val onPoints = Dowker(geometry.D, maxDimension = 1, dual = true)   // the complex on the points
+CircularCoordinates(Dowker.lift(onLandmarks, geometry.D), onPoints).theta.size   // 120
+```
+
+The complex on the points is dense: two points are joined as soon as one landmark's ball holds both, and the call
+checks the cocycle on every triangle of it at `r`. That suits a few hundred points; for more, cut the complex on the
+points at `r` with `maxFiltrationValue`, or expect it not to fit in memory. The
+[Dowker complexes](topological-spaces/dowker-complexes.md) page says what the lift does.
+
 When shorter loops nested inside the one you chose are also alive at `r`, its class is only defined up to adding theirs,
 and each engine picks its own representative, so the coordinate you get depends on the engine (every choice is a valid
 circle map). Choose `r` where only the loops you ask for are alive to get the same answer from every route.

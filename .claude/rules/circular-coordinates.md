@@ -26,7 +26,9 @@ remember its complex); the field is the diagram's (odd prime only). `diagram.rep
 mod p then over Z; any other diagram has the class recovered by `CellularCohomologyEngine` on `K_r`, matched by birth.
 `compute(metricSpace, ...)` keeps its own VR front half. **A bar's class is defined only modulo the shorter bars nested
 in it**: with such bars alive at `r` the engines' coordinates differ (all valid), so cross-route tests need `r` where
-exactly the asked-for loops are alive. `WORKLOG-circular-from-diagram.md`.
+exactly the asked-for loops are alive. `WORKLOG-circular-from-diagram.md`. A Dowker diagram of cocycles lifted to the
+points (`Dowker.lift`) with the points' Dowker complex as `input` gives every point a coordinate; that complex is dense
+(14 s at 400 points capped at `r`, out of memory uncapped), `WORKLOG-dual-witness-complex.md`.
 
 **Toroidal coordinates** (`computeToroidal`, Scoccola et al. 2022, arXiv:2212.07201): combines `k` *simultaneously*-alive
 H¹ classes (common `r`, same connected component of `K_r`, checked) into one torus-valued map: `LatticeReduction` (LLL,

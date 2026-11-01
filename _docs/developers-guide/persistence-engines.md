@@ -413,7 +413,7 @@ listed below.
 | `alpha`                       | `cohomology`         | **no** — no notion of a Vietoris-Rips complex at all   | yes     | **no** — known stall/OOM risk | yes | **no** | **yes** — only a triangulating `alphaBackend` (`default`, `bowyer-watson`, `helix`), any ambient dimension `>= 2` |
 | `sheehy-rips`                 | `cohomology`         | **no** — a simplex's value is not the maximum ambient pairwise distance among its vertices (some pairs sparsified away, others excluded outright) | yes | yes | yes | **no** | **no** |
 | cubical (`computeFromCubicalImage`/`computeFromImage`, no `complex` key) | `fast-cubical` (2-D and up) | **no** — `PackedRipserCohomologyEngine` is specialized to `Simplex[Int]` | yes | yes | yes | **yes** — any ambient dimension `>= 2` | **no** |
-| Dowker relation (`computeFromRelation`, no `complex` key) | `cohomology` | **no** — not a flag complex (a witness for a whole simplex need not witness any of its edges) | yes | **no** — same conservative refusal `witness`/general has (use `naive`/`cohomology`) | yes | **no** | **no** |
+| Dowker relation (`computeFromRelation`, no `complex` key) | `cohomology` | **no** — not a flag complex (edges seen by different witnesses need not have one witness for the whole simplex) | yes | **no** — same conservative refusal `witness`/general has (use `naive`/`cohomology`) | yes | **no** | **no** |
 | simplicial sets               | *(no `matlab`/`cli` entry point at all — construct `SimplicialSetStream`/`FilteredSimplicialSetStream` and drive any generic engine directly)* | | | | | | |
 
 Unsupported combinations fall into a few categories:

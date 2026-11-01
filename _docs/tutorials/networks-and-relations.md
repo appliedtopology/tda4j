@@ -69,8 +69,9 @@ clubs.triples.sorted == people.triples.sorted    // true
 The barcodes are **exactly the same**. This is **Dowker duality**, a theorem: the complex of the rows and the complex of the
 columns of a relation have the same persistent homology. (The two complexes are different, and so are their zero-length bars,
 which carry no information and are left out.) In practice it is a freedom: build the complex on whichever side is smaller
-(people or clubs, genes or drugs) and you get the same loops. It is also a good check on your data pipeline: if the two
-sides ever disagree, something is wrong with the table.
+(people or clubs, genes or drugs) and you get the same loops. The representatives follow the side you built, and
+`Dowker.lift(people, relation)` carries them across: the loop of people becomes a loop of clubs. It is also a good
+check on your data pipeline: if the two sides ever disagree, something is wrong with the table.
 
 ## On your own tables
 
@@ -78,7 +79,9 @@ sides ever disagree, something is wrong with the table.
   `DowkerGeometry.fromBoolean` builds one for you, and the barcode degenerates to the classical Dowker complex, a plain
   simplicial complex with no filtration.
 * A **distance matrix between two different sets** is a perfectly good relation, and so is the matrix of distances from
-  landmarks to witnesses (that is the witness complex, see [Choosing a complex](choosing-a-complex.md)).
+  a few landmarks to all the data points: a set of landmarks is then a simplex when one data point is close to all of
+  them, a stricter cousin of the witness complex of [Choosing a complex](choosing-a-complex.md) (the
+  [user guide](../user-guide/topological-spaces/dowker-complexes.md) has the difference).
 * The command line reads a relation from a CSV file with `--input-format csv-relation` (and `--dual` for the other side), and
   MATLAB has `computeFromRelation`; both are described in the [user guide](../user-guide/topological-spaces/dowker-complexes.md).
 

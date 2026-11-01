@@ -85,9 +85,9 @@ private object CoefficientKind:
   * defaults are listed in the user guide's "Calling from MATLAB or Java" page: `complex`, `engine`, `maxDimension`,
   * `maxFiltrationValue`, `field`, `prime`, `epsilon`, `minPersistence`, `minPersistenceFraction`, `includeZeroLength`,
   * `alphaBackend`, `requireValidTriangulation`, `dtmK`, `dtmQ`, `dtmP`, `sparseEpsilon`, `numLandmarks`,
-  * `witnessVariant`, `landmarkSelector`, `landmarkSeed`, `nu`, `edgeCollapse`, `sublevel`, `nanMask`, `dual`. An
-  * unknown option, an unknown value, or a combination that does not apply (an engine for a complex it cannot read)
-  * throws `IllegalArgumentException` naming it, before anything is computed.
+  * `witnessVariant`, `landmarkSelector`, `landmarkSeed`, `nu`, `edgeCollapse`, `sublevel`, `nanMask`, `dual`,
+  * `representativesOn`. An unknown option, an unknown value, or a combination that does not apply (an engine for a
+  * complex it cannot read) throws `IllegalArgumentException` naming it, before anything is computed.
   *
   * By default a result reports the essential bars and the bars longer than 1% of the input's scale (its minimum
   * enclosing radius, or the value range of an image or relation); zero-length bars are left out unless
@@ -258,7 +258,10 @@ object TDA4j:
     * column `w` (smaller is stronger, `Infinity` for never; non-negative). The matrix need not be square or symmetric.
     * Options: `engine` (`naive`, the default, or `cohomology`: the complex is not a flag complex), `maxDimension`
     * (default 2), `maxFiltrationValue` (default `Infinity`), `dual` (`true` for the complex on the columns, which has
-    * the same diagram), `field`, `prime`, `epsilon`, and the bar options.
+    * the same diagram), `representativesOn` (`rows` or `columns`: the side the representatives are on, by default the
+    * side the complex is built on; the other side's are Dowker's image of them, cycles or cocycles), `field`, `prime`,
+    * `epsilon`, and the bar options. The bars' birth and death cells and the boundary matrix are always those of the
+    * side the complex is built on.
     */
   def computeFromRelation(relation: Array[Array[Double]], options: Array[String]): PersistenceResult =
     validateRelation(relation)
@@ -1064,6 +1067,7 @@ object TDA4j:
     "maxdimension",
     "maxfiltrationvalue",
     "dual",
+    "representativeson",
     "field",
     "prime",
     "epsilon",
@@ -2323,6 +2327,13 @@ object TDA4j:
     val maxFiltrationValue: Option[Double] =
       opts.get("maxfiltrationvalue").map(parseDoubleOption("maxFiltrationValue", _))
     val dual = opts.get("dual").exists(v => parseBooleanOption("dual", v))
+    val onColumns = opts.get("representativeson").map(_.toLowerCase) match
+      case None            => dual
+      case Some("rows")    => false
+      case Some("columns") => true
+      case Some(other)     =>
+        throw new IllegalArgumentException(s"representativesOn must be 'rows' or 'columns', got '$other'")
+    val liftRepresentatives = onColumns != dual
     dispatchByField(opts) { [C] => (toDouble: C => Double) =>
       computeDowker[C](
         relation,
@@ -2331,6 +2342,7 @@ object TDA4j:
         maxDimension,
         maxFiltrationValue,
         dual,
+        liftRepresentatives,
         wantsZeroLength(opts),
         toDouble
       )
@@ -2346,6 +2358,7 @@ object TDA4j:
     requestedMaxDimension: Int,
     maxFiltrationValue: Option[Double],
     dual: Boolean,
+    liftRepresentatives: Boolean,
     includeZeroLength: Boolean,
     toDouble: C => Double
   )(using C is Field): PersistenceResult =
@@ -2353,6 +2366,17 @@ object TDA4j:
       val base = DowkerGeometry(relation)
       if dual then base.dual else base
     val resolvedMaxFiltrationValue = maxFiltrationValue.getOrElse(Double.PositiveInfinity)
+    // representativesOn the other side: each cycle carried there by Dowker's chain map, each cocycle by its transpose
+    // (on the other side's cells below the bar's death, or below the threshold for a bar that does not die); the bar's
+    // cells stay those of the complex built, like the boundary matrix.
+    def onTheSideAsked(bars: List[PersistenceBar[Double, Chain[Simplex[Int], C]]]) =
+      if !liftRepresentatives then bars
+      else if cycles then bars.map(bar => bar.copy(annotation = bar.annotation.map(geometry.lift(_))))
+      else
+        bars.map { bar =>
+          val before = if bar.death.isPosInfinity then Math.nextUp(resolvedMaxFiltrationValue) else bar.death
+          bar.copy(annotation = bar.annotation.map(geometry.liftCocycle(_, before)))
+        }
     val cellVertices: (Int, Simplex[Int]) => Array[Int] = (_, cell) => cell.underlying.toArray
     val streamForBoundary = LimitedCofaceSimplexStream(
       DowkerCofaceSimplexStream(geometry, resolvedMaxFiltrationValue),
@@ -2368,7 +2392,9 @@ object TDA4j:
     engine match
       case EngineKind.Naive =>
         fromBars[Simplex[Int], C](
-          naiveFor[Simplex[Int], C](cycles).barcode(streamForBoundary, includeZeroLength = includeZeroLength),
+          onTheSideAsked(
+            naiveFor[Simplex[Int], C](cycles).barcode(streamForBoundary, includeZeroLength = includeZeroLength)
+          ),
           cellVertices,
           toDouble,
           requestedMaxDimension,
@@ -2376,7 +2402,9 @@ object TDA4j:
         )
       case EngineKind.Cohomology =>
         fromBars[Simplex[Int], C](
-          cohomologyFor[Simplex[Int], C](cycles).barcode(streamForBoundary, includeZeroLength = includeZeroLength),
+          onTheSideAsked(
+            cohomologyFor[Simplex[Int], C](cycles).barcode(streamForBoundary, includeZeroLength = includeZeroLength)
+          ),
           cellVertices,
           toDouble,
           requestedMaxDimension,

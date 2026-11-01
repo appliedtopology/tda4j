@@ -1455,4 +1455,51 @@ class TDA4jSpec extends mutable.Specification:
       allReadable(naiveResult) must beTrue
       allReadable(cohomologyResult) must beTrue
     }
+
+    // Landmarks at the corners of a triangle (points 0, 1, 2), its edge midpoints (3, 4, 5) the other witnesses:
+    // the loop on the landmarks becomes the hexagon through all six points on the columns (DowkerLiftSpec).
+    val h = math.sqrt(3.0) / 2
+    val trianglePoints =
+      Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, h), Array(0.5, 0.0), Array(0.75, h / 2), Array(0.25, h / 2))
+    val landmarkToPoint = WitnessGeometry(EuclideanMetricSpace(trianglePoints), IndexedSeq(0, 1, 2)).D
+    def loopEdges(r: PersistenceResult): Set[List[Int]] =
+      r.cycleVertices(r.mostPersistentBar(1)).map(_.sorted.toList).toSet
+
+    "representativesOn=columns gives the same bars with each cycle on the columns: the landmark loop on the points" in {
+      val onRows = FullBarcode.computeFromRelation(landmarkToPoint, Array("maxDimension", "1"))
+      val onColumns =
+        FullBarcode.computeFromRelation(landmarkToPoint, Array("maxDimension", "1", "representativesOn", "columns"))
+      val back = FullBarcode.computeFromRelation(
+        landmarkToPoint,
+        Array("maxDimension", "1", "dual", "true", "representativesOn", "rows")
+      )
+      (triples(onColumns.toArray()) must beEqualTo(triples(onRows.toArray()))) and
+        (loopEdges(onRows) must beEqualTo(Set(List(0, 1), List(1, 2), List(0, 2)))) and
+        (loopEdges(onColumns) must beEqualTo(
+          Set(List(0, 3), List(1, 3), List(1, 4), List(2, 4), List(2, 5), List(0, 5))
+        )) and
+        (loopEdges(back).flatMap(identity) == Set(0, 1, 2) must beTrue)
+    }
+
+    "representativesOn=columns with cocycles gives the landmark cocycle on the points, dual to the hexagon there" in {
+      def onColumns(more: String*) = FullBarcode.computeFromRelation(
+        landmarkToPoint,
+        Array("maxDimension", "1", "representativesOn", "columns") ++ more
+      )
+      val cocycles = onColumns("representativeType", "cocycles")
+      val cycles = onColumns()
+      def terms(r: PersistenceResult): Map[List[Int], Long] =
+        val i = r.mostPersistentBar(1)
+        r.cycleVertices(i).map(_.sorted.toList).zip(r.cycleCoefficients(i).map(math.round)).toMap
+      val cocycle = terms(cocycles)
+      val pairing = terms(cycles).iterator.map((edge, c) => c * cocycle.getOrElse(edge, 0L)).sum
+      (triples(cocycles.toArray()) must beEqualTo(triples(cycles.toArray()))) and
+        (cocycle.keys.forall(edge => edge.size == 2 && edge.forall(v => 0 <= v && v < 6)) must beTrue) and
+        (Math.floorMod(pairing, 17L) must not(beEqualTo(0L)))
+    }
+
+    "reject a value of representativesOn other than rows or columns" in {
+      FullBarcode.computeFromRelation(landmarkToPoint, Array("representativesOn", "points")) must
+        throwWith[IllegalArgumentException]("rows")
+    }
   }

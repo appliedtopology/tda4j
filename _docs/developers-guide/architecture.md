@@ -464,6 +464,21 @@ filtration function. Because the construction is not a flag complex, it uses
 the generic persistence engines rather than the packed Ripser engine.
 
 `DowkerGeometry.dual` constructs the complex for the transposed relation.
+`DowkerGeometry.lift` is the chain map behind Dowker duality, from the complex
+on the rows to the one on the columns: a vertex goes to its best witness
+(`bestWitness`, the column attaining `f`), and a simplex `σ` to the cone from
+`bestWitness(σ)` over the image of its boundary, computed recursively and
+memoized per simplex. It is the barycentric subdivision followed by the vertex
+map that sends each barycentre to a best witness, so a simplex of the image lies
+in the column complex at the value of the simplex it came from, and the map is
+an isomorphism of persistence modules. `Dowker.lift` applies it to every
+representative of a diagram, and the facade's `representativesOn` option to the
+bars before they become a result. A cocycle needs the map in the other
+direction: `DowkerGeometry.liftCocycle` evaluates it on the image of each simplex
+of the other side under `dual.lift`, for every simplex of its dimension below
+the bar's death (`simplicesBelow`: every subset of one witness's ball), which is
+the transpose of that chain map and again an isomorphism, of persistent
+cohomology.
 
 ### Sheehy's sparse Vietoris-Rips filtration
 

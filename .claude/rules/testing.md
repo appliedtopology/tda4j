@@ -26,6 +26,8 @@ A bare identifier in a narrative fence of a tutorial page ("pure expression does
 - In a non-final statement `(a must X).and(b must Y)` checks only `a`; the by-name `b` is never forced. Write separate `must`
   statements (#99 has the unaudited rest of the repo).
 - `must throwAn[IllegalArgumentException]("text")` takes a REGEX: `(`, `)` and `.` in the message must be escaped or left out.
+  In a spec that also runs on Scala.js use `SpecThrows.throwWith[E]("text")` instead: specs2's message matcher reports a
+  mismatch there for messages that do match (PR #295's JS failure).
 - An example that THROWS is reported as an error (`!`, "N errors"), not a failure (`x`, "N failures"): a script that breaks the
   code and counts failures misses a mutation the example does catch.
 

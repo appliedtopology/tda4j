@@ -337,6 +337,7 @@ object TDA4jCLI:
     add("landmarkSeed", conf.landmarkSeed)
     add("nu", conf.nu)
     add("dual", conf.dual)
+    add("representativesOn", conf.representativesOn)
     pairs.toArray
 
   // -----------------------------------------------------------------------------------------------------------

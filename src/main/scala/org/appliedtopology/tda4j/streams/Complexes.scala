@@ -107,6 +107,50 @@ object Dowker:
     val geometry = if dual then DowkerGeometry(relation).dual else DowkerGeometry(relation)
     Truncated.ofCofaces(DowkerCofaceSimplexStream(geometry, maxFiltrationValue), maxDimension)
 
+  /** The same diagram with every representative moved to the other side of the relation: from the rows to the columns,
+    * or with `dual = true` (for a diagram computed with `dual = true`) from the columns to the rows. The bars are the
+    * same. A cycle goes by [[DowkerGeometry.lift]] to a cycle of the other side's complex at the bar's birth that
+    * represents the same bar there; a cocycle goes by [[DowkerGeometry.liftCocycle]] to a cocycle of the other side's
+    * complex below the bar's death, again of the same bar. Build the complex on the smaller side and read the
+    * representatives on the side you want:
+    *
+    * {{{
+    * val geometry = WitnessGeometry(metricSpace, landmarks)   // landmarks (rows) to every point (columns)
+    * val diagram = Persistence(Dowker(geometry.D, maxDimension = 1))
+    * val onPoints = Dowker.lift(diagram, geometry.D)          // representatives on the points' own numbers
+    *
+    * val cocycles = Persistence(Dowker(geometry.D, maxDimension = 1), representatives = Representatives.Cocycles)
+    * CircularCoordinates(Dowker.lift(cocycles, geometry.D), Dowker(geometry.D, maxDimension = 1, dual = true))
+    * }}}
+    *
+    * The last line gives every point a circle coordinate from a computation on the landmarks: `CircularCoordinates`
+    * takes the lifted diagram with the complex on the points. A lifted cocycle is a cochain on every simplex of its
+    * dimension on the other side below the bar's death (below the diagram's last value, for a bar that does not die),
+    * which for many points and degree 2 is large. The lifted bars record no birth and death cells: those are cells of
+    * the side the diagram was computed on.
+    */
+  def lift(
+    diagram: PersistenceDiagram[Simplex[Int]],
+    relation: Array[Array[Double]],
+    dual: Boolean = false
+  ): PersistenceDiagram.Of[Simplex[Int], diagram.Coefficient] =
+    import diagram.given
+    val geometry = if dual then DowkerGeometry(relation).dual else DowkerGeometry(relation)
+    val cocycles = diagram.representatives.contains(Representatives.Cocycles)
+    def moved(bar: PersistenceBar[Double, Chain[Simplex[Int], diagram.Coefficient]]) =
+      if !cocycles then bar.annotation.map(geometry.lift(_))
+      else
+        val before = if bar.death.isPosInfinity then Math.nextUp(diagram.lastFiltrationValue) else bar.death
+        bar.annotation.map(geometry.liftCocycle(_, before))
+    PersistenceDiagram[Simplex[Int], diagram.Coefficient](
+      diagram.bars.map(bar => bar.copy(annotation = moved(bar), cells = None)),
+      diagram.maxDimension,
+      diagram.lastFiltrationValue,
+      diagram.scale,
+      diagram.representatives,
+      diagram.representativesDieWithTheirBars
+    )
+
 /** The distance-to-measure-weighted Rips complex (Anai et al.); `p` is `1.0` (default) or `2.0`. */
 object DtmRips:
 

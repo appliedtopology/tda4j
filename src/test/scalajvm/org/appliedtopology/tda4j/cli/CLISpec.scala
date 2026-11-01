@@ -752,6 +752,33 @@ class CLISpec extends mutable.Specification:
         (exitCode must beEqualTo(0)) and (cliLines must beEqualTo(directLines))
       }
 
+    "--representatives-on columns gives the same representatives as FullBarcode.computeFromRelation(relation, " +
+      "Array(\"representativesOn\", \"columns\")) directly" >> {
+        val path = tempFile(".csv")
+        CSV.writePointCloud(path, dowkerRelation)
+
+        val buffer = new ByteArrayOutputStream()
+        val exitCode = CliFull.run(
+          Seq("--input-format", "csv-relation", "--representatives-on", "columns", "--representatives", path),
+          new PrintStream(buffer)
+        )
+        val cliLines = buffer.toString.linesIterator.toSeq
+
+        // The text format's own rendering of a representative, `c*[v,...] + ...`.
+        def reps(r: matlab.PersistenceResult) = (0 until r.size()).map { i =>
+          r.cycleVertices(i)
+            .zip(r.cycleCoefficients(i))
+            .map((vs, c) => s"$c*${vs.mkString("[", ",", "]")}")
+            .mkString(" + ")
+        }
+        val direct = FullBarcode.computeFromRelation(dowkerRelation, Array("representativesOn", "columns"))
+        val rows = FullBarcode.computeFromRelation(dowkerRelation)
+
+        (exitCode must beEqualTo(0)) and
+          (cliLines.map(_.split("rep: ", 2)(1)) must beEqualTo(reps(direct))) and
+          (reps(direct) must not(beEqualTo(reps(rows))))
+      }
+
     "reject --complex combined with --input-format=csv-relation" >> {
       val path = tempFile(".csv")
       CSV.writePointCloud(path, dowkerRelation)
