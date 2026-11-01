@@ -45,8 +45,7 @@ renames/signature changes; a break inside a series is a commented `mimaBinaryIss
 
 ## Package layout
 
-**One flat core package plus one add-on** (`DESIGN-package-structure.md`, derivation `WORKLOG-package-flatten.md`;
-the 2026-09 subpackage split it replaced: `WORKLOG-package-reorg.md`). Everything a persistent-homology user needs is
+**One flat core package plus one add-on** (`DESIGN-package-structure.md`, derivation `WORKLOG-package-flatten.md`). Everything a persistent-homology user needs is
 in `org.appliedtopology.tda4j` itself, so users write `import org.appliedtopology.tda4j.*` (no `given` selector
 needed, see "Givens"). The core's source directories are **file organization only, not packages**:
 

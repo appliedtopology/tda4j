@@ -58,10 +58,13 @@ is the point. Representatives are cocycles by default: a page that shows WHERE a
 fails `sbt doc`); no timings in prose. `Map[G, Fp]` equality compares raw representatives (-1 vs 1 over F_2 differ): compare cochains with
 `CupProduct.isCoboundary`, never `==`. Tutorial specs add ~90 s to `testFull`.
 **Language tabs** (`WORKLOG-tutorial-tabs.md`): where `matlab.TDA4j` supports the task, show the code in a `<div class="tabset">` with
-`<div class="tab" data-lang="Scala">` / `"MATLAB"` children (always in that order), a BLANK LINE between each HTML line and the fence
+`<div class="tab" data-lang="Scala">` / `"MATLAB"` / `"Python"` children (always in that order), a BLANK LINE between each HTML line and the fence
 (otherwise the strict markdown parser eats it). Every MATLAB tab needs a spec calling `matlab.TDA4j` directly (not `FullBarcode`)
 with the same options, asserting the numbers the tab quotes; the facade hides bars <= 1% of the enclosing radius, so quote
-`hiddenCount()` or pass `minPersistence 0`. MATLAB syntax/marshalling are never run here -- say so.
+`hiddenCount()` or pass `minPersistence 0`. MATLAB syntax/marshalling are never run here -- say so. A Python tab is the MATLAB
+tab's calls as `tda4j.*` (snake_case options, bars counted from 0) and IS run: `python/tests/test_docs.py` executes every
+```` ```python ```` fence in `_docs` and the READMEs and checks what the page quotes, one `ORACLES` entry per fence (a new fence
+without one fails). Tutorials that use the typed API only (Truchet, cup products, group cohomology) get no Python tab.
 
 **The Playground link and the doc snippets' Scastie configuration are generated** in `build.sbt` (`scastieLink`,
 `scastieSettings`) from the last plain `v*` tag, so a release edits nothing; the docs workflows must check out with tags

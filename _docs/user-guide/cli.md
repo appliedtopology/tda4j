@@ -11,7 +11,8 @@ and writes the diagram or draws it.
 java -jar tda4j-VERSION-assembly.jar [options] <input-file>
 ```
 
-Every flag has the same name and meaning as the MATLAB option in kebab-case (`--max-dimension` is `maxDimension`), and
+Every flag has the same name and meaning as the MATLAB option in kebab-case (`--max-dimension` is `maxDimension`, and
+`max_dimension=1` in [Python](python.md)), and
 `--help` lists them all. A flag you leave out keeps the library default, which is the default in the tables below.
 Flags that take `true` or `false` take it as a value: `--edge-collapse true`.
 

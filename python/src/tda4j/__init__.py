@@ -218,7 +218,7 @@ def relative_persistence_from_distances(distances, subcomplex, **options) -> Res
 @translating
 def load_result(path: str | os.PathLike) -> Result:
     """A result saved by ``Result.save``, the MATLAB or Java ``save``, or the command line's ``--save-result``."""
-    return Result(_java().loadResult(str(path)))
+    return Result(_java().loadResult(_jvm.path_in(path)))
 
 
 # ---------------------------------------------------------------------------------------------------------------------

@@ -79,8 +79,8 @@ class Plot:
     def save(self, path: str | os.PathLike, theme: str | None = None) -> str:
         """Writes the plot to ``path`` (``.svg`` or ``.html``) and returns the absolute path."""
         if theme is None:
-            return str(self._j.save(str(path)))
-        return str(self._j.save(str(path), theme))
+            return str(self._j.save(_jvm.path_in(path)))
+        return str(self._j.save(_jvm.path_in(path), theme))
 
     def view(self) -> "Plot":
         """Adds the plot to the live viewer, a browser tab."""
@@ -89,6 +89,23 @@ class Plot:
 
     def _repr_svg_(self) -> str:
         return self.svg()
+
+    def __getattr__(self, name: str):
+        """The tweaks of the plotting page that take plain arguments, in snake_case: ``plot.with_title("A circle")``,
+        ``with_x_label``, ``with_size(800, 600)``, ``with_x_scale("sqrt")``, ``with_text_scale(1.3)``. Each returns a new plot."""
+        if not name.startswith("with_"):
+            raise AttributeError(f"{type(self).__name__!r} object has no attribute {name!r}")
+        try:
+            method = getattr(self._j, _jvm._camel(name))
+        except AttributeError:
+            raise AttributeError(f"tda4j: a plot has no tweak {name!r}; the plotting page of the user guide lists them") from None
+
+        @translating
+        def tweak(*args):
+            return Plot(method(*args))
+
+        tweak.__name__ = name
+        return tweak
 
     def __repr__(self) -> str:
         return f"<tda4j.Plot {self._j.title()!s}>"
@@ -308,7 +325,7 @@ class Result:
 
     def save(self, path: str | os.PathLike) -> str:
         """Writes the result as a JSON file ``load_result`` reads back; returns its absolute path."""
-        return str(self._j.save(str(path)))
+        return str(self._j.save(_jvm.path_in(path)))
 
     def __repr__(self) -> str:
         return f"<tda4j.Result: {len(self)} bars, {self.hidden_count} hidden>"

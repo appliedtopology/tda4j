@@ -160,7 +160,8 @@ jobs:
   # The Python package the release attaches (and publishes to PyPI once that is set up, see release.yml and RELEASE.md): the
   # wheel built around the fat jar, installed into clean virtual environments on the oldest and the newest Python it
   # supports and tested from outside the checkout, so the tests import the installed package and its bundled jar, not
-  # the sources next to them. The tests are `python/tests`; the pure-Python ones (the release script) skip themselves there.
+  # the sources next to them. The tests are `python/tests`; the ones that need the checkout (the release script, and the
+  # documentation's Python examples, `test_docs.py`) skip themselves there and run in the last step, on the sources.
   python-package:
     needs: changes
     if: needs.changes.outputs.code == 'true'
@@ -204,10 +205,10 @@ jobs:
           python -m venv "$RUNNER_TEMP/py310"
           "$RUNNER_TEMP/py310/bin/pip" install python/dist/*.whl pytest
           cd "$RUNNER_TEMP" && "$RUNNER_TEMP/py310/bin/python" -m pytest py-tests -q
-      - name: Run the pure-Python tests of the sources
+      - name: Run the tests that need the checkout (release script, the documentation's Python examples)
         run: |
           python -m pip install pytest numpy jpype1
-          PYTHONPATH="$PWD/python/src" TDA4J_JAR=$(ls "$PWD"/python/src/tda4j/jars/*-assembly.jar) python -m pytest python/tests/test_release_scripts.py -q
+          PYTHONPATH="$PWD/python/src" TDA4J_JAR=$(ls "$PWD"/python/src/tda4j/jars/*-assembly.jar) python -m pytest python/tests/test_release_scripts.py python/tests/test_docs.py -q
 
   # Compiles every Scala fence in `_docs`. The tutorial specs run the same fences inside `test`; this job is what catches a
   # broken fence in a page that has no spec, and a broken site build.

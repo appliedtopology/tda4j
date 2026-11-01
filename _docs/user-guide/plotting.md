@@ -128,10 +128,32 @@ result = TDA4j.loadResult('circle.json');
 ```
 
 </div>
+<div class="tab" data-lang="Python">
+
+```python
+import numpy as np
+import tda4j
+
+points = np.loadtxt("_docs/tutorials/data/noisy-circle.csv", delimiter=",")
+result = tda4j.persistence(points, max_dimension=1)
+
+result.plot_barcode().view()
+loop = result.most_persistent_bar(1)       # the row of the loop's bar in result.bars (counting from 0)
+result.plot_representative(loop, at=result.bars[loop, 1]).save("loop.svg")   # its 18 edges over the complex
+
+result.save("circle.json")                 # everything, to plot again later
+result = tda4j.load_result("circle.json")
+```
+
+</div>
 </div>
 
-Call the methods with dot syntax (`fig.view()`, `fig.save('loop.svg')`): `save` and `view` are also MATLAB
-functions. MATLAB itself is not run by the test suite; the same calls are made from Scala.
+In MATLAB, call the methods with dot syntax (`fig.view()`, `fig.save('loop.svg')`): `save` and `view` are also MATLAB
+functions. MATLAB itself is not run by the test suite; the same calls are made from Scala. In Python the methods are
+`plot_barcode()`, `plot_diagram()`, ... on the result, and the figure has `svg()`, `html()`, `save(path)` and `view()`;
+a notebook shows a figure by itself. The tweaks that take plain arguments are methods of a Python figure too, in snake_case
+(`with_title("...")`, `with_x_scale("sqrt")`, `with_size(800, 600)`), and `tda4j.set_plot_defaults("palette=print")` changes the
+look of all later plots, with the [settings](#defaults-for-every-plot-a-given-look) of the MATLAB `setPlotDefaults`.
 
 | method | draws |
 |---|---|
@@ -926,6 +948,20 @@ result = TDA4j.computeFromPoints(points, {'maxDimension', '1'});
 
 result.plotDiagram().withTitle('A noisy circle').withXLabel('birth').withYLabel('death').withSize(800, 600).save('diagram.svg');
 result.plotBarcode().withXScale('sqrt').withTextScale(1.3).save('barcode.svg');
+```
+
+</div>
+<div class="tab" data-lang="Python">
+
+```python
+import numpy as np
+import tda4j
+
+points = np.loadtxt("_docs/tutorials/data/noisy-circle.csv", delimiter=",")
+result = tda4j.persistence(points, max_dimension=1)
+
+result.plot_diagram().with_title("A noisy circle").with_x_label("birth").with_y_label("death").with_size(800, 600).save("diagram.svg")
+result.plot_barcode().with_x_scale("sqrt").with_text_scale(1.3).save("barcode.svg")
 ```
 
 </div>

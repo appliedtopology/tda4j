@@ -42,6 +42,19 @@ The `fast-cubical` and `fast-alpha` engines give cycles only. Choose another eng
 
 Node.js 20.16 or newer is required. In a browser, load the package as an ES module.
 
+### Python: no Java, no jar, or a JVM that is already running
+
+* `JVMNotFoundException` from JPype: no Java was found. The package needs Java 21 or newer, on the `PATH` or in
+  `JAVA_HOME`. An `UnsupportedClassVersionError` means the Java it found is older than 21.
+* `no tda4j jar found`: a wheel carries the jar, and a source checkout does not. Build it with `sbt tda4j/assembly` and
+  set `TDA4J_JAR` to it, or run `python/scripts/bundle-jar.sh` (see [Python](python.md#install)).
+* `a JVM is already running without the tda4j jar on its class path`: another library started a JVM first. Call
+  `tda4j.start_jvm()` before it does. A JVM cannot restart in one process, so an option such as `-Xmx` has to be given to
+  the first start: `tda4j.start_jvm(["-Xmx16g"])`.
+* `MemoryError` from the library: the JVM ran out of heap; the line above gives it more.
+* `pip install tda4j` finds nothing: the package is not on PyPI yet; install the wheel from the
+  [releases](https://github.com/appliedtopology/tda4j/releases).
+
 ### Still stuck
 
 Search the [issues](https://github.com/appliedtopology/tda4j/issues), or open one with the smallest input that shows

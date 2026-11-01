@@ -24,6 +24,9 @@ PersistenceResult result = TDA4j.computeFromPoints(points, new String[] {"maxDim
 double[][] bars = result.toArray();
 ```
 
+From Python, the [`tda4j` package](python.md) makes these calls with NumPy arrays: `computeFromPoints(points, {'maxDimension', '1'})`
+is `tda4j.persistence(points, max_dimension=1)`, and the options below are keyword arguments in snake_case.
+
 Bars and simplices are numbered from 0, as everywhere in Java. The [tutorials](../tutorials/index.md) show most tasks
 in a MATLAB tab next to the Scala code.
 

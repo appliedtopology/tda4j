@@ -160,6 +160,31 @@ end
 ```
 
 </div>
+<div class="tab" data-lang="Python">
+
+```python
+import numpy as np
+import tda4j
+
+points = np.loadtxt("_docs/tutorials/data/noisy-circle.csv", delimiter=",")
+
+# Each entry: the value of the `complex` option, and any extra options it needs
+settings = {
+    "vr": {},
+    "cech": {},
+    "alpha": {},
+    "sparse-rips": {"sparse_epsilon": 0.5},
+    "witness": {"num_landmarks": 15},
+}
+
+for name, extra in settings.items():
+    result = tda4j.persistence(points, max_dimension=1, complex=name, **extra)
+    loops = result.diagram(1)
+    birth, death = loops[np.argmax(loops[:, 1] - loops[:, 0])]
+    print(f"{name:<12} {result.num_cells:6d} simplices, loop [{birth:.3f}, {death:.3f})")
+```
+
+</div>
 </div>
 
-In MATLAB a complex is a value of the `complex` option rather than a function, and `numCells()` is the number of simplices the engine had to process.
+In MATLAB and Python a complex is a value of the `complex` option rather than a function, and `numCells()` (`num_cells` in Python) is the number of simplices the engine had to process.

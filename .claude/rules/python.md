@@ -7,7 +7,7 @@ paths:
 
 `python/` is the `tda4j` package on PyPI: a thin JPype layer over `org.appliedtopology.tda4j.matlab.TDA4j` (the MATLAB/Java
 facade), NumPy in and out. Derivation and what was tried: `WORKLOG-more-inputs.md` (section "Python package"). User page:
-`_docs/user-guide/python.md`; release: `RELEASE.md` ("PyPI").
+`_docs/user-guide/python.md`; release: `RELEASE.md` ("PyPI"); the docs arc: `WORKLOG-python-docs.md`.
 
 - **It is the facade, not the Scala API.** Every function is one facade call; no logic of its own beyond converting
   arrays and options. A new capability goes into `matlab.TDA4j` first (the 1:1 mirror rule in CLAUDE.md), then gets its
@@ -32,6 +32,13 @@ facade), NumPy in and out. Derivation and what was tried: `WORKLOG-more-inputs.m
   matrix, a cycle's boundary summing to zero, Takens windows by index arithmetic, an Euler curve counted by hand. They were
   mutation-checked (boundary rows/cols swapped, Takens delay/stride swapped, column-major points, `True` written for a
   boolean, an empty death cell): keep a test only if its plausible wrong answer fails it.
+- **The docs are tests**: `tests/test_docs.py` runs every ```` ```python ```` fence of `_docs/` and the READMEs in a scratch directory
+  (`Plot.view` stubbed) and checks the numbers the page quotes; a new fence needs an `ORACLES` entry. It needs the checkout, so
+  it skips itself in the wheel job and runs in `python-package`'s last step. Install wording while PyPI is not set up: `RELEASE.md`.
+- **Paths are made absolute in Python** (`_jvm.path_in`): the JVM keeps the directory it started in after `os.chdir`, so a relative
+  path it read or wrote meant two places (`save` wrote, `load_result` did not find it). Any function that passes a path to Java uses it.
+- **Plot tweaks are forwarded**: `Plot.__getattr__` turns `with_title("x")` into the Java figure's `withTitle("x")` (plain-argument
+  overloads only: a tweak that needs a Scala value, `Palette`, `Optional`, is not reachable) and wraps the result in a new `Plot`.
 - **Known traps**: row order of `bars` is not part of the answer (compare after sorting); `cells()` order is the engine's
   (grouped by dimension), not globally sorted by filtration value; an image's birth cell in degree 0 is a corner vertex of
   the lowest pixel; a symmetric grid (a torus on a lattice) has ties that circular coordinates refuse (`ValueError`), so

@@ -48,10 +48,11 @@ From MATLAB, `javaaddpath('tda4j-VERSION-assembly.jar')` and the same calls
 `java -jar tda4j-VERSION-assembly.jar --max-dimension 1 points.csv`. The jar is on the
 [releases](https://github.com/appliedtopology/tda4j/releases) page.
 
-From Python (3.10 or newer, with Java 21 or newer installed):
+From Python (3.10 or newer, with Java 21 or newer installed), with the wheel from the
+[releases](https://github.com/appliedtopology/tda4j/releases); the package is not on PyPI yet:
 
 ```
-pip install tda4j
+pip install tda4j-VERSION-py3-none-any.whl
 ```
 
 ```python
