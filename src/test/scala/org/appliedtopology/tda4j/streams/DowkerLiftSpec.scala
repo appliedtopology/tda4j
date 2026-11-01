@@ -4,6 +4,7 @@ import org.specs2.mutable
 import org.specs2.execute.AsResult
 import org.specs2.ScalaCheck
 import org.scalacheck.*
+import org.appliedtopology.tda4j.SpecThrows.throwWith
 
 /** `DowkerGeometry.lift` and `Dowker.lift`: the chain map behind Dowker duality, which moves a bar's representative to
   * the other side of the relation. What it must preserve, checked over F_17 so that a wrong sign shows: the image of a
@@ -118,6 +119,6 @@ class DowkerLiftSpec extends mutable.Specification with ScalaCheck:
     val cocycles = Persistence(Dowker(relation, maxDimension = 1), representatives = Representatives.Cocycles)
     given Double is Field = Field.DoubleApproximated(1e-9)
     val offTheRows = Chain[Simplex[Int], Double](Simplex(0, 7) -> 1.0)
-    (Dowker.lift(cocycles, relation) must throwAn[IllegalArgumentException]("cocycles")) and
-      (DowkerGeometry(relation).lift(offTheRows) must throwAn[IllegalArgumentException]("dual = true"))
+    (Dowker.lift(cocycles, relation) must throwWith[IllegalArgumentException]("cocycles")) and
+      (DowkerGeometry(relation).lift(offTheRows) must throwWith[IllegalArgumentException]("dual = true"))
   }

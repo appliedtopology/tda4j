@@ -1485,8 +1485,8 @@ class TDA4jSpec extends mutable.Specification:
       (FullBarcode.computeFromRelation(
         landmarkToPoint,
         Array("representativesOn", "columns", "representativeType", "cocycles")
-      ) must throwA[IllegalArgumentException]("cocycles")) and
+      ) must throwWith[IllegalArgumentException]("cocycles")) and
         (FullBarcode.computeFromRelation(landmarkToPoint, Array("representativesOn", "points")) must
-          throwA[IllegalArgumentException]("rows"))
+          throwWith[IllegalArgumentException]("rows"))
     }
   }
