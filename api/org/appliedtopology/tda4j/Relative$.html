@@ -143,6 +143,47 @@ node3 -> node2;
           </div>
          </div>
         </div>
+        <div class="documentableElement" id="ofBoundary-fe4">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="Relative$.html#ofBoundary-fe4" t="n" class="documentableName ">ofBoundary</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">grid</span>: <a href="CubicalGridStream.html" t="t">CubicalGridStream</a>): <a href="StratifiedCellStream.html" t="t">StratifiedCellStream</a>[<a href="RelativeCell.html" t="t">RelativeCell</a>[<a href="../tda4j.html#Cube-0" t="t">Cube</a>], <span data-unresolved-link="" t="t">Double</span>]
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p><code>grid</code> modulo its boundary, <code>H(X_t, X_t ∩ ∂X)</code> for the image or volume <code>X</code> the grid fills: the cubes that are not on the boundary (<a href="CubicalGridStream.html#onBoundary-c9">CubicalGridStream.onBoundary</a>). A curve that runs from boundary to boundary is a cycle of the pair, like a closed one. The image itself is the top class, born when its last pixel enters.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p><code>grid</code> modulo its boundary, <code>H(X_t, X_t ∩ ∂X)</code> for the image or volume <code>X</code> the grid fills: the cubes that are not on the boundary (<a href="CubicalGridStream.html#onBoundary-c9">CubicalGridStream.onBoundary</a>). A curve that runs from boundary to boundary is a cycle of the pair, like a closed one. The image itself is the top class, born when its last pixel enters.</p>
+              <div class="snippet mono-small-block">
+               <pre><code class="language-"><span line-number="1" class=""><span class="tooltip-container"></span>val grid = CubicalImage.fromGrayscale2D(pixels)
+</span><span line-number="2" class=""><span class="tooltip-container"></span>Persistence(Relative.ofBoundary(grid), maxDimension = 2)
+</span></code></pre>
+               <div class="buttons"></div>
+              </div>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Relative.scala#L51" target="_blank">Relative.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
         <div class="documentableElement" id="ofVertices-773">
          <div class="documentableElement-expander">
           <button class="icon-button ar show-content"></button>
@@ -170,7 +211,7 @@ node3 -> node2;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Relative.scala#L43" target="_blank">Relative.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/Relative.scala#L55" target="_blank">Relative.scala</a>
               </dd>
              </dl>
             </div>

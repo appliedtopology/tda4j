@@ -3660,7 +3660,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/FastCubicalHomology.scala#L687" target="_blank">FastCubicalHomology.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/FastCubicalHomology.scala#L707" target="_blank">FastCubicalHomology.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -3878,7 +3878,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/CubicalStream.scala#L166" target="_blank">CubicalStream.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/CubicalStream.scala#L173" target="_blank">CubicalStream.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -7473,7 +7473,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/CubicalStream.scala#L227" target="_blank">CubicalStream.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/CubicalStream.scala#L234" target="_blank">CubicalStream.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -7547,7 +7547,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/CubicalStream.scala#L208" target="_blank">CubicalStream.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/CubicalStream.scala#L215" target="_blank">CubicalStream.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -8124,7 +8124,7 @@
              <div class="doc">
               <p>Persistent homology of a cubical grid by union-find instead of matrix reduction (after Le Breton, Szustakowski and Piraud, arXiv:2606.04801, extended here to any coefficient field and to representatives): degree 0 by union-find on the vertices and edges, the top degree <code>d - 1</code> (<code>d</code> the grid's dimension) by union-find on the dual graph. In 2-D those cover everything; in dimension 3 and up the degrees in between are computed by the cohomology engine on the grid without its top cells. Requires <code>d &gt;= 2</code>. A NaN (masked) pixel is not in the complex (see <a href="tda4j/CubicalGridStream.html">CubicalGridStream</a>).</p>
               <p>The dual graph: the top cells (pixels) are vertices, the codimension-1 cells (facets) edges between the one or two top cells containing them, with one extra vertex <code>∞</code>, at value <code>+Infinity</code>, on the far side of every facet on the boundary of the grid. By Alexander duality, degree <code>d - 1</code> of the sublevel filtration is degree 0 of the dual graph's superlevel filtration: union-find in decreasing value with the elder rule, each merge giving the primal bar with birth and death swapped. <code>∞</code>'s component never dies. A masked pixel is in the complement from the start, as <code>∞</code> is, and so is a facet between two masked pixels or a masked pixel and the outside: a component holding one is elder to every other but <code>∞</code>'s, and when it dies at a facet of value <code>v</code> the primal class is born at <code>v</code> and never dies.</p>
-              <p>Representatives: each top cell carries a sign in its dual component, kept consistent as components merge (the sign flip is solved from the merging facet's two boundary coefficients, both <code>±1</code>) so that interior facets cancel; when a component dies, its representative is the boundary of its signed sum of top cells. A merge costs nearly constant time; a representative costs time proportional to its region, and only reported bars get one.</p>
+              <p>Representatives: each top cell carries a sign in its dual component, kept consistent as components merge (the sign flip is solved from the merging facet's two boundary coefficients, both <code>±1</code>) so that interior facets cancel; when a component dies, its representative is the boundary of its signed sum of top cells. A merge costs nearly constant time; a representative costs time proportional to its region, and only reported bars get one. Of two components born at the same value either may die, with the same bars: the smaller one does, so that a tiling's many equal maxima do not make one large region die after another.</p>
              </div>
              <h2 class="h200">Attributes</h2>
              <dl class="attributes attributes-small">
@@ -8138,7 +8138,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/FastCubicalHomology.scala#L26" target="_blank">FastCubicalHomology.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/FastCubicalHomology.scala#L28" target="_blank">FastCubicalHomology.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -9273,7 +9273,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/CubicalStream.scala#L156" target="_blank">CubicalStream.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/CubicalStream.scala#L163" target="_blank">CubicalStream.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -9352,7 +9352,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/CubicalStream.scala#L181" target="_blank">CubicalStream.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/CubicalStream.scala#L188" target="_blank">CubicalStream.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -12232,7 +12232,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/CubicalStream.scala#L194" target="_blank">CubicalStream.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/CubicalStream.scala#L201" target="_blank">CubicalStream.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
