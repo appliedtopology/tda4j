@@ -210,6 +210,64 @@ class DowkerStreamSpec extends mutable.Specification with ScalaCheck:
     }
 
   // ---------------------------------------------------------------------------------------------------------
+  // Landmark-to-witness distances (`WitnessGeometry.D`): the Dowker complex is the Čech complex of the landmarks
+  // tested at the witnesses (Chazal, de Silva and Oudot's Čech(L, W)). It is inside every witness complex and equal
+  // to none: the lazy one with nu = 0 is its flag complex. Fixture: the vertices of an equilateral triangle of side 1
+  // as landmarks, its edge midpoints as the only other witnesses. Every edge has a witness at 1/2 (its midpoint), the
+  // triangle only at sqrt(3)/2 (a midpoint is that far from the opposite vertex), so the Dowker complex has the loop
+  // [1/2, sqrt(3)/2); the lazy complex fills the triangle with its edges, at 1/2, and has no loop.
+  // `WORKLOG-dual-witness-complex.md`.
+  // ---------------------------------------------------------------------------------------------------------
+
+  private def barcodeOf(stream: CellStream[Simplex[Int], Double]): List[(Int, Double, Double)] =
+    sortedTriples(
+      SimplicialHomologyEngine[Int, Double, Double]().persistentHomology(stream).diagramAt(Double.PositiveInfinity)
+    )
+
+  private val h = math.sqrt(3.0) / 2
+  private val triangleWithMidpoints = EuclideanMetricSpace(
+    Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(0.5, h), Array(0.5, 0.0), Array(0.75, h / 2), Array(0.25, h / 2))
+  )
+
+  "on landmark-to-witness distances the Dowker complex has a loop the lazy nu = 0 witness complex fills at once: " +
+    "the triangle with only its edge midpoints as witnesses" >> {
+      val geometry = WitnessGeometry(triangleWithMidpoints, IndexedSeq(0, 1, 2))
+      val dowkerLoops =
+        dropZeroPersistence(barcodeOf(DowkerCofaceSimplexStream(DowkerGeometry(geometry.D)))).filter(_._1 == 1)
+      val lazyLoops =
+        dropZeroPersistence(barcodeOf(LazyWitnessSimplexStream(triangleWithMidpoints, IndexedSeq(0, 1, 2), 0)))
+          .filter(_._1 == 1)
+      (dowkerLoops.map(_._2) must beEqualTo(List(0.5))) and
+        (math.abs(dowkerLoops.head._3 - h) must beLessThan(1e-12)) and
+        (lazyLoops must beEmpty)
+    }
+
+  "on landmark-to-witness distances the Dowker value of every simplex is at least its value in every witness " +
+    "complex, and the lazy nu = 0 value is the largest Dowker value of its edges, on random point clouds" >>
+    AsResult {
+      val clouds = matrixGen[Double](Gen.chooseNum(-1.0, 1.0), Gen.const(2), Gen.chooseNum(5, 9))
+      Prop.forAll(clouds, Gen.chooseNum(3, 4)) { (points: Array[Array[Double]], numLandmarks: Int) =>
+        val metricSpace = EuclideanMetricSpace(points)
+        val geometry = WitnessGeometry(metricSpace, (0 until numLandmarks).toIndexedSeq)
+        val dowker = DowkerGeometry(geometry.D)
+        val general = WitnessCofaceSimplexStream.recursiveFiltrationValue(geometry)
+        val lazySpaces = (0 to 2).map(nu => WitnessMetricSpace(geometry, nu))
+        def edgeMax(sigma: IndexedSeq[Int], value: (Int, Int) => Double): Double =
+          sigma.combinations(2).map(e => value(e(0), e(1))).max
+        val simplices: Seq[IndexedSeq[Int]] = (2 to 3).flatMap((0 until numLandmarks).combinations)
+        simplices.forall { sigma =>
+          val own = dowker.filtrationValue(sigma)
+          val lazyBelow = lazySpaces.forall(s => edgeMax(sigma, s.distance) <= own + 1e-12)
+          val generalBelow = general(Simplex(sigma*)) <= own + 1e-12
+          val flag = math.abs(
+            edgeMax(sigma, lazySpaces(0).distance) - edgeMax(sigma, (i, j) => dowker.filtrationValue(IndexedSeq(i, j)))
+          ) < 1e-12
+          lazyBelow && generalBelow && flag
+        }
+      }
+    }
+
+  // ---------------------------------------------------------------------------------------------------------
   // Constructor validation.
   // ---------------------------------------------------------------------------------------------------------
 

@@ -84,9 +84,9 @@ recursive `max(own_k(σ), max over facets)`, `TrieMap`-memoized; refuses `engine
 ## Dowker complexes
 
 `streams/DowkerStream.scala`, `WORKLOG-dowker-complex.md`. `DowkerGeometry(relation: Array[Array[Double]])`: a
-fully general `R: L x W -> [0, Infinity]`, not metric-derived (generalizes witness's `nu=0` case, independently
-re-derived — doesn't fit `WitnessGeometry`'s shared-ambient-space shape). `filtrationValue(sigma) = min_w
-max_{x in sigma} R(x,w)` is automatically monotone; NOT a flag complex, built on `RipserCofaceSimplexStream`'s
+fully general `R: L x W -> [0, Infinity]`, not metric-derived. On `WitnessGeometry.D` it is Čech(L,W), inside every
+witness variant, equal to none (lazy `nu=0` is its flag complex; `WORKLOG-dual-witness-complex.md`).
+`filtrationValue(sigma) = min_w max_{x in sigma} R(x,w)` is automatically monotone; NOT a flag complex, built on `RipserCofaceSimplexStream`'s
 generic coface loop. `.fromBoolean` lifts an unfiltered relation (`true`→`0.0`, `false`→`+Infinity`).
 
 **`keptByThresholdAndCriterion`'s `<=` admits `+Infinity <= +Infinity`** — safe elsewhere only because no other
@@ -96,7 +96,7 @@ the complete simplex.
 
 **Duality is the point** (`.dual`, the transpose relation): X-side and Y-side barcodes agree exactly **without zero-length
 bars** (the default; with `includeZeroLength = true` they differ, as each vertex records one `H_0` birth and the sides
-have different vertex counts; Chowdhury and Mémoli 2018, confirmed on a hand-worked fixture).
+have different vertex counts; Chowdhury-Mémoli 2018).
 
 Own MATLAB/CLI entry point (`computeFromRelation`/`--input-format csv-relation`), not a `complex=` value — a
 relation doesn't fit the point-cloud/distance-matrix dispatch. `engine` defaults `cohomology`, refuses `ripser`/

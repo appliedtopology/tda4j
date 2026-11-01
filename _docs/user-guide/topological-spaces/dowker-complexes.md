@@ -29,8 +29,15 @@ rows.triples.sorted == columns.triples.sorted                               // t
 (Chowdhury and Mémoli's functorial Dowker theorem). So build whichever side is smaller; the representatives are on
 the side you built.
 
-With a witness's distances to landmarks as the relation, this is the witness complex with `nu = 0`. For a plain
-yes-or-no relation, `DowkerGeometry.fromBoolean(table)` gives the classical, unfiltered Dowker complex. The
+**Landmarks and witnesses.** With the distances from a few landmarks (rows) to all the data points (columns) as the
+relation, `WitnessGeometry(metricSpace, landmarks).D`, a set of landmarks is a simplex at `t` when one data point is
+within `t` of all of them: the Čech complex of the landmarks, with the common point of the balls required to be a data
+point. It is contained in every [witness complex](witness-complexes.md) at every `t`, but it is none of them: the lazy
+`Witness(nu = 0)` has the same edges and fills in every triangle whose edges are present, and the general variant lets
+a witness of a `k`-simplex reach `t` beyond its `(k+1)`-th nearest landmark. Its dual is the complex on all the data
+points whose simplices are the sets that fit in one landmark's ball of radius `t`: far larger, with the same barcode.
+
+For a plain yes-or-no relation, `DowkerGeometry.fromBoolean(table)` gives the classical, unfiltered Dowker complex. The
 complex is not a flag complex, so the Ripser engine does not apply. The [networks tutorial](../../tutorials/networks-and-relations.md)
 works through an example.
 

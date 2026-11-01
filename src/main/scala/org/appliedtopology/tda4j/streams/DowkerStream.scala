@@ -10,7 +10,9 @@ import scala.collection.immutable
   * f(sigma) = min_w max_{x in sigma} R(x, w)
   * }}}
   * `R` need not come from a metric. The unfiltered Dowker complex is the case `R(x, w)` in `{0, Infinity}`
-  * ([[DowkerGeometry.fromBoolean]]); the witness complex with `nu = 0` is the case `R` = landmark-to-witness distances.
+  * ([[DowkerGeometry.fromBoolean]]). With `R` the landmark-to-witness distances (`WitnessGeometry.D`) it is the Čech
+  * complex of the landmarks with the balls' common point required to be a witness. That is contained in every witness
+  * complex but is none of them: the lazy witness complex with `nu = 0` is its flag complex (the same edges).
   *
   * The filtration is monotone (`f(tau) <= f(sigma)` for `tau` a face of `sigma`, since the max over a subset is smaller
   * for every `w`), vertices have values `min_w R(x, w)` that are generally nonzero, and the complex is not a flag

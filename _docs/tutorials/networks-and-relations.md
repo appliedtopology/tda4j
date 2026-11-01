@@ -78,7 +78,9 @@ sides ever disagree, something is wrong with the table.
   `DowkerGeometry.fromBoolean` builds one for you, and the barcode degenerates to the classical Dowker complex, a plain
   simplicial complex with no filtration.
 * A **distance matrix between two different sets** is a perfectly good relation, and so is the matrix of distances from
-  landmarks to witnesses (that is the witness complex, see [Choosing a complex](choosing-a-complex.md)).
+  a few landmarks to all the data points: a set of landmarks is then a simplex when one data point is close to all of
+  them, a stricter cousin of the witness complex of [Choosing a complex](choosing-a-complex.md) (the
+  [user guide](../user-guide/topological-spaces/dowker-complexes.md) has the difference).
 * The command line reads a relation from a CSV file with `--input-format csv-relation` (and `--dual` for the other side), and
   MATLAB has `computeFromRelation`; both are described in the [user guide](../user-guide/topological-spaces/dowker-complexes.md).
 
