@@ -74,8 +74,9 @@ object AlphaShapes extends PointCloudComplex:
     * so the barcode is the same, and the simplices of large circumradius that a triangulation has along its hull are
     * never built. This is what `Persistence(points, complex = AlphaShapes)` runs on.
     *
-    * `AlphaBackend.Default` stays on the triangulation `apply` builds without a radius (it would prefer DQP for any
-    * radius in 6 or more dimensions, where this radius leaves every point in every neighbourhood).
+    * `AlphaBackend.Default` picks the backend by the degree cap instead of the radius, which here leaves every point in
+    * every neighbourhood: DQP when `maxDimension` is given and low in high ambient dimension
+    * ([[prefersDQPAtEnclosingRadius]]), else the triangulation `apply` builds without a radius.
     */
   def upToEnclosingRadius(
     points: PointCloud,
@@ -87,7 +88,10 @@ object AlphaShapes extends PointCloudComplex:
     if maxRadius.toOption.isDefined || points.size == 0 then
       apply(points, backend, requireValidTriangulation, maxRadius, maxDimension)
     else
-      val chosen = if backend == AlphaBackend.Default then triangulation(points) else backend
+      val chosen =
+        if backend != AlphaBackend.Default then backend
+        else if !requireValidTriangulation && prefersDQPAtEnclosingRadius(points, maxDimension) then AlphaBackend.DQP
+        else triangulation(points)
       apply(points, chosen, requireValidTriangulation, points.metricSpace.minimumEnclosingRadius, maxDimension)
 
   /** The alpha complex of `points`, built by `backend` (see [[AlphaBackend]]).
@@ -101,7 +105,8 @@ object AlphaShapes extends PointCloudComplex:
     *     ambient dimension) makes it much cheaper, while without a radius it is far slower than a triangulation.
     *   - `Default` picks: without a `maxRadius`, BowyerWatson for points in at most 4 dimensions and Helix above; with
     *     one, DQP instead when it is expected to be faster for this radius, from the average number of points within
-    *     `2 maxRadius` of a point (`AlphaShapes.prefersDQP`).
+    *     `2 maxRadius` of a point (`AlphaShapes.prefersDQP`). ([[upToEnclosingRadius]], which the verb runs on, picks
+    *     DQP without a radius when the degree cap is low in high dimension.)
     *
     * In general position every backend gives the same complex: the simplices whose alpha value (radius) is at most
     * `maxRadius`, with the same values. On cospherical points DQP keeps the higher-dimensional simplex they span where
@@ -164,6 +169,22 @@ object AlphaShapes extends PointCloudComplex:
   /** The backend that triangulates all the points: BowyerWatson up to 4 dimensions, Helix above. */
   def triangulation(points: PointCloud): AlphaBackend =
     if points.points.headOption.forall(_.length <= 4) then AlphaBackend.BowyerWatson else AlphaBackend.Helix
+
+  /** The lowest ambient dimension in which [[prefersDQPAtEnclosingRadius]] says DQP. */
+  val dqpMinAmbientDimension: Int = 8
+
+  /** Whether `DQP` is expected to build the alpha complex up to the enclosing radius, and homological degree
+    * `maxDimension`, faster than a triangulation (`Helix` above 4 dimensions) builds the whole one: in at least
+    * [[dqpMinAmbientDimension]] dimensions, and with `maxDimension` at most 2 below the ambient dimension (the top
+    * degree `d - 1` stays on the triangulation: DQP's memory is 1.5 to 2.5 times Helix's there from 10 dimensions). DQP
+    * builds only the candidates up to dimension `maxDimension + 1`, a triangulation every dimension: at 40 points with
+    * `maxDimension = 4` DQP was 3 times faster in 8 dimensions, 8 times in 10 and 28 times in 12 (with a fifth of the
+    * memory), and the only backend to finish in 15; at 5 dimensions it was slightly slower and at 6 a tie. Measured for
+    * 40 and 60 uniform points, `maxDimension` 4 and `d - 1`; the caps in between are interpolated.
+    */
+  def prefersDQPAtEnclosingRadius(points: PointCloud, maxDimension: Optional[Int]): Boolean =
+    val ambient = points.points.headOption.map(_.length).getOrElse(0)
+    ambient >= dqpMinAmbientDimension && maxDimension.toOption.exists(_ <= ambient - 2)
 
   /** Whether `DQP` is expected to build the alpha complex truncated at radius `r` faster than a triangulation
     * (`BowyerWatson` up to 4 dimensions, `Helix` above) builds the whole one. DQP's cost grows with the number of

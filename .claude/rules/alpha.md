@@ -66,23 +66,22 @@ doubles) and stream order (`AlphaProfileDriver dump=`), not by Betti numbers. DQ
 
 **Helix walk** (`WORKLOG-helix-construction-speed.md`): hull facet by gift wrapping (deterministic, no RNG); across
 each frontier facet the cofacet is the light point with the smallest centre parameter `t` (sphere centre `c0 + t n`),
-ties to the smallest index, its sphere taken from `t` (never re-solved from the vertices: ill-conditioned on slivers),
-then checked empty; the old candidate scan is only the fallback (`sphereScanFallbacks`, 0 on random clouds,
-`HelixWalkSpec`). Cospherical = within `1e-10 r`, NOT `epsilon` (at the default `1e-5` near-ties got tiled as clusters
-on a few thousand random points and tore the triangulation). EVERY result gets `looksValid` (each point a vertex, no
+ties to the smallest index, its sphere taken from `t` (never re-solved: ill-conditioned on slivers), then checked
+empty; the old candidate scan is only the fallback (`sphereScanFallbacks`, 0 on random clouds, `HelixWalkSpec`).
+Cospherical = within `1e-10 r`, NOT `epsilon` (at `1e-5` near-ties got tiled as clusters and tore the triangulation). EVERY result gets `looksValid` (each point a vertex, no
 facet in 3 tops, every boundary facet on the hull -- Euler characteristic is NOT enough: a partial contractible walk
 passes it); a failure goes to `repairByJitterRetriangulation` (jitter `1e-4` of the spacing, all points when the
 structural check fails; on the PROJECTED points). Exact grids are valid at the default epsilon; at `1e-9` a 3-D grid can fail to repair and the raw walk is returned.
 **Dispatch with a radius** (`AlphaShapes(points, maxRadius = r)`, the verb's and facade's `maxFiltrationValue`):
 `Default` = the triangulation without a radius, else `prefersDQP` (mean of `k^1.6`, k = neighbours within `2r`, 64
-samples, vs a fitted cost model: DQP `0.004·2.35^(d-2)·k^1.6`, BowyerWatson `b_d (n/1000)^0.2`, b = 0.03/0.1/1.1 for
-d = 2..4, Helix 5-D `150 (n/1000)^0.4`, d >= 6 always DQP). Triangulations are filtered (`RadiusLimitedAlphaShapes`), DQP truncated (`AlphaComplexDQPStream`, top dim `maxDimension + 1`); the
+samples, vs a fitted cost model in `dqpNeighbourThreshold`; d >= 6 always DQP). Triangulations are filtered (`RadiusLimitedAlphaShapes`), DQP truncated (`AlphaComplexDQPStream`, top dim `maxDimension + 1`); the
 results must be identical in general position (`AlphaDispatchSpec`; cospherical: DQP keeps the spanned simplex, Helix
 triangulates). The facade passes no `Epsilon`: alpha uses `AlphaShapes`' default `1e-5` (the `epsilon` option is `field=R`). Untruncated DQP is ~100x slower than Helix. fast-alpha refuses a
 radius and takes either triangulation. Measurements: `WORKLOG-helix-construction-speed.md`.
-**Without a radius** the verb (`AlphaShapes.fromPoints` -> `upToEnclosingRadius`) cuts the triangulation (BowyerWatson/Helix, NEVER
-`Default`, which picks DQP for any radius at d >= 6) at `minimumEnclosingRadius`: the union of balls is contractible past it, so the barcode is
-unchanged (`PersistenceVerbSpec`); the facade's `complex=alpha` does the same except `engine=fast-alpha` (tutorial count 313; `Infinity` gives the 325 of `AlphaShapes(points)`, `MatlabTabsSpec`). #215.
+**Without a radius** the verb (`AlphaShapes.fromPoints` -> `upToEnclosingRadius`) cuts at `minimumEnclosingRadius` (the union of balls
+is contractible past it, so the barcode is unchanged) and picks by the degree cap, not `prefersDQP` (every point is a neighbour there):
+DQP iff d >= 8 and `maxDimension <= d - 2` (`prefersDQPAtEnclosingRadius`; n = 40/60 `four` sweep: 3x to 28x faster, memory equal or lower;
+the top degree stays Helix, DQP 1.5-2.5x its memory; caps between 4 and d - 2 and n >= 100 unmeasured, `WORKLOG-dqp-degree-cap.md`), else BowyerWatson/Helix (`PersistenceVerbSpec`); the facade's `complex=alpha` does the same except `engine=fast-alpha` (tutorial count 313; `Infinity` gives the 325 of `AlphaShapes(points)`, `MatlabTabsSpec`). #215.
 `WORKLOG-enclosing-radius.md`.
 
 **One root mechanism (near-cospherical clusters, order-dependent facet-pivot choices) produces two DIFFERENT

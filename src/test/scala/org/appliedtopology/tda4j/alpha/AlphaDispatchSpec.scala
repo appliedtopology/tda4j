@@ -89,3 +89,43 @@ class AlphaDispatchSpec extends mutable.Specification:
       (AlphaShapes(cloud(5, 20, 7)).isInstanceOf[HelixDelaunay] must beTrue) and
       (AlphaBackend.parse("Bowyer-Watson") must be_==(AlphaBackend.BowyerWatson))
   }
+
+  "Without a radius the default builds the complex up to the enclosing radius, with DQP when the degree cap is low in high dimension" >> {
+    def dqp(dim: Int, n: Int, cap: Optional[Int]) =
+      AlphaShapes.upToEnclosingRadius(cloud(dim, n, 40L + dim), maxDimension = cap).isInstanceOf[AlphaComplexDQPStream]
+    // Measured (n = 40 and 60, cap 4): DQP is 3 to 28 times faster from 8 dimensions, ties at 6 and loses at 5.
+    (dqp(8, 14, 2) must beTrue) and
+      (dqp(8, 14, 6) must beTrue).setMessage("the cap d - 2 is still DQP") and
+      (dqp(8, 14, 7) must beFalse).setMessage("the top degree d - 1 stays on the triangulation") and
+      (dqp(9, 14, 2) must beTrue) and
+      (dqp(7, 14, 2) must beFalse).setMessage("7 dimensions stay on the triangulation") and
+      (dqp(8, 14, Optional.empty) must beFalse).setMessage("no cap is the whole complex") and
+      (AlphaShapes
+        .upToEnclosingRadius(cloud(8, 14, 3), AlphaBackend.Helix, maxDimension = 2)
+        .isInstanceOf[AlphaComplexDQPStream] must beFalse).setMessage("an explicit backend is kept") and
+      (AlphaShapes
+        .upToEnclosingRadius(cloud(8, 14, 3), maxRadius = 5.0, maxDimension = 2)
+        .isInstanceOf[AlphaComplexDQPStream] must beTrue).setMessage("a given radius goes through prefersDQP as before")
+  }
+
+  "The verb in 8 dimensions with a low degree cap gives the same bars as the triangulation" >> {
+    val problems = for
+      seed <- 0 until 4
+      cap <- Seq(1, 2, 4)
+      pts = cloud(8, 16, 900L + seed)
+    yield
+      def clean(bars: List[(Int, Double, Double)]) = bars.filter((_, b, d) => d - b > 1e-7).sorted
+      val viaVerb = clean(Persistence(pts, maxDimension = cap, complex = AlphaShapes, characteristic = 3).triples)
+      val viaHelix = clean(
+        Persistence(
+          Truncated(AlphaShapes.upToEnclosingRadius(pts, AlphaBackend.Helix, maxDimension = cap), cap),
+          characteristic = 3
+        ).triples
+      )
+      Option.when(
+        viaVerb.size != viaHelix.size || viaVerb.zip(viaHelix).exists { case ((d1, b1, e1), (d2, b2, e2)) =>
+          d1 != d2 || math.abs(b1 - b2) > 1e-9 || !(e1 == e2 || math.abs(e1 - e2) <= 1e-9)
+        }
+      )(s"seed $seed cap $cap: ${viaVerb.size} vs ${viaHelix.size} bars")
+    problems.flatten must beEmpty
+  }
