@@ -20,7 +20,8 @@ end
 if opts["task"] != "dowker" || parse(Int, get(opts, "p", "2")) != 2 || parse(Int, opts["dim"]) > 1
     exit(3)  # unsupported
 end
-root = get(ENV, "DOWKER_YOON_PROJECT", pwd())
+# the --project directory (where the repository's .jl files are) unless the variable says otherwise
+root = get(ENV, "DOWKER_YOON_PROJECT", dirname(Base.active_project()))
 include(joinpath(root, "Eirene_var.jl"))
 include(joinpath(root, "dowker_persistence.jl"))
 using .Eirene_var
