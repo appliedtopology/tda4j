@@ -353,7 +353,7 @@
     <tr>
      <td><code>alphaBackend</code></td>
      <td><code>default</code>, <code>bowyer-watson</code>, <code>helix</code>, <code>DQP</code></td>
-     <td><code>default</code>: <code>bowyer-watson</code> for points in at most 4 dimensions, <code>helix</code> above; with <code>maxFiltrationValue</code>, <code>DQP</code> instead when it is expected to be faster (same result in general position)</td>
+     <td><code>default</code>: <code>bowyer-watson</code> for points in at most 4 dimensions, <code>helix</code> above; <code>DQP</code> instead when it is expected to be faster: with <code>maxFiltrationValue</code> judged by the radius, without one for points with at least 8 coordinates and a <code>maxDimension</code> at most two below that (same result in general position)</td>
     </tr>
     <tr>
      <td><code>requireValidTriangulation</code></td>

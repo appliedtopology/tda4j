@@ -138,7 +138,7 @@ node4 -> node1;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/alpha/AlphaShapes.scala#L227" target="_blank">AlphaShapes.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/alpha/AlphaShapes.scala#L248" target="_blank">AlphaShapes.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -203,7 +203,7 @@ node4 -> node1;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/alpha/AlphaShapes.scala#L226" target="_blank">AlphaShapes.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/alpha/AlphaShapes.scala#L247" target="_blank">AlphaShapes.scala</a>
               </dd>
              </dl>
             </div>
@@ -250,7 +250,7 @@ node4 -> node1;
                <li><code>BowyerWatson</code> triangulates the whole point set (Delaunay, exact predicates: valid on grids and other degenerate input, and the same whatever the point order) and reads the alpha values off the triangulation. Points spanning at most 4 dimensions only; the fastest in 2-D and 3-D by far.</li>
                <li><code>Helix</code> triangulates the whole point set too, in any dimension, with floating-point predicates.</li>
                <li><code>DQP</code> decides each simplex on its own, dimension by dimension, among points within <code>2 maxRadius</code> of each other: it never builds the whole triangulation, so a small <code>maxRadius</code> (or a low <code>maxDimension</code> in high ambient dimension) makes it much cheaper, while without a radius it is far slower than a triangulation.</li>
-               <li><code>Default</code> picks: without a <code>maxRadius</code>, BowyerWatson for points in at most 4 dimensions and Helix above; with one, DQP instead when it is expected to be faster for this radius, from the average number of points within <code>2 maxRadius</code> of a point (<code>AlphaShapes.prefersDQP</code>).</li>
+               <li><code>Default</code> picks: without a <code>maxRadius</code>, BowyerWatson for points in at most 4 dimensions and Helix above; with one, DQP instead when it is expected to be faster for this radius, from the average number of points within <code>2 maxRadius</code> of a point (<code>AlphaShapes.prefersDQP</code>). (<a href="AlphaShapes$.html#upToEnclosingRadius-7fc">upToEnclosingRadius</a>, which the verb runs on, picks DQP without a radius when the degree cap is low in high dimension.)</li>
               </ul>
               <p>In general position every backend gives the same complex: the simplices whose alpha value (radius) is at most <code>maxRadius</code>, with the same values. On cospherical points DQP keeps the higher-dimensional simplex they span where BowyerWatson and Helix triangulate it (each its own way); the barcode is the same up to zero-length bars.</p>
              </div>
@@ -281,7 +281,7 @@ node4 -> node1;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/alpha/AlphaShapes.scala#L118" target="_blank">AlphaShapes.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/alpha/AlphaShapes.scala#L123" target="_blank">AlphaShapes.scala</a>
               </dd>
              </dl>
             </div>
@@ -316,7 +316,7 @@ node4 -> node1;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/alpha/AlphaShapes.scala#L214" target="_blank">AlphaShapes.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/alpha/AlphaShapes.scala#L235" target="_blank">AlphaShapes.scala</a>
               </dd>
              </dl>
             </div>
@@ -386,7 +386,7 @@ node4 -> node1;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/alpha/AlphaShapes.scala#L185" target="_blank">AlphaShapes.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/alpha/AlphaShapes.scala#L206" target="_blank">AlphaShapes.scala</a>
               </dd>
              </dl>
             </div>
@@ -421,7 +421,42 @@ node4 -> node1;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/alpha/AlphaShapes.scala#L174" target="_blank">AlphaShapes.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/alpha/AlphaShapes.scala#L195" target="_blank">AlphaShapes.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="prefersDQPAtEnclosingRadius-fffff975">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="AlphaShapes$.html#prefersDQPAtEnclosingRadius-fffff975" t="n" class="documentableName ">prefersDQPAtEnclosingRadius</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">points</span>: <a href="PointCloud.html" t="t">PointCloud</a>, <span t="k"></span><span data-unresolved-link="" t="n">maxDimension</span>: <a href="Optional.html" t="t">Optional</a>[<span data-unresolved-link="" t="t">Int</span>]): <span data-unresolved-link="" t="t">Boolean</span>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>Whether <code>DQP</code> is expected to build the alpha complex up to the enclosing radius, and homological degree <code>maxDimension</code>, faster than a triangulation (<code>Helix</code> above 4 dimensions) builds the whole one: in at least <a href="AlphaShapes$.html#dqpMinAmbientDimension-0">dqpMinAmbientDimension</a> dimensions, and with <code>maxDimension</code> at most 2 below the ambient dimension (the top degree <code>d - 1</code> stays on the triangulation: DQP's memory is 1.5 to 2.5 times Helix's there from 10 dimensions). DQP builds only the candidates up to dimension <code>maxDimension + 1</code>, a triangulation every dimension: at 40 points with <code>maxDimension = 4</code> DQP was 3 times faster in 8 dimensions, 8 times in 10 and 28 times in 12 (with a fifth of the memory), and the only backend to finish in 15; at 5 dimensions it was slightly slower and at 6 a tie. Measured for 40 and 60 uniform points, <code>maxDimension</code> 4 and <code>d - 1</code>; the caps in between are interpolated.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p>Whether <code>DQP</code> is expected to build the alpha complex up to the enclosing radius, and homological degree <code>maxDimension</code>, faster than a triangulation (<code>Helix</code> above 4 dimensions) builds the whole one: in at least <a href="AlphaShapes$.html#dqpMinAmbientDimension-0">dqpMinAmbientDimension</a> dimensions, and with <code>maxDimension</code> at most 2 below the ambient dimension (the top degree <code>d - 1</code> stays on the triangulation: DQP's memory is 1.5 to 2.5 times Helix's there from 10 dimensions). DQP builds only the candidates up to dimension <code>maxDimension + 1</code>, a triangulation every dimension: at 40 points with <code>maxDimension = 4</code> DQP was 3 times faster in 8 dimensions, 8 times in 10 and 28 times in 12 (with a fifth of the memory), and the only backend to finish in 15; at 5 dimensions it was slightly slower and at 6 a tie. Measured for 40 and 60 uniform points, <code>maxDimension</code> 4 and <code>d - 1</code>; the caps in between are interpolated.</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/alpha/AlphaShapes.scala#L185" target="_blank">AlphaShapes.scala</a>
               </dd>
              </dl>
             </div>
@@ -456,7 +491,7 @@ node4 -> node1;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/alpha/AlphaShapes.scala#L165" target="_blank">AlphaShapes.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/alpha/AlphaShapes.scala#L170" target="_blank">AlphaShapes.scala</a>
               </dd>
              </dl>
             </div>
@@ -484,7 +519,7 @@ node4 -> node1;
             <div class="cover">
              <div class="doc">
               <p><a href="AlphaShapes$.html#apply-7fc">apply</a>, except that without a <code>maxRadius</code> the complex is cut at the points' minimum enclosing radius (<code>FiniteMetricSpace.minimumEnclosingRadius</code>) rather than left whole: past it the union of balls is contractible, so the barcode is the same, and the simplices of large circumradius that a triangulation has along its hull are never built. This is what <code>Persistence(points, complex = AlphaShapes)</code> runs on.</p>
-              <p><code>AlphaBackend.Default</code> stays on the triangulation <code>apply</code> builds without a radius (it would prefer DQP for any radius in 6 or more dimensions, where this radius leaves every point in every neighbourhood).</p>
+              <p><code>AlphaBackend.Default</code> picks the backend by the degree cap instead of the radius, which here leaves every point in every neighbourhood: DQP when <code>maxDimension</code> is given and low in high ambient dimension (<a href="AlphaShapes$.html#prefersDQPAtEnclosingRadius-fffff975">prefersDQPAtEnclosingRadius</a>), else the triangulation <code>apply</code> builds without a radius.</p>
              </div>
              <h2 class="h200">Attributes</h2>
              <dl class="attributes attributes-small">
@@ -492,7 +527,50 @@ node4 -> node1;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/alpha/AlphaShapes.scala#L80" target="_blank">AlphaShapes.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/alpha/AlphaShapes.scala#L81" target="_blank">AlphaShapes.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+       </div>
+      </section>
+      <section id="Concrete-fields">
+       <div class="documentableList expand">
+        <div class="documentableList-expander">
+         <button class="icon-button show-content expand"></button>
+         <h4 class="groupHeader h200">Concrete fields</h4>
+        </div>
+        <div class="documentableElement" id="dqpMinAmbientDimension-0">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">val </span></span><a href="AlphaShapes$.html#dqpMinAmbientDimension-0" t="n" class="documentableName ">dqpMinAmbientDimension</a>: <span data-unresolved-link="" t="t">Int</span>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>The lowest ambient dimension in which <a href="AlphaShapes$.html#prefersDQPAtEnclosingRadius-fffff975">prefersDQPAtEnclosingRadius</a> says DQP.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p>The lowest ambient dimension in which <a href="AlphaShapes$.html#prefersDQPAtEnclosingRadius-fffff975">prefersDQPAtEnclosingRadius</a> says DQP.</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/alpha/AlphaShapes.scala#L174" target="_blank">AlphaShapes.scala</a>
               </dd>
              </dl>
             </div>
@@ -507,4 +585,4 @@ node4 -> node1;
    </div>
   </div>
  </div>
-</section></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#attributes">Attributes</a></li><li><a href="#members-list">Members list</a><ul><li><a href="#Type-members">Type members</a><ul><li><a href="#Classlikes">Classlikes</a></li><li><a href="#Types">Types</a></li></ul></li><li><a href="#Value-members">Value members</a><ul><li><a href="#Concrete-methods">Concrete methods</a></li></ul></li></ul></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>
+</section></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#attributes">Attributes</a></li><li><a href="#members-list">Members list</a><ul><li><a href="#Type-members">Type members</a><ul><li><a href="#Classlikes">Classlikes</a></li><li><a href="#Types">Types</a></li></ul></li><li><a href="#Value-members">Value members</a><ul><li><a href="#Concrete-methods">Concrete methods</a></li><li><a href="#Concrete-fields">Concrete fields</a></li></ul></li></ul></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>
