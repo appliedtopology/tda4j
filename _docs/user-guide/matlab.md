@@ -93,7 +93,7 @@ for data where a `NaN` can only be a bug.
 | `includeZeroLength` | `true`, `false` | `false` |
 | `sublevel` | `true`, `false` | `true` (images) |
 | `nanMask` | `true` (a `NaN` pixel is masked), `false` (a `NaN` pixel is an error) | `true` (images) |
-| `alphaBackend` | `default`, `bowyer-watson`, `helix`, `DQP` | `default`: `bowyer-watson` for points in at most 4 dimensions, `helix` above; with `maxFiltrationValue`, `DQP` instead when it is expected to be faster (same result in general position) |
+| `alphaBackend` | `default`, `bowyer-watson`, `helix`, `DQP` | `default`: `bowyer-watson` for points in at most 4 dimensions, `helix` above; `DQP` instead when it is expected to be faster: with `maxFiltrationValue` judged by the radius, without one for points with at least 8 coordinates and a `maxDimension` at most two below that (same result in general position) |
 | `requireValidTriangulation` | `true`, `false` | `false` (alpha with `helix`: also check for cavities, and fail rather than return a triangulation that could not be repaired) |
 | `dtmK` | integer | required for `dtm-rips` and `dtm-alpha` |
 | `dtmQ`, `dtmP` | number | `2.0`, `1.0` (`dtmP` is `1.0` or `2.0`, for `dtm-rips`) |

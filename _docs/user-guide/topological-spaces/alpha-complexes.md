@@ -43,8 +43,11 @@ the whole complex.
   whole triangulation, so a small radius makes it cheap, and in high ambient dimension it reaches the low-dimensional
   simplices where a Delaunay triangulation is out of reach. Without a radius it is much slower than a triangulation.
 * **`AlphaBackend.Default`** (the default): Bowyer-Watson for points in at most 4 dimensions, Helix above; with a radius,
-  DQP instead when it is expected to be faster, judged from how many points lie within twice the radius of a point. In
-  general position the result is the same whichever is used.
+  DQP instead when it is expected to be faster, judged from how many points lie within twice the radius of a point.
+  `Persistence` without a radius stops at the enclosing radius and uses DQP when the points have at least 8
+  coordinates and `maxDimension` is at most two below that: its cost follows `maxDimension` and a triangulation's does
+  not (with 40 points in 12 dimensions and `maxDimension = 4`, 25 seconds against 12 minutes, and in 15 dimensions it is
+  the only one that finishes). In general position the result is the same whichever is used.
 
 In degenerate position the alpha complex contains higher-dimensional simplices than a triangulation would: four
 cospherical points span a 3-simplex, so a square grid in the plane produces 3-simplices with DQP. Bowyer-Watson and

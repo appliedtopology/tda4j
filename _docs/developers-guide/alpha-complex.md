@@ -29,9 +29,16 @@ radius, dimension by dimension, up to `maxDimension + 1` (`AlphaComplexDQPStream
 point (64 sample points) and compares a per-point cost model fitted to measurements (DQP about `c_d k^1.6`,
 BowyerWatson about `b_d (n/1000)^0.2`, Helix in 5-D about `150 (n/1000)^0.4`; in ambient dimension 6 and up DQP
 whenever a radius is given). `AlphaShapes.fromPoints` (the `Persistence` verb) and the MATLAB/CLI `maxFiltrationValue`
-pass the radius through. Without one the verb calls `AlphaShapes.upToEnclosingRadius`: the triangulation (`BowyerWatson`
-or `Helix`; `Default` would pick DQP for any radius in 6 or more dimensions) cut at `metricSpace.minimumEnclosingRadius`,
-past which the union of balls is contractible; the MATLAB/CLI `complex=alpha` does the same. `maxFiltrationValue =
+pass the radius through. Without one the verb calls `AlphaShapes.upToEnclosingRadius`, which cuts at
+`metricSpace.minimumEnclosingRadius`, past which the union of balls is contractible, and chooses by the degree cap
+instead of the radius (every point is in every neighbourhood there): `DQP` when the ambient dimension is at least
+`AlphaShapes.dqpMinAmbientDimension` (8) and `maxDimension` is at most 2 below it
+(`AlphaShapes.prefersDQPAtEnclosingRadius`), else the triangulation (`BowyerWatson` or `Helix`). DQP's cost follows the cap
+(it builds simplices up to dimension `maxDimension + 1`) and a triangulation's does not: at 40 points with
+`maxDimension = 4` DQP is 3 times faster in 8 dimensions, 8 times in 10 and 28 times in 12, and the only backend that
+finishes in 15; the top degree `d - 1` stays on the triangulation, where DQP needs up to 2.5 times the memory (the caps
+between 4 and `d - 2` are interpolated, not measured). The MATLAB/CLI
+`complex=alpha` does the same. `maxFiltrationValue =
 Infinity` gives the whole complex, and `engine=fast-alpha` needs a whole triangulation and refuses a radius. The facade's `alphaBackend`
 string goes through `AlphaBackend.parse` (default `default`). All backends extend the common `AlphaShapes` abstract
 class, so they are interchangeable for any code consuming the stream: `AlphaComplexSpec` runs identical property

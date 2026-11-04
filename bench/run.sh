@@ -166,7 +166,7 @@ setup_dowker() {
     # Its Project.toml and Manifest.toml want Julia 1.7.2 and pull in Plots, IJulia and Interact; if the instantiate
     # fails the row is reported as missing and the Python rows are unaffected.
     if "$julia" --project="$TOOLS/Dowker_persistence" -e 'import Pkg; Pkg.instantiate()' \
-       && "$julia" --project="$TOOLS/Dowker_persistence" "$BENCH/workers/dowker_yoon_worker.jl" \
+       && DOWKER_YOON_PROJECT="$TOOLS/Dowker_persistence" "$julia" --project="$TOOLS/Dowker_persistence" "$BENCH/workers/dowker_yoon_worker.jl" \
             task=dowker input="$DATA/relation_60x200.txt" dim=1 p=2 threshold=0.5 warmup=0 trials=1 >/dev/null; then
       echo "$julia" > "$TOOLS/dowker_yoon.path"
     else
