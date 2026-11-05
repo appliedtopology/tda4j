@@ -163,9 +163,15 @@ setup_dowker() {
   fi
   local julia="${JULIA:-$(command -v julia || true)}"
   if [ -n "$julia" ] && [ -d "$TOOLS/Dowker_persistence" ]; then
-    # Its Project.toml and Manifest.toml want Julia 1.7.2 and pull in Plots, IJulia and Interact; if the instantiate
-    # fails the row is reported as missing and the Python rows are unaffected.
-    if "$julia" --project="$TOOLS/Dowker_persistence" -e 'import Pkg; Pkg.instantiate()' \
+    # Its Manifest.toml is from Julia 1.7.2 and cannot be instantiated on a current Julia (MbedTLS_jll is no longer a
+    # stdlib: "Missing source file"). The Project.toml's compat is open, so the tracked manifest is deleted once and
+    # Pkg resolves afresh (Plots, IJulia and Interact come with it, a few minutes of precompilation); a manifest
+    # Pkg wrote since differs from the tracked one and stays. If the resolve fails the row is reported as missing and
+    # the Python rows are unaffected.
+    if git -C "$TOOLS/Dowker_persistence" diff --quiet -- Manifest.toml 2>/dev/null; then
+      rm -f "$TOOLS/Dowker_persistence/Manifest.toml"
+    fi
+    if "$julia" --project="$TOOLS/Dowker_persistence" -e 'import Pkg; Pkg.resolve(); Pkg.precompile()' \
        && DOWKER_YOON_PROJECT="$TOOLS/Dowker_persistence" "$julia" --project="$TOOLS/Dowker_persistence" "$BENCH/workers/dowker_yoon_worker.jl" \
             task=dowker input="$DATA/relation_60x200.txt" dim=1 p=2 threshold=0.5 warmup=0 trials=1 >/dev/null; then
       echo "$julia" > "$TOOLS/dowker_yoon.path"
