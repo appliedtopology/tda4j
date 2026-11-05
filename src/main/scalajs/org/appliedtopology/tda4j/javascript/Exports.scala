@@ -95,6 +95,43 @@ object Exports:
       Result(TDA4j.computeRelativeFromDistanceMatrix(matrix(distances), subcomplex.toArray, optionArray(options)))
     )
 
+  /** The harmonic chain barcode of the Vietoris-Rips complex of a point cloud: each bar's `representative` is a cycle
+    * orthogonal to all boundaries that stays so for the bar's whole life. Coefficients are real (`field: "R"`, the
+    * default here) or exact (`"Q"`), never `"Z"`. See `harmonicChainBarcode` in the user guide.
+    */
+  @JSExportTopLevel("harmonicChainBarcode")
+  def harmonicChainBarcode(
+    points: js.Array[js.Array[Double]],
+    options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
+  ): Result =
+    guarded(Result(TDA4j.harmonicChainBarcodeFromPoints(matrix(points), optionArray(options))))
+
+  /** [[harmonicChainBarcode]] for a finite metric space given as its full matrix of distances. */
+  @JSExportTopLevel("harmonicChainBarcodeFromDistances")
+  def harmonicChainBarcodeFromDistances(
+    distances: js.Array[js.Array[Double]],
+    options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
+  ): Result =
+    guarded(Result(TDA4j.harmonicChainBarcodeFromDistanceMatrix(matrix(distances), optionArray(options))))
+
+  /** The ordinary barcode of the Vietoris-Rips complex of a point cloud, each bar's `representative` the harmonic cycle
+    * at its birth (Basu and Cox). See `harmonicRepresentatives` in the user guide.
+    */
+  @JSExportTopLevel("harmonicRepresentatives")
+  def harmonicRepresentatives(
+    points: js.Array[js.Array[Double]],
+    options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
+  ): Result =
+    guarded(Result(TDA4j.harmonicRepresentativesFromPoints(matrix(points), optionArray(options))))
+
+  /** [[harmonicRepresentatives]] for a finite metric space given as its full matrix of distances. */
+  @JSExportTopLevel("harmonicRepresentativesFromDistances")
+  def harmonicRepresentativesFromDistances(
+    distances: js.Array[js.Array[Double]],
+    options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
+  ): Result =
+    guarded(Result(TDA4j.harmonicRepresentativesFromDistanceMatrix(matrix(distances), optionArray(options))))
+
   /** The map on persistent homology induced by the inclusion of the Vietoris-Rips complex of a subsample (`subsample`:
     * point numbers, from 0) into that of the whole point cloud: see `inclusionMap` in the user guide. Returns
     * `{ maxDimension, characteristic, degrees }` with, for each degree, `{ dimension, sourceBars, targetBars, entries,

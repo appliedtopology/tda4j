@@ -34,11 +34,17 @@ import scala.collection.mutable
   * the bar, and the other chains that are not orthogonal have a multiple of it subtracted. It is the bar's chain at the
   * moment the bar ends, and it was harmonic from the moment the bar began.
   *
+  * In a Vietoris-Rips filtration a triangle enters at the value of its longest edge: if that edge starts a new loop,
+  * the triangle ends the oldest loop it is not orthogonal to, so a long ordinary bar is cut there and appears as
+  * consecutive bars. For the ordinary bars with harmonic representatives use [[HarmonicRepresentatives]]. The births
+  * and deaths are always those of the ordinary barcode, paired differently.
+  *
   * Harmonic means an inner product, so the coefficients are the real numbers (`Coefficients(0)`, the default; a
   * tolerance decides which entries are zero) or the exact rationals (`Coefficients.Rationals`, no tolerance: the
-  * numbers can grow), and a finite field is refused. The result is an ordinary [[PersistenceDiagram]] whose bars carry
-  * their cells, so every tool for diagrams applies; its representatives are chains that are both cycles and cocycles.
-  * The cost is `O(m^3)` for `m` cells in the worst case (the paper's bound) and the chains are kept sparse.
+  * numbers can grow), and a finite field is refused: the dot product is not positive definite there, so a chain can be
+  * orthogonal to itself and the algorithm divides by its length. The result is an ordinary [[PersistenceDiagram]] whose
+  * bars carry their cells, so every tool for diagrams applies; its representatives are chains that are both cycles and
+  * cocycles. The cost is `O(m^3)` for `m` cells in the worst case (the paper's bound) and the chains are kept sparse.
   */
 object HarmonicChainBarcode:
 

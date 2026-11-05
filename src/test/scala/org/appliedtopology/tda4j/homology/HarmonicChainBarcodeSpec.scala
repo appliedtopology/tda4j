@@ -294,6 +294,42 @@ class HarmonicChainBarcodeSpec extends Specification:
       failures.take(2) must beEmpty
     }
 
+    "have the births and the deaths of the ordinary barcode, paired differently" in {
+      val failures = for
+        seed <- 0L until TestPlatform.perPlatform(jvm = 8L, js = 2L)
+        rng = new Random(seed)
+        points = Array.fill(9)(Array(rng.nextDouble(), rng.nextDouble()))
+        rips = VietorisRips(EuclideanMetricSpace(points), maxDimension = 1, maxFiltrationValue = 100.0)
+        harmonic = HarmonicChainBarcode(
+          rips,
+          maxDimension = 1,
+          coefficients = Coefficients.Rationals,
+          includeZeroLength = true
+        ).triples
+        ordinary = Persistence(rips, maxDimension = 1, characteristic = 17, includeZeroLength = true).triples
+        births = (bars: List[(Int, Double, Double)]) => bars.map(b => (b._1, b._2)).sorted
+        deaths = (bars: List[(Int, Double, Double)]) => bars.filter(_._3.isFinite).map(b => (b._1, b._3)).sorted
+        if births(harmonic) != births(ordinary) || deaths(harmonic) != deaths(ordinary)
+      yield s"seed $seed"
+      failures must beEmpty
+    }
+
+    "cut the long bar of a Vietoris-Rips complex where a triangle enters with its longest edge, which the Basu-Cox bars do not" in {
+      // seed 2: one loop in the ordinary barcode; at four values an edge starts a new loop in the same step as a
+      // triangle with that edge as its longest, the triangle ends the older loop, and the loop is four consecutive bars
+      val rng = new Random(2)
+      val points = Array.fill(10)(Array(rng.nextDouble(), rng.nextDouble()))
+      val rips = VietorisRips(EuclideanMetricSpace(points), maxDimension = 1, maxFiltrationValue = 100.0)
+      val ordinary = Persistence(rips, maxDimension = 1, characteristic = 17).dim(1).triples
+      val cut =
+        HarmonicChainBarcode(rips, maxDimension = 1, coefficients = Coefficients.Rationals).dim(1).triples.sorted
+      val representatives = HarmonicRepresentatives(rips, maxDimension = 1, coefficients = Coefficients.Rationals)
+      (ordinary.size must beEqualTo(1)) and (cut.size must beEqualTo(4)) and
+        (cut.head._2 must beEqualTo(ordinary.head._2)) and (cut.last._3 must beEqualTo(ordinary.head._3)) and
+        (cut.zip(cut.tail).forall((a, b) => a._3 == b._2) must beTrue) and
+        (representatives.dim(1).triples must beEqualTo(ordinary))
+    }
+
     "leave out the bars that are born and gone at one value, unless asked" in {
       val rng = new Random(3)
       val points = Array.fill(8)(Array(rng.nextDouble(), rng.nextDouble()))

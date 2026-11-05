@@ -83,6 +83,10 @@ __all__ = [
     "hom_dimension",
     "inclusion_map",
     "inclusion_map_from_distances",
+    "harmonic_chain_barcode",
+    "harmonic_chain_barcode_from_distances",
+    "harmonic_representatives",
+    "harmonic_representatives_from_distances",
     "jar_path",
     "load_result",
     "morse_reduction",
@@ -211,6 +215,46 @@ def relative_persistence_from_distances(distances, subcomplex, **options) -> Res
     return Result(
         _java().computeRelativeFromDistanceMatrix(
             _jvm.points_in(distances, "distances"), _jvm.ints_in(subcomplex, "subcomplex"), _jvm.options_in(options)
+        )
+    )
+
+
+@translating
+def harmonic_chain_barcode(points, **options) -> Result:
+    """The harmonic chain barcode of the Vietoris-Rips complex of a point cloud (Hou, Parsa and Wang): the
+    representative of each bar is a cycle orthogonal to all boundaries (a harmonic cycle) that stays so for the bar's
+    whole life. It is not the ordinary barcode: a cycle stops being harmonic when a cell makes it non-orthogonal to a
+    boundary, before it becomes one.
+
+    Harmonic needs an inner product, so ``field`` is ``"R"`` (the default here; ``epsilon`` is the tolerance) or ``"Q"``
+    (exact rational numbers), and ``"Z"`` is an error. Options: ``max_dimension``, ``max_filtration_value``, ``field``,
+    ``epsilon``, ``include_zero_length`` and the bar options."""
+    return Result(_java().harmonicChainBarcodeFromPoints(_jvm.points_in(points), _jvm.options_in(options)))
+
+
+@translating
+def harmonic_chain_barcode_from_distances(distances, **options) -> Result:
+    """``harmonic_chain_barcode`` for a matrix of distances."""
+    return Result(
+        _java().harmonicChainBarcodeFromDistanceMatrix(_jvm.points_in(distances, "distances"), _jvm.options_in(options))
+    )
+
+
+@translating
+def harmonic_representatives(points, **options) -> Result:
+    """The ordinary barcode of the Vietoris-Rips complex of a point cloud, the representative of each bar the harmonic
+    cycle at its birth (Basu and Cox): picked out by the persistence module alone, so it does not depend on the order
+    of cells of equal value. The options of ``harmonic_chain_barcode`` except ``include_zero_length`` (a bar of length
+    zero has no such cycle)."""
+    return Result(_java().harmonicRepresentativesFromPoints(_jvm.points_in(points), _jvm.options_in(options)))
+
+
+@translating
+def harmonic_representatives_from_distances(distances, **options) -> Result:
+    """``harmonic_representatives`` for a matrix of distances."""
+    return Result(
+        _java().harmonicRepresentativesFromDistanceMatrix(
+            _jvm.points_in(distances, "distances"), _jvm.options_in(options)
         )
     )
 

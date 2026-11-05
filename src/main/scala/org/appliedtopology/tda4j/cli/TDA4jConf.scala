@@ -213,6 +213,16 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
       "the subcomplex on these points: comma-separated 0-based point numbers, e.g. 0,1,2 (--engine takes naive, " +
       "chunks or cohomology; --complex is not offered)"
   )
+  val harmonic: ScallopOption[String] = opt[String](
+    name = "harmonic",
+    noshort = true,
+    descr = "harmonic chains of the Vietoris-Rips complex of a point cloud or a distance matrix: 'chains' for the " +
+      "harmonic chain barcode, whose bars carry a cycle that stays harmonic (orthogonal to all boundaries) for the " +
+      "bar's whole life, or 'representatives' for the ordinary bars with the harmonic cycle of the bar's birth as " +
+      "representative. Harmonic needs an inner product, so --field is R (the default here) or Q; --max-dimension, " +
+      "--max-filtration-value, --epsilon, --min-persistence, --min-persistence-fraction, --threads and, for " +
+      "'chains', --include-zero-length apply (--complex, --engine and --representative-type are not offered)"
+  )
   val inclusionOf: ScallopOption[String] = opt[String](
     name = "inclusion-of",
     descr = "instead of the diagram, write the image, kernel and cokernel of the map on persistent homology induced " +

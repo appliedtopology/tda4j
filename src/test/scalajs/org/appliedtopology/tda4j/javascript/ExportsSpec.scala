@@ -163,6 +163,40 @@ class ExportsSpec extends Specification:
     }
   }
 
+  "harmonicChainBarcode and harmonicRepresentatives" should
+    "give the circle's loop as a cycle, from points and from a distance matrix, and refuse a finite field" >> {
+      val points = circle(8)
+      val distances = js.Array(
+        points.toSeq.map(p => js.Array(points.toSeq.map(q => math.hypot(p(0) - q(0), p(1) - q(1)))*))*
+      )
+      val chosen = options("maxDimension" -> 1, "minPersistence" -> 0)
+      val harmonic = Exports.harmonicChainBarcode(points, chosen)
+      val ordinary = Exports.harmonicRepresentatives(points, chosen)
+      // the representative of a loop is a cycle: its boundary is zero at every vertex
+      def isCycle(result: Result, i: Int): Boolean =
+        val chain = dynamic(result.representative(i))
+        val cells = chain.cells.asInstanceOf[js.Array[js.Array[Int]]]
+        val coefficients = chain.coefficients.asInstanceOf[js.Array[Double]]
+        cells.toSeq
+          .zip(coefficients.toSeq)
+          .flatMap((edge, c) => Seq(edge(1) -> c, edge(0) -> -c))
+          .groupMapReduce(_._1)(_._2)(_ + _)
+          .values
+          .forall(math.abs(_) < 1e-8)
+      def loops(result: Result) = result.bars.indices.filter(i => dynamic(result.bars(i)).dim.asInstanceOf[Int] == 1)
+      (loops(harmonic) must not(beEmpty)) and (loops(harmonic).forall(isCycle(harmonic, _)) must beTrue) and
+        (loops(ordinary).forall(isCycle(ordinary, _)) must beTrue) and
+        (Exports.harmonicChainBarcodeFromDistances(distances, chosen).bars.length must beEqualTo(
+          harmonic.bars.length
+        )) and
+        (Exports.harmonicRepresentativesFromDistances(distances, chosen).bars.length must beEqualTo(
+          ordinary.bars.length
+        )) and
+        (Exports.harmonicChainBarcode(points, options("field" -> "Z")) must throwWith[js.JavaScriptException](
+          "inner product"
+        ))
+    }
+
   "inclusionMap and simplicialMap" should {
     "tell the square's loop from the circle's: the image from the side, the kernel after the circle's loop, the cokernel before" >> {
       val points = circle(24)

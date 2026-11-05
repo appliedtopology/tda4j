@@ -21,8 +21,8 @@ export interface Options {
   maxDimension?: number;
   /** Stop the complex at this scale. Default: the enclosing radius. */
   maxFiltrationValue?: number;
-  /** Coefficients: `"Z"` (a prime field, see `prime`, the default) or `"R"` (floating point numbers). */
-  field?: "Z" | "R";
+  /** Coefficients: `"Z"` (a prime field, see `prime`, the default), `"R"` (floating point numbers) or `"Q"` (exact rational numbers). */
+  field?: "Z" | "R" | "Q";
   /** The prime of the field when `field` is `"Z"`. Default 17. */
   prime?: number;
   /** The tolerance of the alpha complex's degeneracy tests when `field` is `"R"`. */
@@ -165,6 +165,14 @@ export function persistenceFromDistancesAndLandmarks(distances: number[][], land
 export function relativePersistence(points: number[][], subcomplex: number[], options?: Options): Result;
 /** `relativePersistence` for a finite metric space given as its full matrix of distances. */
 export function relativePersistenceFromDistances(distances: number[][], subcomplex: number[], options?: Options): Result;
+/** The harmonic chain barcode of the Vietoris-Rips complex of a point cloud: each bar's representative is a cycle orthogonal to all boundaries that stays so for the bar's whole life. Harmonic needs an inner product, so `field` is `"R"` (the default here) or `"Q"`, not `"Z"`. */
+export function harmonicChainBarcode(points: number[][], options?: Options): Result;
+/** `harmonicChainBarcode` for a finite metric space given as its full matrix of distances. */
+export function harmonicChainBarcodeFromDistances(distances: number[][], options?: Options): Result;
+/** The ordinary barcode of the Vietoris-Rips complex of a point cloud, each bar's representative the harmonic cycle at its birth. Same options as `harmonicChainBarcode` except `includeZeroLength`. */
+export function harmonicRepresentatives(points: number[][], options?: Options): Result;
+/** `harmonicRepresentatives` for a finite metric space given as its full matrix of distances. */
+export function harmonicRepresentativesFromDistances(distances: number[][], options?: Options): Result;
 
 /** The map on persistent homology in one degree: the bars as `[birth, death]` rows, the matrix as `[source bar, target bar, coefficient]` rows (the bars as positions in `sourceBars` and `targetBars`), and the barcodes of its image, kernel and cokernel. */
 export interface MapDegree {

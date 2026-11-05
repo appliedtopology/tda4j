@@ -323,6 +323,35 @@ See [Alpha complex](alpha-complex.md) for backend limitations and triangulation
 repair.
 
 
+## Harmonic chains: `HarmonicChainBarcode` and `HarmonicRepresentatives`
+
+These are not engines in the sense above: they do not reduce the boundary matrix to find a barcode, they follow the
+harmonic chains `ker ∂_p ∩ ker ∂_{p+1}ᵀ` along a simplex-wise filtration, over a field with an inner product (the reals or
+`Coefficients.Rationals`; a finite field is refused, since the dot product is not positive definite there). Both live in
+`homology/` and read any `StratifiedCellStream` with an `OrderedCell`, and the facades expose them for Vietoris-Rips.
+
+`HarmonicChainBarcode` is Algorithm 1 of Hou, Parsa and Wang. One `Run` inserts the cells in the order value, then
+dimension, then the stream's order within a dimension (`insertionOrder`; `ofOrder` takes any order). A positive cell
+creates a harmonic cycle: the cycle that the standard reduction records for it (the `V` column), made orthogonal to an
+orthogonal basis of all cycles of its degree kept so far (Gram-Schmidt, no square roots, so it is exact over the
+rationals); it is the unique cycle with coefficient 1 on the birth cell that is orthogonal to the older cycles, which is the
+paper's `φ`. A negative cell ends the oldest alive chain that is not orthogonal to its boundary, and subtracts a multiple
+of it from the others that are not. The invariants that the specs test, against oracles that share no code with the
+algorithm: the number of bars alive at each value is the Betti number there; the births and deaths are those of the
+ordinary barcode; every chain is a cycle orthogonal to all boundaries at every value of its bar (Definition 11 of the
+paper); the barcode equals the one read off the zigzag of the harmonic spaces by counting `dim ∩ V_k` over each interval.
+
+`HarmonicRepresentatives` replaces the representatives of an ordinary diagram by the harmonic cycles at the births (Basu and
+Cox). It reuses the `Run`'s snapshots of the harmonic chains at the values involved, and for each group of bars with one
+pair of endpoints solves `P^{s,t} = M^{s,t} ∩ (N^{s,t})^⊥` in coordinates of the chains at the birth value; the specs check it
+against the definition of `P` written out in chain coordinates over the rationals. It depends on the filtration's values
+and not on how equal values are ordered.
+
+What does not carry over from the engines above: clearing and apparent pairs give each cell's sign but not the
+pairing the harmonic rule chooses, and a reduction of the complex (discrete Morse theory, edge collapse) changes the inner
+product, so it changes the harmonic barcode. The memory is the orthogonal cycle basis; the cost is cubic in the number
+of cells in the worst case.
+
 ## Querying a run: the cursor
 
 Engine 1's `HomologyState` is a cursor over the stream:

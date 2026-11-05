@@ -137,6 +137,20 @@ the bar flags and `--threads`), and refuses `--complex`, the landmark flags, ima
 $ tda4j --relative-to 0,3,5 --max-dimension 1 points.csv
 ```
 
+## Harmonic chains
+
+`--harmonic chains` writes the [harmonic chain barcode](harmonic-chains.md) of the Vietoris-Rips complex of a point cloud
+or a distance matrix, and `--harmonic representatives` the ordinary bars with the harmonic cycle at each birth as the
+representative, both written like any diagram (add `--representatives` to see the chains). Harmonic needs an inner
+product, so `--field` is `R` (the default here) or `Q`. They take `--max-dimension`, `--max-filtration-value`,
+`--field`, `--epsilon`, `--min-persistence`, `--min-persistence-fraction`, `--threads` and, for `chains`,
+`--include-zero-length`, and refuse the other flags of the diagram (`--complex`, `--engine`, `--representative-type`,
+`--prime`), `--relative-to`, the landmark flags, images, relations and saved results.
+
+```
+$ tda4j --harmonic representatives --max-dimension 1 --representatives points.csv
+```
+
 ## The map of a subsample
 
 `--inclusion-of 0,6,12,18` writes the [map on persistent homology](barcode-algebra.md#maps-between-spaces) of the

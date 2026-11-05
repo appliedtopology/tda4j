@@ -1048,6 +1048,117 @@ object TDA4j:
   // option parsing
   // ---------------------------------------------------------------------------------------------------------------
 
+  private val harmonicBarcodeKeys = Set(
+    "maxdimension",
+    "maxfiltrationvalue",
+    "field",
+    "epsilon",
+    "includezerolength",
+    "minpersistence",
+    "minpersistencefraction",
+    "threads"
+  )
+  // A bar of zero length has no Basu-Cox chain: the chain belongs to a class of the persistence module, which a bar that
+  // begins and ends at one value is not.
+  private val harmonicRepresentativeKeys = harmonicBarcodeKeys - "includezerolength"
+
+  /** The harmonic chain barcode (Hou, Parsa and Wang) of the Vietoris-Rips complex of a point cloud: each bar is a
+    * harmonic cycle, orthogonal to all boundaries, that stays harmonic for the bar's whole life, and `cycleVertices`
+    * and `cycleCoefficients` of the bar are that chain. Harmonic means an inner product, so the field is the real
+    * numbers (`field` `R`, the default, with the tolerance `epsilon`) or the exact rationals (`Q`); `Z` is an error.
+    * Options `maxDimension` (the top degree of the bars, default `2`), `maxFiltrationValue`, `field`, `epsilon`,
+    * `includeZeroLength`, `minPersistence`, `minPersistenceFraction` and `threads`, and no others. See
+    * `HarmonicChainBarcode`.
+    */
+  def harmonicChainBarcodeFromPoints(points: Array[Array[Double]], options: Array[String]): PersistenceResult =
+    validatePoints(points)
+    harmonic(EuclideanMetricSpace(points), options, representatives = false)
+
+  def harmonicChainBarcodeFromPoints(points: Array[Array[Double]]): PersistenceResult =
+    harmonicChainBarcodeFromPoints(points, Array.empty[String])
+
+  /** [[harmonicChainBarcodeFromPoints]] for a finite metric space given as its full matrix of distances. */
+  def harmonicChainBarcodeFromDistanceMatrix(
+    distances: Array[Array[Double]],
+    options: Array[String]
+  ): PersistenceResult =
+    validateSquare(distances)
+    harmonic(explicitMetricSpace(distances), options, representatives = false)
+
+  def harmonicChainBarcodeFromDistanceMatrix(distances: Array[Array[Double]]): PersistenceResult =
+    harmonicChainBarcodeFromDistanceMatrix(distances, Array.empty[String])
+
+  /** The ordinary barcode of the Vietoris-Rips complex of a point cloud with the Basu-Cox harmonic representatives: the
+    * chain of a bar is the harmonic cycle at its birth value, picked out by the persistence module alone (so it does
+    * not depend on how cells of equal value are ordered). The same options as [[harmonicChainBarcodeFromPoints]] except
+    * `includeZeroLength`, which a Basu-Cox chain does not exist for. See `HarmonicRepresentatives`.
+    */
+  def harmonicRepresentativesFromPoints(points: Array[Array[Double]], options: Array[String]): PersistenceResult =
+    validatePoints(points)
+    harmonic(EuclideanMetricSpace(points), options, representatives = true)
+
+  def harmonicRepresentativesFromPoints(points: Array[Array[Double]]): PersistenceResult =
+    harmonicRepresentativesFromPoints(points, Array.empty[String])
+
+  /** [[harmonicRepresentativesFromPoints]] for a finite metric space given as its full matrix of distances. */
+  def harmonicRepresentativesFromDistanceMatrix(
+    distances: Array[Array[Double]],
+    options: Array[String]
+  ): PersistenceResult =
+    validateSquare(distances)
+    harmonic(explicitMetricSpace(distances), options, representatives = true)
+
+  def harmonicRepresentativesFromDistanceMatrix(distances: Array[Array[Double]]): PersistenceResult =
+    harmonicRepresentativesFromDistanceMatrix(distances, Array.empty[String])
+
+  private def harmonic(
+    metricSpace: FiniteMetricSpace[Int],
+    options: Array[String],
+    representatives: Boolean
+  ): PersistenceResult =
+    val opts =
+      parseOptionsWithKeys(options, if representatives then harmonicRepresentativeKeys else harmonicBarcodeKeys)
+    val maxDimension = opts.get("maxdimension").fold(2)(parseIntOption("maxDimension", _))
+    require(maxDimension >= 0, s"option 'maxDimension' must be 0 or more, got '$maxDimension'")
+    val maxFiltrationValue = opts.get("maxfiltrationvalue").map(parseDoubleOption("maxFiltrationValue", _))
+    val coefficients = CoefficientKind.parse(opts.getOrElse("field", "r")) match
+      case CoefficientKind.R => Coefficients(0, opts.get("epsilon").fold(1e-9)(parseDoubleOption("epsilon", _)))
+      case CoefficientKind.Q =>
+        if opts.contains("epsilon") then
+          throw new IllegalArgumentException("option 'epsilon' is the tolerance of field=R: field=Q is exact")
+        Coefficients.Rationals
+      case CoefficientKind.Z =>
+        throw new IllegalArgumentException(
+          "harmonic chains need an inner product on the chains, so option 'field' must be 'R' (the default) or 'Q', " +
+            "not 'Z'"
+        )
+    val threshold = parseThresholdSpec(opts)
+    withThreads(opts) {
+      val complex = VietorisRips(metricSpace, maxDimension = maxDimension, maxFiltrationValue = maxFiltrationValue)
+      val diagram =
+        if representatives then HarmonicRepresentatives(complex, maxDimension, coefficients)
+        else HarmonicChainBarcode(complex, maxDimension, coefficients, wantsZeroLength(opts))
+      import diagram.given
+      val toDouble: diagram.Coefficient => Double = summon[diagram.Coefficient is Field].toDouble(_)
+      val cellVertices: (Int, Simplex[Int]) => Array[Int] = (_, cell) => cell.underlying.toArray
+      threshold(
+        fromBars[Simplex[Int], diagram.Coefficient](
+          diagram.bars,
+          cellVertices,
+          toDouble,
+          maxDimension,
+          () =>
+            buildBoundaryMatrix[Simplex[Int], diagram.Coefficient](
+              complex.iterator.toIndexedSeq,
+              cellVertices,
+              toDouble,
+              complex.filtrationValue
+            )
+        ),
+        metricSpace.minimumEnclosingRadius
+      )
+    }
+
   private val recognizedKeys = Set(
     "complex",
     "engine",
@@ -2661,8 +2772,10 @@ object TDA4j:
       val dim = indexed(i).dim
       indexed(i).annotation match
         case Some(chain) =>
-          chain.collapseAll()
-          val items = chain.rawEntries
+          // `terms` is one entry per cell, in cell order: the vertices and the coefficients are two reads of this
+          // provider (`cycleVertices(i)`, `cycleCoefficients(i)`), and a heap's own order after `collapseAll` is not
+          // the same from one call to the next, which paired a coefficient with another cell's vertices.
+          val items = chain.terms
           (items.map(t => cellVertices(dim, t._1)).toArray, items.map(t => toDouble(t._2)).toArray)
         case None =>
           throw new UnsupportedOperationException(
