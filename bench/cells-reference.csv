@@ -41,3 +41,15 @@ unif5d_500,alpha,500,5,2,,gudhi,268107,500,14370,81069,172168,,,,,,tda4j agrees,
 unif10d_1000,alpha,1000,10,2,1.0,tda4j,2691159,1000,65696,595651,2028812,,,,,,single source (TDA4j's own count),60acd01c8579c8203d55b32e3c097a657e5aeccd75a4f5b754c7cfbbf4d4f88a
 o3_1024_alpha,alpha,1024,9,2,0.670713,tda4j,30634,1024,7613,13356,8641,,,,,,single source (TDA4j's own count),fe48136f1da0ef449ce2e417ed256144397c5a337187799ab866b2a1234c2f8d
 cyclooctane_alpha,alpha,6040,24,2,0.25,tda4j,70896,6040,24646,28352,11858,,,,,,single source (TDA4j's own count),262cd4eff6d0ff7404de7d324eff1478d24eabfce3fd66c8adaa2f7d2af02320
+cech_unif3d_80,cech,80,3,2,,tda4j,1666980,80,3160,82160,1581580,,,,,,single source (TDA4j's own count),f1332154ee046616088d4e43a20d463211840ae4e1f82555e46de738f35fd12e
+cech_unif3d_1000,cech,1000,3,2,0.08,tda4j,41682,1000,7043,15354,18285,,,,,,single source (TDA4j's own count),ccd293f2b7f0e92433730e7cda9b82d8758b1cc8abe254f6fd7096bcbb78d228
+cech_unif5d_500,cech,500,5,2,0.2,tda4j,14118,500,3436,5552,4630,,,,,,single source (TDA4j's own count),cf4d04beb15689176f913e1bc403348fe6b7582fbfa9df49c7825cb86f68b48f
+dtm_circle_outliers,dtm,600,2,1,0.6,tda4j,403060,532,19885,382643,,,,,,,single source (TDA4j's own count),fba99f57cb0f75392e70ed00d50532b84dba66175e915340dd1bc3a5d0cfa049
+dtm_unif3d_1000,dtm,1000,3,2,0.15,tda4j,27,26,1,,,,,,,,single source (TDA4j's own count),ccd293f2b7f0e92433730e7cda9b82d8758b1cc8abe254f6fd7096bcbb78d228
+witness_unif3d_1000_L50,witness,1000,3,2,,tda4j,44802,50,823,6993,36936,,,,,,single source (TDA4j's own count),ccd293f2b7f0e92433730e7cda9b82d8758b1cc8abe254f6fd7096bcbb78d228
+witness_unif3d_5000_L100,witness,5000,3,2,,tda4j,594582,100,3152,51736,539594,,,,,,single source (TDA4j's own count),e4137799e8da9b1e8ee9e774fec2d75d01f9d525c9b3748b567fc069a2a9f7c4
+sparse_sphere3_96,sparse,96,3,2,1.941142361098062,tda4j,611502,96,2806,47766,560834,,,,,,single source (TDA4j's own count),12727b85ff728b925373e4240ca7f0c178adc472eae5d8891710828adbec3540
+sparse_o3_1024,sparse,1024,9,2,1.8,tda4j,2235677,1024,31940,331762,1870951,,,,,,single source (TDA4j's own count),fe48136f1da0ef449ce2e417ed256144397c5a337187799ab866b2a1234c2f8d
+sparse_unif3d_1000,sparse,1000,3,2,0.25,tda4j,1187824,1000,23002,197198,966624,,,,,,single source (TDA4j's own count),ccd293f2b7f0e92433730e7cda9b82d8758b1cc8abe254f6fd7096bcbb78d228
+dowker_300x100,dowker,300,,1,0.35,tda4j,450757,300,17612,432845,,,,,,,single source (TDA4j's own count),660ad7b1558085af1401e2e69e4c0131c9443a0ef762783ada5b70a6a9521f79
+dowker_60x200,dowker,60,,2,0.5,tda4j,231531,60,1540,22136,207795,,,,,,single source (TDA4j's own count),d04ead02cf0ff6e60b6cb5eaae2674208f373aa8fcb26961b2e804694a6e8bfc
