@@ -23,16 +23,7 @@ describes how to measure, and the tools in the repository for doing it.
 - **Say when an effect is within the noise.** A difference smaller than the
   spread between processes is not a result.
 
-For memory, compare a heap histogram (`jcmd <pid> GC.class_histogram`, which
-collects first, so it shows what is live), or find the smallest `-Xmx` at which
-each variant still finishes at its speed. An `OutOfMemoryError` at a heap size
-where the other variant runs is a clearer result than a timing. Peak RSS of a
-JVM is a measure of its collector's policy before it is one of the computation:
-with a large pinned heap (`--jvm-fixed-heap`) it is what the run allocated until
-the first collection, and several computations in one process fill the whole
-young generation whatever one of them needs. The benchmark's default is the
-serial collector with a heap that follows the live data, so its RSS is close to
-what a computation needs and comparable with the native tools.
+For memory, see [Memory: measure the live data](#memory-measure-the-live-data) below.
 
 ## Benchmark specs
 
@@ -81,6 +72,59 @@ For where the time goes inside a run, record it with Java Flight Recorder
 (`-XX:StartFlightRecording`). The scripts `run-single-engine-jfr.sh` and
 `jfr-summarize.sh` in `.claude/scripts/` wrap a driver run and summarize the
 hot methods.
+
+## A worked A/B
+
+To compare a change with the code before it:
+
+1. `git worktree add ../tda4j-a <base>` and `../tda4j-b <change>`. In each, `sbt "export Test/fullClasspath"` (one sbt at a
+   time), and note the two classpaths. Each worktree keeps its own `target/`, so neither build disturbs the other.
+2. Pick a driver and a workload that exercise the change through the entry point a user calls (below). The workload must
+   be large enough that one run takes seconds: below that the JIT's first compilations are most of what you time.
+3. Run `java -cp $CP_A ...`, then `$CP_B`, then A, then B, each as a fresh JVM, at least three times each. The driver prints
+   the median of its timed trials and one JSON line; compare the medians of the processes, and look at the spread.
+4. Add `digest=true` to `PaperBenchmarkDriver`: it prints a SHA-256 of the last diagram's bars with their representatives'
+   terms. **Equal digests across the two builds show the change altered no output**, which is what an optimisation claims.
+   A digest does not apply to a change that is allowed to change representatives; compare bars there.
+5. Report what the numbers show. An effect inside the spread between processes is unconfirmed, and says so.
+
+Mutation-test the new code the same way you would a spec: an A/B on code that is not run proves nothing, and a
+wrong answer that is fast shows as an improvement.
+
+## Profile the steady state, through the real entry point
+
+- **Skip the warm-up.** A fresh JVM spends its first few runs in the interpreter and the compilers: runs that take
+  3 to 5 seconds at first take 1 second once warm, whatever the collector. A recording of the whole process mostly profiles
+  the JIT. Start it after the warm-up (`-XX:StartFlightRecording:delay=22s,...`) and run enough trials (30 or so)
+  to have samples to read.
+- **Profile what the user calls.** The default `Persistence` run on points asks for cycles, which Ripser derives from its
+  cocycles by an extra reduction (`Involution`); a profile of the cocycle-only driver never sees that pass, and half the
+  time of the default run once went there. `PaperBenchmarkDriver ... reps=cycles` is the default row.
+- **JFR names the hot method, not the cost of removing it.** A frame that shows hot in the profile can cost nothing
+  when removed (the sampled allocation sites of a tabulate, the inlining of a sort); check each candidate with an A/B
+  before you build on it.
+- `jfr-summarize.sh <recording.jfr>` reduces a recording to the top CPU leaf frames and the top allocation sources by
+  class and by call site, weighted by bytes, in under a hundred lines. For allocation, `jdk.ObjectAllocationSample`
+  grouped by class and by the first TDA4j frame, with its line number, finds the boxing sites in one pass.
+
+## Memory: measure the live data
+
+Peak RSS follows the collector. With `-Xmx` equal to `-Xms` and the parallel collector, a 1 to 3 GB computation never
+collects in a 16 GB heap, and RSS is the sum of everything it allocated, including the trials after the first. The
+benchmarks therefore use the serial collector with a heap that follows the live data. To find what a computation
+needs: the heap histogram at a point where its result is still reachable (`hold=<seconds>` keeps the last diagram alive
+for it), the smallest `-Xmx` at which it finishes, or `heap_peak_mb` and `old_peak_mb` of the driver's own pools.
+
+Memory limits what can be computed more than time does, so the project prefers a small slowdown that saves a lot of memory
+(hybrid dense and neighbour-list edge ranks in `ParallelRipser`, primitive per-simplex state, bars of 330 bytes rather
+than objects of several times that). Show both numbers.
+
+## The same entry point on both platforms
+
+A benchmark of Scala.js against the JVM is only meaningful when both sides run the same code path. The npm package is the
+facade (`matlab.TDA4j`), the `Persistence` verb is something else: they differ in the degrees they build, in
+zero-length bars and in representatives, and a 500-fold difference between "JS" and "JVM" once came from exactly that.
+Compare facade with facade, or verb with verb. See [JVM and Scala.js](jvm-and-js.md).
 
 ## Against other libraries: `bench/`
 
