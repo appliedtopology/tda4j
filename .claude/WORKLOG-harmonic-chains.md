@@ -88,3 +88,10 @@ Limits and open items
   idea (memory over speed, Mikael 2026-10-24).
 - No cocycle variant, no representative-type option; a persistent-Laplacian kernel as chains is a cheap follow-up; the
   Gülen-Mémoli-Wan poset construction is not built.
+
+Issues filed: #304 (a large prime for harmonic chains, a decision), #305 (memory of the orthogonal cycle basis), #306 (VR
+bars cut at apparent pairs; 16 of the 84 extra bars unexamined), #307 (cocycles, Laplacian kernel as chains, poset construction).
+
+Checks run (2026-11-05): `tda4j/testFull` 2289 examples, no failures; `tda4jJS` the harmonic, exports and TDAlab specs
+(68 examples) and then the whole suite; the Python suite against the assembly jar (114 tests, including
+`test_facade_coverage.py`); native scalafmt `--check`.
