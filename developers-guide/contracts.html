@@ -1,0 +1,239 @@
+<!DOCTYPE html><html data-githubContributorsUrl="https://api.github.com/repos/appliedtopology/tda4j" data-githubContributorsFilename="_docs/developers-guide/contracts.md" data-pathToRoot="../" data-rawLocation="developers-guide/contracts" data-dynamicSideMenu="false"><head><meta charset="utf-8"></meta><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"></meta><title>Contracts</title><link rel="canonical" href="https://tda4j.appliedtopology.org/developers-guide/contracts.html"></link><link rel="shortcut icon" type="image/x-icon" href="../favicon.ico"></link><script type="text/javascript" src="../scripts/theme.js"></script><script type="text/javascript" src="../scripts/searchData.js" defer="true"></script><script type="text/javascript" src="../scripts/scastieConfiguration.js" defer="true"></script><link rel="stylesheet" href="../styles/theme/bundle.css"></link><link rel="stylesheet" href="../styles/theme/components/bundle.css"></link><link rel="stylesheet" href="../styles/theme/components/button/bundle.css"></link><link rel="stylesheet" href="../styles/theme/layout/bundle.css"></link><link rel="stylesheet" href="../styles/nord-light.css"></link><link rel="stylesheet" href="../styles/dotty-icons.css"></link><link rel="stylesheet" href="../styles/filter-bar.css"></link><link rel="stylesheet" href="../styles/code-snippets.css"></link><link rel="stylesheet" href="../styles/searchbar.css"></link><link rel="stylesheet" href="../styles/social-links.css"></link><link rel="stylesheet" href="../styles/versions-dropdown.css"></link><link rel="stylesheet" href="../styles/content-contributors.css"></link><link rel="stylesheet" href="../styles/fontawesome.css"></link><script type="text/javascript" src="../hljs/highlight.pack.js" defer="true"></script><script type="text/javascript" src="../scripts/hljs-scala3.js" defer="true"></script><script type="text/javascript" src="../scripts/ux.js" defer="true"></script><script type="text/javascript" src="../scripts/common/component.js" defer="true"></script><script type="text/javascript" src="../scripts/common/utils.js" defer="true"></script><script type="text/javascript" src="../scripts/components/FilterBar.js" defer="true"></script><script type="text/javascript" src="../scripts/components/DocumentableList.js" defer="true"></script><script type="text/javascript" src="../scripts/components/Input.js" defer="true"></script><script type="text/javascript" src="../scripts/components/FilterGroup.js" defer="true"></script><script type="text/javascript" src="../scripts/components/Filter.js" defer="true"></script><script type="text/javascript" src="../scripts/scaladoc-scalajs.js" defer="true"></script><script type="text/javascript" src="../scripts/contributors.js" defer="true"></script><script type="text/javascript" src="https://code.jquery.com/jquery-3.5.1.min.js" defer="true"></script><script type="text/javascript" src="https://d3js.org/d3.v6.min.js" defer="true"></script><script type="text/javascript" src="https://cdn.jsdelivr.net/npm/graphlib-dot@0.6.2/dist/graphlib-dot.min.js" defer="true"></script><script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/dagre-d3/0.6.1/dagre-d3.min.js" defer="true"></script><script type="text/javascript" src="https://scastie.scala-lang.org/embedded.js" defer="true"></script><script type="text/javascript" src="../scripts/data.js" defer="true"></script><link rel="stylesheet" href="../styles/staticsitestyles.css"></link><script>var pathToRoot = "../";</script><style>
+     :root {
+          /* text */
+          --text-primary: #205976;
+          --text-secondary: #866504;
+          --text-text-tertiary: #206f6f;
+          --text-text-inverted: #eef3f5;
+
+          /* background */
+          --background-default: #f8f7f4;
+          --background-subtle: var(--grey2);
+          --background-neutral: var(--grey3);
+     }
+     :root.theme-dark {
+
+          /* text */
+          --text-primary: #81bde0;
+          --text-secondary: #f0c647;
+          --text-text-tertiary: #75c7c7;
+          --text-text-inverted: #1a262b;
+
+          /* background */
+          --background-default: #161b1e;
+          --background-subtle: var(--grey2);
+          --background-neutral: var(--grey3);
+
+
+     }
+     :is(#content h1, h2, h3, h4, h5, h6, .h50, .h100, .h200, .h300, .h400, .h500, .h600, .h700) {
+          color: var(--text-secondary);
+     }
+     /* The large logo comes in a light and a dark version (brand/large-logo.svg, large-logo-dark.svg); the page holds both. */
+     .logo-dark { display: none; }
+     :root.theme-dark .logo-light { display: none; }
+     :root.theme-dark .logo-dark { display: inline; }
+</style>
+<style>
+     /* Language tabsets: <div class="tabset"><div class="tab" data-lang="Scala">...</div>...</div>; see WORKLOG-tutorial-tabs.md */
+     .tabset { margin: 1em 0; }
+     .tabset > .tab-bar { display: flex; gap: 0.25em; border-bottom: 1px solid var(--text-primary); }
+     .tabset > .tab-bar > button { background: none; border: 1px solid transparent; border-bottom: none; padding: 0.3em 0.9em; cursor: pointer; color: var(--text-primary); font: inherit; }
+     .tabset > .tab-bar > button[aria-selected="true"] { border-color: var(--text-primary); background: var(--background-subtle); font-weight: bold; }
+     .tabset.js-ready > .tab:not(.active) { display: none; }
+     .tabset > .tab > *:first-child { margin-top: 0.5em; }
+     div.mermaid { overflow-x: auto; margin: 1em 0; }
+</style>
+<script>
+     // Builds a tab bar for each .tabset from its .tab children's data-lang, and keeps every tabset on the page (and on later pages) on the same language.
+     document.addEventListener("DOMContentLoaded", function () {
+          var KEY = "tda4j-language";
+          var saved = null;
+          try { saved = localStorage.getItem(KEY); } catch (e) {}
+          var sets = Array.prototype.slice.call(document.querySelectorAll(".tabset"));
+          function show(lang) {
+               sets.forEach(function (set) {
+                    var tabs = Array.prototype.slice.call(set.children).filter(function (c) { return c.classList.contains("tab"); });
+                    var chosen = tabs.some(function (t) { return t.dataset.lang === lang; }) ? lang : tabs[0].dataset.lang;
+                    tabs.forEach(function (t) { t.classList.toggle("active", t.dataset.lang === chosen); });
+                    set.querySelectorAll(".tab-bar > button").forEach(function (b) { b.setAttribute("aria-selected", b.textContent === chosen ? "true" : "false"); });
+               });
+          }
+          sets.forEach(function (set) {
+               var bar = document.createElement("div");
+               bar.className = "tab-bar";
+               bar.setAttribute("role", "tablist");
+               Array.prototype.slice.call(set.children).filter(function (c) { return c.classList.contains("tab"); }).forEach(function (t) {
+                    var b = document.createElement("button");
+                    b.type = "button";
+                    b.setAttribute("role", "tab");
+                    b.textContent = t.dataset.lang;
+                    b.addEventListener("click", function () {
+                         try { localStorage.setItem(KEY, t.dataset.lang); } catch (e) {}
+                         show(t.dataset.lang);
+                    });
+                    bar.appendChild(b);
+               });
+               set.insertBefore(bar, set.firstChild);
+               set.classList.add("js-ready");
+          });
+          show(saved);
+     });
+</script>
+<script>
+     // Mermaid diagrams. Scaladoc renders a ```mermaid fence as <pre><code class="language-mermaid">, which mermaid does not
+     // pick up by itself. On a page that has one, load mermaid (pinned; only there, it is 2.5 MB) and draw each block in
+     // the site's light or dark theme, redrawing when the reader switches. If the script cannot load, the source stays.
+     document.addEventListener("DOMContentLoaded", function () {
+          var codes = Array.prototype.slice.call(document.querySelectorAll("pre > code.language-mermaid"));
+          if (!codes.length) return;
+          var script = document.createElement("script");
+          script.src = "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js";
+          script.onload = function () {
+               var diagrams = codes.map(function (code) {
+                    var div = document.createElement("div");
+                    div.className = "mermaid";
+                    div.dataset.source = code.textContent;
+                    code.parentNode.replaceWith(div);
+                    return div;
+               });
+               var drawnDark = null;
+               function draw() {
+                    var dark = document.documentElement.classList.contains("theme-dark");
+                    if (dark === drawnDark) return;
+                    drawnDark = dark;
+                    mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: dark ? "dark" : "default" });
+                    diagrams.forEach(function (d) {
+                         d.removeAttribute("data-processed");
+                         d.textContent = d.dataset.source;
+                    });
+                    // Mermaid scales a diagram down to the column, which makes a wide one unreadable (its useMaxWidth setting
+                    // does not reach class diagrams). Shrink to fit only down to 70% of natural size; wider than that, keep
+                    // 70% and scroll sideways.
+                    mermaid.run({ nodes: diagrams }).then(function () {
+                         diagrams.forEach(function (d) {
+                              var svg = d.querySelector("svg");
+                              var box = svg && svg.viewBox && svg.viewBox.baseVal;
+                              if (!box || !box.width) return;
+                              var width = Math.max(Math.min(box.width, d.clientWidth), 0.7 * box.width);
+                              svg.style.maxWidth = "none";
+                              svg.setAttribute("width", width);
+                              svg.setAttribute("height", box.height * width / box.width);
+                         });
+                    });
+               }
+               draw();
+               new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+          };
+          document.head.appendChild(script);
+     });
+</script></head><body><div id=""><div id="header" class="body-small"><div class="header-container-left"><a href="../" class="logo-container"><span id="project-logo" class="project-logo"><img src="../project-logo/header-icon.svg"></img></span><span id="dark-project-logo" class="project-logo"><img src="../project-logo/header-icon.svg"></img></span><span class="project-name h300">tda4j</span></a><span onclick="dropdownHandler(event)" class="text-button with-arrow" id="dropdown-trigger"><a><div class="projectVersion">dev</div></a></span><div id="version-dropdown" class="dropdown-menu"></div></div><div class="header-container-right"><button id="search-toggle" class="icon-button"></button><a href="https://appliedtopology.org" class="text-button">Applied Topology</a><a href="https://scastie.scala-lang.org/?inputs=%7B%22_isWorksheetMode%22%3A%20true%2C%20%22code%22%3A%20%22import%20scala.language.experimental.modularity%5Cnimport%20org.appliedtopology.tda4j.*%5Cnval%20d%20%3D%20Persistence%28Seq%28Seq%280.0%2C%200.0%29%2C%20Seq%281.0%2C%200.0%29%2C%20Seq%281.0%2C%201.0%29%2C%20Seq%280.0%2C%201.0%29%29%29%5Cnd.bars.map%28b%20%3D%3E%20%28b.dim%2C%20b.birth%2C%20b.death%29%29%5Cn%22%2C%20%22target%22%3A%20%7B%22scalaVersion%22%3A%20%223.9.0%22%2C%20%22tpe%22%3A%20%22Scala3%22%7D%2C%20%22libraries%22%3A%20%5B%5D%2C%20%22librariesFromList%22%3A%20%5B%5D%2C%20%22sbtConfigExtra%22%3A%20%22scalacOptions%20%2B%2B%3D%20Seq%28%5C%22-deprecation%5C%22%2C%20%5C%22-encoding%5C%22%2C%20%5C%22UTF-8%5C%22%2C%20%5C%22-feature%5C%22%2C%20%5C%22-unchecked%5C%22%2C%20%5C%22-source%3Afuture%5C%22%2C%20%5C%22-language%3Aexperimental.modularity%5C%22%2C%20%5C%22-language%3AimplicitConversions%5C%22%2C%20%5C%22-language%3AadhocExtensions%5C%22%29%5CnlibraryDependencies%20%2B%3D%20%5C%22org.appliedtopology%5C%22%20%25%25%20%5C%22tda4j%5C%22%20%25%20%5C%220.6.2%5C%22%5Cn%22%2C%20%22sbtPluginsConfigExtra%22%3A%20%22%22%2C%20%22isShowingInUserProfile%22%3A%20true%7D" class="text-button">Playground</a><span id="theme-toggle" class="icon-button"></span><span id="mobile-menu-toggle" class="icon-button hamburger"></span></div></div><div id="mobile-menu"><div class="mobile-menu-header body-small"><span class="mobile-menu-logo"><span id="project-logo" class="project-logo"><img src="../project-logo/header-icon.svg"></img></span><span id="dark-project-logo" class="project-logo"><img src="../project-logo/header-icon.svg"></img></span><span class="project-name h300">tda4j</span></span><button id="mobile-menu-close" class="icon-button close"></button></div><div class="mobile-menu-container body-medium"><input id="mobile-scaladoc-searchbar-input" class="scaladoc-searchbar-input" type="search" placeholder="Find anything"></input><a href="https://appliedtopology.org" class="mobile-menu-item">Applied Topology</a><a href="https://scastie.scala-lang.org/?inputs=%7B%22_isWorksheetMode%22%3A%20true%2C%20%22code%22%3A%20%22import%20scala.language.experimental.modularity%5Cnimport%20org.appliedtopology.tda4j.*%5Cnval%20d%20%3D%20Persistence%28Seq%28Seq%280.0%2C%200.0%29%2C%20Seq%281.0%2C%200.0%29%2C%20Seq%281.0%2C%201.0%29%2C%20Seq%280.0%2C%201.0%29%29%29%5Cnd.bars.map%28b%20%3D%3E%20%28b.dim%2C%20b.birth%2C%20b.death%29%29%5Cn%22%2C%20%22target%22%3A%20%7B%22scalaVersion%22%3A%20%223.9.0%22%2C%20%22tpe%22%3A%20%22Scala3%22%7D%2C%20%22libraries%22%3A%20%5B%5D%2C%20%22librariesFromList%22%3A%20%5B%5D%2C%20%22sbtConfigExtra%22%3A%20%22scalacOptions%20%2B%2B%3D%20Seq%28%5C%22-deprecation%5C%22%2C%20%5C%22-encoding%5C%22%2C%20%5C%22UTF-8%5C%22%2C%20%5C%22-feature%5C%22%2C%20%5C%22-unchecked%5C%22%2C%20%5C%22-source%3Afuture%5C%22%2C%20%5C%22-language%3Aexperimental.modularity%5C%22%2C%20%5C%22-language%3AimplicitConversions%5C%22%2C%20%5C%22-language%3AadhocExtensions%5C%22%29%5CnlibraryDependencies%20%2B%3D%20%5C%22org.appliedtopology%5C%22%20%25%25%20%5C%22tda4j%5C%22%20%25%20%5C%220.6.2%5C%22%5Cn%22%2C%20%22sbtPluginsConfigExtra%22%3A%20%22%22%2C%20%22isShowingInUserProfile%22%3A%20true%7D" class="mobile-menu-item">Playground</a><span id="mobile-theme-toggle" class="mobile-menu-item mode"></span></div></div><span id="mobile-sidebar-toggle" class="floating-button"></span><div id="leftColumn" class="body-small"><div class="switcher-container"><a id="docs-nav-button" class="switcher h100 selected" href="../index.html">Docs</a><a id="api-nav-button" class="switcher h100 " href="../api/index.html">API</a></div><nav id="docs-nav" class="side-menu"><div class="ni n0"><span class="nh de"><button class="ar icon-button "></button><a href="../tutorials/index.html"><span>Tutorials for TDA4j</span></a></span><div class="ni n1 "><span class="nh de"><a href="../tutorials/all-ways-to-call.html"><span>All the ways to call TDA4j</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../tutorials/find-a-loop.html"><span>Finding a loop in noisy data</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../tutorials/choosing-a-complex.html"><span>Choosing a complex</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../tutorials/noise-and-outliers.html"><span>Noise and outliers</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../tutorials/circular-and-toroidal-coordinates.html"><span>Circular and toroidal coordinates</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../tutorials/comparing-barcodes.html"><span>Comparing barcodes</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../tutorials/images.html"><span>Topology of an image</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../tutorials/truchet-tiles.html"><span>Curves in a Truchet pattern</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../tutorials/networks-and-relations.html"><span>Networks and relations</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../tutorials/telling-spaces-apart.html"><span>Telling spaces apart</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../tutorials/persistent-group-cohomology.html"><span>Persistent group cohomology</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../tutorials/scaling-up.html"><span>Scaling up</span></a></span></div></div><div class="ni n0 expanded"><span class="nh h100 expanded cs de"><button class="ar icon-button expanded"></button><a href="index.html"><span>Developer&apos;s Guide for TDA4j</span></a></span><div class="ni n1 "><span class="nh de"><a href="scala3-primer.html"><span>A Scala 3.7+ primer for this codebase</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="architecture.html"><span>Architecture: from algebra to persistence</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="public-api.html"><span>The public API: the verb, diagrams and labs</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="persistence-engines.html"><span>Persistence engines: what to trust, and why</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="alpha-complex.html"><span>Alpha complex: Bowyer-Watson, Helix and DQP</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="nerves.html"><span>Nerves and group homology</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="plotting.html"><span>Plotting internals</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="performance.html"><span>Measuring performance</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="facades.html"><span>Extending the facades</span></a></span></div><div class="ni n1 expanded"><span class="nh h100 selected de"><a href="#"><span>Contracts</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="adding-engines-and-complexes.html"><span>Adding an engine or a complex</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="jvm-and-js.html"><span>JVM and Scala.js</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="testing.html"><span>Testing conventions</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="pr-workflow.html"><span>Pull request workflow</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="degeneracies.html"><span>Degeneracy behaviors that look like bugs but aren&apos;t</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="gotchas.html"><span>Hard-won invariants you must not break</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="class-diagrams.html"><span>Mapping the library: class diagrams</span></a></span></div></div><div class="ni n0"><span class="nh de"><button class="ar icon-button "></button><a href="../user-guide/index.html"><span>User Guide for TDA4j</span></a></span><div class="ni n1 "><span class="nh de"><a href="../user-guide/installation.html"><span>Installation</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/quickstart.html"><span>Quickstart</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/cli.html"><span>Command-line tool: `tda4j`</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/matlab.html"><span>Calling from MATLAB or Java</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/javascript.html"><span>Using it from JavaScript</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/python.html"><span>Using it from Python</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/coming-from-other-libraries.html"><span>Coming from JavaPlex, Ripser or GUDHI</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/troubleshooting.html"><span>Troubleshooting</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/glossary.html"><span>Glossary</span></a></span></div><div class="ni n1"><span class="nh de"><button class="ar icon-button "></button><a href="../user-guide/user-guide/topological-spaces/index.html"><span>Complexes</span></a></span><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/topological-spaces/vietoris-rips.html"><span>Vietoris-Rips complexes</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/topological-spaces/cech-complexes.html"><span>Čech complexes</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/topological-spaces/alpha-complexes.html"><span>Alpha complexes</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/topological-spaces/sparse-vietoris-rips.html"><span>Sparse Rips complexes</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/topological-spaces/witness-complexes.html"><span>Witness complexes</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/topological-spaces/dowker-complexes.html"><span>Dowker complexes</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/topological-spaces/cubical-complexes.html"><span>Cubical complexes and images</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/topological-spaces/simplicial-sets.html"><span>Simplicial sets</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/topological-spaces/series-graphs-functions.html"><span>Time series, graphs and functions</span></a></span></div></div><div class="ni n1"><span class="nh de"><button class="ar icon-button "></button><a href="../user-guide/user-guide/homology-computation/index.html"><span>Homology computation</span></a></span><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/homology-computation/choosing-engine.html"><span>Which persistence engine?</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/homology-computation/fast-cubical.html"><span>The fast cubical engine</span></a></span></div><div class="ni n2 "><span class="nh de"><a href="../user-guide/user-guide/homology-computation/fast-alpha-complexes.html"><span>The fast alpha engine</span></a></span></div></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/boundary-matrix.html"><span>Boundary-matrix export</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/circular-coordinates.html"><span>Circular and toroidal coordinates</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/input-output.html"><span>Loading and saving data</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/barcode-algebra.html"><span>Maps between barcodes</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/barcode-products.html"><span>Products, Hom and duals of barcodes</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/persistent-laplacian.html"><span>The persistent Laplacian</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/discrete-morse.html"><span>Discrete Morse theory</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/zigzag-persistence.html"><span>Zigzag persistence</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/relative-persistence.html"><span>Pairs of spaces</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/utilities.html"><span>Linear algebra, graphs and neighbours</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/vectorization.html"><span>Comparing diagrams and turning them into vectors</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/noise-and-clusters.html"><span>Telling features from noise, and clustering</span></a></span></div><div class="ni n1 "><span class="nh de"><a href="../user-guide/plotting.html"><span>Plotting</span></a></span></div></div></nav></div><div id="footer" class="body-small"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div><div id="scaladoc-searchBar"></div><div id="main"><div class="breadcrumbs container"><a href="../index.html">tda4j</a>/<a href="index.html">Developer&apos;s Guide for TDA4j</a>/<a href="contracts.html">Contracts</a></div><div id="content" class="body-medium"><div><main>
+ <p>TDA4j is a platform for experiments, so its extension points are open: you can hand an engine your own stream, give a stream your own criterion, or write a new engine. Most of what makes that safe is a contract the caller keeps, and most contracts are <strong>documented, not checked</strong>, because a check costs time in an inner loop. This page lists the contracts, who checks each, and what you see when one is broken.</p>
+ <p><a href="gotchas.html">Hard-won invariants</a> is the other side: traps in the existing code. This page is what the code asks of you.</p>
+ <section id="streams">
+  <h2 class="h500"><a href="#streams" class="anchor"></a>Streams</h2>
+  <p>A stream is a filtered complex: cells in filtration order, a filtration value for each, and (for a stratified stream) the cells of each dimension.</p>
+  <table>
+   <thead>
+    <tr>
+     <th>Contract</th>
+     <th>If you break it</th>
+     <th>Checked by</th>
+    </tr>
+   </thead>
+   <tbody>
+    <tr>
+     <td><strong><code>filtrationOrdering</code> is a total order with the filtration value reversed</strong>, built with <code>FiltrationOrdering.canonical(value, dim, tieBreak)</code>. Ties need a tie-break, or tied cells collide as one map key.</td>
+     <td><code>IllegalStateException: reduction pivot ... was not a recorded open class</code>, or a quietly different barcode</td>
+     <td><code>HomologyFixtures.respectsOrderingContract</code></td>
+    </tr>
+    <tr>
+     <td><strong>A dimension's cells are sorted by the same <code>Ordering</code> object, reversed</strong> (<code>.sorted(using filtrationOrdering.reverse)</code>), never by a second comparator that looks equivalent</td>
+     <td>the same</td>
+     <td>the same</td>
+    </tr>
+    <tr>
+     <td><strong>Filtration is monotone</strong>: <code>value(face) &lt;= value(coface)</code>, exactly. A computed value that is one ulp below a face's is a violation (Čech clamps each radius to its facets' maximum).</td>
+     <td>negative-length or lost bars</td>
+     <td><code>respectsOrderingContract</code></td>
+    </tr>
+    <tr>
+     <td><strong>Every face of a cell is in the stream</strong> (closed under faces), with the boundary the cell type's <code>boundary</code> returns</td>
+     <td><code>∂∂ ≠ 0</code>, wrong Betti numbers</td>
+     <td><code>respectsOrderingContract</code></td>
+    </tr>
+    <tr>
+     <td><strong>The dimensions are contiguous from 0</strong>, and <code>isDefinedAt</code> is false past the top</td>
+     <td><code>.iterator</code> never ends</td>
+     <td><code>respectsOrderingContract</code></td>
+    </tr>
+    <tr>
+     <td><strong>A truncated stream says so</strong>: it overrides <code>homologyDegreeLimit</code> (the minimum with the stream it wraps). Its top-dimension "classes" are artifacts, since every unfilled top cell looks essential.</td>
+     <td>spurious essential bars in the top degree</td>
+     <td><code>PersistenceVerbSpec</code>, <code>TruncatedTopDegreeSpec</code></td>
+    </tr>
+    <tr>
+     <td><strong><code>filtrationValue</code> is cheap</strong>: it is called inside comparisons. Memoize it.</td>
+     <td>an order of magnitude in time</td>
+     <td>benchmark only</td>
+    </tr>
+   </tbody>
+  </table>
+  <p>A complete complex (explicit, cubical, alpha, simplicial set) reports no limit; a hand-built complex that wants its top degree must not be a <code>Truncated</code> stream. <code>ExplicitStreamBuilder.fromFacets</code> closes a list of maximal cells under faces.</p>
+ </section>
+ <section id="keepcriterion-and-filtrationvalueoverride">
+  <h3 class="h400"><a href="#keepcriterion-and-filtrationvalueoverride" class="anchor"></a><code>keepCriterion</code> and <code>filtrationValueOverride</code></h3>
+  <p>Coface streams (<code>VietorisRips</code>, <code>Cech</code>, the witness, Dowker, DTM and sparse constructions) take hooks that cut or change the complex. They are public on purpose, and they give the caller the responsibility.</p>
+  <ul>
+   <li><strong><code>keepCriterion</code> must be closed under faces.</strong> Every face of a simplex it keeps, vertices and edges included, is kept. The generator cuts each dimension by the criterion and builds the next from what is left, which is the answer of the coface loop only when the criterion is closed. A criterion that is not gives unpredictable cells and bars, and nothing tells you: checking costs a facet lookup per simplex.</li>
+   <li>A criterion is asked about a <code>Simplex</code> per candidate. The default is the shared constant <code>CofaceSimplexStream.keepAll</code>; a literal <code>{ case _ =&gt; true }</code> in its place silently takes the slow path, because the stream recognises the constant to build its layers on arrays.</li>
+   <li><strong><code>filtrationValueOverride</code> is valid when the new filtration is itself monotone</strong> (Čech is: its radii are monotone along faces). It is not forwarded to the generator-backed layers yet, so an override is slower than the default value.</li>
+   <li><strong>An edge-collapsed or sparse complex is a flag complex</strong> of a weighted graph, and may take the generator route. Everything that reads only the edge list and the values of simplices is fine; a rule about a simplex not determined by its edges is not.</li>
+   <li><strong>A flat filtration equals the stream's <code>filtrationValue</code> bit for bit.</strong> Where a stream provides <code>flatFiltration</code> (array values for layers), <code>FlatLayersSpec</code> compares it with the stream built from cells. A new hook belongs in that spec's list.</li>
+  </ul>
+ </section>
+ <section id="metric-spaces">
+  <h3 class="h400"><a href="#metric-spaces" class="anchor"></a>Metric spaces</h3>
+  <ul>
+   <li><strong>A distance matrix is read from its lower triangle</strong>: <code>distance(x, y)</code> is <code>d(max, min)</code>, as in ripser.cpp and GUDHI. An asymmetric input gives every tool the same complex.</li>
+   <li><strong>The default <code>maxFiltrationValue</code> is the minimum enclosing radius</strong>; the barcode does not change beyond it. Pass <code>Some(Double.PositiveInfinity)</code> to build all of it. The radius of a Čech or alpha complex is not a Vietoris-Rips diameter, so a bar count of one against the other means nothing.</li>
+   <li><strong>Never collect all pairwise distances into one collection</strong>: at tens of thousands of points it does not fit. A loop over pairs <code>a &lt; b</code> asks for <code>distance(b, a)</code>.</li>
+   <li>A metric that is not a real metric (a witness complex's edge weights) must not be given to the spatial search or to alpha.</li>
+  </ul>
+ </section>
+ <section id="engines">
+  <h2 class="h500"><a href="#engines" class="anchor"></a>Engines</h2>
+  <ul>
+   <li><strong>Every bar has a representative</strong> (a chain that witnesses it), over any <code>Field</code>. An engine that cannot return one is a research tool, not an engine of the <code>Persistence</code> verb. Cycles and cocycles may differ between engines on ties: compare them for validity (a cycle's boundary is zero; it is present at its birth), never cell for cell.</li>
+   <li><strong>Zero-length bars are dropped by default</strong>, on the true pairing and not after truncation. An engine takes <code>includeZeroLength</code> (default <code>false</code>). <code>diagramAt(f)</code> reports a class alive at <code>f</code> as <code>[birth, f]</code>.</li>
+   <li><strong>An engine stops at the stream's <code>homologyDegreeLimit</code></strong>, whatever degree it was asked for: it computes <code>min(asked, limit)</code>.</li>
+   <li><strong><code>maxDimension</code> is the top homological degree.</strong> Engines build one dimension higher internally. A stream constructor may speak in simplex dimension instead; use the dispatchers (<code>VietorisRips</code>, <code>Cech</code>, ...), which speak in degrees.</li>
+   <li><strong>Pairing and order agree.</strong> An engine that reads a stream reduces under the order the stream declares. A pivot that is not the paired birth cell throws; it is never worked around.</li>
+   <li><strong>Degree 0 by union-find needs edges of the shape <code>c·(v - u)</code></strong> with both ends in the stream, else the engine reduces it by columns. The <code>useUnionFind = false</code> switch exists so that tests can compare the two.</li>
+   <li><strong>The query contract of the cursor engines:</strong> <code>diagramAt(f)</code> is exact at any <code>f</code>, wherever the cursor is. <code>advanceFor</code>, <code>processedCells</code> and <code>totalCells</code> are kept for long runs.</li>
+   <li><strong>Reductions are deterministic in the thread count</strong>: a parallel step gives the same bars for any split. <code>Parallel</code> runs in order on Scala.js.</li>
+  </ul>
+ </section>
+ <section id="coefficients-and-chains">
+  <h2 class="h500"><a href="#coefficients-and-chains" class="anchor"></a>Coefficients and chains</h2>
+  <ul>
+   <li><strong>Generic over <code>Field</code>.</strong> Never test the runtime class of a coefficient (<code>case d: Double</code>): on Scala.js every number is a <code>Double</code>, so an <code>Fp</code> matches. Ask the field (<code>Field.toDouble</code>).</li>
+   <li><strong>A new <code>Field</code> with exact equality overrides <code>hash</code>.</strong> <code>Chain.hashCode</code> must agree with <code>equals</code>, which compares formal sums with <code>field.isEqual</code>; the default hash of <code>0</code> is correct for every field and slow for a set of chains.</li>
+   <li><strong>A <code>Chain</code> storage passes its order and field up and implements <code>entryIterator</code></strong>; the rest has defaults. No nulls.</li>
+   <li><strong>Summon a chain's <code>RingModule</code> where the stream's <code>Ordering</code> is in scope</strong>, or it pivots on the cell's own order (<a href="gotchas.html">Hard-won invariants</a>).</li>
+  </ul>
+ </section>
+ <section id="public-api">
+  <h2 class="h500"><a href="#public-api" class="anchor"></a>Public API</h2>
+  <ul>
+   <li><strong>No top-level givens in the core package.</strong> A default instance lives in the companion of the data type it serves, never in a typeclass's companion.</li>
+   <li><strong>A restriction (<code>private[tda4j]</code>, <code>sealed</code>, <code>final</code>) carries a comment naming its reason</strong>: an invariant-bearing mutable state, a library-wide guarantee, a name that would shadow the user's in the flat package, a facade internal. "It keeps the API small" is not one. Concrete public classes are <code>open</code>.</li>
+   <li><strong>Numeric options take <code>Optional[Double]</code></strong> and point inputs the <code>PointCloud</code> <code>into</code> type, so <code>2</code>, <code>2.0</code> and <code>Some(2.0)</code> work.</li>
+   <li><strong>Facade methods take only <code>double</code>, <code>int</code>, <code>String</code> and arrays</strong>, and unknown option keys are errors (<a href="facades.html">Extending the facades</a>).</li>
+  </ul>
+ </section>
+ <section id="why-most-contracts-are-not-checked">
+  <h2 class="h500"><a href="#why-most-contracts-are-not-checked" class="anchor"></a>Why most contracts are not checked</h2>
+  <p>A check costs a lookup per simplex or per cell, in code whose speed is the point. Checking is moved to a test that runs on the contract's fixtures: <code>respectsOrderingContract</code> on a stream, a reference engine compared term for term, a discriminating example (a fixture with vertex 1 born early and vertex 9 late) where the plausible wrong answer fails. When you write an extension, run its stream through <code>respectsOrderingContract</code> and its engine against the reference engines before you trust a barcode; see <a href="testing.html">Testing conventions</a>.</p>
+ </section>
+</main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#streams">Streams</a><ul><li><a href="#keepcriterion-and-filtrationvalueoverride">keepCriterion and filtrationValueOverride</a></li><li><a href="#metric-spaces">Metric spaces</a></li></ul></li><li><a href="#engines">Engines</a></li><li><a href="#coefficients-and-chains">Coefficients and chains</a></li><li><a href="#public-api">Public API</a></li><li><a href="#why-most-contracts-are-not-checked">Why most contracts are not checked</a></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>
