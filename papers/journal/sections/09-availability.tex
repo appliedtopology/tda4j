@@ -1,0 +1,26 @@
+\section{Availability, reproducibility and statements}\label{sec:availability}
+
+\paragraph{Software.}
+\tdaj{} is released under the MIT licence at \url{https://github.com/appliedtopology/tda4j}; the documentation (user guide,
+tutorials, API reference and developer's guide) is at \url{https://tda4j.appliedtopology.org/}. The JVM library is published as
+\code{org.\allowbreak appliedtopology:\allowbreak tda4j\_3} (and \code{tda4j\_sjs1\_3} for Scala.js), the JavaScript package as \code{@appliedtopology/tda4j},
+and a fat jar for MATLAB and the command line and a Python wheel are attached to each release. This paper describes
+version \TODO{release tag}, archived at \TODO{Zenodo DOI}. \VERIFY{the project is at 0.7.0-SNAPSHOT; the release pipeline has not run end to end (RELEASE.md)}
+
+\paragraph{Reproducing the evaluation.}
+The harness is in the repository (\code{bench/}). \code{bench/run.sh setup} installs every tool at a pinned version,
+\code{prepare} downloads and generates the data (seeded; every download is checked against a recorded checksum), and
+\code{bench/final\_run.sh} runs the stages of the final run on a frozen commit and merges them. The raw results (\code{runs.csv},
+\code{summary.csv}, the barcodes and \code{env.json}) are archived with the release: \TODO{archive location}. The tables of
+this paper are generated from the summaries by \code{papers/tools/bench-to-tex.py}.
+
+\paragraph{Statement on the use of AI assistance.}
+The library builds on a base layout written entirely by the core development team. Starting in the autumn of 2026 the
+development has drawn on AI code assistants and on AI-generated code to accelerate it; the commit history records which
+changes were made with assistance, and the core team reviews and approves every contribution before it is integrated. A first
+draft of this manuscript was produced with an AI assistant from the project's design notes, worklogs and benchmark harness;
+the authors \TODO{state what they rewrote, checked and verified}. No AI system is an author.
+\TODO{the venue's policy on disclosure; name the tools and versions as the venue requires (Springer does not accept AI systems as authors and asks for use to be documented; re-check the current wording)}
+
+\paragraph{Acknowledgements.}
+\TODO{funding; Nico Stucki (barcode algebra); the contributors listed in \code{CONTRIBUTORS.md}; the authors of the tools in the benchmark}

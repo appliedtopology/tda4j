@@ -1,0 +1,258 @@
+\section{Algorithms and engineering}\label{sec:algorithms}
+
+This section describes the techniques behind the engine family and says, for each, where it comes from. Three labels are used
+throughout. \emph{Borrowed}: implemented from a published source, which is cited. \emph{Extended}: a published idea
+that we carry to a new setting (a field, a cell type, representatives, a platform); the extension is named. \emph{New}: as far as
+the project's notes and the literature we have read show; we have not carried out a systematic prior-art search, and where the
+call is close the text says so. \Cref{app:catalogue} gives the full list with the same labels.
+
+\subsection{Vietoris--Rips complexes: generation and the packed engine}\label{sec:vr}
+
+\paragraph{In-order generation of simplices (from the preprint).}
+Ripser enumerates the cofaces of a simplex by the combinatorial number system and sorts each dimension by diameter. The
+preprint of Bauer, Matuszewski and Vejdemo-Johansson~\cite{bauer2024generating} shows that the simplices of one dimension can
+instead be generated in filtration order from the previous dimension, without a sort: of the cofacets of a simplex that
+have the same diameter as the simplex's longest edges, the lexicographically first one is determined by where the
+longest edges sit, in one of three cases, and as a consequence a simplex needs only its first longest edge as metadata.
+\VERIFY{statement and numbering of the preprint's Theorem~3 and Propositions~5 and~7}
+\tdaj{} implements the generator (\code{LayeredInorderSimplexStream}) with four bytes of metadata per simplex, candidate
+cofacets from bitset neighbourhood balls that are updated by one sweep per dimension, a mirrored vertex order so that ties come
+out in Ripser's colexicographic order without further work in general position, and a check of every run of tied values that sorts the run only if it is out of order.
+Generation and engine both read flat primitive arrays of values and vertices per dimension.
+\PROV{whether the mirrored vertex order and the tie-run check belong to the preprint or are ours}
+
+\paragraph{The packed Ripser engine (borrowed, extended).}
+The default engine for Vietoris--Rips complexes is a port of Ripser's algorithm~\cite{bauer2021ripser}: cohomology, clearing,
+implicit coboundaries through the combinatorial number system, apparent pairs, emergent pairs and the enclosing radius. What
+differs is what it is generic over and what it returns. It works over any prime, not a compile-time fixed one; it returns a
+representative for every bar; and it keeps its per-simplex state in primitive arrays (the level's simplices, the pairing
+rows, the cleared set, hash tables keyed by index) instead of objects, so that no pair, column or bar costs an allocation
+that is not needed. Three parts of this are specific enough to describe.
+\begin{itemize}[leftmargin=1.5em, itemsep=2pt]
+\item \emph{Index width.} A simplex is numbered by one 63-bit word, or by two when a level is too large for one
+  (a combinatorial number past $2^{63}$), up to 126 bits; past that the engine asks for a lower \code{maxDimension}. The two-word
+  type is separate from the one-word type, so a one-word run pays nothing for it (a cell is a plain class with a method
+  for the high word, and the subclass that stores it is used only in a two-word run). The coefficient is not packed into the
+  index, which is why a prime does not shrink the range of simplices the engine can number, in contrast to Ripser's coefficient
+  build, which reserves eight bits of the simplex index for it.
+  \VERIFY{ripser.cpp's \code{num\_coefficient\_bits} and the consequent limit $2^{55}-1$ were read in the copy shipped with ripser.py~0.6.15 (2026-10-18), not in the pinned master; and how TDA4j stores the coefficient of a column entry}
+  \PROV{prior art on simplex-index width beyond 63 bits (Dory~\cite{aggarwal2021dory}, giotto-ph) has not been checked}
+\item \emph{Working column.} A column is reduced on a heap over primitive arrays with lazy cancellation, as in Ripser. A
+  column's reduction history is logged, and cocycles are expanded from the logs only for the bars that are reported.
+\item \emph{Apparent and emergent pairs.} The test for an apparent pair decodes a column's simplex once, and finds the
+  facet of smallest index from the simplex's longest edges rather than by scanning facets. An emergent pair is
+  paired without being reduced, and its column is stored only as its simplex and rebuilt if a later column needs it, which
+  lowers live memory at a small cost in time.
+  \PROV{the rebuild-on-demand storage of emergent columns is ours; the pairs are Ripser's definition}
+\end{itemize}
+Under a threshold, cofacets come from per-vertex sorted neighbour lists in the order of the all-vertex scan, with bit-identical diameters; the
+edge ranks that the parallel engine uses are a dense table up to a few thousand points and sorted neighbour lists above, a
+choice made for memory.
+
+\subsection{A representative for every bar}\label{sec:representatives}
+
+Every engine returns, for every bar, a chain that witnesses it. The library's design principle, which the tests enforce, is
+that nothing public drops representatives and that an optimisation which does is probably not worth having. An
+engine computes one kind natively: cocycles for the cohomology engines, cycles for the homology engines and for the fast
+engines. The other kind comes from the engine's own pairing by one further pass, the \emph{involution}.
+
+\paragraph{From a cohomology pairing to cycles.}
+Given the pairs of a cohomology run, only the boundary columns of the death cells are reduced, in the reverse of the order
+that the cohomology run used, youngest first; the reduced column of a death cell $\tau$ is a cycle for the bar $(\sigma,\tau)$,
+and its youngest cell is $\sigma$. An essential bar gets the cycle that reducing the boundary of its birth cell to zero
+produces. This is the computation of \v{C}ufar and Virk~\cite{cufar2021involuted}, who give it for Vietoris--Rips
+complexes, and which Ripserer.jl offers as \code{alg = :involuted}. Hang et al.~\cite{hang2021umatch} give a
+related factorisation, with lazy cycle representatives, for OAT.
+
+\paragraph{From a homology pairing to cocycles.}
+Dually, from the pairing of a homology run only the coboundary columns of the birth cells are reduced, youngest first, and the
+representative is the corresponding column of the reduction. The dualities of de Silva, Morozov and
+Vejdemo-Johansson~\cite{desilva2011dualities} make this direction unsurprising; we have not found it stated for general
+cell types.
+\PROV{whether the reverse direction is in \v{C}ufar--Virk or elsewhere (the catalog checked their abstract, introduction and section outline, not every page); it is probably folklore}
+
+\paragraph{Invariants.}
+Three invariants make the pass safe, and each has caught a bug. The pairing must come from the same total order under which
+the involution reduces. Zero-length pairs must be present in the pairing, since their columns are pivots that the others use,
+even though the verb drops them from its output afterwards. And every pivot is checked against the paired cell: a mismatch
+throws and never falls back, because a disagreement is a bug in the pairing or in the order, not a condition to recover from.
+Two engines may return different, equally valid representatives for the same bar, so representatives are never compared cell
+for cell across engines; they are checked for validity: a cycle (or cocycle), present at the bar's birth, killed at its death.
+
+\paragraph{Costs and laziness.}
+A cycle derived from cocycles costs a second reduction, which touches only the death columns, and an apparent pair that
+nobody reports is not reduced. Representatives are \emph{lazy chains} in the packed engines: a cocycle is a node in the
+reduction logs, expanded with an explicit stack when it is read (and the expansion throws if it meets a cycle in the logs,
+which would be a bug). The cost of representatives is measured in \cref{sec:eval-reps}.
+
+\paragraph{The fast engines.}
+The two union-find engines (\cref{sec:dual-uf}) return cycles only and have no derived kind: their tie-breaking is by value
+rather than by the stream's order, so there is no common order for an involution to reduce under. Cocycles of an image
+come from the cohomology engine.
+
+\subsection{Degree $0$ by union-find}\label{sec:h0}
+
+Every engine that reduces degree $0$ pairs it by union-find: the edges oldest first, an edge that joins two components
+kills the component with the younger root and is paired with it. The pairs are those the reduction would find, and the
+representative of a bar is the indicator of the dying component (the final component, for an essential bar). The parallel
+engine builds it on demand from the merge forest. The shortcut is valid only if every edge has boundary
+$c\,(v-u)$ for a nonzero scalar $c$, or none, which is a property the library checks for each stream
+(\code{EdgeBoundary.shape}); a Morse-reduced or hand-built complex whose edges break it falls back to column reduction.
+Each engine keeps a switch (\code{useUnionFind = false}) and the reference engines always reduce by columns, so that each
+specification compares the two. Union-find for degrees $0$ and $1$ is classical, and the chunk algorithm
+used it already~\cite{bkr2014chunks}; what is specific here is the uniform guard and the oracles that hold it to account.
+The effect on time and memory is in \cref{sec:eval-ablation}.
+
+\subsection{Dual union-find for the top degree}\label{sec:dual-uf}
+
+For a complex that triangulates a region of $\R^d$ in which every facet has at most two cofaces, the top homology
+$H_{d-1}$ of a sublevel filtration is determined by union-find on the \emph{dual graph} of the top cells read in the
+superlevel direction, with an extra vertex at infinity for the outside: a class dies when two components of the complement
+merge, by Alexander duality, and the elder rule decides which. Degree $0$ is primal union-find. The two fast engines use this
+for cubical images (\code{FastCubicalHomologyEngine}, with the $T$-construction, in which a cube takes the minimum of the
+pixels that contain it) and for Delaunay alpha complexes (\code{FastAlphaHomologyEngine}). For $d\ge3$ the middle
+degrees go to the packed cohomology engine run on the complex with its top cells hidden, which is where the degrees that
+union-find cannot reach are computed; no matrix reduction is needed in $2$D.
+
+\paragraph{Representatives.}
+For a bar of degree $d-1$ the representative is the boundary of the coherently oriented sum of the top cells of the component
+that dies. A signed union-find records the merge forest (parent, orientation flip, event) and freezes it; a representative is
+materialised by walking the dying component's subtree only when it is read. Each merge therefore costs almost nothing and
+only reported bars pay for their size. The first implementation copied the surviving component's coefficient map on every
+union; replacing it with the forest turned quadratic time into near-linear (\cref{sec:eval-cubical}).
+Ties need a rule, because the union-find breaks them by value rather than by the stream's order: on equal births the
+smaller component dies.
+
+\paragraph{Prior art.}
+Union-find for the top Betti number of complexes in $S^3$ is due to Delfinado and Edelsbrunner~\cite{delfinado1995incremental};
+duality for the persistence of images to Garin et al.~\cite{garin2020duality}; the cubical fast path in this form to Le Breton,
+Szustakowski and Piraud~\cite{lebreton2026flash}, whose Flash Cubical handles the $V$-construction over $\Ftwo$ in dimensions
+two and three, and whose abstract says that the ideas ``generalise naturally to $T$-filtrations''. We generalise in
+four ways: to the $T$-construction, to any field, to any dimension from two, and to Delaunay complexes; and we return
+representatives, which Flash Cubical does not. Our hybrid for the middle degrees hides the top cells and runs cohomology; the
+relation of this to Flash Cubical's treatment of three-dimensional images is not one we have compared in detail.
+\PROV{how different the middle-degree hybrid is from Flash Cubical's 3D case}
+
+\paragraph{What the representatives are.}
+Obayashi~\cite{obayashi2018volume} computes volume-optimal cycles for a generator, and Lenzen and
+Renkin~\cite{lenzen2025codim1} prove that the boundaries of the components of the complement form a minimal cycle basis for
+any positive weights in codimension one. Our representatives are those boundaries, and we would like to say that they are
+volume-optimal at birth. We have not proved it.
+\begin{conjecture}[to be proved or dropped before submission]\label{conj:volume}
+For a filtration with distinct values, the representative that the dual union-find engine returns for a bar of degree $d-1$ is
+the boundary of the component of the complement that is born when the class is, and so a volume-optimal cycle in the sense of
+Obayashi and Lenzen--Renkin.
+\end{conjecture}
+\PROV{Mikael: whether to prove \cref{conj:volume} before the paper and compare with HomCloud on inputs with distinct values; ties make which bar gets which component depend on the tie-break, so representatives can legitimately differ there}
+\paragraph{Preconditions.}
+The alpha engine needs every facet to have at most two cofaces. The Bowyer--Watson triangulation guarantees it, and for a
+Helix triangulation the engine checks it and throws \code{FastAlphaTriangulationException}; how often it fails, by ambient
+dimension and point count, is measured in \cref{sec:eval-alpha}.
+
+\subsection{Parallel reduction in units of edge blocks}\label{sec:parallel}
+
+For a flag complex, a simplex $\sigma$ belongs to the \emph{block} of its first longest edge $e$. The blocks partition
+the complex, each block is contiguous in a filtration order in general position, and a unit of work is a union of whole blocks.
+The engine reduces each unit independently (phase~1), then reduces the deferred columns, those whose pivot lies in an earlier
+unit, against the final pairs of earlier units in parallel (phase~2a), and reduces the remainder in order (phase~2b). The
+argument for soundness is the one for chunks~\cite{bkr2014chunks}: a unit is contiguous in filtration order, so reducing it alone
+and then merging gives the same pairs as one sequential reduction; blocks add that, in general position, every zero-length
+pair lies inside one block. A simplex's key is its block's rank above its combinatorial index, so the diameter of a simplex is
+a rank, a maximum of ranks, and the sort is on integer keys; for a very large complex the key takes two words. The pairs are
+those of a sequential reduction, and the result is exact whatever the number of threads. This engine is \code{Engine.ParallelRipser}; its
+representatives are lazy chains, cocycles from the logs and cycles from one parallel pass of the involution.
+A given engine returns the same representatives at every thread count; but \code{Engine.Auto} chooses a different engine when
+several threads are available, so with \code{Auto} the representatives can depend on the thread count, in the ties.
+\PROV{Mikael: where the preprint~\cite{bauer2024generating} ends and the edge-block material begins (the preprint as arXiv serves it has no blocks, lens graphs or parallel reduction); related work on parallel reduction is Ripser++~\cite{zhang2020ripserpp}, lock-free reduction~\cite{morozov2020lockfree} and giotto-ph~\cite{burella2021giotto}}
+
+Two observations belong with the engine. In high degrees the reduction is nearly free and the cost is enumerating cells,
+which is independent from block to block: in one of our test cases a degree-ten computation needed a few hundred column
+additions for tens of millions of columns. And what remains serial is a fraction that does not shrink with more threads: the
+deferred columns of degree~$1$, whose reduction is a chain of dependencies; a binary tree over the units did not
+shorten it. A related experiment that parallelised reduction over explicit coboundary matrices gave no speedup and is kept in
+the code base only for its helpers.
+\VERIFY{the quantitative claims in this paragraph come from project notes (434 additions for 41M columns, 40 points in $\R^{10}$ to $H_{10}$); re-measure before quoting}
+
+\subsection{Alpha complexes}\label{sec:alpha}
+
+The alpha complex has three backends and one selection rule.
+\begin{itemize}[leftmargin=1.5em, itemsep=2pt]
+\item \emph{Bowyer--Watson}~\cite{bowyer1981computing,watson1981computing}, in up to four affine dimensions, with exact
+  predicates: a floating-point filter with an exact fallback in the style of Shewchuk~\cite{shewchuk1997adaptive}, though not adaptive,
+  and a symbolic perturbation by point index in the sense of simulation of simplicity~\cite{edelsbrunner1990simulation}, so that the
+  triangulation is the same for every insertion order. It is valid by construction.
+\item \emph{Helix}, a frontier walk from a hull facet that works in any ambient dimension.
+  \PROV{who designed the walk and which publication it follows; the scaladoc cites IEEE document 10917453, which the project's notes say could not be read, and the benchmark harness takes nothing from it}
+  What we added is a validity check (every point a vertex, no facet in three top simplices, every hull facet on the hull, and
+  $H_{d-1}$ of the full unfiltered complex trivial because the hull is contractible), a repair by jitter and
+  re-triangulation when it fails, and parallel speculative evaluation of queued cases whose results are applied in queue order, so that
+  results are identical to one thread.
+\item \emph{Dual active-set quadratic programming} (DQP) of Carlsson and Carlsson~\cite{carlsson2023alpha}: no triangulation, a
+  quadratic program per candidate simplex, truncated by a radius. A valid simplex of large circumradius can fail the rank
+  test of the solver; \tdaj{} retries at a tighter tolerance and keeps the result only if the multipliers are certified against
+  the data, because lowering the tolerance alone is unsafe (\cref{sec:pitfalls}).
+\end{itemize}
+Filtration values are computed top-down: a simplex takes its own circumradius when it is Gabriel with respect to its cofaces
+and otherwise the minimum over them, with circumspheres by Householder reflections, never by the Gram system, which lost
+digits on a sliver in four dimensions. \code{Auto} uses Bowyer--Watson up to four dimensions and Helix above, and with a radius a cost
+model chooses between a triangulation and DQP; with no radius and a low degree cap in high ambient dimension it runs DQP
+truncated at the enclosing radius, since a triangulation builds the whole complex whatever the radius and DQP only what lies
+within it.
+\VERIFY{the exact thresholds of the selection rule (ambient dimension $\ge8$ and cap $\le d-2$ at 2026-11-03, PR \#301) and whether Mikael decides to change them after the server tables}
+In general position the \v{C}ech and alpha complexes have the same barcode by the persistent nerve
+lemma~\cite{chazal2008persistence}, which gives an independent check of every alpha backend at dimensions where GUDHI cannot run.
+Alpha complexes are cut at the enclosing radius, past which the union of balls is contractible.
+
+\subsection{Other complexes}\label{sec:complexes}
+
+\begin{itemize}[leftmargin=1.5em, itemsep=2pt]
+\item \textbf{\v{C}ech} complexes of Euclidean points on the Vietoris--Rips coface machinery, with radii from a minimum
+  enclosing ball. A computed ball can be one ulp non-monotone, so the value of a simplex is clamped to the maximum over its
+  facets.
+\item \textbf{Witness} complexes~\cite{desilva2004witness} on maxmin or random landmarks. The \emph{lazy} witness complex is a flag complex under a
+  witness metric space, so the Ripser engines apply to it; the \emph{general} one is not a flag complex and runs on the
+  generic cohomology engine.
+\item \textbf{Dowker} complexes of a relation $R\subseteq L\times W$ with real values~\cite{dowker1952homology,chowdhury2018dowker}, and the
+  dual, whose barcode agrees without zero-length bars. One observation from building this: the Dowker complex of the
+  landmark--witness distances is the \v{C}ech complex of the landmarks on the witnesses, not the witness complex with $\nu=0$.
+  \VERIFY{the observation is in the project notes (PR \#295), not checked against the literature}
+\item \textbf{Distance-to-measure} weighted Rips complexes~\cite{anai2019dtm,chazal2011geometric}, with $p\in\{1,2\}$; for
+  $p=1$ the barcode agrees with GUDHI's \code{DTMRipsComplex} byte for byte on the examples checked.
+\item \textbf{Sparse Rips} filtrations of Cavanna, Jahanseir and Sheehy~\cite{cavanna2015sparse}, from a greedy permutation. Their
+  Algorithm~3 omits a clamp that their own Section~5.3 requires (\cref{sec:references}); \tdaj{} applies the clamp to every edge.
+  GUDHI implements a different sparse filtration~\cite{buchet2016efficient}, so the two $\varepsilon$ are not comparable.
+\item \textbf{Edge collapse} of flag filtrations~\cite{boissonnat2020edge,glisse2022swap}: a port of GUDHI's collapser, since an independent
+  redesign gave a wrong answer on a five-point example; a dense matrix form with an incremental dominator test is used for large inputs.
+\item \textbf{Cubical complexes} of images in any dimension, sublevel or superlevel, with missing pixels as \code{NaN}: the
+  complex is the closure of the unmasked pixels. Cubes are encoded in doubled coordinates~\cite{kaczynski2004computational}.
+\end{itemize}
+
+\subsection{Beyond barcodes}\label{sec:breadth}
+
+\paragraph{Coordinates.}
+Circular coordinates~\cite{desilva2011circular} come from a persistent class by harmonic smoothing with conjugate gradients, with the integer lift
+checked exactly on every triangle; toroidal coordinates of Scoccola et al.~\cite{scoccola2022toroidal} decorrelate several
+classes by lattice reduction (LLL on the Cholesky factor of the Gram matrix), with our own LLL; sparse variants on a landmark
+Dowker complex follow Perea~\cite{perea2018multiscale}. A coordinate can start from any diagram: the cocycles are used directly or recovered, the
+input must be supplied again, and a bar's class is defined only modulo the bars nested inside it.
+
+\paragraph{Other persistence variants.}
+Zigzag persistence~\cite{carlsson2010zigzag}, relative persistence (the quotient by a subcomplex as a cell type), images, kernels and cokernels
+of maps between barcodes (``barcode algebra'', contributed by Nico Stucki \PROV{source of the algorithm}), discrete Morse reduction~\cite{mischaikow2013morse},
+the persistent Laplacian, and exact rational coefficients, which can blow up in size and so remain opt-in.
+
+\paragraph{Distances and vectorizations.}
+Bottleneck and Wasserstein distances by Hopcroft--Karp and Hungarian matching with the conventions of Hera~\cite{kerber2017hera}
+and a stated policy for essential bars, persistence landscapes~\cite{bubenik2015landscapes} and images~\cite{adams2017images}.
+
+\paragraph{Simplicial sets and groups.}
+The \code{sset} add-on gives simplicial sets with products, quotients, joins, smash products, cones and mapping cones, cup products
+and Steenrod squares, fundamental groups by presentation, and nerves of groups, monoids and finite categories; the catalogue is
+checked against Sage~\cite{sagemath}, with cup products as the discriminating oracle. A filtered simplicial set is a
+filtered complex like any other, so persistence with representatives comes from the general engines. For persistent group
+homology along a subgroup chain, Ellis and King~\cite{ellis2011persistent} introduced the notion and HAP~\cite{hap}
+computes it from resolutions, which scale better than the bar construction; we compute the same barcode as an
+honest filtered simplicial set, with representatives, optionally after a Brown collapse that generates the critical cells
+directly~\cite{brown1992geometry,anick1986homology}. We regard this as a worked example of the constructive layer rather than as a
+competitor to HAP.
+\PROV{whether collapse along a subgroup chain with representatives has appeared in HAP, Ellis--King or the rewriting-systems literature}

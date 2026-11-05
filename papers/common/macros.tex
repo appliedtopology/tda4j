@@ -1,0 +1,108 @@
+% Shared macros for the TDA4j papers (long/ and conference/).
+%
+% Three kinds of marker keep a draft honest. Every one of them shows up in the PDF in colour and in
+% `make todo`, so nothing pending can slip into a submission unnoticed.
+%
+%   \TODO{...}, \TODOtime{...}, \TODOmem{...}, \TODOnum{...}
+%        red     a value or a piece of text that has to be filled in (a timing, a memory figure, a count, a name).
+%   \OUTCOME{...}
+%        blue    a sentence whose DIRECTION depends on the benchmark results. It is written as a template, with
+%                the figures as placeholders. If the run says something else, rewrite the sentence.
+%   \VERIFY{...}, \PROV{...}
+%        orange  a fact (about code, another tool, or the literature) written from memory or from project notes
+%                and not yet checked against a primary source; and a provenance question about who first did
+%                what.
+%
+%   \res{key}, \resT, \resC, \resM, \resA
+%        a value looked up from common/results.tex, which tools/bench-to-tex.py generates from the benchmark
+%        harness's summary.csv. A key without a value prints a red placeholder; the key is in the source.
+%
+% Switch `\drafttrue` to `\draftfalse` for a submission: every marker then prints `??` and warns.
+
+\RequirePackage{xcolor}
+\makeatletter
+
+\newif\ifdraft
+\drafttrue
+
+\definecolor{todored}{HTML}{C0392B}
+\definecolor{outcomeblue}{HTML}{1F5FA8}
+\definecolor{verifyorange}{HTML}{B9770E}
+
+\newcommand{\@marker}[3]{%
+  \ifdraft\textcolor{#1}{[\textbf{#2:} #3]}\else
+    \PackageWarning{macros}{Unresolved #2 marker left in a final build}\textbf{??}\fi}
+\newcommand{\TODO}[1]{\@marker{todored}{TODO}{#1}}
+\newcommand{\TODOtime}[1]{\@marker{todored}{time}{#1}}
+\newcommand{\TODOmem}[1]{\@marker{todored}{mem}{#1}}
+\newcommand{\TODOnum}[1]{\@marker{todored}{num}{#1}}
+\newcommand{\VERIFY}[1]{\@marker{verifyorange}{verify}{#1}}
+\newcommand{\PROV}[1]{\@marker{verifyorange}{provenance}{#1}}
+% A sentence whose direction depends on the benchmark: kept readable, coloured, listed by `make todo`.
+\newcommand{\OUTCOME}[1]{\ifdraft\textcolor{outcomeblue}{#1}\else
+  \PackageWarning{macros}{An \string\OUTCOME\space sentence was left in a final build}#1\fi}
+
+% ------------------------------------------------------------------------------------------------------
+% Results lookup. A key is  case/prime/tool/field  with field one of warm, cold, mem, status, bars, agree, dist.
+% tools/bench-to-tex.py writes common/results.tex as a list of \defres{key}{value}.
+% ------------------------------------------------------------------------------------------------------
+\newcommand{\defres}[2]{\expandafter\gdef\csname res@#1\endcsname{#2}}
+\newcommand{\res}[2][?]{%
+  \@ifundefined{res@#2}%
+    {\ifdraft\textcolor{todored}{$\langle$#1$\rangle$}\else\PackageWarning{macros}{Missing result #2}\textbf{??}\fi}%
+    {\csname res@#2\endcsname}}
+\newcommand{\resT}[3]{\res[t]{#1/#2/#3/warm}}   % warm median time, seconds
+\newcommand{\resC}[3]{\res[t]{#1/#2/#3/cold}}   % cold time, seconds
+\newcommand{\resM}[3]{\res[m]{#1/#2/#3/mem}}    % peak resident memory
+\newcommand{\resA}[3]{\res[a]{#1/#2/#3/agree}}  % agreement with the reference barcode
+
+% A table row of results: \benchrow{prime}{tool key}{tool name}; the columns are the comma-separated
+% case keys in \benchcases, and \benchkind says which field (\resT, \resC, \resM, \resA).
+\def\benchcases{}
+\let\benchkind\resT
+% (An `&` inside a \@for loop breaks the alignment, so the row is first collected in \@cells, with `&` as \amp.)
+\def\amp{&}
+\newcommand{\benchcell}[1]{\texttt{\scriptsize\detokenize{#1}}}
+\newcommand{\benchrow}[3]{%
+  \def\@cells{}%
+  \@for\bc:=\benchcases\do{%
+    \edef\@cells{\unexpanded\expandafter{\@cells}\noexpand\amp\noexpand\benchkind{\bc}{#1}{#2}}}%
+  #3\@cells\\}
+\newcommand{\benchhead}{%
+  \def\@cells{}%
+  \@for\bc:=\benchcases\do{%
+    \edef\@cells{\unexpanded\expandafter{\@cells}\noexpand\amp\noexpand\benchcell{\bc}}}%
+  \@cells\\}
+
+% A row of a sweep (threads, ambient dimension, point count): the columns are the values in \sweepvals, a cell reads
+% the key  <prefix>/<value>/<field>  (field warm, mem). \sweeprow{prefix}{row name}, with \sweepkind \resK or \resKM.
+\def\sweepvals{}
+\newcommand{\sweepT}[1]{\res[t]{#1/warm}}
+\newcommand{\sweepM}[1]{\res[m]{#1/mem}}
+\let\sweepkind\sweepT
+\newcommand{\sweeprow}[2]{%
+  \def\@cells{}%
+  \@for\bc:=\sweepvals\do{%
+    \edef\@cells{\unexpanded\expandafter{\@cells}\noexpand\amp\noexpand\sweepkind{#1/\bc}}}%
+  #2\@cells\\}
+\newcommand{\sweephead}{%
+  \def\@cells{}%
+  \@for\bc:=\sweepvals\do{%
+    \edef\@cells{\unexpanded\expandafter{\@cells}\noexpand\amp\bc}}%
+  \@cells\\}
+\makeatother
+
+% ------------------------------------------------------------------------------------------------------
+% Names
+% ------------------------------------------------------------------------------------------------------
+\newcommand{\tdaj}{TDA4j}
+\newcommand{\Fp}{\mathbb{F}_p}
+\newcommand{\Ftwo}{\mathbb{F}_2}
+\newcommand{\Fsev}{\mathbb{F}_{17}}
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\Q}{\mathbb{Q}}
+\newcommand{\R}{\mathbb{R}}
+% \code may break a long identifier at a hyphen (the hyphen character of the tt font is set on use).
+\newcommand{\code}[1]{{\ttfamily\hyphenchar\font=`\-\relax #1}}
+\newcommand{\Hom}[2]{H_{#1}(#2)}
+\newcommand{\Cl}{\operatorname{Cl}}

@@ -1,0 +1,49 @@
+\section{Limitations and future work}\label{sec:limitations}
+
+\paragraph{Speed.}
+\OUTCOME{On Vietoris--Rips complexes \tdaj{} is slower than the specialists, which return no representatives: \TODOnum{factor range}
+behind ripser.cpp, and behind RedZeD on the cases where it is faster. In degree three and above the gap \TODO{widens or narrows}.}
+The principle that every engine is generic over the field and returns a representative for every bar has a price,
+and the evaluation reports it. Where a use needs only bars over $\Ftwo$ of a Vietoris--Rips complex, a specialist is the better
+tool, and the library's file formats exist to hand the problem to one.
+
+\paragraph{Memory.}
+The generic engines hold every cell of the stream and reduce over dense numbers; they are for complexes that are not Vietoris--Rips
+complexes and for moderate sizes. The packed engines are lean, but a very large Vietoris--Rips complex still bounds what can be
+computed more than time does.
+
+\paragraph{Fast engines.}
+The union-find engines return cycles only; they need a triangulated region (a cubical grid of dimension two or more, or a
+Delaunay triangulation in which every facet has at most two cofaces, which Helix does not always give in high dimension); and their
+middle degrees fall back to cohomology. We have not proved that their representatives are volume-optimal (\cref{conj:volume}).
+
+\paragraph{Alpha complexes in high dimension.}
+An untruncated dual-quadratic-programming computation stays approximate for simplices whose circumradius is far above the point
+spacing, so a radius should be given; the triangulation backends build the whole complex whatever the radius. Which backend
+wins depends on the ambient dimension, the number of points and the degree cap, and the rule that \code{Auto} applies was
+derived from the measurements of \cref{sec:eval-alpha} for random points and is untested on clustered clouds.
+\VERIFY{notes say: caps between four and $d-2$, $n\ge100$ and clustered clouds are unmeasured}
+
+\paragraph{Exact coefficients.}
+Rational coefficients are available and can blow up in size; floating-point coefficients are available with a tolerance
+and are not recommended for torsion. Integer coefficients are not provided.
+
+\paragraph{Scope.}
+Multiparameter persistence, extended persistence, vineyards and periodic boundary conditions are outside the library's current scope.
+Persistent group homology does not scale like HAP's resolution-based computation.
+
+\paragraph{Language and platform.}
+Every user file needs the \code{experimental.modularity} import, and the library needs Scala~3.9 and Java~21. The Scala.js build
+is single-threaded, has no file system in a browser, and is slower than the JVM build by the factors of \cref{sec:eval-js}.
+\VERIFY{MATLAB: the facade has not been run in MATLAB as of the plan of 2026-10-04; and the Python package is not on PyPI as of 2026-11-01}
+
+\paragraph{Evidence.}
+Where the evaluation compares with a tool on a case that tool was designed for, the other tool wins by construction; where it
+compares on one that only \tdaj{} supports, there is nothing to compare with. We have tried to make each table's question
+clear; the threats to validity of \cref{sec:threats} list the rest. That GUDHI's witness complexes are the same objects as
+ours is not established, so the witness rows are findings and not checks.
+
+\paragraph{Future work.}
+Proving or refuting volume-optimality of the dual union-find representatives, and comparing them with HomCloud's on inputs
+with distinct values; a vertex-valued cubical input, so that the $V$-construction needs no refinement; block-parallel reduction on alpha
+complexes; a cursor for the cohomology engines; and a comparison of group homology with HAP on the same subgroup chains.

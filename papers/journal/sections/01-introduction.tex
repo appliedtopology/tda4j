@@ -1,0 +1,74 @@
+\section{Introduction}\label{sec:intro}
+
+Persistent homology has two software cultures. One writes fast specialists. Ripser~\cite{bauer2021ripser} computes
+Vietoris--Rips barcodes with a small memory footprint; Cubical Ripser~\cite{kaji2020cubical}, Flash
+Cubical~\cite{lebreton2026flash} and RedZeD~\cite{kapulkin2026redzed} each take one kind of input, mostly over $\Ftwo$, and
+report bars. The other writes toolkits: GUDHI~\cite{gudhi2014}, Dionysus~\cite{dionysus2}, Eirene~\cite{henselman2016matroid},
+Ripserer.jl~\cite{cufar2020ripserer}, OAT~\cite{hang2021umatch}, giotto-tda~\cite{tauzin2020gtda} and JavaPlex~\cite{tausz2014javaplex},
+which cover more complexes and more of the pipeline around a barcode. The two cultures answer different questions. A
+specialist answers ``how fast can this barcode be computed?'' A toolkit answers ``which of the many ways to build a
+filtered complex, reduce it, and read the result will let me finish my analysis?''
+
+\tdaj{} is a toolkit that takes the specialists' techniques seriously. It began as the successor to JavaPlex, the
+research package for persistent (co)homology that grew out of the Computational Topology workgroup at Stanford and was
+used mostly through MATLAB~\cite{tausz2014javaplex}. More than a decade later the needs are different: users call persistent homology
+from Python and from the browser, expect a barcode in seconds for the point-cloud sizes that Ripser made routine, and
+increasingly want to see \emph{where} a class lives, with a cycle or cocycle they can plot, project or feed into
+circular coordinates, rather than only that it exists. \tdaj{} is built for those users, and as a platform on which to try
+new ideas on persistent homology itself: the machinery behind each entry point is public, so a new filtration, a new
+reduction, or a new pairing strategy can be tried against the library's oracles without forking it.
+
+\paragraph{What the library is.}
+The core is a Scala~3 library for the JVM and for JavaScript, built from one source tree. A filtered complex is a stream
+of cells in filtration order; an engine consumes the stream and returns a barcode with representatives; a verb,
+\code{Persistence(input, \ldots)}, picks sensible defaults for both. Everything between input and barcode is generic over the
+cell type and over the coefficient field, and the field is a type, so mixing elements of two different prime fields is a compile-time
+error rather than a silently wrong answer (\cref{sec:design}). Beyond barcodes the library offers circular and toroidal
+coordinates, zigzag and relative persistence, maps between barcodes, discrete Morse reduction, the persistent Laplacian,
+barcode distances and vectorizations, and simplicial sets with products, cup products and Steenrod squares
+(\cref{sec:breadth}).
+
+\paragraph{Contributions.}
+This is a system paper. We separate what is borrowed from what is new, and
+we say where a claim waits on a measurement.
+\begin{enumerate}[label=\textbf{C\arabic*.}, leftmargin=2.2em, itemsep=2pt]
+\item \textbf{A typed substrate for persistent homology} (\cref{sec:design}): cells, chains, fields, filtered complexes and
+  engines as separate, checked abstractions; a single verb on top; and defaults that encode what went wrong in practice
+  ($\Fsev$ rather than $\Ftwo$, zero-length bars dropped, the enclosing radius as the threshold).
+\item \textbf{A representative for every bar, from every engine} (\cref{sec:representatives}): each engine computes cycles or
+  cocycles natively and derives the other kind from its own pairing by one reduction pass, in both directions, with every pivot
+  checked against the pairing. The derivation of cycles from cohomology is due to \v{C}ufar and
+  Virk~\cite{cufar2021involuted}; we make it uniform over cell types and fields, add the reverse direction, and make
+  representatives lazy so that they are paid for only when read.
+\item \textbf{An engine family built from a few techniques} (\cref{sec:algorithms}): in-order generation of
+  Vietoris--Rips simplices from the preprint of Bauer, Matuszewski and Vejdemo-Johansson~\cite{bauer2024generating}; a packed
+  Ripser engine with one- or two-word simplex indices; degree $0$ by union-find in every engine that reduces it; a dual
+  union-find engine for the top degree of cubical and alpha complexes that extends the idea of Flash
+  Cubical~\cite{lebreton2026flash} to the $T$-construction, to any field and to Delaunay complexes, with signed
+  representatives; and exact parallel reduction in units of edge blocks.
+  \PROV{Mikael: which parts of the edge-block material are in the preprint and which are new here; see Appendix~\ref{app:notes}, question~1.}
+\item \textbf{A correctness methodology and a cross-library agreement check} (\cref{sec:correctness}): reference engines kept in the
+  test tree and compared term for term, oracles chosen so that the plausible wrong answer fails, and a benchmark harness that checks
+  every tool's barcode against the others before it times them. The harness found a bug in our own default alpha backend and
+  defects in published algorithms and reference code.
+\item \textbf{One library, six front ends} (\cref{sec:platforms}): the JVM and JavaScript builds share their sources;
+  MATLAB, Java, Python, the command line and npm are thin layers over one option set; and every number in the
+  tutorials is asserted by a test.
+\item \textbf{A same-machine evaluation against \TODOnum{number of tools} tools} (\cref{sec:evaluation}), reported as measured,
+  including where specialists are faster.
+\end{enumerate}
+
+\paragraph{Summary of the evaluation.}
+\OUTCOME{On Vietoris--Rips complexes, the default engine returning cycles is \TODOnum{factor range} slower than
+ripser.cpp, and returns a representative for every bar; the packed engine computing cocycles alone is within
+\TODOnum{factor range}. Parallel reduction in edge blocks gives \TODOnum{factor range} on \TODOnum{number} threads.
+On cubical images the dual union-find engine is \TODOnum{factor range} from Cubical Ripser. On alpha complexes the
+triangulation backends and the dual-quadratic-programming backend cross over at ambient dimension \TODOnum{d}.
+The Scala.js build is \TODOnum{factor range} slower than the JVM build.}
+
+\paragraph{Outline.}
+\Cref{sec:background} fixes notation and places \tdaj{} among the existing software.
+\Cref{sec:design} describes the design and \cref{sec:algorithms} the algorithms and the engineering behind the engine family.
+\Cref{sec:correctness} describes how correctness is established, and \cref{sec:evaluation} the evaluation.
+\Cref{sec:showcases} gives worked examples, \cref{sec:limitations} lists limitations, and \cref{sec:availability}
+says where to find the software and how AI assistance was used in writing the code and this text.

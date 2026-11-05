@@ -1,0 +1,19 @@
+\begin{abstract}
+Persistent homology software divides into fast specialists, which compute one barcode of one kind of complex, usually
+over $\Ftwo$ and without representatives, and broad toolkits that trade speed for generality.
+\tdaj{} is a library for Scala and Java on the JVM and, from the same sources, for JavaScript in the browser and on
+Node.js; it is reachable from MATLAB, Python and the command line. It continues the line of PLEX, JPlex and JavaPlex.
+It computes persistent homology and cohomology of Vietoris--Rips, \v{C}ech, alpha, witness, Dowker, DTM-weighted and sparse
+Rips complexes, of cubical images, and of simplicial sets and nerves of groups, over any prime field and over the
+rationals, and every engine returns a representative cycle or cocycle for every bar.
+We describe the design (cells, fields and filtered complexes as typed values, engines behind one verb), the techniques
+behind the engine family (in-order generation of Vietoris--Rips simplices, a packed Ripser engine with two-word simplex
+indices, union-find for degree $0$ and, dualised, for the top degree of cubical and alpha complexes, parallel reduction
+in units of edge blocks, three alpha-complex backends), and the correctness methodology the library is developed under,
+including a cross-library agreement check that found defects in our own default and in reference implementations.
+We evaluate on \TODOnum{number of cases} cases against \TODOnum{number of tools} tools.
+\OUTCOME{On Vietoris--Rips complexes the default engine with representatives runs within \TODOnum{factor range} of
+the bars-only time of ripser.cpp and uses \TODOnum{factor range} of its memory; on cubical images it is
+\TODOnum{factor range} of CubicalRipser; on alpha complexes it is \TODOnum{factor range} of GUDHI, and the
+dual-quadratic-programming backend overtakes the triangulation backends from ambient dimension \TODOnum{d}.}
+\end{abstract}

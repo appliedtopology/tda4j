@@ -1,0 +1,174 @@
+\section{Design}\label{sec:design}
+
+The library has three layers and a verb. \emph{Algebra} defines cells, chains and coefficient fields. \emph{Streams} produce
+filtered complexes as sequences of cells in filtration order. \emph{Engines} consume a stream and return a barcode with
+representatives. \code{Persistence} chooses a stream, an engine and defaults from one call.
+
+\subsection{Cells, chains and fields}\label{sec:algebra}
+
+\paragraph{Fields are typeclasses.}
+A coefficient type is a type with a \code{Field} instance. \code{FiniteField(p)} gives the field with $p$ elements; its
+element type \code{Fp} is an \emph{opaque type per prime}, so elements of $\mathbb{F}_5$ and $\mathbb{F}_7$ have
+incompatible types and mixing them is a compile-time error. Exact arithmetic over $\Q$ is available for small examples;
+double-precision coefficients take a tolerance. Engines never inspect the runtime class of a coefficient: on Scala.js every
+boxed number is a \code{Double}, so a test such as \code{case d: Double} would also match an \code{Fp}. They ask the field.
+
+\paragraph{Cells carry their boundary.}
+A \code{Cell} has a dimension and a \code{boundary}, a list of faces with coefficients. An \code{OrderedCell} adds a total
+order. The library's instances are simplices (on any vertex type), cubes (in doubled coordinates, so that a cube of any
+dimension is a tuple of integers), the generators of a finite simplicial set, and cells of a quotient. A new kind of cell is a
+new instance, and every generic engine runs on it. There is deliberately no dual notion of a cocell: a coboundary is
+extrinsic to a cell, since it depends on which higher cells the ambient complex contains, so engines that need
+coboundaries compute them against the complex they are given.
+
+\paragraph{Chains are formal sums with pluggable storage.}
+A \code{Chain[CellT, CoefficientT]} is a formal sum of cells, kept in the order of the cells; its leading term is the
+reduction pivot. \code{Chain} is abstract and open. Equality and hash are those of the formal sum, whatever the storage, so a
+chain stored as a heap, packed into primitive arrays, or expanded lazily from a reduction log compares equal to the same sum
+stored any other way. The listing shows the style, which uses Scala~3's context-bound syntax for typeclasses.
+
+\begin{lstlisting}[language=Scala]
+trait Cell extends HasDimension:
+  type Self
+  extension (self: Self)
+    def boundary[CoefficientT: Field]: Seq[(Self, CoefficientT)]
+
+trait OrderedCell extends Cell:
+  type Self: Ordering as ordering
+\end{lstlisting}
+
+\paragraph{Default instances live with the data, never with the typeclass.}
+The core package has no top-level \code{given}. The default instances for \code{Simplex}, \code{Cube}, \code{Chain} and the
+other data types sit in their companions, which puts them in the types' implicit scope: found without an import, and
+consulted only when nothing lexically visible matches, so a user's own instance never ties with them. An instance in the
+companion of a \emph{typeclass} (\code{Field}, \code{OrderedCell}) would be searched while the instance type was still
+unknown and would silently decide type inference: a default \code{Double is Field} would turn a forgotten import of a
+finite field into real coefficients and a wrong torsion answer. A spec checks the rule from a user's side, with code
+that sees only the public imports. The price is an import line, \code{import scala.language.experimental.modularity},
+in every user file, because the typeclass syntax is experimental in Scala~3.9.
+\VERIFY{whether the import is still required in the release the paper describes}
+
+\subsection{Filtered complexes are streams in filtration order}\label{sec:streams}
+
+A \emph{stream} yields cells in filtration order, together with each cell's value. \tdaj{} requires of every stream the
+same \emph{ordering contract}. The order is one total order, built by one combinator: filtration value, then dimension, then
+a tie-break (for Vietoris--Rips the colexicographic order of the combinatorial index, as in Ripser). Within a dimension the
+cells are delivered in that same order, never in an independently built one that agrees except on ties. Values are monotone
+exactly: a face is never larger than its coface, down to the last bit of a floating-point value. Engines pair under the
+stream's order, so a stream whose ties disagree with the engine that reads it produces a barcode that is wrong in a way the
+Betti numbers do not show. This has been the largest single source of bugs in the library, and the contract is tested cell
+for cell and value for value against an independent construction (\cref{sec:oracles}).
+
+Streams are level-wise: a Vietoris--Rips stream generates the simplices of one dimension at a time, on flat arrays, and
+an engine reading it up to degree $k$ never forces dimension $k+2$. A stream says which homological degrees it covers
+(\code{homologyDegreeLimit}), and every engine that reads a stream stops there, so the artifacts at the cut of a truncated
+complex are never reported as classes. The dispatchers (\code{VietorisRips}, \code{Cech}, \code{Witness},
+\code{Dowker}, \code{DtmRips}, \code{SparseRips}, \code{Truncated}, \code{AlphaShapes}, \code{CubicalImage}) take \code{maxDimension} as the top
+\emph{homological} degree, in contrast to JavaPlex and GUDHI where it is the top simplex dimension; the construction classes
+behind them are public machinery, and \cref{app:catalogue} lists them.
+
+\subsection{Engines and the verb}\label{sec:verb}
+
+Engines are independent implementations that share \code{Chain} primitives (\cref{tab:engines}); a fix to one says nothing about
+the others, and each fast engine has a slower reference in the test tree that it must equal term for term.
+
+\begin{table}[t]
+\centering\small
+\begin{tabular}{@{}p{3.9cm} p{3.4cm} p{3.2cm} p{3.8cm}@{}}
+\toprule
+Engine & Input & Native kind & Role \\
+\midrule
+Naive & any ordered cell & cycles & reference; cursor \\
+Chunks & any stream & cycles & clear-and-compress~\cite{bkr2014chunks} \\
+Cohomology & any stream & cocycles & generic, dense numbering \\
+Ripser (packed) & Rips of a metric space & cocycles & the default for Rips \\
+Parallel Ripser & Rips of a metric space & cocycles (lazy) & edge blocks on threads \\
+Packed cubical & cubical grid & cocycles & image cocycles \\
+Fast cubical & cubical grid & cycles & dual union-find; default for images \\
+Fast alpha & Delaunay alpha complex & cycles & dual union-find \\
+\bottomrule
+\end{tabular}
+\caption{The engines behind \code{Persistence}. Each returns the other kind of representative by the involution
+(\cref{sec:representatives}), except the two fast engines (cycles only). A tenth class, the Ripser engine on explicit
+\code{Simplex[Int]} cells, is kept as a test oracle and a block-parallel experiment on explicit matrices is kept for its
+helpers; neither is reachable from the verb.}
+\label{tab:engines}
+\end{table}
+
+The verb is one call:
+\begin{lstlisting}[language=Scala]
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+
+val points = Array.tabulate(30)(i => Array(math.cos(i * 0.21), math.sin(i * 0.21)))
+val diagram = Persistence(points)   // degrees 0 to 2, coefficients in the field with 17 elements
+diagram.dim(1).longest              // the most persistent loop, with a representative cycle
+\end{lstlisting}
+Its full form is \code{Persistence(input, maxDimension = 2, maxFiltrationValue, complex = VietorisRips, characteristic = 17,
+engine = Auto)}. The input is anything that converts to a stream: points, a metric space, an image, or a stream. Public numeric
+options accept \code{2.0}, \code{2}, \code{Some(2.0)} or \code{None}, and point inputs accept the array and sequence types
+users have; every such parameter is an \code{into} type so that a single \code{apply} with defaults covers the call.
+\code{Engine.Auto} chooses the packed Ripser engine, or the parallel one when several threads are available and it applies,
+for Vietoris--Rips complexes on points or a metric space; the fast cubical engine for images of dimension two and up when
+cycles are asked for; and the generic cohomology engine otherwise.
+The result is an immutable \code{PersistenceDiagram}: bars with representatives, the coefficient field as a type member,
+and queries (\code{dim}, \code{at(f)}, \code{longest}, \code{longerThan}, \code{bettiNumbers}).
+
+\paragraph{The cursor.}
+Where the run is long, an engine's cursor lets the caller advance it for a time slice, read progress
+(\code{processedCells}, \code{totalCells}), and ask for \code{diagramAt(f)}, which is exact at any filtration value $f$
+wherever the cursor stands. Only the homology engines are prefix-ordered: the naive engine has the cursor, and the chunks
+engine answers the same queries without one. The cohomology engines, which are the fast ones, process cells in a different
+order and cannot offer it.
+
+\subsection{Defaults that encode lessons}\label{sec:defaults}
+
+\begin{itemize}[leftmargin=1.5em, itemsep=1pt]
+\item \textbf{Coefficients are $\Fsev$.} $\Ftwo$ hides signs and odd torsion: an engine with a sign error passes every
+  $\Ftwo$ test. The default is also the default of the MATLAB and command-line front ends, so a user who wants to compare
+  with Ripser or GUDHI passes \code{characteristic = 2} on purpose.
+\item \textbf{Zero-length bars are dropped.} Every engine, the verb and the front ends take \code{includeZeroLength},
+  default \code{false}. A test must not use ``number of bars equals number of cells'' as an oracle unless it opts in.
+\item \textbf{Degrees $0$ to $2$ are computed.} Higher degrees cost far more. The verb caps the reduction at the requested
+  degree, and a truncated stream carries its own limit (\cref{sec:streams}).
+\item \textbf{The threshold is the enclosing radius.} For a point cloud the enclosing radius, the smallest over the points
+  of the largest distance to another point, is where the complex becomes a cone and the barcode stops changing. It
+  is Ripser's default as well, and credited there to Henselman-Petrusek~\cite{bauer2021ripser}.
+\end{itemize}
+
+\subsection{Platforms and interfaces}\label{sec:platforms}
+
+\paragraph{One source tree, two platforms.}
+The core compiles from one tree for the JVM and, through Scala.js, for JavaScript; platform-specific code lives behind a
+handful of seams (parallelism, file access, the live plot viewer, the image decoder, the filtration cache), each defined
+once per platform under the same name. Shared code uses no Java library that Scala.js lacks, which is why the library
+carries its own Jacobi singular-value decomposition, linear solvers, vantage-point tree and enclosing-ball solver.
+Parallel steps run on a fork-join pool on the JVM and sequentially in JavaScript. Specs run on both platforms; a property
+that searches for rare inputs runs all its cases on the JVM and a tenth of them on Scala.js, since only what differs between
+the platforms needs the second run.
+
+\paragraph{Front ends.}
+The JVM library is called directly from Scala and from Java. A facade of plain arrays and option strings
+(\code{matlab.TDA4j}) is the entry point for MATLAB, Java and other JVM languages; the command-line program is a thin
+translator over it, and the Python package (a wheel over the facade via JPype) and the npm package (ES modules and type
+declarations over the Scala.js build) mirror it. Adding an option means adding it to the facade, the command line and the
+Python package together; a test fails when the Python package falls behind.
+\VERIFY{the MATLAB facade has not been run in MATLAB as of PLAN-paper.md 2026-10-04; its bytecode needs a MATLAB release with Java~17 or later (R2024a on MathWorks' compatibility page, read through a summarizer only)}
+\VERIFY{Python package: published on PyPI or not at submission (not yet at 2026-11-01)}
+
+\paragraph{Documentation is tested.}
+The code fences of the tutorials and the user guide are compiled by the documentation build, and the numbers the tutorials
+quote are asserted by specs, so the documentation cannot drift from the library without a build failing; the same example
+appears in each language as tabs.
+\VERIFY{the exact coverage: fences marked as not compiled exist, and the Python and MATLAB tabs are checked by other means} \Cref{app:first-lines} compares the first lines a newcomer writes for ``barcode with representatives from a point cloud'' in
+\tdaj{} and in the tools of \cref{tab:related}.
+
+\subsection{Openness}\label{sec:openness}
+
+The library is a platform for experiments, so public and extensible is the default. Access modifiers are not documentation:
+``this is not the entry point'' is said in the scaladoc, not by hiding the class. A restriction carries a comment naming one
+of five reasons: invariant-bearing mutable state; a library-wide guarantee (nothing public may drop representatives); the
+flat namespace (a public top-level name joins every user's wildcard import and shadows their own definitions); a facade whose
+contract is strings and arrays; or a name that is public another way. Hooks are kept even where no current entry point uses
+them: a \code{keepCriterion} on the Vietoris--Rips generator lets an experiment prune simplices, with the caveat, documented
+rather than checked at run time, that the kept set must be closed under taking faces.

@@ -1,0 +1,521 @@
+\section{Evaluation}\label{sec:evaluation}
+
+\emph{Every figure in this section is a placeholder.} The tables read their cells from \code{common/results.tex}, which
+\code{tools/bench-to-tex.py} generates from the benchmark harness's output (\code{bench/}); a red $\langle t\rangle$ or
+$\langle m\rangle$ is a cell without a value yet. The text around the tables is written as a template (blue): each
+sentence says what it will say \emph{if} the measurements come out the way the design suggests, and has to be
+rewritten, not just filled in, when they do not. What the evaluation covers follows the harness's tasks:
+Vietoris--Rips complexes, the cost of representatives, thread scaling, cubical images, alpha complexes, the rarer
+complexes, and the Scala.js build.
+
+\subsection{Protocol}\label{sec:protocol}
+
+\paragraph{Machine and versions.}
+All tools ran on one machine: \res[cpu]{env/cpu}, \res[cores]{env/cores} logical processors, \res[RAM]{env/mem_total}, under
+\res[OS]{env/platform}, on \res[date]{env/date}. \TODO{governor, cooling, other load; hardware as in the final-run plan}
+\Cref{tab:versions} lists the pinned version of every tool; \tdaj{} is at commit \res[commit]{env/tda4j_git}.
+
+\begin{table}[t]
+\centering\small
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{4.4cm} >{\raggedright\arraybackslash}p{4.4cm} >{\raggedright\arraybackslash}p{5.4cm}@{}}
+\toprule
+Tool & Version or commit & Built with / invoked as \\
+\midrule
+\tdaj{} (JVM) & \res[commit]{env/tda4j_git} & Java \TODO{version}, Scala 3.9, \TODO{JVM flags} \\
+\tdaj{} (Scala.js) & \TODO{npm package version} & Node.js \res[node]{env/node} \\
+ripser.cpp & \TODO{commit} & \TODO{flags; \code{USE\_COEFFICIENTS} for $p>2$} \\
+RedZeD & \TODO{commit (the harness pins 22ef1bf)} & \TODO{flags} \\
+GUDHI, giotto-ph, Dionysus~2, OAT, ripser.py & \TODO{versions} & Python \TODO{version} \\
+Ripserer.jl, Eirene.jl & \TODO{versions} & Julia \TODO{version} \\
+DIPHA, PHAT & \TODO{commits} & MPI \TODO{implementation} \\
+Cubical Ripser, Flash Cubical & \TODO{versions} & \TODO{flags; $V$-construction} \\
+JavaPlex & \TODO{version} & Java \TODO{version} \\
+\bottomrule
+\end{tabular}
+\caption{Pinned tool versions.}
+\label{tab:versions}
+\end{table}
+
+\paragraph{What is timed.}
+Each tool is run in its own process on one case. A \emph{cold} time is the wall-clock time of a process from launch to exit,
+as a user of the command line sees it: start-up, JIT compilation and reading the input included. A \emph{warm} time is the
+median of \TODOnum{trials} timed computations after \TODOnum{warm-ups} untimed ones in one process; a computation longer than
+a cutoff is reported once and used for both. One engine runs per JVM, since JIT state leaks between engines. Inputs that a tool reads in
+its own format (DIPHA, PHAT, RedZeD) are converted beforehand and not timed; the harness records that the input is not the
+same file. A \emph{kernel} row (PHAT) times a reduction of a prebuilt matrix and builds no complex, so it is never the
+baseline against which another tool is measured.
+
+\paragraph{Memory.}
+Peak memory is the process's own high-water resident set size, sampled while it runs; for a JVM the harness also records the
+peak of the heap pools. The JVM runs with a serial collector and a heap that follows live data, so that resident memory is
+close to what a computation needs; a fixed large heap would instead measure the total allocation, which is a property of the
+garbage collector. The maximum heap is \TODOnum{size}.
+
+\paragraph{Threads.}
+The main tables are single-threaded, as ripser.cpp, RedZeD and GUDHI are: every \tdaj{} row runs with the library's parallel
+steps sequential. Rows that use every processor say so (``\code{-mt}'') and are reported separately
+(\cref{sec:eval-threads}).
+
+\paragraph{Fields.}
+Vietoris--Rips tables are over $\Ftwo$, which every tool supports except OAT (rationals). We also report \tdaj{} and the tools that
+support other primes at $p=17$, the library's default. A tool that does not support a case or a field reports ``--''.
+
+\paragraph{Failures.}
+Timeouts (\TODOnum{timeout}), memory limits and out-of-memory kills are results and are never dropped: a table cell shows
+\code{T/O}, \code{OOM} or \code{limit}. A limit of another tool is a result of its own; for instance, ripser.cpp's
+coefficient builds fail above a simplex index of $2^{55}-1$.
+\VERIFY{this limit was read in the copy of ripser.cpp inside the ripser.py 0.6.15 sdist, not in the pinned commit}
+
+\paragraph{Agreement.}
+Before a time is reported, the run's barcode is compared with the reference's by bottleneck distance per degree
+(\cref{sec:agreement}); a disagreement is marked and the row is left out of the means.
+
+\paragraph{Cases.}
+\Cref{app:benchmark} lists the cases. The Vietoris--Rips cases are the seven of the Ripser paper's own benchmark
+with its flags (minus the printing filter), plus a size ladder on the three-sphere and cyclooctane. These cases favour Ripser,
+whose authors chose them; we use them because they are the common ground on which every tool in the comparison
+has been run before.
+
+\subsection{Vietoris--Rips complexes}\label{sec:eval-vr}
+
+\OUTCOME{With representatives, the default engine is \TODOnum{factor range} slower than ripser.cpp on the Ripser-paper cases
+and uses \TODOnum{factor range} of its memory. Computing cocycles alone narrows the time to \TODOnum{factor range}.
+RedZeD is faster than every other tool on \TODOnum{which} cases at degree \TODOnum{d} and slower on \TODOnum{which};
+\tdaj{} returns a representative for every bar from every engine; of the other tools \TODOnum{which} return representatives, of \TODOnum{which kind}.}
+
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{3pt}
+\def\benchcases{sphere3_192,o3_1024,o3_4096,clifford50000,random16,fractal-r,dragon2000}
+\let\benchkind\resT
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}l*{7}{r}@{}}
+\toprule
+Tool\benchhead
+\midrule
+\benchrow{2}{ripser.cpp}{ripser.cpp}
+\benchrow{2}{redzed}{RedZeD}
+\benchrow{2}{giotto-ph-1t}{giotto-ph, 1 thread}
+\benchrow{2}{gudhi}{GUDHI}
+\benchrow{2}{dipha}{DIPHA, 1 rank}
+\benchrow{2}{dionysus}{Dionysus~2}
+\benchrow{2}{eirene}{Eirene}
+\benchrow{2}{ripserer}{Ripserer.jl}
+\benchrow{2}{javaplex}{JavaPlex}
+\midrule
+\benchrow{2}{tda4j-cocycles}{\tdaj{}, cocycles}
+\benchrow{2}{tda4j-parallelverb-1t}{\tdaj{}, parallel engine, 1 thread, cocycles}
+\benchrow{2}{tda4j}{\tdaj{}, cycles (default)}
+\bottomrule
+\end{tabular}}
+\caption{Vietoris--Rips, warm median time in seconds over $\Ftwo$, the Ripser-paper cases. Representatives: none for the
+tools above the rule except Ripserer.jl (cocycles) and Eirene and Dionysus in their default rows (none); \tdaj{} returns them in the rows below.
+\VERIFY{check which default rows of each tool return representatives}}
+\label{tab:vr-time}
+\end{table}
+
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{3pt}
+\def\benchcases{sphere3_192,o3_1024,o3_4096,clifford50000,random16,fractal-r,dragon2000}
+\let\benchkind\resM
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}l*{7}{r}@{}}
+\toprule
+Tool\benchhead
+\midrule
+\benchrow{2}{ripser.cpp}{ripser.cpp}
+\benchrow{2}{redzed}{RedZeD}
+\benchrow{2}{giotto-ph-1t}{giotto-ph, 1 thread}
+\benchrow{2}{gudhi}{GUDHI}
+\benchrow{2}{dipha}{DIPHA, 1 rank}
+\benchrow{2}{dionysus}{Dionysus~2}
+\benchrow{2}{eirene}{Eirene}
+\benchrow{2}{ripserer}{Ripserer.jl}
+\benchrow{2}{javaplex}{JavaPlex}
+\midrule
+\benchrow{2}{tda4j-cocycles}{\tdaj{}, cocycles}
+\benchrow{2}{tda4j}{\tdaj{}, cycles (default)}
+\bottomrule
+\end{tabular}}
+\caption{Vietoris--Rips, peak resident memory over $\Ftwo$, the same cases as \cref{tab:vr-time}.}
+\label{tab:vr-mem}
+\end{table}
+
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{3pt}
+\def\benchcases{sphere3_48,sphere3_96,sphere3_192,cyclooctane}
+\let\benchkind\resT
+\begin{tabular}{@{}l*{4}{r}@{}}
+\toprule
+Tool\benchhead
+\midrule
+\benchrow{17}{ripser.cpp}{ripser.cpp, $p=17$}
+\benchrow{17}{giotto-ph-1t}{giotto-ph, $p=17$}
+\benchrow{17}{gudhi}{GUDHI, $p=17$}
+\benchrow{17}{dionysus}{Dionysus~2, $p=17$}
+\benchrow{17}{javaplex}{JavaPlex, $p=17$}
+\benchrow{17}{tda4j-cocycles}{\tdaj{}, cocycles, $p=17$}
+\benchrow{17}{tda4j}{\tdaj{}, cycles, $p=17$}
+\bottomrule
+\end{tabular}
+\caption{Vietoris--Rips over $\Fsev$: the size ladder on the three-sphere and cyclooctane (6040 points in $\R^{24}$, cutoff $0.5$).
+Tools that are $\Ftwo$-only are absent.}
+\label{tab:vr-17}
+\end{table}
+
+\paragraph{Where the time goes.}
+\OUTCOME{On \TODOnum{case}, \TODOnum{percent} of the packed engine's time is the apparent-pair test, \TODOnum{percent}
+building and sorting a level, and \TODOnum{percent} reducing; apparent pairs cover \TODOnum{range} of the columns.}
+\TODO{from \code{SingleEngineProfileDriver} counters on the final commit}
+
+\subsection{The cost of representatives}\label{sec:eval-reps}
+
+\OUTCOME{Cocycles cost \TODOnum{factor range} over a bars-only run of the same engine; cycles derived by the involution
+cost \TODOnum{factor range} over cocycles. Ripserer.jl's involuted cycles cost \TODOnum{factor range} over its cocycles, OAT's
+cycles \TODOnum{factor range} over its bars, Dionysus's cocycles \TODOnum{factor range}, and Eirene's cycle records
+\TODOnum{factor range}.}
+
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{3pt}
+\def\benchcases{sphere3_192,o3_1024,random16,dragon2000}
+\let\benchkind\resT
+\begin{tabular}{@{}l*{4}{r}@{}}
+\toprule
+Tool and output\benchhead
+\midrule
+\benchrow{2}{tda4j-parallel-1t}{\tdaj{}, bars only (block-parallel experiment, 1 thread)}
+\benchrow{2}{tda4j-cocycles}{\tdaj{}, cocycles}
+\benchrow{2}{tda4j}{\tdaj{}, cycles}
+\midrule
+\benchrow{2}{ripserer}{Ripserer.jl, cocycles}
+\benchrow{2}{ripserer-involuted}{Ripserer.jl, involuted cycles}
+\benchrow{2}{dionysus}{Dionysus~2, bars (cohomology)}
+\benchrow{2}{dionysus-cocycles}{Dionysus~2, cocycles}
+\benchrow{2}{oat}{OAT, bars}
+\benchrow{2}{oat-cycles}{OAT, cycles}
+\benchrow{2}{eirene}{Eirene, bars}
+\benchrow{2}{eirene-cycles}{Eirene, cycles}
+\bottomrule
+\end{tabular}
+\caption{Warm median time in seconds, over $\Ftwo$, with and without representatives. OAT computes over the rationals whatever the prime requested.}
+\label{tab:reps}
+\end{table}
+
+\paragraph{Representative quality.}
+Time is not the only cost. For each representative the harness's checks establish validity: closed (a cycle, or a cocycle),
+present at the bar's birth, and killed at its death. We do not claim that \tdaj{}'s representatives are small; we
+report their size, in cells and in diameter, against the other tools' where those return one.
+\TODO{representative size table; the harness does not record it yet}
+
+\subsection{Threads}\label{sec:eval-threads}
+
+\OUTCOME{On \TODOnum{case}, the parallel engine with cocycles runs \TODOnum{factor} faster on \TODOnum{n} threads than on one, against
+\TODOnum{factor} for giotto-ph and \TODOnum{factor} for DIPHA; at \TODOnum{n} threads it is \TODOnum{faster/slower} than
+ripser.cpp on one. The serial remainder, the deferred columns of degree~$1$, accounts for \TODOnum{percent} of a
+\TODOnum{n}-thread run at \TODOnum{points} points.}
+
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{3pt}
+\def\sweepvals{1,2,4,8,16,32}
+\let\sweepkind\sweepT
+\begin{tabular}{@{}l*{6}{r}@{}}
+\toprule
+Threads\sweephead
+\midrule
+\sweeprow{threads/fractal-r/tda4j-parallelverb-mt}{\tdaj{}, parallel engine, cocycles}
+\sweeprow{threads/fractal-r/tda4j-parallel-mt}{\tdaj{}, bars only}
+\sweeprow{threads/fractal-r/giotto-ph-mt}{giotto-ph}
+\sweeprow{threads/fractal-r/dipha-mt}{DIPHA (MPI ranks)}
+\midrule
+\multicolumn{7}{@{}l}{ripser.cpp, one thread: \res[t]{threads/fractal-r/ripser.cpp/1/warm}\ s} \\
+\bottomrule
+\end{tabular}
+\caption{Warm median time in seconds against the number of threads, on \code{fractal-r} (a distance matrix of 512 points, degree two), $\Ftwo$.
+Runs are pinned to the first $t$ processors. The harness's second default case (40 points in $\R^{10}$, degree ten) is
+analogous. \TODO{the sweep harness writes \code{sweep.csv}; \code{bench-to-tex.py} does not read it yet}}
+\label{tab:threads}
+\end{table}
+
+\subsection{Cubical images}\label{sec:eval-cubical}
+
+\OUTCOME{On two-dimensional images the dual union-find engine is \TODOnum{factor range} from Cubical Ripser, and
+\TODOnum{factor range} from Flash Cubical on the $V$-construction, in time; in memory it is
+\TODOnum{factor range} of Cubical Ripser's. On three-dimensional images \ldots \TODO{statement}. Computing representatives costs
+\TODOnum{factor} over bars alone in two dimensions.}
+
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{3pt}
+\def\benchcases{random2d_512,blob2d_512,random2d_2048,blob2d_2048,random3d_32,random3d_64,blob3d_64,random3d_128}
+\let\benchkind\resT
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}l*{8}{r}@{}}
+\toprule
+Tool\benchhead
+\midrule
+\benchrow{2}{cripser}{Cubical Ripser}
+\benchrow{2}{gudhi}{GUDHI}
+\benchrow{2}{tda4j-cohomology}{\tdaj{}, cohomology engine, cocycles}
+\benchrow{2}{tda4j}{\tdaj{}, dual union-find (default), cycles}
+\bottomrule
+\end{tabular}}
+\caption{Cubical complexes of images, $T$-construction (a cube takes the value of the pixels it contains), sublevel
+filtration, warm median time in seconds over $\Ftwo$. Names give the kind and size of the image.}
+\label{tab:cubical-t}
+\end{table}
+
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{3pt}
+\def\benchcases{random2d_512_v,random2d_2048_v,random3d_64_v,random3d_128_v}
+\let\benchkind\resT
+\begin{tabular}{@{}l*{4}{r}@{}}
+\toprule
+Tool\benchhead
+\midrule
+\benchrow{2}{flashcubical}{Flash Cubical}
+\benchrow{2}{cripser}{Cubical Ripser}
+\benchrow{2}{gudhi}{GUDHI}
+\benchrow{2}{tda4j}{\tdaj{} on the refined image}
+\bottomrule
+\end{tabular}
+\caption{The $V$-construction (the array holds vertex values, a cell takes the largest of its vertices), warm median time in seconds over $\Ftwo$.
+\tdaj{} has no vertex-valued input, so it runs on the $(2n-1)^d$ image that gives every cell its birth value, which has the same
+persistent homology and $2^d$ times the cells; the refinement is inside the timed run.}
+\label{tab:cubical-v}
+\end{table}
+
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{3pt}
+\def\benchcases{random2d_512,blob2d_2048,random3d_64,random3d_128}
+\let\benchkind\resM
+\begin{tabular}{@{}l*{4}{r}@{}}
+\toprule
+Tool\benchhead
+\midrule
+\benchrow{2}{cripser}{Cubical Ripser}
+\benchrow{2}{gudhi}{GUDHI}
+\benchrow{2}{tda4j}{\tdaj{}, dual union-find, cycles}
+\bottomrule
+\end{tabular}
+\caption{Cubical complexes, peak resident memory, $T$-construction, over $\Ftwo$.}
+\label{tab:cubical-mem}
+\end{table}
+
+\paragraph{Representatives in the fast path.}
+The first implementation of representatives in the dual union-find engine copied a component's coefficient map on every
+union. \OUTCOME{After the merge forest replaced it, a \TODOnum{size}$^2$ image takes \TODOnum{time} instead of
+\TODOnum{time}.} \TODO{re-measure on the final commit with a before/after build; the old implementation is kept in the test tree as an oracle}
+
+\subsection{Alpha complexes}\label{sec:eval-alpha}
+
+\OUTCOME{In dimensions two to four the default (Bowyer--Watson) is \TODOnum{factor range} of GUDHI in time, and the fast alpha engine
+returns the top degree \TODOnum{factor} faster than the default. In higher ambient dimension the Helix and DQP backends cross at
+$d=\TODOnum{d}$ at $n=\TODOnum{n}$ with degree cap \TODOnum{cap}, DQP using \TODOnum{factor range} the memory; the \v{C}ech complex
+overtakes DQP between $d=\TODOnum{d}$ and $d=\TODOnum{d'}$. Helix produced an invalid triangulation in \TODOnum{count} of
+\TODOnum{draws} draws.}
+
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{3pt}
+\def\benchcases{unif2d_1000,unif2d_10000,unif3d_1000,unif3d_5000,dragon2000_alpha_gp,sphere3_192_alpha_gp}
+\let\benchkind\resT
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{3.4cm}*{6}{r}@{}}
+\toprule
+Tool\benchhead
+\midrule
+\benchrow{2}{gudhi}{GUDHI (CGAL)}
+\benchrow{2}{tda4j}{\tdaj{}, default (Bowyer--Watson), cycles}
+\benchrow{2}{tda4j-helix}{\tdaj{}, Helix}
+\benchrow{2}{tda4j-fastalpha}{\tdaj{}, fast alpha (dual union-find)}
+\bottomrule
+\end{tabular}}
+\caption{Alpha complexes in two and three dimensions; warm median time in seconds, $\Ftwo$. The last two cases are in general
+position (jittered copies of a scan and of a cospherical set).}
+\label{tab:alpha-low}
+\end{table}
+
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{3pt}
+\def\benchcases{unif5d_500,unif10d_1000,o3_1024_alpha,cyclooctane_alpha}
+\let\benchkind\resT
+\begin{tabular}{@{}l*{4}{r}@{}}
+\toprule
+Tool\benchhead
+\midrule
+\benchrow{2}{gudhi}{GUDHI (CGAL)}
+\benchrow{2}{tda4j}{\tdaj{}, default}
+\benchrow{2}{tda4j-helix}{\tdaj{}, Helix}
+\benchrow{2}{tda4j-dqp}{\tdaj{}, DQP}
+\bottomrule
+\end{tabular}
+\caption{Alpha complexes in higher ambient dimension, warm median time in seconds, $\Ftwo$. \code{unif10d\_1000} takes its parameters
+from the DQP paper's example (1000 points in $[-1,1]^{10}$, radius $1$, simplices up to dimension three); \code{o3\_1024\_alpha} is
+1024 orthogonal $3\times3$ matrices in $\R^9$; \code{cyclooctane\_alpha} is the 6040 conformations in $\R^{24}$ at radius $0.25$.
+A full Delaunay triangulation is out of reach for the last two, and a timeout is a result.}
+\label{tab:alpha-high}
+\end{table}
+
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{3pt}
+\def\sweepvals{5,6,7,8,10,12,15}
+\let\sweepkind\sweepT
+\begin{tabular}{@{}l*{7}{r}@{}}
+\toprule
+Ambient dimension $d$\sweephead
+\midrule
+\sweeprow{alpha-four/n40/tda4j-helix}{Helix path, $n=40$}
+\sweeprow{alpha-four/n40/tda4j-dqp}{DQP, $n=40$}
+\sweeprow{alpha-four/n40/tda4j-cech}{\v{C}ech, $n=40$}
+\sweeprow{alpha-four/n40/gudhi}{GUDHI, $n=40$}
+\midrule
+\sweeprow{alpha-four/n60/tda4j-helix}{Helix path, $n=60$}
+\sweeprow{alpha-four/n60/tda4j-dqp}{DQP, $n=60$}
+\sweeprow{alpha-four/n60/tda4j-cech}{\v{C}ech, $n=60$}
+\bottomrule
+\end{tabular}
+\caption{Random points in the unit cube, degrees up to four, warm median time in seconds against the ambient dimension.
+\TODO{from \code{bench/run.sh sweep-alpha --path four}; \code{bench-to-tex.py} does not read sweeps yet}}
+\label{tab:alpha-four}
+\end{table}
+
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{3pt}
+\def\sweepvals{3,4,5,6,7,8,10,12}
+\let\sweepkind\sweepM
+\begin{tabular}{@{}l*{8}{r}@{}}
+\toprule
+Ambient dimension $d$\sweephead
+\midrule
+\sweeprow{alpha-top/n40/tda4j}{default, $n=40$}
+\sweeprow{alpha-top/n40/tda4j-fastalpha-top}{top degree only, $n=40$}
+\sweeprow{alpha-top/n40/gudhi}{GUDHI, $n=40$}
+\bottomrule
+\end{tabular}
+\caption{The whole barcode in $\R^d$ ($H_0$ to $H_{d-1}$), peak resident memory. \TODO{from \code{sweep-alpha --path top}}}
+\label{tab:alpha-top}
+\end{table}
+
+\paragraph{Failure rates and agreement.}
+In general position the \v{C}ech and alpha complexes have the same barcode, so the agreement of \tdaj{}'s \v{C}ech
+complex, its dual quadratic program, its Helix triangulation and GUDHI is a check at dimensions where GUDHI cannot run.
+\OUTCOME{They agree to \TODOnum{tolerance} on every bar longer than \TODOnum{length} in all \TODOnum{number} draws.}
+The rate at which Helix produces a triangulation that fails the validity check, by $(d,n)$, is \TODO{table from
+\code{sweep-alpha --validity}: rows $d$, columns $n$}.
+The bottleneck distance between backends at high $d$ measures the agreement of nearly flat simplices, whose circumradii are
+large and whose values cluster; it is a stress test of the implementations and not a statement about topology.
+
+\subsection{The rarer complexes}\label{sec:eval-rare}
+
+No mainstream implementation exists for several of the complexes \tdaj{} offers, so the comparisons are with GUDHI where it has one
+and otherwise with hand-built baselines. What the agreement column means depends on the row: for \v{C}ech and DTM it is a real
+check; for witness complexes it is a finding, since it is not established that GUDHI's weak and strong witness complexes are
+the same objects; for sparse Rips the two filtrations approximate with incomparable $\varepsilon$ and the reference is exact Rips
+from ripser.cpp, so the distance is the approximation error.
+
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{3pt}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}l l r r r r c@{}}
+\toprule
+Task & Case & \tdaj{} time & GUDHI time & \tdaj{} mem & GUDHI mem & Agree \\
+\midrule
+\v{C}ech & \texttt{\scriptsize cech\_unif3d\_80} & \resT{cech_unif3d_80}{2}{tda4j} & \resT{cech_unif3d_80}{2}{gudhi} & \resM{cech_unif3d_80}{2}{tda4j} & \resM{cech_unif3d_80}{2}{gudhi} & \resA{cech_unif3d_80}{2}{tda4j} \\
+ & \texttt{\scriptsize cech\_unif3d\_1000} & \resT{cech_unif3d_1000}{2}{tda4j} & \resT{cech_unif3d_1000}{2}{gudhi} & \resM{cech_unif3d_1000}{2}{tda4j} & \resM{cech_unif3d_1000}{2}{gudhi} & \resA{cech_unif3d_1000}{2}{tda4j} \\
+ & \texttt{\scriptsize cech\_unif5d\_500} & \resT{cech_unif5d_500}{2}{tda4j} & \resT{cech_unif5d_500}{2}{gudhi} & \resM{cech_unif5d_500}{2}{tda4j} & \resM{cech_unif5d_500}{2}{gudhi} & \resA{cech_unif5d_500}{2}{tda4j} \\
+DTM-Rips & \texttt{\scriptsize dtm\_circle\_outliers} & \resT{dtm_circle_outliers}{2}{tda4j} & \resT{dtm_circle_outliers}{2}{gudhi} & \resM{dtm_circle_outliers}{2}{tda4j} & \resM{dtm_circle_outliers}{2}{gudhi} & \resA{dtm_circle_outliers}{2}{tda4j} \\
+ & \texttt{\scriptsize dtm\_unif3d\_1000} & \resT{dtm_unif3d_1000}{2}{tda4j} & \resT{dtm_unif3d_1000}{2}{gudhi} & \resM{dtm_unif3d_1000}{2}{tda4j} & \resM{dtm_unif3d_1000}{2}{gudhi} & \resA{dtm_unif3d_1000}{2}{tda4j} \\
+Witness (lazy) & \texttt{\scriptsize witness\_unif3d\_1000\_L50} & \resT{witness_unif3d_1000_L50}{2}{tda4j} & \resT{witness_unif3d_1000_L50}{2}{gudhi} & \resM{witness_unif3d_1000_L50}{2}{tda4j} & \resM{witness_unif3d_1000_L50}{2}{gudhi} & \resA{witness_unif3d_1000_L50}{2}{tda4j} \\
+ & \texttt{\scriptsize witness\_unif3d\_5000\_L100} & \resT{witness_unif3d_5000_L100}{2}{tda4j} & \resT{witness_unif3d_5000_L100}{2}{gudhi} & \resM{witness_unif3d_5000_L100}{2}{tda4j} & \resM{witness_unif3d_5000_L100}{2}{gudhi} & \resA{witness_unif3d_5000_L100}{2}{tda4j} \\
+Sparse Rips & \texttt{\scriptsize sparse\_sphere3\_96} & \resT{sparse_sphere3_96}{2}{tda4j} & \resT{sparse_sphere3_96}{2}{gudhi} & \resM{sparse_sphere3_96}{2}{tda4j} & \resM{sparse_sphere3_96}{2}{gudhi} & \resA{sparse_sphere3_96}{2}{tda4j} \\
+ & \texttt{\scriptsize sparse\_o3\_1024} & \resT{sparse_o3_1024}{2}{tda4j} & \resT{sparse_o3_1024}{2}{gudhi} & \resM{sparse_o3_1024}{2}{tda4j} & \resM{sparse_o3_1024}{2}{gudhi} & \resA{sparse_o3_1024}{2}{tda4j} \\
+ & \texttt{\scriptsize sparse\_unif3d\_1000} & \resT{sparse_unif3d_1000}{2}{tda4j} & \resT{sparse_unif3d_1000}{2}{gudhi} & \resM{sparse_unif3d_1000}{2}{tda4j} & \resM{sparse_unif3d_1000}{2}{gudhi} & \resA{sparse_unif3d_1000}{2}{tda4j} \\
+Dowker & \texttt{\scriptsize dowker\_300x100} & \resT{dowker_300x100}{2}{tda4j} & \resT{dowker_300x100}{2}{gudhi} & \resM{dowker_300x100}{2}{tda4j} & \resM{dowker_300x100}{2}{gudhi} & \resA{dowker_300x100}{2}{tda4j} \\
+ & \texttt{\scriptsize dowker\_60x200} & \resT{dowker_60x200}{2}{tda4j} & \resT{dowker_60x200}{2}{gudhi} & \resM{dowker_60x200}{2}{tda4j} & \resM{dowker_60x200}{2}{gudhi} & \resA{dowker_60x200}{2}{tda4j} \\
+\bottomrule
+\end{tabular}}
+\caption{Complexes that few other libraries offer, $\Ftwo$: warm median time (seconds), peak memory, and agreement with the task's reference
+(GUDHI; ripser.cpp for sparse Rips). The Dowker rows are against a GUDHI simplex tree filled by hand; Blaser and Brun's
+\code{dowker\_homology} and Yoon's Julia package are further rows. \VERIFY{the Dowker, DTM and witness comparisons depend on the pinned packages building}}
+\label{tab:rare}
+\end{table}
+
+\subsection{The Scala.js build}\label{sec:eval-js}
+
+The same sources compile to JavaScript, and the harness runs the npm package under Node.js beside each JVM row.
+\OUTCOME{The JavaScript build is \TODOnum{factor range} slower than the JVM on Vietoris--Rips, \TODOnum{factor range} on images and
+\TODOnum{factor range} on alpha complexes, and finishes \TODOnum{which} of the cases that the JVM finishes.}
+
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{3pt}
+\def\benchcases{sphere3_96,sphere3_192,o3_1024,random2d_512,random2d_1024,unif3d_1000}
+\let\benchkind\resC
+\begin{tabular}{@{}l*{6}{r}@{}}
+\toprule
+Platform\benchhead
+\midrule
+\benchrow{2}{tda4j}{JVM, cycles}
+\benchrow{2}{tda4j-js}{Scala.js on Node.js, cycles}
+\bottomrule
+\end{tabular}
+\caption{The two builds of \tdaj{}, cold time (process launch to exit) in seconds over $\Ftwo$; the image and alpha cases use the
+default engine of each task. \TODO{subset of cases the JS build finishes}}
+\label{tab:js}
+\end{table}
+
+\subsection{What each technique buys}\label{sec:eval-ablation}
+
+The techniques of \cref{sec:algorithms} are switchable in the code, so each can be measured alone: each row of
+\cref{tab:ablation} compares the engine with a technique on and off, in one JVM per variant, interleaved, with the median of
+several timed runs after warm-up. Digests of the output (bars and representative terms) are compared between the variants,
+so a variant that changes the answer is not measured.
+
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{4.2cm} >{\raggedright\arraybackslash}p{3.4cm} r r >{\raggedright\arraybackslash}p{2.3cm}@{}}
+\toprule
+Technique & Switch & Time ratio & Memory ratio & Case \\
+\midrule
+Union-find for degree $0$ & \code{useUnionFind} & \res[r]{ablation/unionfind/o3_1024/time} & \res[r]{ablation/unionfind/o3_1024/mem} & \code{o3\_1024} \\
+Emergent pairs & \code{useEmergentPairs} & \res[r]{ablation/emergent/o3_4096/time} & \res[r]{ablation/emergent/o3_4096/mem} & \code{o3\_4096} \\
+Apparent pairs & \code{useApparentPairs} & \res[r]{ablation/apparent/sphere3_192/time} & \res[r]{ablation/apparent/sphere3_192/mem} & \code{sphere3\_192} \\
+Apparent-pair skip in the involution & \TODO{switch} & \res[r]{ablation/skip/o3_1024/time} & \res[r]{ablation/skip/o3_1024/mem} & \code{o3\_1024} \\
+Decoding a column once & \TODO{switch} & \res[r]{ablation/decode/o3_1024/time} & \res[r]{ablation/decode/o3_1024/mem} & \code{o3\_1024} \\
+In-order generation of layers & \TODO{switch} & \res[r]{ablation/inorder/sphere3_192/time} & \res[r]{ablation/inorder/sphere3_192/mem} & \code{sphere3\_192} \\
+Dense cell numbering & \code{packSimplices} / cell-keyed reference & \res[r]{ablation/dense/sphere3_96/time} & \res[r]{ablation/dense/sphere3_96/mem} & \code{sphere3\_96} \\
+Two-word indices (cost, on a one-word case) & \code{wideIndices} & \res[r]{ablation/wide/random16/time} & \res[r]{ablation/wide/random16/mem} & \code{random16} \\
+Merge forest for representatives & eager reference & \res[r]{ablation/forest/blob2d_512/time} & \res[r]{ablation/forest/blob2d_512/mem} & \code{blob2d\_512} \\
+\bottomrule
+\end{tabular}
+\caption{Ablations: the ratio of the variant without the technique to the variant with it (a ratio above one favours
+the technique). Cases are indicative; the final choice follows the results. \TODO{cases and switches; the A/B driver is
+\code{SingleEngineProfileDriver} and \code{PaperBenchmarkDriver}, whose output \code{bench-to-tex.py} does not read; enter values in \code{common/results-manual.tex}}}
+\label{tab:ablation}
+\end{table}
+
+\subsection{Threats to validity}\label{sec:threats}
+
+\begin{itemize}[leftmargin=1.5em, itemsep=2pt]
+\item \emph{One machine, one commit, one pinned version of each tool.} Ratios between tools depend on the machine's cache and memory system.
+\item \emph{The cases.} They come from the Ripser paper's benchmark and the PH roadmap, so they favour Ripser; cases where \tdaj{}'s generality
+  matters (other fields, other complexes, representatives) are in other tables, and a reader should weigh each table for its question.
+\item \emph{Precision.} ripser.cpp, Dionysus and RedZeD compute with single-precision values; \tdaj{} uses doubles; the agreement
+  tolerance accounts for it, and the memory ratios do not correct for it.
+\item \emph{The $V$/$T$ mismatch for images.} \tdaj{}'s $V$ rows run on a refined image; the table says so.
+\item \emph{Who wrote the harness.} The harness is ours. It follows the Ripser paper's own benchmark where one exists, and records flags, versions and failures;
+  it is public, so each row can be rerun.
+\item \emph{The JVM.} Cold and warm times are different quantities; compact heap policy is chosen to measure live data. We report both times and the heap policy.
+\item \emph{Representatives.} We measure validity and cost, not usefulness, and tools that return no representative cannot be compared on them.
+\end{itemize}

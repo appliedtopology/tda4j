@@ -1,0 +1,73 @@
+\section{Benchmark inventory}\label{app:benchmark}
+
+This appendix lists the cases and the harness rows behind the tables of \cref{sec:evaluation}, as the harness defines them
+(\code{bench/bench.py}, \code{CASES} and \code{TOOLS}); the keys of the tables are these names. \VERIFY{regenerate from the final commit's \code{bench.py}; the case set and the row set change}
+
+\subsection{Cases}
+
+{\footnotesize\setlength{\tabcolsep}{4pt}
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{4.0cm} l >{\raggedright\arraybackslash}p{5.0cm} r >{\raggedright\arraybackslash}p{2.2cm}@{}}
+\toprule
+Case & Task & Input & Degree & Threshold \\
+\midrule
+\endhead
+\code{sphere3\_48}, \code{\_96} & Rips & points, size ladder (scripted) & 2 & enclosing radius \\
+\code{sphere3\_192} & Rips & \code{sphere\_3\_192\_points.dat} of the Ripser benchmark & 2 & enclosing radius \\
+\code{dragon2000} & Rips & 2000 points of a scanned model & 1 & enclosing radius \\
+\code{random16} & Rips & 50 random points in $\R^{16}$ & 7 & enclosing radius \\
+\code{fractal-r} & Rips & PH-roadmap distance matrix (512 points), symmetrised for the benchmark & 2 & enclosing radius \\
+\code{o3\_1024} & Rips & 1024 orthogonal $3\times3$ matrices in $\R^9$ & 3 & 1.8 \\
+\code{o3\_4096} & Rips & 4096 orthogonal $3\times3$ matrices in $\R^9$ & 3 & 1.4 \\
+\code{clifford50000} & Rips & 50,000 points on a Clifford torus & 2 & 0.15 \\
+\code{cyclooctane} & Rips & 6040 conformations in $\R^{24}$~\cite{martin2010cyclooctane} & 2 & 0.5 \\
+\midrule
+\code{random2d\_\{512,\allowbreak 1024,\allowbreak 2048\}} & cubical & uniform noise images, $T$-construction & 1 & -- \\
+\code{blob2d\_\{512,\allowbreak 1024,\allowbreak 2048\}} & cubical & smooth random fields (Gaussian blobs) & 1 & -- \\
+\code{random3d\_\{32,64,128\}}, \code{blob3d\_64} & cubical & three-dimensional volumes & 2 & -- \\
+\code{*\_v} & cubical & the $V$-construction twin of each of the above (array read as vertex values) & as above & -- \\
+\midrule
+\code{unif2d\_\{1000,10000\}}, \code{unif3d\_\{1000,5000\}} & alpha & uniform points in the unit cube & 1, 2 & none \\
+\code{dragon2000\_alpha\_gp}, \code{sphere3\_192\_alpha\_gp} & alpha & jittered copies, in general position (the unjittered originals are degenerate and flagged) & 2 & none \\
+\code{unif5d\_500} & alpha & uniform in $[0,1]^5$ & 2 & none \\
+\code{unif10d\_1000} & alpha & 1000 points in $[-1,1]^{10}$, the DQP paper's example~\cite{carlsson2023alpha} & 2 & radius 1.0 \\
+\code{o3\_1024\_alpha} & alpha & as \code{o3\_1024}, radius for about 25 neighbours & 2 & by neighbours \\
+\code{cyclooctane\_alpha} & alpha & as \code{cyclooctane}, as the DQP paper uses it & 2 & radius 0.25 \\
+\midrule
+\code{cech\_unif3d\_\{80,1000\}}, \code{cech\_unif5d\_500} & \v{C}ech & uniform points; radius bounds the work & 2 & none, 0.08, 0.2 \\
+\code{dtm\_circle\_outliers}, \code{dtm\_unif3d\_1000} & DTM & a circle with outliers; uniform points; $k=10$ & 1, 2 & 0.6, 0.15 \\
+\code{witness\_unif3d\_1000\_L50}, \code{\_5000\_L100} & witness & maxmin landmarks chosen once and given to every tool & 2 & none \\
+\code{sparse\_sphere3\_96}, \code{sparse\_o3\_1024}, \code{sparse\_unif3d\_1000} & sparse Rips & $\varepsilon=0.3$; reference is exact Rips (ripser.cpp) & 2 & none, 1.8, 0.25 \\
+\code{dowker\_300x100}, \code{dowker\_60x200} & Dowker & relation matrices (rows are vertices) & 1, 2 & 0.35, 0.5 \\
+\bottomrule
+\end{longtable}}
+
+\subsection{Rows}
+
+{\footnotesize\setlength{\tabcolsep}{4pt}
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{4.2cm} >{\raggedright\arraybackslash}p{7.2cm} >{\raggedright\arraybackslash}p{2.8cm}@{}}
+\toprule
+Row & What it runs & Representatives \\
+\midrule
+\endhead
+\code{tda4j}, \code{tda4j-cocycles} & the verb with \code{Engine.Auto}, cycles or cocycles; one thread & cycles, cocycles \\
+\code{tda4j-parallelverb-1t}, \code{-mt} & \code{Engine.ParallelRipser} through the verb, one thread or every processor & cocycles \\
+\code{tda4j-parallel-1t}, \code{-mt} & the bars-only block-parallel experiment (named explicitly) & none \\
+\code{tda4j-collapse} & edge-collapsed Rips & cycles \\
+\code{tda4j-helix}, \code{-bw}, \code{-dqp}, \code{-fastalpha}, \code{-fastalpha-top}, \code{-cech} & alpha backends and the fast alpha engine; \v{C}ech & cycles \\
+\code{tda4j-cohomology} & the generic cohomology engine on images & cocycles \\
+\code{tda4j-js*} & the Scala.js twin of each row, on Node.js & as the twin \\
+\code{ripser.cpp}, \code{ripser.py} & Ripser, coefficient build for $p>2$ & none, cocycles \\
+\code{redzed} & RedZeD, $\Ftwo$, bars only & none \\
+\code{giotto-ph-1t}, \code{-mt} & giotto-ph, one thread or every processor & flag generators \\
+\code{gudhi}, \code{gudhi-collapse} & GUDHI Rips, with edge collapse; alpha, \v{C}ech, DTM, witness, cubical & -- \\
+\code{dionysus}, \code{-homology}, \code{-cocycles} & Dionysus~2, cohomology (default), homology, with cocycles & cocycles \\
+\code{oat}, \code{oat-cycles} & OAT over the rationals & cycles \\
+\code{ripserer}, \code{ripserer-involuted} & Ripserer.jl & cocycles, involuted cycles \\
+\code{eirene}, \code{eirene-cycles} & Eirene.jl, $\Ftwo$ & cycle records \\
+\code{dipha}, \code{dipha-mt} & DIPHA, $\Ftwo$, one rank or a rank per processor & none \\
+\code{phat}, \code{phat-dual} & PHAT on a prebuilt matrix (a kernel row) & none \\
+\code{javaplex} & JavaPlex & \VERIFY{} \\
+\code{cripser}, \code{flashcubical} & Cubical Ripser; Flash Cubical ($V$-construction only) & \VERIFY{} \\
+\code{dowker-nerves}, \code{dowker-yoon} & Blaser and Brun's \code{dowker\_homology}; Yoon's Julia package ($\Ftwo$, degrees 0 and 1) & -- \\
+\bottomrule
+\end{longtable}}

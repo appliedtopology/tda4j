@@ -1,0 +1,121 @@
+\section{How correctness is established}\label{sec:correctness}
+
+A persistent homology library can be wrong in ways that no unit test on Betti numbers will show: a pairing with the right
+count and the wrong bars, a filtration whose ties disagree with its engine, a field in which every sign error cancels. The
+library is developed under a methodology designed around that fact. We describe it because the benchmark in
+\cref{sec:evaluation} is only as meaningful as the agreement checks behind it, and because we think the incidents,
+which are the empirical content of this section, are of use to the authors of other libraries.
+
+\subsection{Oracles that the plausible wrong answer fails}\label{sec:oracles}
+
+A specification is \emph{discriminating} if the plausible wrong implementation fails it.
+\begin{itemize}[leftmargin=1.5em, itemsep=2pt]
+\item \textbf{$\Fsev$ or $\mathbb{F}_3$ against $\Ftwo$} for signs: over $\Ftwo$ a sign error is invisible, so every engine is tested
+  at an odd prime, and signed-field fixtures need at least five vertices, since a hash-ordered set of four or fewer elements
+  hides an ordering bug.
+\item \textbf{Cup products against Betti numbers} for simplicial sets: they distinguish spaces with the same Betti numbers, and they
+  caught a wrong torus fixture that the Betti numbers accepted.
+\item \textbf{Cell for cell, value for value} against an independent construction for every stream, with tie-heavy inputs;
+  a new complex is compared with the hand-wrapped construction class, because Betti numbers do not catch a wrong $+1$.
+\item \textbf{Reference engines kept in the test tree}: each fast engine has a slower reference that it must equal bar for bar
+  and term for term (the packed Ripser engine against a \code{Chain}-based one; the dense cohomology engine against the
+  cell-keyed one; the signed union-find against the first, eager implementation; the collapsed nerve against the bar construction).
+  \emph{Two engines agreeing is no proof if they share a code path}: hand-derived fixtures are the real oracle.
+\item \textbf{Mutation checks} on new code: a check that cannot fail is worthless, and some can fail on rare inputs only: a missing
+  pivot check showed on five of three hundred tie grids. A uniform sign flip of every coboundary changes no output, so
+  sign mutations must be non-uniform.
+\item \textbf{Pivot checks at run time}: the involution checks every pivot against the pairing and throws on a mismatch
+  (\cref{sec:representatives}); a reduction that moves backwards or stands still for 64 steps throws too.
+\end{itemize}
+
+\subsection{The documentation is a test}\label{sec:docs-tests}
+
+The tutorials state numbers (the number of bars of a torus, the bars of a Truchet tiling), and a specification asserts each
+of them; the code fences of the documentation are compiled by its build. Documentation that is wrong breaks the build, and the
+first five lines a newcomer writes are the ones we test first.
+
+\subsection{A catalogue of pitfalls, each with an incident}\label{sec:pitfalls}
+
+Every entry in \cref{tab:pitfalls} cost us a bug in this code base. Several are pitfalls in persistent homology software
+generally, and in benchmarking it.
+
+\begin{table}[t]
+\centering\small
+\begin{tabular}{@{}p{3.3cm} p{6.4cm} p{5.3cm}@{}}
+\toprule
+Pitfall & Incident & Guard \\
+\midrule
+Truncation artifacts & A direct caller of a complex truncated at a low dimension once got 1,072,740 bars where Ripser reports 18,145. & Streams carry \code{homologyDegreeLimit}; every engine stops there. \\
+Fields that hide errors & $\Ftwo$ passes sign-broken engines; odd torsion is invisible. & $\Fsev$ default; odd-prime fixtures. \\
+Tie orders & Stream and engine broke ties differently: the same ``Betti numbers'', a different barcode, or a pivot error. At least five bugs of this kind. & One comparator combinator; the contract of \cref{sec:streams}. \\
+One-ulp radii & A minimum-enclosing-ball radius of a simplex came out one ulp \emph{smaller} than that of a facet: a non-monotone filtration. & Clamp to the maximum over facets. \\
+Equal quantities computed twice & In Bowyer--Watson a simplex's radius and its coface's, equal in exact arithmetic, were computed separately, and a bar of length about $2\cdot10^{-16}$ existed or not depending on which diagonal of a cocircular square the triangulation chose. & One computation per value; symbolic perturbation. \\
+Asymmetric ``distance matrices'' & The PH-roadmap's \code{fractal\_9\_5\_2} matrix has 2,135 of 130,816 pairs with $d(i,j)\ne d(j,i)$, all differences surviving rounding to float32; the packed engine looped forever on it. & Read one fixed triangle (the lower, as ripser.cpp and GUDHI do), and give every benchmark tool the same canonical matrix. \\
+Zero-length bars & ``Number of bars equals number of cells'' is false once they are dropped; the barcodes of a Dowker complex and of its dual agree only without them. & \code{includeZeroLength}; tests compare the ordering contract, not bar counts. \\
+Essential bars in distances & Bottleneck and Wasserstein distances differ by convention in how an essential bar is matched. & A stated policy; Hera's conventions available. \\
+Comparing too few degrees & DQP discarded valid simplices of large circumradius and their cofaces, giving spurious never-dying classes in degrees five to nine at $n=40$ in $\R^{10}$; earlier sweeps compared degrees up to two. & Compare every degree up to the top; a certified rescue pass. \\
+An edge-only Gabriel rule & Helix's alpha values applied the Gabriel test to edges only and lost most of $H_2$ in three dimensions; the agreement check against DQP, \v{C}ech and GUDHI found it on its first run. & Gabriel test for every facet; the agreement spec. \\
+Platform semantics & On Scala.js every boxed number is a \code{Double}, so a runtime test of a coefficient's class matches a finite-field element; a \code{java.util.ArrayDeque} used as a stack repeats elements once it grows. & Ask the field; stacks in \code{Int} arrays; mutation checks on both. \\
+\bottomrule
+\end{tabular}
+\caption{Pitfalls and the incidents behind them. \VERIFY{the counts quoted (1,072,740 against 18,145 bars; 2,135 of 130,816 pairs) are from the project's notes and PLAN-paper.md; re-run before quoting}}
+\label{tab:pitfalls}
+\end{table}
+
+\subsection{A cross-library agreement check}\label{sec:agreement}
+
+The benchmark harness (\cref{sec:protocol}) does not only time tools: it compares each tool's barcode with a reference's before
+it reports a time, degree by degree, by bottleneck distance. The tolerance follows from the inputs, since ripser.cpp computes
+in single precision, JavaPlex quantises filtration values, and an asymmetric matrix has no single barcode. Every tool is given
+the same canonicalised input; zero-length and essential bars follow one stated convention; and an alpha radius and a squared
+radius are converted explicitly (GUDHI's alpha filtration values are squared radii). A row that does not agree is a finding,
+and the tables report it with the cause, ours or theirs. The reference is the one the harness assigns per task (ripser.cpp for
+Vietoris--Rips and for sparse filtrations, GUDHI elsewhere); a case flagged as degenerate (a cospherical input, on which every
+Delaunay-based tool triangulates the degenerate cells its own way) has no ground truth and is paired with a jittered copy in
+general position.
+
+\Cref{tab:agreement} summarises the outcome.
+\OUTCOME{Every tool agrees with the reference on \TODOnum{fraction} of the \TODOnum{number} case/field/tool combinations
+that finished; the disagreements, and what each turned out to be, are \TODO{list, from the final run's summary.csv: the \code{agrees} and \code{note} columns}.}
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{3pt}
+\def\benchcases{sphere3_192,o3_1024,o3_4096,random16,fractal-r,dragon2000}
+\let\benchkind\resA
+\begin{tabular}{@{}l*{6}{c}@{}}
+\toprule
+Tool\benchhead
+\midrule
+\benchrow{2}{tda4j}{\tdaj}
+\benchrow{2}{redzed}{RedZeD}
+\benchrow{2}{giotto-ph-1t}{giotto-ph}
+\benchrow{2}{gudhi}{GUDHI}
+\benchrow{2}{dionysus}{Dionysus~2}
+\benchrow{2}{ripserer}{Ripserer.jl}
+\benchrow{2}{javaplex}{JavaPlex}
+\bottomrule
+\end{tabular}
+\caption{Agreement of each tool's barcode with ripser.cpp's over $\Ftwo$, all degrees up to the case's top degree
+(check mark: bottleneck distance within the tolerance; otherwise the distance). Tools that failed show the failure.}
+\label{tab:agreement}
+\end{table}
+
+\subsection{Defects found in references}\label{sec:references}
+
+Building features against published algorithms and reference code turned up three defects, each verified rather than
+suspected; we report what was verified and nothing more.
+\begin{itemize}[leftmargin=1.5em, itemsep=2pt]
+\item \textbf{Cavanna--Jahanseir--Sheehy~\cite{cavanna2015sparse}, Algorithm~3.} The algorithm computes an edge's birth time from its
+  two endpoints only, with no check against the radius past which a point's ball is empty; the paper's own Section~5.3,
+  which gives the general rule, requires one. A hand-verified counterexample ($\varepsilon=1$, $\lambda_i=1$, $\lambda_j=10$,
+  $d=10$) has Algorithm~3 return $8$ although $p_i$ vanishes at $4$, so over the interval $(4,8)$ the edge would be present
+  while its endpoint's ball is already empty.
+\item \textbf{DREiMac's \code{\_gram\_schmidt}}~\cite{scoccola2022toroidal}. The subroutine projects each new vector onto the original
+  basis vectors instead of the orthogonalised ones; on $(1,0,0),(1,1,0),(1,1,1)$ it returns a third vector that is not orthogonal
+  to the first. The bug is invisible with two classes, the headline torus case. We did \emph{not} find an end-to-end failure: on
+  300 random $3\times3$ integer bases the final output was always LLL-reduced. This is a defect in an isolated subroutine, not a
+  demonstrated error in toroidal coordinates.
+\item \textbf{The PH-roadmap's \code{fractal\_9\_5\_2} distance matrix} (\cref{tab:pitfalls}) is not symmetric; tools that read different
+  triangles compute from different inputs. Whether any tool other than ours misbehaves on it has not been checked.
+\end{itemize}
+\VERIFY{none of the three has been reported upstream; decide whether to file reports before submission}

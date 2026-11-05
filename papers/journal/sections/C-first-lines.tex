@@ -1,0 +1,40 @@
+\section{The first lines a newcomer writes}\label{app:first-lines}
+
+The task is ``the persistence diagram of a point cloud, in degrees up to two, over a small prime field, with a representative for
+the longest loop''. The table gives the calls each library needs. It is a qualitative comparison of ease of use, not a measurement.
+
+\begin{table}[h]
+\centering\small
+\begin{tabular}{@{}l p{12.0cm}@{}}
+\toprule
+Library & First lines \\
+\midrule
+\tdaj{} (Scala) &
+\code{import scala.language.experimental.modularity; import org.appliedtopology.tda4j.*}\newline
+\code{val d = Persistence(points, maxDimension = 2, characteristic = 17)}\newline
+\code{d.dim(1).longest}\quad(the bar, with its cycle) \\
+\tdaj{} (Java) &
+\code{PersistenceResult r = TDA4j.computeFromPoints(points, new String[] \{"maxDimension", "2"\});}\newline
+\code{double[][] bars = r.toArray();}\quad(rows: dimension, birth, death) \\
+\tdaj{} (Python) &
+\code{result = tda4j.persistence(np.array(points), max\_dimension=2)}\newline
+\code{result.bars}\quad(rows: dimension, birth, death) \\
+\tdaj{} (JavaScript) &
+\code{const result = persistence(points, \{ maxDimension: 2 \});}\newline
+\code{result.bars} \\
+ripser.py &
+\code{dgms = ripser(X, maxdim=2, coeff=17)['dgms']} \\
+GUDHI (Python) &
+\code{rc = gudhi.RipsComplex(points=X)}\newline
+\code{st = rc.create\_simplex\_tree(max\_dimension=3)}\newline
+\code{st.persistence(homology\_coeff\_field=17)} \VERIFY{signature and defaults} \\
+JavaPlex (MATLAB) &
+\code{stream = api.Plex4.createVietorisRipsStream(points, 3, maxDistance, numDivisions);}\newline
+\code{alg = api.Plex4.getModularSimplicialAlgorithm(3, 17);}\newline
+\code{intervals = alg.computeIntervals(stream);} \\
+Ripserer.jl &
+\code{ripserer(X; dim\_max=2, modulus=17)} \VERIFY{keyword names} \\
+\bottomrule
+\end{tabular}
+\caption{Calls for the same task. The \tdaj{} and ripser.py rows are those of the documentation's migration page; the others from memory. \VERIFY{run each snippet before quoting it; the representative of the longest loop needs further calls in \TODOnum{which} of the other libraries}}
+\end{table}

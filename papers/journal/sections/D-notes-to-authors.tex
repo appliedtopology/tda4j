@@ -1,0 +1,57 @@
+\ifdraft
+\section{Notes to the authors (delete before submission)}\label{app:notes}
+
+\subsection{Questions that only the authors can answer}
+
+\begin{enumerate}[leftmargin=2em, itemsep=3pt]
+\item \textbf{Where does the preprint end and the edge-block material begin?} The preprint~\cite{bauer2024generating}, as arXiv
+  serves it, has the three-case theorem, the first-longest-edge metadata, the in-order stream, the Dory-style coboundary lists and
+  experiments inside Ripser. It does not mention blocks, lens graphs, block-keyed encodings or parallel reduction. The draft
+  attributes the first group to the preprint (P) and the second to this paper (N). Is there a newer version or a second paper that carries the block
+  material? Do the mirrored vertex order and the tie-run handling count as the preprint's or as ours? Is the apparent-pair test from the block's edge
+  Proposition~5 as intended?
+\item \textbf{Helix.} The scaladoc cites IEEE document 10917453, which the project's notes say could not be read. Who designed the
+  frontier-walk algorithm: a thesis, an earlier library, or us from the paper's abstract? \Cref{sec:alpha} says nothing about its source.
+\item \textbf{Barcode algebra.} Image, kernel and cokernel of maps between barcodes (Nico Stucki): which paper or earlier code?
+\item \textbf{The dual union-find claim.} Prove \cref{conj:volume} before the paper (that our representative is the boundary of the
+  complement component at birth), then compare with HomCloud on inputs with distinct values? Without it the claim is Flash Cubical's idea carried to
+  the $T$-construction, any field and Delaunay complexes, with representatives. Is the middle-degree hybrid different enough from Flash Cubical's 3D case to count?
+\item \textbf{Persistent group homology through Brown's collapse.} Is it in HAP, Ellis--King or the rewriting-systems literature? The plan of
+  2026-10-04 called the uncollapsed version a tutorial rather than a contribution; the draft keeps it as a worked example.
+\item \textbf{Prior-art checks not run:} simplex-index width beyond 63 bits (Dory, giotto-ph); lazy representatives from reduction
+  logs (how ripser.py stores cocycles); a full persistence library with representatives in a browser; block-parallel reduction
+  (Morozov--Nigmetov, Ripser++, giotto-ph); whether any earlier benchmark checked agreement of outputs at scale (the claim of
+  \cref{sec:agreement} is made only inside the library's own context until this is done).
+\item \textbf{Venue and shape.} The plan of 2026-10-04 recommends the Journal of Applied and Computational Topology as a system-and-methods paper; ACM TOMS
+  fits better if the correctness methodology is to be the spine; a JOSS paper is a cheap add-on. The draft is plain \code{article}, so it ports
+  to either; the abstract and introduction would change with the choice.
+\item \textbf{Authors and the AI statement.} The author list is the one in \code{CITATION.cff}. The statement of \cref{sec:availability}
+  draws on \code{CONTRIBUTORS.md}; the venue's policy and whether to name the tools need checking.
+\item \textbf{Cuts.} If the paper has to be shorter, the natural cuts are the appendix catalogue, \cref{sec:group} and the
+  simplicial-set part of \cref{sec:breadth}, and the rarer-complexes table; the engine family, the representatives, the correctness section and the VR,
+  cubical and alpha evaluations are the spine.
+\item \textbf{Defects in references.} Report the three defects of \cref{sec:references} upstream before submission? The project's catalog also mentions a
+  defect in \code{jvptree} 0.3.0, for which the notes I read give no details; it is not in the draft.
+\end{enumerate}
+
+\subsection{What has to happen before the evaluation can be filled in}
+
+\begin{itemize}[leftmargin=2em, itemsep=3pt]
+\item \textbf{A final run on a frozen commit} (\code{bench/final\_run.sh}), merged, with the tda4j rows rerun at that commit: the 2026-10-23 full run
+  predates several changes to the \tdaj{} rows. The decisions recorded in the plan: report both the Ripser and the parallel engine on one thread (issue \#223),
+  and keep \code{Engine.Auto} as it is until the answers are in.
+\item \textbf{Unrun or unverified rows:} RedZeD on the compute server (a $\mathbb{Z}/2$-only, one-thread, bars-only row; its paper reports Ripser ahead in some degree-three cases); Flash Cubical, which
+  was never built in the cloud container, so its column order and agreement with Cubical Ripser are read from source only; the Dowker packages; OAT at primes (it is rational);
+  the 128$^3$ cubical rows.
+\item \textbf{Harness gaps:} \code{bench-to-tex.py} reads \code{summary.csv} only, so the thread, alpha and radius sweeps and the ablations
+  (\cref{tab:threads,tab:alpha-four,tab:alpha-top,tab:ablation}) need either a reader for their CSV files or hand-entered values in \code{common/results-manual.tex};
+  representative sizes are not recorded; interquartile ranges are not tabulated (the per-trial times are in \code{runs.csv}).
+\item \textbf{Whether to rewrite the outcome sentences.} Each blue sentence is a template for the result the design suggests. The evaluation text should be rewritten from the tables, not edited.
+\end{itemize}
+
+\subsection{Claims written from project notes and not re-verified}
+
+Everything marked ``verify'' (orange) in the text, every \code{refs.bib} entry with a \code{verify} field, and the following: the class and switch names in
+\cref{sec:algorithms} were taken from the developer's guide and the rule files of the repository at the commit named in the notes, not from reading the source; the
+descriptions of other tools in \cref{tab:related} and \cref{app:first-lines}; the thresholds of \code{Engine.Auto}'s alpha rule; and every number quoted in such a note (counts of bars, cells, column additions; none is a timing or a memory figure that the paper relies on). \texttt{make todo} prints the full inventory.
+\fi

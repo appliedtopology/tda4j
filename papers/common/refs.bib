@@ -1,0 +1,732 @@
+% Bibliography for the TDA4j papers.
+%
+% Every entry carries its provenance in how it is marked:
+%   - no `verify` field: title, authors and year were read from the arXiv listing or the publication in the session
+%     that wrote this file (2026-11-05).
+%   - `verify = {...}`: written from memory or from project notes; the field says what was not checked. `make todo`
+%     lists them. Check each against the publisher's page before submission.
+% BibTeX ignores `verify`, `eprint` and `archivePrefix`.
+
+% ---------------------------------------------------------------------------------------------------------------
+% The method this library is built around
+% ---------------------------------------------------------------------------------------------------------------
+@article{bauer2021ripser,
+  author = {Bauer, Ulrich},
+  title = {Ripser: efficient computation of {Vietoris--Rips} persistence barcodes},
+  journal = {Journal of Applied and Computational Topology},
+  year = {2021},
+  volume = {5},
+  pages = {391--423},
+  note = {arXiv:1908.02518},
+  eprint = {1908.02518},
+  verify = {volume and pages from memory; arXiv listing checked}
+}
+
+@misc{bauer2024generating,
+  author = {Bauer, Ulrich and Matuszewski, Jordan and Vejdemo-Johansson, Mikael},
+  title = {Generating cofaces in {Vietoris--Rips} filtration order},
+  year = {2024},
+  note = {arXiv:2411.05495},
+  eprint = {2411.05495}
+}
+
+@article{elz2002,
+  author = {Edelsbrunner, Herbert and Letscher, David and Zomorodian, Afra},
+  title = {Topological persistence and simplification},
+  journal = {Discrete \& Computational Geometry},
+  year = {2002},
+  volume = {28},
+  number = {4},
+  pages = {511--533},
+  verify = {from memory}
+}
+
+@article{zomorodian2005computing,
+  author = {Zomorodian, Afra and Carlsson, Gunnar},
+  title = {Computing persistent homology},
+  journal = {Discrete \& Computational Geometry},
+  year = {2005},
+  volume = {33},
+  number = {2},
+  pages = {249--274},
+  verify = {from memory}
+}
+
+@inproceedings{chen2011twist,
+  author = {Chen, Chao and Kerber, Michael},
+  title = {Persistent homology computation with a twist},
+  booktitle = {Proceedings of the 27th European Workshop on Computational Geometry (EuroCG)},
+  year = {2011},
+  verify = {from memory}
+}
+
+@incollection{bkr2014chunks,
+  author = {Bauer, Ulrich and Kerber, Michael and Reininghaus, Jan},
+  title = {Clear and compress: computing persistent homology in chunks},
+  booktitle = {Topological Methods in Data Analysis and Visualization III},
+  publisher = {Springer},
+  year = {2014},
+  pages = {103--117},
+  verify = {from memory}
+}
+
+@article{phat2017,
+  author = {Bauer, Ulrich and Kerber, Michael and Reininghaus, Jan and Wagner, Hubert},
+  title = {{PHAT} -- persistent homology algorithms toolbox},
+  journal = {Journal of Symbolic Computation},
+  year = {2017},
+  volume = {78},
+  pages = {76--90},
+  verify = {from memory}
+}
+
+@inproceedings{dipha2014,
+  author = {Bauer, Ulrich and Kerber, Michael and Reininghaus, Jan},
+  title = {Distributed computation of persistent homology},
+  booktitle = {Proceedings of the Sixteenth Workshop on Algorithm Engineering and Experiments (ALENEX)},
+  year = {2014},
+  pages = {31--38},
+  verify = {from memory}
+}
+
+@article{desilva2011dualities,
+  author = {de Silva, Vin and Morozov, Dmitriy and Vejdemo-Johansson, Mikael},
+  title = {Dualities in persistent (co)homology},
+  journal = {Inverse Problems},
+  year = {2011},
+  volume = {27},
+  number = {12},
+  pages = {124003},
+  note = {arXiv:1107.5665},
+  eprint = {1107.5665},
+  verify = {journal details from memory; arXiv listing checked}
+}
+
+@article{desilva2011circular,
+  author = {de Silva, Vin and Morozov, Dmitriy and Vejdemo-Johansson, Mikael},
+  title = {Persistent cohomology and circular coordinates},
+  journal = {Discrete \& Computational Geometry},
+  year = {2011},
+  volume = {45},
+  number = {4},
+  pages = {737--759},
+  note = {arXiv:0905.4887 (an earlier version, by two of the authors)},
+  verify = {journal details and author list of the published version from memory}
+}
+
+@misc{cufar2021involuted,
+  author = {{\v{C}}ufar, Matija and Virk, {\v{Z}}iga},
+  title = {Fast computation of persistent homology representatives with involuted persistent homology},
+  year = {2021},
+  note = {arXiv:2105.03629},
+  eprint = {2105.03629}
+}
+
+@article{cufar2020ripserer,
+  author = {{\v{C}}ufar, Matija},
+  title = {Ripserer.jl: flexible and efficient persistent homology computation in {Julia}},
+  journal = {Journal of Open Source Software},
+  year = {2020},
+  volume = {5},
+  number = {54},
+  pages = {2614},
+  verify = {from memory (the JOSS URL is in .claude/PLAN-paper.md)}
+}
+
+@misc{hang2021umatch,
+  author = {Hang, Haibin and Giusti, Chad and Ziegelmeier, Lori and Henselman-Petrusek, Gregory},
+  title = {U-match factorization: sparse homological algebra, lazy cycle representatives, and dualities in persistent (co)homology},
+  year = {2021},
+  note = {arXiv:2108.08831},
+  eprint = {2108.08831}
+}
+
+@misc{henselman2016matroid,
+  author = {Henselman, Gregory and Ghrist, Robert},
+  title = {Matroid filtrations and computational persistent homology},
+  year = {2016},
+  note = {arXiv:1606.00199},
+  eprint = {1606.00199}
+}
+
+% ---------------------------------------------------------------------------------------------------------------
+% Other software
+% ---------------------------------------------------------------------------------------------------------------
+@inproceedings{tausz2014javaplex,
+  author = {Tausz, Andrew and Vejdemo-Johansson, Mikael and Adams, Henry},
+  title = {{JavaPlex}: a research software package for persistent (co)homology},
+  booktitle = {Mathematical Software -- ICMS 2014},
+  series = {Lecture Notes in Computer Science},
+  volume = {8592},
+  year = {2014},
+  verify = {from memory: volume, pages, and whether the author order is this one}
+}
+
+@inproceedings{gudhi2014,
+  author = {Maria, Cl{\'e}ment and Boissonnat, Jean-Daniel and Glisse, Marc and Yvinec, Mariette},
+  title = {The {Gudhi} library: simplicial complexes and persistent homology},
+  booktitle = {Mathematical Software -- ICMS 2014},
+  series = {Lecture Notes in Computer Science},
+  volume = {8592},
+  year = {2014},
+  pages = {167--174},
+  verify = {from memory}
+}
+
+@article{boissonnat2014simplextree,
+  author = {Boissonnat, Jean-Daniel and Maria, Cl{\'e}ment},
+  title = {The simplex tree: an efficient data structure for general simplicial complexes},
+  journal = {Algorithmica},
+  year = {2014},
+  volume = {70},
+  number = {3},
+  pages = {406--427},
+  verify = {from memory}
+}
+
+@article{boissonnat2015annotation,
+  author = {Boissonnat, Jean-Daniel and Dey, Tamal K. and Maria, Cl{\'e}ment},
+  title = {The compressed annotation matrix: an efficient data structure for computing persistent cohomology},
+  journal = {Algorithmica},
+  year = {2015},
+  volume = {73},
+  number = {3},
+  pages = {607--619},
+  verify = {from memory}
+}
+
+@misc{aggarwal2021dory,
+  author = {Aggarwal, Manu and Periwal, Vipul},
+  title = {Dory: overcoming barriers to computing persistent homology},
+  year = {2021},
+  note = {arXiv:2103.05608},
+  eprint = {2103.05608}
+}
+
+@misc{zhang2020ripserpp,
+  author = {Zhang, Simon and Xiao, Mengbai and Wang, Hao},
+  title = {{GPU}-accelerated computation of {Vietoris--Rips} persistence barcodes},
+  year = {2020},
+  note = {arXiv:2003.07989; SoCG 2020},
+  eprint = {2003.07989},
+  verify = {SoCG 2020 from memory; arXiv listing checked}
+}
+
+@inproceedings{morozov2020lockfree,
+  author = {Morozov, Dmitriy and Nigmetov, Arnur},
+  title = {Towards lockfree persistent homology},
+  booktitle = {Proceedings of the 32nd ACM Symposium on Parallelism in Algorithms and Architectures (SPAA)},
+  year = {2020},
+  verify = {from memory; not found by title in the arXiv search of 2026-11-05}
+}
+
+@misc{burella2021giotto,
+  author = {Burella P{\'e}rez, Juli{\'a}n and Hauke, Sydney and Lupo, Umberto and Caorsi, Matteo and Dassatti, Alberto},
+  title = {giotto-ph: a {Python} library for high-performance computation of persistent homology of {Vietoris--Rips} filtrations},
+  year = {2021},
+  note = {arXiv:2107.05412},
+  eprint = {2107.05412}
+}
+
+@misc{tauzin2020gtda,
+  author = {Tauzin, Guillaume and Lupo, Umberto and Tunstall, Lewis and Burella P{\'e}rez, Julian and Caorsi, Matteo and Medina-Mardones, Anibal M. and Dassatti, Alberto and Hess, Kathryn},
+  title = {giotto-tda: a topological data analysis toolkit for machine learning and data exploration},
+  year = {2020},
+  note = {arXiv:2004.02551; JMLR 22 (2021)},
+  eprint = {2004.02551},
+  verify = {author list beyond the first five and the JMLR reference from memory}
+}
+
+@misc{kaji2020cubical,
+  author = {Kaji, Shizuo and Sudo, Takeki and Ahara, Kazushi},
+  title = {Cubical {Ripser}: software for computing persistent homology of image and volume data},
+  year = {2020},
+  note = {arXiv:2005.12692},
+  eprint = {2005.12692}
+}
+
+@misc{lebreton2026flash,
+  author = {Le Breton, Titouan and Szustakowski, Karol and Piraud, Marie},
+  title = {Fast cubical persistent homology on {2D} and {3D} images via union-find, pruning, and lookup tables},
+  year = {2026},
+  note = {arXiv:2606.04801},
+  eprint = {2606.04801}
+}
+
+@misc{kapulkin2026redzed,
+  author = {Kapulkin, Chris and Kershaw, Nathan},
+  title = {{RedZeD}: computing persistent homology by reduction to zero differentials},
+  year = {2026},
+  note = {arXiv:2606.06310},
+  eprint = {2606.06310}
+}
+
+@article{obayashi2022homcloud,
+  author = {Obayashi, Ippei and Nakamura, Takenobu and Hiraoka, Yasuaki},
+  title = {Persistent homology analysis for materials research and persistent homology software: {HomCloud}},
+  journal = {Journal of the Physical Society of Japan},
+  year = {2022},
+  volume = {91},
+  pages = {091013},
+  verify = {from memory}
+}
+
+@misc{perseus,
+  author = {Nanda, Vidit},
+  title = {Perseus: the persistent homology software},
+  howpublished = {\url{https://people.maths.ox.ac.uk/nanda/perseus/}},
+  verify = {from memory; check the URL and whether a citation is preferred}
+}
+
+@misc{dionysus2,
+  author = {Morozov, Dmitriy},
+  title = {Dionysus 2},
+  howpublished = {\url{https://mrzv.org/software/dionysus2/}},
+  verify = {from memory}
+}
+
+@misc{sagemath,
+  author = {{The Sage Developers}},
+  title = {{SageMath}, the {Sage} Mathematics Software System},
+  howpublished = {\url{https://www.sagemath.org}},
+  verify = {version to be added}
+}
+
+@misc{hap,
+  author = {Ellis, Graham},
+  title = {{HAP}, homological algebra programming, a {GAP} package},
+  howpublished = {\url{https://gap-packages.github.io/hap/}},
+  verify = {the manual page was read on 2026-10-04; version to be added}
+}
+
+@article{otter2017roadmap,
+  author = {Otter, Nina and Porter, Mason A. and Tillmann, Ulrike and Grindrod, Peter and Harrington, Heather A.},
+  title = {A roadmap for the computation of persistent homology},
+  journal = {EPJ Data Science},
+  year = {2017},
+  volume = {6},
+  pages = {17},
+  verify = {from memory}
+}
+
+% ---------------------------------------------------------------------------------------------------------------
+% Cubical complexes and images, representatives
+% ---------------------------------------------------------------------------------------------------------------
+@incollection{wagner2012cubical,
+  author = {Wagner, Hubert and Chen, Chao and Vu{\c{c}}ini, Erald},
+  title = {Efficient computation of persistent homology for cubical data},
+  booktitle = {Topological Methods in Data Analysis and Visualization II},
+  publisher = {Springer},
+  year = {2012},
+  pages = {91--106},
+  verify = {from memory}
+}
+
+@article{mischaikow2013morse,
+  author = {Mischaikow, Konstantin and Nanda, Vidit},
+  title = {Morse theory for filtrations and efficient computation of persistent homology},
+  journal = {Discrete \& Computational Geometry},
+  year = {2013},
+  volume = {50},
+  number = {2},
+  pages = {330--353},
+  verify = {from memory}
+}
+
+@article{delfinado1995incremental,
+  author = {Delfinado, Cecil Jose A. and Edelsbrunner, Herbert},
+  title = {An incremental algorithm for {Betti} numbers of simplicial complexes on the 3-sphere},
+  journal = {Computer Aided Geometric Design},
+  year = {1995},
+  volume = {12},
+  number = {7},
+  pages = {771--784},
+  verify = {from memory}
+}
+
+@misc{garin2020duality,
+  author = {Garin, Ad{\'e}lie and Heiss, Teresa and Maggs, Kelly and Bleile, Bea and Robins, Vanessa},
+  title = {Duality in persistent homology of images},
+  year = {2020},
+  note = {arXiv:2005.04597},
+  eprint = {2005.04597}
+}
+
+@article{obayashi2018volume,
+  author = {Obayashi, Ippei},
+  title = {Volume-optimal cycle: tightest representative cycle of a generator in persistent homology},
+  journal = {SIAM Journal on Applied Algebra and Geometry},
+  year = {2018},
+  volume = {2},
+  number = {4},
+  pages = {508--534},
+  note = {arXiv:1712.05103},
+  eprint = {1712.05103},
+  verify = {journal details from memory; arXiv listing checked (the arXiv title is ``Volume optimal cycle: ...'')}
+}
+
+@misc{lenzen2025codim1,
+  author = {Lenzen, Fabian and Renkin, Leon},
+  title = {Persistent cycle representatives and generalized landscapes for codimension 1 persistent homology},
+  year = {2025},
+  note = {arXiv:2512.09668},
+  eprint = {2512.09668}
+}
+
+@book{kaczynski2004computational,
+  author = {Kaczynski, Tomasz and Mischaikow, Konstantin and Mrozek, Marian},
+  title = {Computational Homology},
+  publisher = {Springer},
+  year = {2004},
+  verify = {from memory}
+}
+
+% ---------------------------------------------------------------------------------------------------------------
+% Complexes
+% ---------------------------------------------------------------------------------------------------------------
+@article{zomorodian2010fast,
+  author = {Zomorodian, Afra},
+  title = {Fast construction of the {Vietoris--Rips} complex},
+  journal = {Computers \& Graphics},
+  year = {2010},
+  volume = {34},
+  number = {3},
+  pages = {263--271},
+  verify = {from memory}
+}
+
+@misc{rieser2023new,
+  author = {Rieser, Antonio},
+  title = {A new construction of the {Vietoris--Rips} complex},
+  year = {2023},
+  note = {arXiv:2301.07191},
+  eprint = {2301.07191}
+}
+
+@inproceedings{desilva2004witness,
+  author = {de Silva, Vin and Carlsson, Gunnar},
+  title = {Topological estimation using witness complexes},
+  booktitle = {Eurographics Symposium on Point-Based Graphics},
+  year = {2004},
+  verify = {from memory}
+}
+
+@article{chowdhury2018dowker,
+  author = {Chowdhury, Samir and M{\'e}moli, Facundo},
+  title = {A functorial {Dowker} theorem and persistent homology of asymmetric networks},
+  journal = {Journal of Applied and Computational Topology},
+  year = {2018},
+  volume = {2},
+  pages = {115--175},
+  verify = {from memory (pages in particular)}
+}
+
+@article{dowker1952homology,
+  author = {Dowker, C. H.},
+  title = {Homology groups of relations},
+  journal = {Annals of Mathematics},
+  year = {1952},
+  volume = {56},
+  pages = {84--95},
+  verify = {from memory}
+}
+
+@article{chazal2011geometric,
+  author = {Chazal, Fr{\'e}d{\'e}ric and Cohen-Steiner, David and M{\'e}rigot, Quentin},
+  title = {Geometric inference for probability measures},
+  journal = {Foundations of Computational Mathematics},
+  year = {2011},
+  volume = {11},
+  number = {6},
+  pages = {733--751},
+  verify = {from memory}
+}
+
+@misc{anai2019dtm,
+  author = {Anai, Hirokazu and Chazal, Fr{\'e}d{\'e}ric and Glisse, Marc and Ike, Yuichi and Inakoshi, Hiroya and Tinarrage, Rapha{\"e}l and Umeda, Yuhei},
+  title = {{DTM}-based filtrations},
+  year = {2018},
+  note = {arXiv:1811.04757; SoCG 2019},
+  eprint = {1811.04757},
+  verify = {author list and venue from memory; arXiv listing checked for title and first five authors}
+}
+
+@misc{cavanna2015sparse,
+  author = {Cavanna, Nicholas J. and Jahanseir, Mahmoodreza and Sheehy, Donald R.},
+  title = {A geometric perspective on sparse filtrations},
+  year = {2015},
+  note = {arXiv:1506.03797; CCCG 2015},
+  eprint = {1506.03797},
+  verify = {venue from memory}
+}
+
+@article{sheehy2013linear,
+  author = {Sheehy, Donald R.},
+  title = {Linear-size approximations to the {Vietoris--Rips} filtration},
+  journal = {Discrete \& Computational Geometry},
+  year = {2013},
+  volume = {49},
+  number = {4},
+  pages = {778--796},
+  verify = {from memory}
+}
+
+@article{buchet2016efficient,
+  author = {Buchet, Mickael and Chazal, Fr{\'e}d{\'e}ric and Oudot, Steve Y. and Sheehy, Donald R.},
+  title = {Efficient and robust persistent homology for measures},
+  journal = {Computational Geometry},
+  year = {2016},
+  volume = {58},
+  pages = {70--96},
+  verify = {from memory}
+}
+
+@inproceedings{boissonnat2020edge,
+  author = {Boissonnat, Jean-Daniel and Pritam, Siddharth},
+  title = {Edge collapse and persistence of flag complexes},
+  booktitle = {36th International Symposium on Computational Geometry (SoCG 2020)},
+  year = {2020},
+  verify = {from memory; not found by title in the arXiv search of 2026-11-05}
+}
+
+@misc{glisse2022swap,
+  author = {Glisse, Marc and Pritam, Siddharth},
+  title = {Swap, shift and trim to edge collapse a filtration},
+  year = {2022},
+  note = {arXiv:2203.07022; SoCG 2022},
+  eprint = {2203.07022},
+  verify = {venue from memory}
+}
+
+@misc{carlsson2023alpha,
+  author = {Carlsson, Erik and Carlsson, John},
+  title = {Computing the alpha complex using dual active set methods},
+  year = {2024},
+  note = {arXiv:2310.00536; Scientific Reports 14, 19824},
+  eprint = {2310.00536},
+  verify = {Scientific Reports reference taken from a comment in bench/bench.py, not checked}
+}
+
+@article{arnstrom2022daqp,
+  author = {Arnstr{\"o}m, Daniel and Bemporad, Alberto and Axehill, Daniel},
+  title = {A dual active-set solver for embedded quadratic programming using recursive {LDL}$^\top$ updates},
+  journal = {IEEE Transactions on Automatic Control},
+  year = {2022},
+  verify = {from memory: the catalog names ``DAQP, Arnstr{\"o}m--Bemporad--Axehill 2022''; title, volume and pages unchecked}
+}
+
+@article{edelsbrunner1994alpha,
+  author = {Edelsbrunner, Herbert and M{\"u}cke, Ernst P.},
+  title = {Three-dimensional alpha shapes},
+  journal = {ACM Transactions on Graphics},
+  year = {1994},
+  volume = {13},
+  number = {1},
+  pages = {43--72},
+  verify = {from memory}
+}
+
+@article{edelsbrunner1990simulation,
+  author = {Edelsbrunner, Herbert and M{\"u}cke, Ernst P.},
+  title = {Simulation of simplicity: a technique to cope with degenerate cases in geometric algorithms},
+  journal = {ACM Transactions on Graphics},
+  year = {1990},
+  volume = {9},
+  number = {1},
+  pages = {66--104},
+  verify = {from memory}
+}
+
+@article{bowyer1981computing,
+  author = {Bowyer, Adrian},
+  title = {Computing {Dirichlet} tessellations},
+  journal = {The Computer Journal},
+  year = {1981},
+  volume = {24},
+  number = {2},
+  pages = {162--166},
+  verify = {from memory}
+}
+
+@article{watson1981computing,
+  author = {Watson, David F.},
+  title = {Computing the $n$-dimensional {Delaunay} tessellation with application to {Voronoi} polytopes},
+  journal = {The Computer Journal},
+  year = {1981},
+  volume = {24},
+  number = {2},
+  pages = {167--172},
+  verify = {from memory}
+}
+
+@article{shewchuk1997adaptive,
+  author = {Shewchuk, Jonathan Richard},
+  title = {Adaptive precision floating-point arithmetic and fast robust geometric predicates},
+  journal = {Discrete \& Computational Geometry},
+  year = {1997},
+  volume = {18},
+  number = {3},
+  pages = {305--363},
+  verify = {from memory}
+}
+
+@inproceedings{chazal2008persistence,
+  author = {Chazal, Fr{\'e}d{\'e}ric and Oudot, Steve Y.},
+  title = {Towards persistence-based reconstruction in {Euclidean} spaces},
+  booktitle = {Proceedings of the 24th Annual Symposium on Computational Geometry (SoCG)},
+  year = {2008},
+  pages = {232--241},
+  verify = {from memory}
+}
+
+% ---------------------------------------------------------------------------------------------------------------
+% Coordinates, distances, vectorizations, other persistence variants
+% ---------------------------------------------------------------------------------------------------------------
+@misc{perea2018multiscale,
+  author = {Perea, Jose A.},
+  title = {Multiscale projective coordinates via persistent cohomology of sparse filtrations},
+  year = {2016},
+  note = {arXiv:1612.02861; Discrete \& Computational Geometry 59 (2018)},
+  eprint = {1612.02861},
+  verify = {journal reference from memory}
+}
+
+@misc{scoccola2022toroidal,
+  author = {Scoccola, Luis and Gakhar, Hitesh and Bush, Johnathan and Schonsheck, Nikolas and Rask, Tatum and Zhou, Ling and Perea, Jose A.},
+  title = {Toroidal coordinates: decorrelating circular coordinates with lattice reduction},
+  year = {2022},
+  note = {arXiv:2212.07201; SoCG 2023},
+  eprint = {2212.07201},
+  verify = {venue from memory}
+}
+
+@misc{kerber2017hera,
+  author = {Kerber, Michael and Morozov, Dmitriy and Nigmetov, Arnur},
+  title = {Geometry helps to compare persistence diagrams},
+  year = {2016},
+  note = {arXiv:1606.03357; ACM Journal of Experimental Algorithmics 22 (2017)},
+  eprint = {1606.03357},
+  verify = {journal reference from memory}
+}
+
+@misc{bubenik2015landscapes,
+  author = {Bubenik, Peter},
+  title = {Statistical topological data analysis using persistence landscapes},
+  year = {2012},
+  note = {arXiv:1207.6437; Journal of Machine Learning Research 16 (2015)},
+  eprint = {1207.6437},
+  verify = {journal reference from memory}
+}
+
+@misc{adams2017images,
+  author = {Adams, Henry and Chepushtanova, Sofya and Emerson, Tegan and Hanson, Eric and Kirby, Michael and Motta, Francis and Neville, Rachel and Peterson, Chris and Shipman, Patrick and Ziegelmeier, Lori},
+  title = {Persistence images: a stable vector representation of persistent homology},
+  year = {2015},
+  note = {arXiv:1507.06217; Journal of Machine Learning Research 18 (2017)},
+  eprint = {1507.06217},
+  verify = {author list beyond the first five and journal reference from memory}
+}
+
+@article{carlsson2010zigzag,
+  author = {Carlsson, Gunnar and de Silva, Vin},
+  title = {Zigzag persistence},
+  journal = {Foundations of Computational Mathematics},
+  year = {2010},
+  volume = {10},
+  number = {4},
+  pages = {367--405},
+  note = {arXiv:0812.0197},
+  eprint = {0812.0197},
+  verify = {journal details from memory; arXiv listing checked}
+}
+
+@article{carlsson2009topology,
+  author = {Carlsson, Gunnar},
+  title = {Topology and data},
+  journal = {Bulletin of the American Mathematical Society},
+  year = {2009},
+  volume = {46},
+  number = {2},
+  pages = {255--308},
+  verify = {from memory (the README links the article)}
+}
+
+@book{edelsbrunner2010computational,
+  author = {Edelsbrunner, Herbert and Harer, John L.},
+  title = {Computational Topology: An Introduction},
+  publisher = {American Mathematical Society},
+  year = {2010},
+  verify = {from memory}
+}
+
+@article{chazal2021introduction,
+  author = {Chazal, Fr{\'e}d{\'e}ric and Michel, Bertrand},
+  title = {An introduction to topological data analysis: fundamental and practical aspects for data scientists},
+  journal = {Frontiers in Artificial Intelligence},
+  year = {2021},
+  volume = {4},
+  pages = {667963},
+  verify = {from memory}
+}
+
+% ---------------------------------------------------------------------------------------------------------------
+% Groups, simplicial sets
+% ---------------------------------------------------------------------------------------------------------------
+@article{ellis2011persistent,
+  author = {Ellis, Graham and King, Simon A.},
+  title = {Persistent homology of groups},
+  journal = {Journal of Group Theory},
+  year = {2011},
+  volume = {14},
+  number = {4},
+  pages = {575--587},
+  note = {arXiv:1006.2237},
+  eprint = {1006.2237},
+  verify = {journal details from memory; arXiv listing checked}
+}
+
+@incollection{brown1992geometry,
+  author = {Brown, Kenneth S.},
+  title = {The geometry of rewriting systems: a proof of the {Anick--Groves--Squier} theorem},
+  booktitle = {Algorithms and Classification in Combinatorial Group Theory},
+  publisher = {Springer},
+  year = {1992},
+  pages = {137--163},
+  verify = {from memory}
+}
+
+@article{anick1986homology,
+  author = {Anick, David J.},
+  title = {On the homology of associative algebras},
+  journal = {Transactions of the American Mathematical Society},
+  year = {1986},
+  volume = {296},
+  number = {2},
+  pages = {641--659},
+  verify = {from memory}
+}
+
+% ---------------------------------------------------------------------------------------------------------------
+% Data
+% ---------------------------------------------------------------------------------------------------------------
+@article{martin2010cyclooctane,
+  author = {Martin, Shawn and Thompson, Alessandro and Coutsias, Evangelos A. and Watson, Jean-Paul},
+  title = {Topology of cyclo-octane energy landscape},
+  journal = {The Journal of Chemical Physics},
+  year = {2010},
+  volume = {132},
+  number = {23},
+  pages = {234115},
+  verify = {from memory}
+}
+
+@article{carlsson2008patches,
+  author = {Carlsson, Gunnar and Ishkhanov, Tigran and de Silva, Vin and Zomorodian, Afra},
+  title = {On the local behavior of spaces of natural images},
+  journal = {International Journal of Computer Vision},
+  year = {2008},
+  volume = {76},
+  number = {1},
+  pages = {1--12},
+  verify = {from memory}
+}

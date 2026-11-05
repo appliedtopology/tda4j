@@ -1,0 +1,63 @@
+\section{Worked examples}\label{sec:showcases}
+
+The examples below are chosen to exercise what the benchmark does not: representatives, torsion, relative persistence, and the
+constructive layer. Each corresponds to a tutorial in the documentation, whose numbers are asserted by tests.
+
+\subsection{Counting curves in a Truchet tiling}\label{sec:truchet}
+
+A Truchet tile is a square with two quarter-circle arcs; a random tiling of a grid joins them into curves, some of which close
+into loops while others run off the edge of the picture. Take the image whose pixel values are the distance to the nearest arc, and
+its sublevel filtration. The homology of the curves alone sees only the loops. Relative to the boundary of the picture,
+a curve running from edge to edge becomes a cycle too, so the long bars of the relative persistent homology are \emph{all} the
+curves, open and closed. Persistence cannot tell the two kinds apart; the representatives can: a loop's representative closes
+up in the interior, an arc's ends lie on the boundary. The example uses three pieces of the library together: relative
+persistence (a quotient by the frame, as a cell type), a trick that places the image in a frame so that the fast cubical engine
+applies, and representatives from the dual union-find engine at the scale of a large image
+(\cref{sec:dual-uf}). It also exposed the tie rule of that engine: on a plateau of equal values the smaller component must die,
+and a version that broke ties the other way was correct but \TODOnum{factor} slower on a $1026^2$ image.
+\TODO{figure: a tiling with its representatives coloured by closed or open; \code{truchet-24x24-seed5.png} in the project folder is a candidate}
+\VERIFY{the factor is from project notes (87~s to 4~s on a $1026^2$ pattern); re-measure}
+
+\subsection{Distinguishing spaces that Betti numbers cannot}\label{sec:telling}
+
+The torus and the Klein bottle have the same Betti numbers over $\Ftwo$ and different ones over $\mathbb{F}_3$: torsion shows up
+only by comparing fields, which is why the default is not $\Ftwo$. The torus and the space $S^1\vee S^1\vee S^2$ have the same
+Betti numbers in every field; the cup product on $H^1$, computed on the simplicial sets, separates them. The complex projective plane
+and $S^2\vee S^4$ have the same Betti numbers and are separated by the Steenrod square $\mathrm{Sq}^2$ on $H^2$ (the library
+also builds the mapping cone of the Hopf map, a second model of the projective plane). None of this is persistent homology: it is the
+constructive layer of \cref{sec:breadth} working with the engines, and the classical results provide the oracles (a computed
+cup product, or Steenrod square, that disagrees with theory is a bug).
+
+\subsection{Circular coordinates from landmarks}\label{sec:circ}
+
+Circular coordinates assign every data point an angle that varies continuously around a persistent loop. On a point cloud of
+thousands of points the dense construction does not scale; on a landmark Dowker complex, the nerve of the landmarks restricted to
+the data, it does, following Perea~\cite{perea2018multiscale}. The example in the library takes a periodic signal's
+sliding-window embedding, computes the coordinate on every point from a few landmarks, and checks it against the true phase.
+One sign convention in the sparse construction (the cocycle is minus the coboundary of the potential) was wrong at first and
+was caught by a continuity specification: the coordinate must not jump around the loop.
+\TODO{data, numbers and figure from the circular-coordinates tutorial; choose a dataset with a ground-truth phase}
+
+\subsection{Cyclooctane: torsion and high ambient dimension}\label{sec:cyclooctane}
+
+The conformations of cyclooctane form a data set of 6040 points in $\R^{24}$~\cite{martin2010cyclooctane}, whose conformation space is
+known to be a sphere and a Klein bottle glued along two circles, a space with torsion in its homology. A full Delaunay triangulation
+in $\R^{24}$ is out of reach, so the alpha complex is computed by the dual quadratic program, and the Vietoris--Rips complex by Ripser's
+algorithm to a cutoff; the data is the file JavaPlex ships for its tutorial. The example exercises the odd-prime
+default (a field in which the torsion is visible), DQP alpha in high ambient dimension, and representatives that locate the
+Klein-bottle part of the data.
+\OUTCOME{Over $\Ftwo$, $\mathbb{F}_3$ and $\Fsev$ the Betti numbers at the chosen radius are \TODOnum{vectors per field}, which
+\TODO{agree or disagree} with the expected sphere-and-Klein-bottle homology; the representatives of the \TODOnum{number} longest
+bars \TODO{what they show}.}
+\PROV{the rule of the project is to compute first and quote after: do not state the Betti numbers before the run (\code{cyclooctane} and \code{cyclooctane\_alpha} in the harness report the bars alive at the radius, per field)}
+
+\subsection{Persistent group homology}\label{sec:group}
+
+A chain of subgroups $H_0\le H_1\le\dots\le G$ gives a chain of classifying spaces, and so a filtered simplicial set whose
+persistent homology follows the group's homology as the group grows. The library computes this for small groups, for example a
+chain of subgroups of the symmetric group $S_4$, with representatives, optionally on the Brown-collapsed complex whose
+critical cells are Anick chains generated directly. HAP computes the same barcode from resolutions and goes much
+further; we include the example as a demonstration of the constructive layer, and we say in the documentation that it is not
+the best way to compute group cohomology.
+\TODO{agreement with HAP's \code{PersistentHomologyOfSubGroupSeries} on the same chain, with $p=2$ and a resolution algorithm for the non-$p$-group $S_4$; the cost table (bar construction against collapse)}
+\VERIFY{notes quote $S_4$ to degree six in seconds against billions of bar-complex cells; re-measure}

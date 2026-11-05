@@ -1,0 +1,80 @@
+\section{Catalogue of constructions and techniques, with provenance}\label{app:catalogue}
+
+Tags: \textbf{B}~borrowed, implemented from the named source; \textbf{B+}~a borrowed idea with a named extension of ours (field, cell type,
+representatives, platform); \textbf{P}~from the preprint of Bauer, Matuszewski and Vejdemo-Johansson~\cite{bauer2024generating};
+\textbf{N}~new as far as the project notes and the literature we read show (not a systematic search); \textbf{E}~engineering or API
+design, not a method claim; \textbf{?}~provenance unclear. The list is adapted from the project's catalog of 2026-10-24
+and updated where the code has changed since. \VERIFY{classical citations marked B were written from memory in the catalog; each is in \code{refs.bib} with a \code{verify} note}
+
+\subsection{Complexes and streams}
+
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{3.6cm} >{\raggedright\arraybackslash}p{6.2cm} p{1.1cm} >{\raggedright\arraybackslash}p{3.2cm}@{}}
+\toprule
+Construction & What it builds & Tag & Source \\
+\midrule
+\endhead
+\code{VietorisRips} (default) & Rips complex in Ripser's coface order via the combinatorial number system; layers on flat arrays & B, E & \cite{bauer2021ripser} \\
+In-order generation (\code{Implementation.Inorder}) & each dimension from the one below, already in filtration order; first longest edge as metadata & P & \cite{bauer2024generating}; mirrored order and tie-run check \PROV{P or N} \\
+Enumerating generation & breadth-first coface enumeration; the oracle the others are checked against & B & textbook \\
+Incremental (New-VR) & kept close to the paper; a cross-validation baseline, not a fast construction & B & \cite{rieser2023new} \\
+\v{C}ech & \v{C}ech complex of Euclidean points on the Rips machinery; radius from a minimum enclosing ball, clamped over facets & B, E & minimum enclosing ball by Wolfe's active-set method \VERIFY{citation} \\
+Witness (lazy, general) & witness complexes on maxmin or random landmarks; the lazy one is a flag complex, so Ripser applies & B, B+ & \cite{desilva2004witness}; checked against JavaPlex's source \\
+Dowker (and dual) & filtered Dowker complex of a real-valued relation; generalises witness with $\nu=0$ (re-derived) & B, B+ & \cite{dowker1952homology,chowdhury2018dowker} \\
+DTM-Rips & Rips complex weighted by distance to measure, $p\in\{1,2\}$ & B & \cite{chazal2011geometric,anai2019dtm} \\
+Sparse Rips & $(1+\varepsilon)$-approximate filtration from a greedy permutation & B & \cite{cavanna2015sparse,sheehy2013linear}; see \cref{sec:references} \\
+Edge collapse & dominated edges removed from a flag filtration; vertices kept & B & \cite{boissonnat2020edge,glisse2022swap}; port of GUDHI's collapser \\
+Truncated, \code{homologyDegreeLimit} & a complex cut at a homological degree that says so & E & \\
+Explicit stream builder & hand-built filtered complexes closed under faces & B & JavaPlex's explicit stream as an idea \\
+Alpha, Bowyer--Watson & Delaunay by insertion up to four affine dimensions; exact predicates; symbolic perturbation by point index & B & \cite{bowyer1981computing,watson1981computing,shewchuk1997adaptive,edelsbrunner1990simulation} \\
+Alpha, Helix & frontier walk from a hull facet in any dimension; validity check; jitter repair; parallel speculative evaluation & ? / N & \PROV{design source; repair, validity check and the Gabriel rule for every facet are ours} \\
+Alpha, DQP & no Delaunay: a dual active-set quadratic program per candidate simplex, truncated by radius; certified rescue pass & B, B+ & \cite{carlsson2023alpha}; solver style \cite{arnstrom2022daqp} \\
+Cubical images & $n$-dimensional $T$-construction; sublevel or superlevel; \code{NaN} as a missing pixel & B, B+ & \cite{kaczynski2004computational}; \VERIFY{$T$-construction as in GUDHI, DIPHA, Perseus} \\
+Simplicial sets & Eilenberg--Zilber presentation, normalised chains, optional filtration; products, quotients, joins, cones, mapping cones, Hopf map, $\mathbb{CP}^2$ & B & Sage's catalogue \cite{sagemath} \\
+Nerves, classifying spaces & nerves of monoids, groups, finite categories; Borel construction & B & standard \\
+Collapsed nerve & Brown's collapse of the bar complex; critical cells as Anick chains generated directly & B, ? & \cite{brown1992geometry,anick1986homology}; use for persistence \PROV{} \\
+\bottomrule
+\end{longtable}
+
+\subsection{Engines and techniques}
+
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{5.2cm} p{1.1cm} >{\raggedright\arraybackslash}p{8.1cm}@{}}
+\toprule
+Technique & Tag & Source and our contribution \\
+\midrule
+\endhead
+Standard left-to-right reduction & B & \cite{elz2002,zomorodian2005computing} \\
+Clearing (twist) & B & \cite{chen2011twist} \\
+Clear-and-compress chunks & B & \cite{bkr2014chunks}; representatives for every bar on request are E \\
+Cohomology instead of homology & B & \cite{desilva2011dualities}; its speed through clearing \cite{bauer2021ripser} \\
+Implicit coboundary, apparent pairs, heap column & B & \cite{bauer2021ripser} \\
+Emergent pairs, rebuilt on demand & B, N & definition from \cite{bauer2021ripser}; the storage as a simplex rebuilt when needed is ours \\
+Enclosing radius as default threshold & B & Henselman-Petrusek, as credited in \cite{bauer2021ripser} \\
+Neighbour lists under a threshold & B, E & sparse distance matrices in Ripser; sorted lists as in Dory \cite{aggarwal2021dory}; the dense table below a few thousand points is E \\
+Primitive per-simplex state & E & \\
+Two-word (126-bit) simplex indices & N, E & \PROV{prior art on index width beyond 63 bits not checked} \\
+Dense integer cell numbering in generic cohomology & B, E & integer keys as in GUDHI \cite{gudhi2014}; the measurement is the content \\
+Degree $0$ by union-find in every engine, with a guard & B, E & classical; guard (\code{EdgeBoundary.shape}) and oracles are ours \\
+Dual union-find for the top degree & B+ & \cite{delfinado1995incremental,garin2020duality,lebreton2026flash}: $T$-construction, any field, any dimension from two, Delaunay complexes \\
+Middle degrees by cohomology on the complex without its top cells & B+, ? & \PROV{difference from Flash Cubical's three-dimensional case} \\
+Signed union-find with a frozen merge forest & N & on a classical weighted union-find \\
+Involuted persistent homology, cycles from cohomology & B+ & \cite{cufar2021involuted}, uniform over cell types and fields \\
+Cocycles from a homology pairing & N & \PROV{plausibly folklore given \cite{desilva2011dualities}; not in \cite{cufar2021involuted} as far as checked} \\
+Lazy representatives from reduction logs & ? & \PROV{how ripser.py stores cocycles not checked} \\
+Representatives as a design invariant & E & Ripserer.jl and OAT make the same promise \\
+Edge blocks as units of parallel reduction & P + N & \PROV{preprint~\cite{bauer2024generating} against this paper; compare \cite{zhang2020ripserpp,morozov2020lockfree,burella2021giotto}} \\
+Lens-graph identity for local bar counts & N & the link of an edge in a flag complex is the clique complex of the common neighbourhood, so the identity is elementary; its use is new \PROV{} \\
+Block-parallel reduction on explicit matrices & N & a measured dead end, kept for its helpers \\
+Alpha values top-down with the Gabriel test on every facet & B & the definition \cite{edelsbrunner1994alpha}; the edge-only rule was a bug \\
+\v{C}ech--alpha agreement as an oracle & B, N & persistent nerve lemma \cite{chazal2008persistence}; the use as an oracle where GUDHI cannot run is ours \\
+Circular coordinates & B & \cite{desilva2011circular}; exact integer-lift check E \\
+Toroidal coordinates & B & \cite{scoccola2022toroidal}; our own LLL \\
+Sparse circular and toroidal coordinates & B & \cite{perea2018multiscale} \\
+Bottleneck and Wasserstein distances & B & \cite{kerber2017hera}; essential-bar policy E \\
+Landscapes, persistence images & B & \cite{bubenik2015landscapes,adams2017images} \\
+Image, kernel, cokernel of maps between barcodes & ? & contributed by Nico Stucki \PROV{source} \\
+Persistent group homology along a subgroup chain & B+ & \cite{ellis2011persistent,hap}: the same barcode as a filtered simplicial set, with representatives \\
+One source tree for JVM and Scala.js; own numerics and spatial search & E & \PROV{whether another library with representatives runs in a browser: not checked} \\
+Cross-tool harness with agreement checks & B+, N & extends the Ripser paper's benchmark; agreement checks at scale \PROV{literature check} \\
+Documentation as tests; pitfall catalogue & E, N & \\
+\bottomrule
+\end{longtable}

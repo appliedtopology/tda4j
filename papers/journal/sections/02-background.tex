@@ -1,0 +1,75 @@
+\section{Background and related software}\label{sec:background}
+
+\subsection{Persistent (co)homology in one page}\label{sec:ph}
+
+A \emph{filtered complex} is a finite set of cells $\sigma_1,\dots,\sigma_N$ with a filtration value $f(\sigma)\in\R$ and an
+order in which every cell comes after the cells of its boundary and after every cell of smaller value. The cells of
+dimension $k$ span the chain group $C_k$ over a field $\mathbb{K}$, and the boundary matrix $\partial$ records
+$\partial\colon C_k\to C_{k-1}$. The \emph{standard algorithm}~\cite{elz2002,zomorodian2005computing} reduces $\partial$ from
+left to right, adding earlier columns to later ones until no two nonzero columns have the same lowest nonzero row (the
+\emph{pivot}), and reads the barcode off the pivots: a column with pivot $\sigma$ pairs the cell $\tau$ that owns the column
+with $\sigma$, and gives a bar $[f(\sigma),f(\tau))$ in degree $\dim\sigma$; a cell that is neither a pivot nor owns a
+nonzero column gives an essential bar. The same reduction, recording the column operations, produces for each bar a
+\emph{representative}: for a finite bar $(\sigma,\tau)$ the reduced column of $\tau$, a cycle whose youngest cell is $\sigma$,
+and for an essential bar a cycle that is not a boundary.
+
+Four ideas make reduction fast enough for point clouds of thousands of points, and they recur throughout the paper.
+\emph{Clearing}~\cite{chen2011twist,bkr2014chunks}: a cell that is a pivot cannot own a nonzero column, so its column is
+skipped. \emph{Cohomology}~\cite{desilva2011dualities}: reducing the coboundary matrix, in reversed order, gives the same
+barcode and, with clearing, far fewer column operations for Vietoris--Rips complexes. \emph{Implicit matrices}: Ripser stores no
+matrix, but enumerates coboundaries from a combinatorial number system~\cite{bauer2021ripser}. \emph{Apparent and emergent
+pairs}: columns whose pivot can be read off from the cell without any addition are paired without being reduced
+\cite{bauer2021ripser}. A cohomology computation returns cocycle representatives; cycle representatives come from
+a second pass, the \emph{involution}, which \v{C}ufar and Virk describe for Vietoris--Rips complexes~\cite{cufar2021involuted}
+and which \cref{sec:representatives} generalises.
+
+\subsection{Existing software}\label{sec:related}
+
+\Cref{tab:related} lists the tools that \tdaj{} is compared with or measured against, with the properties that matter for the
+claims of this paper. The table is a summary of capabilities, not a ranking: the specialists are specialised on purpose.
+
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{4pt}
+\footnotesize
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{2.3cm} >{\raggedright\arraybackslash}p{2.4cm} >{\raggedright\arraybackslash}p{3.2cm} >{\raggedright\arraybackslash}p{1.8cm} >{\raggedright\arraybackslash}p{2.3cm} >{\raggedright\arraybackslash}p{1.9cm}@{}}
+\toprule
+Tool & Language / interfaces & Inputs & Fields & Representatives & Parallelism \\
+\midrule
+ripser.cpp~\cite{bauer2021ripser} & C++, Python (ripser.py) & Vietoris--Rips of points and distance matrices & $\Fp$ (coefficient build) & cocycles in ripser.py & one thread \\
+RedZeD~\cite{kapulkin2026redzed} & C++, Julia, Python & Vietoris--Rips & $\Ftwo$ & none (birth and death simplices) & one thread \\
+giotto-ph~\cite{burella2021giotto} & Python & Vietoris--Rips & $\Fp$ & flag generators (vertex pairs) & threads \\
+GUDHI~\cite{gudhi2014} & C++, Python & Rips, alpha, \v{C}ech, witness, DTM, cubical, sparse, edge collapse & $\Fp$ & limited \VERIFY{what persistence() returns} & mostly serial \\
+Dionysus~2~\cite{dionysus2} & C++, Python & Vietoris--Rips and others & $\Fp$ & cocycles & serial \\
+PHAT, DIPHA~\cite{phat2017,dipha2014} & C++, MPI (DIPHA) & boundary matrices; Rips, cubical (DIPHA) & $\Ftwo$ & none & MPI (DIPHA) \\
+Eirene~\cite{henselman2016matroid} & Julia & Vietoris--Rips & $\Ftwo$ & cycles & serial \\
+Ripserer.jl~\cite{cufar2020ripserer} & Julia & Rips, alpha, cubical & generic & cocycles, involuted cycles & serial \\
+OAT~\cite{hang2021umatch} & Rust, Python & Vietoris--Rips and boundary matrices & $\Q$ & optimal cycles & \VERIFY{} \\
+JavaPlex~\cite{tausz2014javaplex} & Java, MATLAB & Rips, witness, flag, explicit streams, zigzag & $\Fp$, $\Q$, $\Z$ & annotated intervals & serial \\
+Cubical Ripser~\cite{kaji2020cubical} & C++, Python & images, $V$-construction by default & $\Ftwo$ & cycles & serial \\
+Flash Cubical~\cite{lebreton2026flash} & C++, Python & 2D, 3D images, $V$-construction & $\Ftwo$ & none & serial \\
+HomCloud~\cite{obayashi2022homcloud} & Python & alpha, cubical & $\Ftwo$ & volume-optimal cycles & \VERIFY{} \\
+\midrule
+\tdaj{} & Scala, Java, MATLAB, Python, JavaScript, CLI & Rips, \v{C}ech, alpha, witness, Dowker, DTM, sparse Rips, images, simplicial sets, nerves & $\Fp$, $\Q$, floats & every bar, every engine & edge-block parallel Ripser; alpha, \v{C}ech \\
+\bottomrule
+\end{tabular}
+\caption{The tools in the comparison. Rows are summaries written from the harness's constraints on each tool
+(\cref{sec:protocol}) and from the tools' documentation.
+\VERIFY{Entries not marked are from the benchmark-harness notes (Z/2-only tools, the $V$-construction of Flash Cubical, float32 in
+Ripser and Dionysus) or from memory; check every row against the pinned version before submission.}}
+\label{tab:related}
+\end{table}
+
+Three observations from the table shape what follows. First, no tool in the table combines the breadth of the toolkits with a
+representative for every bar from every engine \VERIFY{claim about other tools, from their documentation as read for the table; check against the pinned versions}: Ripserer.jl and OAT come closest, and they are the natural points of
+comparison for the cost of representatives (\cref{sec:eval-reps}). Second, the fast cubical tools are limited to two- and
+three-dimensional images over $\Ftwo$ and return no representatives, which leaves room for a dual union-find engine
+that is generic over the field, the dimension and the complex (\cref{sec:dual-uf}). Third, JavaPlex is the only tool in the table
+reachable from MATLAB and generic over fields, cell types and filtrations, and it is the library \tdaj{} replaces; it is
+included in the benchmark as the predecessor, not as a competitor.
+
+\paragraph{What \tdaj{} does not try to be.}
+It does not try to beat the specialists on their own ground. The design principle behind it is the opposite of a speed
+record: every engine must be generic over the field and return a representative for every bar, and an optimisation that
+gives up either is probably not worth having. The evaluation (\cref{sec:evaluation}) therefore reports the price of that
+principle, bar for bar, against tools that do not pay it.

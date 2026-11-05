@@ -1,0 +1,10 @@
+# TeX build products (the PDF is rebuilt with `make journal`)
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.out
+*.toc
+*.synctex.gz
+*.pdf
