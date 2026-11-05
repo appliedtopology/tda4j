@@ -114,7 +114,7 @@ sbt -DrunBenchmarks=true tda4j/test   # also run benchmark/profiling specs — N
 No `sbt` on `PATH`: `.claude/scripts/install-sbt.sh`. A cloud Setup script
 should hold `.claude/scripts/cloud-setup-script.sh` (installer plus warmed dependencies), else a session starts cold (~1 h).
 
-No linter beyond scalafmt; tests are specs2. CI jobs (`test.yml`, `lint.yml`) and their local equivalents: steward skill; a weekly `coverage.yml` maps coverage. The ~319 `-Wunused:all` warnings stay
+No linter beyond scalafmt; tests are specs2. CI jobs (`test.yml`, `lint.yml`) and their local equivalents: steward skill. The ~319 `-Wunused:all` warnings stay
 (`WORKLOG-compiler-warnings.md`). Docs build with 3.8.4 (a FRESH sbt server only: `rules/docs-and-tutorials.md`). After
 `sbt package` or a docs build a test compile can miss main classes ("Not found: TDAlab"): `sbt clean`. **scalafmt only sees git-tracked files**: `git add` a new file before `scalafmtAll`.
 
@@ -181,8 +181,7 @@ proper nouns (external projects' own spellings), correctly titlecased.
 every homology implementation should (a) be generic over `Field` coefficients and (b) return representatives (a
 real chain witnessing each bar). An optimization that abandons representatives is probably not worth it. Every
 public interface (MATLAB facade included) should expose representatives; anywhere that doesn't is incomplete.
-**Current gaps**: every engine records a representative for every bar (`PackedRipserCohomologyEngine`'s apparent pairs
-too), and so does `ClassifyingSpace.persistentGroupHomology`. `BlockParallelReduction` (JVM only, not reachable from
+**Current gaps**: every engine records a representative for every bar, and so does `ClassifyingSpace.persistentGroupHomology`. `BlockParallelReduction` (JVM only, not reachable from
 `Persistence`) gives bars only (#192); `ParallelPackedCohomology` is `Engine.ParallelRipser` (`rules/engines.md`).
 
 **Openness principle (project lead, foundational: the library is a platform for experiments and research)**: public
@@ -234,6 +233,7 @@ file before changing that subsystem; this table is the index, in case a rule did
 |---|---|---|
 | `rules/streams.md` | the ordering contract every stream must satisfy (the #1 bug source), VR constructions, `ExplicitStreamBuilder` | `streams/` |
 | `rules/engines.md` | the persistence engines, `Involution`, benchmark specs | `homology/` |
+| `rules/harmonic-chains.md` | harmonic chains: barcode, representatives | `Harmonic*` |
 | `rules/barcode.md` | `BarcodeDistance`, `Vectorization`, `BootstrapBand`, `ToMATo` | `barcode/` |
 | `rules/module-maps.md` | maps of barcodes: `MapAlgebra`, `PersistenceMap`, their oracle | `MapAlgebra`, `PersistenceMap` |
 | `rules/morse-and-zigzag.md` | discrete Morse theory, zigzag persistence | `DiscreteMorse`, `MorseCell`, `Zigzag*` |

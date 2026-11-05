@@ -88,6 +88,44 @@ def test_relative_persistence_from_distances_is_that_of_the_points(circle):
     )
 
 
+# -- harmonic chains ------------------------------------------------------------------------------------------------
+
+def _boundary_at_each_vertex(representative):
+    total = {}
+    for (a, b), c in zip(representative.cells, representative.coefficients):
+        total[b] = total.get(b, 0.0) + c
+        total[a] = total.get(a, 0.0) - c
+    return total.values()
+
+
+def test_the_harmonic_representatives_of_a_loop_are_cycles_for_both_barcodes(circle):
+    points = circle(9)
+    for compute in (tda4j.harmonic_chain_barcode, tda4j.harmonic_representatives):
+        result = compute(points, max_dimension=1, min_persistence=0)
+        loops = [i for i in range(len(result)) if result.bars[i, 0] == 1]
+        assert loops
+        for i in loops:
+            assert all(abs(x) < 1e-8 for x in _boundary_at_each_vertex(result.representative(i)))
+
+
+def test_the_harmonic_barcodes_from_distances_are_those_of_the_points_and_the_rationals_agree(circle):
+    points = circle(8)
+    distances = np.linalg.norm(points[:, None] - points[None, :], axis=2)
+    for compute, from_distances in (
+        (tda4j.harmonic_chain_barcode, tda4j.harmonic_chain_barcode_from_distances),
+        (tda4j.harmonic_representatives, tda4j.harmonic_representatives_from_distances),
+    ):
+        assert np.allclose(compute(points, max_dimension=1).bars, from_distances(distances, max_dimension=1).bars)
+        assert np.allclose(
+            compute(points, max_dimension=1).bars, compute(points, max_dimension=1, field="Q").bars
+        )
+
+
+def test_a_finite_field_is_a_value_error_for_harmonic_chains(circle):
+    with pytest.raises(ValueError, match="inner product"):
+        tda4j.harmonic_chain_barcode(circle(6), field="Z")
+
+
 # -- maps -----------------------------------------------------------------------------------------------------------
 
 def test_the_inclusion_of_all_the_points_is_the_identity_with_nothing_in_kernel_or_cokernel(circle):

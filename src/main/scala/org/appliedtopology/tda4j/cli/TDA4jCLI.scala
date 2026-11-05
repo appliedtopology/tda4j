@@ -164,6 +164,35 @@ object TDA4jCLI:
               s"--relative-to takes a point cloud or a distance matrix (the Vietoris-Rips complex), not --input-format=$format"
             )
 
+      conf.harmonic.toOption.foreach { kind =>
+        if kind != "chains" && kind != "representatives" then
+          throw new IllegalArgumentException(s"--harmonic takes 'chains' or 'representatives', got '$kind'")
+        val allowed = if kind == "chains" then harmonicOptions + "includeZeroLength" else harmonicOptions
+        val others = Seq(
+          "--relative-to" -> conf.relativeTo.isSupplied,
+          "--select-landmarks" -> conf.selectLandmarks(),
+          "--landmarks-file" -> conf.landmarksFile.isSupplied
+        ).collect { case (flag, true) => flag } ++
+          options.grouped(2).map(_(0)).filterNot(allowed).map(flagName)
+        if others.nonEmpty then
+          throw new IllegalArgumentException(
+            s"--harmonic $kind computes harmonic chains of a Vietoris-Rips complex, and ${others.mkString(", ")} " +
+              "cannot go with it (it takes " +
+              allowed.toSeq.sorted.map(flagName).mkString(", ") + ")"
+          )
+        resolved match
+          case ResolvedInput.Points(_) | ResolvedInput.Distances(_) => ()
+          case ResolvedInput.Result(_)                              =>
+            throw new IllegalArgumentException(
+              s"${conf.input()} is a saved result, computed already: --harmonic would change the computation. " +
+                "Compute again from the original input"
+            )
+          case _ =>
+            throw new IllegalArgumentException(
+              s"--harmonic takes a point cloud or a distance matrix (the Vietoris-Rips complex), not --input-format=$format"
+            )
+      }
+
       resolved match
         case ResolvedInput.Result(_) =>
           val flags = options.grouped(2).map(pair => flagName(pair(0))).toSeq ++
@@ -244,6 +273,16 @@ object TDA4jCLI:
         0
       else
         val result = conf.landmarksFile.toOption match
+          case _ if conf.harmonic.isSupplied =>
+            val chains = conf.harmonic() == "chains"
+            resolved match
+              case ResolvedInput.Points(points) =>
+                if chains then TDA4j.harmonicChainBarcodeFromPoints(points, options)
+                else TDA4j.harmonicRepresentativesFromPoints(points, options)
+              case ResolvedInput.Distances(distances) =>
+                if chains then TDA4j.harmonicChainBarcodeFromDistanceMatrix(distances, options)
+                else TDA4j.harmonicRepresentativesFromDistanceMatrix(distances, options)
+              case _ => throw new IllegalStateException("unreachable: rejected by the --harmonic guard above")
           case _ if conf.relativeTo.isSupplied =>
             val subcomplex = parseVertexList("--relative-to", conf.relativeTo())
             resolved match
@@ -450,6 +489,17 @@ object TDA4jCLI:
         "as --max-filtration-value for step 2 (the JavaPlex tutorial's own 2R recipe)"
     )
 
+  // What `--harmonic` passes to the facade (`includeZeroLength` besides, for `chains`).
+  private val harmonicOptions = Set(
+    "maxDimension",
+    "maxFiltrationValue",
+    "field",
+    "epsilon",
+    "minPersistence",
+    "minPersistenceFraction",
+    "threads"
+  )
+
   private val eulerCurveOptions = Set("maxFiltrationValue", "threads")
 
   /** `--euler-curve`: the curve of the Vietoris-Rips complex of a point cloud or distance matrix, one `scale,value`
@@ -504,6 +554,7 @@ object TDA4jCLI:
       "--euler-curve" -> conf.eulerCurve(),
       "--persistent-laplacian" -> conf.persistentLaplacian(),
       "--morse-reduction" -> conf.morseReduction(),
+      "--harmonic" -> conf.harmonic.isSupplied,
       "--bootstrap-band" -> conf.bootstrapBand(),
       "--tomato" -> conf.tomato(),
       "--inclusion-of" -> conf.inclusionOf.isSupplied

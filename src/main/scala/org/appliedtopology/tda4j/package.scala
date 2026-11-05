@@ -115,6 +115,8 @@ abstract class Lab(characteristic: Int, precision: Double = 1e-9):
     GridCubes,
     GridRanks,
     Gudhi,
+    HarmonicChainBarcode,
+    HarmonicRepresentatives,
     HasDimension,
     HeapChain,
     HelixDelaunay,

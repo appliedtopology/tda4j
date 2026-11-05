@@ -74,6 +74,7 @@ subsection:
       - page: user-guide/discrete-morse.md
       - page: user-guide/zigzag-persistence.md
       - page: user-guide/relative-persistence.md
+      - page: user-guide/harmonic-chains.md
       - page: user-guide/utilities.md
       - page: user-guide/vectorization.md
       - page: user-guide/noise-and-clusters.md
