@@ -26,6 +26,12 @@ subsection:
       - page: developers-guide/nerves.md
       - page: developers-guide/plotting.md
       - page: developers-guide/performance.md
+      - page: developers-guide/facades.md
+      - page: developers-guide/contracts.md
+      - page: developers-guide/adding-engines-and-complexes.md
+      - page: developers-guide/jvm-and-js.md
+      - page: developers-guide/testing.md
+      - page: developers-guide/pr-workflow.md
       - page: developers-guide/degeneracies.md
       - page: developers-guide/gotchas.md
       - page: developers-guide/class-diagrams.md

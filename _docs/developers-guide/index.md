@@ -35,6 +35,15 @@ context-abstraction syntax is most of the gap; the first page covers it.
    specs, the profile drivers and the cross-library harness are in
    [Measuring performance](performance.md).
 
+9. **Extending the library.** What each extension point asks of you and what it
+   gives back: [Extending the facades](facades.md) (MATLAB, the command line,
+   JavaScript and Python), [Contracts](contracts.md) (the rules that are
+   documented rather than checked), and [Adding an engine or a
+   complex](adding-engines-and-complexes.md).
+10. **Working on both platforms and getting a change merged.** [JVM and
+    Scala.js](jvm-and-js.md), [Testing conventions](testing.md) and the
+    [pull request workflow](pr-workflow.md).
+
 ## Contributing
 
 How to set up, the commands, the path from an issue to a merged pull request,
