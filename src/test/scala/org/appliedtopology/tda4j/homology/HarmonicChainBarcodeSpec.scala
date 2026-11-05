@@ -306,6 +306,51 @@ class HarmonicChainBarcodeSpec extends Specification:
     }
   }
 
+  "the harmonic chains at a value" should {
+    // Figure 1 again: K_7 has no triangle, so its three loops are all harmonic; abe enters at 8 and abd at 9
+    val figure = explicit(
+      List(0, 1, 2, 3, 4).map(v => (0.0, Simplex(v))) ++ List(
+        (1.0, Simplex(0, 2)),
+        (2.0, Simplex(0, 3)),
+        (3.0, Simplex(1, 3)),
+        (4.0, Simplex(0, 1)),
+        (5.0, Simplex(1, 2)),
+        (6.0, Simplex(0, 4)),
+        (7.0, Simplex(1, 4)),
+        (8.0, Simplex(0, 1, 4)),
+        (9.0, Simplex(0, 1, 3)),
+        (10.0, Simplex(0, 1, 2))
+      )*
+    )
+
+    "be as many as the Betti number there and cycles orthogonal to every boundary, over the rationals" in {
+      val triangles = List(Simplex(0, 1, 4) -> 8.0, Simplex(0, 1, 3) -> 9.0, Simplex(0, 1, 2) -> 10.0)
+      val failures = for
+        (value, betti) <- List(3.5 -> 0, 4.0 -> 1, 7.0 -> 3, 8.0 -> 2, 9.0 -> 1, 10.0 -> 0)
+        chains = HarmonicChainBarcode.harmonicChains(figure, 1, value, Coefficients.Rationals)
+        if chains.size != betti || chains.exists { chain =>
+          val z = chain.terms.toMap
+          val net = z.toSeq
+            .flatMap((cell, x) => simplexBoundary(cell).map((f, sign) => f -> exact.times(x, q(sign))))
+            .groupMapReduce(_._1)(_._2)(exact.plus)
+          val orthogonal = triangles
+            .filter(_._2 <= value)
+            .map((t, _) =>
+              simplexBoundary(t)
+                .flatMap((f, sign) => z.get(f).map(exact.times(_, q(sign))))
+                .foldLeft(exact.zero)(exact.plus)
+            )
+          !net.values.forall(_.isZero) || !orthogonal.forall(_.isZero)
+        }
+      yield s"at $value: ${chains.size} chains, expected $betti"
+      failures must beEmpty
+    }
+
+    "be none before any cell has entered" in {
+      HarmonicChainBarcode.harmonicChains(figure, 1, -1.0, Coefficients.Rationals) must beEmpty
+    }
+  }
+
   "the harmonic chain barcode" should {
     "refuse coefficients in a finite field, whose chains have no inner product" in {
       val edge = explicit((0.0, Simplex(0)), (0.0, Simplex(1)), (1.0, Simplex(0, 1)))

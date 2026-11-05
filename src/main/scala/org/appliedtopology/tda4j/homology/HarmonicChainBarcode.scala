@@ -53,9 +53,17 @@ object HarmonicChainBarcode:
     coefficients: Optional[Coefficients] = Optional.empty,
     includeZeroLength: Boolean = false
   ): PersistenceDiagram[CellT] =
+    val degree = degreeFor(stream, maxDimension)
+    ofOrder(insertionOrder(stream, degree), degree, coefficients, includeZeroLength)
+
+  // The top degree asked for, checked against what the stream was built for (as the verb does).
+  private[tda4j] def degreeFor[CellT: OrderedCell](
+    stream: StratifiedCellStream[CellT, Double],
+    maxDimension: Optional[Int]
+  ): Int =
     val requested = maxDimension.toOption
     requested.foreach(k => require(k >= 0, s"HarmonicChainBarcode: maxDimension must be >= 0, got $k"))
-    val degree = (requested, stream.homologyDegreeLimit) match
+    (requested, stream.homologyDegreeLimit) match
       case (Some(k), Some(limit)) if k > limit =>
         throw new IllegalArgumentException(
           s"HarmonicChainBarcode: this complex was built for degrees 0..$limit, so degree $k would be wrong; " +
@@ -64,7 +72,29 @@ object HarmonicChainBarcode:
       case (Some(k), _)        => k
       case (None, Some(limit)) => limit
       case (None, None)        => Persistence.DefaultMaxDimension
-    ofOrder(insertionOrder(stream, degree), degree, coefficients, includeZeroLength)
+
+  /** A basis of the harmonic chains of degree `dimension` of the complex at filtration value `value` (all the cells of
+    * the stream with value at most `value`): as many chains as the Betti number there, each a cycle orthogonal to every
+    * boundary, in the order of their births. A lab hook for what the barcode follows: the chains the algorithm keeps
+    * alive after the last cell of that value (the order of the cells is [[insertionOrder]]). The chains' coefficients
+    * are `coefficients.C`: `harmonicChains(stream, 1, 0.5, Coefficients.Rationals)` has exact rational ones.
+    */
+  def harmonicChains[CellT: OrderedCell](
+    stream: StratifiedCellStream[CellT, Double],
+    dimension: Int,
+    value: Double,
+    coefficients: Coefficients
+  ): Vector[Chain[CellT, coefficients.C]] =
+    zeroCharacteristic(Optional(Some(coefficients)))
+    import coefficients.given
+    val degree = degreeFor(stream, dimension)
+    val order = trackedOrder(insertionOrder(stream, degree), degree)
+    order.map(_._2).filter(_ <= value).lastOption match
+      case None        => Vector.empty
+      case Some(level) =>
+        val run = new Run[CellT, coefficients.C](degree, order, includeZeroLength = true, Set(level))
+        run.execute()
+        run.chainsAt(dimension, level)
 
   /** The order in which [[apply]] inserts the cells of `stream` up to dimension `maxDimension + 1`: by filtration
     * value, then dimension, then the position in the stream's own order of the dimension. Each cell comes with its
@@ -97,21 +127,9 @@ object HarmonicChainBarcode:
     includeZeroLength: Boolean = false
   ): PersistenceDiagram[CellT] =
     require(maxDimension >= 0, s"HarmonicChainBarcode: maxDimension must be >= 0, got $maxDimension")
-    val field = coefficients.getOrElse(Coefficients(0))
-    require(
-      field.characteristic == 0,
-      "HarmonicChainBarcode: harmonic chains need an inner product on the chains, so the coefficients must be the real " +
-        s"or the rational numbers (characteristic 0), not a field of characteristic ${field.characteristic}; " +
-        "pass coefficients = Coefficients(0) or Coefficients.Rationals"
-    )
+    val field = zeroCharacteristic(coefficients)
     import field.given
-    val tracked = order.filter((cell, _) => summon[CellT is OrderedCell].dim(cell) <= maxDimension + 1).toVector
-    tracked.zip(tracked.drop(1)).foreach { case ((_, before), (_, after)) =>
-      require(
-        before <= after,
-        s"HarmonicChainBarcode: the filtration values decrease along the order ($before, then $after)"
-      )
-    }
+    val tracked = trackedOrder(order, maxDimension)
     val bars = new Run[CellT, field.C](maxDimension, tracked, includeZeroLength).execute()
     PersistenceDiagram[CellT, field.C](
       bars,
@@ -120,15 +138,49 @@ object HarmonicChainBarcode:
       representatives = Some(Representatives.Cycles)
     )
 
+  // The coefficients, which must be real or rational: the harmonic condition is orthogonality.
+  private[tda4j] def zeroCharacteristic(coefficients: Optional[Coefficients]): Coefficients =
+    val field = coefficients.getOrElse(Coefficients(0))
+    require(
+      field.characteristic == 0,
+      "HarmonicChainBarcode: harmonic chains need an inner product on the chains, so the coefficients must be the real " +
+        s"or the rational numbers (characteristic 0), not a field of characteristic ${field.characteristic}; " +
+        "pass coefficients = Coefficients(0) or Coefficients.Rationals"
+    )
+    field
+
+  // The cells the run needs (dimension at most maxDimension + 1), with their values checked not to decrease.
+  private[tda4j] def trackedOrder[CellT: OrderedCell](
+    order: Seq[(CellT, Double)],
+    maxDimension: Int
+  ): Vector[(CellT, Double)] =
+    val tracked = order.filter((cell, _) => summon[CellT is OrderedCell].dim(cell) <= maxDimension + 1).toVector
+    tracked.zip(tracked.drop(1)).foreach { case ((_, before), (_, after)) =>
+      require(
+        before <= after,
+        s"HarmonicChainBarcode: the filtration values decrease along the order ($before, then $after)"
+      )
+    }
+    tracked
+
   // A harmonic chain that is alive: `rep` is its chain now, and `birth` the number of the cell whose entry created it.
   private final class Born[F](val birth: Int, val rep: mutable.HashMap[Int, F])
 
   // The state of one run. Cells are numbered by their place in the order, and every chain is a sparse vector over those numbers.
-  private final class Run[CellT, F](maxDimension: Int, order: Vector[(CellT, Double)], includeZeroLength: Boolean)(using
+  // `private[tda4j]` because it holds the mutable state of a run: HarmonicRepresentatives reads the snapshots it takes.
+  private[tda4j] final class Run[CellT, F](
+    maxDimension: Int,
+    val order: Vector[(CellT, Double)],
+    includeZeroLength: Boolean,
+    snapshotValues: Set[Double] = Set.empty
+  )(using
     cells: CellT is OrderedCell,
     fr: F is Field
   ):
-    private type Vec = mutable.HashMap[Int, F]
+    type Vec = mutable.HashMap[Int, F]
+
+    // The harmonic chains of each degree after the last cell of each filtration value in `snapshotValues`.
+    val snapshots = mutable.HashMap.empty[(Int, Double), Vector[Vec]]
 
     private val dims = order.map((cell, _) => cells.dim(cell))
     private val ids = order.zipWithIndex.map((entry, i) => entry._1 -> i).toMap
@@ -175,11 +227,17 @@ object HarmonicChainBarcode:
       val (small, large) = if a.size <= b.size then (a, b) else (b, a)
       small.foldLeft(fr.zero) { case (sum, (k, x)) => large.get(k).fold(sum)(y => fr.plus(sum, fr.times(x, y))) }
 
-    private def chainOf(rep: Vec): Chain[CellT, F] =
+    def chainOf(rep: Vec): Chain[CellT, F] =
       Chain.from(rep.toSeq.map((id, x) => (order(id)._1, x)))(using cells.ordering)
 
+    def chainsAt(dimension: Int, value: Double): Vector[Chain[CellT, F]] =
+      snapshots((dimension, value)).map(chainOf)
+
     def execute(): List[PersistenceBar[Double, Chain[CellT, F]]] =
-      for i <- order.indices do insert(i)
+      for i <- order.indices do
+        insert(i)
+        if snapshotValues(order(i)._2) && (i == order.size - 1 || order(i + 1)._2 > order(i)._2) then
+          for p <- 0 to maxDimension do snapshots((p, order(i)._2)) = alive(p).map(born => born.rep.clone()).toVector
       // what is alive at the end never ends
       for p <- 0 to maxDimension; born <- alive(p) do
         bars += PersistenceBar(
