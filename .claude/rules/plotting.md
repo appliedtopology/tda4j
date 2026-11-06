@@ -13,9 +13,8 @@ evidence: `DESIGN-plotting.md`; the build-out: `WORKLOG-plotting.md`; the move i
 the customization grammar (tweaks, scales, styles): `WORKLOG-plot-grammar.md`.
 
 **A leaf subpackage of the core** (`org.appliedtopology.tda4j.plot`, directory `plot/`), like `matlab`/`cli`: nothing in the
-core uses it. Its one dependency is cask (Undertow and XNIO, for `view()` only; the JDK's own HTTP server crashed,
-`be3f71a7`). **A plot
-feature that needs a library goes in a new module**; `view()`'s cask is the standing exception (`WORKLOG-demo-jar.md`). Not
+core uses it. Its one dependency is cask (Undertow and XNIO, for `view()` only). **A plot feature that needs a library
+goes in a new module**; `view()`'s cask is the standing exception (`WORKLOG-demo-jar.md`). Not
 re-exported by the labs. `matlab.PersistenceResult`'s `plot...` methods (hence the CLI's `--plot`) draw through it
 (`WORKLOG-facade-plots.md`).
 
@@ -110,10 +109,8 @@ API). Rules:
   frame is asked for; its padding scales with the legend text, columns are given up until they fit, and the room beside the
   plot includes the box. `Axis.crossesAt` is in the units of the OTHER axis (`Scale.x(crossesAt = 0)` is the x axis through
   `y = 0`), kept only when that axis's range BEFORE the equal-aspect widening shows the value (else the axis stays at the
-  edge and a note says why). `Palette.grayscale` is checked by lightness and contrast in specs (the validator's chroma floor
-  fails any gray); `Palette.okabeIto` is the canonical eight on white, first three validated on all pairs. A diagram's
-  `Board.heading` and a color bar's `barTicks` are drawn in the renderer, not the constructors; `plotRepresentative(i)` draws
-  a cocycle at its bar's birth.
+  edge and a note says why). A diagram's `Board.heading` and a color bar's `barTicks` are drawn in the renderer, not the
+  constructors; `plotRepresentative(i)` draws a cocycle at its bar's birth.
 - PNG and PDF are documented external conversion only (project lead, #101): no rasterizer module; interactivity (#102) is not
   wanted. A command in that section is run before it is written down (`cairosvg` and Chromium were; the others come from manuals).
 - **`Look` (session defaults)**: every public constructor of `Plot` that returns a `Figure` or `Scene` takes `(using look:
