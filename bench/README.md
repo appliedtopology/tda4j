@@ -119,15 +119,17 @@ Four presets (`--path`) cover what the sweep is read by, each setting the option
 
 Without `--path`, `--dim` (a number, or `top`; at most d - 1) sets the highest degree, 2 by default.
 
-`--radii 0.25,0.5,1` runs every cell once per fraction of the enclosing radius (the smallest over the points of the largest distance from a point), giving each tool that radius as its largest; a tool that takes no radius (the fast alpha engine) is left out. `sweep.md` has one block per radius, and `sweep.csv` a `radius` column.
+Every tool that takes a radius gets the same one: the enclosing radius of the draw (the smallest over the points of the largest distance from a point), as `bench.py run` gives it to an alpha case without a radius of its own. It is where TDA4j's alpha complex stops by default; GUDHI's does not, and the barcode does not change past it. On GUDHI the cut left degrees 0 to 2 unchanged on 10 draws (n = 40 and 60, d = 6 to 10, interior and surface), took 21% to 40% off the simplex tree (the most at d = 10) and changed the time by at most 11%, the cut tree being the faster, since the Delaunay triangulation is the cost. A tool that takes no radius (`tda4j-fastalpha`, which reduces the whole triangulation) is given none.
+
+`--radii 0.25,0.5,1` runs every cell once per fraction of the enclosing radius instead, giving each tool that takes one that fraction of it as its largest and leaving out the tools that take none. `sweep.md` has one block per radius, and `sweep.csv` a `radius` column (empty for the enclosing radius itself).
 
 Tools: `tda4j`, `tda4j-helix`, `tda4j-fastalpha`, `tda4j-fastalpha-top` (the top degree alone), `tda4j-dqp`, `tda4j-cech`, `gudhi`, and the `tda4j-js` twins. A barcode is
 compared with the first of GUDHI, the Cech complex and the dual-QP that finished on the same draw. GUDHI (CGAL) is the other
 implementation but stops early in d. The Cech complex (minimum enclosing balls, no triangulation) and the dual-QP (a
 quadratic program per simplex) are other algorithms than the Delaunay walk, and by the nerve lemma the Cech and alpha
 complexes have the same barcode in general position, so their agreement to rounding is a check at dimensions where GUDHI
-cannot run. At these point counts the dual-QP needs no radius: it builds every candidate simplex up to dimension 3 (at most
-C(n, 4) of them). Nothing from another paper's tables is used: their timings were measured in other settings.
+cannot run. At the enclosing radius, which is at least half the diameter, every pair of points is a neighbour for the dual-QP: it builds every candidate simplex up to dimension 3 (at most
+C(n, 4) of them) at these point counts. Nothing from another paper's tables is used: their timings were measured in other settings.
 
 Each cell runs on `--seeds` draws (default 3; start with 1), cold and warm, and a tool's series stops at its first timeout or
 out-of-memory. The defaults assume a machine like the compute server's (`--jvm-heap 64g`, `--timeout 1800`, GUDHI capped at
@@ -172,7 +174,31 @@ checks: the barcode is the same at every count, and its distance to ripser.cpp's
 ```sh
 bench/run.sh sweep-threads --jvm-heap 32g
 bench/run.sh sweep-threads --cases o3_1024 --tools tda4j-parallelverb-mt,giotto-ph-mt --threads 1,4,16,32
+bench/run.sh sweep-threads --tools 'tda4j*' --baselines ''                  # TDA4j's rows alone, to merge (below)
 ```
+
+### Merging sweeps
+
+Each of the three sweeps (`sweep-threads`, `sweep-cubical`, `sweep-alpha`) writes a directory of its own, and
+`bench/run.sh sweep-merge OUT DIR[:tools]...` builds one from several as `merge` does for the main run's: a rerun of some
+tools replaces their rows in an earlier sweep and leaves the rest, with their bars and logs, and `sweep.md` is rebuilt from
+the merged rows and names each part, its date, host and TDA4j commit. `DIR:tools` takes only those tools (`--tools`'s notation:
+names or patterns, `!pattern` to leave tools out: `old:'!tda4j*'` is every tool but TDA4j's; the cubical sweep's references are
+`old:cripser,gudhi`), `--drop` leaves some out of the result.
+
+The unit that is replaced is a tool's *series*, not a row, because a tool's run along one axis stops at its first timeout or
+out-of-memory: on `sweep-threads` the tool's rows on one case in one field at every thread count, on `sweep-cubical` an image
+kind in one dimension at every size, on `sweep-alpha` the sweep over d at one n and shape (or over n at one d, or a single
+`--extra` cell) at one radius, over all its draws. Taking only the later run's rows of a series keeps a rerun from standing
+beside a thread count or size it never reached and the older commit measured. The merged sweep lists the series in the
+earlier sweep's order.
+
+`--tools` of `sweep-threads` and `sweep-alpha`, and `--engines` of `sweep-cubical`, take patterns too, so a rerun of TDA4j's
+rows is `--tools 'tda4j*'` (`--tools 'tda4j*' --baselines ''` on the threads sweep, whose baselines are `ripser.cpp`; `--no-reference`
+on the cubical sweep). The parts must come from one machine, with the same `--cases`, `--dims` and the like: the merge does not
+compare them. `sweep-alpha` records the radius it gave its tools (`alpha_radius_rule` in `env.json`), and refuses to merge
+a sweep from before every tool that takes a radius was given the enclosing radius (GUDHI got none) with a later one unless
+`--allow-mixed` accepts the difference. `bench/final_run.sh` does this with `SWEEPS_BASE` (below).
 
 ## The rarer complexes
 
@@ -205,7 +231,7 @@ Ripser; whether `Auto` should choose `ParallelRipser` on one thread is the compa
 
 The alpha cases without a radius of their own give every tool that takes one the enclosing radius: TDA4j's alpha complex
 stops there by default and GUDHI's does not, and the barcode no longer changes after it. The tools that take none
-(`tda4j-fastalpha`, which reduces the whole triangulation) are given none.
+(`tda4j-fastalpha`, which reduces the whole triangulation) are given none. The alpha sweep does the same on every draw.
 
 ## The final run
 
@@ -230,7 +256,7 @@ bench/final_run.sh status                                        # while it runs
 | `cubicalv` | GUDHI, CubicalRipser and FlashCubical on the `_v` cubical cases at p = 2 (`BASE` has no rows for them; TDA4j's own `_v` rows are in the `tda4j` stage). Resumable |
 | `redzed` | RedZeD on every Vietoris–Rips case at p = 2 (`BASE` has no rows for it). Resumable |
 | `merge` | `BASE` without its TDA4j rows (they are from the older commit), then `$FINAL/tda4j`, `$FINAL/js`, `$FINAL/cubicalv` and `$FINAL/redzed`: `bench.py merge`. Refuses when the anchors drifted (`ALLOW_DRIFT=1` overrides). Runs `bench.py check` on the result |
-| `sweeps` | the threads, cubical and alpha sweeps. A sweep directory has its own tables and does not merge, so each sweep reruns its external tools too |
+| `sweeps` | the threads, cubical and alpha sweeps, each whole in `$FINAL/sweeps/<sweep>`. With `SWEEPS_BASE`, the directory of an earlier run's sweeps, only TDA4j's rows of each rerun (into `$FINAL/sweeps/<sweep>-tda4j`, with the same `*_SWEEP_ARGS`) and merge with the earlier sweep's other tools (`sweep-merge`); refuses when the anchors drifted, as `merge` does, and when the earlier alpha sweep gave GUDHI no radius (`ALLOW_MIXED_ALPHA=1` overrides) |
 
 The measurement protocol (fields, timeout, warm-up, trials, heap) is `BASE`'s own, read from its `env.json`, unless the
 environment says otherwise; the header of the script lists the variables. The bars-only experiment tabulates all distances

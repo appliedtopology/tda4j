@@ -23,7 +23,8 @@
 #             (resumable)
 #   merge     BASE's rows of the other tools + $FINAL/tda4j + $FINAL/js + $FINAL/cubicalv + $FINAL/redzed -> $FINAL/merged,
 #             summarized and checked
-#   sweeps    the threads, cubical and alpha sweeps, each in its own directory under $FINAL/sweeps
+#   sweeps    the threads, cubical and alpha sweeps, each in its own directory under $FINAL/sweeps; with SWEEPS_BASE, only
+#             TDA4j's rows of each, merged into the earlier sweep's other tools (bench/sweep_merge.py)
 #   status    the commit, the anchors verdict and the number of rows of each stage
 #   all       freeze smoke anchors tda4j js cubicalv redzed merge sweeps
 #
@@ -46,8 +47,13 @@
 #                random2d_1024; the last field of FIELDS; 0.2]. Only the rows BASE also has are compared
 #   ALLOW_DRIFT=1   merge although the anchors differ from BASE's by more than the tolerance (say so in the paper)
 #   SWEEPS       the sweeps to run [threads cubical alpha]; THREADS_SWEEP_ARGS, CUBICAL_SWEEP_ARGS, ALPHA_SWEEP_ARGS
-#                are passed on as they are (the earlier sweep's env.json has the arguments it was given). The sweep
-#                directories do not merge: each sweep reruns its external tools too
+#                are passed on as they are (the earlier sweep's env.json has the arguments it was given)
+#   SWEEPS_BASE  a directory holding an earlier run's threads/, cubical/ and alpha/ sweeps (an earlier $FINAL/sweeps). A
+#                sweep it holds is not rerun whole: TDA4j's rows alone run into $FINAL/sweeps/<sweep>-tda4j, with the
+#                same *_SWEEP_ARGS as the earlier sweep had, and merge with the earlier sweep's other tools into
+#                $FINAL/sweeps/<sweep> (a tool's series on one case or axis is replaced whole). As for `merge`, the anchors
+#                must show the machine as it was (ALLOW_DRIFT=1 to override), and an earlier alpha sweep must be one that
+#                gave every tool that takes a radius the enclosing radius (ALLOW_MIXED_ALPHA=1 to accept GUDHI's older rows)
 #   DRY_RUN=1    print the commands, run nothing
 #
 # bench/run.sh does the work; this script only chooses what to run and in which order.
@@ -116,6 +122,7 @@ ANCHOR_CASES="${ANCHOR_CASES:-sphere3_192,o3_1024,random2d_1024}"
 ANCHOR_FIELDS="${ANCHOR_FIELDS:-$LAST_FIELD}"
 ANCHOR_TOLERANCE="${ANCHOR_TOLERANCE:-0.2}"
 SWEEPS="${SWEEPS:-threads cubical alpha}"
+SWEEPS_BASE="${SWEEPS_BASE:-}"
 
 # The protocol every stage shares; a stage adds its own --fields, --timeout, --tools and --cases.
 protocol=(--warm-cap "$WARM_CAP" --warmup "$WARMUP" --trials "$TRIALS" --jvm-heap "$JVM_HEAP" --resume)
@@ -255,18 +262,23 @@ stage_redzed() {
   bench_py check "$FINAL/redzed" --tools "$REDZED_TOOLS" --allow unsupported,timeout,oom,limit
 }
 
+# Another run's rows stand beside this run's only where the anchors show the machine as it was.
+require_anchors() {
+  case "$(cat "$FINAL/anchors.verdict" 2>/dev/null || echo absent)" in
+    ok) ;;
+    drift) [ -n "${ALLOW_DRIFT:-}" ] || die "the anchors differ from BASE's by more than $ANCHOR_TOLERANCE ($FINAL/anchors/anchors.md): the machine is not the one that measured BASE; ALLOW_DRIFT=1 merges anyway" ;;
+    none) echo "WARNING: no anchor row is common to this run and BASE: nothing shows the machine ran as it did" ;;
+    *) echo "WARNING: the anchors stage has not run: nothing shows the machine ran as it did" ;;
+  esac
+}
+
 stage_merge() {
   say "merge: BASE's other tools + this run's TDA4j rows"
   require_frozen
   require_base
   if [ -z "${DRY_RUN:-}" ]; then
     [ ! -e "$FINAL/merged" ] || die "$FINAL/merged exists: remove it to merge again"
-    case "$(cat "$FINAL/anchors.verdict" 2>/dev/null || echo absent)" in
-      ok) ;;
-      drift) [ -n "${ALLOW_DRIFT:-}" ] || die "the anchors differ from BASE's by more than $ANCHOR_TOLERANCE ($FINAL/anchors/anchors.md): the machine is not the one that measured BASE; ALLOW_DRIFT=1 merges anyway" ;;
-      none) echo "WARNING: no anchor row is common to this run and BASE: nothing shows the machine ran as it did" ;;
-      *) echo "WARNING: the anchors stage has not run: nothing shows the machine ran as it did" ;;
-    esac
+    require_anchors
   fi
   # BASE's own TDA4j rows (including the JS twins) are from an older commit: only the other tools' rows are taken.
   local sources=("$BASE:!tda4j*" "$FINAL/tda4j")
@@ -277,17 +289,43 @@ stage_merge() {
   bench_py check "$FINAL/merged" --tools "tda4j*,$REDZED_TOOLS" --allow unsupported,missing,timeout,oom,limit
 }
 
+# The radius rule an alpha sweep ran at (its env.json): `enclosing` once every tool that takes a radius got the draw's
+# enclosing radius; empty for an older sweep, whose GUDHI rows had none.
+alpha_radius_rule() {
+  [ -x "$PY" ] && [ -f "$1/env.json" ] || return 0
+  "$PY" -c 'import json, sys
+print(json.load(open(sys.argv[1])).get("alpha_radius_rule", ""))' "$1/env.json" 2>/dev/null || true
+}
+
 stage_sweeps() {
   say "sweeps: $SWEEPS"
   require_frozen
-  local sweep
+  local sweep extra only others
   for sweep in $SWEEPS; do
+    # `only` selects TDA4j's rows of a sweep, `others` the earlier sweep's rows that are not TDA4j's (sweep_merge.py)
     case "$sweep" in
-      threads) step "$RUN" sweep-threads --out "$FINAL/sweeps/threads" --timeout "$TIMEOUT" --jvm-heap "$JVM_HEAP" ${THREADS_SWEEP_ARGS:-} ;;
-      cubical) step "$RUN" sweep-cubical --out "$FINAL/sweeps/cubical" --timeout "$TIMEOUT" --jvm-heap "$JVM_HEAP" ${CUBICAL_SWEEP_ARGS:-} ;;
-      alpha) step "$RUN" sweep-alpha --out "$FINAL/sweeps/alpha" --timeout "$TIMEOUT" --jvm-heap "$JVM_HEAP" ${ALPHA_SWEEP_ARGS:-} ;;
+      threads) extra=(${THREADS_SWEEP_ARGS:-}); only=(--tools 'tda4j*' --baselines ''); others='!tda4j*' ;;
+      cubical) extra=(${CUBICAL_SWEEP_ARGS:-}); only=(--no-reference); others='cripser,gudhi' ;;
+      alpha) extra=(${ALPHA_SWEEP_ARGS:-}); only=(--tools 'tda4j*'); others='!tda4j*' ;;
       *) die "unknown sweep '$sweep' (threads cubical alpha)" ;;
     esac
+    if [ -n "$SWEEPS_BASE" ] && { [ -f "$SWEEPS_BASE/$sweep/sweep.csv" ] || [ -n "${DRY_RUN:-}" ]; }; then
+      if [ -z "${DRY_RUN:-}" ]; then
+        [ ! -e "$FINAL/sweeps/$sweep" ] || die "$FINAL/sweeps/$sweep exists: remove it to merge again"
+        require_anchors
+        if [ "$sweep" = alpha ] && [ "$(alpha_radius_rule "$SWEEPS_BASE/alpha")" != enclosing ] && [ -z "${ALLOW_MIXED_ALPHA:-}" ]; then
+          die "$SWEEPS_BASE/alpha gave GUDHI no radius (it predates the enclosing radius for every tool): rerun the alpha sweep whole (leave SWEEPS_BASE out), or ALLOW_MIXED_ALPHA=1 to merge anyway (GUDHI's time differs by at most 11% on the draws measured)"
+        fi
+      fi
+      step "$RUN" "sweep-$sweep" --out "$FINAL/sweeps/$sweep-tda4j" --timeout "$TIMEOUT" --jvm-heap "$JVM_HEAP" \
+        "${only[@]}" ${extra[@]+"${extra[@]}"}
+      step "$RUN" sweep-merge "$FINAL/sweeps/$sweep" "$SWEEPS_BASE/$sweep:$others" "$FINAL/sweeps/$sweep-tda4j" \
+        ${ALLOW_MIXED_ALPHA:+--allow-mixed}
+    else
+      if [ -n "$SWEEPS_BASE" ]; then echo "WARNING: $SWEEPS_BASE has no $sweep sweep: it runs whole"; fi
+      step "$RUN" "sweep-$sweep" --out "$FINAL/sweeps/$sweep" --timeout "$TIMEOUT" --jvm-heap "$JVM_HEAP" \
+        ${extra[@]+"${extra[@]}"}
+    fi
   done
 }
 
@@ -296,7 +334,7 @@ stage_status() {
   echo "frozen at: $(cat "$FINAL/commit" 2>/dev/null || echo 'not yet')   HEAD: $(git -C "$REPO" rev-parse HEAD)"
   echo "anchors verdict: $(cat "$FINAL/anchors.verdict" 2>/dev/null || echo 'not yet')"
   local dir
-  for dir in smoke smoke-redzed smoke-v anchors tda4j js cubicalv redzed merged sweeps/threads sweeps/cubical sweeps/alpha; do
+  for dir in smoke smoke-redzed smoke-v anchors tda4j js cubicalv redzed merged sweeps/threads sweeps/threads-tda4j sweeps/cubical sweeps/cubical-tda4j sweeps/alpha sweeps/alpha-tda4j; do
     for csv in runs.csv sweep.csv; do
       if [ -f "$FINAL/$dir/$csv" ]; then
         printf '%-16s %6d rows  (%s)\n' "$dir" "$(($(wc -l < "$FINAL/$dir/$csv") - 1))" "$csv"

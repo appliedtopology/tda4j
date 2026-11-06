@@ -19,16 +19,21 @@ top degree is where the fast alpha engine's dual union-find needs no reduction),
 the point count raised until each tool gives up, and the radius sweep. `--dim` sets the highest degree directly (a number,
 or `top`; at most d - 1).
 
-`--radii f,f,..` runs every cell once per fraction f of the enclosing radius (the smallest over the points of the largest
-distance from a point: where TDA4j's alpha complex stops without a radius), handing each tool the radius f times that. A
-tool that takes no radius (the fast alpha engine) is left out. The triangulations build the whole complex whatever the
-radius and filter it; the dual quadratic program builds only what lies within it, so the radius is where the backends'
-costs separate. The tables have one block per radius.
+Every tool that takes a radius is given the same one: the enclosing radius of the draw (the smallest over the points of
+the largest distance from a point), where TDA4j's alpha complex stops without a radius, as `bench.py run` does for an alpha
+case that has none. A tool that takes no radius (the fast alpha engine, `no_radius`) is given none and does the whole
+triangulation. Past the enclosing radius the barcode does not change, and GUDHI's time by at most 11% (its Delaunay
+triangulation is the cost): what the radius cuts is the simplices above it, 21% to 40% of the tree at d = 6 to 10.
+
+`--radii f,f,..` runs every cell once per fraction f of the enclosing radius instead, handing each tool that takes a radius
+f times it, and leaves out the tools that take none. The triangulations build the whole complex whatever the radius and
+filter it; the dual quadratic program builds only what lies within it, so the radius is where the backends' costs
+separate. The tables have one block per radius; the `radius` column of sweep.csv is empty for the enclosing radius itself.
 
 Tools: `tda4j` (the default: Helix without a radius above 4-D), `tda4j-helix`, `tda4j-fastalpha` (Helix's triangulation, then
 the dual union-find for the top degree and the cohomology engine for the degrees up to `--dim` below it),
-`tda4j-fastalpha-top` (the top degree d - 1 alone, compared with the reference in that degree only), `tda4j-dqp` (the dual quadratic program: it needs no triangulation, so with no radius it builds every
-candidate simplex up to dimension 3), `tda4j-cech`, `gudhi` (CGAL's Delaunay triangulation), and the Scala.js twins when
+`tda4j-fastalpha-top` (the top degree d - 1 alone, compared with the reference in that degree only), `tda4j-dqp` (the dual quadratic program: it needs no triangulation, and at the enclosing radius, which is at least
+half the diameter, every pair of points is a neighbour, so the candidates are every simplex up to dimension 3), `tda4j-cech`, `gudhi` (CGAL's Delaunay triangulation), and the Scala.js twins when
 installed. Bowyer-Watson stops at 4-D, the sweep starts at 5. `--py-mem-gb` caps GUDHI's address space, so CGAL's allocation
 at high d ends in `oom` and not in the kernel's killer; JVM and Node are not capped.
 
@@ -57,6 +62,7 @@ memory, and the distance to the reference barcode). `sweep_alpha.py --summarize 
 import argparse
 import csv
 import datetime
+import functools
 import json
 import os
 import statistics
@@ -76,6 +82,7 @@ TOP_ONLY = ("tda4j-fastalpha-top",)  # the tools that report only degree d - 1
 REFERENCES = ["gudhi", "tda4j-cech", "tda4j-dqp"]  # the barcode a row is compared with: the first that finished
 COLUMNS = ["shape", "n", "d", "series", "radius", "seed", "tool", "status", "reason", "degenerate", "densest_facet",
            "cold_wall_s", "cold_s", "warm_median_s", "rss_mb", "rss_src", "heap_peak_mb", "old_peak_mb", "bars", "cells"]
+VALIDITY_COLUMNS = ["shape", "d", "n", "draws", "status", "invalid", "repair_threw", "fallback_draws", "seconds"]
 COUNTED = ("tda4j", "gudhi")  # the tools whose complex is counted per draw: TDA4j's own stream and GUDHI's simplex tree
 
 
@@ -116,16 +123,51 @@ def parse_radii(text):
     return out
 
 
+def farthest(x, p):
+    """The distance from the point `p` to the farthest point of `x`."""
+    return float(np.sqrt(((x - p) ** 2).sum(axis=1).max()))
+
+
 def enclosing_radius(x):
     """The smallest over the points of the largest distance from that point: past it the union of balls is contractible,
-    and it is where TDA4j's alpha complex stops when it is given no radius."""
-    diff = x[:, None, :] - x[None, :, :]
-    return float(np.sqrt((diff ** 2).sum(axis=-1)).max(axis=1).min())
+    and it is where TDA4j's alpha complex stops when it is given no radius. Exact at any n in the memory of a few
+    vectors: the distance to the farthest point is the farthest of the convex hull's vertices, so a lower bound from the
+    extreme points in many directions (the hull's vertices, approximately) lets a point whose bound is already above the
+    best so far go without its exact scan; in the plane at 3 000 000 points that is a few scans, in R^25 at 60 points,
+    where every point is a vertex, all of them."""
+    n, d = x.shape
+    if n <= 1:
+        return 0.0
+    if n <= 4096:
+        return min(farthest(x, p) for p in x)
+    rng = np.random.default_rng([20261106, n, d])
+    directions = np.vstack([np.eye(d), -np.eye(d), rng.standard_normal((max(64, 8 * d), d))])
+    anchors = np.unique([int((x @ u).argmax()) for u in directions])  # one direction at a time: n x 68 would not fit
+    bound = np.zeros(n)
+    for a in anchors:
+        bound = np.maximum(bound, ((x - x[a]) ** 2).sum(axis=1))
+    best = np.inf
+    for i in np.argsort(bound):
+        if np.sqrt(bound[i]) >= best:
+            break  # every later point has at least this bound: none is smaller than the best
+        best = min(best, farthest(x, x[i]))
+    return best
+
+
+@functools.lru_cache(maxsize=32)
+def draw_radius(shape, n, d, seed):
+    """The enclosing radius of the draw (shape, n, d, seed): the same number for every tool and every repeat."""
+    return enclosing_radius(points(shape, n, d, seed))
 
 
 def tools_for_radius(tools, radius):
     """The tools that run in a cell with this radius fraction (None: no radius): those that take a radius, or all."""
     return [t for t in tools if radius is None or not t[2].get("no_radius")]
+
+
+def case_name(shape, n, d, seed, radius=""):
+    """The name of a draw's bench.Case, hence of the log files the cell counts write."""
+    return f"{shape}{d}d_{n}_s{seed}" + (f"_r{radius}" if radius else "")
 
 
 def cell_tag(shape, n, d, seed, radius=""):
@@ -165,19 +207,29 @@ PATHS = {
 }
 
 
+def tool_radius(opts, shape, n, d, seed, radius=None):
+    """The largest radius a tool is given on a draw: `radius` (a fraction, default 1) of the draw's enclosing radius, the
+    same number for every tool that takes one, and None for a tool that takes none (`no_radius`: the whole triangulation).
+    The enclosing radius is where TDA4j's alpha complex stops without one and GUDHI's does not; `bench.py run` gives it
+    to every alpha case that has no radius of its own for the same reason."""
+    if opts.get("no_radius"):
+        return None
+    return (1.0 if radius is None else radius) * draw_radius(shape, n, d, seed)
+
+
 def run_cell(name, kind, opts, shape, n, d, seed, series, args, bench_args, out, radius=None):
     """One tool on one draw: a cold run, then a warm one if the cold computation was quick. Returns a row. `radius` is a
-    fraction of the draw's enclosing radius, which the tool gets as its largest radius; None: as the tool defaults."""
+    fraction of the draw's enclosing radius, which a tool that takes a radius gets as its largest (`tool_radius`); None:
+    the enclosing radius itself, and the row's `radius` column is empty."""
     x = points(shape, n, d, seed)
     fraction = f"{radius:g}" if radius is not None else ""
-    threshold = radius * enclosing_radius(x) if radius is not None else None
+    threshold = tool_radius(opts, shape, n, d, seed, radius)
     rel = f"sweepalpha/{shape}_{n}_{d}_{seed}.txt"
     path = Path(args.data) / rel
     if not path.exists():
         np.savetxt(path, x, fmt="%.17g")
     task = "cech" if name == "tda4j-cech" else "alpha"
-    case = bench.Case(f"{shape}{d}d_{n}_s{seed}" + (f"_r{fraction}" if fraction else ""), task, rel, "points",
-                      degree_for(args.dim, d))
+    case = bench.Case(case_name(shape, n, d, seed, fraction), task, rel, "points", degree_for(args.dim, d))
     tag = f"{cell_tag(shape, n, d, seed, fraction)}__{name}"
     bars = out / "bars" / f"{tag}.tsv"
     caps = {"address_space_mb": args.py_mem_gb * 1024} if kind == "py" and args.py_mem_gb else {}
@@ -235,8 +287,7 @@ def validity_runs(args, out):
                      "fallback_draws": j["fallback_draws"] if j else "", "seconds": f"{proc.wall:.0f}"})
         print(f"validity {item}: {rows[-1]}", flush=True)
     with open(out / "validity.csv", "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=["shape", "d", "n", "draws", "status", "invalid", "repair_threw",
-                                          "fallback_draws", "seconds"])
+        w = csv.DictWriter(f, fieldnames=VALIDITY_COLUMNS)
         w.writeheader()
         w.writerows(rows)
 
@@ -292,7 +343,9 @@ def main():
     ap.add_argument("--node-opts", default="")
     ap.add_argument("--py-mem-gb", type=int, default=128, help="cap GUDHI's address space (GB); 0: no cap")
     ap.add_argument("--no-js", action="store_true", help="skip the Scala.js build of TDA4j")
-    ap.add_argument("--tools", default="", help="comma-separated tool names (default: all available)")
+    ap.add_argument("--tools", default="",
+                    help="comma-separated tool names or patterns (`tda4j*`; `!gudhi` leaves one out); default: all "
+                         "available")
     ap.add_argument("--out", default="")
     ap.add_argument("--data", default="")
     ap.add_argument("--python", default=sys.executable)
@@ -312,10 +365,11 @@ def main():
     (out / "logs").mkdir(parents=True, exist_ok=True)
     (out / "bars").mkdir(parents=True, exist_ok=True)
     (Path(args.data) / "sweepalpha").mkdir(parents=True, exist_ok=True)
-    wanted = set(args.tools.split(",")) if args.tools else None
+    bench.write_env(out, args)
+    mark_radius_rule(out)
     tools = []
     for name, kind, task, opts in bench.TOOLS:
-        if task not in ("alpha", "cech") or name not in TOOL_NAMES or (wanted and name not in wanted):
+        if task not in ("alpha", "cech") or name not in TOOL_NAMES or not bench.tool_selected(name, args.tools):
             continue
         if kind == "tda4j-js" and args.no_js:
             continue
@@ -356,6 +410,18 @@ def main():
         validity_runs(args, out)
     summarize(out)
     print(f"\nresults in {out}")
+
+
+RADIUS_RULE = "enclosing"  # every tool that takes a radius gets the draw's enclosing radius (#242)
+
+
+def mark_radius_rule(out):
+    """Records in env.json which radius the tools ran at, so that `sweep_merge.py` does not set the rows of a sweep that
+    gave GUDHI none (older sweeps) beside the rows of one that gave it the enclosing radius."""
+    env = bench.read_env(out)
+    env["alpha_radius_rule"] = RADIUS_RULE
+    with open(out / "env.json", "w") as f:
+        json.dump(env, f, indent=1, default=str)
 
 
 def summarize(out, bottleneck=None):
@@ -440,6 +506,12 @@ def summarize(out, bottleneck=None):
     lines = ["# Alpha complex: dimension and point-count sweep", "",
              "Each cell is the median over the draws that finished (`ok/draws` if some did not; otherwise the status). "
              "† marks a degenerate draw: d + 1 points on one facet of the cube.", ""]
+    env = bench.read_env(out)
+    if env.get("alpha_radius_rule") == RADIUS_RULE and any(not r["radius"] for r in rows):
+        lines += ["Radius: a tool that takes one ran at the enclosing radius of its draw (as TDA4j's alpha complex stops "
+                  "there by default), the same for every such tool; the fast alpha engine takes none and ran on the "
+                  "whole triangulation. A block `radius f` is f times the enclosing radius.", ""]
+    lines += bench.merged_text(env)
     for title, cell in [("Time in seconds (warm median; the cold computation if it was too slow to repeat)", time_cell),
                         ("Peak memory in MB: RSS (JVM heap pools' peak in parentheses)", memory_cell),
                         ("Largest bottleneck distance to the reference barcode (in parentheses)", distance_cell)] + \
