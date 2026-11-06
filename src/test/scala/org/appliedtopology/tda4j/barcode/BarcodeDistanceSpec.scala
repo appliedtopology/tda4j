@@ -415,13 +415,29 @@ class BarcodeDistanceSpec extends Specification with ScalaCheck:
         beCloseTo(2.0 * math.sqrt(2.0) / math.Pi, 1e-5)
     }
 
-    "is symmetric and at most sqrt(2) times the 1-Wasserstein distance" >> {
+    // The 1-Wasserstein distance here uses the L-infinity ground norm. Take its optimal matching and extend it to the
+    // diagonal-completed point sets: a matched pair p~q contributes the pair (p, q) and the pair of their diagonal
+    // projections, an unmatched p the pair (p, diag p). On a line the average of |<v, u>| over directions u is
+    // (2/pi)|v|_2, and for a shift (a, b) with max(|a|, |b|) = m, |(a, b)|_2 + |diag shift|_2 <= 2 sqrt(2) m (equality
+    // at a = b = m), while the diagonal pair costs sqrt(2) m. Sorting is optimal per line, so
+    // SW <= (4 sqrt(2) / pi) W1 ~ 1.80 W1. The mean of |cos| over 60 evenly spaced angles exceeds 2/pi by at most
+    // 0.012% (checked numerically), covered by the factor 1.001.
+    "is symmetric and at most 4 sqrt(2) / pi times the 1-Wasserstein distance" >> {
+      val bound = 4.0 * math.sqrt(2.0) / math.Pi * 1.001
       val prop = forAll(diagramGen, diagramGen) { (d1: Bars, d2: Bars) =>
         val sw = BarcodeDistance.slicedWassersteinDistance(d1, d2, directions = 60)
         math.abs(sw - BarcodeDistance.slicedWassersteinDistance(d2, d1, directions = 60)) < 1e-9 &&
-        sw <= math.sqrt(2.0) * BarcodeDistance.wassersteinDistance(d1, d2) + 1e-9
+        sw <= bound * BarcodeDistance.wassersteinDistance(d1, d2) + 1e-9
       }
       prop
+    }
+
+    "exceeds sqrt(2) times the 1-Wasserstein distance on two nearby bars (why the constant is not sqrt(2))" >> {
+      val d1 = List(bar(0, 1.9707702837960768, 6.114317036823014))
+      val d2 = List(bar(0, 1.414582968376753, 5.5049830725667785))
+      val sw = BarcodeDistance.slicedWassersteinDistance(d1, d2, directions = 60)
+      val w1 = BarcodeDistance.wassersteinDistance(d1, d2)
+      (sw must be_>(math.sqrt(2.0) * w1)) and (sw must be_<=(4.0 * math.sqrt(2.0) / math.Pi * 1.001 * w1))
     }
 
     "rejects zero directions" >> {
