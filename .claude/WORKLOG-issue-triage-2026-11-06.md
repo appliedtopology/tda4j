@@ -196,3 +196,14 @@ section of the release notes. Two checks that came out clean:
 - #123: `demo/examples` still call `JVPTree`; `src` does not. A release chore.
 - Not checked: the witness definitions of #171 (no GUDHI comparison run here); #61, #98, #101, #107 need MATLAB, Safari,
   Firefox, Inkscape or a screen reader.
+
+## Correction, 2026-11-07
+
+- **#248 was already done**, not open work: commit 775f243 (2026-10-29) put the Euler characteristic curve in MATLAB
+  (`eulerCurveFromPoints`, `eulerCurveFromDistanceMatrix`), JavaScript (`eulerCurve`), the command line (`--euler-curve`),
+  Python (`euler_curve`) and the vectorization page's MATLAB tab with a `MatlabTabsSpec` case. The table row above that
+  lists it as to-do is wrong; the issue is closed with that evidence. The one item with no home in the docs, that a
+  diagram does not give the curve, is a sentence on the vectorization page now (#159's change).
+- #232 and #159 were fixed as planned; #287 and #288 were measured (no code fix; #312 filed for the verb's quadratic
+  pre-pass); #242 and #243 are the sweep-harness change. See `WORKLOG-sweep-harness.md`, `WORKLOG-bench-jvm-facade.md`,
+  `WORKLOG-migration-guide-check.md` and `WORKLOG-memory-measurements.md` once those branches are merged.
