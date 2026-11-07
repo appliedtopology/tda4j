@@ -33,5 +33,7 @@ bracket counted as a wrapper (the argument and the lambda fixtures are reported)
 
 The exemption for the next example's header is a heuristic: a chain followed by `step(...)`, `sequential` or another statement at
 the same indentation outside an example would be reported, and the fix is then to write the spec so that it is not.
-Not covered: `.and(` written as the infix `and` on matchers, and `.or(` (a non-final `(a must X).or(b must Y)` is too strict, not
+Not covered, checked with a planted spec: a chain inside a lambda whose result is dropped (`Seq(1).foreach(x => (a).and(b))`) passes
+vacuously (the same `foreach` with a plain `must` fails), and the scan accepts it on purpose; `src/test` has none (the specs use
+`Result.foreach` / `TestResult.foreach`, which evaluate each result): #322. Not covered either: `.and(` written as the infix `and` on matchers, and `.or(` (a non-final `(a must X).or(b must Y)` is too strict, not
 vacuous: `a` throws before `or` is reached).
