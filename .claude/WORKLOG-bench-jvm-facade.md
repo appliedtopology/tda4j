@@ -18,7 +18,9 @@ includes whatever the facade adds on top of the verb: it copies the input, parse
   `computeFromCubicalImage`, with the option strings the worker's options object becomes (`facadeOptions`: `maxDimension`,
   `prime`, `minPersistence 0`, then `engine`, `representativeType`, `maxFiltrationValue`, `complex`, `alphaBackend`, in the
   worker's key order; `fastcubical` and `fastalpha` spelled `fast-cubical` and `fast-alpha`). Every bar of positive length is
-  read with `toArrayUnfiltered` (the worker's `allBars`) and `read=true` reads `cycleVertices(i)` for every bar. What the JS
+  read with `toArrayUnfiltered` (the worker's `allBars`) and `read=true` reads `cycleVertices(i)` and `cycleCoefficients(i)` for every bar, the two calls of the JS API's
+  `representative(i)` (each runs the representative provider once, so one getter alone would time half the work: the
+  first version read only `cycleVertices`, caught in review; the JSON line's `coefficients_read` counts the second). What the JS
   API does not offer (`reps=none`, an engine the worker has no name for, `construction=V`, `fastalpha` on DQP or with a
   threshold) throws here too. The JSON line carries `"facade":true`.
 - `bench.py`: a `tda4j-facade*` row generated from every `tda4j-js*` row (same task and options, `facade`, `experiment`):
@@ -37,9 +39,9 @@ run that wants them names them: `--tools tda4j-js,tda4j,tda4j-facade`.
 
 - Specs (`PaperBenchmarkDriverFacadeSpec`): the option strings for each option, and the driver on files, facade against
   verb, bars and the counts of the JSON line equal on points (threshold, cocycles, F_2), a distance matrix, alpha (default
-  and Bowyer-Watson) and Cech, and on a cubical image with `read=true` for three engines (terms read equal). Mutation-checked
+  and Bowyer-Watson) and Cech, and on a cubical image with `read=true` for three engines (terms read equal, and `coefficients_read` equal to `terms_read`). Mutation-checked
   on the driver: dropping `minPersistence 0` (an error: the representatives of the hidden bars are read by index), the
-  `complex` option for alpha, the threshold, the `fast-cubical` spelling, and the representative reading each fail a spec.
+  `complex` option for alpha, the threshold, the `fast-cubical` spelling, and the representative reading each fail a spec, as does skipping the `cycleCoefficients` read (`coefficients read 0 against terms 3`).
   The example for `minPersistence` needs a bar the default threshold would hide, hence the 400 in the test image. Equivalent
   mutant, not killable: `toArrayUnfiltered` for `toArray` in the driver's `bars` (with `minPersistence 0` they are the same).
 - `bench/test_bench.py` (`FacadeRowsTests`, 13 tests): the generated rows, the twin names, the command, the experiment rule

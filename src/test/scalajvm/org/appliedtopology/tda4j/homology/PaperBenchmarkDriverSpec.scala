@@ -237,6 +237,10 @@ class PaperBenchmarkDriverFacadeSpec extends Specification:
           Option.when(field(facade.json, "terms_read").toLong <= 0L)(s"$engine: no representative terms were read"),
           Option.when(field(facade.json, "terms_read") != field(verb.json, "terms_read"))(
             s"$engine: terms read ${field(facade.json, "terms_read")} against ${field(verb.json, "terms_read")}"
+          ),
+          // `representative(i)` calls both getters; a run that skipped the coefficients would time half the work.
+          Option.when(field(facade.json, "coefficients_read") != field(facade.json, "terms_read"))(
+            s"$engine: coefficients read ${field(facade.json, "coefficients_read")} against terms ${field(facade.json, "terms_read")}"
           )
         ).flatten
       yield problem

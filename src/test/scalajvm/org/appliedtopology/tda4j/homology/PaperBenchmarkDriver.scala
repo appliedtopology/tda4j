@@ -58,9 +58,10 @@ import scala.jdk.CollectionConverters.ListHasAsScala
   *     `bench/workers/tda4j_js_worker.mjs` takes): the call the Scala.js worker makes, through
   *     `matlab.TDA4j.computeFromPoints` / `computeFromDistanceMatrix` / `computeFromCubicalImage` with the option
   *     strings the npm API hands it (`facadeOptions`), not through `Persistence`. Every bar of positive length is read
-  *     out of the result (`toArrayUnfiltered`), and `read=true` reads every representative as the worker does. The JSON
-  *     line has `"facade":true`; `bench/bench.py`'s `tda4j-facade*` rows put it beside the `tda4j-js*` rows and the
-  *     verb's.
+  *     out of the result (`toArrayUnfiltered`), and `read=true` reads every representative as the worker does
+  *     (`cycleVertices` and `cycleCoefficients`, the two calls of `representative(i)`; the line's `coefficients_read`
+  *     counts the second). The JSON line has `"facade":true`; `bench/bench.py`'s `tda4j-facade*` rows put it beside the
+  *     `tda4j-js*` rows and the verb's.
   *   - `count=true` (tasks `vr`, `alpha`, `cech`, `sparse`, `dtm`, `witness`, `dowker`): build the complex the task
   *     would reduce, count its cells by dimension (up to `dim + 1`, all a barcode up to degree `dim` needs) and print
   *     one JSON line with `cells`; no engine runs (`bench/count_cells.py`).
@@ -115,6 +116,7 @@ object PaperBenchmarkDriver:
       countCells(task, opts, dim, threshold)
       return
     var termsRead = 0L
+    var coefficientsRead = 0L // facade runs only: the terms read through `cycleCoefficients`
     var held: AnyRef = null
 
     def engine: Persistence.Engine = engineName match
@@ -137,7 +139,11 @@ object PaperBenchmarkDriver:
         // What the worker does with a result: every bar of positive length, then (read=true) every representative.
         def bars(result: matlab.PersistenceResult): List[(Int, Double, Double)] =
           val all = result.toArrayUnfiltered()
-          if readReps then termsRead = all.indices.iterator.map(i => result.cycleVertices(i).length.toLong).sum
+          if readReps then
+            // `representative(i)` of the JavaScript API calls both getters, each of which runs the provider once: read
+            // both, and count the coefficients too, so the run shows that the second call was made.
+            termsRead = all.indices.iterator.map(i => result.cycleVertices(i).length.toLong).sum
+            coefficientsRead = all.indices.iterator.map(i => result.cycleCoefficients(i).length.toLong).sum
           all.iterator.map(row => (row(0).toInt, row(1), row(2))).toList
         task match
           case "vr" =>
@@ -349,6 +355,7 @@ object PaperBenchmarkDriver:
         s""""heap_used_mb":${(rt.totalMemory - rt.freeMemory) / 1048576},""" +
         s""""heap_peak_mb":$heapPeakMb,"old_peak_mb":$oldPeakMb,""" +
         s""""terms_read":$termsRead,""" +
+        (if facade then s""""coefficients_read":$coefficientsRead,""" else "") +
         (if wantDigest then s""""digest":"$digest",""" else "") +
         s""""java":"${System.getProperty("java.version")}"""" +
         "}"
