@@ -117,6 +117,17 @@ class MetricSpaceSpec extends mutable.Specification with ScalaCheck:
       (readAfterMutation(cached = true) must be_==((5.0, 5.0, Seq(0, 1)))) and
         (readAfterMutation(cached = false) must be_==((5.0, 5.0, Seq(0, 1))))
     }
+    "keep the snapshot when a caller writes to what the vantage-point tree returns, and when the longest edge is asked for" >> {
+      // `nearest` and `withinDistance` return the indexed elements themselves: they must not be the space's own rows.
+      def readAfterWrites(cached: Boolean) =
+        val space = new EuclideanMetricSpace(Array(Array(0.0, 0.0), Array(3.0, 4.0)), cacheDistances = cached)
+        space.vpt.nearest(Array(0.0, 0.0), 1).head(0) = 100.0
+        space.vpt.withinDistance(Array(3.0, 4.0), 0.0).head(1) = -100.0
+        space.longestDistanceByQueries(10.0)
+        (space.distance(0, 1), space.point(0).toSeq, space.point(1).toSeq, space.minimumEnclosingRadius)
+      (readAfterWrites(cached = true) must be_==((5.0, Seq(0.0, 0.0), Seq(3.0, 4.0), 5.0))) and
+        (readAfterWrites(cached = false) must be_==((5.0, Seq(0.0, 0.0), Seq(3.0, 4.0), 5.0)))
+    }
     "read one point's coordinates without the others" >> {
       val space = EuclideanMetricSpace(Array(Array(0.0, 1.0), Array(2.0, 3.0)))
       (space.point(1).toSeq must be_==(Seq(2.0, 3.0))) and (space.pts.map(_.toSeq).toSeq must be_==(

@@ -22,8 +22,12 @@ cloud, so the samples and the isolated time are not reconciled (the run's own ti
   with one task per point on all threads.
 - `VantagePointTree.largestDistanceWithin(query, radius, maxMeasurements)`: the walk of `indicesWithinDistance` keeping only the
   largest distance within the radius, no list of elements; `NaN` past the cap, `-infinity` for none.
-- `EuclideanMetricSpace.vpt` wraps the space's own coordinate arrays instead of cloning every point (the tree only reads them;
-  the clone stayed alive as long as the space did: a second copy of the cloud).
+- The pass queries a private tree over point indices (`indexTree`: a `VantagePointTree[Int]` whose metric reads the space's own
+  coordinate arrays), not the public `vpt`. `vpt` keeps cloning every point: it hands its stored points to callers
+  (`nearest`, `withinDistance`), so a tree over the space's own rows would let a caller write into the space. A first version
+  wrapped the rows in `vpt` and was caught in review for exactly that; `MetricSpaceSpec` now writes into what `vpt` returns and
+  checks the longest edge afterwards. The index tree stores one `Int` per point, so the pass adds no second copy of the cloud;
+  the `vpt` clone is still made when someone asks for `vpt` (that is #288's 94 MB at 10^6 points, unchanged by this change).
 
 The per-query cap is the density switch the issue asked for. It is not "threshold below the enclosing radius": that test
 needs the radius (itself a scan when the caller gave a threshold) and does not say whether queries pay. The cap counts what
@@ -42,22 +46,27 @@ sparse and `None` for a dense threshold; the coincident-point cloud and a heap w
 right; the diagram's `lastFiltrationValue` on both Ripser engines equals a hand-derived 2.0 on 8,200 points on a line. A
 count of measured distances shows the walk stops at its cap. Eleven mutants (`<` for `<=` in the tree, in the rows and in the
 default loop; the farther child skipped; the cap never spent, unlimited, or ignored; the queries' result replaced by 0; the
-fallback replaced by 0; either call in `Persistence` replaced by 0) each fail at least one example. Scala.js: the same spec
+fallback replaced by 0; either call in `Persistence` replaced by 0) each fail at least one example. A twelfth mutant (`vpt` wrapping the space's rows without cloning, the first version) fails the
+`MetricSpaceSpec` snapshot example: the caller's write to a returned point changes the longest edge. Scala.js: the same spec
 passes; its big examples run fewer thresholds there (a scan of 33 million distances is seconds on JS).
 
 ## A/B
 
 A: the old serial loop, written out in a small Java driver over `EuclideanMetricSpace.distance`. B: `longestDistanceWithin`.
 One pass per JVM (`-Xmx8g`, serial GC), the point generation and, where given, the enclosing radius excluded, tree build
-included in B, three trials each, alternating, 4-core cloud container. The longest edge was identical to the last digit in
-every run. The driver was a throwaway Java program, not kept: the old loop is twelve lines.
+included in B, three trials each, 4-core cloud container. The longest edge was identical to the last digit in every run. The
+driver was a throwaway Java program, not kept: the old loop is twelve lines. The A column and the first B version (a tree
+wrapping the rows) were alternated; B below is the shipped index-tree version, timed afterwards in its own runs, so the ratios
+compare runs from different moments. The index tree measured slightly slower than the wrapped one (about 0.35 s to 0.45 s on
+the torus, 0.33 s to 0.37 s on the uniform cloud; the give-up rows 3.1 s to 3.0 s and 2.4 s to 2.6 s): a difference of that
+size is within what this machine's noise produced between sessions, so it is reported as unconfirmed, not as a cost.
 
 | cloud | threshold | A, seconds (3 trials) | B, seconds (3 trials) | median ratio |
 |---|---|---|---|---|
-| Clifford torus in R^4, 50,000 points | 0.15 (about 180 neighbours) | 6.1, 6.6, 4.4 | 0.37, 0.35, 0.34 | 17x |
-| uniform in [0,1]^3, 100,000 points | 0.0288 (about 10 neighbours) | 15.7, 17.3, 15.6 | 0.33, 0.33, 0.28 | 48x |
-| 100,000 identical points | 0.5 (every pair) | 15.0, 15.9, 15.5 | 3.2, 3.2, 3.1 | 4.8x |
-| uniform in [0,1]^3, 50,000 points | enclosing radius (0.858) | 10.6, 10.2, 8.8 | 2.4, 2.3, 2.4 | 4.3x |
+| Clifford torus in R^4, 50,000 points | 0.15 (about 180 neighbours) | 6.1, 6.6, 4.4 | 0.45, 0.47, 0.41 | 14x |
+| uniform in [0,1]^3, 100,000 points | 0.0288 (about 10 neighbours) | 15.7, 17.3, 15.6 | 0.37, 0.42, 0.35 | 43x |
+| 100,000 identical points | 0.5 (every pair) | 15.0, 15.9, 15.5 | 3.0, 3.1, 3.0 | 5.2x |
+| uniform in [0,1]^3, 50,000 points | enclosing radius (0.858) | 10.6, 10.2, 8.8 | 2.6, 2.6, 2.5 | 4.0x |
 
 The last two rows are the give-up path: a failed attempt (tree build and a few capped queries) followed by the parallel pass,
 which is the four threads of the container against one; on one thread (`Parallel.sequentially`, or Scala.js) B there costs the

@@ -287,11 +287,18 @@ open class EuclideanMetricSpace(coordinates: Array[Array[Double]], val cacheDist
   /** The Euclidean distance between two points, the metric of [[vpt]]. */
   lazy val vpdf: (Array[Double], Array[Double]) => Double = (x, y) => sqrt(pointSqDistance(x, y))
 
-  // Over the space's own copy of the coordinates, wrapped not cloned: the tree only reads them, and a second copy of a
-  // large cloud would stay alive as long as the space does.
+  // Over copies of the points: the tree hands out the elements it indexes (`nearest`, `withinDistance`), and a caller
+  // writing to one must not reach the space's own coordinates (the snapshot above).
   /** A vantage-point tree over the points. */
-  lazy val vpt: VantagePointTree[Array[Double]] =
-    VantagePointTree(scala.collection.immutable.ArraySeq.unsafeWrapArray(pointCoordinates), vpdf)
+  lazy val vpt: VantagePointTree[Array[Double]] = VantagePointTree(pointCoordinates.map(_.clone()).toSeq, vpdf)
+
+  // The tree of the library's own queries over point numbers: its metric reads the space's coordinates and the tree
+  // holds only the numbers, so no copy of the cloud is made and nothing a caller can write to is handed out.
+  private lazy val indexTree: VantagePointTree[Int] =
+    VantagePointTree(
+      scala.collection.immutable.ArraySeq.unsafeWrapArray(Array.range(0, size)),
+      (x: Int, y: Int) => sqrt(squaredDistance(pointCoordinates(x), pointCoordinates(y)))
+    )
 
   /** The indices of the points within distance `eps` of `qp` (ascending), `qp` itself need not be one of them. */
   def neighbors(qp: Array[Double], eps: Double): Seq[Int] = vpt.indicesWithinDistance(qp, eps)
@@ -307,20 +314,20 @@ open class EuclideanMetricSpace(coordinates: Array[Array[Double]], val cacheDist
     if size <= EuclideanMetricSpace.MaxCachedPoints then super.longestDistanceWithin(threshold)
     else longestDistanceByQueries(threshold).getOrElse(longestDistanceByRows(threshold))
 
-  /** The longest distance at most `threshold` by one query per point on [[vpt]], the points on all threads; `None` when
-    * a point has so many others within reach that the tree stops paying (a query that would measure more than a quarter
-    * of the points is given up, and with it the whole search): the cost of a point is then about the cost of scanning
-    * the points once, so the queries would cost as much as the pass over all pairs.
+  /** The longest distance at most `threshold` by one query per point on a vantage-point tree, the points on all
+    * threads; `None` when a point has so many others within reach that the tree stops paying (a query that would
+    * measure more than a quarter of the points is given up, and with it the whole search): the cost of a point is then
+    * about the cost of scanning the points once, so the queries would cost as much as the pass over all pairs.
     */
   def longestDistanceByQueries(threshold: Double): Option[Double] =
     val n = size
-    val tree = vpt // built once, before the threads ask for it
+    val tree = indexTree // built once, before the threads ask for it
     val cap = math.max(1L, n / 4L)
     val longest = new Array[Double](n)
     val gaveUp = new java.util.concurrent.atomic.AtomicBoolean(false)
     Parallel.tasks(n) { i =>
       if !gaveUp.get() then
-        val d = tree.largestDistanceWithin(pointCoordinates(i), threshold, cap)
+        val d = tree.largestDistanceWithin(i, threshold, cap)
         if d.isNaN then gaveUp.set(true) else longest(i) = d
     }
     if gaveUp.get() then None else Some(longest.foldLeft(0.0)(math.max))
