@@ -34,7 +34,10 @@ Tools: `tda4j` (the default: Helix without a radius above 4-D), `tda4j-helix`, `
 the dual union-find for the top degree and the cohomology engine for the degrees up to `--dim` below it),
 `tda4j-fastalpha-top` (the top degree d - 1 alone, compared with the reference in that degree only), `tda4j-dqp` (the dual quadratic program: it needs no triangulation, and at the enclosing radius, which is at least
 half the diameter, every pair of points is a neighbour, so the candidates are every simplex up to dimension 3), `tda4j-cech`, `gudhi` (CGAL's Delaunay triangulation), and the Scala.js twins when
-installed. Bowyer-Watson stops at 4-D, the sweep starts at 5. `--py-mem-gb` caps GUDHI's address space, so CGAL's allocation
+installed. The JVM facade twins `tda4j-facade`, `-helix`, `-fastalpha` and `-dqp` make the call the JS worker makes (the
+same option strings through `matlab.TDA4j`, `PaperBenchmarkDriver facade=true`) and run only when `--tools` names them: with
+the JS twins and the verb's rows, a cell shows JS against the JVM doing the same work, and the last table compares their bar
+counts. Bowyer-Watson stops at 4-D, the sweep starts at 5. `--py-mem-gb` caps GUDHI's address space, so CGAL's allocation
 at high d ends in `oom` and not in the kernel's killer; JVM and Node are not capped.
 
 The reference for a barcode is the first of GUDHI, the Cech complex and the dual-QP that finished on the same draw (and is not
@@ -77,7 +80,9 @@ import bench  # noqa: E402  (Case, TOOLS, command, run_proc, last_json, availabl
 import count_cells  # noqa: E402  (count_tda4j, count_gudhi: the size of the complex a draw produces)
 
 TOOL_NAMES = ["tda4j", "tda4j-helix", "tda4j-fastalpha", "tda4j-fastalpha-top", "tda4j-dqp", "tda4j-cech", "gudhi",
-              "tda4j-js", "tda4j-js-helix", "tda4j-js-fastalpha", "tda4j-js-dqp"]
+              "tda4j-js", "tda4j-js-helix", "tda4j-js-fastalpha", "tda4j-js-dqp",
+              # the JVM facade twins of the JS rows (`experiment` rows: run only when named in --tools)
+              "tda4j-facade", "tda4j-facade-helix", "tda4j-facade-fastalpha", "tda4j-facade-dqp"]
 TOP_ONLY = ("tda4j-fastalpha-top",)  # the tools that report only degree d - 1
 REFERENCES = ["gudhi", "tda4j-cech", "tda4j-dqp"]  # the barcode a row is compared with: the first that finished
 COLUMNS = ["shape", "n", "d", "series", "radius", "seed", "tool", "status", "reason", "degenerate", "densest_facet",
@@ -307,6 +312,23 @@ def plan(args):
     return cells
 
 
+def candidate_tools(spec, no_js):
+    """The `bench.TOOLS` rows (name, kind, task, opts) a sweep with `--tools spec` runs, before it checks they are
+    installed. An `experiment` row (the JVM facade twins) only when `spec` names it itself."""
+    rows = []
+    for name, kind, task, opts in bench.TOOLS:
+        if task not in ("alpha", "cech") or name not in TOOL_NAMES or not bench.tool_selected(name, spec):
+            continue
+        if kind == "tda4j-js" and no_js:
+            continue
+        if opts.get("experiment") and not bench.experiment_wanted(name, spec):
+            continue
+        if any(r[0] == name for r in rows):  # `gudhi` is listed for both the alpha and the cech task: one row, not two
+            continue
+        rows.append((name, kind, task, opts))
+    return rows
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--path", default="", choices=[""] + list(PATHS),
@@ -368,13 +390,7 @@ def main():
     bench.write_env(out, args)
     mark_radius_rule(out)
     tools = []
-    for name, kind, task, opts in bench.TOOLS:
-        if task not in ("alpha", "cech") or name not in TOOL_NAMES or not bench.tool_selected(name, args.tools):
-            continue
-        if kind == "tda4j-js" and args.no_js:
-            continue
-        if any(t[0] == name for t in tools):  # `gudhi` is listed for both the alpha and the cech task: one row, not two
-            continue
+    for name, kind, task, opts in candidate_tools(args.tools, args.no_js):
         opts = dict(opts, pytool=name)
         if not bench.available(kind, opts, args.python):
             print(f"{name} is not installed: left out", flush=True)
@@ -503,6 +519,27 @@ def summarize(out, bottleneck=None):
         totals = [sum(json.loads(r["cells"]).values()) for r in counted]
         return f"{int(statistics.median(totals)):,}"
 
+    twin_tools = [t for t in tools if bench.jvm_twin(t) or bench.verb_twin(t)]  # the JS rows and the facade rows
+
+    def counts_cell(shape, n, d, tool, rs):
+        """`same` if this JS or facade row reported the bars per degree its verb twin reported (and its facade twin, for
+        a JS row) on every draw, else `differ: ...` for the first draw that differs; empty if there was nothing to compare."""
+        label = "JS" if bench.jvm_twin(tool) else "facade"
+        verdicts = []
+        for r in rs:
+            if r["status"] != "ok":
+                continue
+
+            def twin(name):
+                rows_of = by.get((shape, n, d, r["radius"], name), []) if name else []
+                return next((x for x in rows_of if x["seed"] == r["seed"] and x["status"] == "ok"), None)
+            rows_to_compare = {label: r, "verb": twin(bench.jvm_twin(tool) or bench.verb_twin(tool))}
+            if label == "JS":
+                rows_to_compare["facade"] = twin(bench.facade_twin(tool))
+            verdicts.append(bench.counts_verdict(**rows_to_compare))
+        differing = [v for v in verdicts if v.startswith("differ")]
+        return differing[0] if differing else ("same" if verdicts and all(v == "same" for v in verdicts) else "")
+
     lines = ["# Alpha complex: dimension and point-count sweep", "",
              "Each cell is the median over the draws that finished (`ok/draws` if some did not; otherwise the status). "
              "† marks a degenerate draw: d + 1 points on one facet of the cube.", ""]
@@ -512,19 +549,22 @@ def summarize(out, bottleneck=None):
                   "there by default), the same for every such tool; the fast alpha engine takes none and ran on the "
                   "whole triangulation. A block `radius f` is f times the enclosing radius.", ""]
     lines += bench.merged_text(env)
-    for title, cell in [("Time in seconds (warm median; the cold computation if it was too slow to repeat)", time_cell),
-                        ("Peak memory in MB: RSS (JVM heap pools' peak in parentheses)", memory_cell),
-                        ("Largest bottleneck distance to the reference barcode (in parentheses)", distance_cell)] + \
-                       ([("Cells of the complex up to dimension dim + 1 (median over draws; tda4j: its own stream, "
-                          "gudhi: the simplex tree)", cells_cell)] if any(r.get("cells") for r in rows) else []):
+    for title, cell, columns in [
+            ("Time in seconds (warm median; the cold computation if it was too slow to repeat)", time_cell, tools),
+            ("Peak memory in MB: RSS (JVM heap pools' peak in parentheses)", memory_cell, tools),
+            ("Largest bottleneck distance to the reference barcode (in parentheses)", distance_cell, tools)] + \
+            ([("Cells of the complex up to dimension dim + 1 (median over draws; tda4j: its own stream, "
+               "gudhi: the simplex tree)", cells_cell, tools)] if any(r.get("cells") for r in rows) else []) + \
+            ([("Bars per degree of a Scala.js or JVM facade row against the verb's row of the same variant "
+               "(`same`, or what differs)", counts_cell, twin_tools)] if twin_tools else []):
         lines += [f"## {title}", ""]
         for group in dict.fromkeys(group_of(*c)[0] for c in cells):
             members = [c for c in cells if group_of(*c)[0] == group]
-            lines += [f"### {group}", "", "| | " + " | ".join(tools) + " |", "|---|" + "---|" * len(tools)]
+            lines += [f"### {group}", "", "| | " + " | ".join(columns) + " |", "|---|" + "---|" * len(columns)]
             for s, n, d, series, radius in members:
                 degenerate = any(r["degenerate"] == "True" for t in tools for r in by.get((s, n, d, radius, t), []))
                 label = group_of(s, n, d, series, radius)[1] + ("†" if degenerate else "")
-                body = " | ".join(cell(s, n, d, t, by.get((s, n, d, radius, t), [])) for t in tools)
+                body = " | ".join(cell(s, n, d, t, by.get((s, n, d, radius, t), [])) for t in columns)
                 lines.append(f"| {label} | {body} |")
             lines.append("")
     if (out / "validity.csv").exists():

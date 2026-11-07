@@ -40,7 +40,7 @@ Useful options of `run`:
 |---|---|
 | `--tasks vr,cubical,alpha` | which families of cases |
 | `--cases a,b` | named cases only (see `CASES` in `bench.py`); names or patterns as for `--tools` (`*_v` the V-construction cubical cases, `!*_v` all others) |
-| `--tools tda4j,ripser.cpp` | named tools only (see `TOOLS` in `bench.py`); patterns work (`'tda4j*'`) and `!pattern` leaves tools out (`'tda4j*,!tda4j-js*'` is every JVM row of TDA4j). A row the harness lists as an `experiment` (the bars-only `tda4j-parallel-1t` and `-mt`) runs only when its own name is here |
+| `--tools tda4j,ripser.cpp` | named tools only (see `TOOLS` in `bench.py`); patterns work (`'tda4j*'`) and `!pattern` leaves tools out (`'tda4j*,!tda4j-js*'` is every JVM row of TDA4j). A row the harness lists as an `experiment` (the bars-only `tda4j-parallel-1t` and `-mt`, and the JVM facade rows `tda4j-facade*`) runs only when its own name is here |
 | `--resume` | continue an interrupted run in `--out`: the (case, field, tool) groups already finished there are skipped, and a timeout among them still stops the later fields. Run it with the same options |
 | `--fields 2,17` | coefficient primes; tools that only do Z/2 report `unsupported` at 17 |
 | `--warmup N --trials N` | warm runs: untimed and timed computations per process |
@@ -86,7 +86,10 @@ RESULTS` adds the totals to a finished run's `summary.csv` as `summary_with_cell
 - chunks, 2-D only and capped at 512²;
 - CubicalRipser and GUDHI, alongside for scale;
 - the Scala.js build of TDA4j (`js-fastcubical`, `js-cohomology-cycles`: the first two engines on Node.js) when
-  `setup` installed it, with a `js/jvm` column in `sweep.md`; `--no-js` leaves it out.
+  `setup` installed it, with a `js/jvm` column in `sweep.md`; `--no-js` leaves it out;
+- `facade-fastcubical`, `facade-cohomology-cycles`: the same two engines as the Scala.js worker calls them, through the
+  MATLAB facade on the JVM, when `--engines` names them. `sweep.md` then has a `js/facade` column and a `bars` column that says
+  whether the bars per degree of the JS, the facade and the verb rows agree.
 
 The images are noise and a blob, in 2-D up to 4096² and 3-D up to 128³.
 
@@ -123,7 +126,8 @@ Every tool that takes a radius gets the same one: the enclosing radius of the dr
 
 `--radii 0.25,0.5,1` runs every cell once per fraction of the enclosing radius instead, giving each tool that takes one that fraction of it as its largest and leaving out the tools that take none. `sweep.md` has one block per radius, and `sweep.csv` a `radius` column (empty for the enclosing radius itself).
 
-Tools: `tda4j`, `tda4j-helix`, `tda4j-fastalpha`, `tda4j-fastalpha-top` (the top degree alone), `tda4j-dqp`, `tda4j-cech`, `gudhi`, and the `tda4j-js` twins. A barcode is
+Tools: `tda4j`, `tda4j-helix`, `tda4j-fastalpha`, `tda4j-fastalpha-top` (the top degree alone), `tda4j-dqp`, `tda4j-cech`, `gudhi`, and the `tda4j-js` twins (and, when `--tools` names them, the JVM facade twins `tda4j-facade`, `-helix`,
+`-fastalpha`, `-dqp`, with a table in `sweep.md` of whether the bars per degree of each JS and facade row equal the verb's). A barcode is
 compared with the first of GUDHI, the Cech complex and the dual-QP that finished on the same draw. GUDHI (CGAL) is the other
 implementation but stops early in d. The Cech complex (minimum enclosing balls, no triangulation) and the dual-QP (a
 quadratic program per simplex) are other algorithms than the Delaunay walk, and by the nerve lemma the Cech and alpha
@@ -369,6 +373,7 @@ JVM classes' commit.
 | `tda4j-cocycles` | the same with `Representatives.Cocycles` | the native kind of the Ripser engine; closest to bars-only |
 | `tda4j-js`, `tda4j-js-cocycles` | `workers/tda4j_js_worker.mjs` on Node.js, through the npm package's `persistence`, `persistenceFromDistances` and `persistenceFromGrid` | the Scala.js build of the two rows above: the same library, the same engines, compiled to JavaScript |
 | `tda4j-js-cohomology`, `tda4j-js-fastalpha`, `tda4j-js-bw`, `tda4j-js-helix` | the same, named engines and backends | JavaScript twins of the next row's tools |
+| `tda4j-facade`, `tda4j-facade-cocycles`, `tda4j-facade-cohomology`, `tda4j-facade-fastalpha`, `tda4j-facade-bw`, `tda4j-facade-helix`, `tda4j-facade-dqp` | `PaperBenchmarkDriver facade=true`: `matlab.TDA4j.computeFromPoints`, `computeFromDistanceMatrix` or `computeFromCubicalImage` with the option strings the JS worker passes (`facadeOptions`), every bar of positive length read out, on one thread | the JavaScript API is a thin layer over this facade, which does a little more than the `Persistence` verb (copies the input, reads every bar out), so the JS rows are set against the JVM doing the same work and not only against the verb. `experiment` rows: `--tools tda4j-js,tda4j,tda4j-facade`. Not in `final_run.sh`: the paper compares the verb's rows |
 | `tda4j-cohomology`, `tda4j-fastalpha` | named engines | cohomology on images (on a grid: the packed grid engine, the general engine's output); the dual union-find on alpha (on the default triangulation) |
 | `tda4j-bw`, `tda4j-helix`, `tda4j-dqp` | named alpha backends | `tda4j` uses the default: Bowyer–Watson up to 4 dimensions, Helix above, DQP for a small radius; these name each. Bowyer–Watson is `unsupported` above 4-D; DQP only runs on a case with a radius (untruncated it is about 100 times slower than Helix); `tda4j-fastalpha` takes no radius |
 | `tda4j-parallel-1t`, `tda4j-parallel-mt` | `PaperBenchmarkDriver engine=parallel threads=N` | the block-parallel experiment `ParallelPackedCohomology` (JVM only): implicit coboundaries, bars only, on 1 thread or every CPU. A simplex is one `Long` key where it fits and a block and an index beyond (o3_4096); it fails on a case whose n × n tables do not fit (clifford50000) |
@@ -408,7 +413,9 @@ yet); `--tools` leaves them out of a quick run.
   out of the means. The means are per task (never pooled across tasks), with median, range and how many cases the
   variant finished; the `tda4j-js` rows count as TDA4j variants, never as the baseline. Last, **Scala.js against the
   JVM**: for each `tda4j-js*` row, the warm and cold time ratios and the memory ratios to its JVM twin (`tda4j-js` to
-  `tda4j`, `tda4j-js-cocycles` to `tda4j-cocycles`, ...), per case and as geometric means per task.
+  `tda4j`, `tda4j-js-cocycles` to `tda4j-cocycles`, ...), per case and as geometric means per task. Where the JVM facade
+  twin (`tda4j-facade...`) also ran, the table has its time ratios too and a `bar counts` column that says `same` or what
+  differs among the JS, verb and facade rows; **The JVM facade against the verb** follows, with the same columns.
 - `env.json`: the machine, the JVM, Node.js and the npm package's version, every Python package's version, the
   ripser.cpp commit, the options, and which TDA4j was measured: `tda4j_git` (the HEAD of the checkout the JVM classes
   were built in), `tda4j_dirty` (the tracked files that differ from it; untracked ones are not listed) and

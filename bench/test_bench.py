@@ -2863,5 +2863,167 @@ class VConstructionTests(unittest.TestCase):
         self.assertEqual((dist, note), (0.0, ""))
 
 
+class FacadeRowsTests(unittest.TestCase):
+    """The JVM facade rows (#232): the call the Scala.js worker makes, run on the JVM, beside the JS rows and the verb's."""
+
+    def test_every_javascript_row_has_a_facade_twin_with_its_options_and_a_verb_twin_to_compare_with(self):
+        js = {(n, t): o for n, k, t, o in bench.TOOLS if k == "tda4j-js"}
+        facade = {(n, t): o for n, k, t, o in bench.TOOLS if o.get("facade")}
+        verb = {(n, t) for n, k, t, o in bench.TOOLS if k == "tda4j" and not o.get("facade")}
+        self.assertTrue(js)
+        self.assertEqual({(bench.facade_twin(n), t) for n, t in js}, set(facade))
+        for (name, task), opts in js.items():
+            twin = facade[(bench.facade_twin(name), task)]
+            self.assertEqual({k: v for k, v in twin.items() if k not in ("facade", "experiment")}, opts, name)
+            self.assertTrue(twin["experiment"], "run only when named")
+            self.assertIn((bench.jvm_twin(name), task), verb, f"{name}: no verb row to set it against")
+            self.assertEqual(bench.verb_twin(bench.facade_twin(name)), bench.jvm_twin(name))
+        self.assertTrue(all(k == "tda4j" for n, k, t, o in bench.TOOLS if o.get("facade")))
+
+    def test_the_names_of_the_twins(self):
+        self.assertEqual(bench.facade_twin("tda4j-js"), "tda4j-facade")
+        self.assertEqual(bench.facade_twin("tda4j-js-cocycles"), "tda4j-facade-cocycles")
+        self.assertEqual(bench.verb_twin("tda4j-facade"), "tda4j")
+        self.assertEqual(bench.verb_twin("tda4j-facade-fastalpha"), "tda4j-fastalpha")
+        self.assertEqual([bench.facade_twin("tda4j"), bench.facade_twin("gudhi"), bench.verb_twin("tda4j-js"),
+                          bench.verb_twin("tda4j-cocycles")], [None] * 4)
+
+    def test_the_command_asks_for_the_facade_on_one_thread_and_only_for_a_facade_row(self):
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "cp").write_text("x.jar")
+            case = bench.Case("c", "vr", "pts.txt", "points", 2)
+            args = Namespace(jvm_heap="1g", jvm_opts="")
+            with mock.patch.dict(os.environ, {"TDA4J_CP": str(Path(d) / "cp")}):
+                def command(opts):
+                    return bench.command("tda4j", "t", opts, case, Path(d), 2, 1.0, 0, 1, "o", args)
+                facade = command({"engine": "auto", "reps": "cycles", "facade": True, "experiment": True})
+                verb = command({"engine": "auto", "reps": "cycles"})
+        self.assertIn("facade=true", facade)
+        self.assertIn("sequential=true", facade, "the JS worker is one thread: so is the facade run it is compared with")
+        self.assertNotIn("facade=true", verb)
+
+    def test_an_experiment_row_is_wanted_only_by_its_own_name(self):
+        self.assertTrue(bench.experiment_wanted("tda4j-facade", "tda4j-js,tda4j,tda4j-facade"))
+        self.assertFalse(bench.experiment_wanted("tda4j-facade", "tda4j*"))
+        self.assertFalse(bench.experiment_wanted("tda4j-facade", "tda4j-facade*,!tda4j-js"))
+        self.assertFalse(bench.experiment_wanted("tda4j-facade", ""))
+        self.assertFalse(bench.experiment_wanted("tda4j-facade", "!tda4j-facade"))
+
+    def test_the_alpha_sweep_takes_the_facade_rows_that_exist_as_experiments(self):
+        named = [n for n in sweep_alpha.TOOL_NAMES if n.startswith("tda4j-facade")]
+        self.assertEqual(sorted(named), ["tda4j-facade", "tda4j-facade-dqp", "tda4j-facade-fastalpha", "tda4j-facade-helix"])
+        alpha = {n: o for n, k, t, o in bench.TOOLS if t == "alpha"}
+        for name in named:
+            self.assertTrue(alpha[name].get("experiment"), name)
+        self.assertEqual({bench.verb_twin(bench.facade_twin(n)) for n in ("tda4j-js", "tda4j-js-helix")},
+                         {"tda4j", "tda4j-helix"})
+
+    def test_the_alpha_sweep_runs_a_facade_row_only_when_it_is_named(self):
+        names = lambda spec, no_js=False: [r[0] for r in sweep_alpha.candidate_tools(spec, no_js)]
+        self.assertNotIn("tda4j-facade", names(""))
+        self.assertNotIn("tda4j-facade", names("tda4j*"))
+        self.assertNotIn("tda4j-facade", names("tda4j-facade*"))
+        self.assertIn("tda4j-js", names(""))
+        both = names("tda4j,tda4j-js,tda4j-facade")
+        self.assertEqual(both, ["tda4j", "tda4j-js", "tda4j-facade"])
+        self.assertEqual(names("tda4j,tda4j-js,tda4j-facade", no_js=True), ["tda4j", "tda4j-facade"])
+        self.assertEqual(names("gudhi"), ["gudhi"], "listed for alpha and for Cech: one row")
+
+    def test_the_bar_counts_of_the_rows_are_compared(self):
+        row = lambda counts: {"bars": json.dumps(counts)}
+        a, b = {"0": 5, "1": 2}, {"1": 2, "0": 5}
+        self.assertEqual(bench.counts_verdict(JS=row(a), verb=row(b), facade=row(a)), "same", "key order is not a difference")
+        verdict = bench.counts_verdict(JS=row(a), verb=row(b), facade=row({"0": 5, "1": 3}))
+        self.assertTrue(verdict.startswith("differ: "), verdict)
+        self.assertIn('facade {"0": 5, "1": 3}', verdict)
+        self.assertEqual(bench.counts_verdict(JS=row(a), verb=None, facade={"bars": ""}), "", "fewer than two to compare")
+        self.assertEqual(bench.counts_verdict(JS=row(a), verb=row(b)), "same")
+
+    def summary_row(self, tool, warm, cold, bars, rss="100", heap=""):
+        return {"case": "c", "task": "vr", "p": "17", "tool": tool, "status": "ok", "warm_median_s": str(warm),
+                "cold_s": str(cold), "maxrss_mb": rss, "heap_peak_mb": heap, "agrees": "True", "bars": json.dumps(bars)}
+
+    def test_the_summary_sets_js_against_the_facade_and_the_verb_and_compares_the_bar_counts(self):
+        bars = {"0": 4, "1": 1}
+        summary = [self.summary_row("tda4j-js", 6, 8, bars, rss="300"), self.summary_row("tda4j", 2, 4, bars, heap="50"),
+                   self.summary_row("tda4j-facade", 3, 5, bars)]
+        text = "\n".join(bench.js_against_jvm(summary) + bench.facade_against_verb(summary))
+        # JS / verb: 6/2 and 8/4; JS / facade: 6/3 and 8/5; memory: 300/100 and 300/50
+        self.assertIn("| c | 17 | tda4j-js | tda4j | 3.00 | 2.00 | 3.00 | 6.00 | True | tda4j-facade | 2.00 | 1.60 | same |", text)
+        self.assertIn("- vr, tda4j-js, p=17: 2.00x over 1 cases", text, "the geometric mean against the facade")
+        # facade / verb: 3/2 and 5/4
+        self.assertIn("| c | 17 | tda4j-facade | tda4j | 1.50 | 1.25 | same |", text)
+
+    def test_a_bar_count_that_differs_is_named_and_a_missing_facade_row_leaves_its_columns_empty(self):
+        summary = [self.summary_row("tda4j-js", 6, 8, {"0": 4, "1": 1}), self.summary_row("tda4j", 2, 4, {"0": 4, "1": 1}),
+                   self.summary_row("tda4j-facade", 3, 5, {"0": 4, "1": 7})]
+        text = "\n".join(bench.js_against_jvm(summary) + bench.facade_against_verb(summary))
+        self.assertIn('differ: JS {"0": 4, "1": 1}; verb {"0": 4, "1": 1}; facade {"0": 4, "1": 7} |', text)
+        self.assertIn('| differ: facade {"0": 4, "1": 7}; verb {"0": 4, "1": 1} |', text)
+        summary[0] = self.summary_row("tda4j-js", 6, 8, {"0": 4, "1": 1}, rss="300")
+        alone = "\n".join(bench.js_against_jvm(summary[:2]) + bench.facade_against_verb(summary[:2]))
+        self.assertIn("| c | 17 | tda4j-js | tda4j | 3.00 | 2.00 | 3.00 |  | True |  |  |  | same |", alone)
+        self.assertNotIn("The JVM facade against the verb", alone)
+
+    def test_a_summary_without_a_javascript_row_has_neither_table(self):
+        summary = [self.summary_row("tda4j", 2, 4, {"0": 4}), self.summary_row("tda4j-facade", 3, 5, {"0": 4})]
+        self.assertEqual(bench.js_against_jvm(summary), [])
+        self.assertIn("The JVM facade against the verb", "\n".join(bench.facade_against_verb(summary)))
+
+    def alpha_sweep_text(self, bars_by_tool):
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d)
+            (out / "bars").mkdir()
+            rows = [dict(shape="interior", n="40", d="9", series="d", seed="0", tool=t, status="ok", reason="",
+                         degenerate="False", densest_facet="2", cold_wall_s="1", cold_s="2", warm_median_s="",
+                         rss_mb="100", rss_src="x", heap_peak_mb="", old_peak_mb="", bars=json.dumps(b), cells="",
+                         radius="") for t, b in bars_by_tool.items()]
+            with open(out / "sweep.csv", "w", newline="") as f:
+                w = csv.DictWriter(f, fieldnames=sweep_alpha.COLUMNS)
+                w.writeheader()
+                w.writerows(rows)
+            sweep_alpha.summarize(out)
+            return (out / "sweep.md").read_text()
+
+    def test_the_alpha_sweep_compares_the_bar_counts_of_the_js_and_facade_rows_with_the_verbs(self):
+        same = {"0": 3, "1": 1}
+        text = self.alpha_sweep_text({"tda4j": same, "tda4j-js": same, "tda4j-facade": same})
+        self.assertIn("## Bars per degree of a Scala.js or JVM facade row", text)
+        self.assertIn("| | tda4j-js | tda4j-facade |", text)
+        self.assertIn("| d = 9 | same | same |", text)
+        text = self.alpha_sweep_text({"tda4j": same, "tda4j-js": same, "tda4j-facade": {"0": 3, "1": 2}})
+        self.assertIn('| d = 9 | differ: JS {"0": 3, "1": 1}; verb {"0": 3, "1": 1}; facade {"0": 3, "1": 2} | '
+                      'differ: facade {"0": 3, "1": 2}; verb {"0": 3, "1": 1} |', text)
+        self.assertNotIn("## Bars per degree", self.alpha_sweep_text({"tda4j": same, "tda4j-dqp": same}))
+
+    def cubical_text(self, facade_bars, with_facade=True):
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d)
+            bars = json.dumps({"0": 2, "1": 1})
+            rows = [(2, "random", 128, "fastcubical", "ok", 1.0, 0.1, 100, bars),
+                    (2, "random", 128, "js-fastcubical", "ok", 2.0, 0.2, 100, bars)]
+            if with_facade:
+                rows.append((2, "random", 128, "facade-fastcubical", "ok", 1.6, 0.16, 100, json.dumps(facade_bars)))
+            sweep_cubical.write_table(out, rows)
+            return (out / "sweep.md").read_text()
+
+    def test_the_cubical_sweep_has_the_facade_columns_only_when_a_facade_engine_ran(self):
+        text = self.cubical_text({"0": 2, "1": 1})
+        self.assertIn("| facade-fastcubical | fast/coh | js/jvm | js/facade | bars |", text)
+        self.assertIn("| 1.6 (0.16) |  | 2.00 | 1.25 | same |", text)
+        self.assertIn('differ: JS {"0": 2, "1": 1}; verb {"0": 2, "1": 1}; facade {"0": 2, "1": 0}',
+                      self.cubical_text({"0": 2, "1": 0}))
+        plain = self.cubical_text(None, with_facade=False)
+        self.assertNotIn("facade", plain)
+        self.assertIn("| fast/coh | js/jvm |", plain)
+
+    def test_the_cubical_sweep_runs_a_facade_engine_only_when_named_and_the_command_asks_for_the_facade(self):
+        source = (HERE_BENCH / "sweep_cubical.py").read_text()
+        self.assertIn("bench.experiment_wanted(lab, args.engines)", source)
+        self.assertIn('(["facade=true"] if lab in FACADE_LABELS else [])', source)
+        self.assertEqual(sweep_cubical.FACADE_LABELS, {"facade-fastcubical", "facade-cohomology-cycles"})
+        self.assertEqual([e[1:] for e in sweep_cubical.FACADE_ENGINES], [e[1:] for e in sweep_cubical.JS_ENGINES])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -874,6 +874,12 @@ def tool_selected(name, spec):
     return not include or any(fnmatch.fnmatchcase(name, t) for t in include)
 
 
+def experiment_wanted(name, spec):
+    """Whether `spec` (`--tools`'s notation) names the tool `name` itself: an `experiment` row is run only then, never
+    by a pattern."""
+    return name in {t.strip() for t in str(spec or "").split(",") if t.strip() and not t.startswith("!")}
+
+
 def default_alpha_radius(case, data):
     """The radius an alpha case without its own gets for every tool that takes one: the enclosing radius, as for
     Vietoris-Rips. TDA4j's alpha complex stops there by default and GUDHI's does not, and the barcode no longer changes
@@ -1038,7 +1044,6 @@ def run(args):
     write_env(out, args)
     cases = [c for c in CASES if tool_selected(c.name, args.cases)]
     tasks = set(args.tasks.split(",")) if args.tasks else None
-    wanted_names = {t.strip() for t in (args.tools or "").split(",") if t.strip() and not t.startswith("!")}
     fields = [int(p) for p in args.fields.split(",")]
     runs_csv = out / "runs.csv"
     new = not runs_csv.exists()
@@ -1061,7 +1066,7 @@ def run(args):
                 for name, kind, ttask, opts in TOOLS:
                     if ttask != case.task or not tool_selected(name, args.tools):
                         continue
-                    if opts.get("experiment") and name not in wanted_names:
+                    if opts.get("experiment") and not experiment_wanted(name, args.tools):
                         continue  # an experiment row is run only by its own name in --tools, never by a pattern
                     if (case.name, str(p), name) in done:
                         continue
