@@ -13,7 +13,11 @@ Normally driven by bench/run.sh, which builds the tools and sets the environment
 whose variable is unset, or whose Python package is missing, is skipped and listed as `missing`.
 
 The `tda4j-js*` tools are the Scala.js build, packaged as the npm package and run on Node.js
-(workers/tda4j_js_worker.mjs): the same sources as `tda4j*`, so the pair of rows is the cost of the platform.
+(workers/tda4j_js_worker.mjs): the same sources as `tda4j*`, so the pair of rows is the cost of the platform. The
+JavaScript API is a thin layer over the MATLAB facade, which does a little more than the `Persistence` verb that the
+`tda4j*` rows call (copies the input, reads every bar out): the `tda4j-facade*` rows make the JS worker's call on the
+JVM (`PaperBenchmarkDriver facade=true`, the same option strings), and the summary sets JS, the facade and the verb side
+by side with their bar counts compared. They are `experiment` rows: `--tools tda4j-js,tda4j,tda4j-facade`.
 
 Method (see .claude/PLAN-paper.md, section 3.0):
   - Every run is its own process, killed at --timeout. Peak RSS is the kernel's VmHWM of that process, sampled from
@@ -313,6 +317,12 @@ TOOLS += [
     ("tda4j-js-dqp", "tda4j-js", "alpha",
      {"engine": "auto", "reps": "cycles", "backend": "dqp", "needs_radius": True}),
 ]
+# The JVM facade beside each Scala.js twin (#232): `tda4j-facade...` makes the call `tda4j-js...` makes, the same option
+# strings through `matlab.TDA4j` (`PaperBenchmarkDriver facade=true`), so a JavaScript row can be set against the JVM
+# doing the same work (the verb's row, `tda4j...`, does not: it builds nothing the facade builds on top). `experiment`
+# rows: run only by their own names in --tools (`tda4j-js,tda4j,tda4j-facade`).
+TOOLS += [(name.replace("tda4j-js", "tda4j-facade", 1), "tda4j", task, dict(opts, facade=True, experiment=True))
+          for name, kind, task, opts in TOOLS if kind == "tda4j-js"]
 REFERENCE = {"vr": "ripser.cpp", "cubical": "gudhi", "alpha": "gudhi", "cech": "gudhi", "dtm": "gudhi",
              "witness": "gudhi", "sparse": "ripser.cpp", "dowker": "gudhi"}
 CHARACTERISTIC_ZERO = {name for name, _, _, opts in TOOLS if opts.get("char0")}
@@ -324,6 +334,21 @@ def jvm_twin(name):
     if name == "tda4j-js":
         return "tda4j"
     return "tda4j-" + name[len("tda4j-js-"):] if name.startswith("tda4j-js-") else None
+
+
+def facade_twin(name):
+    """`tda4j-js-cocycles` -> `tda4j-facade-cocycles`, `tda4j-js` -> `tda4j-facade`; None for a tool that is not a
+    JavaScript twin."""
+    if name == "tda4j-js":
+        return "tda4j-facade"
+    return "tda4j-facade-" + name[len("tda4j-js-"):] if name.startswith("tda4j-js-") else None
+
+
+def verb_twin(name):
+    """`tda4j-facade-cocycles` -> `tda4j-cocycles`, `tda4j-facade` -> `tda4j`; None for a tool that is not a facade row."""
+    if name == "tda4j-facade":
+        return "tda4j"
+    return "tda4j-" + name[len("tda4j-facade-"):] if name.startswith("tda4j-facade-") else None
 
 
 def node_heap_mb(spec):
@@ -683,7 +708,8 @@ def command(kind, name, opts, case, data, p, threshold, warmup, trials, out, arg
                  f"engine={opts['engine']}", f"reps={opts['reps']}"] +
                 ([f"backend={opts['backend']}"] if "backend" in opts else []) +
                 [f"threads={t}" for t in threads] + sequential +
-                [f"{k}={opts[k]}" for k in ("collapse", "wvariant", "dual", "nu") if k in opts] + common)
+                [f"{k}={opts[k]}" for k in ("collapse", "wvariant", "dual", "nu") if k in opts] +
+                (["facade=true"] if opts.get("facade") else []) + common)
     if kind == "tda4j-js":
         heap = args.node_heap or args.jvm_heap
         return ([os.environ.get("NODE", "node"), f"--max-old-space-size={node_heap_mb(heap)}"] + args.node_opts.split() +
@@ -846,6 +872,12 @@ def tool_selected(name, spec):
     if any(fnmatch.fnmatchcase(name, t[1:]) for t in items if t.startswith("!")):
         return False
     return not include or any(fnmatch.fnmatchcase(name, t) for t in include)
+
+
+def experiment_wanted(name, spec):
+    """Whether `spec` (`--tools`'s notation) names the tool `name` itself: an `experiment` row is run only then, never
+    by a pattern."""
+    return name in {t.strip() for t in str(spec or "").split(",") if t.strip() and not t.startswith("!")}
 
 
 def default_alpha_radius(case, data):
@@ -1012,7 +1044,6 @@ def run(args):
     write_env(out, args)
     cases = [c for c in CASES if tool_selected(c.name, args.cases)]
     tasks = set(args.tasks.split(",")) if args.tasks else None
-    wanted_names = {t.strip() for t in (args.tools or "").split(",") if t.strip() and not t.startswith("!")}
     fields = [int(p) for p in args.fields.split(",")]
     runs_csv = out / "runs.csv"
     new = not runs_csv.exists()
@@ -1035,7 +1066,7 @@ def run(args):
                 for name, kind, ttask, opts in TOOLS:
                     if ttask != case.task or not tool_selected(name, args.tools):
                         continue
-                    if opts.get("experiment") and name not in wanted_names:
+                    if opts.get("experiment") and not experiment_wanted(name, args.tools):
                         continue  # an experiment row is run only by its own name in --tools, never by a pattern
                     if (case.name, str(p), name) in done:
                         continue
@@ -1439,46 +1470,116 @@ def summarize(out: Path, bottleneck=None):
                      f"range {ordered[0]:.2f} to {ordered[-1]:.2f}) and {geomean(best_vals):.2f}x the best other tool, "
                      f"over {len(vals)} cases; finished {len(finished.get(key, ()))} of {len(attempted.get(key, ()))}")
     lines += js_against_jvm(summary)
+    lines += facade_against_verb(summary)
     (out / "summary.md").write_text("\n".join(lines) + "\n")
     print("\n".join(lines))
+
+
+def bar_counts(row):
+    """The bars per degree a row reported (the `bars` column's JSON), or None for a tool that does not report them."""
+    try:
+        counts = json.loads(row.get("bars") or "")
+    except ValueError:
+        return None
+    return counts if isinstance(counts, dict) else None
+
+
+def counts_verdict(**rows):
+    """`same` if every row given (label=summary row) that reported bars per degree reported the same, `differ: ...`
+    naming each if not, empty if fewer than two did."""
+    counts = {label: bar_counts(row) for label, row in rows.items() if row is not None}
+    counts = {label: c for label, c in counts.items() if c is not None}
+    if len(counts) < 2:
+        return ""
+    if len({json.dumps(c, sort_keys=True) for c in counts.values()}) == 1:
+        return "same"
+    return "differ: " + "; ".join(f"{label} {json.dumps(c, sort_keys=True)}" for label, c in counts.items())
 
 
 def js_against_jvm(summary):
     """The Scala.js build beside the JVM build of the same variant: warm and cold time ratios (JS ÷ JVM) and memory,
     per case and as geometric means per task. Memory is compared two ways: RSS to RSS, and the JS RSS to the JVM's
-    peak heap use (a JVM's RSS follows its collector). Empty when no `tda4j-js*` tool ran."""
+    peak heap use (a JVM's RSS follows its collector). Where the JVM facade twin (`tda4j-facade...`, the same call the
+    JS worker makes) also ran, its time ratios are there and the bar counts of the three are compared. Empty when no
+    `tda4j-js*` tool ran against a twin."""
     index = {(s["case"], s["p"], s["tool"]): s for s in summary if s["status"] == "ok"}
-    rows, warm_ratios, cold_ratios = [], {}, {}
+    rows, warm_ratios, cold_ratios, facade_ratios = [], {}, {}, {}
     for (cname, p, tool), js in sorted(index.items()):
-        jvm_name = jvm_twin(tool)
+        jvm_name, facade_name = jvm_twin(tool), facade_twin(tool)
         jvm = index.get((cname, p, jvm_name)) if jvm_name else None
-        if jvm is None:
+        facade = index.get((cname, p, facade_name)) if facade_name else None
+        if jvm is None and facade is None:
             continue
         task = js["task"]
 
-        def ratio(key):
-            a, b = js.get(key, ""), jvm.get(key, "")
+        def ratio(key, other):
+            if other is None:
+                return None
+            a, b = js.get(key, ""), other.get(key, "")
             return float(a) / float(b) if a not in ("", None) and b not in ("", None) and float(b) > 0 else None
 
-        warm, cold = ratio("warm_median_s"), ratio("cold_s")
-        mem = float(js["maxrss_mb"]) / float(jvm["maxrss_mb"]) if float(jvm["maxrss_mb"]) > 0 else None
-        heap = float(js["maxrss_mb"]) / float(jvm["heap_peak_mb"]) if jvm.get("heap_peak_mb") else None
+        warm, cold = ratio("warm_median_s", jvm), ratio("cold_s", jvm)
+        facade_warm, facade_cold = ratio("warm_median_s", facade), ratio("cold_s", facade)
+        mem = float(js["maxrss_mb"]) / float(jvm["maxrss_mb"]) if jvm and float(jvm["maxrss_mb"]) > 0 else None
+        heap = float(js["maxrss_mb"]) / float(jvm["heap_peak_mb"]) if jvm and jvm.get("heap_peak_mb") else None
         if warm:
             warm_ratios.setdefault((task, tool, p), []).append(warm)
         if cold:
             cold_ratios.setdefault((task, tool, p), []).append(cold)
+        if facade_warm:
+            facade_ratios.setdefault((task, tool, p), []).append(facade_warm)
         fmt = lambda v: "" if v is None else f"{v:.2f}"
-        rows.append(f"| {cname} | {p} | {tool} | {jvm_name} | {fmt(warm)} | {fmt(cold)} | {fmt(mem)} | {fmt(heap)} | "
-                    f"{js['agrees']} |")
+        verdict = counts_verdict(JS=js, verb=jvm, facade=facade)
+        rows.append(f"| {cname} | {p} | {tool} | {jvm_name if jvm else ''} | {fmt(warm)} | {fmt(cold)} | {fmt(mem)} | "
+                    f"{fmt(heap)} | {js['agrees']} | {facade_name if facade else ''} | {fmt(facade_warm)} | "
+                    f"{fmt(facade_cold)} | {verdict} |")
     if not rows:
         return []
     lines = ["", "## Scala.js against the JVM (JS ÷ JVM; above 1, the JVM is faster)", "",
-             "| case | p | JS tool | JVM twin | warm × | cold × | peak RSS × | RSS ÷ JVM heap peak | JS agrees with reference |",
-             "|---|---|---|---|---|---|---|---|---|"] + rows + ["", "Geometric means of the warm ratio (cold in parentheses):", ""]
+             "| case | p | JS tool | JVM twin | warm × | cold × | peak RSS × | RSS ÷ JVM heap peak | JS agrees with reference "
+             "| JVM facade twin | warm × (facade) | cold × (facade) | bar counts |",
+             "|---|---|---|---|---|---|---|---|---|---|---|---|---|"] + rows
+    lines += ["", "Geometric means of the warm ratio (cold in parentheses):", ""]
     for key, vals in sorted(warm_ratios.items()):
         cold = cold_ratios.get(key, [])
         gc = f" ({geomean(cold):.2f})" if cold else ""
         lines.append(f"- {key[0]}, {key[1]}, p={key[2]}: {geomean(vals):.2f}x{gc} over {len(vals)} cases")
+    if facade_ratios:
+        lines += ["", "Against the JVM facade (the same call as the JS worker's, no verb), geometric means of the warm ratio:", ""]
+        for key, vals in sorted(facade_ratios.items()):
+            lines.append(f"- {key[0]}, {key[1]}, p={key[2]}: {geomean(vals):.2f}x over {len(vals)} cases")
+    return lines
+
+
+def facade_against_verb(summary):
+    """The JVM facade run (`tda4j-facade...`) beside the verb run of the same variant (`tda4j...`): what the facade
+    adds to the work (copying the input, reading every bar out, the options parsed), warm and cold, with the bar counts
+    compared. Empty when no facade row ran against a verb row."""
+    index = {(s["case"], s["p"], s["tool"]): s for s in summary if s["status"] == "ok"}
+    rows, warm_ratios = [], {}
+    for (cname, p, tool), facade in sorted(index.items()):
+        verb_name = verb_twin(tool)
+        verb = index.get((cname, p, verb_name)) if verb_name else None
+        if verb is None:
+            continue
+
+        def ratio(key):
+            a, b = facade.get(key, ""), verb.get(key, "")
+            return float(a) / float(b) if a not in ("", None) and b not in ("", None) and float(b) > 0 else None
+
+        warm, cold = ratio("warm_median_s"), ratio("cold_s")
+        if warm:
+            warm_ratios.setdefault((facade["task"], tool, p), []).append(warm)
+        fmt = lambda v: "" if v is None else f"{v:.2f}"
+        rows.append(f"| {cname} | {p} | {tool} | {verb_name} | {fmt(warm)} | {fmt(cold)} | "
+                    f"{counts_verdict(facade=facade, verb=verb)} |")
+    if not rows:
+        return []
+    lines = ["", "## The JVM facade against the verb (facade ÷ verb; above 1, the verb is faster)", "",
+             "| case | p | facade tool | verb tool | warm × | cold × | bar counts |", "|---|---|---|---|---|---|---|"] + rows
+    lines += ["", "Geometric means of the warm ratio:", ""]
+    for key, vals in sorted(warm_ratios.items()):
+        lines.append(f"- {key[0]}, {key[1]}, p={key[2]}: {geomean(vals):.2f}x over {len(vals)} cases")
     return lines
 
 

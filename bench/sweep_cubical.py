@@ -14,6 +14,10 @@ Engines:
   - cohomology: the general cohomology engine (cocycles native, cycles by the involution; both are timed).
   - chunks: homology by clearing and compression (2-D only by default; slow in 3-D).
   - js-fastcubical, js-cohomology-cycles: the first two on the Scala.js build, in Node.js (`--node-heap` sets its heap).
+  - facade-fastcubical, facade-cohomology-cycles: the first two as the Scala.js worker calls them, through the MATLAB facade
+    on the JVM (`PaperBenchmarkDriver facade=true`), so a JS row can be set against the JVM doing the same work and not
+    only against the verb. Run only when `--engines` names them; the table then has a `js/facade` column, and a `bars`
+    column says whether the bar counts of the JS, the facade and the verb rows agree.
 
 A series stops growing once one size times out. Output, in --out (default $WORKDIR/sweeps/cubical-<timestamp>):
   sweep.csv (one row per run), sweep.md (median seconds, µs per pixel, and the ratio fast / cohomology).
@@ -25,6 +29,7 @@ import json
 import os
 import statistics
 import sys
+from argparse import Namespace
 from pathlib import Path
 
 import numpy as np
@@ -43,6 +48,14 @@ JS_ENGINES = [
     ("js-fastcubical", "fastcubical", "cycles", {2, 3, 4}, 0),
     ("js-cohomology-cycles", "cohomology", "cycles", {2, 3, 4}, 0),
 ]
+FACADE_ENGINES = [  # run only when named in --engines
+    ("facade-fastcubical", "fastcubical", "cycles", {2, 3, 4}, 0),
+    ("facade-cohomology-cycles", "cohomology", "cycles", {2, 3, 4}, 0),
+]
+REFERENCES = ("cripser", "gudhi")  # the other implementations: every other label is TDA4j's
+FACADE_LABELS = {e[0] for e in FACADE_ENGINES}
+COLUMNS = ["dim", "image", "n", "pixels", "engine", "status", "median_s", "times_s", "us_per_pixel", "maxrss_mb", "bars",
+           "rss_src", "heap_peak_mb", "reason"]
 
 
 def main():
@@ -62,14 +75,21 @@ def main():
     ap.add_argument("--python", default=sys.executable)
     ap.add_argument("--no-reference", action="store_true", help="skip CubicalRipser and GUDHI")
     ap.add_argument("--max-pixels", type=int, default=0, help="skip sizes with more pixels (0: no cap)")
-    ap.add_argument("--engines", default="", help="comma-separated labels (default: all; see ENGINES, plus cripser,gudhi)")
+    ap.add_argument("--engines", default="",
+                    help="comma-separated labels or patterns (default: all; see ENGINES, plus cripser,gudhi; "
+                         "`!cripser,!gudhi` is TDA4j's engines alone, like --no-reference)")
+    ap.add_argument("--summarize", default="", help="rebuild sweep.md of an existing sweep directory and stop")
     ap.add_argument("--warm-cap", type=float, default=60,
                     help="repeat a computation (warm-up + trials) only if one cold run took less than this (s)")
     args = ap.parse_args()
+    if args.summarize:
+        summarize(Path(args.summarize))
+        return
 
     out = Path(args.out or Path(os.environ.get("WORKDIR", ".")) / "sweeps" /
                f"cubical-{datetime.datetime.now():%Y%m%d-%H%M%S}")
     (out / "logs").mkdir(parents=True, exist_ok=True)
+    bench.write_env(out, Namespace(**vars(args), jvm_opts=""))
     data = Path(args.data) / "sweep"
     data.mkdir(parents=True, exist_ok=True)
     cp = Path(os.environ["TDA4J_CP"]).read_text().strip()
@@ -80,8 +100,7 @@ def main():
     rows = []
     with open(out / "sweep.csv", "w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["dim", "image", "n", "pixels", "engine", "status", "median_s", "times_s", "us_per_pixel",
-                    "maxrss_mb", "bars", "rss_src", "heap_peak_mb", "reason"])
+        w.writerow(COLUMNS)
         for d in [int(x) for x in args.dims.split(",")]:
             for image in args.images.split(","):
                 stopped = set()
@@ -92,7 +111,6 @@ def main():
                     path = data / f"{image}{d}d_{n}.npy"
                     if not path.exists():
                         np.save(path, rng.random(shape) if image == "random" else bench.blob(shape, rng))
-                    wanted = set(args.engines.split(",")) if args.engines else None
 
                     def command(label, warmup, trials):
                         for lab, engine, reps, dims, cap in JS_ENGINES:
@@ -102,12 +120,13 @@ def main():
                                         str(bench.HERE / "workers" / "tda4j_js_worker.mjs"), "task=cubical",
                                         f"input={path}", f"dim={d - 1}", "p=2", f"engine={engine}", f"reps={reps}",
                                         f"warmup={warmup}", f"trials={trials}"]
-                        for lab, engine, reps, dims, cap in ENGINES:
+                        for lab, engine, reps, dims, cap in ENGINES + FACADE_ENGINES:
                             if lab == label:
                                 return (["java"] + bench.jvm_flags(args.jvm_heap, fixed_heap=args.jvm_fixed_heap) +
                                         ["-cp", cp, "org.appliedtopology.tda4j.PaperBenchmarkDriver", "task=cubical",
                                          f"input={path}", f"dim={d - 1}", "p=2", f"engine={engine}", f"reps={reps}",
-                                         f"warmup={warmup}", f"trials={trials}", "sequential=true"])
+                                         f"warmup={warmup}", f"trials={trials}", "sequential=true"] +
+                                        (["facade=true"] if lab in FACADE_LABELS else []))
                         return [args.python, str(bench.HERE / "workers" / "py_worker.py"), f"tool={label}",
                                 "task=cubical", f"input={path}", f"dim={d - 1}", "p=2", f"warmup={warmup}",
                                 f"trials={trials}"]
@@ -115,10 +134,12 @@ def main():
                     labels = [lab for lab, _, _, dims, cap in ENGINES if d in dims and (not cap or n ** d <= cap)]
                     if js:
                         labels += [lab for lab, _, _, dims, cap in JS_ENGINES if d in dims and (not cap or n ** d <= cap)]
+                    labels += [lab for lab, _, _, dims, cap in FACADE_ENGINES
+                               if d in dims and (not cap or n ** d <= cap) and bench.experiment_wanted(lab, args.engines)]
                     if not args.no_reference:
                         labels += ["cripser", "gudhi"]
                     for label in labels:
-                        if label in stopped or (wanted and label not in wanted):
+                        if label in stopped or not bench.tool_selected(label, args.engines):
                             continue
                         tag = f"{d}d_{image}_{n}_{label}"
                         # Cold first: one computation, bounded by --timeout. Repeat only when that was quick enough
@@ -138,7 +159,7 @@ def main():
                                     upp, f"{rss:.0f}", json.dumps(j["bars"]) if j else "", rss_src,
                                     j.get("heap_peak_mb", "") if j else "", reason])
                         f.flush()
-                        rows.append((d, image, n, label, status, med, upp, rss))
+                        rows.append((d, image, n, label, status, med, upp, rss, json.dumps(j["bars"]) if j else ""))
                         print(f"{tag:40s} {status:9s} " + (f"{med:9.3f}s {upp:8.2f}us/px {rss:7.0f}MB" if med
                               else f"wall={wall:.0f}s"), flush=True)
                         if status != "ok":
@@ -147,12 +168,32 @@ def main():
     print(f"\nresults in {out}")
 
 
+def summarize(out):
+    """sweep.md of a sweep directory, from its sweep.csv (a merged directory has no other record of its runs)."""
+    with open(out / "sweep.csv", newline="") as f:
+        runs = list(csv.DictReader(f))
+
+    def number(text):
+        return float(text) if text not in ("", None) else None
+    rows = [(int(r["dim"]), r["image"], int(r["n"]), r["engine"], r["status"], number(r["median_s"]),
+             number(r["us_per_pixel"]), number(r["maxrss_mb"]), r.get("bars", "")) for r in runs]
+    write_table(out, rows)
+
+
 def write_table(out, rows):
+    """sweep.md. A row is (dim, image, n, engine, status, median seconds, µs per pixel, peak RSS, bars per degree as JSON);
+    the facade columns are there only if a facade engine ran."""
+    with_facade = any(r[3] in FACADE_LABELS for r in rows)
     lines = ["# Image engines: size sweep", "", "Median seconds (µs per pixel). `fast/coh` = fastcubical ÷ "
-             "cohomology-cycles: above 1, the general engine is faster. `js/jvm` = js-fastcubical ÷ fastcubical.", ""]
-    labels = [e[0] for e in ENGINES] + ["cripser", "gudhi"] + [e[0] for e in JS_ENGINES]
-    lines.append("| dim | image | n | " + " | ".join(labels) + " | fast/coh | js/jvm |")
-    lines.append("|---" * (len(labels) + 5) + "|")
+             "cohomology-cycles: above 1, the general engine is faster. `js/jvm` = js-fastcubical ÷ fastcubical" +
+             (", `js/facade` = js-fastcubical ÷ facade-fastcubical. `bars`: `same` if the bars per degree of the "
+              "JS, facade and verb rows of the fast engine agree, else what differs." if with_facade else "."), ""]
+    labels = ([e[0] for e in ENGINES] + ["cripser", "gudhi"] + [e[0] for e in JS_ENGINES] +
+              [e[0] for e in FACADE_ENGINES if with_facade and any(r[3] == e[0] for r in rows)])
+    lines += bench.merged_text(bench.read_env(out))
+    extra = ["fast/coh", "js/jvm"] + (["js/facade", "bars"] if with_facade else [])
+    lines.append("| dim | image | n | " + " | ".join(labels + extra) + " |")
+    lines.append("|---" * (len(labels) + len(extra) + 3) + "|")
     keys = sorted({(r[0], r[1], r[2]) for r in rows})
     for d, image, n in keys:
         cells, by = [], {}
@@ -162,12 +203,21 @@ def write_table(out, rows):
         for lab in labels:
             r = by.get(lab)
             cells.append("" if r is None else (f"{r[5]:.3g} ({r[6]:.3g})" if r[5] else r[4]))
-        f, c, j = by.get("fastcubical"), by.get("cohomology-cycles"), by.get("js-fastcubical")
+        f, c, j, g = by.get("fastcubical"), by.get("cohomology-cycles"), by.get("js-fastcubical"), by.get("facade-fastcubical")
         ratio = f"{f[5] / c[5]:.2f}" if f and c and f[5] and c[5] else ""
         js_ratio = f"{j[5] / f[5]:.2f}" if j and f and j[5] and f[5] else ""
-        lines.append(f"| {d} | {image} | {n} | " + " | ".join(cells) + f" | {ratio} | {js_ratio} |")
+        tail = [ratio, js_ratio]
+        if with_facade:
+            tail += [f"{j[5] / g[5]:.2f}" if j and g and j[5] and g[5] else "",
+                     bench.counts_verdict(JS=bars_row(j), verb=bars_row(f), facade=bars_row(g))]
+        lines.append(f"| {d} | {image} | {n} | " + " | ".join(cells + tail) + " |")
     (out / "sweep.md").write_text("\n".join(lines) + "\n")
     print("\n".join(lines))
+
+
+def bars_row(row):
+    """`row`'s bars per degree in the form `bench.counts_verdict` takes, or None for a row that did not finish."""
+    return {"bars": row[8]} if row is not None and row[4] == "ok" and len(row) > 8 else None
 
 
 if __name__ == "__main__":

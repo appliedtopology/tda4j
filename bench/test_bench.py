@@ -34,6 +34,8 @@ _spec.loader.exec_module(bench)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import sweep_alpha  # noqa: E402  (imports bench.py by name: a second copy of the module, which is fine here)
 import sweep_threads  # noqa: E402  (likewise)
+import sweep_cubical  # noqa: E402
+import sweep_merge  # noqa: E402
 import count_cells  # noqa: E402
 import dipha_io  # noqa: E402
 import phat_io  # noqa: E402
@@ -655,7 +657,7 @@ class RadiusPathTests(unittest.TestCase):
         self.assertEqual([t[0] for t in sweep_alpha.tools_for_radius(tools, 0.5)], ["tda4j"])
         self.assertEqual([t[0] for t in sweep_alpha.tools_for_radius(tools, None)], ["tda4j", "tda4j-fastalpha"])
 
-    def _run(self, radius):
+    def _run(self, radius, opts=None, name="tda4j-dqp"):
         seen = []
         saved = sweep_alpha.bench.command, sweep_alpha.bench.run_proc
         sweep_alpha.bench.command = lambda kind, name, opts, case, data, p, thr, w, t, out, args: (
@@ -667,8 +669,8 @@ class RadiusPathTests(unittest.TestCase):
                 (Path(d) / "sweepalpha").mkdir()
                 (Path(d) / "bars").mkdir()
                 args = Namespace(data=d, dim=2, field=17, py_mem_gb=0, timeout=10, warm_cap=0, trials=0, count=False)
-                row = sweep_alpha.run_cell("tda4j-dqp", "tda4j", {}, "interior", 10, 5, 0, "d", args, None, Path(d),
-                                           radius)
+                row = sweep_alpha.run_cell(name, "tda4j", opts or {}, "interior", 10, 5, 0, "d", args, None,
+                                           Path(d), radius)
                 x = sweep_alpha.points("interior", 10, 5, 0)
         finally:
             sweep_alpha.bench.command, sweep_alpha.bench.run_proc = saved
@@ -681,12 +683,73 @@ class RadiusPathTests(unittest.TestCase):
         self.assertIn("r0.5", name, "the barcode, log and cell count of a radius do not overwrite another's")
         self.assertTrue(out.endswith("r0.5__tda4j-dqp.tsv"), out)
 
-    def test_a_cell_without_a_radius_runs_as_before(self):
-        (name, threshold, out), row, _ = self._run(None)
-        self.assertIsNone(threshold)
-        self.assertEqual(row["radius"], "")
+    def test_a_cell_without_a_radius_fraction_gives_a_tool_that_takes_one_the_enclosing_radius(self):
+        (name, threshold, out), row, enclosing = self._run(None)
+        self.assertEqual(threshold, enclosing, "TDA4j stops there by default and GUDHI does not: the same for both")
+        self.assertEqual(row["radius"], "", "the column is empty for the enclosing radius itself")
         self.assertNotIn("_r", name)
         self.assertTrue(out.endswith("interior_10_5_0__tda4j-dqp.tsv"), out)
+
+    def test_every_tool_that_takes_a_radius_gets_the_same_one_and_a_tool_that_takes_none_gets_none(self):
+        for fraction in (None, 0.25, 1.0):
+            (_, a, _), _, _ = self._run(fraction, {}, "tda4j-helix")
+            (_, b, _), _, _ = self._run(fraction, {}, "gudhi")
+            (_, c, _), _, _ = self._run(fraction, {"no_radius": True}, "tda4j-fastalpha")
+            self.assertEqual(a, b)
+            self.assertGreater(a, 0)
+            self.assertIsNone(c, "the whole triangulation: it takes no radius")
+
+    def test_the_default_radius_is_the_fraction_one_of_the_radii_sweep(self):
+        (_, default, _), _, _ = self._run(None)
+        (_, one, _), _, _ = self._run(1.0)
+        self.assertEqual(default, one)
+
+    def test_the_enclosing_radius_of_a_large_draw_is_the_brute_force_value(self):
+        # above 4096 points the radius is found by pruning with a lower bound: it must be the same number
+        def brute(x):
+            return min(float(np.sqrt(((x - p) ** 2).sum(axis=1).max())) for p in x)
+        for shape, d in (("interior", 2), ("surface", 3), ("interior", 7)):
+            x = sweep_alpha.points(shape, 4200, d, 1)
+            self.assertAlmostEqual(sweep_alpha.enclosing_radius(x), brute(x), places=12, msg=f"{shape} d={d}")
+        x = np.vstack([sweep_alpha.points("interior", 2100, 3, 2)] * 2)  # every point twice: ties in every bound
+        self.assertAlmostEqual(sweep_alpha.enclosing_radius(x), brute(x), places=12)
+        # on a sphere every point's farthest distance is nearly 2 and the bounds are loose: the smallest bound is not
+        # the answer, and a search that stops at the first scan is wrong in the fourth place
+        rng = np.random.default_rng(7)
+        for d in (3, 6):
+            x = rng.standard_normal((4200, d))
+            x /= np.linalg.norm(x, axis=1)[:, None]
+            self.assertAlmostEqual(sweep_alpha.enclosing_radius(x), brute(x), places=12, msg=f"sphere d={d}")
+
+    def test_the_enclosing_radius_of_one_point_is_zero_and_of_the_draw_is_cached(self):
+        self.assertEqual(sweep_alpha.enclosing_radius(np.zeros((1, 3))), 0.0)
+        self.assertEqual(sweep_alpha.draw_radius("interior", 40, 6, 0),
+                         sweep_alpha.enclosing_radius(sweep_alpha.points("interior", 40, 6, 0)))
+        before = sweep_alpha.draw_radius.cache_info().hits
+        sweep_alpha.draw_radius("interior", 40, 6, 0)
+        self.assertEqual(sweep_alpha.draw_radius.cache_info().hits, before + 1, "one computation per draw, not per tool")
+
+    def test_the_plane_sweeps_biggest_draw_has_a_radius_in_memory_that_a_distance_matrix_would_not_fit(self):
+        x = sweep_alpha.points("interior", 300000, 2, 0)  # a matrix of its distances: 720 GB
+        self.assertAlmostEqual(sweep_alpha.enclosing_radius(x), math.sqrt(0.5), delta=0.01)
+
+    def test_the_sweep_records_the_radius_it_ran_at_and_the_summary_says_so(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d)
+            (out / "bars").mkdir()
+            (out / "env.json").write_text("{}")
+            sweep_alpha.mark_radius_rule(out)
+            self.assertEqual(json.loads((out / "env.json").read_text())["alpha_radius_rule"], "enclosing")
+            row = dict(shape="interior", n="40", d="9", series="d", seed="0", tool="tda4j", status="ok", reason="",
+                       degenerate="False", densest_facet="2", cold_wall_s="1", cold_s="2", warm_median_s="",
+                       rss_mb="100", rss_src="x", heap_peak_mb="", old_peak_mb="", bars="{}", cells="", radius="")
+            with open(out / "sweep.csv", "w", newline="") as f:
+                w = csv.DictWriter(f, fieldnames=sweep_alpha.COLUMNS)
+                w.writeheader()
+                w.writerow(row)
+            sweep_alpha.summarize(out)
+            text = (out / "sweep.md").read_text()
+        self.assertIn("ran at the enclosing radius of its draw", text)
 
     def test_the_tables_have_one_block_per_radius(self):
         with tempfile.TemporaryDirectory() as d:
@@ -784,12 +847,13 @@ class SweepLoopTests(unittest.TestCase):
     def run_sweep(self, fake, argv_extra=()):
         calls = []
         with tempfile.TemporaryDirectory() as d:
-            saved = sweep_alpha.run_cell, sweep_alpha.bench.available, sys.argv
+            saved = sweep_alpha.run_cell, sweep_alpha.bench.available, sweep_alpha.bench.write_env, sys.argv
             self.radii = []
             sweep_alpha.run_cell = lambda name, kind, opts, shape, n, dd, seed, series, args, bench_args, out, radius=None: (
                 calls.append((name, shape, n, dd, seed)) or self.radii.append(radius) or
                 fake(name, shape, n, dd, seed, radius))
             sweep_alpha.bench.available = lambda kind, opts, python: True
+            sweep_alpha.bench.write_env = lambda out, args: (out / "env.json").write_text("{}")
             sys.argv = ["sweep_alpha.py", "--data", d, "--out", str(Path(d) / "out"), "--dims", "5,6,7,8", "--points", "40",
                         "--shapes", "interior", "--seeds", "2", "--tools", "tda4j-helix,tda4j-dqp", *argv_extra]
             try:
@@ -798,7 +862,7 @@ class SweepLoopTests(unittest.TestCase):
                     rows = list(csv.DictReader(f))
                 md = (Path(d) / "out" / "sweep.md").read_text()
             finally:
-                sweep_alpha.run_cell, sweep_alpha.bench.available, sys.argv = saved
+                sweep_alpha.run_cell, sweep_alpha.bench.available, sweep_alpha.bench.write_env, sys.argv = saved
         return calls, rows, md
 
     @staticmethod
@@ -2024,6 +2088,327 @@ class MergeTests(unittest.TestCase):
         self.assertEqual(runs[("c", "2", "tda4j", "warm")]["median_s"], "1.5", "the old TDA4j rows are not taken")
 
 
+def write_sweep(directory, columns, rows, env=None, bars=(), logs=(), validity=None):
+    """A sweep directory (sweep.csv, env.json, bars/, logs/ and for the alpha sweep validity.csv) for the merge tests."""
+    directory = Path(directory)
+    (directory / "bars").mkdir(parents=True, exist_ok=True)
+    (directory / "logs").mkdir(parents=True, exist_ok=True)
+    with open(directory / "sweep.csv", "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=columns)
+        w.writeheader()
+        for r in rows:
+            w.writerow({**{c: "" for c in columns}, **r})
+    (directory / "env.json").write_text(json.dumps(env or {}))
+    for name, text in bars:
+        (directory / "bars" / name).write_text(text)
+    for name in logs:
+        (directory / "logs" / name).write_text("log")
+    if validity is not None:
+        with open(directory / "validity.csv", "w", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=sweep_alpha.VALIDITY_COLUMNS)
+            w.writeheader()
+            w.writerows(validity)
+
+
+class SweepMergeTests(unittest.TestCase):
+    """bench/sweep_merge.py: a sweep directory from an earlier one plus a rerun of some tools, per series, last wins."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.dir.cleanup)
+        self.root = Path(self.dir.name)
+        self.out = self.root / "merged"
+        self.good = "0\t0.0\tinf\n1\t0.5\t0.75\n"
+        self.other = lambda tag: f"0\t0.0\tinf\n1\t0.5\t0.{len(tag)}\n"  # a valid barcode that differs per tag
+
+    def env(self, commit, day, **more):
+        return {"date": f"2026-11-{day}T10:00:00", "host": "server", "tda4j_git": commit * 40, **more}
+
+    # --- the alpha sweep -------------------------------------------------------------------------------------
+    @staticmethod
+    def alpha_row(tool, d, seconds="2.0", status="ok", n="40", shape="interior", series="d", seed="0", radius=""):
+        return {"shape": shape, "n": n, "d": d, "series": series, "radius": radius, "seed": seed, "tool": tool,
+                "status": status, "warm_median_s": seconds if status == "ok" else "", "rss_mb": "100",
+                "rss_src": "proc", "degenerate": "False"}
+
+    def alpha_sweeps(self, old_rule="enclosing", new_rule="enclosing"):
+        rule = lambda r: {"alpha_radius_rule": r} if r else {}
+        old = self.root / "old"
+        write_sweep(old, sweep_alpha.COLUMNS,
+                    [self.alpha_row("tda4j", "5", "9.0"), self.alpha_row("tda4j", "6", "19.0"),
+                     self.alpha_row("gudhi", "5", "5.0"), self.alpha_row("gudhi", "6", "7.0"),
+                     self.alpha_row("tda4j", "10", "3.0", n="60")],
+                    env=self.env("a", "01", **rule(old_rule)),
+                    bars=[("interior_40_5_0__tda4j.tsv", self.other("old5")), ("interior_40_6_0__tda4j.tsv", self.other("old6")),
+                          ("interior_40_5_0__gudhi.tsv", self.good), ("interior_40_6_0__gudhi.tsv", self.good),
+                          ("interior_60_10_0__tda4j.tsv", self.other("old60"))],
+                    logs=["interior_40_5_0__tda4j__cold.out", "interior_40_6_0__tda4j__cold.out",
+                          "interior_40_5_0__gudhi__cold.out", "interior_40_5_0__gudhi__warm.err",
+                          "interior5d_40_s0__gudhi.out", "interior5d_40_s0__tda4j.out"],
+                    validity=[{"shape": "interior", "d": "4", "n": "25", "draws": "1000", "status": "ok",
+                               "invalid": "6"}])
+        new = self.root / "new"
+        write_sweep(new, sweep_alpha.COLUMNS, [self.alpha_row("tda4j", "5", "2.0")],
+                    env=self.env("b", "06", **rule(new_rule)), bars=[("interior_40_5_0__tda4j.tsv", self.other("new5"))],
+                    logs=["interior_40_5_0__tda4j__cold.out"],
+                    validity=[{"shape": "interior", "d": "4", "n": "25", "draws": "1000", "status": "ok",
+                               "invalid": "5"}, {"shape": "interior", "d": "6", "n": "40", "draws": "300",
+                                                 "status": "ok", "invalid": "0"}])
+        return old, new
+
+    def alpha_rows(self):
+        with open(self.out / "sweep.csv", newline="") as f:
+            return [(r["tool"], r["n"], r["d"], r["warm_median_s"]) for r in csv.DictReader(f)]
+
+    def test_alpha_a_rerun_of_tda4j_replaces_its_series_whole_and_leaves_gudhi(self):
+        old, new = self.alpha_sweeps()
+        sweep_merge.merge(self.out, [f"{old}:!tda4j*", str(new)])
+        self.assertEqual(self.alpha_rows(), [("tda4j", "40", "5", "2.0"), ("gudhi", "40", "5", "5.0"),
+                                             ("gudhi", "40", "6", "7.0")],
+                         "the rerun's d = 5 only: the old d = 6 row of the series is not carried over; the order is the "
+                         "earlier sweep's")
+
+    def test_alpha_without_a_tools_filter_the_new_series_still_replaces_the_old_one_of_the_same_axis(self):
+        old, new = self.alpha_sweeps()
+        sweep_merge.merge(self.out, [str(old), str(new)])
+        self.assertEqual(self.alpha_rows(), [("tda4j", "40", "5", "2.0"), ("gudhi", "40", "5", "5.0"),
+                                             ("gudhi", "40", "6", "7.0"), ("tda4j", "60", "10", "3.0")],
+                         "the old series at n = 40 is gone (d = 6 was not reached by the rerun), the one at n = 60 stays, "
+                         "and the merged sweep keeps the older sweep's order")
+
+    def test_alpha_bars_and_logs_follow_their_rows_and_only_theirs(self):
+        old, new = self.alpha_sweeps()
+        sweep_merge.merge(self.out, [f"{old}:!tda4j*", str(new)])
+        self.assertEqual(sorted(p.name for p in (self.out / "bars").iterdir()),
+                         ["interior_40_5_0__gudhi.tsv", "interior_40_5_0__tda4j.tsv", "interior_40_6_0__gudhi.tsv"])
+        self.assertEqual((self.out / "bars" / "interior_40_5_0__tda4j.tsv").read_text(), self.other("new5"))
+        self.assertEqual(sorted(p.name for p in (self.out / "logs").iterdir()),
+                         ["interior5d_40_s0__gudhi.out", "interior_40_5_0__gudhi__cold.out",
+                          "interior_40_5_0__gudhi__warm.err", "interior_40_5_0__tda4j__cold.out"],
+                         "the cell-count log of gudhi comes along, the old tda4j's do not")
+
+    def test_alpha_the_environment_names_the_sources_and_the_tda4j_commit_is_the_newest_rerun(self):
+        old, new = self.alpha_sweeps()
+        sweep_merge.merge(self.out, [f"{old}:!tda4j*", str(new)])
+        env = json.loads((self.out / "env.json").read_text())
+        self.assertEqual(env["tda4j_git"], "b" * 40)
+        self.assertEqual([(o["tools"], o["keys"]) for o in env["merged_from"]], [(["gudhi"], 1), (["tda4j"], 1)], "a series of two rows is one key")
+        self.assertEqual(env["alpha_radius_rule"], "enclosing")
+        md = (self.out / "sweep.md").read_text()
+        self.assertIn("Merged from:", md)
+        self.assertIn("ran at the enclosing radius of its draw", md)
+        self.assertRegex(md, r"\| d = 5 \| 2 \| 5 \|")
+
+    def test_alpha_validity_cells_come_from_the_last_source_that_has_them(self):
+        old, new = self.alpha_sweeps()
+        sweep_merge.merge(self.out, [str(old), str(new)])
+        with open(self.out / "validity.csv", newline="") as f:
+            rows = {(r["d"], r["n"]): r["invalid"] for r in csv.DictReader(f)}
+        self.assertEqual(rows, {("4", "25"): "5", ("6", "40"): "0"})
+
+    def test_alpha_a_sweep_that_gave_gudhi_no_radius_does_not_merge_with_one_that_did_unless_allowed(self):
+        old, new = self.alpha_sweeps(old_rule="")
+        with self.assertRaises(SystemExit) as caught:
+            sweep_merge.merge(self.out, [f"{old}:!tda4j*", str(new)])
+        self.assertIn("different radii", str(caught.exception))
+        self.assertFalse((self.out / "sweep.csv").exists())
+        sweep_merge.merge(self.out, [f"{old}:!tda4j*", str(new)], allow_mixed=True)
+        self.assertEqual(json.loads((self.out / "env.json").read_text())["alpha_radius_rule"], "mixed")
+
+    def test_alpha_a_sweep_from_before_the_radius_column_merges_when_the_mix_is_allowed(self):
+        legacy = [c for c in sweep_alpha.COLUMNS if c != "radius"]
+        without = lambda row: {k: v for k, v in row.items() if k != "radius"}
+        old = self.root / "old"
+        write_sweep(old, legacy, [without(self.alpha_row("tda4j", "5", "9.0")), without(self.alpha_row("gudhi", "5", "5.0"))],
+                    env=self.env("a", "01"),
+                    bars=[("interior_40_5_0__tda4j.tsv", self.other("old5")), ("interior_40_5_0__gudhi.tsv", self.good)])
+        new = self.root / "new"
+        write_sweep(new, sweep_alpha.COLUMNS, [self.alpha_row("tda4j", "5", "2.0")],
+                    env=self.env("b", "06", alpha_radius_rule="enclosing"),
+                    bars=[("interior_40_5_0__tda4j.tsv", self.other("new5"))])
+        sweep_merge.merge(self.out, [f"{old}:!tda4j*", str(new)], allow_mixed=True)
+        self.assertEqual(self.alpha_rows(), [("tda4j", "40", "5", "2.0"), ("gudhi", "40", "5", "5.0")],
+                         "the legacy rows read as a draw without a radius fraction, the same series key a rerun has")
+        self.assertEqual(sorted(p.name for p in (self.out / "bars").iterdir()),
+                         ["interior_40_5_0__gudhi.tsv", "interior_40_5_0__tda4j.tsv"])
+        with open(self.out / "sweep.csv", newline="") as f:
+            self.assertIn("radius", next(csv.reader(f)), "the merged sweep has the current columns")
+
+    def test_alpha_a_part_that_supplies_nothing_does_not_count_for_the_radius_rule(self):
+        old, new = self.alpha_sweeps(old_rule="")
+        sweep_merge.merge(self.out, [f"{old}:gudhi", f"{old}:gudhi"])  # both without the rule: consistent
+        self.assertEqual(json.loads((self.out / "env.json").read_text())["alpha_radius_rule"], "")
+
+    def test_alpha_cells_at_another_radius_are_a_series_of_their_own(self):
+        old = self.root / "old"
+        write_sweep(old, sweep_alpha.COLUMNS, [self.alpha_row("tda4j", "9", "1.0", radius="0.5"),
+                                               self.alpha_row("tda4j", "9", "4.0", radius="1")],
+                    env=self.env("a", "01", alpha_radius_rule="enclosing"))
+        new = self.root / "new"
+        write_sweep(new, sweep_alpha.COLUMNS, [self.alpha_row("tda4j", "9", "0.5", radius="0.5")],
+                    env=self.env("b", "06", alpha_radius_rule="enclosing"))
+        sweep_merge.merge(self.out, [str(old), str(new)])
+        self.assertEqual([r[3] for r in self.alpha_rows()], ["0.5", "4.0"])
+
+    # --- the threads sweep -----------------------------------------------------------------------------------
+    @staticmethod
+    def thread_row(tool, threads, seconds, status="ok", case="heavy"):
+        return {"case": case, "task": "vr", "p": "2", "tool": tool, "mode": "warm" if status == "ok" else "cold",
+                "status": status, "median_s": seconds if status == "ok" else "", "threads": threads, "pinned": "True"}
+
+    def thread_sweeps(self):
+        old = self.root / "old"
+        write_sweep(old, sweep_threads.COLUMNS,
+                    [self.thread_row("ripser.cpp", "1", "2.0")]
+                    + [self.thread_row("tda4j-parallel-mt", str(t), s) for t, s in ((4, "2.5"), (2, "4.0"), (1, "8.0"))]
+                    + [self.thread_row("giotto-ph-mt", str(t), s) for t, s in ((2, "3.0"), (1, "6.0"))],
+                    env=self.env("a", "01", cpu="Test CPU", cores=4, args={"baselines": "ripser.cpp"}),
+                    bars=[("heavy__p2__ripser.cpp@1.tsv", self.good)]
+                    + [(f"heavy__p2__tda4j-parallel-mt@{t}.tsv", self.good) for t in (1, 2, 4)]
+                    + [(f"heavy__p2__giotto-ph-mt@{t}.tsv", self.good) for t in (1, 2)],
+                    logs=[f"heavy__p2__tda4j-parallel-mt@{t}__cold.out" for t in (1, 2, 4)]
+                    + ["heavy__p2__ripser.cpp@1__cold.out"])
+        new = self.root / "new"
+        write_sweep(new, sweep_threads.COLUMNS,
+                    [self.thread_row("tda4j-parallel-mt", "2", "", status="timeout"),
+                     self.thread_row("tda4j-parallel-mt", "1", "7.0")],
+                    env=self.env("b", "06", cpu="Test CPU", cores=4, args={"baselines": ""}),
+                    bars=[("heavy__p2__tda4j-parallel-mt@1.tsv", self.good)],
+                    logs=["heavy__p2__tda4j-parallel-mt@1__cold.out"])
+        return old, new
+
+    def test_threads_a_rerun_of_tda4j_replaces_the_whole_series_so_no_old_thread_count_stands_beside_it(self):
+        old, new = self.thread_sweeps()
+        sweep_merge.merge(self.out, [f"{old}:!tda4j*", str(new)])
+        with open(self.out / "sweep.csv", newline="") as f:
+            rows = [(r["tool"], r["threads"], r["status"]) for r in csv.DictReader(f)]
+        self.assertEqual(rows, [("ripser.cpp", "1", "ok"), ("tda4j-parallel-mt", "2", "timeout"),
+                                ("tda4j-parallel-mt", "1", "ok"), ("giotto-ph-mt", "2", "ok"), ("giotto-ph-mt", "1", "ok")],
+                         "the old 4-thread row of the old commit is not carried over")
+        self.assertEqual(sorted(p.name for p in (self.out / "bars").iterdir() if "tda4j" in p.name),
+                         ["heavy__p2__tda4j-parallel-mt@1.tsv"])
+
+    def test_threads_without_a_tools_filter_the_old_thread_counts_of_a_replaced_series_do_not_survive(self):
+        old, new = self.thread_sweeps()
+        sweep_merge.merge(self.out, [str(old), str(new)])
+        with open(self.out / "sweep.csv", newline="") as f:
+            rows = [(r["tool"], r["threads"]) for r in csv.DictReader(f)]
+        self.assertEqual([t for tool, t in rows if tool == "tda4j-parallel-mt"], ["2", "1"],
+                         "the old 4-thread row of the old commit would stand beside the new commit's 1 and 2")
+
+    def test_threads_the_summary_compares_with_the_baseline_of_the_earlier_part(self):
+        old, new = self.thread_sweeps()
+        sweep_merge.merge(self.out, [f"{old}:!tda4j*", str(new)])
+        env = json.loads((self.out / "env.json").read_text())
+        self.assertEqual(env["args"]["baselines"], "ripser.cpp")
+        self.assertEqual(env["tda4j_git"], "b" * 40)
+        md = (self.out / "sweep.md").read_text()
+        self.assertIn("Merged from:", md)
+        self.assertIn("ripser.cpp (single-threaded)", md)
+        self.assertIn("| tda4j-parallel-mt | 7 | timeout |", md)
+
+    # --- the cubical sweep -----------------------------------------------------------------------------------
+    @staticmethod
+    def cubical_row(engine, n, seconds, status="ok", dim="2", image="random"):
+        return {"dim": dim, "image": image, "n": n, "pixels": str(int(n) ** int(dim)), "engine": engine,
+                "status": status, "median_s": seconds, "us_per_pixel": "0.5" if seconds else "", "maxrss_mb": "100"}
+
+    def test_cubical_the_references_stay_and_the_engines_are_rerun(self):
+        old = self.root / "old"
+        write_sweep(old, sweep_cubical.COLUMNS,
+                    [self.cubical_row("fastcubical", "128", "1.0"), self.cubical_row("fastcubical", "256", "4.0"),
+                     self.cubical_row("cripser", "128", "2.0"), self.cubical_row("gudhi", "128", "3.0")],
+                    env=self.env("a", "01"),
+                    logs=["2d_random_128_fastcubical__cold.out", "2d_random_256_fastcubical__cold.out",
+                          "2d_random_128_cripser__cold.out", "2d_random_128_gudhi__warm.out"])
+        new = self.root / "new"
+        write_sweep(new, sweep_cubical.COLUMNS, [self.cubical_row("fastcubical", "128", "0.8")],
+                    env=self.env("b", "06"), logs=["2d_random_128_fastcubical__cold.out"])
+        sweep_merge.merge(self.out, [f"{old}:!fastcubical", str(new)])
+        with open(self.out / "sweep.csv", newline="") as f:
+            rows = [(r["engine"], r["n"], r["median_s"]) for r in csv.DictReader(f)]
+        self.assertEqual(rows, [("fastcubical", "128", "0.8"), ("cripser", "128", "2.0"), ("gudhi", "128", "3.0")])
+        self.assertEqual(sorted(p.name for p in (self.out / "logs").iterdir()),
+                         ["2d_random_128_cripser__cold.out", "2d_random_128_fastcubical__cold.out",
+                          "2d_random_128_gudhi__warm.out"])
+        md = (self.out / "sweep.md").read_text()
+        self.assertIn("Merged from:", md)
+        self.assertRegex(md, r"\| 2 \| random \| 128 \| 0\.8 \(0\.5\)")
+
+    def test_cubical_the_summary_can_be_rebuilt_from_the_csv_alone(self):
+        d = self.root / "sweep"
+        write_sweep(d, sweep_cubical.COLUMNS, [self.cubical_row("fastcubical", "128", "1.0"),
+                                               self.cubical_row("cohomology-cycles", "128", "2.0"),
+                                               self.cubical_row("cripser", "128", "", status="timeout")])
+        sweep_cubical.summarize(d)
+        md = (d / "sweep.md").read_text()
+        self.assertIn("| 2 | random | 128 | 1 (0.5) | 2 (0.5) |", md.replace("1 (0.5)", "1 (0.5)"))
+        self.assertIn("timeout", md)
+        self.assertIn("0.50", md, "fast / cohomology = 1.0 / 2.0")
+
+    # --- every kind ------------------------------------------------------------------------------------------
+    def test_the_kind_of_a_sweep_is_read_from_its_columns(self):
+        for name, columns in (("threads", sweep_threads.COLUMNS), ("cubical", sweep_cubical.COLUMNS),
+                              ("alpha", sweep_alpha.COLUMNS)):
+            write_sweep(self.root / name, columns, [])
+            self.assertEqual(sweep_merge.kind_of(self.root / name).name, name)
+        write_sweep(self.root / "old-alpha", [c for c in sweep_alpha.COLUMNS if c != "radius"], [])
+        self.assertEqual(sweep_merge.kind_of(self.root / "old-alpha").name, "alpha", "from before the radius sweep")
+
+    def test_sweeps_of_different_kinds_do_not_merge(self):
+        write_sweep(self.root / "a", sweep_alpha.COLUMNS, [])
+        write_sweep(self.root / "b", sweep_cubical.COLUMNS, [])
+        with self.assertRaises(SystemExit) as caught:
+            sweep_merge.merge(self.out, [str(self.root / "a"), str(self.root / "b")])
+        self.assertIn("different kinds", str(caught.exception))
+
+    def test_a_directory_that_holds_a_sweep_is_not_overwritten_and_a_non_sweep_is_refused(self):
+        old, new = self.alpha_sweeps()
+        with self.assertRaises(SystemExit):
+            sweep_merge.merge(old, [str(old), str(new)])
+        with self.assertRaises(SystemExit) as caught:
+            sweep_merge.merge(self.out, [str(self.root / "nowhere")])
+        self.assertIn("no sweep.csv", str(caught.exception))
+
+    def test_drop_leaves_tools_out_and_a_missing_row_does_not_replace_a_measurement(self):
+        old, new = self.alpha_sweeps()
+        sweep_merge.merge(self.out, [str(old), str(new)], drop="gudhi")
+        self.assertNotIn("gudhi", [r[0] for r in self.alpha_rows()])
+        out2 = self.root / "merged2"
+        missing = self.root / "missing"
+        write_sweep(missing, sweep_alpha.COLUMNS, [self.alpha_row("gudhi", "5", status="missing")],
+                    env=self.env("c", "07", alpha_radius_rule="enclosing"))
+        sweep_merge.merge(out2, [str(old), str(missing)])
+        with open(out2 / "sweep.csv", newline="") as f:
+            gudhi = [(r["d"], r["warm_median_s"]) for r in csv.DictReader(f) if r["tool"] == "gudhi"]
+        self.assertEqual(gudhi, [("5", "5.0"), ("6", "7.0")], "the old measurement stands: the series was not replaced")
+
+
+class SweepToolSelectionTests(unittest.TestCase):
+    """The sweeps take `--tools` (and the cubical `--engines`) as bench.py does: names, patterns, exclusions."""
+
+    def test_the_threads_sweep_selects_multithreaded_tools_by_pattern(self):
+        args = Namespace(tools="tda4j*", baselines="", threads="")
+        names = [t[0] for t in sweep_threads.plan(args, 8)]
+        self.assertTrue(names and all(n.startswith("tda4j") for n in names), names)
+        self.assertIn("tda4j-parallel-mt", names)
+        self.assertNotIn("giotto-ph-mt", names)
+        self.assertNotIn("ripser.cpp", names, "no baselines asked for")
+        self.assertEqual([t[0] for t in sweep_threads.plan(Namespace(tools="!tda4j*", baselines="ripser.cpp", threads=""), 8)][0],
+                         "ripser.cpp")
+        self.assertNotIn("tda4j-parallel-mt", [t[0] for t in sweep_threads.plan(Namespace(tools="!tda4j*", baselines="", threads=""), 8)])
+
+    def test_a_pattern_that_names_no_tool_is_an_error(self):
+        with self.assertRaises(SystemExit):
+            sweep_threads.plan(Namespace(tools="nosuchtool*", baselines="", threads=""), 8)
+
+    def test_the_cubical_engines_are_selected_like_tools_and_the_references_are_the_two_external_ones(self):
+        labels = [e[0] for e in sweep_cubical.ENGINES + sweep_cubical.JS_ENGINES] + list(sweep_cubical.REFERENCES)
+        chosen = [lab for lab in labels if bench.tool_selected(lab, "!cripser,!gudhi")]
+        self.assertEqual(chosen, [e[0] for e in sweep_cubical.ENGINES + sweep_cubical.JS_ENGINES])
+        self.assertEqual(sweep_cubical.REFERENCES, ("cripser", "gudhi"))
+
+
 class AnchorsTests(unittest.TestCase):
     """bench.py anchors: whether the rows two runs share took the same time."""
 
@@ -2206,6 +2591,7 @@ class FinalRunScriptTests(unittest.TestCase):
         self.fake = self.root / "run.sh"
         header = "case,p,tool,task,status,reason,agrees,degenerate,vs_reference,note"
         self.fake.write_text('#!/usr/bin/env bash\necho "$*" >> "$FAKE_LOG"\n'
+                             'printf \'%s\\037\' "$@" >> "$FAKE_LOG.argv"; echo >> "$FAKE_LOG.argv"\n'
                              f'if [ "$1" = merge ]; then mkdir -p "$2"; echo "{header}" > "$2/summary.csv"; fi\n'
                              f'if [ "$1" = run ] && [ -n "${{RESULTS_DIR:-}}" ]; then mkdir -p "$RESULTS_DIR"; '
                              f'echo "{header}" > "$RESULTS_DIR/summary.csv"; fi\n')
@@ -2229,6 +2615,41 @@ class FinalRunScriptTests(unittest.TestCase):
 
     def calls(self):
         return self.log.read_text().splitlines() if self.log.exists() else []
+
+    def argv_calls(self):
+        """Every call of the fake run.sh as its list of arguments (the log above joins them with spaces, so an empty
+        argument and an argument with a space cannot be told apart there)."""
+        path = Path(str(self.log) + ".argv")
+        return [line.split("\x1f")[:-1] for line in path.read_text().splitlines()] if path.exists() else []
+
+    def sweeps_stage(self, **env):
+        """The sweeps stage as a TDA4j-only rerun over an earlier run holding all three sweeps."""
+        self.script("freeze")
+        base = self.root / "sweeps-base"
+        for sweep in ("threads", "cubical", "alpha"):
+            (base / sweep).mkdir(parents=True)
+            (base / sweep / "sweep.csv").write_text("x\n")
+        (self.final / "anchors.verdict").write_text("ok\n")
+        for path in (self.log, Path(str(self.log) + ".argv")):
+            path.unlink(missing_ok=True)
+        r = self.script("sweeps", SWEEPS_BASE=str(base), ALLOW_MIXED_ALPHA="1", **env)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return r
+
+    def rerun(self, sweep):
+        """The arguments of the `sweep-<sweep>` call that reran TDA4j's rows, after the name."""
+        return next(a[1:] for a in self.argv_calls() if a[:1] == [f"sweep-{sweep}"])
+
+    @staticmethod
+    def values(argv, option):
+        """Every value `option` is given in `argv`, as `--option value` or `--option=value` (argparse takes the last)."""
+        out = []
+        for i, a in enumerate(argv):
+            if a == option:
+                out.append(argv[i + 1])
+            elif a.startswith(option + "="):
+                out.append(a.split("=", 1)[1])
+        return out
 
     def test_freeze_records_the_commit_builds_and_pins_the_stages_to_it(self):
         r = self.script("freeze")
@@ -2280,6 +2701,36 @@ class FinalRunScriptTests(unittest.TestCase):
         merge = next(c for c in self.calls() if c.startswith("merge "))
         self.assertEqual(merge, f"merge {self.final}/merged {self.base}:!tda4j* {self.final}/tda4j")
         self.assertNotEqual(self.script("merge", ALLOW_DRIFT="1").returncode, 0, "a merge is not overwritten")
+
+    def test_a_tda4j_only_sweep_rerun_stays_tda4j_only_whatever_the_replayed_arguments_select(self):
+        self.sweeps_stage(
+            THREADS_SWEEP_ARGS="--tools tda4j-parallelverb-mt,giotto-ph-mt --baselines ripser.cpp --fields 17",
+            ALPHA_SWEEP_ARGS="--tools=gudhi,!tda4j-helix --out /elsewhere --n 100",
+            CUBICAL_SWEEP_ARGS="--engines fast-cubical,cohomology-cycles --dims 2")
+        threads, alpha, cubical = self.rerun("threads"), self.rerun("alpha"), self.rerun("cubical")
+        self.assertEqual(self.values(threads, "--tools"), ["tda4j-parallelverb-mt"],
+                         "the earlier sweep's TDA4j tool is kept, the other tool's name is not: argparse takes the last")
+        self.assertEqual(self.values(threads, "--baselines"), [""], "no baseline runs, whatever the earlier sweep ran")
+        self.assertEqual(self.values(threads, "--fields"), ["17"], "the other options of the earlier sweep are replayed")
+        self.assertEqual(self.values(alpha, "--tools"), ["tda4j*,!tda4j-helix"],
+                         "no TDA4j name left: every TDA4j tool, minus the exclusion the earlier sweep had")
+        self.assertEqual(self.values(alpha, "--out"), [f"{self.final}/sweeps/alpha-tda4j"],
+                         "the rerun's own directory, the one the merge reads")
+        self.assertEqual(self.values(alpha, "--n"), ["100"])
+        self.assertIn("--no-reference", cubical)
+        self.assertEqual(self.values(cubical, "--engines"), ["fast-cubical,cohomology-cycles"])
+        merges = [a for a in self.argv_calls() if a[:1] == ["sweep-merge"]]
+        self.assertEqual([m[1] for m in merges], [f"{self.final}/sweeps/{s}" for s in ("threads", "cubical", "alpha")])
+
+    def test_the_sweeps_stage_without_an_earlier_run_passes_the_arguments_on_as_they_are(self):
+        self.script("freeze")
+        self.log.unlink()
+        args = "--tools giotto-ph-mt,tda4j-parallelverb-mt --baselines ripser.cpp --fields 17"
+        r = self.script("sweeps", SWEEPS="threads", THREADS_SWEEP_ARGS=args)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        argv = self.rerun("threads")
+        self.assertEqual(self.values(argv, "--tools"), ["giotto-ph-mt,tda4j-parallelverb-mt"])
+        self.assertEqual(self.values(argv, "--baselines"), ["ripser.cpp"])
 
     def test_the_v_construction_stage_runs_the_external_tools_at_z2_and_the_merge_takes_its_rows(self):
         self.script("freeze")
@@ -2495,6 +2946,168 @@ class VConstructionTests(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         dist, note = bench.agreement(bars, reference, 2)
         self.assertEqual((dist, note), (0.0, ""))
+
+
+class FacadeRowsTests(unittest.TestCase):
+    """The JVM facade rows (#232): the call the Scala.js worker makes, run on the JVM, beside the JS rows and the verb's."""
+
+    def test_every_javascript_row_has_a_facade_twin_with_its_options_and_a_verb_twin_to_compare_with(self):
+        js = {(n, t): o for n, k, t, o in bench.TOOLS if k == "tda4j-js"}
+        facade = {(n, t): o for n, k, t, o in bench.TOOLS if o.get("facade")}
+        verb = {(n, t) for n, k, t, o in bench.TOOLS if k == "tda4j" and not o.get("facade")}
+        self.assertTrue(js)
+        self.assertEqual({(bench.facade_twin(n), t) for n, t in js}, set(facade))
+        for (name, task), opts in js.items():
+            twin = facade[(bench.facade_twin(name), task)]
+            self.assertEqual({k: v for k, v in twin.items() if k not in ("facade", "experiment")}, opts, name)
+            self.assertTrue(twin["experiment"], "run only when named")
+            self.assertIn((bench.jvm_twin(name), task), verb, f"{name}: no verb row to set it against")
+            self.assertEqual(bench.verb_twin(bench.facade_twin(name)), bench.jvm_twin(name))
+        self.assertTrue(all(k == "tda4j" for n, k, t, o in bench.TOOLS if o.get("facade")))
+
+    def test_the_names_of_the_twins(self):
+        self.assertEqual(bench.facade_twin("tda4j-js"), "tda4j-facade")
+        self.assertEqual(bench.facade_twin("tda4j-js-cocycles"), "tda4j-facade-cocycles")
+        self.assertEqual(bench.verb_twin("tda4j-facade"), "tda4j")
+        self.assertEqual(bench.verb_twin("tda4j-facade-fastalpha"), "tda4j-fastalpha")
+        self.assertEqual([bench.facade_twin("tda4j"), bench.facade_twin("gudhi"), bench.verb_twin("tda4j-js"),
+                          bench.verb_twin("tda4j-cocycles")], [None] * 4)
+
+    def test_the_command_asks_for_the_facade_on_one_thread_and_only_for_a_facade_row(self):
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "cp").write_text("x.jar")
+            case = bench.Case("c", "vr", "pts.txt", "points", 2)
+            args = Namespace(jvm_heap="1g", jvm_opts="")
+            with mock.patch.dict(os.environ, {"TDA4J_CP": str(Path(d) / "cp")}):
+                def command(opts):
+                    return bench.command("tda4j", "t", opts, case, Path(d), 2, 1.0, 0, 1, "o", args)
+                facade = command({"engine": "auto", "reps": "cycles", "facade": True, "experiment": True})
+                verb = command({"engine": "auto", "reps": "cycles"})
+        self.assertIn("facade=true", facade)
+        self.assertIn("sequential=true", facade, "the JS worker is one thread: so is the facade run it is compared with")
+        self.assertNotIn("facade=true", verb)
+
+    def test_an_experiment_row_is_wanted_only_by_its_own_name(self):
+        self.assertTrue(bench.experiment_wanted("tda4j-facade", "tda4j-js,tda4j,tda4j-facade"))
+        self.assertFalse(bench.experiment_wanted("tda4j-facade", "tda4j*"))
+        self.assertFalse(bench.experiment_wanted("tda4j-facade", "tda4j-facade*,!tda4j-js"))
+        self.assertFalse(bench.experiment_wanted("tda4j-facade", ""))
+        self.assertFalse(bench.experiment_wanted("tda4j-facade", "!tda4j-facade"))
+
+    def test_the_alpha_sweep_takes_the_facade_rows_that_exist_as_experiments(self):
+        named = [n for n in sweep_alpha.TOOL_NAMES if n.startswith("tda4j-facade")]
+        self.assertEqual(sorted(named), ["tda4j-facade", "tda4j-facade-dqp", "tda4j-facade-fastalpha", "tda4j-facade-helix"])
+        alpha = {n: o for n, k, t, o in bench.TOOLS if t == "alpha"}
+        for name in named:
+            self.assertTrue(alpha[name].get("experiment"), name)
+        self.assertEqual({bench.verb_twin(bench.facade_twin(n)) for n in ("tda4j-js", "tda4j-js-helix")},
+                         {"tda4j", "tda4j-helix"})
+
+    def test_the_alpha_sweep_runs_a_facade_row_only_when_it_is_named(self):
+        names = lambda spec, no_js=False: [r[0] for r in sweep_alpha.candidate_tools(spec, no_js)]
+        self.assertNotIn("tda4j-facade", names(""))
+        self.assertNotIn("tda4j-facade", names("tda4j*"))
+        self.assertNotIn("tda4j-facade", names("tda4j-facade*"))
+        self.assertIn("tda4j-js", names(""))
+        both = names("tda4j,tda4j-js,tda4j-facade")
+        self.assertEqual(both, ["tda4j", "tda4j-js", "tda4j-facade"])
+        self.assertEqual(names("tda4j,tda4j-js,tda4j-facade", no_js=True), ["tda4j", "tda4j-facade"])
+        self.assertEqual(names("gudhi"), ["gudhi"], "listed for alpha and for Cech: one row")
+
+    def test_the_bar_counts_of_the_rows_are_compared(self):
+        row = lambda counts: {"bars": json.dumps(counts)}
+        a, b = {"0": 5, "1": 2}, {"1": 2, "0": 5}
+        self.assertEqual(bench.counts_verdict(JS=row(a), verb=row(b), facade=row(a)), "same", "key order is not a difference")
+        verdict = bench.counts_verdict(JS=row(a), verb=row(b), facade=row({"0": 5, "1": 3}))
+        self.assertTrue(verdict.startswith("differ: "), verdict)
+        self.assertIn('facade {"0": 5, "1": 3}', verdict)
+        self.assertEqual(bench.counts_verdict(JS=row(a), verb=None, facade={"bars": ""}), "", "fewer than two to compare")
+        self.assertEqual(bench.counts_verdict(JS=row(a), verb=row(b)), "same")
+
+    def summary_row(self, tool, warm, cold, bars, rss="100", heap=""):
+        return {"case": "c", "task": "vr", "p": "17", "tool": tool, "status": "ok", "warm_median_s": str(warm),
+                "cold_s": str(cold), "maxrss_mb": rss, "heap_peak_mb": heap, "agrees": "True", "bars": json.dumps(bars)}
+
+    def test_the_summary_sets_js_against_the_facade_and_the_verb_and_compares_the_bar_counts(self):
+        bars = {"0": 4, "1": 1}
+        summary = [self.summary_row("tda4j-js", 6, 8, bars, rss="300"), self.summary_row("tda4j", 2, 4, bars, heap="50"),
+                   self.summary_row("tda4j-facade", 3, 5, bars)]
+        text = "\n".join(bench.js_against_jvm(summary) + bench.facade_against_verb(summary))
+        # JS / verb: 6/2 and 8/4; JS / facade: 6/3 and 8/5; memory: 300/100 and 300/50
+        self.assertIn("| c | 17 | tda4j-js | tda4j | 3.00 | 2.00 | 3.00 | 6.00 | True | tda4j-facade | 2.00 | 1.60 | same |", text)
+        self.assertIn("- vr, tda4j-js, p=17: 2.00x over 1 cases", text, "the geometric mean against the facade")
+        # facade / verb: 3/2 and 5/4
+        self.assertIn("| c | 17 | tda4j-facade | tda4j | 1.50 | 1.25 | same |", text)
+
+    def test_a_bar_count_that_differs_is_named_and_a_missing_facade_row_leaves_its_columns_empty(self):
+        summary = [self.summary_row("tda4j-js", 6, 8, {"0": 4, "1": 1}), self.summary_row("tda4j", 2, 4, {"0": 4, "1": 1}),
+                   self.summary_row("tda4j-facade", 3, 5, {"0": 4, "1": 7})]
+        text = "\n".join(bench.js_against_jvm(summary) + bench.facade_against_verb(summary))
+        self.assertIn('differ: JS {"0": 4, "1": 1}; verb {"0": 4, "1": 1}; facade {"0": 4, "1": 7} |', text)
+        self.assertIn('| differ: facade {"0": 4, "1": 7}; verb {"0": 4, "1": 1} |', text)
+        summary[0] = self.summary_row("tda4j-js", 6, 8, {"0": 4, "1": 1}, rss="300")
+        alone = "\n".join(bench.js_against_jvm(summary[:2]) + bench.facade_against_verb(summary[:2]))
+        self.assertIn("| c | 17 | tda4j-js | tda4j | 3.00 | 2.00 | 3.00 |  | True |  |  |  | same |", alone)
+        self.assertNotIn("The JVM facade against the verb", alone)
+
+    def test_a_summary_without_a_javascript_row_has_neither_table(self):
+        summary = [self.summary_row("tda4j", 2, 4, {"0": 4}), self.summary_row("tda4j-facade", 3, 5, {"0": 4})]
+        self.assertEqual(bench.js_against_jvm(summary), [])
+        self.assertIn("The JVM facade against the verb", "\n".join(bench.facade_against_verb(summary)))
+
+    def alpha_sweep_text(self, bars_by_tool):
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d)
+            (out / "bars").mkdir()
+            rows = [dict(shape="interior", n="40", d="9", series="d", seed="0", tool=t, status="ok", reason="",
+                         degenerate="False", densest_facet="2", cold_wall_s="1", cold_s="2", warm_median_s="",
+                         rss_mb="100", rss_src="x", heap_peak_mb="", old_peak_mb="", bars=json.dumps(b), cells="",
+                         radius="") for t, b in bars_by_tool.items()]
+            with open(out / "sweep.csv", "w", newline="") as f:
+                w = csv.DictWriter(f, fieldnames=sweep_alpha.COLUMNS)
+                w.writeheader()
+                w.writerows(rows)
+            sweep_alpha.summarize(out)
+            return (out / "sweep.md").read_text()
+
+    def test_the_alpha_sweep_compares_the_bar_counts_of_the_js_and_facade_rows_with_the_verbs(self):
+        same = {"0": 3, "1": 1}
+        text = self.alpha_sweep_text({"tda4j": same, "tda4j-js": same, "tda4j-facade": same})
+        self.assertIn("## Bars per degree of a Scala.js or JVM facade row", text)
+        self.assertIn("| | tda4j-js | tda4j-facade |", text)
+        self.assertIn("| d = 9 | same | same |", text)
+        text = self.alpha_sweep_text({"tda4j": same, "tda4j-js": same, "tda4j-facade": {"0": 3, "1": 2}})
+        self.assertIn('| d = 9 | differ: JS {"0": 3, "1": 1}; verb {"0": 3, "1": 1}; facade {"0": 3, "1": 2} | '
+                      'differ: facade {"0": 3, "1": 2}; verb {"0": 3, "1": 1} |', text)
+        self.assertNotIn("## Bars per degree", self.alpha_sweep_text({"tda4j": same, "tda4j-dqp": same}))
+
+    def cubical_text(self, facade_bars, with_facade=True):
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d)
+            bars = json.dumps({"0": 2, "1": 1})
+            rows = [(2, "random", 128, "fastcubical", "ok", 1.0, 0.1, 100, bars),
+                    (2, "random", 128, "js-fastcubical", "ok", 2.0, 0.2, 100, bars)]
+            if with_facade:
+                rows.append((2, "random", 128, "facade-fastcubical", "ok", 1.6, 0.16, 100, json.dumps(facade_bars)))
+            sweep_cubical.write_table(out, rows)
+            return (out / "sweep.md").read_text()
+
+    def test_the_cubical_sweep_has_the_facade_columns_only_when_a_facade_engine_ran(self):
+        text = self.cubical_text({"0": 2, "1": 1})
+        self.assertIn("| facade-fastcubical | fast/coh | js/jvm | js/facade | bars |", text)
+        self.assertIn("| 1.6 (0.16) |  | 2.00 | 1.25 | same |", text)
+        self.assertIn('differ: JS {"0": 2, "1": 1}; verb {"0": 2, "1": 1}; facade {"0": 2, "1": 0}',
+                      self.cubical_text({"0": 2, "1": 0}))
+        plain = self.cubical_text(None, with_facade=False)
+        self.assertNotIn("facade", plain)
+        self.assertIn("| fast/coh | js/jvm |", plain)
+
+    def test_the_cubical_sweep_runs_a_facade_engine_only_when_named_and_the_command_asks_for_the_facade(self):
+        source = (HERE_BENCH / "sweep_cubical.py").read_text()
+        self.assertIn("bench.experiment_wanted(lab, args.engines)", source)
+        self.assertIn('(["facade=true"] if lab in FACADE_LABELS else [])', source)
+        self.assertEqual(sweep_cubical.FACADE_LABELS, {"facade-fastcubical", "facade-cohomology-cycles"})
+        self.assertEqual([e[1:] for e in sweep_cubical.FACADE_ENGINES], [e[1:] for e in sweep_cubical.JS_ENGINES])
 
 
 if __name__ == "__main__":
