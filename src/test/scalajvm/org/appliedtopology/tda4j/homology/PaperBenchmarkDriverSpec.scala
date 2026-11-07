@@ -1,6 +1,7 @@
 package org.appliedtopology.tda4j
 
 import org.specs2.mutable.Specification
+import scala.jdk.CollectionConverters.ListHasAsScala
 
 /** The benchmark driver's V-construction input (`construction=V`): an array of vertex values is run as the
   * T-construction image that gives every cell the largest value of its vertices. The refinement is checked cell by cell
@@ -66,5 +67,183 @@ class PaperBenchmarkDriverSpec extends Specification:
       val ring = Array(0.0, 0.0, 0.0, 0.0, 5.0, 0.0, 0.0, 0.0, 0.0)
       val (refined, refinedShape) = refine(ring, IndexedSeq(3, 3))
       bars(refined, refinedShape, 1) === List((0, 0.0, Double.PositiveInfinity), (1, 0.0, 5.0))
+    }
+  }
+
+/** `facade=true`: the driver makes the call the Scala.js worker makes, through `matlab.TDA4j`, with the option strings
+  * the worker's options object becomes. Two things are checked: that the option strings are the worker's (the
+  * discriminating failure is a facade run that quietly does other work than the JavaScript one it is compared with),
+  * and that on every task the facade run reports the bars the verb run reports, with the representatives read.
+  */
+class PaperBenchmarkDriverFacadeSpec extends Specification:
+  sequential
+
+  private def options(
+    task: String = "vr",
+    engine: String = "auto",
+    reps: String = "cycles",
+    threshold: Option[String] = None,
+    backend: String = "default"
+  ) = PaperBenchmarkDriver.facadeOptions(task, 2, 17, threshold, engine, reps, backend).toList
+
+  private val base = List("maxDimension", "2", "prime", "17", "minPersistence", "0")
+
+  "facadeOptions" should {
+    "pass the dimension, the prime and a zero persistence threshold, and nothing else, for the defaults" in
+      options() === base
+    "name an engine the way the facade does, and only when it is not auto" in
+      (
+        options(engine = "fastcubical", task = "cubical"),
+        options(engine = "fastalpha", task = "alpha"),
+        options(engine = "cohomology")
+      ) === (
+        (base ++ List("engine", "fast-cubical")),
+        (base ++ List("engine", "fast-alpha", "complex", "alpha")),
+        (base ++ List("engine", "cohomology"))
+      )
+    "ask for cocycles, the threshold, the complex and the alpha backend where the worker does" in {
+      options(task = "alpha", reps = "cocycles", threshold = Some("1.8"), backend = "dqp") ===
+        base ++ List(
+          "representativeType",
+          "cocycles",
+          "maxFiltrationValue",
+          "1.8",
+          "complex",
+          "alpha",
+          "alphaBackend",
+          "dqp"
+        )
+      options(task = "cech") === base ++ List("complex", "cech")
+    }
+    "refuse what the JavaScript API does not offer" in {
+      val refused = List(
+        () => options(reps = "none"),
+        () => options(engine = "parallel"),
+        () => options(engine = "fastalpha-top", task = "alpha"),
+        () => options(engine = "fastalpha", task = "alpha", backend = "dqp"),
+        () => options(engine = "fastalpha", task = "alpha", threshold = Some("1.0")),
+        () => options(task = "witness")
+      ).map(call => scala.util.Try(call()).isFailure)
+      refused === List.fill(6)(true)
+    }
+  }
+
+  // The driver on a file, one JSON line out: what the harness reads.
+  private def tempFile(name: String, write: java.io.File => Unit): java.io.File =
+    val file = java.io.File.createTempFile("facade-spec-", name)
+    file.deleteOnExit()
+    write(file)
+    file
+
+  private def writeText(lines: Seq[String])(file: java.io.File): Unit =
+    java.nio.file.Files.write(file.toPath, lines.mkString("\n").getBytes("UTF-8"))
+
+  /** A version 1 `.npy` file: float64, little-endian, C order. */
+  private def writeNpy(values: Array[Double], shape: Seq[Int])(file: java.io.File): Unit =
+    val shapeText = if shape.size == 1 then s"(${shape.head},)" else shape.mkString("(", ", ", ")")
+    val body = s"{'descr': '<f8', 'fortran_order': False, 'shape': $shapeText, }"
+    val padded = body + " " * ((64 - (10 + body.length + 1) % 64) % 64) + "\n"
+    val buffer =
+      java.nio.ByteBuffer.allocate(10 + padded.length + 8 * values.length).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+    buffer.put(0x93.toByte).put("NUMPY".getBytes("ASCII")).put(1.toByte).put(0.toByte).putShort(padded.length.toShort)
+    buffer.put(padded.getBytes("ASCII"))
+    values.foreach(buffer.putDouble)
+    java.nio.file.Files.write(file.toPath, buffer.array())
+
+  private case class Run(bars: List[String], json: String)
+
+  private def run(input: java.io.File, args: String*): Run =
+    val out = java.io.File.createTempFile("facade-spec-", ".tsv")
+    out.deleteOnExit()
+    val captured = new java.io.ByteArrayOutputStream
+    Console.withOut(captured) {
+      PaperBenchmarkDriver.main(
+        Array(s"input=${input.getPath}", s"out=${out.getPath}", "warmup=0", "trials=1", "sequential=true") ++ args
+      )
+    }
+    val bars = java.nio.file.Files.readAllLines(out.toPath).asScala.toList.sorted
+    Run(bars, captured.toString("UTF-8").linesIterator.next())
+
+  private def field(json: String, key: String): String =
+    s""""$key":(\\{[^}]*\\}|[^,}]*)""".r.findFirstMatchIn(json).map(_.group(1)).getOrElse("")
+
+  // Twelve points on a circle of radius 1, then three noise points: a loop at scale about 0.5 and some small bars.
+  private val circle: Seq[String] =
+    (0 until 12).map(k => s"${math.cos(2 * math.Pi * k / 12)} ${math.sin(2 * math.Pi * k / 12)}") ++
+      Seq("0.13 0.07", "-0.4 0.21", "0.3 -0.62")
+
+  /** What differs between a verb run and a facade run of the same task on `input`: the barcode, the counts the JSON
+    * line reports, the facade marker. Empty if nothing does, and the verb's barcode has bars in it (an empty one would
+    * agree with anything).
+    */
+  private def differences(task: String, input: java.io.File, args: String*): List[String] =
+    val verb = run(input, ("task=" + task) +: "dim=2" +: args*)
+    val facade = run(input, ("task=" + task) +: "dim=2" +: "facade=true" +: args*)
+    List(
+      Option.when(verb.bars.isEmpty)(s"$task ${args.mkString(" ")}: the verb run has no bars"),
+      Option.when(facade.bars != verb.bars)(s"$task ${args.mkString(" ")}: bars ${facade.bars} against ${verb.bars}"),
+      Option.when(field(facade.json, "bars") != field(verb.json, "bars"))(
+        s"$task ${args.mkString(" ")}: counts ${field(facade.json, "bars")} against ${field(verb.json, "bars")}"
+      ),
+      Option.when(field(facade.json, "facade") != "true")(s"$task: the facade line does not say facade"),
+      Option.when(field(verb.json, "facade") != "")(s"$task: the verb line says facade")
+    ).flatten
+
+  "a facade run" should {
+    "report the bars of the verb run on points, with and without a threshold, with cocycles and over F_2" in {
+      val input = tempFile(".txt", writeText(circle))
+      val wrong = List(
+        differences("vr", input, "format=points"),
+        differences("vr", input, "format=points", "threshold=0.7"),
+        differences("vr", input, "format=points", "reps=cocycles", "engine=cohomology"),
+        differences("vr", input, "format=points", "p=2")
+      ).flatten
+      wrong must beEmpty
+    }
+    "report the bars of the verb run on a distance matrix" in {
+      val points = circle.map(_.split(" ").map(_.toDouble))
+      val matrix = points.map(a => points.map(b => math.hypot(a(0) - b(0), a(1) - b(1))).mkString(" "))
+      val input = tempFile(".txt", writeText(matrix))
+      differences("vr", input, "format=distance") must beEmpty
+    }
+    "report the bars of the verb run on alpha and Cech complexes" in {
+      val input = tempFile(".txt", writeText(circle))
+      val wrong = List(
+        differences("alpha", input),
+        differences("alpha", input, "backend=bowyer-watson", "reps=cocycles"),
+        differences("cech", input)
+      ).flatten
+      wrong must beEmpty
+    }
+    "report the bars and the representatives of the verb run on a cubical image, whichever the engine" in {
+      // A 6 x 6 image: a frame of high values, a block of middle ones inside, low ones between: loops that are born
+      // and die at different values. The frame makes the scale 400, so the default persistence threshold (1% of it)
+      // would hide the short bars: the representatives are read for every bar only because `minPersistence` is 0.
+      val values = Array.tabulate(36) { k =>
+        val (i, j) = (k / 6, k % 6)
+        if i == 0 || j == 0 || i == 5 || j == 5 then 400.0
+        else if i >= 2 && i <= 3 && j >= 2 && j <= 3 then 2.0
+        else ((i * 7 + j * 3) % 3).toDouble
+      }
+      val input = tempFile(".npy", writeNpy(values, Seq(6, 6)))
+      val wrong = for
+        engine <- List(Nil, List("engine=fastcubical"), List("engine=cohomology", "reps=cocycles"))
+        verb = run(input, List("task=cubical", "dim=1", "p=2", "read=true") ++ engine*)
+        facade = run(input, List("task=cubical", "dim=1", "p=2", "read=true", "facade=true") ++ engine*)
+        problem <- List(
+          Option.when(verb.bars.isEmpty)(s"$engine: the verb run has no bars"),
+          Option.when(facade.bars != verb.bars)(s"$engine: bars ${facade.bars} against ${verb.bars}"),
+          Option.when(field(facade.json, "bars") != field(verb.json, "bars"))(s"$engine: counts differ"),
+          Option.when(field(facade.json, "terms_read").toLong <= 0L)(s"$engine: no representative terms were read"),
+          Option.when(field(facade.json, "terms_read") != field(verb.json, "terms_read"))(
+            s"$engine: terms read ${field(facade.json, "terms_read")} against ${field(verb.json, "terms_read")}"
+          ),
+          // `representative(i)` calls both getters; a run that skipped the coefficients would time half the work.
+          Option.when(field(facade.json, "coefficients_read") != field(facade.json, "terms_read"))(
+            s"$engine: coefficients read ${field(facade.json, "coefficients_read")} against terms ${field(facade.json, "terms_read")}"
+          )
+        ).flatten
+      yield problem
+      wrong must beEmpty
     }
   }

@@ -35,6 +35,7 @@ thread, the barcode checks). `sweep_threads.py --summarize DIR` rebuilds the tab
 import argparse
 import csv
 import datetime
+import fnmatch
 import json
 import os
 import shutil
@@ -107,16 +108,17 @@ class Rows:
 
 def plan(args, cpus):
     """[(name, kind, opts, counts)]: the baselines at one thread, then the multithreaded tools at every count."""
-    wanted = set(args.tools.split(",")) if args.tools else None
     baselines = [b for b in args.baselines.split(",") if b]
     vr = {name: (kind, opts) for name, kind, task, opts in bench.TOOLS if task == "vr"}
-    unknown = [b for b in baselines if b not in vr] + [t for t in (wanted or ()) if t not in vr]
+    named = [t.strip().removeprefix("!") for t in args.tools.split(",") if t.strip()]
+    unknown = [b for b in baselines if b not in vr] + \
+              [t for t in named if not any(fnmatch.fnmatchcase(name, t) for name in vr)]
     if unknown:
         raise SystemExit(f"not a Vietoris-Rips tool of bench.py: {', '.join(unknown)}")
     counts = thread_counts(args.threads, cpus)
     return ([(b, vr[b][0], dict(vr[b][1]), [1]) for b in baselines] +
             [(name, kind, dict(opts), counts) for name, (kind, opts) in vr.items()
-             if opts.get("multithreaded") and (wanted is None or name in wanted)])
+             if opts.get("multithreaded") and bench.tool_selected(name, args.tools)])
 
 
 def sweep(args, out, cpus, pin):
@@ -182,7 +184,9 @@ def parser():
     ap.add_argument("--cases", default=DEFAULT_CASES,
                     help="comma-separated Vietoris-Rips cases of bench.py, or cube10_40 (generated)")
     ap.add_argument("--threads", default="", help="comma-separated thread counts (default: 1, 2, 4, ... up to the CPUs)")
-    ap.add_argument("--tools", default="", help="comma-separated multithreaded tools (default: all available)")
+    ap.add_argument("--tools", default="",
+                    help="comma-separated multithreaded tools or patterns (`tda4j*`; `!dipha-mt` leaves one out); "
+                         "default: all available")
     ap.add_argument("--baselines", default="ripser.cpp", help="single-threaded tools run once per case, for scale")
     ap.add_argument("--field", type=int, default=2)
     ap.add_argument("--warmup", type=int, default=1)
@@ -266,6 +270,7 @@ def summarize(out, bottleneck=None):
              + (bench.revision_text(env) + " " if bench.revision_text(env) else "")
              + "Times in seconds: the warm median, or the cold computation when it was too slow to repeat. "
                "In parentheses, the speedup over the tool's own run at 1 thread.", ""]
+    lines += bench.merged_text(env)
     for cname, p in dict.fromkeys((r["case"], r["p"]) for r in rows):
         tools = [t for (c, q, t) in by if (c, q) == (cname, p)]
         counts = sorted({t for tool in tools for t in by[(cname, p, tool)]})
