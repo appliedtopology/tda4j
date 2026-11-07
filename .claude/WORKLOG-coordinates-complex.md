@@ -37,3 +37,20 @@ complex or with the wrong prime, the landmark refusal removed) each fail an exam
 were mutated the same way (JS: `complex` ignored in `h1Bars` and in `circularCoordinates`; Python: ignored in each of the
 three) and each fails a test. Python 116 tests pass against the assembly jar (JPype in a scratch venv); JS `ExportsSpec`
 passes on Node 22.
+
+## The TypeScript declarations
+
+`npm/index.d.ts` was the one place the new options were missing (found in review: `h1Bars` took no options at all, and
+`circularCoordinates` and `toroidalCoordinates` listed neither `complex` nor `numLandmarks`, which the JS exports had accepted
+since PR #300 for the landmarks). It now has `CoordinatesComplex` (`"vr" | "cech" | "alpha"`) and the options of the three
+functions, with the rule that `numLandmarks` is 0 for `"cech"` and `"alpha"`.
+
+Checked by compiling a consumer with `tsc` 6.0.2 (`--strict`, `module: nodenext`) against the packed file placed as
+`node_modules/@appliedtopology/tda4j/index.d.ts`: positive calls (`h1Bars(points)`, `h1Bars(points, { complex: "cech",
+prime: 47 })`, `{ numLandmarks: 3 }`, `circularCoordinates` with `cocycleIndex`, `prime`, `complex` and `numLandmarks`,
+`toroidalCoordinates` with `complex`, `reduce`, `prime`, `numLandmarks`) and three `// @ts-expect-error` lines (`complex:
+"witness"`, a misspelled `numLandmark`, `cocycleIndex` on the toroidal function). It compiles clean against the new
+declarations and fails with eight errors against the declarations of `origin/scala` (`has no exported member
+'CoordinatesComplex'`, `Expected 1 arguments, but got 2`, the unknown properties). The fixture is not in the repository and
+CI does not typecheck the declarations: #323.
+
