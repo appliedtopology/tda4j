@@ -474,23 +474,33 @@ object Exports:
   /** The loops of the point cloud's Vietoris-Rips complex: `[birth, death]` for each persistent class of degree 1, the
     * most persistent first. Loop `i` is `cocycleIndex: i` of `circularCoordinates`; pick `r` between its birth and
     * death. The option `numLandmarks` (default 0, every point) gives the loops of the balls around that many maxmin
-    * landmarks instead, which the coordinates with the same `numLandmarks` use (Perea's sparse coordinates).
+    * landmarks instead, which the coordinates with the same `numLandmarks` use (Perea's sparse coordinates). The option
+    * `complex` (`'vr'`, the default, `'cech'` or `'alpha'`) gives the loops of that complex over the field with `prime`
+    * elements (option, default 47), at a ball's radius; they have no landmark form.
     */
   @JSExportTopLevel("h1Bars")
   def h1Bars(
     points: js.Array[js.Array[Double]],
     options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
   ): js.Array[js.Array[Double]] = guarded {
-    val chosen = numbers(options, Set("numLandmarks"))
-    grid(TDA4j.h1Bars(matrix(points), chosen.get("numLandmarks").fold(0)(integer("numLandmarks", _))))
+    val chosen = numbers(options, Set("numLandmarks", "prime"), Set("complex"))
+    grid(
+      TDA4j.h1Bars(
+        matrix(points),
+        chosen.get("numLandmarks").fold(0)(integer("numLandmarks", _)),
+        textOption(options, "complex", "vr"),
+        chosen.get("prime").fold(47)(integer("prime", _))
+      )
+    )
   }
 
   /** Circular coordinates of a point cloud at scale `r`: one angle in `[0, 1)` per point for the loop `cocycleIndex`
     * (option, default 0) of `h1Bars`, over the field with `prime` elements (option, an odd prime, default 47). The
     * option `numLandmarks` (default 0, every point) computes Perea's sparse coordinates over that many maxmin
     * landmarks, for many points. Returns `{ theta, birth, death, r, prime }`, where `theta[i]` is `NaN` for a point
-    * outside the loop's connected component (or, with landmarks, no landmark ball of the loop holds). Throws if the
-    * loop has no integer lift at `prime`: use a larger prime.
+    * outside the loop's connected component (or, with landmarks, no landmark ball of the loop holds). The option
+    * `complex` (`'vr'`, the default, `'cech'` or `'alpha'`) takes the loop of `h1Bars` with the same `complex`. Throws
+    * if the loop has no integer lift at `prime`: use a larger prime.
     */
   @JSExportTopLevel("circularCoordinates")
   def circularCoordinates(
@@ -498,13 +508,14 @@ object Exports:
     r: Double,
     options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
   ): js.Object = guarded {
-    val chosen = numbers(options, Set("cocycleIndex", "prime", "numLandmarks"))
+    val chosen = numbers(options, Set("cocycleIndex", "prime", "numLandmarks"), Set("complex"))
     val result = TDA4j.circularCoordinates(
       matrix(points),
       r,
       chosen.get("cocycleIndex").fold(0)(integer("cocycleIndex", _)),
       chosen.get("prime").fold(47)(integer("prime", _)),
-      chosen.get("numLandmarks").fold(0)(integer("numLandmarks", _))
+      chosen.get("numLandmarks").fold(0)(integer("numLandmarks", _)),
+      textOption(options, "complex", "vr")
     )
     js.Dynamic
       .literal(
@@ -519,7 +530,8 @@ object Exports:
 
   /** Toroidal coordinates of a point cloud at scale `r`: `k` angles per point, combining the loops `cocycleIndices` of
     * `h1Bars` that are alive together at `r`. Options: `prime` (default 47), `reduce` (lattice reduction of the
-    * coordinates, default `true`) and `numLandmarks` (default 0, every point; Perea's sparse coordinates). Returns
+    * coordinates, default `true`), `numLandmarks` (default 0, every point; Perea's sparse coordinates) and `complex`
+    * (`'vr'`, the default, `'cech'` or `'alpha'`, as in `circularCoordinates`). Returns
     * `{ theta, cocycleIndices, basisChange, originalGram, reducedGram, r, prime }`, where `theta[c][i]` is coordinate
     * `c` of point `i`.
     */
@@ -531,10 +543,10 @@ object Exports:
     options: js.UndefOr[js.Dictionary[js.Any]] = js.undefined
   ): js.Object = guarded {
     val dictionary = options.getOrElse(js.Dictionary[js.Any]())
-    val unknown = dictionary.keys.filterNot(Set("prime", "reduce", "numLandmarks")).toSeq
+    val unknown = dictionary.keys.filterNot(Set("prime", "reduce", "numLandmarks", "complex")).toSeq
     require(
       unknown.isEmpty,
-      s"unknown option ${unknown.mkString(", ")}; the options are prime, reduce and numLandmarks"
+      s"unknown option ${unknown.mkString(", ")}; the options are prime, reduce, numLandmarks and complex"
     )
     val prime = dictionary.get("prime").fold(47)(integer("prime", _))
     val numLandmarks = dictionary.get("numLandmarks").fold(0)(integer("numLandmarks", _))
@@ -542,7 +554,9 @@ object Exports:
       require(js.typeOf(value) == "boolean", s"option reduce must be a boolean, not a ${js.typeOf(value)}")
       value.asInstanceOf[Boolean]
     }
-    val result = TDA4j.toroidalCoordinates(matrix(points), r, cocycleIndices.toArray, prime, reduce, numLandmarks)
+    val complex = textOption(options, "complex", "vr")
+    val result =
+      TDA4j.toroidalCoordinates(matrix(points), r, cocycleIndices.toArray, prime, reduce, numLandmarks, complex)
     js.Dynamic
       .literal(
         theta = js.Array((0 until result.dimension()).map(c => js.Array(result.theta(c)*))*),
@@ -602,18 +616,29 @@ object Exports:
       .asInstanceOf[js.Object]
 
   /** The numeric options of `options`, refusing a key outside `allowed` and a value that is not a number. */
-  private def numbers(options: js.UndefOr[js.Dictionary[js.Any]], allowed: Set[String]): Map[String, Double] =
+  // `text` names the options that are text (`complex`): allowed, but not numbers, read by `textOption`.
+  private def numbers(
+    options: js.UndefOr[js.Dictionary[js.Any]],
+    allowed: Set[String],
+    text: Set[String] = Set.empty
+  ): Map[String, Double] =
     options.toOption.fold(Map.empty[String, Double]) { dictionary =>
-      val unknown = dictionary.keys.filterNot(allowed).toSeq
+      val unknown = dictionary.keys.filterNot(allowed ++ text).toSeq
       require(
         unknown.isEmpty,
-        s"unknown option ${unknown.mkString(", ")}; the options are ${allowed.toSeq.sorted.mkString(", ")}"
+        s"unknown option ${unknown.mkString(", ")}; the options are ${(allowed ++ text).toSeq.sorted.mkString(", ")}"
       )
       dictionary.toMap.collect {
-        case (key, value) if !js.isUndefined(value) =>
+        case (key, value) if !js.isUndefined(value) && !text(key) =>
           require(js.typeOf(value) == "number", s"option $key must be a number, not a ${js.typeOf(value)}")
           key -> value.asInstanceOf[Double]
       }
+    }
+
+  private def textOption(options: js.UndefOr[js.Dictionary[js.Any]], name: String, default: String): String =
+    options.toOption.flatMap(_.get(name)).filterNot(js.isUndefined).fold(default) { value =>
+      require(js.typeOf(value) == "string", s"option $name must be a string, not a ${js.typeOf(value)}")
+      value.asInstanceOf[String]
     }
 
   private def integer(name: String, value: Double): Int =

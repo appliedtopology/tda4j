@@ -71,6 +71,29 @@ def test_sparse_circular_coordinates_give_every_point_an_angle_from_a_few_landma
     assert torus.theta.shape == (1, 200)
 
 
+def test_circular_coordinates_of_a_cech_complex_use_the_loop_of_that_complex(circle):
+    points = circle(30)
+    vr_birth = tda4j.h1_bars(points)[0][0]
+    birth, death = tda4j.h1_bars(points, complex="cech")[0]
+    # radii against diameters: the loop is born at about half the scale
+    assert birth < 0.75 * vr_birth
+    result = tda4j.circular_coordinates(points, (birth + death) / 2, complex="cech")
+    assert result.birth == pytest.approx(birth) and result.death == pytest.approx(death)
+    angles = np.sort(result.theta)
+    steps = np.diff(np.append(angles, angles[0] + 1.0))
+    assert np.allclose(steps, 1 / 30, atol=1e-6)
+    r = (birth + death) / 2
+    torus = tda4j.toroidal_coordinates(points, r, [0], complex="cech")
+    assert torus.theta.shape == (1, 30)
+    # the Cech complex at r is not the Vietoris-Rips complex at r: another harmonic cocycle, another Gram matrix
+    assert not np.allclose(torus.original_gram, tda4j.toroidal_coordinates(points, r, [0]).original_gram)
+
+
+def test_a_complex_with_no_sparse_form_refuses_landmarks_and_says_what_to_do(circle):
+    with pytest.raises(ValueError, match="no sparse form"):
+        tda4j.h1_bars(circle(30), num_landmarks=5, complex="cech")
+
+
 def test_a_prime_without_an_integer_lift_is_reported_as_the_library_error_that_says_so(circle):
     points = circle(30)
     birth, death = tda4j.h1_bars(points)[0]
