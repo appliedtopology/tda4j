@@ -46,7 +46,7 @@
     Source
    </dt>
    <dd class="body-medium">
-    <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L186" target="_blank">FiniteMetricSpace.scala</a>
+    <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L209" target="_blank">FiniteMetricSpace.scala</a>
    </dd>
    <dt class="body-small">
     Graph
@@ -145,7 +145,7 @@ node4 -> node1;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L221" target="_blank">FiniteMetricSpace.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L244" target="_blank">FiniteMetricSpace.scala</a>
               </dd>
              </dl>
             </div>
@@ -201,7 +201,7 @@ node4 -> node1;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L243" target="_blank">FiniteMetricSpace.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L266" target="_blank">FiniteMetricSpace.scala</a>
               </dd>
              </dl>
             </div>
@@ -242,7 +242,120 @@ node4 -> node1;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L220" target="_blank">FiniteMetricSpace.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L243" target="_blank">FiniteMetricSpace.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="longestDistanceByQueries-fffff256">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="EuclideanMetricSpace.html#longestDistanceByQueries-fffff256" t="n" class="documentableName ">longestDistanceByQueries</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">threshold</span>: <span data-unresolved-link="" t="t">Double</span>): <span data-unresolved-link="" t="t">Option</span>[<span data-unresolved-link="" t="t">Double</span>]
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>The longest distance at most <code>threshold</code> by one query per point on a vantage-point tree, the points on all threads; <code>None</code> when a point has so many others within reach that the tree stops paying (a query that would measure more than a quarter of the points is given up, and with it the whole search): the cost of a point is then about the cost of scanning the points once, so the queries would cost as much as the pass over all pairs.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p>The longest distance at most <code>threshold</code> by one query per point on a vantage-point tree, the points on all threads; <code>None</code> when a point has so many others within reach that the tree stops paying (a query that would measure more than a quarter of the points is given up, and with it the whole search): the cost of a point is then about the cost of scanning the points once, so the queries would cost as much as the pass over all pairs.</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L322" target="_blank">FiniteMetricSpace.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="longestDistanceByRows-5b2">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="EuclideanMetricSpace.html#longestDistanceByRows-5b2" t="n" class="documentableName ">longestDistanceByRows</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">threshold</span>: <span data-unresolved-link="" t="t">Double</span>): <span data-unresolved-link="" t="t">Double</span>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>The longest distance at most <code>threshold</code> by the pass over all pairs, one task per point (its pairs with the points after it), the tasks shared between all threads.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p>The longest distance at most <code>threshold</code> by the pass over all pairs, one task per point (its pairs with the points after it), the tasks shared between all threads.</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L338" target="_blank">FiniteMetricSpace.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+        <div class="documentableElement" id="longestDistanceWithin-5b2" data-f-keywords="override">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"><span t="k">override </span></span><span class="kind"><span t="k">def </span></span><a href="EuclideanMetricSpace.html#longestDistanceWithin-5b2" t="n" class="documentableName ">longestDistanceWithin</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">threshold</span>: <span data-unresolved-link="" t="t">Double</span>): <span data-unresolved-link="" t="t">Double</span>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>The same number as <a href="FiniteMetricSpace.html#longestDistanceWithin-5b2">FiniteMetricSpace.longestDistanceWithin</a>. Up to <a href="EuclideanMetricSpace$.html#MaxCachedPoints-0">EuclideanMetricSpace.MaxCachedPoints</a> points the pass over the pairs is cheap, and it runs as it does for any space. Above that, the distances are not cached and the pass costs <code>n^2 / 2</code> of them, so it is replaced by one query per point on the vantage-point tree (<a href="EuclideanMetricSpace.html#longestDistanceByQueries-fffff256">longestDistanceByQueries</a>), which costs a few hundred distances per point on a cloud where the threshold keeps few of the pairs, and that is where a long run is. Where it keeps many, the pass runs as one task per point on all threads (<a href="EuclideanMetricSpace.html#longestDistanceByRows-5b2">longestDistanceByRows</a>).</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p>The same number as <a href="FiniteMetricSpace.html#longestDistanceWithin-5b2">FiniteMetricSpace.longestDistanceWithin</a>. Up to <a href="EuclideanMetricSpace$.html#MaxCachedPoints-0">EuclideanMetricSpace.MaxCachedPoints</a> points the pass over the pairs is cheap, and it runs as it does for any space. Above that, the distances are not cached and the pass costs <code>n^2 / 2</code> of them, so it is replaced by one query per point on the vantage-point tree (<a href="EuclideanMetricSpace.html#longestDistanceByQueries-fffff256">longestDistanceByQueries</a>), which costs a few hundred distances per point on a cloud where the threshold keeps few of the pairs, and that is where a long run is. Where it keeps many, the pass runs as one task per point on all threads (<a href="EuclideanMetricSpace.html#longestDistanceByRows-5b2">longestDistanceByRows</a>).</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Definition Classes
+              </dt>
+              <dd class="body-medium">
+               <div>
+                <a href="FiniteMetricSpace.html">FiniteMetricSpace</a>
+               </div>
+              </dd>
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L313" target="_blank">FiniteMetricSpace.scala</a>
               </dd>
              </dl>
             </div>
@@ -277,7 +390,7 @@ node4 -> node1;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L271" target="_blank">FiniteMetricSpace.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L304" target="_blank">FiniteMetricSpace.scala</a>
               </dd>
              </dl>
             </div>
@@ -312,7 +425,7 @@ node4 -> node1;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L195" target="_blank">FiniteMetricSpace.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L218" target="_blank">FiniteMetricSpace.scala</a>
               </dd>
              </dl>
             </div>
@@ -347,7 +460,7 @@ node4 -> node1;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L202" target="_blank">FiniteMetricSpace.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L225" target="_blank">FiniteMetricSpace.scala</a>
               </dd>
              </dl>
             </div>
@@ -382,7 +495,7 @@ node4 -> node1;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L192" target="_blank">FiniteMetricSpace.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L215" target="_blank">FiniteMetricSpace.scala</a>
               </dd>
              </dl>
             </div>
@@ -417,7 +530,7 @@ node4 -> node1;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L219" target="_blank">FiniteMetricSpace.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L242" target="_blank">FiniteMetricSpace.scala</a>
               </dd>
              </dl>
             </div>
@@ -455,7 +568,7 @@ node4 -> node1;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L186" target="_blank">FiniteMetricSpace.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L209" target="_blank">FiniteMetricSpace.scala</a>
               </dd>
              </dl>
             </div>
@@ -490,7 +603,7 @@ node4 -> node1;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L265" target="_blank">FiniteMetricSpace.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L288" target="_blank">FiniteMetricSpace.scala</a>
               </dd>
              </dl>
             </div>
@@ -525,7 +638,7 @@ node4 -> node1;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L268" target="_blank">FiniteMetricSpace.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L293" target="_blank">FiniteMetricSpace.scala</a>
               </dd>
              </dl>
             </div>

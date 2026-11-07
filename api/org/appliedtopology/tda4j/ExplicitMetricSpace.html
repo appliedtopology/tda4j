@@ -43,7 +43,7 @@
     Source
    </dt>
    <dd class="body-medium">
-    <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L155" target="_blank">FiniteMetricSpace.scala</a>
+    <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L178" target="_blank">FiniteMetricSpace.scala</a>
    </dd>
    <dt class="body-small">
     Graph
@@ -142,7 +142,7 @@ node4 -> node1;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L170" target="_blank">FiniteMetricSpace.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L193" target="_blank">FiniteMetricSpace.scala</a>
               </dd>
              </dl>
             </div>
@@ -198,7 +198,7 @@ node4 -> node1;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L165" target="_blank">FiniteMetricSpace.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L188" target="_blank">FiniteMetricSpace.scala</a>
               </dd>
              </dl>
             </div>
@@ -239,7 +239,7 @@ node4 -> node1;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L169" target="_blank">FiniteMetricSpace.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L192" target="_blank">FiniteMetricSpace.scala</a>
               </dd>
              </dl>
             </div>
@@ -274,7 +274,57 @@ node4 -> node1;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L168" target="_blank">FiniteMetricSpace.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L191" target="_blank">FiniteMetricSpace.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
+       </div>
+      </section>
+      <section id="Inherited-methods">
+       <div class="documentableList expand">
+        <div class="documentableList-expander">
+         <button class="icon-button show-content expand"></button>
+         <h4 class="groupHeader h200">Inherited methods</h4>
+        </div>
+        <div class="documentableElement" id="longestDistanceWithin-5b2" data-f-inherited="FiniteMetricSpace">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="ExplicitMetricSpace.html#longestDistanceWithin-5b2" t="n" class="documentableName ">longestDistanceWithin</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">threshold</span>: <span data-unresolved-link="" t="t">Double</span>): <span data-unresolved-link="" t="t">Double</span>
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>The longest distance between two points of the space that is at most <code>threshold</code>, <code>0.0</code> when no two points are that close: the longest edge of the Vietoris-Rips complex truncated at <code>threshold</code>, which is the last filtration value of its graph.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p>The longest distance between two points of the space that is at most <code>threshold</code>, <code>0.0</code> when no two points are that close: the longest edge of the Vietoris-Rips complex truncated at <code>threshold</code>, which is the last filtration value of its graph.</p>
+              <p>One pass over the pairs, <code>n^2 / 2</code> distances. A space that finds it faster overrides this and answers the same number (<a href="EuclideanMetricSpace.html">EuclideanMetricSpace</a> does, by neighbour queries on a cloud too big to cache its distances); a <code>threshold</code> of <code>NaN</code> or below <code>0</code> finds no pair.</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Inherited from:
+              </dt>
+              <dd class="body-medium">
+               <a href="FiniteMetricSpace.html#longestDistanceWithin-5b2">FiniteMetricSpace</a>
+              </dd>
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L92" target="_blank">FiniteMetricSpace.scala</a>
               </dd>
              </dl>
             </div>
@@ -312,7 +362,7 @@ node4 -> node1;
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L155" target="_blank">FiniteMetricSpace.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/streams/FiniteMetricSpace.scala#L178" target="_blank">FiniteMetricSpace.scala</a>
               </dd>
              </dl>
             </div>
@@ -377,4 +427,4 @@ node4 -> node1;
    </div>
   </div>
  </div>
-</section></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#attributes">Value parameters</a></li><li><a href="#members-list">Members list</a><ul><li><a href="#Value-members">Value members</a><ul><li><a href="#Concrete-methods">Concrete methods</a></li><li><a href="#Concrete-fields">Concrete fields</a></li><li><a href="#Inherited-fields">Inherited fields</a></li></ul></li></ul></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>
+</section></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#attributes">Value parameters</a></li><li><a href="#members-list">Members list</a><ul><li><a href="#Value-members">Value members</a><ul><li><a href="#Concrete-methods">Concrete methods</a></li><li><a href="#Inherited-methods">Inherited methods</a></li><li><a href="#Concrete-fields">Concrete fields</a></li><li><a href="#Inherited-fields">Inherited fields</a></li></ul></li></ul></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>
