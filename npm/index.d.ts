@@ -369,8 +369,22 @@ export function dualBars(bars: number[][]): number[][];
 /** The first lag in `1..maxLag` at which the autocorrelation of the series is zero or negative: a first guess for the `delay` of `takensEmbedding`. */
 export function delayByAutocorrelation(series: number[], maxLag: number): number;
 
-/** The loops of a point cloud's Vietoris-Rips complex as `[birth, death]`, the most persistent first. */
-export function h1Bars(points: number[][]): number[][];
+/** The complexes whose loops have circular and toroidal coordinates: Vietoris-Rips, Cech and alpha. */
+export type CoordinatesComplex = "vr" | "cech" | "alpha";
+
+/**
+ * The loops of a point cloud's complex as `[birth, death]`, the most persistent first. Loop `i` is `cocycleIndex: i` of
+ * `circularCoordinates`.
+ *
+ * With `numLandmarks` (default 0: every point) the loops are those of the balls around that many maxmin landmarks, which
+ * the coordinates with the same `numLandmarks` use. With `complex: "cech"` or `"alpha"` they are the loops of that
+ * complex over the field with `prime` elements (default 47), at a ball's radius; those have no landmark form, so
+ * `numLandmarks` must be 0 with them.
+ */
+export function h1Bars(
+  points: number[][],
+  options?: { numLandmarks?: number; complex?: CoordinatesComplex; prime?: number }
+): number[][];
 
 export interface CircularCoordinates {
   /** One angle in `[0, 1)` per point; `NaN` for a point outside the loop's connected component. */
@@ -384,11 +398,16 @@ export interface CircularCoordinates {
  * Circular coordinates for the loop `options.cocycleIndex` (default 0) of `h1Bars`, at a scale `r` between its birth and
  * death, over the field with `options.prime` elements (an odd prime, default 47). Throws if the loop has no integer lift at
  * that prime: use a larger one.
+ *
+ * `options.numLandmarks` (default 0: every point) computes Perea's sparse coordinates over that many maxmin landmarks,
+ * for many points; pass the same value to `h1Bars` to find the loop. `options.complex` (default `"vr"`) takes the loop
+ * of that complex from `h1Bars` with the same `complex`; `"cech"` and `"alpha"` have no sparse form, so `numLandmarks`
+ * must be 0 with them.
  */
 export function circularCoordinates(
   points: number[][],
   r: number,
-  options?: { cocycleIndex?: number; prime?: number }
+  options?: { cocycleIndex?: number; prime?: number; numLandmarks?: number; complex?: CoordinatesComplex }
 ): CircularCoordinates;
 
 export interface ToroidalCoordinates {
@@ -401,12 +420,17 @@ export interface ToroidalCoordinates {
   r: number;
   prime: number;
 }
-/** Toroidal coordinates combining the loops `cocycleIndices` of `h1Bars` that are alive together at `r`. */
+/**
+ * Toroidal coordinates combining the loops `cocycleIndices` of `h1Bars` that are alive together at `r`. Options:
+ * `prime` (default 47), `reduce` (lattice reduction of the coordinates, default `true`), `numLandmarks` (default 0:
+ * every point; Perea's sparse coordinates) and `complex` (default `"vr"`, as in `circularCoordinates`, whose rule for
+ * `numLandmarks` with `"cech"` and `"alpha"` applies).
+ */
 export function toroidalCoordinates(
   points: number[][],
   r: number,
   cocycleIndices: number[],
-  options?: { prime?: number; reduce?: boolean }
+  options?: { prime?: number; reduce?: boolean; numLandmarks?: number; complex?: CoordinatesComplex }
 ): ToroidalCoordinates;
 
 /** A point cloud from the text of a file: one point per line, separated by commas or whitespace. */

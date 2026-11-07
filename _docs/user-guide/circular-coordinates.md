@@ -151,3 +151,12 @@ indices counted from 0. Sparse coordinates take the number of landmarks as one m
 `h1Bars(points, numLandmarks)`, `circularCoordinates(points, r, cocycleIndex, prime, numLandmarks)` and
 `toroidalCoordinates(points, r, indices, prime, reduce, numLandmarks)`; Python and JavaScript take `num_landmarks` and
 the option `numLandmarks`.
+
+The loops of a Cech or alpha complex take one more argument, the complex's name, `"cech"` or `"alpha"` (`"vr"`, the
+default, is the Vietoris-Rips route above): `h1Bars(points, numLandmarks, complex)`,
+`circularCoordinates(points, r, cocycleIndex, prime, numLandmarks, complex)` and
+`toroidalCoordinates(points, r, indices, prime, reduce, numLandmarks, complex)`, and in Python and JavaScript
+`complex="cech"` and the option `complex: 'cech'`. They are the loops of the diagram of that complex over the field with
+`prime` elements (`h1Bars(points, numLandmarks, complex, prime)`, the option `prime` in JavaScript), so their bars are
+radii, where those of the Vietoris-Rips complex are diameters, and take `r` from the bars of the same `complex`. There are
+no landmarks for them: `numLandmarks` must be 0.

@@ -915,6 +915,28 @@ object TDA4j:
       .map((b, d) => Array(b, d))
       .toArray
 
+  /** [[h1Bars]] for the loops of another complex: `complex` is `"vr"` (the default of the shorter forms), `"cech"` or
+    * `"alpha"`, as `persistence` takes it. The loops of `"cech"` and `"alpha"` are those of the diagram of that complex
+    * over the field with 47 elements, at a ball's radius, numbered as [[circularCoordinates]] and
+    * [[toroidalCoordinates]] with the same `complex` take them; they have no sparse form, so `numLandmarks` must be
+    * `0`.
+    */
+  def h1Bars(points: Array[Array[Double]], numLandmarks: Int, complex: String): Array[Array[Double]] =
+    h1Bars(points, numLandmarks, complex, 47)
+
+  /** [[h1Bars]] of `complex` over the field with `prime` elements (an odd prime): the one [[circularCoordinates]] and
+    * [[toroidalCoordinates]] are given for the same loops. Vietoris-Rips loops do not depend on it.
+    */
+  def h1Bars(points: Array[Array[Double]], numLandmarks: Int, complex: String, prime: Int): Array[Array[Double]] =
+    coordinatesComplex(complex, numLandmarks, "h1Bars") match
+      case None         => h1Bars(points, numLandmarks)
+      case Some(chosen) =>
+        validatePoints(points)
+        CircularCoordinates
+          .h1Bars(coordinatesDiagram(points, chosen, prime))
+          .map((b, d) => Array(b, d))
+          .toArray
+
   def circularCoordinates(points: Array[Array[Double]], r: Double): CircularCoordinatesResult =
     circularCoordinates(points, r, 0, 47)
 
@@ -942,11 +964,61 @@ object TDA4j:
   ): CircularCoordinatesResult =
     validatePoints(points)
     require(numLandmarks >= 0, s"numLandmarks must be 0 (every point) or positive, got $numLandmarks")
-    val result =
+    circularResult(
+      points,
       CircularCoordinates.compute(EuclideanMetricSpace(points), r, cocycleIndex, prime, numLandmarks = numLandmarks)
+    )
+
+  /** [[circularCoordinates]] of the loop `cocycleIndex` of [[h1Bars]] of `complex` (`"vr"`, `"cech"` or `"alpha"`, with
+    * the same `prime`): the coordinates of the complex that the loop lives in, `CircularCoordinates(diagram, ...)`.
+    * `numLandmarks` must be `0` for `"cech"` and `"alpha"`.
+    */
+  def circularCoordinates(
+    points: Array[Array[Double]],
+    r: Double,
+    cocycleIndex: Int,
+    prime: Int,
+    numLandmarks: Int,
+    complex: String
+  ): CircularCoordinatesResult =
+    coordinatesComplex(complex, numLandmarks, "circularCoordinates") match
+      case None         => circularCoordinates(points, r, cocycleIndex, prime, numLandmarks)
+      case Some(chosen) =>
+        validatePoints(points)
+        val diagram = coordinatesDiagram(points, chosen, prime)
+        circularResult(points, CircularCoordinates(diagram, points, bar = cocycleIndex, r = r, complex = chosen))
+
+  private def circularResult(points: Array[Array[Double]], result: CircularCoordinates.Result) =
     val thetaArray = Array.fill(points.length)(Double.NaN)
     result.theta.foreach((i, t) => thetaArray(i) = t)
     new CircularCoordinatesResult(points.map(_.clone()), thetaArray, result.birth, result.death, result.r, result.prime)
+
+  // The complex a coordinates call works in, `None` for the Vietoris-Rips route over a metric space (every point, or
+  // landmarks); a diagram of the chosen complex is what the other two read.
+  private def coordinatesComplex(raw: String, numLandmarks: Int, method: String): Option[PointCloudComplex] =
+    require(numLandmarks >= 0, s"numLandmarks must be 0 (every point) or positive, got $numLandmarks")
+    ComplexKind.parse(raw) match
+      case ComplexKind.VR                                => None
+      case kind @ (ComplexKind.Cech | ComplexKind.Alpha) =>
+        require(
+          numLandmarks == 0,
+          s"$method: complex='$raw' has no sparse form over landmarks; use numLandmarks=0 or complex='vr'"
+        )
+        Some(if kind == ComplexKind.Cech then Cech else AlphaShapes)
+      case _ =>
+        throw new IllegalArgumentException(
+          s"$method: circular coordinates take complex='vr', 'cech' or 'alpha', got '$raw'"
+        )
+
+  // Degrees 0 and 1 with cocycles over `prime`: what `CircularCoordinates(diagram, ...)` reads its classes from.
+  private def coordinatesDiagram(points: Array[Array[Double]], complex: PointCloudComplex, prime: Int) =
+    Persistence(
+      points,
+      maxDimension = 1,
+      complex = complex,
+      characteristic = prime,
+      representatives = Representatives.Cocycles
+    )
 
   def toroidalCoordinates(
     points: Array[Array[Double]],
@@ -979,14 +1051,48 @@ object TDA4j:
   ): ToroidalCoordinatesResult =
     validatePoints(points)
     require(numLandmarks >= 0, s"numLandmarks must be 0 (every point) or positive, got $numLandmarks")
-    val result = CircularCoordinates.computeToroidal(
-      EuclideanMetricSpace(points),
-      r,
-      cocycleIndices.toIndexedSeq,
-      prime,
-      reduce,
-      numLandmarks = numLandmarks
+    toroidalResult(
+      points,
+      CircularCoordinates.computeToroidal(
+        EuclideanMetricSpace(points),
+        r,
+        cocycleIndices.toIndexedSeq,
+        prime,
+        reduce,
+        numLandmarks = numLandmarks
+      )
     )
+
+  /** [[toroidalCoordinates]] of the loops `cocycleIndices` of [[h1Bars]] of `complex` (`"vr"`, `"cech"` or `"alpha"`),
+    * as [[circularCoordinates]] takes it: `CircularCoordinates.toroidal(diagram, ...)` for the other two complexes.
+    */
+  def toroidalCoordinates(
+    points: Array[Array[Double]],
+    r: Double,
+    cocycleIndices: Array[Int],
+    prime: Int,
+    reduce: Boolean,
+    numLandmarks: Int,
+    complex: String
+  ): ToroidalCoordinatesResult =
+    coordinatesComplex(complex, numLandmarks, "toroidalCoordinates") match
+      case None         => toroidalCoordinates(points, r, cocycleIndices, prime, reduce, numLandmarks)
+      case Some(chosen) =>
+        validatePoints(points)
+        val diagram = coordinatesDiagram(points, chosen, prime)
+        toroidalResult(
+          points,
+          CircularCoordinates.toroidal(
+            diagram,
+            points,
+            bars = cocycleIndices.toIndexedSeq,
+            r = r,
+            complex = chosen,
+            reduce = reduce
+          )
+        )
+
+  private def toroidalResult(points: Array[Array[Double]], result: CircularCoordinates.ToroidalResult) =
     val thetaArrays = result.theta.map { thetaMap =>
       val arr = Array.fill(points.length)(Double.NaN)
       thetaMap.foreach((i, t) => arr(i) = t)

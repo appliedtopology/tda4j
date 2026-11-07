@@ -292,6 +292,35 @@ class ExportsSpec extends Specification:
         "unknown option primes"
       )
     }
+    "with complex 'cech', wind once round a circle over the loop of the Cech complex" >> {
+      val n = 40
+      val points = circle(n)
+      val vr = Exports.h1Bars(points)
+      val loops = Exports.h1Bars(points, options("complex" -> "cech"))
+      val r = (loops(0)(0) + loops(0)(1)) / 2
+      val coordinates = dynamic(Exports.circularCoordinates(points, r, options("complex" -> "cech")))
+      val theta = coordinates.theta.asInstanceOf[js.Array[Double]]
+      val steps = (0 until n).map { i =>
+        val d = (theta((i + 1) % n) - theta(i) + 1.0) % 1.0
+        math.min(d, 1.0 - d)
+      }
+      // radii against diameters: the loop is born at about half the scale, so r is outside the Vietoris-Rips loop
+      (loops(0)(0) must beLessThan(0.75 * vr(0)(0))) and
+        (coordinates.birth.asInstanceOf[Double] must beEqualTo(loops(0)(0))) and
+        (coordinates.death.asInstanceOf[Double] must beEqualTo(loops(0)(1))) and
+        (steps.forall(s => math.abs(s - 1.0 / n) < 0.02) must beTrue)
+    }
+    "refuse landmarks for the Cech complex, a complex of another type than text, and a complex it cannot read" >> {
+      (Exports.h1Bars(circle(12), options("complex" -> "cech", "numLandmarks" -> 4)) must throwWith[
+        js.JavaScriptException
+      ]("no sparse form")) and
+        (Exports.h1Bars(circle(12), options("complex" -> 5)) must throwWith[js.JavaScriptException](
+          "option complex must be a string"
+        )) and
+        (Exports.circularCoordinates(circle(12), 0.5, options("complex" -> "witness")) must throwWith[
+          js.JavaScriptException
+        ]("'vr', 'cech' or 'alpha'"))
+    }
   }
 
   "toroidalCoordinates" should
@@ -301,6 +330,19 @@ class ExportsSpec extends Specification:
       val result = dynamic(Exports.toroidalCoordinates(points, (loops(0)(0) + loops(0)(1)) / 2, js.Array(0)))
       (result.theta.asInstanceOf[js.Array[js.Array[Double]]].length must beEqualTo(1)) and
         (result.basisChange.asInstanceOf[js.Array[js.Array[Int]]].map(_.toSeq).toSeq must beEqualTo(Seq(Seq(1))))
+    }
+
+  "toroidalCoordinates with complex 'cech'" should
+    "give one coordinate for one loop of the Cech complex, and name complex among its options" >> {
+      val points = circle(40)
+      val loops = Exports.h1Bars(points, options("complex" -> "cech"))
+      val r = (loops(0)(0) + loops(0)(1)) / 2
+      val result = dynamic(Exports.toroidalCoordinates(points, r, js.Array(0), options("complex" -> "cech")))
+      (result.theta.asInstanceOf[js.Array[js.Array[Double]]].length must beEqualTo(1)) and
+        (result.r.asInstanceOf[Double] must beEqualTo(r)) and
+        (Exports.toroidalCoordinates(points, r, js.Array(0), options("complexes" -> "cech")) must throwWith[
+          js.JavaScriptException
+        ]("the options are prime, reduce, numLandmarks and complex"))
     }
 
   "the text parsers" should {
