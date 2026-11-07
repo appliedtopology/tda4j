@@ -23,6 +23,14 @@ inside a lambda, `.and(` in a string and in a comment) and mutated three ways (n
 for the next example's header): each fails an example. With the planted example above in the tree, the repository scan reports
 `PlantedAndSpec.scala:7`.
 
+A chain wrapped in parentheses, `((a must X).and(b must Y))`, was first missed (review of the PR): the scan took the
+wrapping parenthesis for a block of the chain's own and found the next statement outside it. The detector now counts the
+parentheses that open at the very start of the statement and are still open at the `.and(` as grouping, not as a block (a
+paren after an identifier, as in `foreach(x => ((a).and(b)))`, is a call and still is one). Fixtures: wrapped on one line, over
+two lines, wrapped twice with the arguments broken inside (reported); wrapped and last, wrapped inside a call's argument
+(accepted). Mutants: the wrapper count ignored (the wrapped fixtures report nothing, as the first version did) and every open
+bracket counted as a wrapper (the argument and the lambda fixtures are reported): each fails an example.
+
 The exemption for the next example's header is a heuristic: a chain followed by `step(...)`, `sequential` or another statement at
 the same indentation outside an example would be reported, and the fix is then to write the spec so that it is not.
 Not covered: `.and(` written as the infix `and` on matchers, and `.or(` (a non-final `(a must X).or(b must Y)` is too strict, not
