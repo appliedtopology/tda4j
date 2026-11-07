@@ -2215,6 +2215,25 @@ class SweepMergeTests(unittest.TestCase):
         sweep_merge.merge(self.out, [f"{old}:!tda4j*", str(new)], allow_mixed=True)
         self.assertEqual(json.loads((self.out / "env.json").read_text())["alpha_radius_rule"], "mixed")
 
+    def test_alpha_a_sweep_from_before_the_radius_column_merges_when_the_mix_is_allowed(self):
+        legacy = [c for c in sweep_alpha.COLUMNS if c != "radius"]
+        without = lambda row: {k: v for k, v in row.items() if k != "radius"}
+        old = self.root / "old"
+        write_sweep(old, legacy, [without(self.alpha_row("tda4j", "5", "9.0")), without(self.alpha_row("gudhi", "5", "5.0"))],
+                    env=self.env("a", "01"),
+                    bars=[("interior_40_5_0__tda4j.tsv", self.other("old5")), ("interior_40_5_0__gudhi.tsv", self.good)])
+        new = self.root / "new"
+        write_sweep(new, sweep_alpha.COLUMNS, [self.alpha_row("tda4j", "5", "2.0")],
+                    env=self.env("b", "06", alpha_radius_rule="enclosing"),
+                    bars=[("interior_40_5_0__tda4j.tsv", self.other("new5"))])
+        sweep_merge.merge(self.out, [f"{old}:!tda4j*", str(new)], allow_mixed=True)
+        self.assertEqual(self.alpha_rows(), [("tda4j", "40", "5", "2.0"), ("gudhi", "40", "5", "5.0")],
+                         "the legacy rows read as a draw without a radius fraction, the same series key a rerun has")
+        self.assertEqual(sorted(p.name for p in (self.out / "bars").iterdir()),
+                         ["interior_40_5_0__gudhi.tsv", "interior_40_5_0__tda4j.tsv"])
+        with open(self.out / "sweep.csv", newline="") as f:
+            self.assertIn("radius", next(csv.reader(f)), "the merged sweep has the current columns")
+
     def test_alpha_a_part_that_supplies_nothing_does_not_count_for_the_radius_rule(self):
         old, new = self.alpha_sweeps(old_rule="")
         sweep_merge.merge(self.out, [f"{old}:gudhi", f"{old}:gudhi"])  # both without the rule: consistent
@@ -2572,6 +2591,7 @@ class FinalRunScriptTests(unittest.TestCase):
         self.fake = self.root / "run.sh"
         header = "case,p,tool,task,status,reason,agrees,degenerate,vs_reference,note"
         self.fake.write_text('#!/usr/bin/env bash\necho "$*" >> "$FAKE_LOG"\n'
+                             'printf \'%s\\037\' "$@" >> "$FAKE_LOG.argv"; echo >> "$FAKE_LOG.argv"\n'
                              f'if [ "$1" = merge ]; then mkdir -p "$2"; echo "{header}" > "$2/summary.csv"; fi\n'
                              f'if [ "$1" = run ] && [ -n "${{RESULTS_DIR:-}}" ]; then mkdir -p "$RESULTS_DIR"; '
                              f'echo "{header}" > "$RESULTS_DIR/summary.csv"; fi\n')
@@ -2595,6 +2615,41 @@ class FinalRunScriptTests(unittest.TestCase):
 
     def calls(self):
         return self.log.read_text().splitlines() if self.log.exists() else []
+
+    def argv_calls(self):
+        """Every call of the fake run.sh as its list of arguments (the log above joins them with spaces, so an empty
+        argument and an argument with a space cannot be told apart there)."""
+        path = Path(str(self.log) + ".argv")
+        return [line.split("\x1f")[:-1] for line in path.read_text().splitlines()] if path.exists() else []
+
+    def sweeps_stage(self, **env):
+        """The sweeps stage as a TDA4j-only rerun over an earlier run holding all three sweeps."""
+        self.script("freeze")
+        base = self.root / "sweeps-base"
+        for sweep in ("threads", "cubical", "alpha"):
+            (base / sweep).mkdir(parents=True)
+            (base / sweep / "sweep.csv").write_text("x\n")
+        (self.final / "anchors.verdict").write_text("ok\n")
+        for path in (self.log, Path(str(self.log) + ".argv")):
+            path.unlink(missing_ok=True)
+        r = self.script("sweeps", SWEEPS_BASE=str(base), ALLOW_MIXED_ALPHA="1", **env)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return r
+
+    def rerun(self, sweep):
+        """The arguments of the `sweep-<sweep>` call that reran TDA4j's rows, after the name."""
+        return next(a[1:] for a in self.argv_calls() if a[:1] == [f"sweep-{sweep}"])
+
+    @staticmethod
+    def values(argv, option):
+        """Every value `option` is given in `argv`, as `--option value` or `--option=value` (argparse takes the last)."""
+        out = []
+        for i, a in enumerate(argv):
+            if a == option:
+                out.append(argv[i + 1])
+            elif a.startswith(option + "="):
+                out.append(a.split("=", 1)[1])
+        return out
 
     def test_freeze_records_the_commit_builds_and_pins_the_stages_to_it(self):
         r = self.script("freeze")
@@ -2646,6 +2701,36 @@ class FinalRunScriptTests(unittest.TestCase):
         merge = next(c for c in self.calls() if c.startswith("merge "))
         self.assertEqual(merge, f"merge {self.final}/merged {self.base}:!tda4j* {self.final}/tda4j")
         self.assertNotEqual(self.script("merge", ALLOW_DRIFT="1").returncode, 0, "a merge is not overwritten")
+
+    def test_a_tda4j_only_sweep_rerun_stays_tda4j_only_whatever_the_replayed_arguments_select(self):
+        self.sweeps_stage(
+            THREADS_SWEEP_ARGS="--tools tda4j-parallelverb-mt,giotto-ph-mt --baselines ripser.cpp --fields 17",
+            ALPHA_SWEEP_ARGS="--tools=gudhi,!tda4j-helix --out /elsewhere --n 100",
+            CUBICAL_SWEEP_ARGS="--engines fast-cubical,cohomology-cycles --dims 2")
+        threads, alpha, cubical = self.rerun("threads"), self.rerun("alpha"), self.rerun("cubical")
+        self.assertEqual(self.values(threads, "--tools"), ["tda4j-parallelverb-mt"],
+                         "the earlier sweep's TDA4j tool is kept, the other tool's name is not: argparse takes the last")
+        self.assertEqual(self.values(threads, "--baselines"), [""], "no baseline runs, whatever the earlier sweep ran")
+        self.assertEqual(self.values(threads, "--fields"), ["17"], "the other options of the earlier sweep are replayed")
+        self.assertEqual(self.values(alpha, "--tools"), ["tda4j*,!tda4j-helix"],
+                         "no TDA4j name left: every TDA4j tool, minus the exclusion the earlier sweep had")
+        self.assertEqual(self.values(alpha, "--out"), [f"{self.final}/sweeps/alpha-tda4j"],
+                         "the rerun's own directory, the one the merge reads")
+        self.assertEqual(self.values(alpha, "--n"), ["100"])
+        self.assertIn("--no-reference", cubical)
+        self.assertEqual(self.values(cubical, "--engines"), ["fast-cubical,cohomology-cycles"])
+        merges = [a for a in self.argv_calls() if a[:1] == ["sweep-merge"]]
+        self.assertEqual([m[1] for m in merges], [f"{self.final}/sweeps/{s}" for s in ("threads", "cubical", "alpha")])
+
+    def test_the_sweeps_stage_without_an_earlier_run_passes_the_arguments_on_as_they_are(self):
+        self.script("freeze")
+        self.log.unlink()
+        args = "--tools giotto-ph-mt,tda4j-parallelverb-mt --baselines ripser.cpp --fields 17"
+        r = self.script("sweeps", SWEEPS="threads", THREADS_SWEEP_ARGS=args)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        argv = self.rerun("threads")
+        self.assertEqual(self.values(argv, "--tools"), ["giotto-ph-mt,tda4j-parallelverb-mt"])
+        self.assertEqual(self.values(argv, "--baselines"), ["ripser.cpp"])
 
     def test_the_v_construction_stage_runs_the_external_tools_at_z2_and_the_merge_takes_its_rows(self):
         self.script("freeze")
