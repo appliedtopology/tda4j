@@ -10,14 +10,14 @@ and GUDHI. This page maps the calls you know to tda4j's, and lists the differenc
 
 | | JavaPlex | Ripser | GUDHI | tda4j |
 |---|---|---|---|---|
-| Default coefficients | `Z/2` (`getDefaultSimplicialAlgorithm`) | `Z/2` | `Z/11` | `Z/17`; pass `characteristic = 2` to compare with the others |
+| Default coefficients | `Z/2` (`getDefaultSimplicialAlgorithm`) | `Z/2`; `--modulus p` needs the build with `-DUSE_COEFFICIENTS` | `Z/11` | `Z/17`; pass `characteristic = 2` to compare with the others |
 | Top degree | `maxDimension` is the top simplex dimension: `k + 1` for `H_k` | `--dim k` is `H_k` | `max_dimension` is the top simplex dimension: `k + 1` for `H_k` | `maxDimension = k` is `H_k` |
-| Filtration values | quantized to `numDivisions` steps | exact | exact | exact |
-| Default threshold | you give it | the enclosing radius | you give it | the enclosing radius |
-| Zero-length bars | check your version | not reported | check your version | not reported (`includeZeroLength = true` to see them) |
+| Filtration values | quantized to `numDivisions` steps (20 if you give none) | exact | exact | exact |
+| Default threshold | you give it | the enclosing radius | none (`max_edge_length` is infinity) | the enclosing radius |
+| Zero-length bars | not reported (a pair born and killed in one division is dropped) | not reported | not reported (`min_persistence = -1` shows them) | not reported (`includeZeroLength = true` to see them) |
 | Short bars | all reported | all reported | all reported (`min_persistence = 0`) | all reported by `Persistence(...)`; the MATLAB, Java and command-line interfaces hide bars up to 1% of the data's scale (`minPersistence = 0` reports all) |
-| Alpha complex filtration | a radius | | the **squared** radius | a radius: square values to compare with GUDHI |
-| Representatives | generators of the bars | no | not from `persistence()` | a cycle or cocycle for every bar |
+| Alpha complex filtration | no alpha complex | | the **squared** radius (`output_squared_values=False` gives radii) | a radius: square values to compare with GUDHI |
+| Representatives | generators of the bars | no | not from `persistence()`; `flag_persistence_generators()` gives the birth and death simplices, not cycles | a cycle or cocycle for every bar |
 
 Every number in tda4j's output is a filtration value of the complex you chose: a diameter for Vietoris-Rips, a radius for
 Čech and alpha. Compare shapes between complexes, not endpoints.
@@ -43,8 +43,8 @@ and interval objects by one call.
 
 A JavaPlex discretization step is gone: there is no `numDivisions`, and the values in a barcode are the real filtration values.
 The witness complex corresponds to JavaPlex's tutorial one; see [witness complexes](topological-spaces/witness-complexes.md)
-for the `2R` threshold. What JavaPlex has and tda4j does not: Hom complexes and persistent homology over `Z` or the
-rationals as exact arithmetic.
+for the `2R` threshold. What JavaPlex has and tda4j does not: Hom complexes of filtered complexes (`Plex4.createHomStream`;
+tda4j has the Hom of barcodes, see [products of barcodes](barcode-products.md)).
 
 ## From Ripser and ripser.py
 
@@ -54,7 +54,7 @@ tda4j implements Ripser's algorithm (clearing, cohomology, apparent pairs) as it
 | Ripser | tda4j |
 |---|---|
 | `ripser --format point-cloud --dim k --threshold t --modulus p file` | `java -jar tda4j-VERSION-assembly.jar --input-format ripser-points --max-dimension k --max-filtration-value t --prime p --min-persistence 0 file` |
-| `--format point-cloud`, `distance`, `lower-distance`, `upper-distance`, `sparse`, `binary` | `--input-format ripser-points`, `ripser-distance`, `ripser-lower`, `ripser-upper`, `ripser-sparse`, `ripser-binary` |
+| `--format point-cloud`, `distance`, `lower-distance`, `upper-distance`, `sparse`, `binary`, `dipha` | `--input-format ripser-points`, `ripser-distance`, `ripser-lower`, `ripser-upper`, `ripser-sparse`, `ripser-binary`, `dipha-distance` |
 | `ripser(X, maxdim=k, thresh=t, coeff=p)` (ripser.py) | `Persistence(X, maxDimension = k, maxFiltrationValue = t, characteristic = p)` |
 | `ripser(D, distance_matrix=True)` | `Persistence(ExplicitMetricSpace(rows))` |
 | `result['dgms'][d]` | `diagram.dim(d).triples` (degree, birth, death), death `Infinity` for an essential bar |
@@ -86,4 +86,5 @@ other tools read with `--output-format gudhi`, `dipha` or `csv`.
 In Python, `tda4j.persistence(X, max_dimension=k, prime=p).diagram(d)` is the Rips line above (`max_dimension` is `k`, not
 `k + 1`), and `tda4j.persistence(X, complex="alpha", max_dimension=k)` the alpha one ([Python](python.md)).
 
-Names and defaults change between versions of these libraries; check the ones you use against your version.
+These rows describe JavaPlex 4 (`Plex4`), `ripser.cpp` and GUDHI 3.13. Names and defaults change between versions of these
+libraries; check the ones you use against your version.
