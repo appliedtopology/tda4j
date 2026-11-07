@@ -58,8 +58,8 @@ a radius); only degenerate inputs stay diagnostic.
 is a `FaceTable` per dimension plus value arrays; the `Simplex` objects, the sorted order of a dimension
 (`simplicesOfDimension`, `sortedDimension`) are made when it is first asked for (the verb reads up to `maxDimension + 1`,
 never the millions of faces above), and `filtrationValue` probes the table, not a `HashMap[Simplex, Double]`. Nothing in
-here may be per-simplex hash sets or a scan of the cells per top simplex (`topValue` was quadratic in the number of cells
-and was 75% of the time at 40 points in R^7: `HelixDelaunay.smallestCircumradii`); no `tabulate`/`map`/`sum` in
+here may be per-simplex hash sets or a scan of the cells per top simplex (`topValue` was quadratic in the cells,
+`HelixDelaunay.smallestCircumradii`); no `tabulate`/`map`/`sum` in
 `circumsphere` (boxing, once per face). Any change here is checked by a before/after dump of every simplex, value (hex
 doubles) and stream order (`AlphaProfileDriver dump=`), not by Betti numbers. DQP and Cech pay for the
 3-skeleton only (at most C(n, <= 4)) when capped.
@@ -80,8 +80,9 @@ triangulates). The facade passes no `Epsilon`: alpha uses `AlphaShapes`' default
 radius and takes either triangulation. Measurements: `WORKLOG-helix-construction-speed.md`.
 **Without a radius** the verb (`AlphaShapes.fromPoints` -> `upToEnclosingRadius`) cuts at `minimumEnclosingRadius` (the union of balls
 is contractible past it, so the barcode is unchanged) and picks by the degree cap, not `prefersDQP` (every point is a neighbour there):
-DQP iff d >= 8 and `maxDimension <= d - 2` (`prefersDQPAtEnclosingRadius`; n = 40/60 `four` sweep: 3x to 28x faster, memory equal or lower;
-the top degree stays Helix, DQP 1.5-2.5x its memory; caps between 4 and d - 2 and n >= 100 unmeasured, `WORKLOG-dqp-degree-cap.md`), else BowyerWatson/Helix (`PersistenceVerbSpec`); the facade's `complex=alpha` does the same except `engine=fast-alpha` (tutorial count 313; `Infinity` gives the 325 of `AlphaShapes(points)`, `MatlabTabsSpec`). #215.
+DQP iff d >= 8 and `maxDimension <= d - 2` (`prefersDQPAtEnclosingRadius`; the top degree stays Helix, where DQP needs 1.5-2.5x
+the memory; caps between 4 and d - 2 and n >= 100 unmeasured, `WORKLOG-dqp-degree-cap.md`), else BowyerWatson/Helix
+(`PersistenceVerbSpec`); the facade's `complex=alpha` does the same except `engine=fast-alpha` (#215, `MatlabTabsSpec`).
 `WORKLOG-enclosing-radius.md`.
 
 **One root mechanism (near-cospherical clusters, order-dependent facet-pivot choices) produces two DIFFERENT
@@ -114,7 +115,7 @@ contractible: `H_{d-1}` must be trivial) also triggers it, on RAW input too. Not
 not a bug; truncating at ambient dimension gives the wrong homotopy type.
 
 **Backend choice is typed** (`WORKLOG-cursor-and-verb.md`): `AlphaShapes(points: PointCloud, backend: AlphaBackend =
-Default)`, `AlphaBackend.Default | Helix | DQP | BowyerWatson` (parse: `bowyer-watson`/`bowyerwatson`/`bw`); the facade's `alphaBackend` string goes
+Default)`, `AlphaBackend.Default | Helix | DQP | BowyerWatson`; the facade's `alphaBackend` string goes
 through `AlphaBackend.parse`. `AlphaShapes` is also a `PointCloudComplex` (`Persistence(points, complex = AlphaShapes)`),
 which refuses `maxFiltrationValue` with a message pointing at `diagram.at(f)`.
 
