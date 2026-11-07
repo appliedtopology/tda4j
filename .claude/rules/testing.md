@@ -24,7 +24,7 @@ A bare identifier in a narrative fence of a tutorial page ("pure expression does
 
 **specs2 traps in the plot specs** (`WORKLOG-plot-grammar.md`):
 - In a non-final statement `(a must X).and(b must Y)` checks only `a`; the by-name `b` is never forced. Write separate `must`
-  statements (#99 has the unaudited rest of the repo).
+  statements (`SpecHygieneSpec` fails on any such chain in `src/test`, #99).
 - `must throwAn[IllegalArgumentException]("text")` takes a REGEX: `(`, `)` and `.` in the message must be escaped or left out.
   In a spec that also runs on Scala.js use `SpecThrows.throwWith[E]("text")` instead: specs2's message matcher reports a
   mismatch there for messages that do match (PR #295's JS failure).
