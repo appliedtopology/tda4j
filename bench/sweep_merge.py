@@ -93,9 +93,11 @@ def kind_of(directory):
     raise SystemExit(f"{directory}/sweep.csv has columns that match no sweep: {sorted(header)}")
 
 
-def read_rows(directory):
+def read_rows(directory, columns=()):
+    """The rows of a sweep.csv; a column of `columns` it lacks (the alpha sweep's `radius`, absent from a sweep.csv written
+    before it existed) is read as empty, the value of a draw with no radius fraction."""
     with open(Path(directory) / "sweep.csv", newline="") as f:
-        return list(csv.DictReader(f))
+        return [{**{c: "" for c in columns}, **row} for row in csv.DictReader(f)]
 
 
 def copy_files(src, out, wanted):
@@ -128,7 +130,7 @@ def merge(out, sources, drop="", allow_mixed=False):
     order = {}   # series -> where it first appeared: the merged sweep keeps the earlier sweep's order
     for i, (src, tools) in enumerate(parsed):
         by = {}
-        for r in read_rows(src):
+        for r in read_rows(src, kind.columns):
             key = kind.series(r)
             order.setdefault(key, len(order))
             if selected(kind.tool(r), tools):

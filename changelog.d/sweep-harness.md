@@ -6,4 +6,5 @@
 - `bench/run.sh sweep-merge` builds one sweep directory from several (`sweep-threads`, `sweep-cubical`, `sweep-alpha`): a
   rerun of some tools replaces their series in an earlier sweep, and `bench/final_run.sh` with `SWEEPS_BASE` reruns only
   TDA4j's rows of each sweep. The sweeps take `--tools` (`--engines`) patterns like `bench.py`, and the alpha and cubical
-  sweeps write an `env.json` (#243).
+  sweeps write an `env.json`; a rerun that replays an earlier sweep's arguments keeps only the TDA4j names of its `--tools`
+  and drops its `--baselines` and `--out`, and `sweep-merge` reads an alpha `sweep.csv` from before the `radius` column (#243).

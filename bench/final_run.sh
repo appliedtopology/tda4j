@@ -47,7 +47,9 @@
 #                random2d_1024; the last field of FIELDS; 0.2]. Only the rows BASE also has are compared
 #   ALLOW_DRIFT=1   merge although the anchors differ from BASE's by more than the tolerance (say so in the paper)
 #   SWEEPS       the sweeps to run [threads cubical alpha]; THREADS_SWEEP_ARGS, CUBICAL_SWEEP_ARGS, ALPHA_SWEEP_ARGS
-#                are passed on as they are (the earlier sweep's env.json has the arguments it was given)
+#                are passed on as they are (the earlier sweep's env.json has the arguments it was given). In a rerun of
+#                TDA4j's rows alone (SWEEPS_BASE, below) a `--tools` keeps its TDA4j names and `--baselines` and `--out`
+#                are dropped, so the earlier sweep's arguments cannot widen the selection
 #   SWEEPS_BASE  a directory holding an earlier run's threads/, cubical/ and alpha/ sweeps (an earlier $FINAL/sweeps). A
 #                sweep it holds is not rerun whole: TDA4j's rows alone run into $FINAL/sweeps/<sweep>-tda4j, with the
 #                same *_SWEEP_ARGS as the earlier sweep had, and merge with the earlier sweep's other tools into
@@ -297,16 +299,52 @@ alpha_radius_rule() {
 print(json.load(open(sys.argv[1])).get("alpha_radius_rule", ""))' "$1/env.json" 2>/dev/null || true
 }
 
+# An earlier sweep's arguments, replayed for a rerun of TDA4j's rows alone. Argparse takes the last value of an option, so
+# a replayed `--tools` or `--baselines` would override the selection of TDA4j's rows and the rerun would measure (and the
+# merge then take) the other tools too: `--tools` keeps the TDA4j names (those starting with `tda4j`) and the exclusions
+# and loses the rest, `--baselines` and `--out` go (the rerun runs no baseline and writes where the merge reads), every
+# other option stays. Sets TDA4J_ONLY_TOOLS (what `--tools` selects: the kept names, else every TDA4j tool, then the
+# exclusions) and TDA4J_ONLY_EXTRA (the options that stay, as they were).
+tda4j_only_replay() {
+  TDA4J_ONLY_EXTRA=()
+  local include='' exclude='' arg val item
+  local -a items
+  while [ $# -gt 0 ]; do
+    arg=$1; shift
+    case "$arg" in
+      --tools|--baselines|--out) val=${1-}; if [ $# -gt 0 ]; then shift; fi ;;
+      --tools=*|--baselines=*|--out=*) val=${arg#*=}; arg=${arg%%=*} ;;
+      *) TDA4J_ONLY_EXTRA+=("$arg"); continue ;;
+    esac
+    if [ "$arg" != --tools ]; then
+      echo "NOTE: the replayed $arg '$val' is dropped: the rerun is TDA4j's rows alone" >&2
+      continue
+    fi
+    IFS=, read -r -a items <<< "$val"
+    for item in ${items[@]+"${items[@]}"}; do
+      case "$item" in
+        '') ;;
+        '!'*) exclude+=",$item" ;;
+        tda4j*) include+=",$item" ;;
+        *) echo "NOTE: the replayed --tools names '$item', dropped: the rerun is TDA4j's rows alone" >&2 ;;
+      esac
+    done
+  done
+  TDA4J_ONLY_TOOLS="${include#,}"
+  if [ -z "$TDA4J_ONLY_TOOLS" ]; then TDA4J_ONLY_TOOLS='tda4j*'; fi
+  TDA4J_ONLY_TOOLS+="$exclude"
+}
+
 stage_sweeps() {
   say "sweeps: $SWEEPS"
   require_frozen
   local sweep extra only others
   for sweep in $SWEEPS; do
-    # `only` selects TDA4j's rows of a sweep, `others` the earlier sweep's rows that are not TDA4j's (sweep_merge.py)
+    # `extra` is the earlier sweep's arguments; `others` the earlier sweep's rows that are not TDA4j's (sweep_merge.py)
     case "$sweep" in
-      threads) extra=(${THREADS_SWEEP_ARGS:-}); only=(--tools 'tda4j*' --baselines ''); others='!tda4j*' ;;
-      cubical) extra=(${CUBICAL_SWEEP_ARGS:-}); only=(--no-reference); others='cripser,gudhi' ;;
-      alpha) extra=(${ALPHA_SWEEP_ARGS:-}); only=(--tools 'tda4j*'); others='!tda4j*' ;;
+      threads) read -r -a extra <<< "${THREADS_SWEEP_ARGS:-}"; others='!tda4j*' ;;
+      cubical) read -r -a extra <<< "${CUBICAL_SWEEP_ARGS:-}"; others='cripser,gudhi' ;;
+      alpha) read -r -a extra <<< "${ALPHA_SWEEP_ARGS:-}"; others='!tda4j*' ;;
       *) die "unknown sweep '$sweep' (threads cubical alpha)" ;;
     esac
     if [ -n "$SWEEPS_BASE" ] && { [ -f "$SWEEPS_BASE/$sweep/sweep.csv" ] || [ -n "${DRY_RUN:-}" ]; }; then
@@ -317,8 +355,15 @@ stage_sweeps() {
           die "$SWEEPS_BASE/alpha gave GUDHI no radius (it predates the enclosing radius for every tool): rerun the alpha sweep whole (leave SWEEPS_BASE out), or ALLOW_MIXED_ALPHA=1 to merge anyway (GUDHI's time differs by at most 11% on the draws measured)"
         fi
       fi
+      tda4j_only_replay ${extra[@]+"${extra[@]}"}
+      # `only` selects TDA4j's rows of a sweep
+      case "$sweep" in
+        threads) only=(--tools "$TDA4J_ONLY_TOOLS" --baselines '') ;;
+        cubical) only=(--no-reference) ;;
+        alpha) only=(--tools "$TDA4J_ONLY_TOOLS") ;;
+      esac
       step "$RUN" "sweep-$sweep" --out "$FINAL/sweeps/$sweep-tda4j" --timeout "$TIMEOUT" --jvm-heap "$JVM_HEAP" \
-        "${only[@]}" ${extra[@]+"${extra[@]}"}
+        "${only[@]}" ${TDA4J_ONLY_EXTRA[@]+"${TDA4J_ONLY_EXTRA[@]}"}
       step "$RUN" sweep-merge "$FINAL/sweeps/$sweep" "$SWEEPS_BASE/$sweep:$others" "$FINAL/sweeps/$sweep-tda4j" \
         ${ALLOW_MIXED_ALPHA:+--allow-mixed}
     else
