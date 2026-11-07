@@ -145,7 +145,7 @@
     <tr>
      <td>Default coefficients</td>
      <td><code>Z/2</code> (<code>getDefaultSimplicialAlgorithm</code>)</td>
-     <td><code>Z/2</code></td>
+     <td><code>Z/2</code>; <code>--modulus p</code> needs the build with <code>-DUSE_COEFFICIENTS</code></td>
      <td><code>Z/11</code></td>
      <td><code>Z/17</code>; pass <code>characteristic = 2</code> to compare with the others</td>
     </tr>
@@ -158,7 +158,7 @@
     </tr>
     <tr>
      <td>Filtration values</td>
-     <td>quantized to <code>numDivisions</code> steps</td>
+     <td>quantized to <code>numDivisions</code> steps (20 if you give none)</td>
      <td>exact</td>
      <td>exact</td>
      <td>exact</td>
@@ -167,14 +167,14 @@
      <td>Default threshold</td>
      <td>you give it</td>
      <td>the enclosing radius</td>
-     <td>you give it</td>
+     <td>none (<code>max_edge_length</code> is infinity)</td>
      <td>the enclosing radius</td>
     </tr>
     <tr>
      <td>Zero-length bars</td>
-     <td>check your version</td>
+     <td>not reported (a pair born and killed in one division is dropped)</td>
      <td>not reported</td>
-     <td>check your version</td>
+     <td>not reported (<code>min_persistence = -1</code> shows them)</td>
      <td>not reported (<code>includeZeroLength = true</code> to see them)</td>
     </tr>
     <tr>
@@ -186,16 +186,16 @@
     </tr>
     <tr>
      <td>Alpha complex filtration</td>
-     <td>a radius</td>
+     <td>no alpha complex</td>
      <td></td>
-     <td>the <strong>squared</strong> radius</td>
+     <td>the <strong>squared</strong> radius (<code>output_squared_values=False</code> gives radii)</td>
      <td>a radius: square values to compare with GUDHI</td>
     </tr>
     <tr>
      <td>Representatives</td>
      <td>generators of the bars</td>
      <td>no</td>
-     <td>not from <code>persistence()</code></td>
+     <td>not from <code>persistence()</code>; <code>flag_persistence_generators()</code> gives the birth and death simplices, not cycles</td>
      <td>a cycle or cocycle for every bar</td>
     </tr>
    </tbody>
@@ -255,7 +255,7 @@
     </tr>
    </tbody>
   </table>
-  <p>A JavaPlex discretization step is gone: there is no <code>numDivisions</code>, and the values in a barcode are the real filtration values. The witness complex corresponds to JavaPlex's tutorial one; see <a href="user-guide/topological-spaces/witness-complexes.html">witness complexes</a> for the <code>2R</code> threshold. What JavaPlex has and tda4j does not: Hom complexes and persistent homology over <code>Z</code> or the rationals as exact arithmetic.</p>
+  <p>A JavaPlex discretization step is gone: there is no <code>numDivisions</code>, and the values in a barcode are the real filtration values. The witness complex corresponds to JavaPlex's tutorial one; see <a href="user-guide/topological-spaces/witness-complexes.html">witness complexes</a> for the <code>2R</code> threshold. What JavaPlex has and tda4j does not: Hom complexes of filtered complexes (<code>Plex4.createHomStream</code>; tda4j has the Hom of barcodes, see <a href="barcode-products.html">products of barcodes</a>).</p>
  </section>
  <section id="from-ripser-and-ripserpy">
   <h2 class="h500"><a href="#from-ripser-and-ripserpy" class="anchor"></a>From Ripser and ripser.py</h2>
@@ -273,8 +273,8 @@
      <td><code>java -jar tda4j-VERSION-assembly.jar --input-format ripser-points --max-dimension k --max-filtration-value t --prime p --min-persistence 0 file</code></td>
     </tr>
     <tr>
-     <td><code>--format point-cloud</code>, <code>distance</code>, <code>lower-distance</code>, <code>upper-distance</code>, <code>sparse</code>, <code>binary</code></td>
-     <td><code>--input-format ripser-points</code>, <code>ripser-distance</code>, <code>ripser-lower</code>, <code>ripser-upper</code>, <code>ripser-sparse</code>, <code>ripser-binary</code></td>
+     <td><code>--format point-cloud</code>, <code>distance</code>, <code>lower-distance</code>, <code>upper-distance</code>, <code>sparse</code>, <code>binary</code>, <code>dipha</code></td>
+     <td><code>--input-format ripser-points</code>, <code>ripser-distance</code>, <code>ripser-lower</code>, <code>ripser-upper</code>, <code>ripser-sparse</code>, <code>ripser-binary</code>, <code>dipha-distance</code></td>
     </tr>
     <tr>
      <td><code>ripser(X, maxdim=k, thresh=t, coeff=p)</code> (ripser.py)</td>
@@ -354,6 +354,6 @@
    </tbody>
   </table>
   <p>In Python, <code>tda4j.persistence(X, max_dimension=k, prime=p).diagram(d)</code> is the Rips line above (<code>max_dimension</code> is <code>k</code>, not <code>k + 1</code>), and <code>tda4j.persistence(X, complex="alpha", max_dimension=k)</code> the alpha one (<a href="python.html">Python</a>).</p>
-  <p>Names and defaults change between versions of these libraries; check the ones you use against your version.</p>
+  <p>These rows describe JavaPlex 4 (<code>Plex4</code>), <code>ripser.cpp</code> and GUDHI 3.13. Names and defaults change between versions of these libraries; check the ones you use against your version.</p>
  </section>
 </main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#differences-that-change-results">Differences that change results</a></li><li><a href="#from-javaplex">From JavaPlex</a></li><li><a href="#from-ripser-and-ripserpy">From Ripser and ripser.py</a></li><li><a href="#from-gudhi">From GUDHI</a></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>
