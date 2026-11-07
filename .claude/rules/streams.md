@@ -52,13 +52,12 @@ coface stream that is the flag complex of a graph can build its flat layers from
 Rips, edge-collapsed Rips; `filtered-complexes.md`, #190), and so does the default `RipserCofaceSimplexStream` (default
 value, <= 2^15 points: `WORKLOG-cohomology-stream-sort.md`, #251); the stream keeps the generator's `root`s
 (4 bytes a simplex of the top layer) and rebuilds the generator's order from its flat layer by reversing tied runs. `WORKLOG-layered-inorder.md`, `WORKLOG-flag-generator.md`. `FiniteMetricSpace` has
-a VP-tree impl (`VantagePointTree`, `VantagePointQuery`; `WORKLOG-scalajs-numerics-spatial.md`) and `SparseMetricSpace` (+∞ past its cutoff rather than excluding — don't use it as a
-thresholded oracle).
+a VP-tree impl (`VantagePointTree`, `VantagePointQuery`; `WORKLOG-scalajs-numerics-spatial.md`) and `SparseMetricSpace` (+∞ past its cutoff: not a thresholded oracle).
 
 **Spatial search, enclosing balls and binomials are our own pure Scala** (Scala.js cannot use Java libraries; nothing in
 `src/main/scala` may import one; `WORKLOG-scalajs-numerics-spatial.md`). `VantagePointTree`: `withinDistance` is
 inclusive, `nearest(k)` is the first `k` of the stable sort by distance (ties by construction order, as `BruteForce`),
-balanced and deterministic, pruning slack `1e-12`; `VantagePointQuery` is its `SpatialQuery`. `MinimumEnclosingBall`:
+balanced and deterministic, pruning slack `1e-12`; `VantagePointQuery` is its `SpatialQuery`; `longestDistanceWithin`: the verb's longest edge (`WORKLOG-longest-edge.md`). `MinimumEnclosingBall`:
 Wolfe's active-set method on the dual (Welzl is exponential in the boundary points), the radius IS the largest distance
 to the returned centre. `SimplexIndexing.binomial`: exact `Long`, `IllegalArgumentException` on overflow.
 `VantagePointTreeOracleSpec` (JVM) is judged by a linear scan, never by jvptree: jvptree 0.3.0 loses points exactly on the
