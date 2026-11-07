@@ -25,6 +25,7 @@ import json
 import os
 import statistics
 import sys
+from argparse import Namespace
 from pathlib import Path
 
 import numpy as np
@@ -43,6 +44,9 @@ JS_ENGINES = [
     ("js-fastcubical", "fastcubical", "cycles", {2, 3, 4}, 0),
     ("js-cohomology-cycles", "cohomology", "cycles", {2, 3, 4}, 0),
 ]
+REFERENCES = ("cripser", "gudhi")  # the other implementations: every other label is TDA4j's
+COLUMNS = ["dim", "image", "n", "pixels", "engine", "status", "median_s", "times_s", "us_per_pixel", "maxrss_mb", "bars",
+           "rss_src", "heap_peak_mb", "reason"]
 
 
 def main():
@@ -62,14 +66,21 @@ def main():
     ap.add_argument("--python", default=sys.executable)
     ap.add_argument("--no-reference", action="store_true", help="skip CubicalRipser and GUDHI")
     ap.add_argument("--max-pixels", type=int, default=0, help="skip sizes with more pixels (0: no cap)")
-    ap.add_argument("--engines", default="", help="comma-separated labels (default: all; see ENGINES, plus cripser,gudhi)")
+    ap.add_argument("--engines", default="",
+                    help="comma-separated labels or patterns (default: all; see ENGINES, plus cripser,gudhi; "
+                         "`!cripser,!gudhi` is TDA4j's engines alone, like --no-reference)")
+    ap.add_argument("--summarize", default="", help="rebuild sweep.md of an existing sweep directory and stop")
     ap.add_argument("--warm-cap", type=float, default=60,
                     help="repeat a computation (warm-up + trials) only if one cold run took less than this (s)")
     args = ap.parse_args()
+    if args.summarize:
+        summarize(Path(args.summarize))
+        return
 
     out = Path(args.out or Path(os.environ.get("WORKDIR", ".")) / "sweeps" /
                f"cubical-{datetime.datetime.now():%Y%m%d-%H%M%S}")
     (out / "logs").mkdir(parents=True, exist_ok=True)
+    bench.write_env(out, Namespace(**vars(args), jvm_opts=""))
     data = Path(args.data) / "sweep"
     data.mkdir(parents=True, exist_ok=True)
     cp = Path(os.environ["TDA4J_CP"]).read_text().strip()
@@ -80,8 +91,7 @@ def main():
     rows = []
     with open(out / "sweep.csv", "w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["dim", "image", "n", "pixels", "engine", "status", "median_s", "times_s", "us_per_pixel",
-                    "maxrss_mb", "bars", "rss_src", "heap_peak_mb", "reason"])
+        w.writerow(COLUMNS)
         for d in [int(x) for x in args.dims.split(",")]:
             for image in args.images.split(","):
                 stopped = set()
@@ -92,7 +102,6 @@ def main():
                     path = data / f"{image}{d}d_{n}.npy"
                     if not path.exists():
                         np.save(path, rng.random(shape) if image == "random" else bench.blob(shape, rng))
-                    wanted = set(args.engines.split(",")) if args.engines else None
 
                     def command(label, warmup, trials):
                         for lab, engine, reps, dims, cap in JS_ENGINES:
@@ -118,7 +127,7 @@ def main():
                     if not args.no_reference:
                         labels += ["cripser", "gudhi"]
                     for label in labels:
-                        if label in stopped or (wanted and label not in wanted):
+                        if label in stopped or not bench.tool_selected(label, args.engines):
                             continue
                         tag = f"{d}d_{image}_{n}_{label}"
                         # Cold first: one computation, bounded by --timeout. Repeat only when that was quick enough
@@ -147,10 +156,23 @@ def main():
     print(f"\nresults in {out}")
 
 
+def summarize(out):
+    """sweep.md of a sweep directory, from its sweep.csv (a merged directory has no other record of its runs)."""
+    with open(out / "sweep.csv", newline="") as f:
+        runs = list(csv.DictReader(f))
+
+    def number(text):
+        return float(text) if text not in ("", None) else None
+    rows = [(int(r["dim"]), r["image"], int(r["n"]), r["engine"], r["status"], number(r["median_s"]),
+             number(r["us_per_pixel"]), number(r["maxrss_mb"])) for r in runs]
+    write_table(out, rows)
+
+
 def write_table(out, rows):
     lines = ["# Image engines: size sweep", "", "Median seconds (µs per pixel). `fast/coh` = fastcubical ÷ "
              "cohomology-cycles: above 1, the general engine is faster. `js/jvm` = js-fastcubical ÷ fastcubical.", ""]
     labels = [e[0] for e in ENGINES] + ["cripser", "gudhi"] + [e[0] for e in JS_ENGINES]
+    lines += bench.merged_text(bench.read_env(out))
     lines.append("| dim | image | n | " + " | ".join(labels) + " | fast/coh | js/jvm |")
     lines.append("|---" * (len(labels) + 5) + "|")
     keys = sorted({(r[0], r[1], r[2]) for r in rows})
