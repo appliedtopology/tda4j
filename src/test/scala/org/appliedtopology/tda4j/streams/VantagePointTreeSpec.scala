@@ -65,8 +65,13 @@ class VantagePointTreeSpec extends Specification:
       val within = radii.flatMap { eps =>
         val expected = elems.indices.filter(i => dist(q, elems(i)) <= eps)
         val got = tree.indicesWithinDistance(q, eps)
-        if got == expected then None
-        else Some(s"leaf $leafSize query $qi radius $eps: expected $expected, got $got")
+        // the largest distance in range, `-infinity` for none: what a scan of the distances finds
+        val expectedLargest = expected.map(i => dist(q, elems(i))).foldLeft(Double.NegativeInfinity)(math.max)
+        val gotLargest = tree.largestDistanceWithin(q, eps, Long.MaxValue)
+        if got != expected then Some(s"leaf $leafSize query $qi radius $eps: expected $expected, got $got")
+        else if gotLargest != expectedLargest then
+          Some(s"leaf $leafSize query $qi radius $eps: largest distance expected $expectedLargest, got $gotLargest")
+        else None
       }
       val nearest = ks.flatMap { k =>
         val expected = elems.indices.sortBy(i => dist(q, elems(i))).take(k)
@@ -98,6 +103,37 @@ class VantagePointTreeSpec extends Specification:
       )
     yield problem
     problems.take(5) must beEmpty
+  }
+
+  "largestDistanceWithin gives up, with NaN, exactly when the walk would measure more distances than it is allowed" >> {
+    val rng = Random(11)
+    val elems = randomPoints(rng, 1000, 2)
+    val tree = VantagePointTree(elems, euclid, 16)
+    val q = elems(17)
+    val sparse = 0.01
+    val expected = elems.map(euclid(q, _)).filter(_ <= sparse).max
+    // a tiny radius in the plane: the tree measures a few dozen of the 1000 distances, so a cap of 200 is not reached
+    tree.largestDistanceWithin(q, sparse, 200L) must beEqualTo(expected)
+    // an infinite radius visits every element, 1000 distances: any cap below that is
+    tree.largestDistanceWithin(q, Double.PositiveInfinity, 999L).isNaN must beTrue
+    tree.largestDistanceWithin(q, Double.PositiveInfinity, 1000L) must beEqualTo(elems.map(euclid(q, _)).max)
+    // a cap of zero is spent by the first distance
+    tree.largestDistanceWithin(q, sparse, 0L).isNaN must beTrue
+    // and the walk stops measuring when the cap is spent: the rest of one leaf at most, not the other 900 elements
+    var calls = 0
+    val counted = VantagePointTree(
+      elems,
+      (a: Pt, b: Pt) =>
+        calls += 1; euclid(a, b)
+      ,
+      16
+    )
+    calls = 0
+    counted.largestDistanceWithin(q, Double.PositiveInfinity, 50L).isNaN must beTrue
+    calls must beLessThanOrEqualTo(50 + 1 + 16)
+    // nothing is found for a radius that finds nothing, and the cap does not matter
+    tree.largestDistanceWithin(q, -1.0, 0L) must beEqualTo(Double.NegativeInfinity)
+    tree.largestDistanceWithin(q, Double.NaN, 0L) must beEqualTo(Double.NegativeInfinity)
   }
 
   "A radius that is exactly the distance to a data point includes that point" >> {
