@@ -146,7 +146,9 @@ tda4j.euler_curve(points, max_simplex_dimension=3, max_filtration_value=1.0)
 `maxSimplexDimension` (default 2) is the dimension of the largest simplices counted and `maxFiltrationValue` the largest
 scale. The curve is computed from the cliques of each edge's lens (the points closer than the edge to both its ends)
 without building the complex, so it is cheap where a stream of the same simplices is not. `EulerCharacteristicCurve.ofStream(stream)`
-counts the cells of any other stream, an alpha complex or a cubical one for instance.
+counts the cells of any other stream, an alpha complex or a cubical one for instance. A persistence diagram does not give
+the curve: the alternating sum of the Betti numbers of a diagram computed to degree `k` leaves out the top degree of
+the complex it came from, so it is not the Euler characteristic of that complex or of its `k`-skeleton.
 
 From JavaScript, `eulerCurve(points, { maxSimplexDimension: 3 })` returns an object with `scales` and `values` and the
 methods `at(t)` and `sample(tMin, tMax, resolution)`; `eulerCurveFromDistances` takes a distance matrix. From the command
