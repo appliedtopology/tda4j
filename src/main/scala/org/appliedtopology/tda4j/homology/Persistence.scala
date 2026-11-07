@@ -184,21 +184,6 @@ object Persistence:
       )
 
   object Input:
-    // The longest edge within the threshold, one pair at a time: collecting every pairwise distance first is n^2/2
-    // values (1.25e9 at 50,000 points).
-    private def longestEdgeWithin(ms: FiniteMetricSpace[Int], threshold: Double): Double =
-      var longestEdge = 0.0
-      val n = ms.size
-      var x = 0
-      while x < n do
-        var y = x + 1
-        while y < n do
-          val d = ms.distance(x, y)
-          if d <= threshold && d > longestEdge then longestEdge = d
-          y += 1
-        x += 1
-      longestEdge
-
     private def ofMetricSpace(ms: FiniteMetricSpace[Int], points: Option[PointCloud]): Input[Simplex[Int]] =
       new Input[Simplex[Int]]:
         require(ms.size > 0, "Persistence: the input has no points")
@@ -247,7 +232,7 @@ object Persistence:
               )
             }
             new PersistenceBar(bar.dim, bar.lower, bar.upper, Some(chain), pair)
-          val longestEdge = longestEdgeWithin(ms, threshold)
+          val longestEdge = ms.longestDistanceWithin(threshold)
           PersistenceDiagram[Simplex[Int], coefficients.C](
             (if cycles then engine.persistentHomology(includeZeroLength)
              else engine.persistentCohomology(includeZeroLength)).map(decode),
@@ -330,7 +315,7 @@ object Persistence:
           PersistenceDiagram[Simplex[Int], coefficients.C](
             made.map(_._1).toList,
             maxDimension,
-            longestEdgeWithin(ms, threshold),
+            ms.longestDistanceWithin(threshold),
             scale,
             Some(kindOf(cycles)),
             cycles

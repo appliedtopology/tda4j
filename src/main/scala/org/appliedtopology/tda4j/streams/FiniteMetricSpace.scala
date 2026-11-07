@@ -81,6 +81,29 @@ trait FiniteMetricSpace[VertexT]:
         i += 1
       longest
 
+  /** The longest distance between two points of the space that is at most `threshold`, `0.0` when no two points are
+    * that close: the longest edge of the Vietoris-Rips complex truncated at `threshold`, which is the last filtration
+    * value of its graph.
+    *
+    * One pass over the pairs, `n^2 / 2` distances. A space that finds it faster overrides this and answers the same
+    * number ([[EuclideanMetricSpace]] does, by neighbour queries on a cloud too big to cache its distances); a
+    * `threshold` of `NaN` or below `0` finds no pair.
+    */
+  def longestDistanceWithin(threshold: Double): Double =
+    val points = elements.toIndexedSeq
+    val n = points.length
+    var longest = 0.0
+    var i = 0
+    while i < n do
+      val x = points(i)
+      var j = i + 1
+      while j < n do
+        val d = distance(x, points(j))
+        if d <= threshold && d > longest then longest = d
+        j += 1
+      i += 1
+    longest
+
 /** Convenience functionality for metric spaces.
   */
 object FiniteMetricSpace:
@@ -264,11 +287,60 @@ open class EuclideanMetricSpace(coordinates: Array[Array[Double]], val cacheDist
   /** The Euclidean distance between two points, the metric of [[vpt]]. */
   lazy val vpdf: (Array[Double], Array[Double]) => Double = (x, y) => sqrt(pointSqDistance(x, y))
 
+  // Over the space's own copy of the coordinates, wrapped not cloned: the tree only reads them, and a second copy of a
+  // large cloud would stay alive as long as the space does.
   /** A vantage-point tree over the points. */
-  lazy val vpt: VantagePointTree[Array[Double]] = VantagePointTree(pointCoordinates.map(_.clone()).toSeq, vpdf)
+  lazy val vpt: VantagePointTree[Array[Double]] =
+    VantagePointTree(scala.collection.immutable.ArraySeq.unsafeWrapArray(pointCoordinates), vpdf)
 
   /** The indices of the points within distance `eps` of `qp` (ascending), `qp` itself need not be one of them. */
   def neighbors(qp: Array[Double], eps: Double): Seq[Int] = vpt.indicesWithinDistance(qp, eps)
+
+  /** The same number as [[FiniteMetricSpace.longestDistanceWithin]]. Up to [[EuclideanMetricSpace.MaxCachedPoints]]
+    * points the pass over the pairs is cheap, and it runs as it does for any space. Above that, the distances are not
+    * cached and the pass costs `n^2 / 2` of them, so it is replaced by one query per point on the vantage-point tree
+    * ([[longestDistanceByQueries]]), which costs a few hundred distances per point on a cloud where the threshold keeps
+    * few of the pairs, and that is where a long run is. Where it keeps many, the pass runs as one task per point on all
+    * threads ([[longestDistanceByRows]]).
+    */
+  override def longestDistanceWithin(threshold: Double): Double =
+    if size <= EuclideanMetricSpace.MaxCachedPoints then super.longestDistanceWithin(threshold)
+    else longestDistanceByQueries(threshold).getOrElse(longestDistanceByRows(threshold))
+
+  /** The longest distance at most `threshold` by one query per point on [[vpt]], the points on all threads; `None` when
+    * a point has so many others within reach that the tree stops paying (a query that would measure more than a quarter
+    * of the points is given up, and with it the whole search): the cost of a point is then about the cost of scanning
+    * the points once, so the queries would cost as much as the pass over all pairs.
+    */
+  def longestDistanceByQueries(threshold: Double): Option[Double] =
+    val n = size
+    val tree = vpt // built once, before the threads ask for it
+    val cap = math.max(1L, n / 4L)
+    val longest = new Array[Double](n)
+    val gaveUp = new java.util.concurrent.atomic.AtomicBoolean(false)
+    Parallel.tasks(n) { i =>
+      if !gaveUp.get() then
+        val d = tree.largestDistanceWithin(pointCoordinates(i), threshold, cap)
+        if d.isNaN then gaveUp.set(true) else longest(i) = d
+    }
+    if gaveUp.get() then None else Some(longest.foldLeft(0.0)(math.max))
+
+  /** The longest distance at most `threshold` by the pass over all pairs, one task per point (its pairs with the points
+    * after it), the tasks shared between all threads.
+    */
+  def longestDistanceByRows(threshold: Double): Double =
+    val n = size
+    val longest = new Array[Double](n)
+    Parallel.tasks(n) { x =>
+      var row = 0.0
+      var y = x + 1
+      while y < n do
+        val d = distance(x, y)
+        if d <= threshold && d > row then row = d
+        y += 1
+      longest(x) = row
+    }
+    longest.foldLeft(0.0)(math.max)
 
 object EuclideanMetricSpace:
   /** The largest point count whose distances are cached: `8192^2` doubles is 512 MB. */

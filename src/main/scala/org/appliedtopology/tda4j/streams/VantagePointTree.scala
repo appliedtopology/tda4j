@@ -62,6 +62,19 @@ open class VantagePointTree[V](
   /** The elements at distance at most `radius` from `query`, in the order of `elements`. */
   def withinDistance(query: V, radius: Double): IndexedSeq[V] = indicesWithinDistance(query, radius).map(items)
 
+  /** The largest distance at most `radius` from `query` to an element, `Double.NegativeInfinity` when there is none (a
+    * negative or `NaN` radius finds nothing): the largest value `indicesWithinDistance` would have found, without the
+    * list of elements. The walk gives up and returns `Double.NaN` as soon as it has measured more than
+    * `maxMeasurements` distances: a radius so large that the tree prunes too little to beat a scan of every element,
+    * which is the caller's cue to scan.
+    */
+  def largestDistanceWithin(query: V, radius: Double, maxMeasurements: Long): Double =
+    if size == 0 || !(radius >= 0.0) then Double.NegativeInfinity
+    else
+      val found = new VantagePointTree.Largest(maxMeasurements)
+      collectLargest(0, query, radius, found)
+      if found.measured > maxMeasurements then Double.NaN else found.best
+
   /** The indices of the `k` elements nearest to `query`, nearest first, ties by ascending index. Fewer than `k` when
     * the tree holds fewer elements. Throws `IllegalArgumentException` for a negative `k`.
     */
@@ -98,6 +111,25 @@ open class VantagePointTree[V](
       // every element of the nearer child is at distance <= threshold from the vantage point, of the farther one >=
       if !(d - radius > threshold + slack) then collect(node + 1, query, radius, found)
       if !(d + radius < threshold - slack) then collect(layout.farther(node), query, radius, found)
+
+  // `collect` keeping only the largest distance found; stops descending once more than `found.cap` distances were
+  // measured (a leaf in progress finishes its scan).
+  private def collectLargest(node: Int, query: V, radius: Double, found: VantagePointTree.Largest): Unit =
+    val lo = layout.lo(node)
+    val hi = layout.hi(node)
+    if layout.mid(node) < 0 then
+      var slot = lo
+      while slot < hi do
+        found.offer(measure(query, slot), radius)
+        slot += 1
+    else
+      val d = measure(query, lo)
+      found.offer(d, radius)
+      val threshold = layout.threshold(node)
+      val slack = VantagePointTree.RelativeSlack * (d + radius + threshold)
+      if !found.exhausted && !(d - radius > threshold + slack) then collectLargest(node + 1, query, radius, found)
+      if !found.exhausted && !(d + radius < threshold - slack) then
+        collectLargest(layout.farther(node), query, radius, found)
 
   private def search(node: Int, query: V, best: VantagePointTree.Nearest): Unit =
     val lo = layout.lo(node)
@@ -163,6 +195,17 @@ object VantagePointTree:
       val result = java.util.Arrays.copyOf(data, count)
       java.util.Arrays.sort(result)
       result
+
+  /** The largest distance within a radius among the `measured` distances of a walk, which is spent once `measured`
+    * passes `cap`.
+    */
+  private final class Largest(val cap: Long):
+    var best: Double = Double.NegativeInfinity
+    var measured: Long = 0L
+    def exhausted: Boolean = measured > cap
+    def offer(d: Double, radius: Double): Unit =
+      measured += 1
+      if d <= radius && d > best then best = d
 
   /** The `capacity` best `(distance, index)` pairs seen so far, as a max-heap on that pair: the root is the worst kept
     * candidate, `bound` its distance (infinite while the heap is not full).
