@@ -33,8 +33,10 @@ rationals since #270; what is left is Hom complexes of filtered complexes, `Plex
 zero-length bars for JavaPlex and GUDHI ("check your version"), GUDHI's default threshold ("you give it": it is
 infinity). Missing: `--modulus` needs the `USE_COEFFICIENTS` build, JavaPlex's default 20 divisions, Ripser's `dipha`
 format, GUDHI's `output_squared_values`, what `flag_persistence_generators` returns. The page now names the versions it
-describes. The Euler curve section of `vectorization.md` says that a persistence diagram does not give the curve (#248's
-last point, which had no home in the docs).
+describes. The Euler curve section of `vectorization.md` says when a persistence diagram gives the curve (#248's last point, which had
+no home in the docs): the first wording said a diagram never does, which is false for a complete one (the Euler
+characteristic at a scale is the alternating count of the bars alive there, infinite bars included), and was corrected in
+review; what is true is that a diagram cut at degree `k` leaves out the homology above `k`.
 
 ## Not checked
 
