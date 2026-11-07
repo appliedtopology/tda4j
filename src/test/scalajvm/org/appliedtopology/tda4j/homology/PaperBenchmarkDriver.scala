@@ -13,7 +13,7 @@ import scala.jdk.CollectionConverters.ListHasAsScala
   * java -cp $CP org.appliedtopology.tda4j.PaperBenchmarkDriver task=vr input=sphere.txt format=points dim=2 \
   *   [threshold=1.8] [p=2] [engine=auto|ripser|cohomology|chunks|naive|fastcubical|fastalpha|fastalpha-top|blocks|parallel] \
   *   [reps=cycles|cocycles|none] [backend=default|bowyer-watson|helix|dqp] [warmup=2] [trials=5] [out=bars.tsv]
-  *   [read=true] [hold=seconds] [digest=true] [count=true] [threads=N]
+  *   [read=true] [hold=seconds] [digest=true] [count=true] [threads=N] [facade=true]
   * }}}
   *
   *   - `task=vr`: points (`format=points`, one point per line) or a full distance matrix (`format=distance`).
@@ -54,6 +54,13 @@ import scala.jdk.CollectionConverters.ListHasAsScala
   *     triangulation fails the checks the fast alpha engine relies on (a facet with other than one or two top cofaces,
   *     an interior void, `looksValid`), those for which `requireValidTriangulation = true` throws, and those where the
   *     walk fell back to its slow candidate search; one JSON line (`bench/sweep_alpha.py --validity`).
+  *   - `facade=true` (tasks `vr`, `cubical`, `alpha`, `cech`; the engines and backends that
+  *     `bench/workers/tda4j_js_worker.mjs` takes): the call the Scala.js worker makes, through
+  *     `matlab.TDA4j.computeFromPoints` / `computeFromDistanceMatrix` / `computeFromCubicalImage` with the option
+  *     strings the npm API hands it (`facadeOptions`), not through `Persistence`. Every bar of positive length is read
+  *     out of the result (`toArrayUnfiltered`), and `read=true` reads every representative as the worker does. The JSON
+  *     line has `"facade":true`; `bench/bench.py`'s `tda4j-facade*` rows put it beside the `tda4j-js*` rows and the
+  *     verb's.
   *   - `count=true` (tasks `vr`, `alpha`, `cech`, `sparse`, `dtm`, `witness`, `dowker`): build the complex the task
   *     would reduce, count its cells by dimension (up to `dim + 1`, all a barcode up to degree `dim` needs) and print
   *     one JSON line with `cells`; no engine runs (`bench/count_cells.py`).
@@ -102,6 +109,7 @@ object PaperBenchmarkDriver:
     // digest=true (cubical): a SHA-256 over the last diagram's bars in list order, each with its representative's keys
     // and coefficients, to compare two builds on one input term for term.
     val wantDigest = opts.get("digest").contains("true")
+    val facade = opts.get("facade").contains("true")
     var digest = ""
     if opts.get("count").contains("true") then
       countCells(task, opts, dim, threshold)
@@ -123,6 +131,31 @@ object PaperBenchmarkDriver:
 
     val loadStart = System.nanoTime()
     val compute: () => List[(Int, Double, Double)] = task match
+      case _ if facade =>
+        val facadeOpts =
+          facadeOptions(task, dim, p, opts.get("threshold"), engineName, repsName, opts.getOrElse("backend", "default"))
+        // What the worker does with a result: every bar of positive length, then (read=true) every representative.
+        def bars(result: matlab.PersistenceResult): List[(Int, Double, Double)] =
+          val all = result.toArrayUnfiltered()
+          if readReps then termsRead = all.indices.iterator.map(i => result.cycleVertices(i).length.toLong).sum
+          all.iterator.map(row => (row(0).toInt, row(1), row(2))).toList
+        task match
+          case "vr" =>
+            val matrix = readMatrix(input)
+            opts.getOrElse("format", "points") match
+              case "points"   => () => bars(matlab.TDA4j.computeFromPoints(matrix, facadeOpts))
+              case "distance" => () => bars(matlab.TDA4j.computeFromDistanceMatrix(matrix, facadeOpts))
+              case other      => throw IllegalArgumentException(s"format=$other (points|distance)")
+          case "cubical" =>
+            require(
+              opts.getOrElse("construction", "T") == "T",
+              "facade=true reads the array as the values of the top cells (construction=T), as the JavaScript API does"
+            )
+            val (values, shape) = readNpy(input)
+            () => bars(matlab.TDA4j.computeFromCubicalImage(shape.toArray, values, facadeOpts))
+          case _ =>
+            val pts = readMatrix(input)
+            () => bars(matlab.TDA4j.computeFromPoints(pts, facadeOpts))
       case "vr" if engineName == "parallel" =>
         val ms = metricSpaceOf(opts)
         val n = ms.size
@@ -310,6 +343,7 @@ object PaperBenchmarkDriver:
     println(
       "{" +
         s""""tool":"tda4j","task":"$task","engine":"$engineName","p":$p,"warmup":$warmup,""" +
+        (if facade then """"facade":true,""" else "") +
         s""""load_s":$loadSeconds,"times_s":[${times.mkString(",")}],""" +
         s""""bars":{${counts.map((d, c) => s""""$d":$c""").mkString(",")}},""" +
         s""""heap_used_mb":${(rt.totalMemory - rt.freeMemory) / 1048576},""" +
@@ -325,6 +359,56 @@ object PaperBenchmarkDriver:
       println(s"""{"held":${held != null}}""")
 
   private def fmt(x: Double): String = if x.isPosInfinity then "inf" else x.toString
+
+  /** The facade's option strings for a run of `bench/workers/tda4j_js_worker.mjs`: the worker's options object, key for
+    * key, as the npm API's `optionArray` flattens it (`maxDimension`, `prime`, `minPersistence = 0` first, then the
+    * engine unless it is `auto`, `representativeType` for cocycles, `maxFiltrationValue` when there is a `threshold`,
+    * and for `alpha` and `cech` the `complex`, with `alphaBackend` unless it is the default). The worker's engine names
+    * are the facade's, except `fastcubical` and `fastalpha`, which it spells `fast-cubical` and `fast-alpha`. A
+    * combination the JavaScript API does not offer is an `IllegalArgumentException` here too: `reps=none`, an engine
+    * the worker has no name for (`parallel`, `parallelverb`, `blocks`, `fastalpha-top`), a task other than
+    * `vr | cubical | alpha | cech`, `fastalpha` on DQP or with a threshold.
+    */
+  def facadeOptions(
+    task: String,
+    dim: Int,
+    p: Int,
+    threshold: Option[String],
+    engineName: String,
+    repsName: String,
+    backend: String
+  ): Array[String] =
+    val engines = Map(
+      "ripser" -> "ripser",
+      "cohomology" -> "cohomology",
+      "chunks" -> "chunks",
+      "naive" -> "naive",
+      "fastcubical" -> "fast-cubical",
+      "fastalpha" -> "fast-alpha"
+    )
+    require(
+      engineName == "auto" || engines.contains(engineName),
+      s"engine=$engineName is not one the JavaScript API takes (auto|${engines.keys.toList.sorted.mkString("|")})"
+    )
+    require(
+      repsName == "cycles" || repsName == "cocycles",
+      s"reps=$repsName (cycles|cocycles): the facade has no reps=none"
+    )
+    require(
+      Set("vr", "cubical", "alpha", "cech")(task),
+      s"task=$task: facade=true covers vr, cubical, alpha and cech, the tasks of the JavaScript worker"
+    )
+    if engineName == "fastalpha" then
+      require(backend != "dqp", "engine=fastalpha needs a triangulation, not DQP")
+      require(threshold.isEmpty, "engine=fastalpha takes no threshold")
+    val extra = List(
+      Option.when(engineName != "auto")(List("engine", engines(engineName))),
+      Option.when(repsName == "cocycles")(List("representativeType", "cocycles")),
+      threshold.map(t => List("maxFiltrationValue", t)),
+      Option.when(task == "alpha" || task == "cech")(List("complex", task)),
+      Option.when(task == "alpha" && backend != "default")(List("alphaBackend", backend))
+    ).flatten.flatten
+    (List("maxDimension", dim.toString, "prime", p.toString, "minPersistence", "0") ++ extra).toArray
 
   /** The failure rate of `HelixDelaunay` over `draws` random clouds: see `task=helix-validity` above. */
   private def helixValidity(opts: Map[String, String]): Unit =
