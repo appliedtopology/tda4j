@@ -4,11 +4,9 @@ import WideSimplexIndexing.{highOf, lowOf, toBigInt}
 
 import org.scalacheck.Gen
 import org.scalacheck.Prop.forAll
-import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
-import org.specs2.scalacheck.Parameters
 
-class WideSimplexIndexingSpec extends Specification with ScalaCheck:
+class WideSimplexIndexingSpec extends Specification with PlatformScalaCheck:
 
   // C(n, k) for n <= 2000, k <= 13, by Pascal's rule in BigInt.
   val pascal: Array[Array[BigInt]] =
@@ -26,6 +24,15 @@ class WideSimplexIndexingSpec extends Specification with ScalaCheck:
   def simplexGen(vertexCount: Int, size: Int): Gen[Array[Int]] =
     Gen.pick(size, 0 until vertexCount).map(_.toArray.sorted)
 
+  // Fewer vertices, larger simplices: C(400, 13) is about 2^77. A cofacet cursor visits every vertex, so the cofacet
+  // examples take this case: on Scala.js, where a Long is an object, a walk over 2000 vertices costs seconds.
+  val cofacetCase: Gen[(Int, Array[Int])] =
+    for
+      vertexCount <- Gen.chooseNum(300, 400)
+      size <- Gen.chooseNum(1, 12)
+      vertices <- simplexGen(vertexCount, size)
+    yield (vertexCount, vertices)
+
   // Indices well past 2^63: C(2000, 10) is about 2^88.
   val wideCase: Gen[(Int, Array[Int])] =
     for
@@ -36,7 +43,6 @@ class WideSimplexIndexingSpec extends Specification with ScalaCheck:
 
   "Two-word simplex indices" >> {
     "agree with SimplexIndexing where a Long holds them" >> {
-      given Parameters = Parameters(minTestsOk = TestPlatform.propertyCases(300))
       val smallCase = for
         vertexCount <- Gen.chooseNum(2, 25)
         size <- Gen.chooseNum(1, vertexCount - 1)
@@ -73,24 +79,15 @@ class WideSimplexIndexingSpec extends Specification with ScalaCheck:
       }
     }
 
-    "index and decode simplices whose indices pass 2^63, as BigInt arithmetic does" >> {
-      given Parameters = Parameters(minTestsOk = TestPlatform.propertyCases(300))
+    "index and decode simplices whose indices pass 2^63, as BigInt arithmetic does" >>
       forAll(wideCase) { case (vertexCount, vertices) =>
         val wsi = WideSimplexIndexing(vertexCount)
         val (h, l) = words(oracle(vertices.toSeq))
         (wsi.index(vertices) must be_==((h, l)))
           .and(wsi.decodeToArray(h, l, vertices.length).toSeq must be_==(vertices.toSeq))
       }
-    }
 
-    "reach the BigInt index of every cofacet, in decreasing order, with the added vertex" >> {
-      given Parameters = Parameters(minTestsOk = TestPlatform.propertyCases(100))
-      // Fewer vertices, larger simplices: C(400, 13) is about 2^77.
-      val cofacetCase = for
-        vertexCount <- Gen.chooseNum(300, 400)
-        size <- Gen.chooseNum(1, 12)
-        vertices <- simplexGen(vertexCount, size)
-      yield (vertexCount, vertices)
+    "reach the BigInt index of every cofacet, in decreasing order, with the added vertex" >>
       forAll(cofacetCase, Gen.oneOf(true, false)) { case ((vertexCount, vertices), all) =>
         val wsi = WideSimplexIndexing(vertexCount)
         val (h, l) = words(oracle(vertices.toSeq))
@@ -106,10 +103,8 @@ class WideSimplexIndexingSpec extends Specification with ScalaCheck:
           .and(seen.forall((v, i) => i == oracle((vertices :+ v).sorted.toSeq)) must beTrue)
           .and(seen.map(_._2).zip(seen.map(_._2).drop(1)).forall(_ > _) must beTrue)
       }
-    }
 
-    "reach the BigInt index of every facet, in increasing order, with the removed vertex" >> {
-      given Parameters = Parameters(minTestsOk = TestPlatform.propertyCases(300))
+    "reach the BigInt index of every facet, in increasing order, with the removed vertex" >>
       forAll(wideCase) { case (vertexCount, vertices) =>
         val wsi = WideSimplexIndexing(vertexCount)
         val (h, l) = words(oracle(vertices.toSeq))
@@ -123,11 +118,9 @@ class WideSimplexIndexingSpec extends Specification with ScalaCheck:
           .and(seen.forall((v, i) => i == oracle(vertices.filter(_ != v).toSeq)) must beTrue)
           .and(seen.map(_._2).zip(seen.map(_._2).drop(1)).forall(_ < _) must beTrue)
       }
-    }
 
-    "walk the cofacets and facets of a decoded simplex as they are walked from its index, and say where a facet's vertex was" >> {
-      given Parameters = Parameters(minTestsOk = TestPlatform.propertyCases(200))
-      forAll(wideCase, Gen.oneOf(true, false)) { case ((vertexCount, vertices), all) =>
+    "walk the cofacets and facets of a decoded simplex as they are walked from its index, and say where a facet's vertex was" >>
+      forAll(cofacetCase, Gen.oneOf(true, false)) { case ((vertexCount, vertices), all) =>
         val wsi = WideSimplexIndexing(vertexCount)
         val (h, l) = words(oracle(vertices.toSeq))
         val decoded = wsi.decodeToArray(h, l, vertices.length)
@@ -152,10 +145,8 @@ class WideSimplexIndexingSpec extends Specification with ScalaCheck:
           .and(byVertices.forall((v, _, _, position) => decoded(position) == v) must beTrue)
           .and(decoded.toSeq must be_==(vertices.toSeq))
       }
-    }
 
     "find from neighbour lists the cofacets the full cursor finds whose added vertex neighbours every vertex" >> {
-      given Parameters = Parameters(minTestsOk = TestPlatform.propertyCases(100))
       val n = 300 // C(300, 13) is about 2^70
       val positions = Array.tabulate(n)(i => ((i * 7919L) % 1000).toDouble / 1000.0)
       val distance = (i: Int, j: Int) => math.abs(positions(i) - positions(j))
