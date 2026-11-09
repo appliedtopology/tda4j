@@ -38,7 +38,7 @@ error stream (`TDA4jCLI.run(args, out, err)`); pass a buffer (`WORKLOG-cli-spec-
 **A property that hunts rare inputs** (2000 cases because a bug showed once in thousands of clouds) takes its count
 from `TestPlatform.propertyCases(n)`: all `n` on the JVM, a tenth on Scala.js (`rules/scalajs.md`). A spec that takes
 ScalaCheck's default mixes in `PlatformScalaCheck` instead of `ScalaCheck` (100 cases on the JVM, a tenth on JS; a
-spec's own `given Parameters` wins; the command-line `scalacheck.mintestsok` has no effect here). A loop over seeds,
+spec's own CLASS-level `given Parameters` wins, a `given` inside an example is never seen by specs2's `Prop` conversion, so 100 cases ran on JS; the command-line `scalacheck.mintestsok` has no effect here). A loop over seeds,
 primes or option combinations takes its size from `TestPlatform.perPlatform(jvm = .., js = ..)`. A spec that shared
 code runs must stay cheap on JS, where it is 3 to 60 times slower than on the JVM.
 
