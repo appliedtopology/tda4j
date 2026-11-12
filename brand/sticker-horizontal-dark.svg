@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="200" viewBox="0 0 600 200" role="img" aria-label="tda4j horizontal sticker">
+  <title>tda4j horizontal sticker — dark</title>
+  <style>text { font-family: 'JetBrains Mono', monospace; font-weight: 700; }</style>
+  <!-- Rounded rectangular sticker field; the full viewBox is the intended trim boundary. -->
+  <rect width="600" height="200" rx="28" fill="#161b1e"/>
+  <g transform="translate(0 25)">
+    <circle cx="62" cy="75" r="30" fill="#81bde0" fill-opacity="0.16" stroke="#81bde0" stroke-width="7"/>
+    <circle cx="112" cy="75" r="30" fill="#f0c647" fill-opacity="0.18" stroke="#f0c647" stroke-width="7"/>
+    <line x1="62" y1="75" x2="112" y2="75" stroke="#81bde0" stroke-width="8"/>
+    <circle cx="62" cy="75" r="7" fill="#81bde0"/>
+    <circle cx="112" cy="75" r="7" fill="#f0c647"/>
+  </g>
+  <text x="158" y="126" font-size="76" fill="#81bde0">tda<tspan fill="#f0c647">4</tspan>j</text>
+</svg>
