@@ -217,8 +217,24 @@ object Panel:
   final case class Flat(
     figure: Figure,
     reactions: Map[Int, IndexedSeq[Reaction]] = Map.empty,
-    brush: Option[String] = None
+    brush: Option[String] = None,
+    zoom: Option[ZoomAxes] = None
   ) extends Panel:
+    /** This panel zoomable: the viewer zooms in on a region and pans over the picture, and the axes follow (new ticks
+      * and numbers for the range shown); the buttons beside the panel, or `Ctrl` and the mouse wheel, zoom, and
+      * dragging pans (in a panel that brushes too, a button chooses what dragging does). Points and text keep their
+      * size and lines their width; everything else moves with the data. `axes` says which axes the zoom changes.
+      *
+      * The axes have to be linear, forward, and written as the plot writes them (no `Axis.format`, slanted numbers or
+      * number style): a log axis, for one, is refused, and the message says so. [[PageState.zoom]] gives the still
+      * picture of a window.
+      */
+    def zoomable(axes: ZoomAxes = ZoomAxes.Both): Flat = copy(zoom = Some(axes))
+
+    // zoomable when the page can draw its axes again, as it is otherwise
+    private[plot] def zoomableIfPossible(axes: ZoomAxes): Flat =
+      if Interactive.zoomProblem(figure).isEmpty then zoomable(axes) else this
+
     /** This panel with dragging a rectangle over it choosing, in the selection `selection`, the keys of every item of
       * this panel that the rectangle touches (a shift-drag adds to what is chosen): a region of a diagram, a stretch of
       * a barcode. Some item of the panel has to choose in that selection ([[selecting]]). The rectangle stays on the
@@ -466,6 +482,17 @@ final case class Interactive(
   /** This plot with `panel` as one more panel. */
   def withPanel(panel: Panel): Interactive = copy(panels = panels :+ panel)
 
+  /** This plot with every 2-D panel that the page can zoom made zoomable (see [[Panel.Flat.zoomable]]): the viewer
+    * zooms in on a region with the buttons beside a panel or `Ctrl` and the mouse wheel, pans by dragging, and the axes
+    * follow. A panel whose axes the page cannot draw again (a log axis, a number format) and a 3-D panel are left as
+    * they are. With `axes`, the axes the zoom changes.
+    */
+  def zoomable(axes: ZoomAxes = ZoomAxes.Both): Interactive =
+    copy(panels = panels.map {
+      case flat: Panel.Flat => flat.zoomableIfPossible(axes)
+      case other            => other
+    })
+
   /** This plot with one more control. */
   def withControl(control: Control): Interactive =
     require(
@@ -543,8 +570,11 @@ final case class Interactive(
   /** Whether every behavior listens to a control of this plot, on a mark and axes it can be carried out on. */
   private def validate(): Unit =
     require(
-      controls.nonEmpty || selections.nonEmpty,
-      "Interactive: a plot with no control or selection has nothing to respond to; add one with withSlider or withSelection"
+      controls.nonEmpty || selections.nonEmpty || panels.exists {
+        case Panel.Flat(_, _, _, zoom) => zoom.isDefined; case _ => false
+      },
+      "Interactive: a plot with no control, selection or zoomable panel has nothing to respond to; add one with " +
+        "withSlider, withSelection or Panel.Flat.zoomable"
     )
     require(panels.nonEmpty, "Interactive: add a panel with withPanel")
     val known = controls.map(_.name).toSet
@@ -582,7 +612,12 @@ final case class Interactive(
         })
       }
       panel match
-        case Panel.Flat(figure, rs, brush) =>
+        case Panel.Flat(figure, rs, brush, zoom) =>
+          zoom.foreach { _ =>
+            Interactive
+              .zoomProblem(figure)
+              .foreach(why => require(false, s"Interactive: panel $p is zoomable, but $why"))
+          }
           brush.foreach { b =>
             require(
               chosen(b),
@@ -622,7 +657,7 @@ final case class Interactive(
 
   // ----- the page
 
-  private def firstFigure: Option[Figure] = panels.collectFirst { case Panel.Flat(f, _, _) => f }
+  private def firstFigure: Option[Figure] = panels.collectFirst { case Panel.Flat(f, _, _, _) => f }
 
   private def look: Palette =
     firstFigure
@@ -643,24 +678,31 @@ final case class Interactive(
 
   // A panel is as wide as its picture at most and as the room allows at least 320 pixels: a page in a slide or an
   // iframe narrower than its pictures side by side shrinks them (the `viewBox` keeps the drawing), then stacks them.
-  private def panelBox(width: Int, picture: String, brush: Option[String] = None): String =
+  private def panelBox(
+    width: Int,
+    picture: String,
+    brush: Option[String] = None,
+    zoom: Option[String] = None
+  ): String =
     val brushing = brush.fold("")(b => s""" data-brush="${Svg.escape(b)}"""")
-    s"""<div class="tda4j-panel"$brushing style="max-width:${width}px">$picture</div>"""
+    val zooming = zoom.fold("")(z => s""" data-zoomable="$z"""")
+    s"""<div class="tda4j-panel"$brushing$zooming style="max-width:${width}px">$picture</div>"""
 
   def fragment(theme: Theme = Theme.Auto): String =
     validate()
     val id = Interactive.freshId()
     val pal = look
     val parts = panels.zipWithIndex.map {
-      case (Panel.Flat(figure, rs, brush), k) =>
+      case (Panel.Flat(figure, rs, brush, zoom), k) =>
         val moving = rs.values.exists(_.exists(_.behaviors.exists {
           case _: Behavior.Follows | _: Behavior.Radius => true
           case _                                        => false
         }))
         panelBox(
           figure.width,
-          Svg.renderTagged(figure, theme, false, Svg.Tags(attrsFor(rs), moving, Some(s"$id-p$k"))),
-          brush
+          Svg.renderTagged(figure, theme, false, Svg.Tags(attrsFor(rs), moving, Some(s"$id-p$k"), zoom.map(_.code))),
+          brush,
+          zoom.map(_.code)
         )
       case (Panel.Spatial(scene, rs), k) => panelBox(scene.width, scene.fragmentReacting(theme, rs, s"$id-p$k"))
     }
@@ -686,7 +728,8 @@ final case class Interactive(
         pal,
         theme,
         selections.exists(_.listed),
-        panels.exists { case Panel.Flat(_, _, brush) => brush.isDefined; case _ => false }
+        panels.exists { case Panel.Flat(_, _, brush, _) => brush.isDefined; case _ => false },
+        panels.exists { case Panel.Flat(_, _, _, zoom) => zoom.isDefined; case _ => false }
       )}</style>
        |$headline
        |<div class="tda4j-panels">${parts.mkString}</div>
@@ -731,9 +774,17 @@ final case class Interactive(
       )
     }
     val chosen = selections.map(s => s.name -> state.chosen(s.name)).toMap
-    val shown = panels.map {
-      case Panel.Flat(figure, rs, _) => Interactive.still(figure, rs, now, chosen)
-      case Panel.Spatial(scene, rs)  => Interactive.still(scene, rs, now)
+    state.windows.keys.foreach { k =>
+      val zoomable = panels.zipWithIndex.collect { case (Panel.Flat(_, _, _, Some(_)), i) => i }
+      require(
+        zoomable.contains(k),
+        s"Interactive.at: panel $k is not a zoomable panel (zoomable panels: " +
+          (if zoomable.isEmpty then "none" else zoomable.mkString(", ")) + ")"
+      )
+    }
+    val shown = panels.zipWithIndex.map {
+      case (Panel.Flat(figure, rs, _, _), k) => Interactive.still(figure, rs, now, chosen, state.windows.get(k))
+      case (Panel.Spatial(scene, rs), _)     => Interactive.still(scene, rs, now)
     }
     val sliders = controls.map(c => s"${c.shownName} = ${Svg.number(now(c.name))}")
     val picked = selections.flatMap { s =>
@@ -987,7 +1038,8 @@ object Interactive:
     pal: Palette,
     theme: Theme,
     listing: Boolean = false,
-    brushing: Boolean = false
+    brushing: Boolean = false,
+    zooming: Boolean = false
   ): String =
     val variables =
       if theme == Theme.Auto then pal.cssVariables(s"#$id")
@@ -1012,7 +1064,16 @@ object Interactive:
        else
          s"""
             |#$id .tda4j-brush{fill:var(--s0);fill-opacity:.12;stroke:var(--s0);stroke-dasharray:4 3;pointer-events:none}
-            |#$id [data-brush] svg{user-select:none}""".stripMargin)
+            |#$id [data-brush] svg{user-select:none}""".stripMargin) +
+      (if !zooming then ""
+       else
+         s"""
+            |#$id [data-z=s] *{vector-effect:non-scaling-stroke}
+            |#$id .tda4j-panel{position:relative}
+            |#$id .tda4j-zoombar{position:absolute;top:4px;right:4px;display:flex;gap:4px;z-index:1}
+            |#$id .tda4j-zoombar button{min-width:26px;height:26px;padding:0 6px;font-size:14px;line-height:1;border:1px solid var(--ink2);border-radius:4px;background:var(--surface);color:var(--ink);cursor:pointer;opacity:.85}
+            |#$id .tda4j-zoombar button[aria-pressed=true]{background:var(--s0);color:var(--surface)}
+            |#$id [data-zoomable] svg{user-select:none}""".stripMargin)
 
   // ----- stills: the same behaviors, applied in Scala
 
@@ -1025,6 +1086,32 @@ object Interactive:
   private def clamp(v: Double, lo: Double, hi: Double): Double = math.min(math.max(v, lo), hi)
 
   private[plot] def reactionOf(rs: IndexedSeq[Reaction], i: Int): Reaction = rs(if rs.size == 1 then 0 else i)
+
+  /** Why the page cannot zoom a picture of `figure` (it draws ticks for linear axes that run forward, with plain
+    * numbers), or `None` when it can.
+    */
+  private[plot] def zoomProblem(figure: Figure): Option[String] =
+    val (xt, yt) = Svg.resolved(figure)
+    val transform = Seq("x" -> xt, "y" -> yt).collectFirst {
+      case (axis, t) if t != Transform.Identity =>
+        s"its $axis axis is $t; zooming needs linear axes (the page cannot draw the ticks of another transform)"
+    }
+    transform
+      .orElse(
+        Option.when(figure.x.reverse || figure.y.reverse)(
+          "an axis runs backwards; zooming needs axes that run forward"
+        )
+      )
+      .orElse(
+        Option.when(figure.x.format.nonEmpty || figure.y.format.nonEmpty)(
+          "an axis has a number format (Axis.format); the page cannot write the numbers of another range that way"
+        )
+      )
+      .orElse(
+        Option.when(figure.elements.face(TextRole.TickLabel).angle != 0.0 || !figure.elements.numbers.isDefault)(
+          "its tick labels are slanted or use a number style; the page writes the numbers of another range plain"
+        )
+      )
 
   // the items of `xs` that stay
   private def keepItems[A](xs: IndexedSeq[A], keep: IndexedSeq[Boolean]): IndexedSeq[A] =
@@ -1046,7 +1133,8 @@ object Interactive:
     figure: Figure,
     reactions: Map[Int, IndexedSeq[Reaction]],
     values: Map[String, Double],
-    chosen: Map[String, Set[Int]] = Map.empty
+    chosen: Map[String, Set[Int]] = Map.empty,
+    window: Option[Window] = None
   ): Figure =
     val marks = figure.marks.zipWithIndex.flatMap { (mark, index) =>
       reactions.get(index).fold(Option(mark))(rs => stillMark(mark, rs, values, chosen))
@@ -1060,7 +1148,14 @@ object Interactive:
         max = a.max.orElse(Some(range._2)),
         minusInfinity = if zero && a.minusInfinity.isEmpty then Some(true) else a.minusInfinity
       )
-    figure.copy(marks = marks, x = pinned(figure.x, rangeX, zeroX), y = pinned(figure.y, rangeY, zeroY))
+    val whole = figure.copy(marks = marks, x = pinned(figure.x, rangeX, zeroX), y = pinned(figure.y, rangeY, zeroY))
+    // a zoomed picture shows the window as asked; what lies outside it is clipped
+    window.fold(whole)(w =>
+      whole.copy(
+        x = whole.x.copy(min = Some(w.x0), max = Some(w.x1)),
+        y = whole.y.copy(min = Some(w.y0), max = Some(w.y1))
+      )
+    )
 
   private def stillMark(
     mark: Mark,
@@ -1159,9 +1254,11 @@ object Interactive:
       |function refresh(it){it.el.style.display=Object.values(it.h).some(x=>x)?'none':'';}
       |const fmt=v=>String(Number(v.toPrecision(3)));
       |const tr={i:v=>v,l:v=>Math.log10(v),s:v=>Math.sign(v)*Math.sqrt(Math.abs(v)),m:(v,c)=>Math.sign(v)*Math.log10(1+Math.abs(v)/c)};
+      |function axesOf(svg){
+      |  if(svg._ax)return svg._ax;const f=svg.getAttribute('data-fr');if(!f)return null;
+      |  return svg._ax=f.split(';').map(s=>{const a=s.split(',');return{o:+a[0],n:+a[1],lo:+a[2],hi:+a[3],rev:a[4]==='1',t:a[5],c:+a[6]};});}
       |function frameOf(svg){
-      |  if(svg._fr)return svg._fr;const f=svg.getAttribute('data-fr');if(!f)return null;
-      |  const ax=f.split(';').map(s=>{const a=s.split(',');return{o:+a[0],n:+a[1],lo:+a[2],hi:+a[3],rev:a[4]==='1',t:a[5],c:+a[6]};});
+      |  if(svg._fr)return svg._fr;const ax=axesOf(svg);if(!ax)return null;
       |  const pos=(a,v)=>{const u=tr[a.t](v,a.c);return(a.rev?a.hi-u:u-a.lo)/(a.hi-a.lo)*a.n;};
       |  return svg._fr={px:v=>ax[0].o+pos(ax[0],v),py:v=>ax[1].o+ax[1].n-pos(ax[1],v),scale:ax[0].n/(ax[0].hi-ax[0].lo)};}
       |reactors.v=(it,b,v,j)=>{it.h[j]=!(v>=+b.a[0]&&v<+b.a[1]);it.el.style.display=Object.values(it.h).some(x=>x)?'none':'';};
@@ -1213,7 +1310,11 @@ object Interactive:
       |function pinAll(n,ks){sel[n].pin=new Set(Array.from(ks,Number));commit(n);}
       |const pickers=new Map();
       |items.forEach(it=>{if(it.picks.length){const l=pickers.get(it.svg)||[];l.push(it);pickers.set(it.svg,l);}});
+      |function inPlot(svg,x,y){const ax=axesOf(svg);if(!ax||!svg._zoomed)return true;
+      |  const p=new DOMPoint(x,y).matrixTransform(svg.getScreenCTM().inverse());
+      |  return p.x>=ax[0].o&&p.x<=ax[0].o+ax[0].n&&p.y>=ax[1].o&&p.y<=ax[1].o+ax[1].n;}
       |function hit(list,x,y){let best=null,bd=Infinity,ba=Infinity;
+      |  if(list.length&&!inPlot(list[0].svg,x,y))return null;
       |  for(const it of list){if(!it.el.getClientRects().length)continue;
       |    const r=it.el.getBoundingClientRect();
       |    const d=Math.hypot(Math.max(r.left-x,0,x-r.right),Math.max(r.top-y,0,y-r.bottom));
@@ -1240,7 +1341,7 @@ object Interactive:
       |function brushing(svg,list,n){let from=null;
       |  boxed.push(svg);
       |  svg.addEventListener('pointerdown',ev=>{svg._dragged=false;
-      |    if(ev.button!==0||ev.pointerType==='touch')return;from=[ev.clientX,ev.clientY];});
+      |    if(ev.button!==0||ev.pointerType==='touch'||svg._pan)return;from=[ev.clientX,ev.clientY];});
       |  svg.addEventListener('pointermove',ev=>{if(!from)return;
       |    if(!svg._dragged){if(Math.hypot(ev.clientX-from[0],ev.clientY-from[1])<5)return;
       |      svg._dragged=true;try{svg.setPointerCapture(ev.pointerId);}catch(e){}clearBoxes();
@@ -1251,7 +1352,10 @@ object Interactive:
       |  svg.addEventListener('pointerup',ev=>{if(!from)return;const start=from;from=null;
       |    if(!svg._dragged)return;
       |    try{svg.releasePointerCapture(ev.pointerId);}catch(e){}
-      |    const x0=Math.min(start[0],ev.clientX),x1=Math.max(start[0],ev.clientX),y0=Math.min(start[1],ev.clientY),y1=Math.max(start[1],ev.clientY);
+      |    let x0=Math.min(start[0],ev.clientX),x1=Math.max(start[0],ev.clientX),y0=Math.min(start[1],ev.clientY),y1=Math.max(start[1],ev.clientY);
+      |    const ax=axesOf(svg);
+      |    if(ax&&svg._zoomed){const m=svg.getScreenCTM(),a=new DOMPoint(ax[0].o,ax[1].o).matrixTransform(m),b=new DOMPoint(ax[0].o+ax[0].n,ax[1].o+ax[1].n).matrixTransform(m);
+      |      x0=Math.max(x0,a.x);y0=Math.max(y0,a.y);x1=Math.min(x1,b.x);y1=Math.min(y1,b.y);}
       |    const keys=new Set(ev.shiftKey?sel[n].pin:[]);
       |    for(const it of list){if(!it.el.getClientRects().length)continue;
       |      const r=it.el.getBoundingClientRect();
@@ -1266,6 +1370,89 @@ object Interactive:
       |    clearBoxes();clicked(names,hit(list,ev.clientX,ev.clientY),ev.shiftKey);});
       |  const box=svg.closest('.tda4j-panel');const bn=box&&box.getAttribute('data-brush');
       |  if(bn&&sel[bn])brushing(svg,list,bn);});
+      |const MAXZ=200,zooms={};
+      |function numberText(v){const a=Math.abs(v);if(v===0)return '0';
+      |  if(a>=1e5||a<1e-3){if(a<1e-3&&a>=1e-4)return v.toPrecision(3);
+      |    const m=/^(-?[0-9.]+)e([+-])([0-9]+)$/.exec(v.toExponential(2));return m[1]+'e'+m[2]+(m[3].length<2?'0'+m[3]:m[3]);}
+      |  const s=String(Number(v.toPrecision(4)));return s==='-0'?'0':s;}
+      |function niceTicks(lo,hi,target){
+      |  if(!(hi>lo)||!isFinite(hi)||!isFinite(lo))return [lo];
+      |  const raw=(hi-lo)/target,mag=Math.pow(10,Math.floor(Math.log10(raw))),norm=raw/mag;
+      |  const step=mag*(norm<1.5?1:norm<3?2:norm<7?5:10),first=Math.ceil(lo/step-1e-9),last=Math.floor(hi/step+1e-9),out=[];
+      |  for(let i=first;i<=last;i++){const t=i*step;out.push(t===0?0:t);}return out;}
+      |function ticksFor(s,a,b){let major;
+      |  if(s.m==='f')major=s.fx.slice();
+      |  else{const lo=s.m==='w'?Math.max(s.lo,a):a,hi=s.m==='w'?Math.min(s.hi,b):b;
+      |    const clear=v=>s.ex.every(e=>Math.abs(v-e[0])>=0.05*Math.abs(b-a));
+      |    major=niceTicks(lo,hi,5).filter(clear).map(v=>[v,numberText(v)]);}
+      |  return major.concat(s.ex).filter(t=>t[0]>=a&&t[0]<=b);}
+      |function drawAxes(z,whole){
+      |  if(z.gen){z.gen.remove();z.gen=null;}
+      |  z.orig.forEach(e=>{e.style.display=whole?'':'none';});
+      |  if(whole)return;
+      |  const w=z.win,X=z.ax[0],Y=z.ax[1],px=v=>X.o+(v-w[0])/(w[1]-w[0])*X.n,py=v=>Y.o+Y.n-(v-w[2])/(w[3]-w[2])*Y.n;
+      |  const grid=[],marks=[],labels=[];
+      |  for(const axis of ['x','y']){
+      |    const a=axis==='x'?[w[0],w[1]]:[w[2],w[3]];
+      |    for(const t of ticksFor(z.spec[axis],a[0],a[1])){const v=t[0],at=axis==='x'?px(v):py(v);
+      |      [['g',grid],['m',marks]].forEach(([k,list])=>{const tp=z.tpl[k+axis];if(!tp)return;const e=tp.cloneNode(false);e.style.removeProperty('display');
+      |        e.removeAttribute('data-k');
+      |        if(axis==='x'){e.setAttribute('x1',at);e.setAttribute('x2',at);}else{e.setAttribute('y1',at);e.setAttribute('y2',at);}
+      |        list.push(e);});
+      |      const tl=z.tpl['l'+axis];
+      |      if(tl){const e=tl.cloneNode(false);e.style.removeProperty('display');e.removeAttribute('data-k');e.removeAttribute('data-v');e.textContent=t[1];
+      |        if(axis==='x')e.setAttribute('x',at);else e.setAttribute('y',at+z.off);labels.push(e);}}}
+      |  const g=document.createElementNS(NS,'g');g.setAttribute('data-gen','1');
+      |  grid.concat(marks,labels).forEach(e=>g.appendChild(e));
+      |  z.svg.insertBefore(g,z.svg.querySelector('g[clip-path]'));z.gen=g;}
+      |function setWindow(z,w){
+      |  const X=z.ax[0],Y=z.ax[1],full=z.full;w=w.slice();
+      |  for(const i of [0,2]){const fw=full[i+1]-full[i],wd=Math.min(Math.max(w[i+1]-w[i],fw/MAXZ),fw),a=Math.min(Math.max(w[i],full[i]),full[i+1]-wd);w[i]=a;w[i+1]=a+wd;}
+      |  if(z.axes==='x'){w[2]=full[2];w[3]=full[3];}
+      |  if(z.axes==='y'){w[0]=full[0];w[1]=full[1];}
+      |  z.win=w;
+      |  const sx=(X.hi-X.lo)/(w[1]-w[0]),tx=X.o+(X.lo-w[0])/(w[1]-w[0])*X.n-sx*X.o;
+      |  const sy=(Y.hi-Y.lo)/(w[3]-w[2]),ty=Y.o+Y.n-(Y.lo-w[2])/(w[3]-w[2])*Y.n-sy*(Y.o+Y.n);
+      |  const whole=Math.abs(sx-1)<1e-12&&Math.abs(sy-1)<1e-12&&Math.abs(tx)<1e-9&&Math.abs(ty)<1e-9;
+      |  z.svg._zoomed=!whole;
+      |  z.svg.querySelectorAll('g[data-z=s]').forEach(g=>{if(whole)g.removeAttribute('transform');else g.setAttribute('transform','matrix('+sx+' 0 0 '+sy+' '+tx+' '+ty+')');});
+      |  z.pts.forEach(p=>{if(whole)p.el.removeAttribute('transform');else p.el.setAttribute('transform','translate('+((sx-1)*p.cx+tx)+' '+((sy-1)*p.cy+ty)+')');});
+      |  drawAxes(z,whole);
+      |  root.dispatchEvent(new CustomEvent('tda4j:zoom',{detail:{panel:z.pi,window:w.slice()},bubbles:true}));}
+      |function dataAt(z,ev){const p=new DOMPoint(ev.clientX,ev.clientY).matrixTransform(z.svg.getScreenCTM().inverse()),w=z.win,X=z.ax[0],Y=z.ax[1];
+      |  return [w[0]+(p.x-X.o)/X.n*(w[1]-w[0]),w[2]+(Y.o+Y.n-p.y)/Y.n*(w[3]-w[2])];}
+      |function zoomBy(z,f,cx,cy){const w=z.win;setWindow(z,[cx-(cx-w[0])*f,cx+(w[1]-cx)*f,cy-(cy-w[2])*f,cy+(w[3]-cy)*f]);}
+      |root.querySelectorAll('.tda4j-panel').forEach((box,pi)=>{
+      |  const svg=box.querySelector('svg[data-zm]');if(!svg)return;
+      |  const ax=axesOf(svg),z={svg:svg,pi:pi,ax:ax,spec:JSON.parse(svg.getAttribute('data-zm')),axes:'b',tpl:{},mode:'pan'};
+      |  z.axes=z.spec.ax;z.full=[ax[0].lo,ax[0].hi,ax[1].lo,ax[1].hi];z.win=z.full.slice();
+      |  z.orig=Array.from(svg.querySelectorAll('[data-k]'));
+      |  ['gx','mx','lx','gy','my','ly'].forEach(k=>{z.tpl[k]=svg.querySelector('[data-k="'+k+'"]');});
+      |  z.off=0;if(z.tpl.ly){z.off=+z.tpl.ly.getAttribute('y')-(ax[1].o+ax[1].n-(+z.tpl.ly.getAttribute('data-v')-ax[1].lo)/(ax[1].hi-ax[1].lo)*ax[1].n);}
+      |  z.pts=Array.from(svg.querySelectorAll('g[data-z=p] [data-c]')).map(el=>{const c=el.getAttribute('data-c').split(',');return{el:el,cx:+c[0],cy:+c[1]};});
+      |  zooms[pi]=z;
+      |  const bar=document.createElement('div');bar.className='tda4j-zoombar';
+      |  const button=(text,label,f)=>{const b=document.createElement('button');b.type='button';b.textContent=text;b.setAttribute('aria-label',label);b.title=label;b.addEventListener('click',f);bar.appendChild(b);return b;};
+      |  const centre=()=>[(z.win[0]+z.win[1])/2,(z.win[2]+z.win[3])/2];
+      |  button('+','zoom in',()=>{const c=centre();zoomBy(z,0.5,c[0],c[1]);});
+      |  button('\\u2212','zoom out',()=>{const c=centre();zoomBy(z,2,c[0],c[1]);});
+      |  button('1:1','show everything',()=>setWindow(z,z.full));
+      |  if(box.getAttribute('data-brush')){z.mode='brush';
+      |    const t=button('pan','drag to pan instead of choosing',()=>{z.mode=z.mode==='pan'?'brush':'pan';svg._pan=z.mode==='pan';t.setAttribute('aria-pressed',z.mode==='pan');});
+      |    t.setAttribute('aria-pressed','false');}
+      |  svg._pan=z.mode==='pan';
+      |  box.insertBefore(bar,svg);
+      |  svg.addEventListener('wheel',ev=>{if(!(ev.ctrlKey||ev.metaKey))return;ev.preventDefault();
+      |    const c=dataAt(z,ev);zoomBy(z,Math.exp(ev.deltaY*0.0015),c[0],c[1]);},{passive:false});
+      |  let from=null,start=null;
+      |  svg.addEventListener('pointerdown',ev=>{if(ev.button!==0||ev.pointerType==='touch'||z.mode!=='pan')return;
+      |    svg._dragged=false;from=[ev.clientX,ev.clientY];start=z.win.slice();});
+      |  svg.addEventListener('pointermove',ev=>{if(!from)return;
+      |    if(!svg._dragged){if(Math.hypot(ev.clientX-from[0],ev.clientY-from[1])<5)return;svg._dragged=true;try{svg.setPointerCapture(ev.pointerId);}catch(e){}}
+      |    const m=svg.getScreenCTM().inverse(),a=new DOMPoint(from[0],from[1]).matrixTransform(m),b=new DOMPoint(ev.clientX,ev.clientY).matrixTransform(m);
+      |    const dx=-(b.x-a.x)/ax[0].n*(start[1]-start[0]),dy=(b.y-a.y)/ax[1].n*(start[3]-start[2]);
+      |    setWindow(z,[start[0]+dx,start[1]+dx,start[2]+dy,start[3]+dy]);});
+      |  svg.addEventListener('pointerup',ev=>{if(!from)return;from=null;try{svg.releasePointerCapture(ev.pointerId);}catch(e){}});});
       |const api={root:root,controls:spec,selections:choices,
       |  get:n=>sel[n]?keysOf(n):state[n],
       |  set:(n,v)=>sel[n]?pinAll(n,v):put(ctl[n],v),
@@ -1273,6 +1460,9 @@ object Interactive:
       |  selection:keysOf,
       |  onChange:(n,f)=>{(watch[n]=watch[n]||[]).push(f);f(sel[n]?keysOf(n):state[n]);},
       |  reactor:(k,f)=>{reactors[k]=f;for(const n in ctl)apply(n);for(const n in sel)custom(n);},
+      |  zoom:(i,w)=>{if(!zooms[i])throw new Error('no zoomable panel '+i);setWindow(zooms[i],w);},
+      |  window:i=>zooms[i]?zooms[i].win.slice():null,
+      |  resetZoom:i=>{if(zooms[i])setWindow(zooms[i],zooms[i].full);},
       |  items:items};
       |root.tda4j=api;
       |choices.forEach(c=>{const box=root.querySelector('.tda4j-selection[data-selection="'+c.n+'"]');

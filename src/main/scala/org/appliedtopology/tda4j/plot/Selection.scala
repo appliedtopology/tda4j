@@ -74,8 +74,17 @@ object Selection:
   *   the sliders that are not at their starting values
   * @param selected
   *   the keys chosen in each selection (none by default)
+  * @param windows
+  *   the range of each zoomed panel, by the panel's number (none by default: every panel shows all of its picture)
   */
-final case class PageState(values: Map[String, Double] = Map.empty, selected: Map[String, Set[Int]] = Map.empty):
+final case class PageState(
+  values: Map[String, Double] = Map.empty,
+  selected: Map[String, Set[Int]] = Map.empty,
+  windows: Map[Int, Window] = Map.empty
+):
+  /** This state with the zoomable panel number `panel` (counting every panel of the page from 0) showing `window`. */
+  def zoom(panel: Int, window: Window): PageState = copy(windows = windows.updated(panel, window))
+
   /** This state with the slider `name` at `v`. */
   def value(name: String, v: Double): PageState = copy(values = values.updated(name, v))
 

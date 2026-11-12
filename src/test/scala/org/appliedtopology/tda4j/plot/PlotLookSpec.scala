@@ -195,10 +195,10 @@ class PlotLookSpec extends Specification:
       val wider = Look() + Tweak(f => f.copy(width = f.width + 10))
       val plain = Plot.filtration(circle, barcode = true)(using Look.none)
       val looked = Plot.filtration(circle, barcode = true)(using wider)
-      val widths = (i: Interactive) => i.panels.collect { case Panel.Flat(f, _, _) => f.width }
+      val widths = (i: Interactive) => i.panels.collect { case Panel.Flat(f, _, _, _) => f.width }
       widths(looked) must beEqualTo(widths(plain).map(_ + 10))
       val printed = Plot.filtration(circle)(using Look.print)
-      printed.panels.collect { case Panel.Flat(f, _, _) => f.palette }.distinct must beEqualTo(Vector(Palette.print))
+      printed.panels.collect { case Panel.Flat(f, _, _, _) => f.palette }.distinct must beEqualTo(Vector(Palette.print))
     }
   }
 

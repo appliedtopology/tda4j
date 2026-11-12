@@ -208,7 +208,7 @@ class SelectionSpec extends Specification:
     }
 
     "be there in the views of explore, and not in the cloud" in
-      page.panels.collect { case Panel.Flat(_, _, brush) => brush } === Vector(None, Some("class"), Some("class"))
+      page.panels.collect { case Panel.Flat(_, _, brush, _) => brush } === Vector(None, Some("class"), Some("class"))
 
     "be refused for a selection the plot lacks, or one nothing in the panel chooses in" in {
       val missing = Interactive().withSelection("c").withPanel(chosen.brushable("d"))
@@ -231,7 +231,7 @@ class SelectionSpec extends Specification:
 
     "link the brushable views of a linked filtration too" in {
       val sweep = Plot.filtration(circle, link = true, max = 2.0, barcode = true)
-      sweep.panels.collect { case Panel.Flat(_, _, brush) => brush } === Vector(None, Some("class"), Some("class"))
+      sweep.panels.collect { case Panel.Flat(_, _, brush, _) => brush } === Vector(None, Some("class"), Some("class"))
     }
   }
 
@@ -250,7 +250,9 @@ class SelectionSpec extends Specification:
       val wrong = Interactive().withSelection("c").withPanel(Panel(fig).react(rule, Behavior.shownFrom("c", 0)))
       (wrong.fragment() must throwAn[IllegalArgumentException](".*control called c.*controls are: none.*"))
         .and(
-          Interactive().withPanel(fig).fragment() must throwAn[IllegalArgumentException](".*no control or selection.*")
+          Interactive().withPanel(fig).fragment() must throwAn[IllegalArgumentException](
+            ".*no control, selection or zoomable panel.*"
+          )
         )
     }
 

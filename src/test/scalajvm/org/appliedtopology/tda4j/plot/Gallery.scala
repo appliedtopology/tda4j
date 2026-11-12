@@ -257,4 +257,54 @@ object Gallery:
     val linked = Plot.filtration(circle, barcode = true, link = true).withTitle("Noisy circle")
     linked.save(out("interactive-linked.html"))
     linked.at(PageState().value("t", 0.5).select("class", exploreKey)).save(out("interactive-linked-still.svg"))
+    // zoom and pan: a page that only zooms, with numbers of several magnitudes, and stills of windows the check script
+    // brings the page to; the explore page zoomed into a region of its diagram
+    val wide = Figure(
+      marks = Vector(
+        Mark.Segments(
+          IndexedSeq(((0.0, 0.0), (270000.0, 0.002)), ((0.0, 0.002), (270000.0, 0.0))),
+          IndexedSeq(Paint.Secondary)
+        ),
+        Mark.Points(IndexedSeq.tabulate(10)(i => (i * 30000.0, ((i * 37) % 50) * 4e-5)), IndexedSeq(Paint.Ink))
+      ),
+      x = Axis(label = "x"),
+      y = Axis(label = "y"),
+      title = "Numbers of every size"
+    )
+    val zoomPage = Interactive().withPanel(Panel(wide).zoomable()).withTitle("Zoom and pan")
+    zoomPage.save(out("interactive-zoom.html"))
+    val zoomWindows = Seq(
+      Window(50000.0, 150000.0, 4e-4, 1.2e-3),
+      Window(0.0, 30000.0, 0.0, 1e-4),
+      Window(120000.0, 130000.0, 1e-3, 1.1e-3)
+    )
+    zoomWindows.zipWithIndex.foreach { (w, i) =>
+      zoomPage.at(PageState().zoom(0, w)).save(out(s"interactive-zoom-$i.svg"))
+    }
+    def listed(w: Window) = s"[${w.x0},${w.x1},${w.y0},${w.y1}]"
+    // sixty windows of every size and place, with the words the still writes on them: the page must write the same
+    val random = scala.util.Random(7)
+    def inside(lo: Double, hi: Double): (Double, Double) =
+      val width = (hi - lo) * math.pow(10, -2.1 * random.nextDouble())
+      val start = lo + random.nextDouble() * (hi - lo - width)
+      (start, start + width)
+    val manyWindows = Seq.fill(60) {
+      val ((x0, x1), (y0, y1)) = (inside(0.0, 270000.0), inside(0.0, 0.002))
+      Window(x0, x1, y0, y1)
+    }
+    val words = manyWindows.map { w =>
+      val svg = zoomPage.at(PageState().zoom(0, w)).svgFile(Theme.Light)
+      """<text[^>]*>([^<]*)</text>""".r.findAllMatchIn(svg).map(m => "\"" + m.group(1) + "\"").mkString("[", ",", "]")
+    }
+    java.nio.file.Files.writeString(
+      java.nio.file.Path.of(out("interactive-zoom-words.json")),
+      s"""{"windows":${manyWindows.map(listed(_)).mkString("[", ",", "]")},"words":${words.mkString("[", ",", "]")}}"""
+    )
+    val finite = exploreBars.filter(_.death.isFinite).map(_.death)
+    val diagramWindow = Window(0.02, 0.6 * finite.max, 0.02, 0.6 * finite.max)
+    explored.at(PageState().zoom(1, diagramWindow)).save(out("interactive-explore-zoomed.svg"))
+    java.nio.file.Files.writeString(
+      java.nio.file.Path.of(out("interactive-zoom.json")),
+      s"""{"windows":${zoomWindows.map(listed).mkString("[", ",", "]")},"diagram":${listed(diagramWindow)}}"""
+    )
     println(s"wrote the gallery to $dir")

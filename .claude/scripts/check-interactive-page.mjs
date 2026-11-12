@@ -269,5 +269,138 @@ const describe = (svg, visibleOnly) => {
   await page.close();
 }
 
+// what a panel draws that can be compared: the tag (or the text) and the box of each visible line, circle, ellipse,
+// polygon and text, in the panel's own units. Inside the plot area, a line along an axis is cut at the edge (that is
+// what is seen of it), anything else counts only when it lies wholly inside; so what the window cuts through at a slant
+// is left out of both sides alike.
+const geometry = svg => {
+  const to = svg.getScreenCTM().inverse();
+  const clip = svg.querySelector('clipPath rect');
+  const pr = { l: +clip.getAttribute('x'), t: +clip.getAttribute('y') };
+  pr.r = pr.l + +clip.getAttribute('width'); pr.b = pr.t + +clip.getAttribute('height');
+  const out = [];
+  svg.querySelectorAll('line,circle,ellipse,polygon,text').forEach(el => {
+    if (el.closest('defs')) return;
+    for (let n = el; n && n !== svg; n = n.parentNode) if (n.style && n.style.display === 'none') return;
+    const m = to.multiply(el.getScreenCTM()), b = el.getBBox();
+    const xs = [], ys = [];
+    [[b.x, b.y], [b.x + b.width, b.y], [b.x, b.y + b.height], [b.x + b.width, b.y + b.height]].forEach(([x, y]) => { const p = new DOMPoint(x, y).matrixTransform(m); xs.push(p.x); ys.push(p.y); });
+    let l = Math.min(...xs), t = Math.min(...ys), r = Math.max(...xs), bt = Math.max(...ys);
+    const tag = el.tagName.toLowerCase();
+    if (el.closest('g[clip-path]')) {
+      if (tag === 'line' && (r - l < 0.01 || bt - t < 0.01)) {
+        l = Math.max(l, pr.l); t = Math.max(t, pr.t); r = Math.min(r, pr.r); bt = Math.min(bt, pr.b);
+        if (r < l - 0.01 || bt < t - 0.01) return;
+      } else if (l < pr.l - 0.5 || t < pr.t - 0.5 || r > pr.r + 0.5 || bt > pr.b + 0.5) return;
+    }
+    out.push([tag === 'text' ? el.textContent : tag, l, t, r, bt]);
+  });
+  return out;
+};
+const matches = (a, b, tol = 0.1) => {
+  const used = new Set(); const missing = [];
+  for (const x of a) {
+    let found = -1;
+    for (let j = 0; j < b.length; j++) {
+      if (used.has(j) || b[j][0] !== x[0]) continue;
+      if ([1, 2, 3, 4].every(i => Math.abs(b[j][i] - x[i]) <= tol)) { found = j; break; }
+    }
+    if (found < 0) missing.push(x); else used.add(found);
+  }
+  return { ok: a.length === b.length && missing.length === 0, missing: missing.slice(0, 3).map(m => m.map(v => typeof v === 'number' ? v.toFixed(1) : v).join(' ')) };
+};
+
+{ // zoom and pan: what the page shows in a window is what the still of that window shows
+  const meta = JSON.parse(fs.readFileSync(dir + '/interactive-zoom.json', 'utf8'));
+  const page = await browser.newPage({ viewport: { width: 1800, height: 900 } });
+  const errors = [];
+  page.on('pageerror', e => errors.push(String(e)));
+  page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+  const events = [];
+  const live = (file, panel) => page.evaluate(`(() => { const g = ${geometry.toString()}; return g(document.querySelectorAll('.tda4j-ia svg[role=img]')[${panel}]); })()`);
+  const stillOf = async (file, panel) => {
+    const text = fs.readFileSync(`${dir}/${file}`, 'utf8').replace(/^<\?xml[^>]*\?>\s*/, '');
+    return page.evaluate(`(() => { const g = ${geometry.toString()}; const holder = document.createElement('div');
+      holder.style.cssText = 'position:absolute;left:0;top:0;width:900px;visibility:hidden'; holder.innerHTML = ${JSON.stringify(text)}; document.body.appendChild(holder);
+      const s = [...holder.querySelectorAll('svg[role=img]')].filter(x => x.querySelector('g[clip-path]'))[${panel}];
+      const r = g(s); holder.remove(); return r; })()`);
+  };
+
+  await page.goto('file://' + dir + '/interactive-zoom.html');
+  await page.evaluate(() => document.querySelector('.tda4j-ia').addEventListener('tda4j:zoom', e => (window.zoomEvents = window.zoomEvents || []).push(e.detail)));
+  const whole = await live(null, 0);
+  check(await page.evaluate(() => document.querySelectorAll('.tda4j-zoombar button').length) === 3, 'a panel that only zooms has three buttons: in, out, everything');
+  for (const [i, w] of meta.windows.entries()) {
+    await page.evaluate(w => document.querySelector('.tda4j-ia').tda4j.zoom(0, w), w);
+    const mine = await live(null, 0), theirs = await stillOf(`interactive-zoom-${i}.svg`, 0);
+    const m = matches(mine, theirs);
+    check(m.ok, `window ${JSON.stringify(w)}: ${mine.length} drawn elements, ticks and numbers as in the still (${theirs.length})` + (m.ok ? '' : ` -- not in the still: ${m.missing.join(' | ')}`));
+  }
+  const tickNumbers = (await live(null, 0)).filter(e => /^[-0-9.e+]+$/.test(e[0])).map(e => e[0]);
+  check(tickNumbers.some(t => /e[-+]\d\d$/.test(t)), `the numbers of a tiny window are written like the still writes them: ${tickNumbers.slice(0, 8).join(' ')}`);
+
+  await page.evaluate(() => document.querySelector('.tda4j-ia').tda4j.resetZoom(0));
+  const back = await live(null, 0);
+  const mb = matches(back, whole);
+  check(mb.ok, `resetting the zoom brings back the picture as it was (${back.length} elements)` + (mb.ok ? '' : ` -- ${mb.missing.join(' | ')}`));
+  const ev = await page.evaluate(() => window.zoomEvents);
+  check(ev.length === meta.windows.length + 1 && JSON.stringify(ev[0].window) === JSON.stringify(meta.windows[0]) && ev[0].panel === 0, `each change of the window announces itself (${ev.length} events)`);
+
+  { // sixty windows: the words on the page are the words of the still, number for number
+    const words = JSON.parse(fs.readFileSync(dir + '/interactive-zoom-words.json', 'utf8'));
+    let wrong = [];
+    for (const [i, w] of words.windows.entries()) {
+      const got = await page.evaluate(w => { const t = document.querySelector('.tda4j-ia').tda4j; t.zoom(0, w);
+        return [...document.querySelectorAll('.tda4j-ia svg[role=img] text')].filter(e => { for (let n = e; n && n.tagName !== 'svg'; n = n.parentNode) if (n.style && n.style.display === 'none') return false; return true; }).map(e => e.textContent); }, w);
+      const a = [...got].sort(), b = [...words.words[i]].filter(t => !t.startsWith('Zoom and pan')).sort();
+      if (JSON.stringify(a) !== JSON.stringify(b)) wrong.push(`${JSON.stringify(w)}: page ${a.join(' ')} / still ${b.join(' ')}`);
+    }
+    check(wrong.length === 0, `${words.windows.length} windows of every size write the same numbers as the still` + (wrong.length ? ` -- ${wrong.slice(0, 2).join(' || ')}` : ''));
+    await page.evaluate(() => document.querySelector('.tda4j-ia').tda4j.resetZoom(0));
+  }
+  // the buttons and the wheel
+  const win = () => page.evaluate(() => document.querySelector('.tda4j-ia').tda4j.window(0));
+  const full = await win();
+  await page.click('.tda4j-zoombar button[aria-label="zoom in"]');
+  const half = await win();
+  const near = (a, b, r) => Math.abs(a - b) <= 1e-6 * r;
+  check(near(half[1] - half[0], (full[1] - full[0]) / 2, full[1] - full[0]) && near((half[0] + half[1]) / 2, (full[0] + full[1]) / 2, full[1] - full[0]), 'the + button halves the window about its centre');
+  await page.click('.tda4j-zoombar button[aria-label="zoom out"]');
+  const doubled = await win();
+  check(doubled.every((v, i) => near(v, full[i], full[1] - full[0])), 'the - button brings it back');
+  const box = await page.evaluate(() => { const r = document.querySelector('.tda4j-ia svg[role=img]').getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; });
+  const [cx, cy] = [box[0] + 0.7 * box[2], box[1] + 0.4 * box[3]];
+  const dataAt = (x, y) => page.evaluate(([x, y]) => { const svg = document.querySelector('.tda4j-ia svg[role=img]'), fr = svg.getAttribute('data-fr').split(';').map(s => s.split(',').map(Number)), w = document.querySelector('.tda4j-ia').tda4j.window(0);
+    const p = new DOMPoint(x, y).matrixTransform(svg.getScreenCTM().inverse());
+    return [w[0] + (p.x - fr[0][0]) / fr[0][1] * (w[1] - w[0]), w[2] + (fr[1][0] + fr[1][1] - p.y) / fr[1][1] * (w[3] - w[2])]; }, [x, y]);
+  const before = await dataAt(cx, cy);
+  await page.mouse.move(cx, cy); await page.keyboard.down('Control'); await page.mouse.wheel(0, -400); await page.keyboard.up('Control');
+  await page.waitForTimeout(100);
+  const afterWin = await win(), after = await dataAt(cx, cy);
+  check(afterWin[1] - afterWin[0] < 0.8 * (full[1] - full[0]), 'Ctrl and the wheel zoom in');
+  check(near(before[0], after[0], full[1] - full[0]) && near(before[1], after[1], full[3] - full[2]), 'the point under the cursor stays under it');
+  await page.mouse.move(cx, cy); await page.mouse.wheel(0, -400);
+  check(near((await win())[1] - (await win())[0], afterWin[1] - afterWin[0], full[1] - full[0]), 'the wheel alone leaves the picture (the page scrolls)');
+  // a drag pans: the point that was grabbed stays under the cursor, and the window keeps its size
+  const w0 = await win();
+  const grabbed = await dataAt(cx, cy);
+  await page.mouse.move(cx, cy); await page.mouse.down(); await page.mouse.move(cx + 60, cy - 30, { steps: 6 }); await page.mouse.up();
+  const w1 = await win(), under = await dataAt(cx + 60, cy - 30);
+  check(near(under[0], grabbed[0], full[1] - full[0]) && near(under[1], grabbed[1], full[3] - full[2]), 'a drag pans: the point grabbed stays under the cursor');
+  check(near(w1[1] - w1[0], w0[1] - w0[0], full[1] - full[0]) && w1[0] < w0[0], 'a pan keeps the size of the window');
+  await page.click('.tda4j-zoombar button[aria-label="show everything"]');
+  const reset = await win();
+  check(reset.every((v, i) => near(v, full[i], full[1] - full[0])), 'the 1:1 button shows everything again');
+  // far past the limit, the window stays inside the picture and keeps a size
+  await page.evaluate(() => document.querySelector('.tda4j-ia').tda4j.zoom(0, [-1e9, 1e9, -1e9, 1e9]));
+  const out = await win();
+  check(out.every((v, i) => near(v, full[i], full[1] - full[0])), 'a window beyond the picture is the whole picture');
+  await page.evaluate(() => document.querySelector('.tda4j-ia').tda4j.zoom(0, [1000, 1000.0001, 0, 1e-9]));
+  const tiny = await win();
+  check(tiny[1] - tiny[0] >= (full[1] - full[0]) / 201 && tiny[3] - tiny[2] >= (full[3] - full[2]) / 201, 'zooming stops at 1/200 of the picture');
+  check(errors.length === 0, `no errors while zooming ${errors.join(' | ')}`);
+  await page.close();
+}
+
 await browser.close();
 process.exit(failures ? 1 : 0);

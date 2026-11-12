@@ -251,8 +251,17 @@ object Svg:
     * @param id
     *   the `<svg>`'s element id (its clip path and style scope derive from it), or `None` for the next number of this
     *   renderer: a page that other pages share a document with gives its pictures ids of its own
+    * @param zoom
+    *   whether the page zooms and pans this picture (`"b"` both axes, `"x"` or `"y"`): the marks are then wrapped by
+    *   kind (`<g data-z=...>`), the points carry their centres (`data-c`), and the axis elements carry what the page
+    *   needs to draw them again for another window (`data-k`, `data-v`, and the tick rules in the `<svg>`'s `data-zm`)
     */
-  private[plot] final case class Tags(attrs: (Int, Int) => String, frame: Boolean, id: Option[String] = None):
+  private[plot] final case class Tags(
+    attrs: (Int, Int) => String,
+    frame: Boolean,
+    id: Option[String] = None,
+    zoom: Option[String] = None
+  ):
     /** `open`, an opening tag as the renderer writes it (`<line x1=...`), with the attributes of an item added. */
     def tag(open: String, mark: Int, item: Int): String =
       val a = attrs(mark, item)
@@ -570,10 +579,38 @@ object Svg:
       y0 -= reserveY * unit
     val f = Frame(xt, yt, x0, x1, y0, y1, left, top, w, h, bandX, bandY, fig.x.reverse, fig.y.reverse)
 
+    val zoomOn = tags.zoom.isDefined
+    // how an axis draws its ticks again for another window: the rule (`a`utomatic, `w`ithin a range, `f`ixed list) and
+    // the labels the rule does not make (the `∞` of a diagram)
+    def zoomAxis(a: Axis): String =
+      def json(t: String): String =
+        "\"" + t.flatMap {
+          case '"'  => "\\\""
+          case '\\' => "\\\\"
+          case c    => c.toString
+        } + "\""
+      def pairs(ps: Seq[(Double, String)]): String = ps.map((v, t) => s"[$v,${json(t)}]").mkString("[", ",", "]")
+      val (mode, lo, hi, fixed) = a.ticks match
+        case Ticks.Auto            => ("a", "null", "null", Seq.empty[(Double, String)])
+        case Ticks.Within(l, h)    => ("w", l.toString, h.toString, Seq.empty[(Double, String)])
+        case Ticks.At(positions)   => ("f", "null", "null", positions.map(v => (v, Transform.Identity.tickLabel(v))))
+        case Ticks.Labelled(words) => ("f", "null", "null", words)
+      s"""{"m":"$mode","lo":$lo,"hi":$hi,"fx":${pairs(fixed)},"ex":${pairs(a.extra)}}"""
+    val zoomAttr = tags.zoom.fold("")(axes =>
+      " data-zm=\"" + escape(s"""{"ax":"$axes","x":${zoomAxis(fig.x)},"y":${zoomAxis(fig.y)}}""") + "\""
+    )
     val frameAttr =
-      if !tags.frame then ""
+      if !tags.frame && !zoomOn then ""
       else
-        s""" data-fr="${axisSpec(left, w, x0, x1, fig.x.reverse, xt)};${axisSpec(top, h, y0, y1, fig.y.reverse, yt)}""""
+        s""" data-fr="${axisSpec(left, w, x0, x1, fig.x.reverse, xt)};${axisSpec(
+            top,
+            h,
+            y0,
+            y1,
+            fig.y.reverse,
+            yt
+          )}"""" +
+          zoomAttr
     sb ++= s"""<svg xmlns="http://www.w3.org/2000/svg" id="$id" width="${fig.width}" height="${fig.height}" viewBox="0 0 ${fig.width} ${fig.height}" font-family="${escape(
         style.font
       )}" role="img"$frameAttr>"""
@@ -624,8 +661,12 @@ object Svg:
       s"""style="stroke:${paint(s.paint)}$opacity" stroke-width="${fmt(s.width)}"${s.dash.pattern.fold("")(d =>
           s""" stroke-dasharray="$d""""
         )}"""
-    def line(x1: Double, y1: Double, x2: Double, y2: Double, s: LineStroke): String =
-      s"""<line x1="${fmt(x1)}" y1="${fmt(y1)}" x2="${fmt(x2)}" y2="${fmt(y2)}" ${stroke(s)}/>"""
+    // what a zoomable page needs to find an axis element again: its kind (`g`rid, mi`n`or grid, `m`ark, m`i`nor mark,
+    // `l`abel, with the axis letter) and, for a label, the value it stands for
+    def kind(k: String, v: Option[Double] = None): String =
+      if !zoomOn || k.isEmpty then "" else s""" data-k="$k"""" + v.fold("")(t => s""" data-v="$t"""")
+    def line(x1: Double, y1: Double, x2: Double, y2: Double, s: LineStroke, k: String = ""): String =
+      s"""<line${kind(k)} x1="${fmt(x1)}" y1="${fmt(y1)}" x2="${fmt(x2)}" y2="${fmt(y2)}" ${stroke(s)}/>"""
 
     // grid, ticks, axes
     def mainTicks(a: Axis, tr: Transform, t0: Double, t1: Double): IndexedSeq[(Double, String)] =
@@ -669,42 +710,44 @@ object Svg:
     val (xOutSign, yOutSign) = (if xTop then -1.0 else 1.0, if yRight then 1.0 else -1.0)
     val tickSize = fmt(px(TextRole.TickLabel))
     val tickFill = paint(face(TextRole.TickLabel).paint)
-    def drawGrid(positions: Seq[Double], s: LineStroke, vertical: Boolean): Unit =
+    def drawGrid(positions: Seq[Double], s: LineStroke, vertical: Boolean, k: String): Unit =
       if s.visible && style.grid then
         positions.foreach(t =>
           sb ++= (
-            if vertical then line(f.px(t), top, f.px(t), top + h, s)
-            else line(left, f.py(t), left + w, f.py(t), s)
+            if vertical then line(f.px(t), top, f.px(t), top + h, s, k)
+            else line(left, f.py(t), left + w, f.py(t), s, k)
           )
         )
     if fig.x.visible && fig.x.grid then
-      drawGrid(minorX, minorGridStroke, vertical = true)
-      drawGrid(inX.map(_._1), gridStroke, vertical = true)
+      drawGrid(minorX, minorGridStroke, vertical = true, "nx")
+      drawGrid(inX.map(_._1), gridStroke, vertical = true, "gx")
     if fig.y.visible && fig.y.grid then
-      drawGrid(minorY, minorGridStroke, vertical = false)
-      drawGrid(inY.map(_._1), gridStroke, vertical = false)
+      drawGrid(minorY, minorGridStroke, vertical = false, "ny")
+      drawGrid(inY.map(_._1), gridStroke, vertical = false, "gy")
     if fig.x.visible then
       if axisStroke.visible then sb ++= line(left, xAxisY, left + w, xAxisY, axisStroke)
       if majorMarks.drawn then
         inX.foreach((t, _) =>
-          sb ++= line(f.px(t), xAxisY, f.px(t), markEnd(xAxisY, xOutSign, majorMarks), majorMarks.stroke)
+          sb ++= line(f.px(t), xAxisY, f.px(t), markEnd(xAxisY, xOutSign, majorMarks), majorMarks.stroke, "mx")
         )
       if minorMarks.drawn then
         minorX.foreach(t =>
-          sb ++= line(f.px(t), xAxisY, f.px(t), markEnd(xAxisY, xOutSign, minorMarks), minorMarks.stroke)
+          sb ++= line(f.px(t), xAxisY, f.px(t), markEnd(xAxisY, xOutSign, minorMarks), minorMarks.stroke, "ix")
         )
       // the numbers sit below the axis, or above it; slanted ones end (or start) at their tick
       val tickAngle = face(TextRole.TickLabel).angle
       val labelY = if xTop then xAxisY - markOut - 8.0 * sTick else xAxisY + markOut + 16.0 * sTick
       val tickAnchor =
         if tickAngle == 0.0 then "middle" else if xTop == (tickAngle < 0) then "end" else "start"
-      def tickText(at: Double, label: String): String =
+      def tickText(at: Double, label: String, v: Double): String =
         val turn =
           if tickAngle == 0.0 then "" else s""" transform="rotate(${fmt(-tickAngle)} ${fmt(at)} ${fmt(labelY)})""""
-        s"""<text x="${fmt(at)}" y="${fmt(labelY)}"$turn text-anchor="$tickAnchor" font-size="$tickSize"${extra(
+        s"""<text${kind("lx", Some(v))} x="${fmt(at)}" y="${fmt(
+            labelY
+          )}"$turn text-anchor="$tickAnchor" font-size="$tickSize"${extra(
             TextRole.TickLabel
           )} style="fill:$tickFill;font-variant-numeric:tabular-nums">${body(TextRole.TickLabel, loc(label))}</text>"""
-      inX.foreach((t, label) => sb ++= tickText(f.px(t), label))
+      inX.foreach((t, label) => sb ++= tickText(f.px(t), label, t))
       if fig.x.label.nonEmpty then
         val (lx, anchor) = face(TextRole.AxisLabel).align match
           case Anchor.Start  => (left, "start")
@@ -724,16 +767,16 @@ object Svg:
       if axisStroke.visible then sb ++= line(yAxisX, top, yAxisX, top + h, axisStroke)
       if majorMarks.drawn then
         inY.foreach((t, _) =>
-          sb ++= line(yAxisX, f.py(t), markEnd(yAxisX, yOutSign, majorMarks), f.py(t), majorMarks.stroke)
+          sb ++= line(yAxisX, f.py(t), markEnd(yAxisX, yOutSign, majorMarks), f.py(t), majorMarks.stroke, "my")
         )
       if minorMarks.drawn then
         minorY.foreach(t =>
-          sb ++= line(yAxisX, f.py(t), markEnd(yAxisX, yOutSign, minorMarks), f.py(t), minorMarks.stroke)
+          sb ++= line(yAxisX, f.py(t), markEnd(yAxisX, yOutSign, minorMarks), f.py(t), minorMarks.stroke, "iy")
         )
       val numberX = if yRight then yAxisX + markOut + 6.0 * sTick else yAxisX - markOut - 6.0 * sTick
       val numberAnchor = if yRight then "start" else "end"
       inY.foreach((t, label) =>
-        sb ++= s"""<text x="${fmt(numberX)}" y="${fmt(
+        sb ++= s"""<text${kind("ly", Some(t))} x="${fmt(numberX)}" y="${fmt(
             f.py(t) + 4 * sTick
           )}" text-anchor="$numberAnchor" font-size="$tickSize"${extra(
             TextRole.TickLabel
@@ -791,8 +834,11 @@ object Svg:
     sb ++= s"""<g clip-path="url(#$id-clip)">"""
     def tip(m: Mark, i: Int): String = m.tipAt(i).fold("")(t => s"<title>${escape(t)}</title>")
     var markIndex = 0 // the mark being drawn, for the attributes an interactive page asks for
-    def item(plain: String, m: Mark, i: Int): Unit =
-      val open = tags.tag(plain, markIndex, i)
+    // a point's centre, for a zoomable page to keep its size while it moves it
+    def centred(open: String, at: Option[(Double, Double)]): String =
+      at.filter(_ => zoomOn).fold(open)((x, y) => open.replaceFirst(" ", s""" data-c="${fmt(x)},${fmt(y)}" """))
+    def item(plain: String, m: Mark, i: Int, at: Option[(Double, Double)] = None): Unit =
+      val open = centred(tags.tag(plain, markIndex, i), at)
       m.tipAt(i) match
         case Some(_) if open.endsWith("/>") =>
           sb ++= open.stripSuffix("/>") + ">" + tip(m, i) + "</" + open.drop(1).takeWhile(_ != ' ') + ">"
@@ -877,7 +923,12 @@ object Svg:
           if ok(m.at(i)) then
             val (x, y) = m.at(i)
             val face = faceOf(m.shape, m.radius, m.paintAt(i))
-            item(marker(f.px(x), f.py(y), face.size * ink, face, paint(m.paintAt(i)), paint(face.edge.paint)), m, i)
+            item(
+              marker(f.px(x), f.py(y), face.size * ink, face, paint(m.paintAt(i)), paint(face.edge.paint)),
+              m,
+              i,
+              Some((f.px(x), f.py(y)))
+            )
         )
       case m: Mark.Text =>
         if ok(m.at) then
@@ -885,7 +936,8 @@ object Svg:
             case Anchor.Start  => "start"
             case Anchor.Middle => "middle"
             case Anchor.End    => "end"
-          sb ++= s"""<text x="${fmt(f.px(m.at._1) + m.dx)}" y="${fmt(
+          val centre = if zoomOn then s""" data-c="${fmt(f.px(m.at._1))},${fmt(f.py(m.at._2))}"""" else ""
+          sb ++= s"""<text$centre x="${fmt(f.px(m.at._1) + m.dx)}" y="${fmt(
               f.py(m.at._2) + m.dy
             )}" text-anchor="$anchor" font-size="${fmt(m.size * ts)}" style="fill:${paint(m.paint)}">${escape(
               m.text
@@ -942,7 +994,14 @@ object Svg:
               )}"${dash(m.dashed)}/>"""
     fig.marks.zipWithIndex.foreach { (mark, mi) =>
       markIndex = mi
+      // a zoomable page moves a mark's items as one group (strokes keep their width), or each by itself (points and text
+      // keep their size)
+      if zoomOn then
+        sb ++= (mark match
+          case _: Mark.Points | _: Mark.Text => """<g data-z="p">"""
+          case _                             => """<g data-z="s">""")
       drawMark(mark)
+      if zoomOn then sb ++= "</g>"
     }
     sb ++= "</g>"
     // the frame, over the marks

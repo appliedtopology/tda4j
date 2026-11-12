@@ -1012,13 +1012,16 @@ object Plot:
     val withCycles = complexPanel match
       case flat: Panel.Flat if link =>
         val overlay = cycleOverlay(points, all, classes, maxCells)
-        overlay.fold(flat)(o => o.addTo(flat))
+        overlay.fold(flat)(o => o.addTo(flat)).zoomableIfPossible(ZoomAxes.Both)
       case other => other
-    def brushed(panel: Panel.Flat): Panel.Flat = if link then panel.brushable(classes) else panel
+    // a linked page is one to explore: its pictures also zoom
+    def brushed(panel: Panel.Flat, axes: ZoomAxes): Panel.Flat =
+      if link then panel.brushable(classes).zoomableIfPossible(axes) else panel
     val diagramPanel = brushed(
       Panel
         .sweepDiagram(diagram(all)(using Look.none), "t", linkOf(diagramKeys(all)))
-        .mapFigure(styled)
+        .mapFigure(styled),
+      ZoomAxes.Both
     )
     val panels = Vector[Panel](withCycles, diagramPanel) ++
       Option.when(barcode)(
@@ -1029,7 +1032,8 @@ object Plot:
               "t",
               linkOf(barcodeRows(all, None, BarOrder.Birth).map(_._2.map(_._2).toIndexedSeq))
             )
-            .mapFigure(styled)
+            .mapFigure(styled),
+          ZoomAxes.X
         )
       )
     Interactive(panels, Vector(control), title, Vector.empty, if link then Vector(chooser) else Vector.empty)
@@ -1200,12 +1204,14 @@ object Plot:
       }
       .mapFigure(styled)
       .brushable(classes)
+      .zoomableIfPossible(ZoomAxes.Both)
     val barcodePanel = barcodeRows(all, None, BarOrder.Birth).zipWithIndex
       .foldLeft(Panel.Flat(Plot.barcode(all)(using Look.none))) { case (panel, ((_, rows), g)) =>
         panel.selecting(g, classes, rows.map(_._2).toIndexedSeq)
       }
       .mapFigure(styled)
       .brushable(classes)
+      .zoomableIfPossible(ZoomAxes.X)
     val cloudPanel = points.map { cloud =>
       val overlay = cycleOverlay(cloud, all, classes, maxCycleCells)
       require(
@@ -1219,7 +1225,7 @@ object Plot:
         if drawn.drawn < drawn.candidates then
           s"cycles of the ${drawn.drawn} most persistent of ${drawn.candidates} bars"
         else ""
-      overlay.get.addTo(Panel.Flat(base.copy(subtitle = note))).mapFigure(styled)
+      overlay.get.addTo(Panel.Flat(base.copy(subtitle = note))).mapFigure(styled).zoomableIfPossible(ZoomAxes.Both)
     }
     val chooser = Selection.listing(classes, all.map(interval)).withTitle("class")
     Interactive(
