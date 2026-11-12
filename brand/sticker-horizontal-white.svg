@@ -1,14 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="600" height="200" viewBox="0 0 600 200" role="img" aria-label="tda4j horizontal sticker">
   <title>tda4j horizontal sticker — white</title>
   <style>text { font-family: 'JetBrains Mono', monospace; font-weight: 700; }</style>
-  <!-- Rounded rectangular sticker field; the full viewBox is the intended trim boundary. -->
+  <!-- Selected white-field hybrid: UI-safe teal + bright brand gold, 40% circle fills. The full viewBox is the intended trim boundary. -->
   <rect width="600" height="200" rx="28" fill="#ffffff"/>
   <g transform="translate(0 25)">
-    <circle cx="62" cy="75" r="30" fill="#1a729b" fill-opacity="0.16" stroke="#1a729b" stroke-width="7"/>
-    <circle cx="112" cy="75" r="30" fill="#d6a20a" fill-opacity="0.18" stroke="#d6a20a" stroke-width="7"/>
-    <line x1="62" y1="75" x2="112" y2="75" stroke="#1a729b" stroke-width="8"/>
-    <circle cx="62" cy="75" r="7" fill="#1a729b"/>
+    <circle cx="62" cy="75" r="30" fill="#205976" fill-opacity="0.40" stroke="#205976" stroke-width="7"/>
+    <circle cx="112" cy="75" r="30" fill="#d6a20a" fill-opacity="0.40" stroke="#d6a20a" stroke-width="7"/>
+    <line x1="62" y1="75" x2="112" y2="75" stroke="#205976" stroke-width="8"/>
+    <circle cx="62" cy="75" r="7" fill="#205976"/>
     <circle cx="112" cy="75" r="7" fill="#d6a20a"/>
   </g>
-  <text x="158" y="126" font-size="76" fill="#1a729b">tda<tspan fill="#d6a20a">4</tspan>j</text>
+  <text x="158" y="126" font-size="76" fill="#205976">tda<tspan fill="#d6a20a">4</tspan>j</text>
 </svg>
