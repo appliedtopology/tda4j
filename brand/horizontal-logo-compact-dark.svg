@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="380" height="120" viewBox="0 0 380 120" role="img" aria-label="tda4j">
+  <title>tda4j</title>
+  <style>text { font-family: 'JetBrains Mono', monospace; font-weight: 700; }</style>
+  <!-- Compact lockup: text-sized circles with heavier strokes, preserving mark geometry. -->
+  <g transform="translate(8 10)">
+    <circle cx="30" cy="50" r="24" fill="#81bde0" fill-opacity="0.16" stroke="#81bde0" stroke-width="6"/>
+    <circle cx="70" cy="50" r="24" fill="#f0c647" fill-opacity="0.18" stroke="#f0c647" stroke-width="6"/>
+    <line x1="30" y1="50" x2="70" y2="50" stroke="#81bde0" stroke-width="7"/>
+    <circle cx="30" cy="50" r="6" fill="#81bde0"/>
+    <circle cx="70" cy="50" r="6" fill="#f0c647"/>
+  </g>
+  <text x="130" y="83" font-size="72" fill="#81bde0">tda<tspan fill="#f0c647">4</tspan>j</text>
+</svg>
