@@ -115,6 +115,8 @@ Mono didn't hold up since Space Grotesk isn't used as body/heading type anywhere
   chosen; a thin teal outline on the white "4" was tried and rejected (it reads as a double edge).
   **Accepted exception**: white on `#f2b705` measures 1.8:1; the "4" is 56 units of bold monospace on a 192 field.
 
+**Gold sticker wordmark revision (2026-11-11; pre-print):** both the square `badge-sticker-gold.svg` and horizontal `sticker-horizontal-gold.svg` now use **white `tda` and `j`, with UI teal `#205976` for the `4`**. Only wordmark fills were swapped; icon geometry, circle colors, opacity, background, type size, and layout remain as before. The inversion strengthens the distinct `4` and mirrors the teal sticker's white wordmark with gold `4`. Accepted trade-off: white-on-bright-gold is about 1.8:1, now affecting most letters, so the reversed version is less legible at small size and requires an actual-size print proof. This is sticker-specific, not a change to UI text or the general brand-mark palette. See [GUIDELINES.md](GUIDELINES.md) for decision framework and validation status.
+
 **Print caveat, stated plainly**: these SVGs use live `<text>` styled with `font-family: 'JetBrains Mono'`, which
 renders correctly in a browser (where the Google Fonts stylesheet is loaded) but will NOT render correctly in
 most print/sticker vendor workflows, which don't reliably embed web fonts. Before sending any badge to print,
