@@ -169,8 +169,11 @@ The horizontal lockup and provisional size/clear-space rules are in [GUIDELINES.
   `header-icon-dark`, the others under their own names) and renders `favicon-N.png`, `favicon-dark-N.png`,
   `header-icon-N.png` and `header-icon-dark-N.png` for N in 16, 32, 48, 64, 96, 128, 180, 192, 256, 512. Light PNGs
   are on white, dark PNGs on `#161b1e`, opaque (apple-touch-icon and the web-manifest icons must be). Run it after
-  changing any master; nothing else keeps the copies in sync. `build.sbt` wires the files into the scaladoc pages
-  (`patchDocFavicon`) and `_layouts/main.html` carries the theme colors; no color value lives in `build.sbt`.
+  changing any master; nothing else keeps the copies in sync. The docs header uses the large-ring horizontal
+  pair's symbol (`horizontal-logo.svg`, `horizontal-logo-dark.svg`) beside the live HTML project name.
+  Its symbol exports are `header-mark.svg` and `header-mark_dark.svg` (ScalaDoc's dark sibling convention).
+  `build.sbt` wires the files into the scaladoc pages
+  (`patchDocFavicon`) and `_layouts/main.html` carries the theme colors; the header wordmark colors live in `build.sbt`.
 
 ## Colors outside the site
 

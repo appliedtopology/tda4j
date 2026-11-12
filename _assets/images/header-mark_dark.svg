@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="184" height="112" viewBox="0 20 184 112" role="img" aria-label="tda4j">
+  <title>tda4j</title>
+  <!-- Keep the mark-to-type scale consistent with the stacked logo: 96-unit circles / 56-unit wordmark. -->
+  <g transform="translate(32 15)">
+    <circle cx="20" cy="60" r="48" fill="#81bde0" fill-opacity="0.16" stroke="#81bde0" stroke-width="5"/>
+    <circle cx="100" cy="60" r="48" fill="#f0c647" fill-opacity="0.18" stroke="#f0c647" stroke-width="5"/>
+    <line x1="20" y1="60" x2="100" y2="60" stroke="#81bde0" stroke-width="4"/>
+    <circle cx="20" cy="60" r="6" fill="#81bde0"/>
+    <circle cx="100" cy="60" r="6" fill="#f0c647"/>
+  </g>
+</svg>
