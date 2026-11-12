@@ -365,6 +365,27 @@ JVM classes' commit.
   - A case with a radius gives it to every tool: TDA4j's dispatch and DQP build only what lies within it (bars alive at
     the radius are essential), GUDHI gets `max_alpha_square`, and the tree is cut above dimension `dim + 1`.
 
+## Forked builds
+
+A patched ripser.cpp or RedZeD runs as rows of its own beside the stock ones (`ripser.cpp-patched`, `redzed-patched`), so every
+case, field and sweep that runs the stock tool runs the fork on the same input. Name the repository when you run `setup`:
+
+```sh
+export RIPSER_PATCHED_REPO=https://github.com/ubauer/ripser-dev      # a URL or a local path
+export RIPSER_PATCHED_REF=study/redzed-transfer                      # a branch, tag or commit; default: the repository's HEAD
+export REDZED_PATCHED_REPO=...  REDZED_PATCHED_REF=...               # the same for RedZeD
+bench/run.sh setup ripser redzed
+bench/run.sh run --tools 'ripser.cpp*,redzed*' ...                   # or no --tools: every available row
+```
+
+`setup` clones the repository into `$WORKDIR/tools/ripser-patched` (`redzed-patched`) and fetches the ref again at every setup, so
+a branch that has moved is rebuilt; `bench.py` reads the built binaries from there with no further variables. The build is the
+stock one: `make -B ripser ripser-coeff` (a fork without the `ripser-coeff` target runs over Z/2 only), and RedZeD is compiled with
+`g++ -O3 -std=c++17 -DNDEBUG` from `python/cpp/redzed.cpp` (`REDZED_PATCHED_SRC` names another source file). The ripser fork also has to
+pass stock ripser.cpp's command line on `smoke-points.txt`; a fork that fails to fetch, build or run is reported as `missing` and
+the stock rows are unaffected. A fork cannot be a stale binary: a failed fetch removes it. The commit each fork was built from is
+`ripser_patched_git` / `redzed_patched_git` in `env.json`. With the variables unset there are no such rows and nothing else changes.
+
 ## The tools
 
 | tool | how | notes |
@@ -379,6 +400,7 @@ JVM classes' commit.
 | `tda4j-parallel-1t`, `tda4j-parallel-mt` | `PaperBenchmarkDriver engine=parallel threads=N` | the block-parallel experiment `ParallelPackedCohomology` (JVM only): implicit coboundaries, bars only, on 1 thread or every CPU. A simplex is one `Long` key where it fits and a block and an index beyond (o3_4096); it fails on a case whose n × n tables do not fit (clifford50000) |
 | `ripser.cpp` | vanilla build for p = 2, `ripser-coeff` for other primes | the reference for Vietoris–Rips |
 | `redzed` | C++17, built from a pinned commit (`setup redzed`: `g++ -O3 -std=c++17 -DNDEBUG`) | RedZeD (Kapulkin and Kershaw, arXiv:2606.06310; `nkershaw01/RedZeD`, commit `22ef1bf`), Vietoris–Rips only, **Z/2 only**, homology, one thread, bars (`--barcode`) and no representatives. Its input is the binary lower triangle of the distance matrix as float32 (`redzed_io.py`), made once from the float64 distances before the run and not timed, as DIPHA's input is; ripser.cpp's own parse or distance computation is inside its time. It caps the threshold at the enclosing radius itself, drops zero-length bars, and has no overflow check on its 64-bit simplex indices where ripser.cpp throws (the agreement column is the only guard near 2^63 simplices) |
+| `ripser.cpp-patched`, `redzed-patched` | a fork or branch of the tool above, built by `setup ripser` / `setup redzed` (see Forked builds) | the same command line and the same cases as the stock row, a row of its own beside it; never the reference, so its agreement column is its barcode against stock ripser.cpp's. Absent ("missing") unless the repository is named |
 | `ripser.py`, `giotto-ph-1t`, `giotto-ph-mt` | pip | giotto-ph multithreaded is reported, never the baseline |
 | `gudhi`, `gudhi-collapse` | pip | edge collapse first in the second variant; on the cubical cases `top_dimensional_cells` (T) or `vertices` (the `_v` cases) |
 | `cripser` | pip | CubicalRipser, Z/2 only; `filtration="T"` (or `tcripser`) on the T cases, the V default on the `_v` ones |
