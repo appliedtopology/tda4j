@@ -31,6 +31,12 @@ invocation with `++3.8.4!` (`++3.8.4` without `!` is rejected). Remove the pin w
 sc:nocompile`). A failing snippet fails `sbt doc` with page:line. `WORKLOG-doc-snippets-compile.md`. Cross-links use
 scaladoc's `[[org.appliedtopology.tda4j.Foo]]`/relative `.md` links.
 
+**Header identity:** keep the live HTML project name beside the large-ring symbol exported from
+`brand/horizontal-logo*.svg` by `brand/build-assets.cjs`. `-project-logo` uses `header-mark.svg`;
+ScalaDoc requires the sibling `header-mark_dark.svg` (underscore) for theme switching. Header sizing and
+wordmark colors are applied to guide and API pages by `patchDocFavicon`, including nested pages' relative
+favicon paths. See `WORKLOG-site-header-logo.md`.
+
 **Mermaid fences** (` ```mermaid `, the class diagrams) render on the site through `_layouts/main.html`: on a page that has
 one it loads mermaid (pinned version, jsdelivr; 2.5 MB, so only there), draws each `pre > code.language-mermaid` in the
 site's light or dark theme (redrawn when the reader switches), and sizes it to the column down to 70% of natural size
