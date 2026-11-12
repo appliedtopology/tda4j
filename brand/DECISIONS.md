@@ -149,12 +149,17 @@ looks right, and a botched auto-outline is worse than an honest gap.
   lightness, so the two shapes fight for attention). Slate & Gold won on a direct three-way comparison holding
   the mark's shape constant.
 
+## Layout and usage
+
+The horizontal lockup and provisional size/clear-space rules are in [GUIDELINES.md](GUIDELINES.md). The horizontal pair reuses the standard mark and the approved lowercase JetBrains Mono wordmark; no changes to the approved symbol or colors.
+
 ## Assets in this directory
 
+- `horizontal-logo.svg` / `horizontal-logo-dark.svg` — wide transparent lockup for headers and slide footers; use the guidelines for minimum size and clear space.
 - `icon.svg` / `icon-dark.svg` — the confirmed mark, light/dark-mode mark-tier colors, translucent fills (the
   "standard" rendering, used at ~50px+ — nav bar, docs mockups, anywhere the overlap lens reads fine).
 - `favicon.svg` / `favicon-dark.svg` — same geometry, opaque-ish fills and much bolder strokes, tuned for 16–32px.
-- `large-logo.svg` / `large-logo-dark.svg` — mark plus wordmark, no background, for the docs front page (the layout
+- `large-logo.svg` / `large-logo-dark.svg` — stacked mark plus wordmark, no background, for the docs front page (the layout
   shows the one that matches the reader's theme).
 - `badge-lowercase.svg`, `badge-sticker-teal.svg`, `badge-sticker-gold.svg` — the three square-badge variants above.
   The teal sticker is the dark-mode palette on a solid field, so there is no separate dark badge.
