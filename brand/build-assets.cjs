@@ -23,7 +23,9 @@ const copies = {
   "large-logo.svg": "large-logo.svg",
   "large-logo-dark.svg": "large-logo-dark.svg",
   "horizontal-logo.svg": "horizontal-logo.svg",
-  "horizontal-logo-dark.svg": "horizontal-logo-dark.svg"
+  "horizontal-logo-dark.svg": "horizontal-logo-dark.svg",
+  "horizontal-logo-compact.svg": "horizontal-logo-compact.svg",
+  "horizontal-logo-compact-dark.svg": "horizontal-logo-compact-dark.svg"
 };
 
 // PNG prefix -> [source master, background]
