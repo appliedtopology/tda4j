@@ -5,6 +5,7 @@ These are practical production defaults, not results of user-recognition or prin
 ## Lockups and use
 
 - **Horizontal:** `horizontal-logo.svg` and `horizontal-logo-dark.svg`. Use in wide headers, README mastheads, slides, and footers when there is room for the name. The icon retains the standard (not favicon) geometry, and the lowercase bold JetBrains Mono wordmark keeps the gold 4. Transparent background.
+- **Compact horizontal:** `horizontal-logo-compact.svg` and `horizontal-logo-compact-dark.svg`. Text-led option for navigation and tighter headers: circle outlines are doubled from 3 to 6 units and the connecting line increases from 4 to 7 units, retaining the circle centers, overlap, and dots. Compare at actual size before choosing between the two horizontal signatures.
 - **Stacked:** `large-logo.svg` and `large-logo-dark.svg`. Use in square-ish hero placements. Transparent background.
 - **Standalone mark:** `icon.svg` and `icon-dark.svg` for compact placements; `favicon.svg` and `favicon-dark.svg` at 16–32 px, with deliberately heavier strokes.
 - **Badges/stickers:** the three square `badge-*.svg` variants are complete compositions. Do not crop their text or extract their icon to replace the standard mark.
@@ -21,7 +22,7 @@ For the horizontal lockup, this is about **12% of its icon height** on every sid
 
 | Asset | Suggested minimum rendered width | Why |
 | --- | ---: | --- |
-| Horizontal lockup | 180 px | Wordmark remains the limiting feature; below this, use the standalone mark |
+| Horizontal lockup (either variant) | 180 px | Wordmark remains the limiting feature; below this, use the standalone mark |
 | Stacked large logo | 120 px | Keep the wordmark readable |
 | Standard standalone icon | 48 px | Preserve the finer outlines and central dots |
 | Favicon-specific icon | 16 px | Designed with heavier strokes for this range |
@@ -40,4 +41,4 @@ These are conservative starting points, **not verified readability thresholds**.
 
 ## Verification still needed
 
-Check the horizontal pair with JetBrains Mono loaded at 180 px and at actual header sizes, on light and dark surfaces; compare visual centering and letter spacing with the stacked pair. Check clear space in real layouts. Confirm any printed use with an outlined-text proof. The numerical minimums above should be adjusted if these checks show failures.
+Check both horizontal pairs with JetBrains Mono loaded at 180 px and at actual header sizes, on light and dark surfaces; compare visual centering and letter spacing with the stacked pair. Check clear space in real layouts. Confirm any printed use with an outlined-text proof. The numerical minimums above should be adjusted if these checks show failures.
