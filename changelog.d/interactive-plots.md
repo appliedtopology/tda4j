@@ -16,3 +16,7 @@
   MATLAB), the frames of a video or the slides of a talk. The user guide's plotting page has the recipe for an MP4 or a GIF
   with `ffmpeg`, and for PowerPoint.
 - Every plot tweak (`+ tweak`, `withPalette`, `withStyle`, a `given Look`) reaches every panel of an `Interactive`.
+- The pages of an `Interactive` can share a document with pages written by other runs (a reveal.js deck, a blog post): the
+  element ids of a page carry a token drawn per run, so a second page's slider no longer drives the first's picture. The
+  panels of a page shrink to a narrower slide or iframe, and stack when it is narrower still. The user guide has a
+  reveal.js note.

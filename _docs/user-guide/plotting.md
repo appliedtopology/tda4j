@@ -379,6 +379,19 @@ Microsoft's *Web Viewer* add-in can show a web page inside a slide, but only an 
 connection, so the page has to be on a server first, and Microsoft has changed what the add-in does more than once: test
 it on the machine you present from before relying on it.
 
+**In reveal.js.** The page is plain HTML and script, so a [reveal.js](https://revealjs.com) deck runs it, and the slide
+moves with the slider. Either point a slide at the saved page, or paste `page.fragment()` into the slide's source:
+
+```html
+<section><iframe class="r-stretch" data-src="filtration.html" style="width:100%;border:0"></iframe></section>
+```
+
+Pages written by separate runs can share one deck: each page's element ids carry a token drawn per run, so a second page's
+slider never drives the first's picture. A page fits the room it is given: the panels sit side by side at their own size
+(1132 pixels for the two default ones) when there is room, shrink together when there is less, and stack below about 650
+pixels. The arrow keys move a focused slider and leave the slide where it is. This was tried in Chromium with reveal.js
+5.2.1; Firefox and Safari were not, and a fragment put in with `innerHTML` does not run its script (the browser skips it).
+
 ### Interactivity of your own
 
 The page is built from small values, with the same chained style as the rest of the plots. A **control** is a slider with

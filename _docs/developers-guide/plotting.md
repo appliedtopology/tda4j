@@ -120,6 +120,14 @@ root and symmetric log). `Svg.render` without tags is unchanged, byte for byte: 
 a build of the previous commit hold the default output to that, and `Scene` does the same for its layers (`ia` in the layer's
 JSON, empty when not reacting). A transform the script cannot reproduce (`Transform.Custom`) is refused where it would be needed.
 
+**Ids.** A page is meant to be pasted into a document next to pages other runs wrote (a slide deck), and its script finds its
+root by id, so the wrapper's id is `tda4jia-<nonce>-<n>`: a token drawn once per run and a count of that run's pages. Every id
+inside the page (each picture's clip path and style scope, a 3-D panel's canvas) is the wrapper's id plus `-p<k>`, passed down
+as `Svg.Tags.id` and to `Scene.fragmentReacting`, so a page owns all of its ids. A plain `fragment()` of a figure keeps its
+per-run `tda4j<n>` number, which is what makes saved files reproducible. Each panel sits in a `div.tda4j-panel` capped at its
+picture's own width, with a flex basis of 320 pixels, so a page in a slide or an iframe narrower than its pictures shrinks them
+(the `viewBox` keeps the drawing, and the script works in the picture's own units) and then stacks them.
+
 **Extending it.** `withScript(js)` adds JavaScript to the page, which finds `tda4j` (the controller of that page: `get`, `set`,
 `onChange`, `reactor(kind, f)`, and `tda4j:change` events on the page's element). A `Behavior.Custom` of a kind is carried
 out by the function registered for the kind; a still shows such an item as it was drawn. A new behavior of the library is a case

@@ -45,8 +45,11 @@ class PlotCLISpec extends Specification:
   /** Each SVG render numbers its clip path; two renders of one figure differ only there. */
   private def normalized(svg: String): String = svg.replaceAll("tda4j[0-9]+", "tda4jN")
 
-  /** A page numbers its wrapper too (`tda4jia2`), apart from the clip paths of its pictures. */
-  private def numbered(page: String): String = page.replaceAll("tda4j(ia)?[0-9]+", "tda4jN")
+  /** A page names its wrapper by run and number (`tda4jia-1k2f-2`) and its pictures under that, apart from the clip
+    * paths.
+    */
+  private def numbered(page: String): String =
+    page.replaceAll("tda4jia-[0-9a-z]+-[0-9]+", "tda4jN").replaceAll("tda4j[0-9]+", "tda4jN")
 
   /** Where two long texts first differ, with a little of each; `None` when they are equal. */
   private def firstDifference(a: String, b: String): Option[String] =

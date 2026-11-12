@@ -57,6 +57,30 @@ const describe = (svg, visibleOnly) => {
   await page.close();
 }
 
+{ // the panels take the room there is: their own size when it is there, smaller side by side, stacked when too narrow
+  const page = await browser.newPage({ viewport: { width: 2400, height: 800 } });
+  await page.goto('file://' + dir + '/interactive-filtration.html');
+  const boxes = () => page.evaluate(() => [...document.querySelectorAll('.tda4j-ia .tda4j-panel')].map(p => {
+    const r = p.querySelector('svg').getBoundingClientRect(), q = p.parentNode.getBoundingClientRect();
+    return { y: Math.round(r.y), w: r.width, h: r.height, right: r.right, roomRight: q.right, cap: parseFloat(p.style.maxWidth) };
+  }));
+  const rows = b => new Set(b.map(x => x.y)).size;
+  let b = await boxes();
+  check(b.length >= 2 && rows(b) === 1 && b.every(x => Math.abs(x.w - x.cap) < 1), `2400 px: ${b.length} panels in a row, each at its own size (${b.map(x => Math.round(x.w))})`);
+  for (const w of [1300, 1000, 800, 500, 360]) {
+    await page.setViewportSize({ width: w, height: 800 });
+    b = await boxes();
+    check(b.every(x => x.right <= x.roomRight + 1 && x.w <= x.cap + 1), `${w} px: ${rows(b)} row(s) of ${b.length} panels, none wider than its own size or the page (${b.map(x => Math.round(x.w))})`);
+  }
+  await page.setViewportSize({ width: 1300, height: 800 });
+  b = await boxes();
+  check(rows(b) === 1 && b.some(x => x.w < x.cap - 1), `1300 px: the panels share a row by getting smaller (${b.map(x => Math.round(x.w))})`);
+  await page.setViewportSize({ width: 500, height: 800 });
+  b = await boxes();
+  check(rows(b) === b.length && b.every(x => x.w >= 300), `500 px: the panels stack, each at least 300 px wide (${b.map(x => Math.round(x.w))})`);
+  await page.close();
+}
+
 { // the 3-D page redraws, plays, shows the value and announces its changes
   const page = await browser.newPage({ viewport: { width: 1300, height: 700 } });
   const errors = [];

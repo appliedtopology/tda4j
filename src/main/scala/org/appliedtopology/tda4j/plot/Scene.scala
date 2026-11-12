@@ -271,15 +271,15 @@ final case class Scene(
 
   // ----- the interactive view (canvas)
 
-  def fragment(theme: Theme = Theme.Auto): String = build(theme, None)
+  def fragment(theme: Theme = Theme.Auto): String = build(theme, None, None)
 
   /** This scene as one panel of an [[Interactive]] page: the items whose reaction is [[Behavior.Shown]] come and go as
     * the controls move. The canvas listens for the page's `tda4j:change` events.
     */
-  private[plot] def fragmentReacting(theme: Theme, reactions: Map[Int, IndexedSeq[Reaction]]): String =
-    build(theme, Some(reactions))
+  private[plot] def fragmentReacting(theme: Theme, reactions: Map[Int, IndexedSeq[Reaction]], id: String): String =
+    build(theme, Some(reactions), Some(id))
 
-  private def build(theme: Theme, reacting: Option[Map[Int, IndexedSeq[Reaction]]]): String =
+  private def build(theme: Theme, reacting: Option[Map[Int, IndexedSeq[Reaction]]], named: Option[String]): String =
     val pal = palette.withDegrees(degrees)
     val (ts, ink) = (style.textScale, style.markScale)
     def px(v: Double) = if v == v.toLong then v.toLong.toString else f"$v%.2f"
@@ -343,7 +343,7 @@ final case class Scene(
     val loop =
       if reacting.isEmpty then "for(const it of L.items){"
       else "for(const [k,it] of L.items.entries()){if(hid(L,k))continue;"
-    val id = s"tda4j3d${Scene.counter.incrementAndGet()}"
+    val id = named.getOrElse(s"tda4j3d${Scene.counter.incrementAndGet()}")
     val vars = if theme == Theme.Auto then pal.cssVariables(s"#$id") else ""
     s"""<div id="$id" style="position:relative;width:${width}px;max-width:100%;font-family:${Svg.escape(style.font)}">
        |<style>$vars #$id canvas{display:block;width:100%;touch-action:none;cursor:grab;border-radius:4px}</style>

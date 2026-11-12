@@ -183,6 +183,23 @@ class InteractiveSpec extends Specification:
       frames(logged.fragment(Theme.Light)).last must contain(",l,")
     }
 
+    "keep every id of the page under its own, so that pages from other runs can share a document with it" in {
+      // Two runs both number their first page 1, and the script finds its root by id: a page pasted into a deck next to
+      // one from another run would bind to the other's picture (reveal.js check, #330). The nonce differs per run and
+      // every inner id (the pictures' clip paths and style scopes) derives from the page's, so one page owns its ids.
+      def ids(h: String) = """\bid="([^"]+)"""".r.findAllMatchIn(h).map(_.group(1)).toSeq
+      val root = ids(html).head
+      root must contain(Interactive.nonce)
+      ids(html).filterNot(i => i == root || i.startsWith(root + "-")) must beEmpty
+      ids(page.fragment(Theme.Light)).toSet.intersect(ids(html).toSet) must beEmpty
+    }
+
+    "cap each panel at the width of its own picture, so that a page narrower than its panels can shrink them" in {
+      val wide = (page + Size(700, 400)).fragment(Theme.Light)
+      val caps = """class="tda4j-panel" style="max-width:(\d+)px"""".r.findAllMatchIn(wide).map(_.group(1).toInt).toSeq
+      (caps == Seq(700, 700) && html.contains(".tda4j-panel{flex:1 1 320px;min-width:0}")) must beTrue
+    }
+
     "include the script that makes the page move, once, with the controls it was given" in {
       html.split("tda4j:change").length must beGreaterThan(1)
       html must contain(""""n":"t"""")
@@ -367,6 +384,13 @@ class InteractiveSpec extends Specification:
       html must contain(""""ia":[[""")
       html must contain("closest('.tda4j-ia')")
       html must contain("tda4j:change")
+    }
+
+    "give the canvas of a panel an id under the page's own" in {
+      val html = sweep3.fragment(Theme.Light)
+      val ids = """\bid="([^"]+)"""".r.findAllMatchIn(html).map(_.group(1)).toSeq
+      ids.filterNot(i => i == ids.head || i.startsWith(ids.head + "-")) must beEmpty
+      ids.size must beGreaterThan(1)
     }
 
     "leave a 3-D scene that is not on an interactive page exactly as it was" in {

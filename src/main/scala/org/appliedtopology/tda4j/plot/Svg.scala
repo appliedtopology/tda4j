@@ -248,8 +248,11 @@ object Svg:
     *   the attributes (as text, `data-ia="..."`) of item `i` of mark `m`, or `""`
     * @param frame
     *   whether the `<svg>` carries its frame in `data-fr`
+    * @param id
+    *   the `<svg>`'s element id (its clip path and style scope derive from it), or `None` for the next number of this
+    *   renderer: a page that other pages share a document with gives its pictures ids of its own
     */
-  private[plot] final case class Tags(attrs: (Int, Int) => String, frame: Boolean):
+  private[plot] final case class Tags(attrs: (Int, Int) => String, frame: Boolean, id: Option[String] = None):
     /** `open`, an opening tag as the renderer writes it (`<line x1=...`), with the attributes of an item added. */
     def tag(open: String, mark: Int, item: Int): String =
       val a = attrs(mark, item)
@@ -281,7 +284,7 @@ object Svg:
 
   /** `fig` as an `<svg>` with `tags` (see [[Tags]]); `render` is this without any. */
   private[plot] def renderTagged(fig: Figure, theme: Theme, saved: Boolean, tags: Tags): String =
-    val id = s"tda4j${counter.incrementAndGet()}"
+    val id = tags.id.getOrElse(s"tda4j${counter.incrementAndGet()}")
     val style = fig.style
     val ts = style.textScale
     val ink = style.markScale

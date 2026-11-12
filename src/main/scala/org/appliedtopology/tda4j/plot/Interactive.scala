@@ -486,18 +486,23 @@ final case class Interactive(
         val r = rs(if rs.size == 1 then 0 else item)
         if r.isEmpty then "" else s"""data-ia="${Svg.escape(Interactive.encode(r))}""""
 
+  // A panel is as wide as its picture at most and as the room allows at least 320 pixels: a page in a slide or an
+  // iframe narrower than its pictures side by side shrinks them (the `viewBox` keeps the drawing), then stacks them.
+  private def panelBox(width: Int, picture: String): String =
+    s"""<div class="tda4j-panel" style="max-width:${width}px">$picture</div>"""
+
   def fragment(theme: Theme = Theme.Auto): String =
     validate()
-    val id = s"tda4jia${Interactive.counter.incrementAndGet()}"
+    val id = Interactive.freshId()
     val pal = look
-    val parts = panels.map {
-      case Panel.Flat(figure, rs) =>
+    val parts = panels.zipWithIndex.map {
+      case (Panel.Flat(figure, rs), k) =>
         val moving = rs.values.exists(_.exists(_.behaviors.exists {
           case _: Behavior.Follows | _: Behavior.Radius => true
           case _                                        => false
         }))
-        Svg.renderTagged(figure, theme, false, Svg.Tags(attrsFor(rs), moving))
-      case Panel.Spatial(scene, rs) => scene.fragmentReacting(theme, rs)
+        panelBox(figure.width, Svg.renderTagged(figure, theme, false, Svg.Tags(attrsFor(rs), moving, Some(s"$id-p$k"))))
+      case (Panel.Spatial(scene, rs), k) => panelBox(scene.width, scene.fragmentReacting(theme, rs, s"$id-p$k"))
     }
     val headline =
       if title.isEmpty then ""
@@ -638,8 +643,13 @@ final case class Snapshot(
       )}${inner.mkString}</svg>""".stripMargin
 
 object Interactive:
-  // Element ids for the pages of one session; scratch, no meaning outside this file.
-  private[plot] val counter = new AtomicLong()
+  // Element ids of a page: a page is meant to be pasted into a document (a reveal.js deck, a blog post) next to pages
+  // that other runs wrote, and the script finds its root by id, so a number per run is not enough (two runs' first
+  // pages would both be `1`). The nonce is drawn once per run and the number counts the pages of that run; every
+  // picture inside a page takes its id from the page's, so nothing in a page can collide with another page's.
+  private[plot] val nonce: String = java.lang.Integer.toString(scala.util.Random.nextInt(Int.MaxValue), 36)
+  private val counter = new AtomicLong()
+  private[plot] def freshId(): String = s"tda4jia-$nonce-${counter.incrementAndGet()}"
 
   /** `svg` without the XML declaration of a file, to nest it in another picture. */
   private[plot] def bare(svg: String): String = svg.replaceFirst("""^<\?xml[^>]*\?>\s*""", "")
@@ -752,6 +762,8 @@ object Interactive:
     s"""$variables
        |#$id{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;color:var(--ink)}
        |#$id .tda4j-panels{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start}
+       |#$id .tda4j-panel{flex:1 1 320px;min-width:0}
+       |#$id .tda4j-panel>svg{display:block;width:100%;height:auto}
        |#$id .tda4j-control{display:flex;align-items:center;gap:10px;margin:10px 0 0;font-size:15px}
        |#$id .tda4j-control label{min-width:2.5em}
        |#$id .tda4j-control input[type=range]{flex:1;min-width:120px;accent-color:var(--s0)}

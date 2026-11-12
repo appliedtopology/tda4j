@@ -49,7 +49,7 @@ deadline. A plot prints as one line (`Figure("Barcode", 50 marks)`), because a R
 "Test/runMain org.appliedtopology.tda4j.plot.Gallery <dir>"`). Screenshot with node Playwright
 (`/opt/node-tools/node_modules/playwright`, `executablePath: '/opt/pw-browsers/chromium'`) and read the PNGs. Specs check
 structure, not looks. Chromium's accessibility tree, a canvas drag and text widths can be checked there
-(`WORKLOG-plot-issues-sweep.md`); Firefox, Safari and MATLAB cannot (#98, #330). **Docs fences in
+(`WORKLOG-plot-issues-sweep.md`); Firefox, Safari, MATLAB cannot (#98, #330). **Docs fences in
 `_docs/user-guide/plotting.md` are compiled** like every fence (each self-contained); a spec runs the same calls.
 
 **The grammar** (`Tweak.scala`, `Style.scala`, `ColorScale.scala`, `Transform.scala`; `WORKLOG-plot-grammar.md`). A plot
@@ -58,8 +58,7 @@ constructor parameter: `Labels`, `Size`, `Style`, `Palette` and `Scale.x/y/xy/co
 the chain of typed `with...` methods on `Figure` (and `Scene`), each `this + <tweak>`; the tweaks stay the values for a look
 shared by many plots, boards and scenes (project lead: chaining is close enough to the grammar). Rules:
 - Positions pass through an axis's `Transform` in `Svg.render` ONLY; marks hold data in its own units. Every value has a
-  place (project lead: a negative filtration value is reasonable, and a limit of the log transform is no reason to refuse
-  data): 0 on a log axis is a `-∞` line, a log axis with negative DATA is drawn as a symmetric log and says so in small
+  place (project lead: a limit of the log transform is no reason to refuse data): 0 on a log axis is a `-∞` line, a log axis with negative DATA is drawn as a symmetric log and says so in small
   print, the square root is signed. Only a non-number is left out, and COUNTED in small print. A tweak that needs a place
   on the axis (`Board.shared`) goes through `Svg.resolved`.
 - Tweaks of different parts commute (a spec checks it); the same part, later wins; a `Style` replaces the whole style (copy
@@ -99,16 +98,18 @@ shared by many plots, boards and scenes (project lead: chaining is close enough 
   OTHER axis, kept only when that axis's range BEFORE the equal-aspect widening shows it (else a note says why). A diagram's
   `Board.heading` and a color bar's `barTicks` are drawn in the renderer; `plotRepresentative(i)` draws a cocycle at its bar's birth.
 - PNG and PDF are documented external conversion only (project lead, #101): no rasterizer module. A command in the docs is
-  run before it is written down (`cairosvg`, Chromium, `ffmpeg` and `python-pptx` were; the others come from manuals).
+  run before it is written down (`WORKLOG-interactive-plots.md` lists which were).
 - **Interactive pages** (`Interactive.scala`, #102, `WORKLOG-interactive-plots.md`): `Control`s and `Panel`s (a `Figure` or
   `Scene` with a `Reaction` per mark item; `Behavior` = `Shown | Follows | Radius | Custom`), chained like the tweaks (`+ tweak`
   reaches every panel). **The still is the reference semantics**: `at`/`frames`/`saveFrames` apply the behaviors in Scala
   (`Shown` is `from <= v < until`; axes pinned to the full figure); the page script (`Interactive.runtime`) implements the same
   rules, and `.claude/scripts/check-interactive-page.mjs` compares the two in Chromium (run it after touching either; not in
   CI, #330). The renderers' only hook is `Svg.Tags` (`data-ia` per item, `data-fr` per `<svg>`) and a `Scene` layer's `ia`;
-  without tags the output is byte-identical (Gallery diff). The script knows identity/log/sqrt/symlog only: a `Transform.Custom`
-  axis and a `Radius` on a curved axis are refused when the panel is built. A new behavior is a case, a rule in
-  `inside`/`follow`, a `Tags` encoding, a `reactors` entry and a spec that makes `<` for `<=` and a missing clamp fail.
+  without tags the output is byte-identical (Gallery diff). A page's ids are `tda4jia-<run nonce>-<n>`, every id inside derives
+  from it (pages of separate runs share a deck), and panels are `div.tda4j-panel`s that shrink to the room. The script knows
+  identity/log/sqrt/symlog only: a `Transform.Custom` axis and a `Radius` on a curved axis are refused when built. A new
+  behavior is a case, a rule in `inside`/`follow`, a `Tags` encoding, a `reactors` entry and a spec that makes `<` for `<=`
+  and a missing clamp fail.
 - **`Look` (session defaults)**: every public constructor of `Plot` that returns a `Figure` or `Scene` takes `(using look:
   Look)`; one that builds the plot wraps its body in `look.figure(palette):` / `look.scene:`, one that delegates passes the
   given on, and a call to a public constructor inside a wrapped body passes `Look.none` (applied once). A named `palette` is

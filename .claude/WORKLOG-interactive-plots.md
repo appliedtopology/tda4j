@@ -79,3 +79,32 @@ not found, the guide says it is a still picture.
   each is a case and a reactor.
 - The idea of a `Plot.filtration` over a cursor (the engine's `diagramAt(f)` at each frame) was not needed: the diagram is
   computed once and the line only moves; the exactness oracle in the specs is `diagram.at(t)`.
+
+## Addendum 2026-11-12: a deck in reveal.js (Mikael: the talk reproduced the conference template in reveal.js)
+
+Tried in Chromium with reveal.js 5.2.1 (`white` theme), Playwright, scratch deck with a title slide, one slide with
+`<iframe data-src="a-full.html" data-preload>` and two slides with `fragment()` output pasted in.
+
+- **Iframe route works.** The slider moves (set 0.3, ArrowRight in the iframe: 0.301) and the deck stays on its slide, so
+  reveal's arrow keys do not take the slider's. A page is as wide as its panels side by side (2 x 560 + 12 = 1132 px): in an
+  iframe of 1100 px the second panel wraps below the first. Not a bug; the user guide says to give the iframe the page's size.
+- **Inline route works with one page.** No key conflict, no visual clash with the theme (the page paints its own surface).
+- **Defect found: ids.** Two fragments written by separate runs both start `tda4jia1` (the counter restarts per JVM), the
+  script does `getElementById`, so in one deck the second page's slider drove the first page's picture (B's visible items
+  1124 before and after moving B's slider; A's changed). The same holds for the pictures' clip paths and style scopes
+  (`tda4j1`) and the 3-D canvas (`tda4j3dN`), which depend on the id.
+- **Fix (PR #332):** the wrapper id is `tda4jia-<nonce>-<n>` (nonce drawn per run), and every id inside the page is the
+  wrapper's plus `-p<k>`, passed as `Svg.Tags.id` and `Scene.fragmentReacting(.., id)`. `InteractiveSpec` has two examples
+  (every id under the root, none shared with a second render of the same page; the 3-D canvas too), both fail when the
+  inner ids go back to the renderers' own numbering (mutation run). A plain `fragment()` keeps `tda4j<n>`: saved SVGs
+  stay reproducible. The consequence: an interactive page's text is no longer the same from run to run; specs normalize it.
+- **Layout (same PR):** the iframe of the first try wrapped its panels: reveal caps `section iframe` at 95% of the slide, and
+  the page was two fixed 560 px pictures (1132 + 32 px of `main` padding). Panels now sit in `div.tda4j-panel` (cap = the
+  picture's width, flex basis 320 px, `svg{width:100%;height:auto}`), so a narrower slide shrinks them and below about 650 px
+  they stack; the script works in the picture's own units, so nothing else changed. `check-interactive-page.mjs` has a layout
+  block (2400, 1300, 1000, 800, 500, 360 px). An early screenshot looked clipped: it was taken mid slide transition (reveal's
+  default 0.8 s), not a page defect; the scratch deck sets `transition: "none"`. In the final deck the iframe is
+  `class="r-stretch" style="width:100%;border:0"`; Gallery diff of the default plots against the previous commit: 74/74 identical.
+- **Not checked:** reveal.js with its Markdown plugin, `innerHTML` insertion (a browser never runs those scripts), Firefox,
+  Safari (#330).
+
