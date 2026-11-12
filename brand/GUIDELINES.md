@@ -32,13 +32,13 @@ These are conservative starting points, **not verified readability thresholds**.
 
 ## Horizontal sticker concepts
 
-Four 3:1 rounded-rectangle compositions are available as editable SVG masters:
+Four 3:1 rounded-rectangle compositions are available as editable SVG masters. Cream is reserved for docs/viewer surfaces, **not sticker fields**, as recorded in `.claude/WORKLOG-brand-gold.md`:
 
 | File | Field | Composition |
 | --- | --- | --- |
 | `sticker-horizontal-teal.svg` | Brand teal | Large symbol, white wordmark, warm-gold 4 |
 | `sticker-horizontal-gold.svg` | Bright sticker gold | Large symbol, deep-teal wordmark, white 4 |
-| `sticker-horizontal-cream.svg` | Docs cream | Compact heavy-stroke symbol, teal wordmark, gold 4 |
+| `sticker-horizontal-white.svg` | White | Compact heavy-stroke symbol, teal wordmark, gold 4 |
 | `sticker-horizontal-dark.svg` | Dark surface | Compact heavy-stroke symbol, light-teal wordmark, light-gold 4 |
 
 The 600 × 200 viewBox defines the intended 3:1 sticker trim, **not a print-ready bleed or cutline**. Ask the printer for bleed, safe-zone, corner-radius, color profile and cutline specifications before manufacturing; convert text to outlines and proof at actual size. The gold-field variant intentionally uses the existing white 4 and gold circle; inspect those low-contrast elements in print rather than assuming they are safe.
