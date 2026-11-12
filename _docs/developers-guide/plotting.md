@@ -94,6 +94,42 @@ once. A tweak that raises `UnsupportedOperationException` for a kind of plot is 
 `given Look` to find, a constructor that forgets to pass it on would silently use the empty one: `PlotLookSpec` builds every
 constructor under a look and checks each one, so a new constructor goes in its table.
 
+## Interactive plots
+
+`Interactive` (`Interactive.scala`) is a `Plot` made of panels and controls. A `Control` is a named slider. A `Behavior`
+is what a control does to one item of a mark: `Shown(from, until)` (the item is there while `from <= v < until`),
+`Follows` (a coordinate, or an end of a segment, equals the value held between `lo` and `hi`), `Radius` (the radius of
+a disc is `factor` times the value) and `Custom` (a kind of your own). A `Reaction` is a list of behaviors for one item,
+and a `Panel` is a `Figure` (`Panel.Flat`) or a `Scene` (`Panel.Spatial`) with a reaction for all items of a mark or one
+for each (`reactions: Map[markIndex, IndexedSeq[Reaction]]`, the convention of `paints`). A panel refuses a behavior its
+mark cannot carry out, naming the reason (`Radius` on a log axis, `Follows` on a 3-D layer).
+
+**Stills are the reference semantics.** `Interactive.at(values)` applies the behaviors in Scala: it filters the items
+with `Shown`, moves the ends with `Follows`, resizes the discs, and draws the figure again, with the axes pinned to the
+ranges of the full figure so nothing jumps between frames. `frames`, `saveFrames` and the specs use it. The page's
+controller is a second implementation of the same rules in about a hundred lines of JavaScript (`Interactive.runtime`),
+and the two are compared on the same values in Chromium (the page's visible items against the still's), because a
+page that differs from its frames is a bug in one of them. `InteractiveSpec` checks the Scala side cell for cell
+against the stream (`from <= v` at the exact value a cell enters, a diagram checked against `diagram.at(t)`), and that
+what the page is told matches what the renderer draws.
+
+**The renderer's hook.** `Svg.renderTagged` takes `Svg.Tags`, which adds a `data-ia="kind,control,args;..."` attribute to an
+item (each field percent-escaped) and a `data-fr` to the `<svg>`, the frame of its two axes as `offset,length,lo,hi,
+reversed,transform,constant`, so that the script puts a value on the plot by the renderer's own formula (identity, log, square
+root and symmetric log). `Svg.render` without tags is unchanged, byte for byte: a spec and a diff of every `Gallery` file against
+a build of the previous commit hold the default output to that, and `Scene` does the same for its layers (`ia` in the layer's
+JSON, empty when not reacting). A transform the script cannot reproduce (`Transform.Custom`) is refused where it would be needed.
+
+**Extending it.** `withScript(js)` adds JavaScript to the page, which finds `tda4j` (the controller of that page: `get`, `set`,
+`onChange`, `reactor(kind, f)`, and `tda4j:change` events on the page's element). A `Behavior.Custom` of a kind is carried
+out by the function registered for the kind; a still shows such an item as it was drawn. A new behavior of the library is a case
+of `Behavior`, its rule in `inside`/`follow` for the stills, in `Svg.Tags` for the page, and in the script's `reactors` table.
+
+`Plot.filtration`, `filtrationOf` and `filtration3D` build the page of a filtration from a point cloud and a stream:
+`Panel.sweepDiagram` turns a diagram into segments that grow until the line passes their death and then points. The cells are
+reactions of their own (`Shown` from the value at which each enters), so the page holds every cell up to the largest scale
+(`maxCells` refuses a page that would be too large, and says to lower the scale).
+
 ## Colors are roles
 
 A mark never holds a color, only a `Paint`:

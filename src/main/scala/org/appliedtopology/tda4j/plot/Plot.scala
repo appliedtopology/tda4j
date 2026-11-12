@@ -692,36 +692,61 @@ object Plot:
     palette: Optional[Palette] = Optional.empty
   )(using look: Look): Figure =
     look.figure(palette):
-      val pts = xy(points)
       val cells = stream.iterator.filter(c => c.dim <= 2 && stream.filtrationValue(c) <= at).toVector
-      val tris = cells.filter(_.dim == 2)
-      val edges = cells.filter(_.dim == 1)
-      val marks = Vector.newBuilder[Mark]
-      ballRadius.foreach(r => marks += Mark.Discs(pts, r, IndexedSeq(Paint.Series(0)), opacity = 0.09))
-      marks += Mark.Polygons(
-        tris.map(t => t.toIndexedSeq.map(pts)),
-        IndexedSeq(Paint.Series(0)),
-        opacity = 0.22,
-        tips = tris.map(t => s"${t.show} enters at ${Svg.number(stream.filtrationValue(t))}")
-      )
-      marks += Mark.Segments(
-        edges.map(e => (pts(e.first), pts(e.last))),
-        IndexedSeq(Paint.Secondary),
-        width = 1.2,
-        tips = edges.map(e => s"${e.show} enters at ${Svg.number(stream.filtrationValue(e))}")
-      )
-      marks += Mark.Points(pts, IndexedSeq(Paint.Ink), radius = 2.5, tips = pts.indices.map(i => s"point $i"))
-      Figure(
-        marks = marks.result(),
-        title = if title.nonEmpty then title else s"Complex at ${Svg.number(at)}",
-        subtitle = s"${edges.size} edges, ${tris.size} triangles",
-        x = Axis(grid = false),
-        y = Axis(grid = false),
-        width = 560,
-        height = 520,
-        equalAspect = true,
-        palette = palette.getOrElse(Palette.default)
-      )
+      complexMarks(points, stream, cells, at, ballRadius, title, palette.getOrElse(Palette.default)).figure
+
+  /** A complex figure and where its marks are: the balls (when asked for), then the triangles, edges and points, and
+    * the cells that the triangles and edges are, in order. What `complex` draws and an interactive page reuses.
+    */
+  private[plot] final case class ComplexMarks(
+    figure: Figure,
+    balls: Option[Int],
+    polygons: Int,
+    segments: Int,
+    triangles: Vector[Simplex[Int]],
+    edges: Vector[Simplex[Int]]
+  )
+
+  private[plot] def complexMarks(
+    points: PointCloud,
+    stream: CellStream[Simplex[Int], Double],
+    cells: Vector[Simplex[Int]],
+    at: Double,
+    ballRadius: Option[Double],
+    title: String,
+    palette: Palette
+  ): ComplexMarks =
+    val pts = xy(points)
+    val tris = cells.filter(_.dim == 2)
+    val edges = cells.filter(_.dim == 1)
+    val marks = Vector.newBuilder[Mark]
+    ballRadius.foreach(r => marks += Mark.Discs(pts, r, IndexedSeq(Paint.Series(0)), opacity = 0.09))
+    marks += Mark.Polygons(
+      tris.map(t => t.toIndexedSeq.map(pts)),
+      IndexedSeq(Paint.Series(0)),
+      opacity = 0.22,
+      tips = tris.map(t => s"${t.show} enters at ${Svg.number(stream.filtrationValue(t))}")
+    )
+    marks += Mark.Segments(
+      edges.map(e => (pts(e.first), pts(e.last))),
+      IndexedSeq(Paint.Secondary),
+      width = 1.2,
+      tips = edges.map(e => s"${e.show} enters at ${Svg.number(stream.filtrationValue(e))}")
+    )
+    marks += Mark.Points(pts, IndexedSeq(Paint.Ink), radius = 2.5, tips = pts.indices.map(i => s"point $i"))
+    val figure = Figure(
+      marks = marks.result(),
+      title = if title.nonEmpty then title else s"Complex at ${Svg.number(at)}",
+      subtitle = s"${edges.size} edges, ${tris.size} triangles",
+      x = Axis(grid = false),
+      y = Axis(grid = false),
+      width = 560,
+      height = 520,
+      equalAspect = true,
+      palette = palette
+    )
+    val first = if ballRadius.isDefined then 1 else 0
+    ComplexMarks(figure, Option.when(ballRadius.isDefined)(0), first, first + 1, tris, edges)
 
   /** The complex `kind` (`VietorisRips`, `Cech` or `AlphaShapes`) of `points` at scale `at`, with the balls whose
     * overlaps it records: radius `at / 2` for Vietoris-Rips (an edge enters at the distance of its points), `at` for
@@ -737,6 +762,228 @@ object Plot:
 
   /** The Vietoris-Rips complex of `points` at `at`, with balls of radius `at / 2`. */
   def complex(points: PointCloud, at: Double)(using look: Look): Figure = complex(points, at, VietorisRips)
+
+  // ----- a filtration to sweep
+
+  /** The complex of `stream` over `points` as an [[Interactive]] page: a slider for the filtration value `t` that adds
+    * the edges and triangles as it passes their values (and grows the balls), beside the persistence diagram of `bars`,
+    * where each class is a vertical segment from the diagonal until the movable line passes its death, and then a
+    * point.
+    *
+    * The page holds every cell up to the slider's maximum, so a large complex makes a large page: it refuses more than
+    * `maxCells` of them, and the remedy is a smaller `max`.
+    *
+    * @param balls
+    *   the radius of the balls around the points as a multiple of the filtration value (`0.5` for Vietoris-Rips, where
+    *   an edge enters at its length; `1` for Cech and alpha); none draws no balls
+    * @param max
+    *   the largest value of the slider; the largest value in `stream` when not given
+    * @param start
+    *   where the slider starts; at 0 (just the points) when not given
+    * @param barcode
+    *   a third panel, the barcode, with its movable line
+    * @param stops
+    *   whether the slider steps through exactly the values at which a cell enters, instead of sliding smoothly
+    * @param maxCells
+    *   the most edges and triangles to put on the page
+    * @param title
+    *   the heading of the page
+    */
+  def filtrationOf(
+    points: PointCloud,
+    stream: CellStream[Simplex[Int], Double],
+    bars: Bars,
+    balls: Optional[Double] = Optional.empty,
+    max: Optional[Double] = Optional.empty,
+    start: Optional[Double] = Optional.empty,
+    barcode: Boolean = false,
+    stops: Boolean = false,
+    maxCells: Int = 20000,
+    title: String = "",
+    palette: Optional[Palette] = Optional.empty
+  )(using look: Look): Interactive =
+    sweptFiltration(
+      points,
+      stream,
+      bars,
+      balls.toOption,
+      max.toOption,
+      start.toOption,
+      barcode,
+      stops,
+      maxCells,
+      title,
+      "Complex",
+      palette,
+      spatial = false
+    )
+
+  /** The complex `kind` (`VietorisRips`, `Cech` or `AlphaShapes`) of `points` as an [[Interactive]] page with a slider
+    * for the scale: the complex and its persistence diagram, with balls around the points. Degrees 0 and 1 are
+    * computed, which is what the triangles (2-cells) show; see [[filtrationOf]] for the parameters, and for a complex
+    * or a diagram of your own.
+    *
+    * @param max
+    *   the largest scale; the points' enclosing radius for the complexes that stop there when not given
+    * @param balls
+    *   whether to draw the balls whose overlaps the complex records
+    */
+  def filtration(
+    points: PointCloud,
+    kind: PointCloudComplex = VietorisRips,
+    max: Optional[Double] = Optional.empty,
+    start: Optional[Double] = Optional.empty,
+    balls: Boolean = true,
+    barcode: Boolean = false,
+    stops: Boolean = false,
+    maxCells: Int = 20000,
+    title: String = "",
+    palette: Optional[Palette] = Optional.empty
+  )(using look: Look): Interactive =
+    val stream =
+      if kind eq AlphaShapes then kind.fromPoints(points, 1, None) else kind.fromPoints(points, 1, max.toOption)
+    val bars = Persistence(points, maxDimension = 1, maxFiltrationValue = max, complex = kind)
+    val name = if kind eq VietorisRips then "Vietoris-Rips" else if kind eq Cech then "Cech" else "Alpha"
+    val factor = if balls then Some(if kind eq VietorisRips then 0.5 else 1.0) else None
+    sweptFiltration(
+      points,
+      stream,
+      bars,
+      factor,
+      max.toOption,
+      start.toOption,
+      barcode,
+      stops,
+      maxCells,
+      title,
+      s"$name complex",
+      palette,
+      spatial = false
+    )
+
+  /** [[filtrationOf]] with the complex in 3-D (the first three coordinates of the points): a canvas to turn and zoom,
+    * whose triangles and edges come and go with the slider, beside the diagram. No balls are drawn.
+    */
+  def filtration3DOf(
+    points: PointCloud,
+    stream: CellStream[Simplex[Int], Double],
+    bars: Bars,
+    max: Optional[Double] = Optional.empty,
+    start: Optional[Double] = Optional.empty,
+    barcode: Boolean = false,
+    stops: Boolean = false,
+    maxCells: Int = 20000,
+    title: String = "",
+    palette: Optional[Palette] = Optional.empty
+  )(using look: Look): Interactive =
+    sweptFiltration(
+      points,
+      stream,
+      bars,
+      None,
+      max.toOption,
+      start.toOption,
+      barcode,
+      stops,
+      maxCells,
+      title,
+      "Complex",
+      palette,
+      spatial = true
+    )
+
+  /** [[filtration]] with the complex in 3-D: the complex `kind` of `points` (their first three coordinates), a canvas
+    * to turn and zoom whose triangles and edges come and go with the slider, beside the diagram.
+    */
+  def filtration3D(
+    points: PointCloud,
+    kind: PointCloudComplex = VietorisRips,
+    max: Optional[Double] = Optional.empty,
+    start: Optional[Double] = Optional.empty,
+    barcode: Boolean = false,
+    stops: Boolean = false,
+    maxCells: Int = 20000,
+    title: String = "",
+    palette: Optional[Palette] = Optional.empty
+  )(using look: Look): Interactive =
+    val stream =
+      if kind eq AlphaShapes then kind.fromPoints(points, 2, None) else kind.fromPoints(points, 1, max.toOption)
+    val bars = Persistence(points, maxDimension = 1, maxFiltrationValue = max, complex = kind)
+    filtration3DOf(points, stream, bars, max, start, barcode, stops, maxCells, title, palette)
+
+  private def sweptFiltration(
+    points: PointCloud,
+    stream: CellStream[Simplex[Int], Double],
+    bars: Bars,
+    factor: Option[Double],
+    max: Option[Double],
+    start: Option[Double],
+    barcode: Boolean,
+    stops: Boolean,
+    maxCells: Int,
+    title: String,
+    name: String,
+    palette: Optional[Palette],
+    spatial: Boolean
+  )(using look: Look): Interactive =
+    val limit = max.getOrElse(Double.PositiveInfinity)
+    val cells = stream.iterator.filter(c => c.dim >= 1 && c.dim <= 2 && stream.filtrationValue(c) <= limit).toVector
+    require(cells.nonEmpty, "Plot.filtration: the complex has no edges up to the largest scale; give a larger max")
+    require(
+      cells.size <= maxCells,
+      s"Plot.filtration: the complex has ${cells.size} edges and triangles, and the page would hold every one " +
+        s"(more than the $maxCells allowed); lower max, use fewer points, or pass a larger maxCells"
+    )
+    val value = cells.map(stream.filtrationValue)
+    val top = max.getOrElse(value.max)
+    val low = math.min(0.0, value.min)
+    val at0 = start.getOrElse(low)
+    val slider = Control.slider("t", low, top, at0).withLabel("ε")
+    val control = if stops then slider.withStops((value.filter(_ <= top) :+ low).distinct.sorted) else slider
+    def styled(f: Figure): Figure = look.figure(palette)(f)
+    val entering = (cs: Vector[Simplex[Int]]) =>
+      cs.map(c => Reaction(Vector(Behavior.shownFrom("t", stream.filtrationValue(c))))).toIndexedSeq
+    val complexPanel: Panel =
+      if spatial then
+        val pts = xyz(points)
+        val tris = cells.filter(_.dim == 2)
+        val edges = cells.filter(_.dim == 1)
+        val scene = look.scene(
+          Scene(
+            Vector(
+              Layer.Triangles(
+                tris.map(t => (pts(t.first), pts(t.toIndexedSeq(1)), pts(t.last))),
+                IndexedSeq(Paint.Series(0)),
+                0.2
+              ),
+              Layer.Segments(edges.map(e => (pts(e.first), pts(e.last))), IndexedSeq(Paint.Secondary), 1),
+              Layer.Points(pts, IndexedSeq(Paint.Ink), 2.5)
+            ),
+            title = name
+          )
+        )
+        Panel.Spatial(scene, Map(0 -> entering(tris), 1 -> entering(edges)))
+      else
+        // the figure's range comes from the points, not from the balls, so that it stays put as they grow
+        val xs = xy(points)
+        def pinned(of: XY => Double): (Double, Double) =
+          val (lo, hi) = (xs.map(of).min, xs.map(of).max)
+          val pad = 0.12 * (if hi > lo then hi - lo else 1.0)
+          (lo - pad, hi + pad)
+        val ((x0, x1), (y0, y1)) = (pinned(_._1), pinned(_._2))
+        val built = complexMarks(points, stream, cells, top, factor.map(_ * control.value), name, Palette.default)
+        val base = built.figure.copy(
+          subtitle = "",
+          x = Axis(grid = false, min = Some(x0), max = Some(x1)),
+          y = Axis(grid = false, min = Some(y0), max = Some(y1))
+        )
+        val reactions = Map(built.polygons -> entering(built.triangles), built.segments -> entering(built.edges)) ++
+          built.balls.map(_ -> IndexedSeq(Reaction(Vector(Behavior.radius("t", factor.getOrElse(1.0))))))
+        Panel.Flat(styled(base), reactions)
+    val diagramPanel = Panel.sweepDiagram(diagram(bars)(using Look.none), "t").mapFigure(styled)
+    val panels = Vector[Panel](complexPanel, diagramPanel) ++
+      Option.when(barcode)(Panel.sweepBarcode(Plot.barcode(bars)(using Look.none), "t").mapFigure(styled))
+    Interactive(panels, Vector(control), title)
 
   /** A simplicial chain's terms with their coefficients as numbers (exact small integers for `Z/p`, the value for the
     * reals).

@@ -205,6 +205,7 @@ Distances and vectorizations use every bar of the result, reported or not. See [
 | `plotComplex(at)` | the complex the result was computed from, at scale `at`, over the points; it stops at the result's `maxFiltrationValue` and says so |
 | `plotRepresentative(i)`, `plotRepresentative(i, at)` | bar `i`'s cycle over the input, or its cocycle restricted to the complex at the bar's birth; with `at`, over the complex at that scale (`Inf` draws a cocycle whole) |
 | `plotInput3D()`, `plotComplex3D(at)`, `plotRepresentative3D(i)` | the same in 3-D, from the first three coordinates |
+| `plotFiltration(max)`, `plotFiltration3D(max)` | a page with a slider for the scale, from 0 to `max`: the complex (the 3-D one to turn) beside the persistence diagram, whose classes are segments until the slider's line passes their death. `save('page.html')` for the page, `saveFrames(directory, count)` for a still picture at each of `count` scales, `withPlay(seconds)` and `withTitle(text)` to chain; see [a slider through the filtration](plotting.md#a-slider-through-the-filtration) |
 
 A plot method needs the input the result was computed from; a result from `loadResult` has it.
 

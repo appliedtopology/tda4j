@@ -2,7 +2,7 @@ package org.appliedtopology.tda4j.matlab
 
 import org.appliedtopology.tda4j.*
 import org.appliedtopology.tda4j.matlab.TDA4j.sessionLook
-import org.appliedtopology.tda4j.plot.{BarOrder, Figure, Plot, Scene, Svg}
+import org.appliedtopology.tda4j.plot.{BarOrder, Figure, Interactive, Plot, Scene, Svg}
 
 /** The boundary matrix of the complex a [[PersistenceResult]] was computed from, one column per cell in filtration
   * order; exposed only through `PersistenceResult`'s accessors.
@@ -533,6 +533,30 @@ final class PersistenceResult private[matlab] (
   def plotComplex3D(at: Double): Scene =
     val d = drawn("a 3-D view", at)
     Plot.complex3D(points("a 3-D view"), d.stream, d.scale, s"${d.name} complex at ${Svg.number(d.scale)}")
+
+  /** The result's complex as a page with a slider for the scale, from 0 to `max` in the complex's own units: the
+    * complex (the balls too, for a `vr`, `cech` or `alpha` complex) with its edges and triangles coming in as the
+    * slider passes their values, beside the persistence diagram, where each class is a vertical segment until the line
+    * of the slider passes its death and then a point. `save("page.html")` for the self-contained page,
+    * `saveFrames(directory, count)` for a still picture at each of `count` scales (a video, the slides of a talk). The
+    * page holds every edge and triangle up to `max`, so a large complex refuses (lower `max`). Chain
+    * `withPlay(seconds)`, `withTitle(text)`, `withPalette(name)` on the result.
+    */
+  def plotFiltration(max: Double): Interactive =
+    val d = drawn("a filtration", max)
+    Plot.filtrationOf(
+      points("a filtration"),
+      d.stream,
+      reportedBars,
+      balls = Optional(d.ball.map(_ / d.scale)),
+      max = d.scale,
+      title = s"${d.name} complex"
+    )
+
+  /** [[plotFiltration]] with the complex in 3-D (the first three coordinates), to turn and zoom. */
+  def plotFiltration3D(max: Double): Interactive =
+    val d = drawn("a 3-D filtration", max)
+    Plot.filtration3DOf(points("a 3-D filtration"), d.stream, reportedBars, max = d.scale, title = s"${d.name} complex")
 
   /** Bar `i`'s cycle in 3-D over the points: its edges and triangles in its dimension's color. */
   def plotRepresentative3D(i: Int): Scene =

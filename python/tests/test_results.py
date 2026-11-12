@@ -1,5 +1,6 @@
 import itertools
 import math
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -166,6 +167,22 @@ def test_the_most_persistent_bar_and_the_3d_plots(tmp_path, circle):
     assert "<html" in (tmp_path / "points.html").read_text().lower() and written.endswith("points.html")
     assert result.plot_complex_3d(1.0).save(tmp_path / "complex.html")
     assert result.plot_representative_3d(i).save(tmp_path / "loop.html")
+
+
+def test_a_filtration_page_has_a_slider_and_its_frames_show_the_complex_at_each_scale(tmp_path, circle):
+    result = tda4j.persistence(circle(16), max_dimension=1)
+    page = result.plot_filtration(1.0).with_title("A circle").with_play(4.0)
+    html = page.save(tmp_path / "filtration.html")
+    text = (tmp_path / "filtration.html").read_text()
+    assert html.endswith("filtration.html") and 'type="range"' in text and "A circle" in text
+    frames = page.save_frames(tmp_path / "frames", 3)
+    assert [Path(f).name for f in frames] == ["frame-0000.svg", "frame-0001.svg", "frame-0002.svg"]
+    # the sides of the 16-gon (2 sin(pi/16) = 0.39) come in with the slider: none in the first frame, all of them in the last
+    sides = [Path(f).read_text(encoding="utf-8").count("∆(") for f in frames]
+    assert sides[0] == 0 and sides[2] >= 16 and sides[1] <= sides[2]
+    assert "<canvas" in result.plot_filtration_3d(1.0).html()
+    with pytest.raises(ValueError, match="slider"):
+        result.plot_diagram().save_frames(tmp_path / "none", 3)
 
 
 def test_plots_go_side_by_side(tmp_path, square):

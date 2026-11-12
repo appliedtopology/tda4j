@@ -182,6 +182,48 @@ class PersistenceResultPlotSpec extends Specification:
     }
   }
 
+  "plotFiltration" should {
+    val r = TDA4j.computeFromPoints(circle, Array("maxDimension", "1"))
+    "show, at each scale, the cells plotComplex draws there: none under the side 0.39, the 16 sides after it" >> {
+      val page = r.plotFiltration(1.0)
+      def cellsAt(t: Double) = tips(page.at(t).svgFile(plot.Theme.Light), "∆(").sorted
+      val sides = tips(r.plotComplex(0.5).svg(), "∆(").sorted
+      (cellsAt(0.3) must beEmpty) and
+        (cellsAt(0.5) must beEqualTo(sides)) and
+        (sides.size must beGreaterThanOrEqualTo(16)) and
+        (cellsAt(0.9) must beEqualTo(tips(r.plotComplex(0.9).svg(), "∆(").sorted))
+    }
+    "run its slider over the scales the computation reached, and say which complex it draws" >> {
+      val stopped = TDA4j.computeFromPoints(circle, Array("maxDimension", "1", "maxFiltrationValue", "0.5"))
+      val page = stopped.plotFiltration(2.0)
+      (page.controls.head.max must beCloseTo(0.5, 1e-12)) and (page.controls.head.min must beEqualTo(0.0)) and
+        (page.title must contain("Vietoris-Rips"))
+    }
+    "keep the hook of the other plots: a chained tweak and a theme reach every panel, and the page holds the diagram" >> {
+      val page = r.plotFiltration(1.0).withPalette("print").withTitle("A circle").withPlay(5.0)
+      (page.html() must contain("A circle")) and (page.panels.size must beEqualTo(2)) and
+        (page.controls.head.play must beSome(5.0))
+    }
+    "write its frames from a word and a path, as MATLAB and Python call it" >> {
+      val dir = java.nio.file.Files.createTempDirectory("tda4j-facade-frames").toString
+      val written = r.plotFiltration(1.0).saveFrames(dir, 3, "light")
+      (written.length must beEqualTo(3)) and (written.forall(p => new java.io.File(p).length() > 1000) must beTrue) and
+        (r.plotFiltration(1.0).saveFrames(dir, 2).length must beEqualTo(2))
+    }
+    "draw 3-D with a scene panel, and refuse a result that has no points to draw" >> {
+      val torusLike = Array.tabulate(30)(i =>
+        val t = 2 * math.Pi * i / 30
+        Array(math.cos(t), math.sin(t), 0.3 * math.sin(3 * t))
+      )
+      val r3 = TDA4j.computeFromPoints(torusLike, Array("maxDimension", "1"))
+      val distances = Array(Array(0.0, 1.0, 1.0), Array(1.0, 0.0, 1.0), Array(1.0, 1.0, 0.0))
+      (r3.plotFiltration3D(0.5).html() must contain("<canvas")) and
+        (TDA4j.computeFromDistanceMatrix(distances).plotFiltration(1.0) must throwA[UnsupportedOperationException](
+          message = "distance matrix"
+        ))
+    }
+  }
+
   "vectorization plots" should
     "use every bar, as the numeric landscape does" >> {
       val r = TDA4j.computeFromPoints(circle, Array("maxDimension", "1"))

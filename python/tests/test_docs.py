@@ -188,6 +188,15 @@ def plotting_json(ns, out):
     assert sorted(ns["deaths"]) == sorted(every_bar[:, 2]) and np.isinf(ns["deaths"]).sum() == 1
 
 
+def plotting_filtration(ns, out):
+    text = (Path.cwd() / "filtration.html").read_text(encoding="utf-8")
+    assert 'type="range"' in text and "A noisy circle" in text
+    # the slider runs from 0 to the scale asked for, or to where the computation stopped when that is sooner
+    control = re.search(r'"min":([-0-9.eE]+),"max":([-0-9.eE]+)', text)
+    assert float(control.group(1)) == 0.0 and 0.5 < float(control.group(2)) <= 1.0
+    assert text.count('data-ia="') > 1000  # every cell of the complex carries the value at which it comes in
+
+
 def plotting_tweaks(ns, out):
     here = Path.cwd()
     diagram = (here / "diagram.svg").read_text(encoding="utf-8")
@@ -210,7 +219,7 @@ ORACLES = {
     "tutorials/circular-and-toroidal-coordinates.md": [circular_and_toroidal],
     "user-guide/python.md": [python_page],
     "user-guide/vectorization.md": [vectorization],
-    "user-guide/plotting.md": [plotting_tab, plotting_json, plotting_tweaks],
+    "user-guide/plotting.md": [plotting_tab, plotting_json, plotting_filtration, plotting_tweaks],
 }
 
 

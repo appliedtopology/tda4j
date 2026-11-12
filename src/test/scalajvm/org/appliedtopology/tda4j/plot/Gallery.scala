@@ -237,4 +237,9 @@ object Gallery:
       Mark.Rule.vertical(0.6)).save(out("custom-diagram-threshold.svg"))
     (scene + Style.slides + Palette.reference + Labels(subtitle = "slides style, reference palette"))
       .save(out("custom-sphere.svg"))
+    // interactive pages: the page itself and its stills at three scales
+    val sweep = Plot.filtration(circle, barcode = true).withTitle("Noisy circle").withPlay(8)
+    sweep.save(out("interactive-filtration.html"))
+    Seq(0.15, 0.3, 0.5).foreach(t => sweep.at(t).save(out(f"interactive-still-$t%.2f.svg")))
+    Plot.filtration3D(sphere, max = 0.8, title = "Sphere").withPlay(8).save(out("interactive-sphere.html"))
     println(s"wrote the gallery to $dir")

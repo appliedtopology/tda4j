@@ -45,6 +45,18 @@ class PlotCLISpec extends Specification:
   /** Each SVG render numbers its clip path; two renders of one figure differ only there. */
   private def normalized(svg: String): String = svg.replaceAll("tda4j[0-9]+", "tda4jN")
 
+  /** A page numbers its wrapper too (`tda4jia2`), apart from the clip paths of its pictures. */
+  private def numbered(page: String): String = page.replaceAll("tda4j(ia)?[0-9]+", "tda4jN")
+
+  /** Where two long texts first differ, with a little of each; `None` when they are equal. */
+  private def firstDifference(a: String, b: String): Option[String] =
+    if a == b then None
+    else
+      val i = a.zip(b).indexWhere((x, y) => x != y) match
+        case -1 => math.min(a.length, b.length)
+        case k  => k
+      Some(s"differ at $i: ${a.slice(i - 60, i + 80)} <> ${b.slice(i - 60, i + 80)}")
+
   private val circle =
     val rng = scala.util.Random(11)
     Array.tabulate(30) { i =>
@@ -116,6 +128,20 @@ class PlotCLISpec extends Specification:
         (run("--max-dimension", "1", "--plot", "complex", "--at", "0.5", "--output", complex, circleFile)._1 must
           beEqualTo(0)) and
         (read(complex).toLowerCase must startWith("<!doctype html>"))
+    }
+    "write the page with a slider for --plot filtration, the same one the facade builds, and its first still as an .svg" >> {
+      val (page, still) = (tempPath(".html"), tempPath(".svg"))
+      val args = Seq("--max-dimension", "1", "--plot", "filtration", "--at", "0.8")
+      val expected = direct.plotFiltration(0.8)
+      val built = expected.html()
+      (run(args ++ Seq("--output", page, circleFile)*)._1 must beEqualTo(0)) and
+        (firstDifference(numbered(read(page)), numbered(built)) must beNone) and
+        (read(page).contains("type=\"range\"") must beTrue) and
+        (run(args ++ Seq("--output", still, circleFile)*)._1 must beEqualTo(0)) and
+        (firstDifference(numbered(read(still)), numbered(expected.svgFile(plot.Theme.Light))) must beNone) and
+        (run("--max-dimension", "1", "--plot", "filtration-3d", "--at", "0.8", "--output", page, circleFile)._1 must
+          beEqualTo(0)) and
+        (read(page).contains("<canvas") must beTrue)
     }
     "write a page to the temporary directory without --output, and say where" >> {
       val err = stderrOf {
@@ -194,6 +220,8 @@ class PlotCLISpec extends Specification:
         (fails("--plot", "landscape", "--bar", "0") must beEqualTo(1)) and
         (fails("--plot", "representative", "--bar", "0", "--dimension", "1") must beEqualTo(1)) and
         (fails("--plot", "complex") must beEqualTo(1)) and
+        (fails("--plot", "filtration") must beEqualTo(1)) and
+        (fails("--plot", "filtration,diagram", "--at", "1") must beEqualTo(1)) and
         (fails("--plot", "bars") must beEqualTo(1)) and
         (fails("--plot", "diagram", "--output", tempPath(".png")) must beEqualTo(1)) and
         (fails("--plot", "diagram", "--output-format", "csv") must beEqualTo(1)) and

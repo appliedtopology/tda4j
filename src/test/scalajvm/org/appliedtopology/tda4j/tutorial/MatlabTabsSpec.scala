@@ -252,6 +252,20 @@ class MatlabTabsSpec extends Specification:
           )
         )
     }
+    "write the page with a slider for the scale: a slider from 0 up to the scale asked for, the title and the play time chained on" in {
+      val page = result.plotFiltration(1.0).withTitle("A noisy circle").withPlay(10.0)
+      val file = java.io.File.createTempFile("matlab-tabs", ".html")
+      file.deleteOnExit()
+      page.save(file.getAbsolutePath)
+      val text = new String(java.nio.file.Files.readAllBytes(file.toPath), java.nio.charset.StandardCharsets.UTF_8)
+      val control = page.controls.head
+      (control.min must beEqualTo(0.0))
+        .and(control.max must beBetween(0.5, 1.0).excludingStart)
+        .and(control.play must beSome(10.0))
+        .and(text must contain("A noisy circle"))
+        .and(text must contain("""type="range""""))
+        .and(page.panels.size must beEqualTo(2))
+    }
     "customize the diagram and the barcode with the with... methods, as the Customizing section's tab does" in {
       val diagram =
         result.plotDiagram().withTitle("A noisy circle").withXLabel("birth").withYLabel("death").withSize(800, 600)

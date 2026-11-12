@@ -944,6 +944,12 @@ final class Result private[javascript] (underlying: PersistenceResult):
   @JSExport
   def plotComplex(at: Double): Chart = Exports.guarded(Chart(underlying.plotComplex(at)))
 
+  /** The complex as a page with a slider for the scale, from 0 to `max`, beside the persistence diagram: `html()` is
+    * the self-contained page, `show()` opens it.
+    */
+  @JSExport
+  def plotFiltration(max: Double): Chart = Exports.guarded(Chart(underlying.plotFiltration(max)))
+
   /** The representative of `bars[i]` over the input, at scale `at` when given. */
   @JSExport
   def plotRepresentative(i: Int, at: js.UndefOr[Double] = js.undefined): Chart =

@@ -44,7 +44,8 @@ A `Result` also has `bottleneckDistance(other, dimension)`, `wassersteinDistance
 `slicedWassersteinDistance(other, dimension, directions)`, `wassersteinMatching(other, dimension, order)`, `bottleneckMatching(other, dimension)`, `landscape(dimension, numLevels, tMin, tMax, resolution)`,
 `bettiCurve(dimension, tMin, tMax, resolution)`, `silhouette(dimension, tMin, tMax, resolution, power)`,
 `persistenceEntropy(dimension, normalized)` and the plots `plotBarcode()`, `plotDiagram()`,
-`plotComplex(at)` and `plotRepresentative(i, at)`. A plot has `svg()` and `html()` for the text of a picture or a page,
+`plotComplex(at)`, `plotFiltration(max)` (a page with a slider for the scale beside the persistence diagram: `html()` is the
+self-contained page) and `plotRepresentative(i, at)`. A plot has `svg()` and `html()` for the text of a picture or a page,
 `show()` to put it in the page (in a browser) or open it in the default browser (from Node.js), and `save(path)`.
 
 A `Result` also has `persistenceImage(dimension, sigma, birthMin, birthMax, persistenceMin, persistenceMax,

@@ -190,6 +190,18 @@ class PlotLookSpec extends Specification:
     }
   }
 
+  "a given Look and an interactive plot" should {
+    "reach every panel of a filtration page, once" in {
+      val wider = Look() + Tweak(f => f.copy(width = f.width + 10))
+      val plain = Plot.filtration(circle, barcode = true)(using Look.none)
+      val looked = Plot.filtration(circle, barcode = true)(using wider)
+      val widths = (i: Interactive) => i.panels.collect { case Panel.Flat(f, _) => f.width }
+      widths(looked) must beEqualTo(widths(plain).map(_ + 10))
+      val printed = Plot.filtration(circle)(using Look.print)
+      printed.panels.collect { case Panel.Flat(f, _) => f.palette }.distinct must beEqualTo(Vector(Palette.print))
+    }
+  }
+
 object PlotLookSpec:
   /** A shared look, as a project would keep it in one place. */
   object House:

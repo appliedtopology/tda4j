@@ -238,7 +238,49 @@ object Svg:
   /** `fig` as an `<svg>`. With `saved`, the figure of a file, which draws no background unless its style asks for one
     * (see [[Style.transparent]]).
     */
-  def render(fig: Figure, theme: Theme, saved: Boolean = false): String =
+  def render(fig: Figure, theme: Theme, saved: Boolean = false): String = renderTagged(fig, theme, saved, Tags.none)
+
+  /** What an interactive page asks of the renderer (`Interactive`): attributes for the items of a mark, so that a
+    * script can find them, and the frame (where data values land on the page), so that it can move them. Scratch for
+    * this package; `Tags.none` leaves the output exactly as `render` has always written it.
+    *
+    * @param attrs
+    *   the attributes (as text, `data-ia="..."`) of item `i` of mark `m`, or `""`
+    * @param frame
+    *   whether the `<svg>` carries its frame in `data-fr`
+    */
+  private[plot] final case class Tags(attrs: (Int, Int) => String, frame: Boolean):
+    /** `open`, an opening tag as the renderer writes it (`<line x1=...`), with the attributes of an item added. */
+    def tag(open: String, mark: Int, item: Int): String =
+      val a = attrs(mark, item)
+      if a.isEmpty then open
+      else
+        val name = open.takeWhile(c => c != ' ' && c != '/' && c != '>')
+        name + " " + a + open.drop(name.length)
+
+  private[plot] object Tags:
+    val none: Tags = Tags((_, _) => "", false)
+
+  // an axis for a script: where its plot area starts on the page and how long it is, the range it shows in transformed
+  // space, whether it runs backwards, and the transform (`i`dentity, `l`og, `s`qrt, sy`m`log with its stretch, `c`ustom)
+  private def axisSpec(
+    origin: Double,
+    length: Double,
+    lo: Double,
+    hi: Double,
+    reversed: Boolean,
+    t: Transform
+  ): String =
+    val (code, param) = t match
+      case Transform.Identity        => ("i", 0.0)
+      case Transform.Log10           => ("l", 0.0)
+      case Transform.Sqrt            => ("s", 0.0)
+      case Transform.SymLog(c)       => ("m", c)
+      case Transform.Custom(_, _, _) => ("c", 0.0)
+    s"$origin,$length,$lo,$hi,${if reversed then 1 else 0},$code,$param"
+
+  /** `fig` as an `<svg>` with `tags` (see [[Tags]]); `render` is this without any. */
+  private[plot] def renderTagged(fig: Figure, theme: Theme, saved: Boolean, tags: Tags): String =
     val id = s"tda4j${counter.incrementAndGet()}"
     val style = fig.style
     val ts = style.textScale
@@ -525,9 +567,13 @@ object Svg:
       y0 -= reserveY * unit
     val f = Frame(xt, yt, x0, x1, y0, y1, left, top, w, h, bandX, bandY, fig.x.reverse, fig.y.reverse)
 
+    val frameAttr =
+      if !tags.frame then ""
+      else
+        s""" data-fr="${axisSpec(left, w, x0, x1, fig.x.reverse, xt)};${axisSpec(top, h, y0, y1, fig.y.reverse, yt)}""""
     sb ++= s"""<svg xmlns="http://www.w3.org/2000/svg" id="$id" width="${fig.width}" height="${fig.height}" viewBox="0 0 ${fig.width} ${fig.height}" font-family="${escape(
         style.font
-      )}" role="img">"""
+      )}" role="img"$frameAttr>"""
     if theme == Theme.Auto then sb ++= s"<style>${pal.cssVariables(s"#$id")}</style>"
     if fig.title.nonEmpty then sb ++= s"<title>${escape(fig.title)}</title>"
     if fig.description.nonEmpty then sb ++= s"<desc>${escape(fig.description)}</desc>"
@@ -741,14 +787,16 @@ object Svg:
     // marks
     sb ++= s"""<g clip-path="url(#$id-clip)">"""
     def tip(m: Mark, i: Int): String = m.tipAt(i).fold("")(t => s"<title>${escape(t)}</title>")
-    def item(open: String, m: Mark, i: Int): Unit =
+    var markIndex = 0 // the mark being drawn, for the attributes an interactive page asks for
+    def item(plain: String, m: Mark, i: Int): Unit =
+      val open = tags.tag(plain, markIndex, i)
       m.tipAt(i) match
         case Some(_) if open.endsWith("/>") =>
           sb ++= open.stripSuffix("/>") + ">" + tip(m, i) + "</" + open.drop(1).takeWhile(_ != ' ') + ">"
         case Some(_) => sb ++= "<g>" + tip(m, i) + open + "</g>" // a text, which has content of its own
         case None    => sb ++= open
     def dash(dashed: Boolean): String = if dashed then """ stroke-dasharray="5 4"""" else ""
-    fig.marks.foreach {
+    def drawMark(mark: Mark): Unit = mark match
       case m: Mark.Discs =>
         val linear = xt == Transform.Identity && yt == Transform.Identity
         m.centers.indices.foreach(i =>
@@ -845,9 +893,13 @@ object Svg:
           val (x1p, y1p, x2p, y2p) =
             if m.vertical then (f.px(m.at), top, f.px(m.at), top + h)
             else (left, f.py(m.at), left + w, f.py(m.at))
-          sb ++= s"""<line x1="${fmt(x1p)}" y1="${fmt(y1p)}" x2="${fmt(x2p)}" y2="${fmt(y2p)}" style="stroke:${paint(
-              m.paint
-            )}" stroke-width="${fmt(m.width * ink)}"${dash(m.dashed)}/>"""
+          sb ++= tags.tag(
+            s"""<line x1="${fmt(x1p)}" y1="${fmt(y1p)}" x2="${fmt(x2p)}" y2="${fmt(y2p)}" style="stroke:${paint(
+                m.paint
+              )}" stroke-width="${fmt(m.width * ink)}"${dash(m.dashed)}/>""",
+            markIndex,
+            0
+          )
       case m: Mark.Diagonal =>
         // t runs over the values for which both x = t and y = t + offset lie on the plot
         val (xa, xb) = (xt.inverse(startX), xt.inverse(x1))
@@ -885,6 +937,9 @@ object Svg:
             sb ++= s"""<polyline points="$pts" style="fill:none;stroke:${paint(m.paint)}" stroke-width="${fmt(
                 m.width * ink
               )}"${dash(m.dashed)}/>"""
+    fig.marks.zipWithIndex.foreach { (mark, mi) =>
+      markIndex = mi
+      drawMark(mark)
     }
     sb ++= "</g>"
     // the frame, over the marks

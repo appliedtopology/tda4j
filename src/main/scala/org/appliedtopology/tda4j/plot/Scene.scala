@@ -271,7 +271,15 @@ final case class Scene(
 
   // ----- the interactive view (canvas)
 
-  def fragment(theme: Theme = Theme.Auto): String =
+  def fragment(theme: Theme = Theme.Auto): String = build(theme, None)
+
+  /** This scene as one panel of an [[Interactive]] page: the items whose reaction is [[Behavior.Shown]] come and go as
+    * the controls move. The canvas listens for the page's `tda4j:change` events.
+    */
+  private[plot] def fragmentReacting(theme: Theme, reactions: Map[Int, IndexedSeq[Reaction]]): String =
+    build(theme, Some(reactions))
+
+  private def build(theme: Theme, reacting: Option[Map[Int, IndexedSeq[Reaction]]]): String =
     val pal = palette.withDegrees(degrees)
     val (ts, ink) = (style.textScale, style.markScale)
     def px(v: Double) = if v == v.toLong then v.toLong.toString else f"$v%.2f"
@@ -290,29 +298,51 @@ final case class Scene(
     def num(v: Double) = f"$v%.5f"
     def pos(p: XYZ) = s"[${num((p._1 - c._1) / r)},${num((p._2 - c._2) / r)},${num((p._3 - c._3) / r)}]"
     def col(p: Paint) = "\"" + (if theme == Theme.Auto then pal.css(p) else pal.hex(p, theme)) + "\""
-    val json = layers
+    // for a panel of an interactive page: per layer, per item, the intervals of the control values the item is shown for
+    def ia(index: Int, layer: Layer): String =
+      reacting.flatMap(_.get(index)).fold("") { rs =>
+        val entries = (0 until Interactive.itemCount(layer)).map { i =>
+          val shown = rs(if rs.size == 1 then 0 else i).behaviors.collect { case Behavior.Shown(c, from, until) =>
+            s"""["$c",$from,$until]"""
+          }
+          if shown.isEmpty then "null" else shown.mkString("[", ",", "]")
+        }
+        s""","ia":[${entries.mkString(",")}]"""
+      }
+    val json = layers.zipWithIndex
       .map {
-        case l: Layer.Points =>
+        case (l: Layer.Points, li) =>
           val face = sceneMarker(l.radius, l.paints.headOption.getOrElse(Paint.Ink))
           val edge = if face.edge.visible then face.edge.width else 0.0
           s"""{"kind":"p","r":${face.size * ink},"op":${face.opacity},"ew":$edge,"ec":${col(
               face.edge.paint
             )},"items":[${l.at.indices
               .map(i => s"[${pos(l.at(i))},${col(l.paintAt(i))}]")
-              .mkString(",")}]}"""
-        case l: Layer.Segments =>
+              .mkString(",")}]${ia(li, l)}}"""
+        case (l: Layer.Segments, li) =>
           s"""{"kind":"s","w":${l.width * ink},"items":[${l.ends.indices
               .map(i => s"[${pos(l.ends(i)._1)},${pos(l.ends(i)._2)},${col(l.paintAt(i))}]")
-              .mkString(",")}]}"""
-        case l: Layer.Triangles =>
+              .mkString(",")}]${ia(li, l)}}"""
+        case (l: Layer.Triangles, li) =>
           s"""{"kind":"t","o":${l.opacity},"items":[${l.corners.indices
               .map { i =>
                 val (a, b, d) = l.corners(i)
                 s"[${pos(a)},${pos(b)},${pos(d)},${col(l.paintAt(i))}]"
               }
-              .mkString(",")}]}"""
+              .mkString(",")}]${ia(li, l)}}"""
       }
       .mkString("[", ",", "]")
+    // the script of a panel of an interactive page also asks which items the controls leave out
+    val hook =
+      if reacting.isEmpty then ""
+      else
+        """
+          |const ia=root.closest('.tda4j-ia'),vals={};
+          |function hid(L,k){const a=L.ia&&L.ia[k];if(!a)return false;for(const [n,f,u] of a){const v=vals[n];if(v!==undefined&&!(v>=f&&v<u))return true;}return false;}
+          |if(ia)ia.addEventListener('tda4j:change',e=>{vals[e.detail.name]=e.detail.value;draw();});""".stripMargin
+    val loop =
+      if reacting.isEmpty then "for(const it of L.items){"
+      else "for(const [k,it] of L.items.entries()){if(hid(L,k))continue;"
     val id = s"tda4j3d${Scene.counter.incrementAndGet()}"
     val vars = if theme == Theme.Auto then pal.cssVariables(s"#$id") else ""
     s"""<div id="$id" style="position:relative;width:${width}px;max-width:100%;font-family:${Svg.escape(style.font)}">
@@ -340,7 +370,7 @@ final case class Scene(
       )}">drag to turn, scroll to zoom</div>
        |<script>(function(){
        |const root=document.getElementById('$id'),cv=root.querySelector('canvas'),g=cv.getContext('2d');
-       |const layers=$json;
+       |const layers=$json;$hook
        |const css=getComputedStyle(root);
        |const color=s=>s.startsWith('var(')?css.getPropertyValue(s.slice(4,-1)).trim():s;
        |let az=${math.toRadians(azimuth)},el=${math.toRadians(elevation)},zoom=${Svg.number(zoom)};
@@ -350,7 +380,7 @@ final case class Scene(
        |  if(cv.width!==Math.round(W*dpr)){cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);}
        |  g.setTransform(dpr,0,0,dpr,0,0);g.fillStyle=color(${col(Paint.Surface)});g.fillRect(0,0,W,H);
        |  const s=0.46*Math.min(W,H)*zoom,cx=W/2,cy=H/2,items=[];
-       |  for(const L of layers){for(const it of L.items){
+       |  for(const L of layers){$loop
        |    if(L.kind==='t'){const a=proj(it[0]),b=proj(it[1]),c=proj(it[2]);items.push([(a[2]+b[2]+c[2])/3,0,L,[a,b,c],it[3]]);}
        |    else if(L.kind==='s'){const a=proj(it[0]),b=proj(it[1]);items.push([(a[2]+b[2])/2-1e-6,1,L,[a,b],it[2]]);}
        |    else{const a=proj(it[0]);items.push([a[2]-2e-6,2,L,[a],it[1]]);}}}
