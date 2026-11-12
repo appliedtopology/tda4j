@@ -100,6 +100,8 @@ result.plot_barcode()      # a figure; in a notebook it shows itself, `.save("ba
   puts plots in one row, and `tda4j.set_plot_defaults("palette=print")` changes the look of the next ones. `plot_filtration(max)` is a page
   with a slider for the scale beside the persistence diagram (`save("page.html")`; `save_frames(directory, count)` writes a still
   picture at each of `count` scales, for a video or the slides of a talk, see [a slider through the filtration](plotting.md#a-slider-through-the-filtration)).
+  `plot_explore()` and `plot_linked_filtration(max)` are pages whose pictures are linked, zoom and choose classes (see
+  [exploring a barcode](plotting.md#exploring-a-barcode)).
 * `save(path)`, to be read back by `load_result`.
 
 ### Tutorials

@@ -1439,7 +1439,7 @@ object Interactive:
       |  const button=(text,label,f)=>{const b=document.createElement('button');b.type='button';b.textContent=text;b.setAttribute('aria-label',label);b.title=label;b.addEventListener('click',f);bar.appendChild(b);return b;};
       |  const centre=()=>[(z.win[0]+z.win[1])/2,(z.win[2]+z.win[3])/2];
       |  button('+','zoom in',()=>{const c=centre();zoomBy(z,0.5,c[0],c[1]);});
-      |  button('\\u2212','zoom out',()=>{const c=centre();zoomBy(z,2,c[0],c[1]);});
+      |  button('\u2212','zoom out',()=>{const c=centre();zoomBy(z,2,c[0],c[1]);});
       |  button('1:1','show everything',()=>setWindow(z,z.full));
       |  if(box.getAttribute('data-brush')){z.mode='brush';
       |    const t=button('pan','drag to pan instead of choosing',()=>{z.mode=z.mode==='pan'?'brush':'pan';svg._pan=z.mode==='pan';t.setAttribute('aria-pressed',z.mode==='pan');});

@@ -108,3 +108,63 @@ Tried in Chromium with reveal.js 5.2.1 (`white` theme), Playwright, scratch deck
 - **Not checked:** reveal.js with its Markdown plugin, `innerHTML` insertion (a browser never runs those scripts), Firefox,
   Safari (#330).
 
+
+## Addendum 2026-11-12: the rest of #102 (linked views, brushing, zoom and pan; Mikael: "do the rest of #102 for a full interactivity suite")
+
+Four commits on PR #332 (31635b3 selections, 4b7965c brushing, a7973c2 + 9638450 zoom), then the facades and docs.
+
+**Selections (31635b3).** A `Selection(name, labels, hover, click, listed, title)` is a named set of `Int` keys, the pointer's
+counterpart of a `Control`. `Panel.selecting(mark, name, keys)` makes a mark's items choose keys (`Behavior.Selects`) and adds a
+translucent halo mark (`Behavior.Selected`, shown while the key is chosen); other items listen with `Selected`, AND-combined with
+`Shown`/`Follows` (a cycle cell appears only when its key is chosen AND the slider has passed it). The key of an `explore`
+class is the position of the bar in the list given, in the diagram, the barcode and the labels, which the specs build to be
+neither the diagram's nor the barcode's sort order. Hit testing is by bounding box (4 px, nearest, then smallest). Pinned and
+hovered sets are kept apart and unioned; a click on the background lets the pinned set go. `PageState(values, selected, windows)`
+is the viewer's state for a still (`Interactive.at(PageState)`).
+
+**Brushing (4b7965c).** `Panel.Flat.brushable(selection)`; a drag of more than 5 px draws `.tda4j-brush` and chooses every item whose
+box touches the rectangle (shift adds). The click that ends a drag is swallowed (`svg._dragged`); one rectangle at a time,
+removed by a click on the background. Chromium checks use the one H1 bar to calibrate pixels for barcode stretches.
+
+**Zoom and pan (a7973c2, 9638450).**
+- Renderer: with `Svg.Tags.zoom` the marks are wrapped by kind (`<g data-z="s">` for strokes and areas, `<g data-z="p">` for points
+  and text, each point carrying `data-c`), and every axis element carries `data-k` (kind) and, for a label, `data-v`; the rule
+  that makes ticks (automatic, within a range, fixed list, plus extras such as a diagram's `∞`) and the aspect are in the
+  `<svg>`'s `data-zm` JSON. The page moves a stroke group with one `matrix()` (CSS `vector-effect: non-scaling-stroke` keeps
+  widths) and each point with a `translate` from its centre, so sizes are kept. Without tags the output is byte-identical.
+- Ticks: the script has its own `niceTicks` and number writer (`Svg.number`: four significant digits, and Java's `%.3g` outside
+  1e-3 to 1e5, so `1.00e+05`, `2.50e-05`) and draws the axes again for a window from templates cloned from the originals
+  (minor ticks are dropped while zoomed). Refused with a reason (`Interactive.zoomProblem`): log/sqrt/symlog, reversed axes,
+  `Axis.format`, slanted tick labels or a number style. `Interactive.zoomable()` skips those panels.
+- Equal aspect: the renderer widens one range of a window to keep the aspect, so a still of a window asked for differs from
+  the window; the page mirrors the same widening (`data-zm` carries the ratio), so `tda4j.window(i)` is the effective window.
+- Limits: a window is clamped inside the picture; zoom stops at 1/200 of it; a window change removes the brush rectangle; hover
+  and brush are clamped to the plot area (what the window cuts away still exists under the margins).
+- Traps found by the Chromium checks, none by the Scala specs: (1) templates were cloned after the originals were hidden, so every
+  generated tick was `display:none` (the page drew 7 elements, the still 25); (2) the page wrote `1.00e+5` where Java writes
+  `1.00e+05` (found by comparing 60 random windows' words with the still's); (3) the `−` button showed the literal escape
+  (a `\\u2212` in a Scala triple-quoted string reaches the page unchanged: write `−`); (4) an equal-aspect still was not the
+  page (above); (5) a board still resizes the barcode panel (640x411 against the page's 640x440), so page-versus-still element
+  comparison holds for panels of equal size only. Mutation checks: no clamp of the brush to the plot area (4 of 5 cut-away
+  classes chosen), `inPlot` always true (3 of 4 cut-away classes chosen by hover), a still that ignores its window (4 specs fail),
+  cycles in the wrong order in `plotExplore` (2 specs fail).
+- Checks (`check-interactive-page.mjs`, 94 ok): the zoom-only page against the stills of three windows (visible lines, circles,
+  polygons and texts matched by box within 0.1 unit), the words of 60 seeded windows of every size and place
+  (`interactive-zoom-words.json`), reset, events, + and - buttons, Ctrl+wheel keeps the point under the pointer, a drag keeps the
+  grabbed point under the pointer, limits, the explore page's diagram zoomed against its still, brush and hover with a window,
+  the pan toggle, the barcode zooming along x only. Gallery diff against a worktree of 4b7965c: 80 files identical modulo run
+  ids; the four pages that embed the runtime differ in the script, and the linked and explore pages now carry the zoom
+  (explore 68 to 75 kB; linked sweep 1.18 to 1.19 MB). Default unlinked filtration and 3-D pages equal modulo the script.
+
+**Facades.** `PersistenceResult.plotExplore()` and `plotLinkedFiltration(max)` (the facade's bars carry no typed representative:
+`Plot.exploreOn`/`filtrationOf` take `cycles: Optional[Plot.Cycles]`, the result's own arrays as simplices with coefficients, one
+per reported bar, used in place of the bars' own); CLI `--plot explore` and `--plot linked-filtration --at` (each alone);
+JavaScript `plotExplore()`/`plotLinkedFiltration(max)` and `npm/index.d.ts`; Python `plot_explore()`/`plot_linked_filtration(max)`
+(`test_facade_coverage.py` passes). Specs: the chosen class draws exactly `plotRepresentative(k)`'s cells for every reported
+bar of a result whose threshold hid some bars; CLI page equals the facade's page.
+
+**Unverified.** Firefox and Safari; touch (a drag scrolls and a tap chooses, not tried); the page check in CI (#330); MATLAB;
+reveal.js with the explore page (the slider page was tried, these use the same wrapper but were not put in a deck).
+
+**Left (#333).** 3-D linking (a canvas has its own zoom), zoom of log axes, pinch and touch brushing, minor ticks while zoomed,
+a keyboard route to brush and pan, brushing a still, `explore` over a cursor.

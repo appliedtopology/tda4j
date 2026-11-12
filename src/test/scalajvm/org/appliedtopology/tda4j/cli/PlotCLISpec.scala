@@ -146,6 +146,19 @@ class PlotCLISpec extends Specification:
           beEqualTo(0)) and
         (read(page).contains("<canvas") must beTrue)
     }
+    "write the linked views for --plot explore and --plot linked-filtration, the same pages the facade builds" >> {
+      val (page, linked) = (tempPath(".html"), tempPath(".html"))
+      val bases = Seq("--max-dimension", "1")
+      val explored = direct.plotExplore().html()
+      val sweep = direct.plotLinkedFiltration(0.8).html()
+      (run(bases ++ Seq("--plot", "explore", "--output", page, circleFile)*)._1 must beEqualTo(0)) and
+        (firstDifference(numbered(read(page)), numbered(explored)) must beNone) and
+        (read(page).contains("data-brush=\"class\"") must beTrue) and
+        (run(bases ++ Seq("--plot", "linked-filtration", "--at", "0.8", "--output", linked, circleFile)*)._1 must
+          beEqualTo(0)) and
+        (firstDifference(numbered(read(linked)), numbered(sweep)) must beNone) and
+        (read(linked).contains("type=\"range\"") must beTrue)
+    }
     "write a page to the temporary directory without --output, and say where" >> {
       val err = stderrOf {
         run("--max-dimension", "1", "--plot", "barcode", circleFile)._1 must beEqualTo(0)
@@ -225,6 +238,9 @@ class PlotCLISpec extends Specification:
         (fails("--plot", "complex") must beEqualTo(1)) and
         (fails("--plot", "filtration") must beEqualTo(1)) and
         (fails("--plot", "filtration,diagram", "--at", "1") must beEqualTo(1)) and
+        (fails("--plot", "linked-filtration") must beEqualTo(1)) and
+        (fails("--plot", "explore", "--at", "1") must beEqualTo(1)) and
+        (fails("--plot", "explore,diagram") must beEqualTo(1)) and
         (fails("--plot", "bars") must beEqualTo(1)) and
         (fails("--plot", "diagram", "--output", tempPath(".png")) must beEqualTo(1)) and
         (fails("--plot", "diagram", "--output-format", "csv") must beEqualTo(1)) and

@@ -330,6 +330,7 @@ const matches = (a, b, tol = 0.1) => {
   await page.evaluate(() => document.querySelector('.tda4j-ia').addEventListener('tda4j:zoom', e => (window.zoomEvents = window.zoomEvents || []).push(e.detail)));
   const whole = await live(null, 0);
   check(await page.evaluate(() => document.querySelectorAll('.tda4j-zoombar button').length) === 3, 'a panel that only zooms has three buttons: in, out, everything');
+  check(await page.evaluate(() => [...document.querySelectorAll('.tda4j-zoombar button')].map(b => b.textContent).join(' ')) === '+ \u2212 1:1', 'the buttons write their glyphs, not escape codes');
   for (const [i, w] of meta.windows.entries()) {
     await page.evaluate(w => document.querySelector('.tda4j-ia').tda4j.zoom(0, w), w);
     const mine = await live(null, 0), theirs = await stillOf(`interactive-zoom-${i}.svg`, 0);

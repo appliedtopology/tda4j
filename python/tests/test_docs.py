@@ -197,6 +197,14 @@ def plotting_filtration(ns, out):
     assert text.count('data-ia="') > 1000  # every cell of the complex carries the value at which it comes in
 
 
+def plotting_explore(ns, out):
+    text = (Path.cwd() / "explore.html").read_text(encoding="utf-8")
+    assert "A noisy circle" in text and 'data-brush="class"' in text and 'data-zoomable="b"' in text
+    # one class for each reported bar, named in the page's list of labels
+    labels = re.search(r'"labels":\[(.*?)\]', text)
+    assert labels and labels.group(1).count('"H') == len(ns["result"].bars)
+
+
 def plotting_tweaks(ns, out):
     here = Path.cwd()
     diagram = (here / "diagram.svg").read_text(encoding="utf-8")
@@ -219,7 +227,7 @@ ORACLES = {
     "tutorials/circular-and-toroidal-coordinates.md": [circular_and_toroidal],
     "user-guide/python.md": [python_page],
     "user-guide/vectorization.md": [vectorization],
-    "user-guide/plotting.md": [plotting_tab, plotting_json, plotting_filtration, plotting_tweaks],
+    "user-guide/plotting.md": [plotting_tab, plotting_json, plotting_filtration, plotting_explore, plotting_tweaks],
 }
 
 

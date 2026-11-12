@@ -318,6 +318,17 @@ class Result:
         ``with_play(seconds)`` and ``with_title(text)``; ``save_frames(directory, count)`` writes a still per scale."""
         return Plot(self._j.plotFiltration(float(max)))
 
+    def plot_explore(self) -> Plot:
+        """The bars as linked views, a page: the persistence diagram, the barcode and the points. Pointing at a class in one
+        lights it up in the other and draws its cycle on the points; a click keeps it chosen, dragging a rectangle chooses
+        the classes it touches, and every picture zooms (buttons, or Ctrl and the wheel) and pans. Save it as ``.html``;
+        chain ``with_title(text)``. Needs the points, and bars with representatives."""
+        return Plot(self._j.plotExplore())
+
+    def plot_linked_filtration(self, max: float) -> Plot:
+        """``plot_filtration`` with its views linked as ``plot_explore`` links them."""
+        return Plot(self._j.plotLinkedFiltration(float(max)))
+
     def plot_filtration_3d(self, max: float) -> Plot:
         """``plot_filtration`` with the complex in 3-D, to turn and zoom."""
         return Plot(self._j.plotFiltration3D(float(max)))

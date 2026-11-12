@@ -138,6 +138,33 @@ of `Behavior`, its rule in `inside`/`follow` for the stills, in `Svg.Tags` for t
 reactions of their own (`Shown` from the value at which each enters), so the page holds every cell up to the largest scale
 (`maxCells` refuses a page that would be too large, and says to lower the scale).
 
+### Linked views, brushing and zoom
+
+**Selections.** A `Selection` is a named set of `Int` keys that the viewer chooses by pointing, the pointer's counterpart of a
+`Control`. `Panel.selecting(index, name, keys)` makes the items of a mark choose a key (`Behavior.Selects`) and adds a
+translucent halo, a mark of its own that follows the item it surrounds and is shown while its key is chosen
+(`Behavior.Selected`); other marks listen with `Selected`, combined with `Shown` and `Follows` (every behavior of an item must
+hold for it to be there). `Plot.explore` keys a class by the position of its bar in the list it was given, in every panel. The
+page keeps pinned keys (click, shift-click, brush) and hovered keys apart and shows their union; hit testing is by bounding box
+(within 4 pixels, nearest first). A still takes the same choice as data: `Interactive.at(PageState().select("class", 3))`.
+
+**Brushing.** `Panel.Flat.brushable(name)`: a drag of more than 5 pixels draws a rectangle (`.tda4j-brush`) and chooses the items
+whose boxes touch it; the click that ends a drag is swallowed.
+
+**Zoom.** `Panel.Flat.zoomable(axes)` asks the renderer for zoom tags (`Svg.Tags.zoom`): each mark is wrapped by kind (`<g data-z="s">`
+for strokes and areas, moved by one `matrix()` with `vector-effect: non-scaling-stroke`; `<g data-z="p">` for points and text, each
+moved by a `translate` from its own centre, so sizes are kept), and every axis element carries its kind (`data-k`, and `data-v` for
+a label), with the rule that makes the ticks and the aspect in the picture's `data-zm`. The script draws the axes again for the
+window it shows with its own copy of `Svg.niceTicks` and `Svg.number` (including the exponent form outside 1e-3 to 1e5), so a
+change to either goes in both and in `check-interactive-page.mjs`, which compares the words of sixty windows with the stills'.
+`PageState.zoom(panel, Window)` is the still of a window; a figure of equal aspect widens one range of a window to keep it,
+in the still and on the page alike. Axes the page cannot draw again are refused when the page is built
+(`Interactive.zoomProblem` says why), and `Interactive.zoomable()` skips them.
+
+**Facades.** A result keeps its representatives as arrays, so `PersistenceResult.plotExplore` and `plotLinkedFiltration` give
+`Plot.exploreOn` and `filtrationOf` the cycles of the reported bars as simplices with coefficients (`cycles = ...`), in place of
+the bars' own typed representatives.
+
 ## Colors are roles
 
 A mark never holds a color, only a `Paint`:

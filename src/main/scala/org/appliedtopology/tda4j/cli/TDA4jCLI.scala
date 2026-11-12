@@ -1083,7 +1083,9 @@ object TDA4jCLI:
     "complex-3d",
     "representative-3d",
     "filtration",
-    "filtration-3d"
+    "filtration-3d",
+    "explore",
+    "linked-filtration"
   )
 
   /** The kinds of a `--plot` value: one, or a comma list that is drawn as a board. */
@@ -1112,7 +1114,10 @@ object TDA4jCLI:
           "persistence-image"
         )
       ),
-      "--at" -> (conf.at.isSupplied, Set("representative", "complex", "complex-3d", "filtration", "filtration-3d"))
+      "--at" -> (
+        conf.at.isSupplied,
+        Set("representative", "complex", "complex-3d", "filtration", "filtration-3d", "linked-filtration")
+      )
     )
     val looks = Seq(
       "--title" -> conf.title.isSupplied,
@@ -1185,11 +1190,14 @@ object TDA4jCLI:
           if !conf.at.isSupplied then
             throw new IllegalArgumentException(s"--plot $kind needs --at, the scale of the complex to draw")
         }
-        listed.find(_.startsWith("filtration")).foreach { kind =>
+        listed.find(kind => kind.startsWith("filtration") || kind == "linked-filtration").foreach { kind =>
           if !conf.at.isSupplied then
             throw new IllegalArgumentException(s"--plot $kind needs --at, the largest scale of its slider")
-          if listed.size > 1 then
-            throw new IllegalArgumentException(s"--plot $kind is a page of its own: give it alone, not in a list")
+        }
+        listed.find(kind => kind.startsWith("filtration") || kind == "linked-filtration" || kind == "explore").foreach {
+          kind =>
+            if listed.size > 1 then
+              throw new IllegalArgumentException(s"--plot $kind is a page of its own: give it alone, not in a list")
         }
         // a typo or a number out of range should not cost a long computation: build the changes now
         appearance(conf)
@@ -1288,6 +1296,8 @@ object TDA4jCLI:
       case "representative-3d" => result.plotRepresentative3D(chosenBar())
       case "filtration"        => result.plotFiltration(conf.at())
       case "filtration-3d"     => result.plotFiltration3D(conf.at())
+      case "explore"           => result.plotExplore()
+      case "linked-filtration" => result.plotLinkedFiltration(conf.at())
       case other               => throw new IllegalStateException(s"unreachable: --plot $other was checked")
     val listed = plotKindsOf(conf.plot())
     val kind = listed.mkString(",")
@@ -1305,7 +1315,7 @@ object TDA4jCLI:
             case (board, (panel, i)) => board.place(panel, i / cols, i % cols)
           }
         }
-    if listed.exists(k => k == "barcode" || k == "diagram") then noteHiddenBars(result, loaded, err)
+    if listed.exists(k => k == "barcode" || k == "diagram" || k == "explore") then noteHiddenBars(result, loaded, err)
     val tweaked: Plot = appearance(conf).fold(figure) { tweak =>
       figure match
         case f: Figure      => f + tweak

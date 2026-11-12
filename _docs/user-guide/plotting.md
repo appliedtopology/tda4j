@@ -297,6 +297,7 @@ call takes the largest scale as `max`, the facades as their argument. Options of
 | `barcode = true` | the barcode with a movable vertical line instead of the diagram: each bar grows until the line passes its death |
 | `stops = true` | the slider steps through the values at which the complex changes, one step for each change of the picture |
 | `start` | where the slider begins |
+| `link = true` | the diagram (and the barcode) are [linked](#exploring-a-barcode) to each other and to the complex, where a chosen class draws its cycle; the pictures zoom |
 | `maxCells` | the page holds every edge and triangle up to `max`; asked for more than this (20,000 by default), it refuses and says to lower `max` |
 
 `Plot.filtration3D(points)` is the same with the complex in 3-D, a canvas to turn and zoom beside the diagram;
@@ -456,6 +457,106 @@ Interactive()
 Every plot tweak of this page reaches every panel: `page.withPalette("print")`, `withStyle`, `withTextScale`, `withSetting`.
 `Panel.sweepDiagram(figure, control)` and `Panel.sweepBarcode(figure, control)` turn a diagram or a barcode into the
 sweeping panel of this page, for a page of your own.
+
+## Exploring a barcode
+
+`Plot.exploreOn(points, bars)` is a page of three pictures that know about each other: the point cloud, the persistence
+diagram and the barcode. Point at a class in the diagram or the barcode and it lights up in the other one, and its
+representative cycle is drawn on the points. A click keeps the class chosen (a shift-click adds another, a click on the
+background lets them all go), dragging a rectangle over a diagram or a barcode chooses every class it touches, and the
+page lists what is chosen under the pictures. Every picture zooms and pans.
+
+<div class="tabset">
+<div class="tab" data-lang="Scala">
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val points = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
+val d = Persistence(points, maxDimension = 1)
+Plot.exploreOn(points, d).withTitle("A noisy circle").save("explore.html")
+```
+
+</div>
+<div class="tab" data-lang="MATLAB">
+
+```matlab
+import org.appliedtopology.tda4j.matlab.*;
+
+points = readmatrix('_docs/tutorials/data/noisy-circle.csv');
+result = TDA4j.computeFromPoints(points, {'maxDimension', '1'});
+
+result.plotExplore().withTitle('A noisy circle').save('explore.html');
+```
+
+</div>
+<div class="tab" data-lang="Python">
+
+```python
+import tda4j
+import numpy as np
+
+points = np.loadtxt("_docs/tutorials/data/noisy-circle.csv", delimiter=",")
+result = tda4j.persistence(points, max_dimension=1)
+result.plot_explore().with_title("A noisy circle").save("explore.html")
+```
+
+</div>
+</div>
+
+On the command line, `tda4j --max-dimension 1 --plot explore --output explore.html points.csv` writes the same page.
+`Plot.explore(bars)` is the diagram and the barcode without the points, and `Plot.filtration(points, link = true)` is the
+slider page above with the same links, so that a class chosen in the diagram draws its cycle on the complex at the
+scale the slider shows. The cycles are the bars' representatives (`Persistence` records cycles by default; a cocycle is
+drawn as it is). A page holds every cell of every cycle, so `maxCycleCells` (20,000) keeps the most persistent bars' cycles
+and leaves the rest of the classes lit up in the diagram and the barcode without a cycle; the cloud's subtitle says so.
+
+**Zoom and pan.** Each picture has buttons in its corner: `+` and `−` zoom about the middle, `1:1` shows everything, and
+`Ctrl` (`Cmd` on a Mac) with the mouse wheel zooms about the pointer, which keeps the point under it where it was. Dragging
+pans; in a picture where dragging also chooses classes, the button `pan` switches what a drag does. The axes follow: new
+gridlines and numbers for the range shown, written as the plot writes them, while lines keep their width and points their
+size. Zooming stops at 1/200 of the picture, and the picture of an equal-aspect plot keeps its aspect (the barcode zooms
+along the filtration only, and keeps all its rows). What the window cuts away cannot be pointed at or chosen. A page that
+only zooms needs no slider: `Interactive().withPanel(Panel(figure).zoomable())`, or `page.zoomable()` on any page, which
+makes zoomable every flat panel whose axes the page can draw again. A logarithmic or reversed axis, an axis with a number
+format (`Axis.format`) and slanted tick labels cannot be: `Panel.zoomable` refuses them with the reason, and `zoomable()`
+leaves those panels as they are. The 3-D canvases have a zoom of their own.
+
+**Stills.** A viewer's choice is a value like a slider's: `page.at(PageState().select("class", 3).zoom(1, Window(-0.1, 0.6,
+0.1, 0.8)))` is the picture with class 3 chosen (the key is the position of the bar in the list given) and the second
+picture, the diagram, showing that range (an equal-aspect picture widens one range of a window to keep its aspect, as the page
+does).
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val points = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
+val d = Persistence(points, maxDimension = 1)
+val page = Plot.exploreOn(points, d)
+val chosen = d.bars.indices.maxBy(k => d.bars(k).persistence)
+page.at(PageState().select("class", chosen).zoom(1, Window(-0.1, 0.6, 0.1, 0.8))).save("explore-still.svg")
+```
+
+### Selections of your own
+
+A **selection** is to a viewer's pointer what a slider is to a slider's value: a named set of whole-number keys that panels
+choose from and react to. `Panel.selecting(mark, name, keys)` makes the items of a mark choose the key `keys(i)` while the
+pointer is on them and lights a translucent halo round them while their key is chosen by anyone, `brushable(name)` lets a
+drag choose, and `Behavior.selected(name, key)` shows an item (a cycle, a label) only while a key is chosen, together with
+`shownFrom` and `followsY`, so a page can have both a slider and a selection. `Interactive.withSelection(Selection(name))`
+declares the selection (`withList`, `withLabels(...)`, `clickOnly`, `hoverOnly` change how it behaves and what the page
+writes under the pictures). On the page, `tda4j.selection(name)` gives the chosen keys to a script of your own, `tda4j.onChange(name, f)` calls `f` with
+the keys at every change, and the change is also announced as a `tda4j:change` event whose `value` is the array of keys. The
+zoom has `tda4j.zoom(panel, [x0, x1, y0, y1])`, `tda4j.window(panel)` and `tda4j.resetZoom(panel)` (panels counted from 0), and
+each new window is announced as a `tda4j:zoom` event. `Plot.explore` is built from exactly these pieces, so it is the example to
+read.
+
+Chromium is the browser these pages were checked in; hovering, dragging and the wheel were not tried on a touch screen, where
+a drag scrolls the page as it always did and a tap chooses.
 
 ## Customizing a plot
 

@@ -553,6 +553,37 @@ final class PersistenceResult private[matlab] (
       title = s"${d.name} complex"
     )
 
+  // each reported bar's cycle, as the plots take it
+  private def reportedCycles: Plot.Cycles = reportedBars.indices.map(simplicialTerms)
+
+  /** The result's bars as linked views: the persistence diagram, the barcode and the points, with the points' cycles.
+    * Pointing at a class in the diagram or the barcode lights it up in the other and draws its representative cycle on
+    * the points; a click keeps it chosen (shift-click adds more, a click on the background lets them go), dragging a
+    * rectangle chooses the classes it touches and lists them under the pictures, and every picture zooms (buttons, or
+    * `Ctrl` and the mouse wheel) and pans. `save("page.html")` for the self-contained page; chain `withTitle(text)` and
+    * `withPalette(name)` on the result. Needs the points, and bars with representatives (the default of every engine
+    * but `fast-cubical`).
+    */
+  def plotExplore(): Interactive =
+    Plot.exploreOn(points("linked views"), reportedBars, cycles = Optional(Some(reportedCycles)))
+
+  /** [[plotFiltration]] with its views linked as [[plotExplore]] links them: pointing at a class of the diagram or the
+    * barcode, which it adds beside the diagram, lights it up in the other and draws its cycle on the complex.
+    */
+  def plotLinkedFiltration(max: Double): Interactive =
+    val d = drawn("a linked filtration", max)
+    Plot.filtrationOf(
+      points("a linked filtration"),
+      d.stream,
+      reportedBars,
+      balls = Optional(d.ball.map(_ / d.scale)),
+      max = d.scale,
+      barcode = true,
+      title = s"${d.name} complex",
+      link = true,
+      cycles = Optional(Some(reportedCycles))
+    )
+
   /** [[plotFiltration]] with the complex in 3-D (the first three coordinates), to turn and zoom. */
   def plotFiltration3D(max: Double): Interactive =
     val d = drawn("a 3-D filtration", max)

@@ -312,6 +312,11 @@ object Plot:
     */
   type Terms[CellT] = Chain[CellT, ?] | Seq[(CellT, Double)]
 
+  /** The cycles of a list of bars, one per bar, as simplices with their coefficients: what the facades keep of a
+    * result's representatives.
+    */
+  type Cycles = IndexedSeq[Seq[(Simplex[Int], Double)]]
+
   private def termsOf[CellT](t: Terms[CellT]): Seq[(CellT, Double)] = t match
     case c: Chain[?, ?] => lifted(c.asInstanceOf[Chain[CellT, ?]])
     case s: Seq[?]      => s.asInstanceOf[Seq[(CellT, Double)]]
@@ -805,6 +810,9 @@ object Plot:
     *   link the views as [[explore]] does: pointing at a class of the diagram or the barcode lights it up in the other,
     *   and draws its representative cycle on the complex (the bars must carry representatives, which the default of
     *   `Persistence` does)
+    * @param cycles
+    *   with `link`, the cycle of each bar (bar `k`'s as simplices with coefficients) for bars that carry no
+    *   representative of their own; used in place of the bars' representatives when given
     */
   def filtrationOf(
     points: PointCloud,
@@ -818,7 +826,8 @@ object Plot:
     maxCells: Int = 20000,
     title: String = "",
     palette: Optional[Palette] = Optional.empty,
-    link: Boolean = false
+    link: Boolean = false,
+    cycles: Optional[Cycles] = Optional.empty
   )(using look: Look): Interactive =
     sweptFiltration(
       points,
@@ -834,7 +843,8 @@ object Plot:
       "Complex",
       palette,
       spatial = false,
-      link = link
+      link = link,
+      cycles = cycles.toOption
     )
 
   /** The complex `kind` (`VietorisRips`, `Cech` or `AlphaShapes`) of `points` as an [[Interactive]] page with a slider
@@ -946,7 +956,8 @@ object Plot:
     name: String,
     palette: Optional[Palette],
     spatial: Boolean,
-    link: Boolean = false
+    link: Boolean = false,
+    cycles: Option[Cycles] = None
   )(using look: Look): Interactive =
     require(
       !(link && spatial),
@@ -1011,7 +1022,7 @@ object Plot:
     val linkOf = (keys: Seq[IndexedSeq[Int]]) => Option.when(link)((classes, keys))
     val withCycles = complexPanel match
       case flat: Panel.Flat if link =>
-        val overlay = cycleOverlay(points, all, classes, maxCells)
+        val overlay = cycleOverlay(points, all, classes, maxCells, cycles)
         overlay.fold(flat)(o => o.addTo(flat)).zoomableIfPossible(ZoomAxes.Both)
       case other => other
     // a linked page is one to explore: its pictures also zoom
@@ -1108,11 +1119,18 @@ object Plot:
     points: PointCloud,
     all: Seq[PersistenceBar[Double, ?]],
     selection: String,
-    maxCells: Int
+    maxCells: Int,
+    own: Option[Cycles] = None
   ): Option[CycleOverlay] =
     val pts = xy(points)
+    own.foreach(c =>
+      require(
+        c.size == all.size,
+        s"Plot: ${c.size} cycles for ${all.size} bars; give one cycle (possibly empty) for each bar"
+      )
+    )
     val withCycles = all.zipWithIndex
-      .map((b, k) => (b, k, simplicialTerms(b, pts.size)))
+      .map((b, k) => (b, k, own.fold(simplicialTerms(b, pts.size))(_(k))))
       .filter(_._3.nonEmpty)
       .sortBy((b, k, _) => (-b.persistence, k))
     var used = 0
@@ -1175,6 +1193,9 @@ object Plot:
     *   the point cloud the simplices of the representatives are on
     * @param maxCycleCells
     *   the most cells of cycles to put on the page
+    * @param cycles
+    *   the cycle of each bar (bar `k`'s as simplices with coefficients), for bars that carry no representative of their
+    *   own; used in place of the bars' representatives when given
     */
   def exploreOn(
     points: PointCloud,
@@ -1182,8 +1203,10 @@ object Plot:
     barcode: Boolean = true,
     maxCycleCells: Int = 20000,
     title: String = "",
-    palette: Optional[Palette] = Optional.empty
-  )(using look: Look): Interactive = exploring(bars, Some(points), barcode, maxCycleCells, title, palette)
+    palette: Optional[Palette] = Optional.empty,
+    cycles: Optional[Cycles] = Optional.empty
+  )(using look: Look): Interactive =
+    exploring(bars, Some(points), barcode, maxCycleCells, title, palette, cycles.toOption)
 
   private def exploring(
     bars: Bars,
@@ -1191,7 +1214,8 @@ object Plot:
     barcode: Boolean,
     maxCycleCells: Int,
     title: String,
-    palette: Optional[Palette]
+    palette: Optional[Palette],
+    cycles: Option[Cycles] = None
   )(using look: Look): Interactive =
     val all = barsOf(bars)
     require(all.nonEmpty, "Plot.explore: there are no bars to explore")
@@ -1213,7 +1237,7 @@ object Plot:
       .brushable(classes)
       .zoomableIfPossible(ZoomAxes.X)
     val cloudPanel = points.map { cloud =>
-      val overlay = cycleOverlay(cloud, all, classes, maxCycleCells)
+      val overlay = cycleOverlay(cloud, all, classes, maxCycleCells, cycles)
       require(
         overlay.nonEmpty,
         "Plot.explore: none of the bars carries a representative made of simplices on these points; compute them " +

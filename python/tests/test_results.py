@@ -185,6 +185,17 @@ def test_a_filtration_page_has_a_slider_and_its_frames_show_the_complex_at_each_
         result.plot_diagram().save_frames(tmp_path / "none", 3)
 
 
+def test_linked_views_are_a_page_that_zooms_and_chooses_classes(tmp_path, circle):
+    result = tda4j.persistence(circle(16), max_dimension=1)
+    path = result.plot_explore().with_title("A circle").save(tmp_path / "explore.html")
+    text = Path(path).read_text()
+    assert 'data-brush="class"' in text and 'data-zoomable="b"' in text and "A circle" in text
+    linked = result.plot_linked_filtration(1.0).html()
+    assert 'type="range"' in linked and 'data-brush="class"' in linked
+    with pytest.raises(Exception, match="distance matrix"):
+        tda4j.persistence_from_distances([[0.0, 1.0], [1.0, 0.0]]).plot_explore()
+
+
 def test_plots_go_side_by_side(tmp_path, square):
     result = tda4j.persistence(square, max_dimension=1)
     both = tda4j.side(result.plot_barcode(), result.plot_diagram())
