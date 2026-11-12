@@ -21,7 +21,9 @@ const copies = {
   "favicon.svg": "favicon.svg",
   "favicon-dark.svg": "favicon-dark.svg",
   "large-logo.svg": "large-logo.svg",
-  "large-logo-dark.svg": "large-logo-dark.svg"
+  "large-logo-dark.svg": "large-logo-dark.svg",
+  "horizontal-logo.svg": "horizontal-logo.svg",
+  "horizontal-logo-dark.svg": "horizontal-logo-dark.svg"
 };
 
 // PNG prefix -> [source master, background]
