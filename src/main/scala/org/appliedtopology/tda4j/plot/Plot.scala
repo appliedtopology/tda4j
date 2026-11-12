@@ -331,6 +331,25 @@ object Plot:
 
   // ----- barcodes, diagrams and their vectorizations
 
+  // the bars of each degree in the order the barcode draws them, with the position of each in `all`: the key that
+  // links a bar of the barcode to its point of the diagram
+  private def barcodeRows(
+    all: Seq[PersistenceBar[Double, ?]],
+    longest: Option[Int],
+    order: BarOrder
+  ): Seq[(Int, Seq[(PersistenceBar[Double, ?], Int)])] =
+    all.zipWithIndex.groupBy(_._1.dim).toSeq.sortBy(_._1).map { (k, bs) =>
+      val kept = longest.fold(bs)(n => bs.sortBy(b => -b._1.persistence).take(n))
+      k -> (order match
+        case BarOrder.Birth       => kept.sortBy(b => (b._1.birth, b._1.death))
+        case BarOrder.Persistence => kept.sortBy(b => (-b._1.persistence, b._1.birth))
+        case BarOrder.Death       => kept.sortBy(b => (b._1.death, b._1.birth)))
+    }
+
+  // the position in `all` of each point of each degree's mark of the diagram, in the order `diagram` draws them
+  private def diagramKeys(all: Seq[PersistenceBar[Double, ?]]): Seq[IndexedSeq[Int]] =
+    all.zipWithIndex.groupBy(_._1.dim).toSeq.sortBy(_._1).map((_, bs) => bs.map(_._2).toIndexedSeq)
+
   /** The barcode: one horizontal bar per class from its birth to its death, grouped by degree (lowest on top), each
     * group sorted by birth. An essential bar runs off the right edge, marked `∞`. Hover a bar for its numbers.
     *
@@ -348,13 +367,7 @@ object Plot:
   )(using look: Look): Figure =
     look.figure(palette):
       val all = barsOf(bars)
-      val byDegree = all.groupBy(_.dim).toSeq.sortBy(_._1).map { (k, bs) =>
-        val kept = longest.fold(bs)(n => bs.sortBy(b => -b.persistence).take(n))
-        k -> (order match
-          case BarOrder.Birth       => kept.sortBy(b => (b.birth, b.death))
-          case BarOrder.Persistence => kept.sortBy(b => (-b.persistence, b.birth))
-          case BarOrder.Death       => kept.sortBy(b => (b.death, b.birth)))
-      }
+      val byDegree = barcodeRows(all, longest, order).map((k, bs) => k -> bs.map(_._1))
       val finite = all.flatMap(b => Seq(b.birth, b.death)).filter(_.isFinite)
       val lo = finite.minOption.getOrElse(0.0)
       val hi = finite.maxOption.getOrElse(1.0)
@@ -788,6 +801,10 @@ object Plot:
     *   the most edges and triangles to put on the page
     * @param title
     *   the heading of the page
+    * @param link
+    *   link the views as [[explore]] does: pointing at a class of the diagram or the barcode lights it up in the other,
+    *   and draws its representative cycle on the complex (the bars must carry representatives, which the default of
+    *   `Persistence` does)
     */
   def filtrationOf(
     points: PointCloud,
@@ -800,7 +817,8 @@ object Plot:
     stops: Boolean = false,
     maxCells: Int = 20000,
     title: String = "",
-    palette: Optional[Palette] = Optional.empty
+    palette: Optional[Palette] = Optional.empty,
+    link: Boolean = false
   )(using look: Look): Interactive =
     sweptFiltration(
       points,
@@ -815,7 +833,8 @@ object Plot:
       title,
       "Complex",
       palette,
-      spatial = false
+      spatial = false,
+      link = link
     )
 
   /** The complex `kind` (`VietorisRips`, `Cech` or `AlphaShapes`) of `points` as an [[Interactive]] page with a slider
@@ -838,7 +857,8 @@ object Plot:
     stops: Boolean = false,
     maxCells: Int = 20000,
     title: String = "",
-    palette: Optional[Palette] = Optional.empty
+    palette: Optional[Palette] = Optional.empty,
+    link: Boolean = false
   )(using look: Look): Interactive =
     val stream =
       if kind eq AlphaShapes then kind.fromPoints(points, 1, None) else kind.fromPoints(points, 1, max.toOption)
@@ -858,7 +878,8 @@ object Plot:
       title,
       s"$name complex",
       palette,
-      spatial = false
+      spatial = false,
+      link = link
     )
 
   /** [[filtrationOf]] with the complex in 3-D (the first three coordinates of the points): a canvas to turn and zoom,
@@ -924,8 +945,13 @@ object Plot:
     title: String,
     name: String,
     palette: Optional[Palette],
-    spatial: Boolean
+    spatial: Boolean,
+    link: Boolean = false
   )(using look: Look): Interactive =
+    require(
+      !(link && spatial),
+      "Plot.filtration3D: linked views are for the 2-D page (Plot.filtration with link = true)"
+    )
     val limit = max.getOrElse(Double.PositiveInfinity)
     val cells = stream.iterator.filter(c => c.dim >= 1 && c.dim <= 2 && stream.filtrationValue(c) <= limit).toVector
     require(cells.nonEmpty, "Plot.filtration: the complex has no edges up to the largest scale; give a larger max")
@@ -980,10 +1006,222 @@ object Plot:
         val reactions = Map(built.polygons -> entering(built.triangles), built.segments -> entering(built.edges)) ++
           built.balls.map(_ -> IndexedSeq(Reaction(Vector(Behavior.radius("t", factor.getOrElse(1.0))))))
         Panel.Flat(styled(base), reactions)
-    val diagramPanel = Panel.sweepDiagram(diagram(bars)(using Look.none), "t").mapFigure(styled)
-    val panels = Vector[Panel](complexPanel, diagramPanel) ++
-      Option.when(barcode)(Panel.sweepBarcode(Plot.barcode(bars)(using Look.none), "t").mapFigure(styled))
-    Interactive(panels, Vector(control), title)
+    val all = barsOf(bars)
+    val chooser = Selection.listing(classes, all.map(interval)).withTitle("class")
+    val linkOf = (keys: Seq[IndexedSeq[Int]]) => Option.when(link)((classes, keys))
+    val withCycles = complexPanel match
+      case flat: Panel.Flat if link =>
+        val overlay = cycleOverlay(points, all, classes, maxCells)
+        overlay.fold(flat)(o => o.addTo(flat))
+      case other => other
+    val diagramPanel = Panel
+      .sweepDiagram(diagram(all)(using Look.none), "t", linkOf(diagramKeys(all)))
+      .mapFigure(styled)
+    val panels = Vector[Panel](withCycles, diagramPanel) ++
+      Option.when(barcode)(
+        Panel
+          .sweepBarcode(
+            Plot.barcode(all)(using Look.none),
+            "t",
+            linkOf(barcodeRows(all, None, BarOrder.Birth).map(_._2.map(_._2).toIndexedSeq))
+          )
+          .mapFigure(styled)
+      )
+    Interactive(panels, Vector(control), title, Vector.empty, if link then Vector(chooser) else Vector.empty)
+
+  // ----- linked views: pointing at a class of one picture lights it up in the others
+
+  /** The name of the selection that links the views of [[explore]] and of a linked [[filtration]]: its keys are the
+    * positions of the bars in the list or diagram given.
+    */
+  val classes: String = "class"
+
+  /** The representative cycles of some bars drawn on a point cloud: each shown only while the key of its bar is chosen.
+    */
+  private[plot] final case class CycleOverlay(
+    triangles: Vector[(IndexedSeq[XY], Paint, Int, String)],
+    edges: Vector[((XY, XY), Paint, Int, String)],
+    vertices: Vector[(XY, Paint, Int, String)],
+    selection: String,
+    drawn: Int,
+    candidates: Int
+  ):
+    private def shows(keys: Seq[Int]): IndexedSeq[Reaction] =
+      keys.map(k => Reaction(Vector(Behavior.Selected(selection, k)))).toIndexedSeq
+
+    /** `panel` with the overlay on top of its marks. */
+    def addTo(panel: Panel.Flat): Panel.Flat =
+      val withTriangles =
+        if triangles.isEmpty then panel
+        else
+          panel.reactEach(
+            Mark.Polygons(triangles.map(_._1), triangles.map(_._2), 0.45, triangles.map(_._4)),
+            shows(triangles.map(_._3))
+          )
+      val withEdges =
+        if edges.isEmpty then withTriangles
+        else
+          withTriangles.reactEach(
+            Mark.Segments(edges.map(_._1), edges.map(_._2), width = 3, tips = edges.map(_._4)),
+            shows(edges.map(_._3))
+          )
+      if vertices.isEmpty then withEdges
+      else
+        withEdges.reactEach(
+          Mark.Points(vertices.map(_._1), vertices.map(_._2), 5, tips = vertices.map(_._4)),
+          shows(vertices.map(_._3))
+        )
+
+  // The simplicial terms of a representative, or none when it is not a chain of simplices on these points.
+  private def simplicialTerms(bar: PersistenceBar[Double, ?], vertices: Int): Seq[(Simplex[Int], Double)] =
+    import scala.compiletime.asMatchable
+    val annotation: Option[Any] = bar.annotation
+    annotation.map(_.asMatchable) match
+      case Some(c: Chain[?, ?]) =>
+        val terms = termsOf(c.asInstanceOf[Chain[Simplex[Int], ?]])
+        val simplices = terms.forall { (cell, _) =>
+          cell.asInstanceOf[Matchable] match
+            case set: scala.collection.SortedSet[?] =>
+              set.forall(v =>
+                v.asMatchable match
+                  case i: Int => i >= 0 && i < vertices
+                  case _      => false
+              )
+            case _ => false
+        }
+        if simplices then terms else Seq.empty
+      case _ => Seq.empty
+
+  /** The cycles of `all`'s bars on `points`, at most `maxCells` cells in all, those of the most persistent bars first
+    * (a bar whose cycle would not fit is left out); none when no bar has a cycle to draw.
+    */
+  private[plot] def cycleOverlay(
+    points: PointCloud,
+    all: Seq[PersistenceBar[Double, ?]],
+    selection: String,
+    maxCells: Int
+  ): Option[CycleOverlay] =
+    val pts = xy(points)
+    val withCycles = all.zipWithIndex
+      .map((b, k) => (b, k, simplicialTerms(b, pts.size)))
+      .filter(_._3.nonEmpty)
+      .sortBy((b, k, _) => (-b.persistence, k))
+    var used = 0
+    val kept = Vector.newBuilder[(PersistenceBar[Double, ?], Int, Seq[(Simplex[Int], Double)])]
+    withCycles.foreach { entry =>
+      if used + entry._3.size <= maxCells then
+        used += entry._3.size
+        kept += entry
+    }
+    val chosen = kept.result()
+    Option.when(chosen.nonEmpty) {
+      def tip(s: Simplex[Int], c: Double) = s"${s.show}: ${Svg.number(c)}"
+      val rows = chosen.flatMap { (b, k, terms) =>
+        val dim = terms.map(_._1.dim).maxOption.getOrElse(1)
+        terms.map((cell, c) => (cell, Paint.Series(dim): Paint, k, tip(cell, c)))
+      }
+      CycleOverlay(
+        rows.filter(_._1.dim == 2).map((cell, p, k, t) => (cell.toIndexedSeq.map(pts), p, k, t)),
+        rows.filter(_._1.dim == 1).map((cell, p, k, t) => ((pts(cell.first), pts(cell.last)), p, k, t)),
+        rows.filter(_._1.dim == 0).map((cell, p, k, t) => (pts(cell.first), p, k, t)),
+        selection,
+        chosen.size,
+        withCycles.size
+      )
+    }
+
+  /** Persistence bars to explore: the diagram, the barcode and, given the point cloud they were computed on, the cloud
+    * itself, linked so that pointing at a class in one lights it up in the others. Pointing at a point of the diagram
+    * or a bar of the barcode lights up the same class in the other, and draws its representative cycle on the cloud; a
+    * click keeps it chosen (shift-click adds more, a click on the background lets them go), and the page lists what is
+    * chosen under the pictures. The pictures are those of [[diagram]] and [[barcode]], so everything that tweaks them
+    * (`+ Palette.named("okabe-ito")`) tweaks these.
+    *
+    * The page is one selection called `class` ([[classes]]); its keys are the positions of the bars in `bars`, and
+    * `tda4j.selection("class")` gives them to your own script. `Interactive.at(PageState().select("class", 3))` is the
+    * still picture of a class chosen.
+    *
+    * The cycles are the bars' representatives (the default of [[Persistence]] records cycles; cocycles are drawn as
+    * they are). Each cell of each cycle is on the page: with `maxCycleCells`, those of the most persistent bars first
+    * fill it, and the rest of the bars light up in the diagram and barcode but draw no cycle.
+    *
+    * This is the diagram and the barcode; [[exploreOn]] adds the point cloud, with the cycle of the class chosen.
+    *
+    * @param barcode
+    *   whether to include the barcode
+    * @param title
+    *   the heading of the page
+    */
+  def explore(
+    bars: Bars,
+    barcode: Boolean = true,
+    title: String = "",
+    palette: Optional[Palette] = Optional.empty
+  )(using look: Look): Interactive = exploring(bars, None, barcode, 0, title, palette)
+
+  /** [[explore]] with the point cloud the bars were computed on beside the diagram and the barcode, and the
+    * representative cycle of each class drawn on it while the class is chosen.
+    *
+    * @param points
+    *   the point cloud the simplices of the representatives are on
+    * @param maxCycleCells
+    *   the most cells of cycles to put on the page
+    */
+  def exploreOn(
+    points: PointCloud,
+    bars: Bars,
+    barcode: Boolean = true,
+    maxCycleCells: Int = 20000,
+    title: String = "",
+    palette: Optional[Palette] = Optional.empty
+  )(using look: Look): Interactive = exploring(bars, Some(points), barcode, maxCycleCells, title, palette)
+
+  private def exploring(
+    bars: Bars,
+    points: Option[PointCloud],
+    barcode: Boolean,
+    maxCycleCells: Int,
+    title: String,
+    palette: Optional[Palette]
+  )(using look: Look): Interactive =
+    val all = barsOf(bars)
+    require(all.nonEmpty, "Plot.explore: there are no bars to explore")
+    def styled(f: Figure): Figure = look.figure(palette)(f)
+    val essential = all.exists(_.death.isPosInfinity)
+    val firstPoints = 1 + (if essential then 1 else 0)
+    val diagramPanel = diagramKeys(all).zipWithIndex
+      .foldLeft(Panel.Flat(diagram(all)(using Look.none))) { case (panel, (keys, g)) =>
+        panel.selecting(firstPoints + g, classes, keys)
+      }
+      .mapFigure(styled)
+    val barcodePanel = barcodeRows(all, None, BarOrder.Birth).zipWithIndex
+      .foldLeft(Panel.Flat(Plot.barcode(all)(using Look.none))) { case (panel, ((_, rows), g)) =>
+        panel.selecting(g, classes, rows.map(_._2).toIndexedSeq)
+      }
+      .mapFigure(styled)
+    val cloudPanel = points.map { cloud =>
+      val overlay = cycleOverlay(cloud, all, classes, maxCycleCells)
+      require(
+        overlay.nonEmpty,
+        "Plot.explore: none of the bars carries a representative made of simplices on these points; compute them " +
+          "with Persistence(points, ...), or leave the points out"
+      )
+      val base = cloudFigure(cloud, "Cycles", Palette.default)
+      val drawn = overlay.get
+      val note =
+        if drawn.drawn < drawn.candidates then
+          s"cycles of the ${drawn.drawn} most persistent of ${drawn.candidates} bars"
+        else ""
+      overlay.get.addTo(Panel.Flat(base.copy(subtitle = note))).mapFigure(styled)
+    }
+    val chooser = Selection.listing(classes, all.map(interval)).withTitle("class")
+    Interactive(
+      Vector[Panel]() ++ cloudPanel ++ Vector(diagramPanel) ++ Option.when(barcode)(barcodePanel),
+      Vector.empty,
+      title,
+      Vector.empty,
+      Vector(chooser)
+    )
 
   /** A simplicial chain's terms with their coefficients as numbers (exact small integers for `Z/p`, the value for the
     * reals).

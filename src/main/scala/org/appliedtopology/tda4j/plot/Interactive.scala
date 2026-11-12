@@ -25,6 +25,11 @@ enum Ends:
   *     between `b` and `d` is a bar growing until the line passes its death.
   *   - [[Behavior.Radius]]: the radius of the discs of a mark (data units) is `factor` times the control's value: the
   *     balls whose overlaps a Vietoris-Rips or Cech complex records.
+  *   - [[Behavior.Selects]]: pointing at the item (or clicking it) chooses a key of a [[Selection]]. What the item
+  *     looks like does not change; other items react.
+  *   - [[Behavior.Selected]]: the item is there while a key is chosen in a [[Selection]]: a ring around a point, a
+  *     cycle over the input. Together with [[Behavior.Selects]] on the item that stands for the same thing in another
+  *     panel, this links the views.
   *   - [[Behavior.Custom]]: your own. The page calls the function you register under `kind` (see
   *     [[Interactive.withScript]]); a still picture shows the item as it was drawn.
   */
@@ -43,8 +48,19 @@ enum Behavior:
     */
   case Custom(kind: String, control: String, args: Vector[String])
 
-  /** The control this behavior listens to. */
+  /** Pointing at the item chooses `key` in the selection named `control`; clicking pins it (see [[Selection]]). */
+  case Selects(control: String, key: Int)
+
+  /** The item is shown while `key` is chosen in the selection named `control`. */
+  case Selected(control: String, key: Int)
+
+  /** The control (or selection) this behavior listens to. */
   def control: String
+
+  /** Whether this behavior listens to a [[Selection]] rather than a slider. */
+  def listensToSelection: Boolean = this match
+    case _: Selects | _: Selected => true
+    case _                        => false
 
   /** This behavior and `that` one, on the same item. */
   def +(that: Behavior): Reaction = Reaction(Vector(this, that))
@@ -85,6 +101,12 @@ object Behavior:
 
   /** A behavior of your own, handled by the function registered as `kind` on the page. */
   def custom(kind: String, control: String, args: String*): Behavior = Custom(kind, control, args.toVector)
+
+  /** Pointing at the item chooses `key` in the selection `selection`; a click pins it. */
+  def selects(selection: String, key: Int): Behavior = Selects(selection, key)
+
+  /** The item is shown while `key` is chosen in the selection `selection`. */
+  def selected(selection: String, key: Int): Behavior = Selected(selection, key)
 
 /** What happens to one item: its behaviors, in order. `a + b` builds one. */
 final case class Reaction(behaviors: Vector[Behavior]):
@@ -219,6 +241,44 @@ object Panel:
     /** The same with `change` applied to the figure. */
     def mapFigure(change: Figure => Figure): Flat = copy(figure = change(figure))
 
+    /** The mark at `index` of the figure, linked to the selection `selection`: pointing at its item `i` chooses the key
+      * `keys(i)` there. With `halo`, a translucent shape over each item is added to the figure and appears while the
+      * item's key is chosen, whoever chose it (this panel's item, or an item of another panel with the same key): the
+      * halo of a point, the thick outline of a bar, a triangle drawn darker. The halo moves and comes and goes with the
+      * item it surrounds, so it can be added to a mark that is already reacting to a slider.
+      *
+      * {{{
+      * Panel(diagram).selecting(1, "class", keys)
+      * }}}
+      */
+    def selecting(index: Int, selection: String, keys: IndexedSeq[Int], halo: Boolean = true): Flat =
+      require(
+        figure.marks.indices.contains(index),
+        s"Panel.selecting: the figure has ${figure.marks.size} marks, so there is no mark $index"
+      )
+      val mark = figure.marks(index)
+      val items = Interactive.itemCount(mark)
+      require(
+        items > 0,
+        s"Panel.selecting: a ${mark.getClass.getSimpleName.stripSuffix("$")} has no items the page can find"
+      )
+      require(
+        keys.size == items,
+        s"Panel.selecting: mark $index has $items items, so it takes $items keys (one for each), not ${keys.size}"
+      )
+      val before = (0 until items).map(i => reactions.get(index).fold(Reaction.none)(Interactive.reactionOf(_, i)))
+      val chosen = before.indices.map(i => before(i) + Behavior.Selects(selection, keys(i)))
+      val linked = copy(reactions = reactions.updated(index, chosen))
+      Interactive.halo(mark).filter(_ => halo).fold(linked) { shape =>
+        val lit = before.indices.map { i =>
+          Reaction(before(i).behaviors.filterNot(_.isInstanceOf[Behavior.Selects])) + Behavior.Selected(
+            selection,
+            keys(i)
+          )
+        }
+        linked.reactEach(shape, lit)
+      }
+
   /** A 3-D panel; only [[Behavior.Shown]] and [[Behavior.Custom]] can be carried out on a canvas. */
   final case class Spatial(scene: Scene, reactions: Map[Int, IndexedSeq[Reaction]] = Map.empty) extends Panel:
     /** `layer` added to the scene, its items all reacting as `behavior` says. */
@@ -258,16 +318,24 @@ object Panel:
     * from the diagonal that grows with `control` until the line passes the class's death, and then a point. The movable
     * horizontal line is the control's value. Essential classes (on the line marked `∞`) never become points; their
     * segment grows with the line.
+    *
+    * With `link = Some((selection, keys))`, the classes of the `g`-th degree's mark of the figure (in the order of the
+    * figure's `Points` marks) are linked to the selection called `selection`, `keys(g)(i)` being the key of the `i`-th
+    * (see [[Flat.selecting]]): pointing at a class chooses its key, and it lights up while its key is chosen.
     */
-  def sweepDiagram(figure: Figure, control: String = "t"): Flat =
+  def sweepDiagram(
+    figure: Figure,
+    control: String = "t",
+    link: Option[(String, Seq[IndexedSeq[Int]])] = None
+  ): Flat =
     val top = figure.marks.collectFirst { case r: Mark.Rule if !r.vertical => r.at }
     val kept = figure.marks.filter {
       case _: Mark.Points => false
       case _              => true
     }
     val start = Flat(figure.copy(marks = kept))
-    val withClasses = figure.marks.foldLeft(start) {
-      case (panel, points: Mark.Points) =>
+    val (withClasses, _) = figure.marks.foldLeft((start, 0)) {
+      case ((panel, group), points: Mark.Points) =>
         val infinite = points.at.map((_, y) => top.exists(y >= _))
         val segments = Mark.Segments(
           points.at.map((b, d) => ((b, b), (b, d))),
@@ -293,24 +361,40 @@ object Panel:
         )
         val dies = becomes.map(i => Reaction(Vector(Behavior.shownFrom(control, points.at(i)._2))))
         val withSegments = panel.reactEach(segments, grows)
-        if becomes.isEmpty then withSegments else withSegments.reactEach(afterwards, dies)
-      case (panel, _) => panel
+        val linkedSegments = link.fold(withSegments)((name, keys) =>
+          withSegments.selecting(withSegments.figure.marks.size - 1, name, keys(group))
+        )
+        val result =
+          if becomes.isEmpty then linkedSegments
+          else
+            val withPoints = linkedSegments.reactEach(afterwards, dies)
+            link.fold(withPoints)((name, keys) =>
+              withPoints.selecting(withPoints.figure.marks.size - 1, name, becomes.map(keys(group)))
+            )
+        (result, group + 1)
+      case ((panel, group), _) => (panel, group)
     }
     // essential classes' segments would otherwise stop at the `∞` line; with no `∞` line they run with the control
     withClasses.react(Mark.Rule.horizontal(0.0).copy(paint = Paint.Series(0), width = 1.5), Behavior.followsY(control))
 
   /** The barcode `figure` (from `Plot.barcode`) as the barcode of a sweep: each bar grows with `control` from its
-    * birth, until the movable vertical line passes its death.
+    * birth, until the movable vertical line passes its death. `link` links the bars of the `g`-th `Segments` mark to a
+    * selection, `keys(g)(i)` for the `i`-th, as in [[sweepDiagram]].
     */
-  def sweepBarcode(figure: Figure, control: String = "t"): Flat =
+  def sweepBarcode(
+    figure: Figure,
+    control: String = "t",
+    link: Option[(String, Seq[IndexedSeq[Int]])] = None
+  ): Flat =
     val start = Flat(figure)
-    val withBars = figure.marks.zipWithIndex.foldLeft(start) {
-      case (panel, (bars: Mark.Segments, index)) =>
+    val (withBars, _) = figure.marks.zipWithIndex.foldLeft((start, 0)) {
+      case ((panel, group), (bars: Mark.Segments, index)) =>
         val reactions = bars.ends.map { case ((birth, _), (end, _)) =>
           Reaction(Vector(Behavior.shownFrom(control, birth), Behavior.followsX(control, birth, end, Ends.Second)))
         }
-        panel.copy(reactions = panel.reactions.updated(index, reactions))
-      case (panel, _) => panel
+        val moving = panel.copy(reactions = panel.reactions.updated(index, reactions))
+        (link.fold(moving)((name, keys) => moving.selecting(index, name, keys(group))), group + 1)
+      case ((panel, group), _) => (panel, group)
     }
     withBars.react(Mark.Rule.vertical(0.0).copy(paint = Paint.Series(0), width = 1.5), Behavior.followsX(control))
 
@@ -349,10 +433,16 @@ final case class Interactive(
   panels: Vector[Panel] = Vector.empty,
   controls: Vector[Control] = Vector.empty,
   title: String = "",
-  scripts: Vector[String] = Vector.empty
+  scripts: Vector[String] = Vector.empty,
+  selections: Vector[Selection] = Vector.empty
 ) extends Plot:
   override def toString: String =
-    Plot.describe("Interactive", title, s"${panels.size} panels, ${controls.size} controls")
+    Plot.describe(
+      "Interactive",
+      title,
+      s"${panels.size} panels, ${controls.size} controls" +
+        (if selections.isEmpty then "" else s", ${selections.size} selections")
+    )
 
   // ----- building
 
@@ -368,10 +458,24 @@ final case class Interactive(
   /** This plot with one more control. */
   def withControl(control: Control): Interactive =
     require(
-      !controls.exists(_.name == control.name),
-      s"Interactive: there is already a control called ${control.name}"
+      !controls.exists(_.name == control.name) && !selections.exists(_.name == control.name),
+      s"Interactive: there is already a control or selection called ${control.name}"
     )
     copy(controls = controls :+ control)
+
+  /** This plot with one more selection: a set of keys the viewer chooses by pointing at items (see [[Selection]]). */
+  def withSelection(selection: Selection): Interactive =
+    require(
+      !controls.exists(_.name == selection.name) && !selections.exists(_.name == selection.name),
+      s"Interactive: there is already a control or selection called ${selection.name}"
+    )
+    copy(selections = selections :+ selection)
+
+  /** This plot with a selection called `name`. */
+  def withSelection(name: String): Interactive = withSelection(Selection(name))
+
+  /** This plot with a selection called `name`, listed under the panels with `labels(key)` for each chosen key. */
+  def withSelection(name: String, labels: Seq[String]): Interactive = withSelection(Selection.listing(name, labels))
 
   /** This plot with a slider `name` from `min` to `max`, starting at `min`. */
   def withSlider(name: String, min: Double, max: Double): Interactive = withControl(Control.slider(name, min, max))
@@ -420,29 +524,49 @@ final case class Interactive(
   /** One change written as text, `element.property=value`, to every panel. See [[Settings]]. */
   def withSetting(spec: String): Interactive = this + Settings.parse(spec)
 
-  private def names: String = controls.map(_.name).mkString(", ")
+  private def names: String =
+    (controls.map(_.name) ++ selections.map(s => s"${s.name} (a selection)")).mkString(", ")
 
   // ----- checking
 
   /** Whether every behavior listens to a control of this plot, on a mark and axes it can be carried out on. */
   private def validate(): Unit =
-    require(controls.nonEmpty, "Interactive: a plot with no control has nothing to move; add one with withSlider")
+    require(
+      controls.nonEmpty || selections.nonEmpty,
+      "Interactive: a plot with no control or selection has nothing to respond to; add one with withSlider or withSelection"
+    )
     require(panels.nonEmpty, "Interactive: add a panel with withPanel")
     val known = controls.map(_.name).toSet
+    val chosen = selections.map(_.name).toSet
     panels.zipWithIndex.foreach { (panel, p) =>
       panel.reactions.foreach { (m, rs) =>
         rs.foreach(_.behaviors.foreach { b =>
-          require(
-            known(b.control),
-            s"Interactive: panel $p, part $m reacts to a control called ${b.control}, but the controls are: $names"
-          )
+          b match
+            case _: Behavior.Selects | _: Behavior.Selected =>
+              require(
+                chosen(b.control),
+                s"Interactive: panel $p, part $m reacts to a selection called ${b.control}, but the selections are: " +
+                  (if selections.isEmpty then "none (add one with withSelection)"
+                   else selections.map(_.name).mkString(", "))
+              )
+            case _: Behavior.Custom =>
+              require(
+                known(b.control) || chosen(b.control),
+                s"Interactive: panel $p, part $m reacts to ${b.control}, but the controls and selections are: $names"
+              )
+            case _ =>
+              require(
+                known(b.control),
+                s"Interactive: panel $p, part $m reacts to a control called ${b.control}, but the controls are: " +
+                  (if controls.isEmpty then "none (add one with withSlider)" else controls.map(_.name).mkString(", "))
+              )
           b match
             case Behavior.Custom(kind, _, args) =>
               require(
                 kind.matches("[A-Za-z][A-Za-z0-9-]+"),
                 s"Behavior.Custom: the kind \"$kind\" should be two or more letters, digits or -"
               )
-              require(!Set("v", "f", "r")(kind), s"Behavior.Custom: \"$kind\" is a built-in behavior")
+              require(!Set("v", "f", "r", "s", "w")(kind), s"Behavior.Custom: \"$kind\" is a built-in behavior")
             case _ =>
         })
       }
@@ -484,7 +608,11 @@ final case class Interactive(
       case None     => ""
       case Some(rs) =>
         val r = rs(if rs.size == 1 then 0 else item)
-        if r.isEmpty then "" else s"""data-ia="${Svg.escape(Interactive.encode(r))}""""
+        if r.isEmpty then ""
+        else
+          // what shows only while a key is chosen is not there on a page without script, either
+          val hidden = if r.behaviors.exists(_.isInstanceOf[Behavior.Selected]) then " display=\"none\"" else ""
+          s"""data-ia="${Svg.escape(Interactive.encode(r))}"$hidden"""
 
   // A panel is as wide as its picture at most and as the room allows at least 320 pixels: a page in a slide or an
   // iframe narrower than its pictures side by side shrinks them (the `viewBox` keeps the drawing), then stacks them.
@@ -509,14 +637,19 @@ final case class Interactive(
       else
         s"""<div class="tda4j-title" style="font-size:18px;font-weight:600;margin:4px 0 8px;color:var(--ink)">${Svg
             .escape(title)}</div>"""
-    val ui = controls.map(Interactive.controlHtml(id, _)).mkString
+    val ui = controls.map(Interactive.controlHtml(id, _)).mkString + selections.map(Interactive.selectionHtml).mkString
     val spec = controls.map(Interactive.controlJson).mkString("[", ",", "]")
+    val choices = selections.map(Interactive.selectionJson).mkString("[", ",", "]")
     val mine = scripts
       .map(js => s"try{(function(tda4j,root){$js\n})(api,root);}catch(e){console.error('tda4j script:',e);}")
       .mkString("\n")
-    val program = Interactive.runtime.replace("__ID__", id).replace("__CONTROLS__", spec).replace("__SCRIPTS__", mine)
+    val program = Interactive.runtime
+      .replace("__ID__", id)
+      .replace("__CONTROLS__", spec)
+      .replace("__SELECTIONS__", choices)
+      .replace("__SCRIPTS__", mine)
     s"""<div id="$id" class="tda4j-ia">
-       |<style>${Interactive.styles(id, pal, theme)}</style>
+       |<style>${Interactive.styles(id, pal, theme, selections.exists(_.listed))}</style>
        |$headline
        |<div class="tda4j-panels">${parts.mkString}</div>
        |<div class="tda4j-controls">$ui</div>
@@ -543,15 +676,37 @@ final case class Interactive(
   /** The still picture with the controls at `values` (the others at their starting values): the same items, in the same
     * places, as the page shows at those values.
     */
-  def at(values: Map[String, Double]): Snapshot =
+  def at(values: Map[String, Double]): Snapshot = at(PageState(values))
+
+  /** The still picture with the sliders and selections as `state` has them: what the page shows after the viewer has
+    * done the same. Sliders it leaves out are at their starting values, selections at nothing chosen.
+    */
+  def at(state: PageState): Snapshot =
     validate()
-    val now = valuesWith(values)
+    val now = valuesWith(state.values)
+    state.selected.foreach { (name, keys) =>
+      require(
+        selections.exists(_.name == name),
+        s"Interactive.at: no selection called $name (${
+            if selections.isEmpty then "this plot has none" else selections.map(_.name).mkString(", ")
+          })"
+      )
+    }
+    val chosen = selections.map(s => s.name -> state.chosen(s.name)).toMap
     val shown = panels.map {
-      case Panel.Flat(figure, rs)   => Interactive.still(figure, rs, now)
+      case Panel.Flat(figure, rs)   => Interactive.still(figure, rs, now, chosen)
       case Panel.Spatial(scene, rs) => Interactive.still(scene, rs, now)
     }
-    val readout = controls.map(c => s"${c.shownName} = ${Svg.number(now(c.name))}").mkString("   ")
-    Snapshot(shown, title, if title.isEmpty then readout else s"$title: $readout", now)
+    val sliders = controls.map(c => s"${c.shownName} = ${Svg.number(now(c.name))}")
+    val picked = selections.flatMap { s =>
+      val keys = chosen(s.name).toSeq.sorted
+      Option.when(keys.nonEmpty) {
+        val named = keys.take(4).map(s.labelOf).mkString(" | ")
+        s"${s.shownName} = $named${if keys.size > 4 then s" and ${keys.size - 4} more" else ""}"
+      }
+    }
+    val readout = (sliders ++ picked).mkString("   ")
+    Snapshot(shown, title, if title.isEmpty then readout else s"$title: $readout", now, chosen.filter(_._2.nonEmpty))
 
   /** The still picture with the control `name` at `value`. */
   def at(name: String, value: Double): Snapshot = at(Map(name -> value))
@@ -605,7 +760,8 @@ final case class Snapshot(
   parts: Vector[Plot],
   title: String = "",
   heading: String = "",
-  values: Map[String, Double] = Map.empty
+  values: Map[String, Double] = Map.empty,
+  selected: Map[String, Set[Int]] = Map.empty
 ) extends Plot:
   override def toString: String = Plot.describe("Snapshot", title, s"${parts.size} panels")
 
@@ -679,13 +835,33 @@ object Interactive:
     case l: Layer.Segments  => l.ends.size
     case l: Layer.Triangles => l.corners.size
 
+  /** The shape that lights up `m` while it is chosen (see [[Panel.Flat.selecting]]), with the same items in the same
+    * places; none for a mark that has no good one.
+    */
+  private[plot] def halo(m: Mark): Option[Mark] = m match
+    case m: Mark.Points =>
+      // a round-capped segment of no length is a disc as wide as the line
+      Some(
+        Mark.Segments(
+          m.at.map(p => (p, p)),
+          m.paints,
+          width = 2 * m.radius + 10,
+          opacity = 0.3,
+          roundCaps = true
+        )
+      )
+    case m: Mark.Segments =>
+      Some(Mark.Segments(m.ends, m.paints, width = m.width + 8, opacity = 0.3, roundCaps = true))
+    case m: Mark.Polygons => Some(Mark.Polygons(m.corners, m.paints, opacity = math.min(0.9, m.opacity + 0.35)))
+    case _                => None
+
   /** Which behaviors a mark can carry out. */
   private[plot] def fitsMark(m: Mark)(b: Behavior): Boolean = (m, b) match
-    case (_, _: Behavior.Shown | _: Behavior.Custom) => true
-    case (_: Mark.Segments, f: Behavior.Follows)     => true
-    case (r: Mark.Rule, f: Behavior.Follows)         => (f.coordinate == Coordinate.X) == r.vertical
-    case (_: Mark.Discs, _: Behavior.Radius)         => true
-    case _                                           => false
+    case (_, _: Behavior.Shown | _: Behavior.Custom | _: Behavior.Selects | _: Behavior.Selected) => true
+    case (_: Mark.Segments, f: Behavior.Follows)                                                  => true
+    case (r: Mark.Rule, f: Behavior.Follows) => (f.coordinate == Coordinate.X) == r.vertical
+    case (_: Mark.Discs, _: Behavior.Radius) => true
+    case _                                   => false
 
   // ----- what the page is told
 
@@ -720,6 +896,8 @@ object Interactive:
             )
           case Behavior.Radius(c, factor)     => Seq("r", c, num(factor))
           case Behavior.Custom(kind, c, args) => Seq(kind, c) ++ args
+          case Behavior.Selects(c, key)       => Seq("s", c, key.toString)
+          case Behavior.Selected(c, key)      => Seq("w", c, key.toString)
         fields.map(escapeField).mkString(",")
       }
       .mkString(";")
@@ -754,7 +932,19 @@ object Interactive:
         c.name
       )}">$play<label for="$id-${c.name}">$label</label><input id="$id-${c.name}" type="range" $range aria-label="$label"><output for="$id-${c.name}"></output></div>"""
 
-  private[plot] def styles(id: String, pal: Palette, theme: Theme): String =
+  private[plot] def selectionJson(s: Selection): String =
+    val labels = s.labels.map(jsString).mkString("[", ",", "]")
+    s"""{"n":${jsString(s.name)},"l":${jsString(s.shownName)},"labels":$labels,"hover":${s.hover},"click":${s.click}}"""
+
+  // the list of what is chosen, under the controls
+  private[plot] def selectionHtml(s: Selection): String =
+    if !s.listed then ""
+    else
+      s"""<div class="tda4j-selection" data-selection="${Svg.escape(s.name)}"><span>${Svg.escape(
+          s.shownName
+        )}</span><output aria-live="polite"></output></div>"""
+
+  private[plot] def styles(id: String, pal: Palette, theme: Theme, listing: Boolean = false): String =
     val variables =
       if theme == Theme.Auto then pal.cssVariables(s"#$id")
       else
@@ -768,17 +958,24 @@ object Interactive:
        |#$id .tda4j-control label{min-width:2.5em}
        |#$id .tda4j-control input[type=range]{flex:1;min-width:120px;accent-color:var(--s0)}
        |#$id .tda4j-control output{min-width:5.5em;text-align:right;font-variant-numeric:tabular-nums;color:var(--ink2)}
-       |#$id .tda4j-play{font-size:14px;line-height:1;padding:6px 10px;border:1px solid var(--ink2);border-radius:4px;background:transparent;color:var(--ink);cursor:pointer}""".stripMargin
+       |#$id .tda4j-play{font-size:14px;line-height:1;padding:6px 10px;border:1px solid var(--ink2);border-radius:4px;background:transparent;color:var(--ink);cursor:pointer}""".stripMargin +
+      (if !listing then ""
+       else s"""
+               |#$id .tda4j-selection{display:flex;gap:10px;margin:10px 0 0;font-size:15px;min-height:1.4em}
+               |#$id .tda4j-selection span{min-width:2.5em;color:var(--ink2)}
+               |#$id .tda4j-selection output{flex:1;font-variant-numeric:tabular-nums}""".stripMargin)
 
   // ----- stills: the same behaviors, applied in Scala
 
-  private def inside(shown: Behavior, values: Map[String, Double]): Boolean = shown match
-    case Behavior.Shown(c, from, until) => values.get(c).forall(v => from <= v && v < until)
-    case _                              => true
+  private def inside(shown: Behavior, values: Map[String, Double], chosen: Map[String, Set[Int]]): Boolean =
+    shown match
+      case Behavior.Shown(c, from, until) => values.get(c).forall(v => from <= v && v < until)
+      case Behavior.Selected(c, key)      => chosen.get(c).exists(_.contains(key))
+      case _                              => true
 
   private def clamp(v: Double, lo: Double, hi: Double): Double = math.min(math.max(v, lo), hi)
 
-  private def reactionOf(rs: IndexedSeq[Reaction], i: Int): Reaction = rs(if rs.size == 1 then 0 else i)
+  private[plot] def reactionOf(rs: IndexedSeq[Reaction], i: Int): Reaction = rs(if rs.size == 1 then 0 else i)
 
   // the items of `xs` that stay
   private def keepItems[A](xs: IndexedSeq[A], keep: IndexedSeq[Boolean]): IndexedSeq[A] =
@@ -799,10 +996,11 @@ object Interactive:
   private[plot] def still(
     figure: Figure,
     reactions: Map[Int, IndexedSeq[Reaction]],
-    values: Map[String, Double]
+    values: Map[String, Double],
+    chosen: Map[String, Set[Int]] = Map.empty
   ): Figure =
     val marks = figure.marks.zipWithIndex.flatMap { (mark, index) =>
-      reactions.get(index).fold(Option(mark))(rs => stillMark(mark, rs, values))
+      reactions.get(index).fold(Option(mark))(rs => stillMark(mark, rs, values, chosen))
     }
     // the page keeps the range of the whole figure while items come and go: so does a still
     val (rangeX, rangeY) = Svg.ranges(figure)
@@ -815,10 +1013,15 @@ object Interactive:
       )
     figure.copy(marks = marks, x = pinned(figure.x, rangeX, zeroX), y = pinned(figure.y, rangeY, zeroY))
 
-  private def stillMark(mark: Mark, rs: IndexedSeq[Reaction], values: Map[String, Double]): Option[Mark] =
+  private def stillMark(
+    mark: Mark,
+    rs: IndexedSeq[Reaction],
+    values: Map[String, Double],
+    chosen: Map[String, Set[Int]]
+  ): Option[Mark] =
     val n = itemCount(mark)
     val per = (0 until n).map(reactionOf(rs, _))
-    val keep = per.map(_.behaviors.forall(inside(_, values)))
+    val keep = per.map(_.behaviors.forall(inside(_, values, chosen)))
     def follow(i: Int, end: ((Double, Double), (Double, Double))): ((Double, Double), (Double, Double)) =
       per(i).behaviors.foldLeft(end) {
         case (((ax, ay), (bx, by)), Behavior.Follows(c, coordinate, ends, lo, hi)) =>
@@ -885,7 +1088,7 @@ object Interactive:
     val layers = scene.layers.zipWithIndex.map { (layer, index) =>
       reactions.get(index).fold(layer) { rs =>
         val n = itemCount(layer)
-        val keep = (0 until n).map(i => reactionOf(rs, i).behaviors.forall(inside(_, values)))
+        val keep = (0 until n).map(i => reactionOf(rs, i).behaviors.forall(inside(_, values, Map.empty)))
         layer match
           case l: Layer.Points    => l.copy(at = keepItems(l.at, keep), paints = keepPaints(l.paints, keep, n))
           case l: Layer.Segments  => l.copy(ends = keepItems(l.ends, keep), paints = keepPaints(l.paints, keep, n))
@@ -900,8 +1103,11 @@ object Interactive:
   /** The controller of an interactive page; the placeholders are filled in by `Interactive.fragment`. */
   private[plot] val runtime: String =
     """(function(){
-      |const root=document.getElementById('__ID__'),spec=__CONTROLS__;
-      |const state={},ctl={},watch={},reactors={},byControl={},items=[];
+      |const root=document.getElementById('__ID__'),spec=__CONTROLS__,choices=__SELECTIONS__;
+      |const state={},ctl={},watch={},reactors={},byControl={},items=[],sel={},builtin={v:1,f:1,r:1,s:1,w:1};
+      |choices.forEach(c=>{sel[c.n]={c:c,pin:new Set(),hov:new Set(),now:new Set(),byKey:{},out:null};});
+      |const keysOf=n=>Array.from(sel[n].now).sort((a,b)=>a-b);
+      |function refresh(it){it.el.style.display=Object.values(it.h).some(x=>x)?'none':'';}
       |const fmt=v=>String(Number(v.toPrecision(3)));
       |const tr={i:v=>v,l:v=>Math.log10(v),s:v=>Math.sign(v)*Math.sqrt(Math.abs(v)),m:(v,c)=>Math.sign(v)*Math.log10(1+Math.abs(v)/c)};
       |function frameOf(svg){
@@ -917,8 +1123,13 @@ object Interactive:
       |reactors.r=(it,b,v)=>{const fr=frameOf(it.svg);if(fr)it.el.setAttribute('r',+b.a[0]*v*fr.scale);};
       |root.querySelectorAll('[data-ia]').forEach(el=>{
       |  const bs=el.getAttribute('data-ia').split(';').map(s=>{const a=s.split(',').map(decodeURIComponent);return{k:a[0],c:a[1],a:a.slice(2)};});
-      |  const it={el,bs,svg:el.ownerSVGElement,h:{}};items.push(it);
-      |  new Set(bs.map(b=>b.c)).forEach(c=>(byControl[c]=byControl[c]||[]).push(it));});
+      |  const it={el,bs,svg:el.ownerSVGElement,h:{},picks:[]};items.push(it);
+      |  new Set(bs.map(b=>b.c)).forEach(c=>(byControl[c]=byControl[c]||[]).push(it));
+      |  bs.forEach((b,j)=>{
+      |    if(b.k==='s')it.picks.push({n:b.c,key:+b.a[0]});
+      |    if(b.k==='w'){const s=sel[b.c],key=+b.a[0];(s.byKey[key]=s.byKey[key]||[]).push({it:it,j:j});
+      |      it.h[j]=true;el.removeAttribute('display');el.style.pointerEvents='none';}});});
+      |items.forEach(it=>{if(Object.keys(it.h).length&&it.bs.some(b=>b.k==='w'))refresh(it);});
       |function apply(name){const v=state[name];
       |  for(const it of byControl[name]||[])it.bs.forEach((b,j)=>{if(b.c===name&&reactors[b.k])reactors[b.k](it,b,v,j);});
       |  (watch[name]||[]).forEach(f=>f(v));
@@ -936,13 +1147,61 @@ object Interactive:
       |  const step=t=>{const f=Math.min(1,(t-t0)/dur);put(c,from+(c.max-from)*f);
       |    if(f<1)c.raf=requestAnimationFrame(step);else{c.raf=0;c.btn.innerHTML='&#9654;';}};
       |  c.raf=requestAnimationFrame(step);}
-      |const api={root:root,controls:spec,
-      |  get:n=>state[n],
-      |  set:(n,v)=>put(ctl[n],v),
-      |  onChange:(n,f)=>{(watch[n]=watch[n]||[]).push(f);f(state[n]);},
-      |  reactor:(k,f)=>{reactors[k]=f;for(const n in ctl)apply(n);},
+      |function listOut(n){const s=sel[n];if(!s.out)return;const ks=keysOf(n),L=s.c.labels;
+      |  const name=k=>L[k]!==undefined?L[k]:String(k);
+      |  s.out.textContent=ks.length?ks.slice(0,12).map(name).join(' | ')+(ks.length>12?'  and '+(ks.length-12)+' more':''):'nothing chosen';}
+      |function custom(n){const v=keysOf(n);
+      |  (byControl[n]||[]).forEach(it=>it.bs.forEach((b,j)=>{if(b.c===n&&!builtin[b.k]&&reactors[b.k])reactors[b.k](it,b,v,j);}));}
+      |function commit(n){const s=sel[n],next=new Set([...s.pin,...s.hov]),old=s.now;
+      |  let same=next.size===old.size;if(same)for(const k of next)if(!old.has(k)){same=false;break;}
+      |  if(same)return;s.now=next;
+      |  const flip=(k,hide)=>(s.byKey[k]||[]).forEach(e=>{e.it.h[e.j]=hide;refresh(e.it);});
+      |  for(const k of old)if(!next.has(k))flip(k,true);
+      |  for(const k of next)if(!old.has(k))flip(k,false);
+      |  listOut(n);custom(n);const v=keysOf(n);
+      |  (watch[n]||[]).forEach(f=>f(v));
+      |  root.dispatchEvent(new CustomEvent('tda4j:change',{detail:{name:n,value:v},bubbles:true}));}
+      |function pinAll(n,ks){sel[n].pin=new Set(Array.from(ks,Number));commit(n);}
+      |const pickers=new Map();
+      |items.forEach(it=>{if(it.picks.length){const l=pickers.get(it.svg)||[];l.push(it);pickers.set(it.svg,l);}});
+      |function hit(list,x,y){let best=null,bd=Infinity,ba=Infinity;
+      |  for(const it of list){if(!it.el.getClientRects().length)continue;
+      |    const r=it.el.getBoundingClientRect();
+      |    const d=Math.hypot(Math.max(r.left-x,0,x-r.right),Math.max(r.top-y,0,y-r.bottom));
+      |    if(d>4)continue;
+      |    const a=Math.max(r.width,1)*Math.max(r.height,1);
+      |    if(d<bd||(d===bd&&a<=ba)){bd=d;ba=a;best=it;}}
+      |  return best;}
+      |const namesOf=list=>{const out=new Set();list.forEach(it=>it.picks.forEach(p=>out.add(p.n)));return out;};
+      |function hover(svg,names,it){
+      |  for(const n of names){const s=sel[n];if(!s.c.hover)continue;
+      |    s.hov=new Set(it?it.picks.filter(p=>p.n===n).map(p=>p.key):[]);commit(n);}
+      |  svg.style.cursor=it?'pointer':'';}
+      |function clicked(names,it,shift){
+      |  for(const n of names){const s=sel[n];if(!s.c.click)continue;
+      |    if(!it){if(s.pin.size){s.pin=new Set();commit(n);}continue;}
+      |    const ks=it.picks.filter(p=>p.n===n).map(p=>p.key);
+      |    if(!ks.length)continue;
+      |    if(shift)ks.forEach(k=>{if(s.pin.has(k))s.pin.delete(k);else s.pin.add(k);});
+      |    else{const same=s.pin.size===ks.length&&ks.every(k=>s.pin.has(k));s.pin=same?new Set():new Set(ks);}
+      |    commit(n);}}
+      |pickers.forEach((list,svg)=>{const names=namesOf(list);
+      |  svg.addEventListener('pointermove',ev=>{if(ev.pointerType==='touch')return;svg._xy=[ev.clientX,ev.clientY];
+      |    if(svg._raf)return;
+      |    svg._raf=requestAnimationFrame(()=>{svg._raf=0;hover(svg,names,hit(list,svg._xy[0],svg._xy[1]));});});
+      |  svg.addEventListener('pointerleave',()=>{if(svg._raf){cancelAnimationFrame(svg._raf);svg._raf=0;}hover(svg,names,null);});
+      |  svg.addEventListener('click',ev=>clicked(names,hit(list,ev.clientX,ev.clientY),ev.shiftKey));});
+      |const api={root:root,controls:spec,selections:choices,
+      |  get:n=>sel[n]?keysOf(n):state[n],
+      |  set:(n,v)=>sel[n]?pinAll(n,v):put(ctl[n],v),
+      |  select:pinAll,
+      |  selection:keysOf,
+      |  onChange:(n,f)=>{(watch[n]=watch[n]||[]).push(f);f(sel[n]?keysOf(n):state[n]);},
+      |  reactor:(k,f)=>{reactors[k]=f;for(const n in ctl)apply(n);for(const n in sel)custom(n);},
       |  items:items};
       |root.tda4j=api;
+      |choices.forEach(c=>{const box=root.querySelector('.tda4j-selection[data-selection="'+c.n+'"]');
+      |  if(box){sel[c.n].out=box.querySelector('output');listOut(c.n);}});
       |spec.forEach(c=>{ctl[c.n]=c;
       |  const box=root.querySelector('.tda4j-control[data-control="'+c.n+'"]');
       |  c.input=box.querySelector('input');c.out=box.querySelector('output');c.btn=box.querySelector('.tda4j-play');

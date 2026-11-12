@@ -242,4 +242,14 @@ object Gallery:
     sweep.save(out("interactive-filtration.html"))
     Seq(0.15, 0.3, 0.5).foreach(t => sweep.at(t).save(out(f"interactive-still-$t%.2f.svg")))
     Plot.filtration3D(sphere, max = 0.8, title = "Sphere").withPlay(8).save(out("interactive-sphere.html"))
+    // linked views: pointing at a class in one picture lights it up in the others, with its cycle on the input
+    val exploreBars = Persistence(circle, maxDimension = 1).bars
+    val exploreKey = exploreBars.indices.filter(exploreBars(_).dim == 1).maxBy(exploreBars(_).persistence)
+    val explored = Plot.exploreOn(circle, exploreBars).withTitle("Noisy circle")
+    explored.save(out("interactive-explore.html"))
+    explored.at(PageState().select("class", exploreKey)).save(out("interactive-explore-still.svg"))
+    java.nio.file.Files.writeString(java.nio.file.Path.of(out("interactive-explore.json")), s"""{"key":$exploreKey}""")
+    val linked = Plot.filtration(circle, barcode = true, link = true).withTitle("Noisy circle")
+    linked.save(out("interactive-linked.html"))
+    linked.at(PageState().value("t", 0.5).select("class", exploreKey)).save(out("interactive-linked-still.svg"))
     println(s"wrote the gallery to $dir")

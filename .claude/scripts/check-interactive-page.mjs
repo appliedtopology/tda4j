@@ -104,5 +104,106 @@ const describe = (svg, visibleOnly) => {
   check(errors.length === 0, `no errors on the 3-D page ${errors.join(' | ')}`);
   await page.close();
 }
+
+{ // linked views: pointing at a class lights it up in every picture, as the still of that class does
+  const key = JSON.parse(fs.readFileSync(dir + '/interactive-explore.json', 'utf8')).key;
+  const still = fs.readFileSync(dir + '/interactive-explore-still.svg', 'utf8').replace(/^<\?xml[^>]*\?>\s*/, '');
+  const page = await browser.newPage({ viewport: { width: 1800, height: 800 } });
+  const errors = [];
+  page.on('pageerror', e => errors.push(String(e)));
+  page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+  await page.goto('file://' + dir + '/interactive-explore.html');
+  await page.evaluate(() => { window.events = []; document.querySelector('.tda4j-ia').addEventListener('tda4j:change', e => window.events.push(e.detail)); });
+  const drawn = () => page.evaluate(`
+    (() => { const describe = ${describe.toString()};
+      return [...document.querySelectorAll('.tda4j-ia svg[role=img]')].filter(s => s.querySelector('g[clip-path]')).map(s => describe(s, true)); })()`);
+  const reference = await page.evaluate(`
+    (() => { const describe = ${describe.toString()}; const holder = document.createElement('div'); holder.innerHTML = ${JSON.stringify(still)};
+      return [...holder.querySelectorAll('svg[role=img]')].filter(s => s.querySelector('g[clip-path]')).map(s => describe(s, false)); })()`);
+  const chosen = () => page.evaluate(() => document.querySelector('.tda4j-ia').tda4j.selection('class'));
+  const readout = () => page.evaluate(() => document.querySelector('.tda4j-selection output').textContent);
+  // the middle of the item that chooses `k` in panel `p` (0 is the first panel with something to choose)
+  const where = (p, k) => page.evaluate(([p, k]) => {
+    const it = document.querySelector('.tda4j-ia').tda4j.items.filter(i => i.picks.length)
+      .filter((i, _, all) => i.svg === [...new Set(all.map(j => j.svg))][p]).find(i => i.picks.some(q => q.key === k));
+    const r = it.el.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2];
+  }, [p, k]);
+  const settle = () => page.waitForTimeout(120);
+  const sameAsStill = async what => { const live = await drawn(); check(JSON.stringify(live) === JSON.stringify(reference), `${what}: the drawn elements are the still's (${live.map(l => l.length)} / ${reference.map(l => l.length)})`); };
+
+  const hidden = await page.evaluate(() => [...document.querySelectorAll('[data-ia^="w,"]')].filter(e => e.style.display !== 'none' || e.hasAttribute('display')).length);
+  check(hidden === 0, 'nothing is lit before a key is chosen');
+  check((await chosen()).length === 0 && (await readout()) === 'nothing chosen', 'nothing is chosen and the list says so');
+
+  const [dx, dy] = await where(0, key);
+  await page.mouse.move(dx, dy); await settle();
+  check(JSON.stringify(await chosen()) === JSON.stringify([key]), `pointing at the class ${key} in the diagram chooses it`);
+  await sameAsStill('pointing at the diagram');
+  const words = await readout();
+  check(words.startsWith('H1') && words.includes('persistence'), `the list names the class (${words})`);
+  await page.mouse.move(dx + 120, dy - 120); await settle();
+  check((await chosen()).length === 0, 'moving off it lets it go');
+
+  const [bx, by] = await where(1, key);
+  await page.mouse.move(bx, by); await settle();
+  check(JSON.stringify(await chosen()) === JSON.stringify([key]), 'pointing at the same class in the barcode chooses the same key');
+  await sameAsStill('pointing at the barcode');
+  await page.mouse.move(bx, by + 3); await settle();
+  check(JSON.stringify(await chosen()) === JSON.stringify([key]), 'a thin bar is hit a few pixels off its centre');
+
+  await page.mouse.click(bx, by); await settle();
+  await page.mouse.move(bx + 10, by - 200); await settle();
+  check(JSON.stringify(await chosen()) === JSON.stringify([key]), 'a click keeps the class chosen after the pointer leaves');
+  await sameAsStill('after the click');
+  await page.mouse.click(bx, by); await settle();
+  await page.mouse.move(dx + 120, dy - 120); await settle();
+  check((await chosen()).length === 0, 'a second click lets it go');
+
+  await page.mouse.click(bx, by); await settle();
+  const [ox, oy] = await where(1, 0);
+  await page.keyboard.down('Shift'); await page.mouse.click(ox, oy); await page.keyboard.up('Shift'); await settle();
+  const two = await chosen();
+  check(two.length === 2 && two.includes(key) && two.includes(0), `a shift-click adds the class 0 (${two})`);
+  // the empty corner below the diagonal of the diagram
+  const [cx, cy] = await page.evaluate(() => {
+    const svg = document.querySelector('.tda4j-ia').tda4j.items.find(i => i.picks.length).svg.getBoundingClientRect();
+    return [svg.left + 0.8 * svg.width, svg.top + 0.78 * svg.height];
+  });
+  await page.mouse.click(cx, cy); await settle();
+  check((await chosen()).length === 0, 'a click on the background lets all go');
+
+  await page.evaluate(() => document.querySelector('.tda4j-ia').tda4j.select('class', [3]));
+  check(JSON.stringify(await chosen()) === '[3]', 'the script API chooses a class');
+  const events = await page.evaluate(() => window.events.filter(e => e.name === 'class').map(e => JSON.stringify(e.value)));
+  check(events.length > 4 && events[events.length - 1] === '[3]', `every change is announced (${events.length} events)`);
+  check(errors.length === 0, `no errors on the linked page ${errors.join(' | ')}`);
+  await page.close();
+}
+
+
+{ // the linked sweep: the slider and the selection together are the still of both
+  const key = JSON.parse(fs.readFileSync(dir + '/interactive-explore.json', 'utf8')).key;
+  const still = fs.readFileSync(dir + '/interactive-linked-still.svg', 'utf8').replace(/^<\?xml[^>]*\?>\s*/, '');
+  const page = await browser.newPage({ viewport: { width: 1800, height: 800 } });
+  const errors = [];
+  page.on('pageerror', e => errors.push(String(e)));
+  page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+  await page.goto('file://' + dir + '/interactive-linked.html');
+  await page.evaluate(k => { const a = document.querySelector('.tda4j-ia').tda4j; a.set('t', 0.5); a.select('class', [k]); }, key);
+  const live = await page.evaluate(`
+    (() => { const describe = ${describe.toString()};
+      return [...document.querySelectorAll('.tda4j-ia svg[role=img]')].filter(s => s.querySelector('g[clip-path]')).map(s => describe(s, true)); })()`);
+  const ref = await page.evaluate(`
+    (() => { const describe = ${describe.toString()}; const holder = document.createElement('div'); holder.innerHTML = ${JSON.stringify(still)};
+      return [...holder.querySelectorAll('svg[role=img]')].filter(s => s.querySelector('g[clip-path]')).map(s => describe(s, false)); })()`);
+  check(live.length === ref.length && live.length === 3, `${live.length} panels on the linked sweep`);
+  live.forEach((elements, k) => {
+    const onlyLive = elements.filter(e => !ref[k].includes(e)).slice(0, 3), onlyStill = ref[k].filter(e => !elements.includes(e)).slice(0, 3);
+    check(JSON.stringify(elements) === JSON.stringify(ref[k]), `linked sweep, panel ${k}: ${elements.length} drawn elements as in the still (only live ${onlyLive}; only still ${onlyStill})`);
+  });
+  check(errors.length === 0, `no errors on the linked sweep ${errors.join(' | ')}`);
+  await page.close();
+}
+
 await browser.close();
 process.exit(failures ? 1 : 0);
