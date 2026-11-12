@@ -1014,18 +1014,23 @@ object Plot:
         val overlay = cycleOverlay(points, all, classes, maxCells)
         overlay.fold(flat)(o => o.addTo(flat))
       case other => other
-    val diagramPanel = Panel
-      .sweepDiagram(diagram(all)(using Look.none), "t", linkOf(diagramKeys(all)))
-      .mapFigure(styled)
+    def brushed(panel: Panel.Flat): Panel.Flat = if link then panel.brushable(classes) else panel
+    val diagramPanel = brushed(
+      Panel
+        .sweepDiagram(diagram(all)(using Look.none), "t", linkOf(diagramKeys(all)))
+        .mapFigure(styled)
+    )
     val panels = Vector[Panel](withCycles, diagramPanel) ++
       Option.when(barcode)(
-        Panel
-          .sweepBarcode(
-            Plot.barcode(all)(using Look.none),
-            "t",
-            linkOf(barcodeRows(all, None, BarOrder.Birth).map(_._2.map(_._2).toIndexedSeq))
-          )
-          .mapFigure(styled)
+        brushed(
+          Panel
+            .sweepBarcode(
+              Plot.barcode(all)(using Look.none),
+              "t",
+              linkOf(barcodeRows(all, None, BarOrder.Birth).map(_._2.map(_._2).toIndexedSeq))
+            )
+            .mapFigure(styled)
+        )
       )
     Interactive(panels, Vector(control), title, Vector.empty, if link then Vector(chooser) else Vector.empty)
 
@@ -1194,11 +1199,13 @@ object Plot:
         panel.selecting(firstPoints + g, classes, keys)
       }
       .mapFigure(styled)
+      .brushable(classes)
     val barcodePanel = barcodeRows(all, None, BarOrder.Birth).zipWithIndex
       .foldLeft(Panel.Flat(Plot.barcode(all)(using Look.none))) { case (panel, ((_, rows), g)) =>
         panel.selecting(g, classes, rows.map(_._2).toIndexedSeq)
       }
       .mapFigure(styled)
+      .brushable(classes)
     val cloudPanel = points.map { cloud =>
       val overlay = cycleOverlay(cloud, all, classes, maxCycleCells)
       require(

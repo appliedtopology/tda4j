@@ -248,7 +248,12 @@ object Gallery:
     val explored = Plot.exploreOn(circle, exploreBars).withTitle("Noisy circle")
     explored.save(out("interactive-explore.html"))
     explored.at(PageState().select("class", exploreKey)).save(out("interactive-explore-still.svg"))
-    java.nio.file.Files.writeString(java.nio.file.Path.of(out("interactive-explore.json")), s"""{"key":$exploreKey}""")
+    val barList =
+      exploreBars.map(b => s"[${b.dim},${b.birth},${if b.death.isFinite then b.death.toString else "null"}]")
+    java.nio.file.Files.writeString(
+      java.nio.file.Path.of(out("interactive-explore.json")),
+      s"""{"key":$exploreKey,"bars":${barList.mkString("[", ",", "]")}}"""
+    )
     val linked = Plot.filtration(circle, barcode = true, link = true).withTitle("Noisy circle")
     linked.save(out("interactive-linked.html"))
     linked.at(PageState().value("t", 0.5).select("class", exploreKey)).save(out("interactive-linked-still.svg"))

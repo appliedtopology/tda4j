@@ -205,5 +205,69 @@ const describe = (svg, visibleOnly) => {
   await page.close();
 }
 
+
+{ // brushing: a dragged rectangle chooses the classes it touches
+  const meta = JSON.parse(fs.readFileSync(dir + '/interactive-explore.json', 'utf8'));
+  const page = await browser.newPage({ viewport: { width: 1800, height: 800 } });
+  const errors = [];
+  page.on('pageerror', e => errors.push(String(e)));
+  page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+  await page.goto('file://' + dir + '/interactive-explore.html');
+  const chosen = () => page.evaluate(() => document.querySelector('.tda4j-ia').tda4j.selection('class'));
+  const sorted = a => JSON.stringify([...a].sort((x, y) => x - y));
+  const drag = async (x0, y0, x1, y1, shift) => {
+    if (shift) await page.keyboard.down('Shift');
+    await page.mouse.move(x0, y0); await page.mouse.down(); await page.mouse.move((x0 + x1) / 2, (y0 + y1) / 2, { steps: 4 });
+    await page.mouse.move(x1, y1, { steps: 4 }); await page.mouse.up();
+    if (shift) await page.keyboard.up('Shift');
+    await page.waitForTimeout(150);
+  };
+  // the boxes of the items that choose, by panel (the diagram, then the barcode), with their keys
+  const panels = await page.evaluate(() => {
+    const items = document.querySelector('.tda4j-ia').tda4j.items.filter(i => i.picks.length);
+    const svgs = [...new Set(items.map(i => i.svg))];
+    return svgs.map(svg => ({
+      box: (r => [r.left, r.top, r.right, r.bottom])(svg.getBoundingClientRect()),
+      items: items.filter(i => i.svg === svg).map(i => { const r = i.el.getBoundingClientRect(); return { key: i.picks[0].key, box: [r.left, r.top, r.right, r.bottom] }; })
+    }));
+  });
+  const labels = await page.evaluate(() => document.querySelector('.tda4j-ia').tda4j.selections[0].labels);
+  check(panels.length === 2, `two panels brush (${panels.length})`);
+
+  // the diagram: the column of H0 points at birth 0, dragged from its lower right corner to its upper left
+  const h0 = panels[0].items.filter(i => labels[i.key].startsWith('H0'));
+  const [x0, x1] = [Math.min(...h0.map(i => i.box[0])) - 8, Math.max(...h0.map(i => i.box[2])) + 8];
+  const [y0, y1] = [Math.min(...h0.map(i => i.box[1])) - 8, Math.max(...h0.map(i => i.box[3])) + 8];
+  await drag(x1, y1, x0, y0);
+  const wanted = labels.map((l, k) => (l.startsWith('H0') ? k : -1)).filter(k => k >= 0);
+  const got = await chosen();
+  check(sorted(got) === sorted(wanted), `a drag over the H0 column chooses the ${wanted.length} classes of degree 0, and no other (${got.length})`);
+  check(await page.evaluate(() => document.querySelectorAll('.tda4j-brush').length) === 1, 'the rectangle stays after the drag');
+  check(got.length > 0, 'the click that ends a drag does not let the classes go');
+
+  // the barcode: a stretch of the filtration, the pixels calibrated on the one H1 bar
+  const [hk, hb, hd] = [meta.key, meta.bars[meta.key][1], meta.bars[meta.key][2]];
+  const bar = panels[1].items.find(i => i.key === hk).box;
+  const px = v => bar[0] + (v - hb) / (hd - hb) * (bar[2] - bar[0]);
+  const [lo, hi] = [0.52, 0.6];
+  await drag(px(lo), panels[1].box[1] + 3, px(hi), panels[1].box[3] - 3);
+  const alive = meta.bars.map((b, k) => (b[1] <= hi && (b[2] === null || b[2] >= lo) ? k : -1)).filter(k => k >= 0);
+  const inStretch = await chosen();
+  check(alive.length >= 2 && sorted(inStretch) === sorted(alive), `a drag across ${lo} to ${hi} in the barcode chooses the ${alive.length} bars alive there (${inStretch.length})`);
+  check(await page.evaluate(() => document.querySelectorAll('.tda4j-brush').length) === 1, 'a new drag replaces the rectangle');
+
+  // shift-drag adds
+  await drag(x1, y1, x0, y0, true);
+  const both = await chosen();
+  check(sorted(both) === sorted([...new Set([...alive, ...wanted])]), `a shift-drag adds to what is chosen (${both.length})`);
+
+  // a click on the background lets everything go and takes the rectangle away
+  const [cx, cy] = [panels[0].box[0] + 0.8 * (panels[0].box[2] - panels[0].box[0]), panels[0].box[1] + 0.78 * (panels[0].box[3] - panels[0].box[1])];
+  await page.mouse.click(cx, cy); await page.waitForTimeout(150);
+  check((await chosen()).length === 0 && (await page.evaluate(() => document.querySelectorAll('.tda4j-brush').length)) === 0, 'a click lets all go and removes the rectangle');
+  check(errors.length === 0, `no errors while brushing ${errors.join(' | ')}`);
+  await page.close();
+}
+
 await browser.close();
 process.exit(failures ? 1 : 0);

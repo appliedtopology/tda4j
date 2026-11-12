@@ -197,6 +197,44 @@ class SelectionSpec extends Specification:
     }
   }
 
+  "a brushable panel" should {
+    val points = Mark.Points(IndexedSeq((0.0, 0.0), (1.0, 1.0)), IndexedSeq(Paint.Ink))
+    val chosen = Panel(Figure(marks = Vector(points))).selecting(0, "c", IndexedSeq(0, 1))
+
+    "mark its own box on the page, and no other" in {
+      val html =
+        Interactive().withSelection("c").withPanel(chosen.brushable("c")).withPanel(chosen).fragment(Theme.Light)
+      ("data-brush=\"c\"".r.findAllIn(html).size === 1).and(html must contain("class=\"tda4j-panel\" data-brush=\"c\""))
+    }
+
+    "be there in the views of explore, and not in the cloud" in
+      page.panels.collect { case Panel.Flat(_, _, brush) => brush } === Vector(None, Some("class"), Some("class"))
+
+    "be refused for a selection the plot lacks, or one nothing in the panel chooses in" in {
+      val missing = Interactive().withSelection("c").withPanel(chosen.brushable("d"))
+      val idle = Interactive().withSelection("c").withSelection("d").withPanel(chosen.brushable("d"))
+      (missing.fragment() must throwAn[IllegalArgumentException](
+        ".*brushable on a selection called d.*selections are: c.*"
+      ))
+        .and(
+          idle.fragment() must throwAn[IllegalArgumentException](
+            ".*brushable on d, but none of its items chooses in d.*"
+          )
+        )
+    }
+
+    "bring the brush's style only to a page that has one" in {
+      val brushing = Interactive().withSelection("c").withPanel(chosen.brushable("c")).fragment(Theme.Light)
+      val plain = Interactive().withSelection("c").withPanel(chosen).fragment(Theme.Light)
+      (brushing must contain(".tda4j-brush{")).and(plain must not(contain(".tda4j-brush{")))
+    }
+
+    "link the brushable views of a linked filtration too" in {
+      val sweep = Plot.filtration(circle, link = true, max = 2.0, barcode = true)
+      sweep.panels.collect { case Panel.Flat(_, _, brush) => brush } === Vector(None, Some("class"), Some("class"))
+    }
+  }
+
   "building a selection" should {
     val fig = Figure()
     val rule = Mark.Rule.horizontal(0.0)

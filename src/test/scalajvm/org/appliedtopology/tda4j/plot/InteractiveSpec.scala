@@ -250,7 +250,7 @@ class InteractiveSpec extends Specification:
   "an interactive plot" should {
     "take a tweak in every panel, as a board does" in {
       val styled = page + Palette.print
-      styled.panels.collect { case Panel.Flat(f, _) => f.palette }.distinct === Vector(Palette.print)
+      styled.panels.collect { case Panel.Flat(f, _, _) => f.palette }.distinct === Vector(Palette.print)
     }
 
     "be built by chaining, each step a new value" in {

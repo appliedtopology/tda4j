@@ -214,7 +214,18 @@ object Panel:
     )
 
   /** A 2-D panel. Marks are added with their reactions, in drawing order: `Panel(fig).react(mark, behavior)`. */
-  final case class Flat(figure: Figure, reactions: Map[Int, IndexedSeq[Reaction]] = Map.empty) extends Panel:
+  final case class Flat(
+    figure: Figure,
+    reactions: Map[Int, IndexedSeq[Reaction]] = Map.empty,
+    brush: Option[String] = None
+  ) extends Panel:
+    /** This panel with dragging a rectangle over it choosing, in the selection `selection`, the keys of every item of
+      * this panel that the rectangle touches (a shift-drag adds to what is chosen): a region of a diagram, a stretch of
+      * a barcode. Some item of the panel has to choose in that selection ([[selecting]]). The rectangle stays on the
+      * page until the next click. Brushing is with the mouse or a pen: a finger scrolls the page.
+      */
+    def brushable(selection: String): Flat = copy(brush = Some(selection))
+
     /** `mark` added to the figure, its items all reacting as `behavior` says. */
     def react(mark: Mark, behavior: Behavior): Flat = reactEach(mark, IndexedSeq(Reaction(Vector(behavior))))
 
@@ -571,7 +582,23 @@ final case class Interactive(
         })
       }
       panel match
-        case Panel.Flat(figure, rs) =>
+        case Panel.Flat(figure, rs, brush) =>
+          brush.foreach { b =>
+            require(
+              chosen(b),
+              s"Interactive: panel $p is brushable on a selection called $b, but the selections are: " +
+                (if selections.isEmpty then "none (add one with withSelection)"
+                 else selections.map(_.name).mkString(", "))
+            )
+            require(
+              rs.values.exists(_.exists(_.behaviors.exists {
+                case Behavior.Selects(c, _) => c == b
+                case _                      => false
+              })),
+              s"Interactive: panel $p is brushable on $b, but none of its items chooses in $b " +
+                "(Panel.selecting links a mark's items to a selection)"
+            )
+          }
           val (xt, yt) = Svg.resolved(figure)
           val moving = rs.values.exists(_.exists(_.behaviors.exists {
             case _: Behavior.Follows | _: Behavior.Radius => true
@@ -595,7 +622,7 @@ final case class Interactive(
 
   // ----- the page
 
-  private def firstFigure: Option[Figure] = panels.collectFirst { case Panel.Flat(f, _) => f }
+  private def firstFigure: Option[Figure] = panels.collectFirst { case Panel.Flat(f, _, _) => f }
 
   private def look: Palette =
     firstFigure
@@ -616,20 +643,25 @@ final case class Interactive(
 
   // A panel is as wide as its picture at most and as the room allows at least 320 pixels: a page in a slide or an
   // iframe narrower than its pictures side by side shrinks them (the `viewBox` keeps the drawing), then stacks them.
-  private def panelBox(width: Int, picture: String): String =
-    s"""<div class="tda4j-panel" style="max-width:${width}px">$picture</div>"""
+  private def panelBox(width: Int, picture: String, brush: Option[String] = None): String =
+    val brushing = brush.fold("")(b => s""" data-brush="${Svg.escape(b)}"""")
+    s"""<div class="tda4j-panel"$brushing style="max-width:${width}px">$picture</div>"""
 
   def fragment(theme: Theme = Theme.Auto): String =
     validate()
     val id = Interactive.freshId()
     val pal = look
     val parts = panels.zipWithIndex.map {
-      case (Panel.Flat(figure, rs), k) =>
+      case (Panel.Flat(figure, rs, brush), k) =>
         val moving = rs.values.exists(_.exists(_.behaviors.exists {
           case _: Behavior.Follows | _: Behavior.Radius => true
           case _                                        => false
         }))
-        panelBox(figure.width, Svg.renderTagged(figure, theme, false, Svg.Tags(attrsFor(rs), moving, Some(s"$id-p$k"))))
+        panelBox(
+          figure.width,
+          Svg.renderTagged(figure, theme, false, Svg.Tags(attrsFor(rs), moving, Some(s"$id-p$k"))),
+          brush
+        )
       case (Panel.Spatial(scene, rs), k) => panelBox(scene.width, scene.fragmentReacting(theme, rs, s"$id-p$k"))
     }
     val headline =
@@ -649,7 +681,13 @@ final case class Interactive(
       .replace("__SELECTIONS__", choices)
       .replace("__SCRIPTS__", mine)
     s"""<div id="$id" class="tda4j-ia">
-       |<style>${Interactive.styles(id, pal, theme, selections.exists(_.listed))}</style>
+       |<style>${Interactive.styles(
+        id,
+        pal,
+        theme,
+        selections.exists(_.listed),
+        panels.exists { case Panel.Flat(_, _, brush) => brush.isDefined; case _ => false }
+      )}</style>
        |$headline
        |<div class="tda4j-panels">${parts.mkString}</div>
        |<div class="tda4j-controls">$ui</div>
@@ -694,8 +732,8 @@ final case class Interactive(
     }
     val chosen = selections.map(s => s.name -> state.chosen(s.name)).toMap
     val shown = panels.map {
-      case Panel.Flat(figure, rs)   => Interactive.still(figure, rs, now, chosen)
-      case Panel.Spatial(scene, rs) => Interactive.still(scene, rs, now)
+      case Panel.Flat(figure, rs, _) => Interactive.still(figure, rs, now, chosen)
+      case Panel.Spatial(scene, rs)  => Interactive.still(scene, rs, now)
     }
     val sliders = controls.map(c => s"${c.shownName} = ${Svg.number(now(c.name))}")
     val picked = selections.flatMap { s =>
@@ -944,7 +982,13 @@ object Interactive:
           s.shownName
         )}</span><output aria-live="polite"></output></div>"""
 
-  private[plot] def styles(id: String, pal: Palette, theme: Theme, listing: Boolean = false): String =
+  private[plot] def styles(
+    id: String,
+    pal: Palette,
+    theme: Theme,
+    listing: Boolean = false,
+    brushing: Boolean = false
+  ): String =
     val variables =
       if theme == Theme.Auto then pal.cssVariables(s"#$id")
       else
@@ -963,7 +1007,12 @@ object Interactive:
        else s"""
                |#$id .tda4j-selection{display:flex;gap:10px;margin:10px 0 0;font-size:15px;min-height:1.4em}
                |#$id .tda4j-selection span{min-width:2.5em;color:var(--ink2)}
-               |#$id .tda4j-selection output{flex:1;font-variant-numeric:tabular-nums}""".stripMargin)
+               |#$id .tda4j-selection output{flex:1;font-variant-numeric:tabular-nums}""".stripMargin) +
+      (if !brushing then ""
+       else
+         s"""
+            |#$id .tda4j-brush{fill:var(--s0);fill-opacity:.12;stroke:var(--s0);stroke-dasharray:4 3;pointer-events:none}
+            |#$id [data-brush] svg{user-select:none}""".stripMargin)
 
   // ----- stills: the same behaviors, applied in Scala
 
@@ -1185,12 +1234,38 @@ object Interactive:
       |    if(shift)ks.forEach(k=>{if(s.pin.has(k))s.pin.delete(k);else s.pin.add(k);});
       |    else{const same=s.pin.size===ks.length&&ks.every(k=>s.pin.has(k));s.pin=same?new Set():new Set(ks);}
       |    commit(n);}}
+      |const NS='http://www.w3.org/2000/svg';
+      |const boxed=[];
+      |const clearBoxes=()=>boxed.forEach(s=>{if(s._box){s._box.remove();s._box=null;}});
+      |function brushing(svg,list,n){let from=null;
+      |  boxed.push(svg);
+      |  svg.addEventListener('pointerdown',ev=>{svg._dragged=false;
+      |    if(ev.button!==0||ev.pointerType==='touch')return;from=[ev.clientX,ev.clientY];});
+      |  svg.addEventListener('pointermove',ev=>{if(!from)return;
+      |    if(!svg._dragged){if(Math.hypot(ev.clientX-from[0],ev.clientY-from[1])<5)return;
+      |      svg._dragged=true;try{svg.setPointerCapture(ev.pointerId);}catch(e){}clearBoxes();
+      |      svg._box=document.createElementNS(NS,'rect');svg._box.setAttribute('class','tda4j-brush');svg.appendChild(svg._box);}
+      |    const m=svg.getScreenCTM().inverse(),a=new DOMPoint(from[0],from[1]).matrixTransform(m),b=new DOMPoint(ev.clientX,ev.clientY).matrixTransform(m);
+      |    svg._box.setAttribute('x',Math.min(a.x,b.x));svg._box.setAttribute('y',Math.min(a.y,b.y));
+      |    svg._box.setAttribute('width',Math.abs(a.x-b.x));svg._box.setAttribute('height',Math.abs(a.y-b.y));});
+      |  svg.addEventListener('pointerup',ev=>{if(!from)return;const start=from;from=null;
+      |    if(!svg._dragged)return;
+      |    try{svg.releasePointerCapture(ev.pointerId);}catch(e){}
+      |    const x0=Math.min(start[0],ev.clientX),x1=Math.max(start[0],ev.clientX),y0=Math.min(start[1],ev.clientY),y1=Math.max(start[1],ev.clientY);
+      |    const keys=new Set(ev.shiftKey?sel[n].pin:[]);
+      |    for(const it of list){if(!it.el.getClientRects().length)continue;
+      |      const r=it.el.getBoundingClientRect();
+      |      if(r.right>=x0&&r.left<=x1&&r.bottom>=y0&&r.top<=y1)it.picks.forEach(p=>{if(p.n===n)keys.add(p.key);});}
+      |    sel[n].pin=keys;commit(n);});}
       |pickers.forEach((list,svg)=>{const names=namesOf(list);
-      |  svg.addEventListener('pointermove',ev=>{if(ev.pointerType==='touch')return;svg._xy=[ev.clientX,ev.clientY];
+      |  svg.addEventListener('pointermove',ev=>{if(ev.pointerType==='touch'||svg._dragged||ev.buttons)return;svg._xy=[ev.clientX,ev.clientY];
       |    if(svg._raf)return;
       |    svg._raf=requestAnimationFrame(()=>{svg._raf=0;hover(svg,names,hit(list,svg._xy[0],svg._xy[1]));});});
       |  svg.addEventListener('pointerleave',()=>{if(svg._raf){cancelAnimationFrame(svg._raf);svg._raf=0;}hover(svg,names,null);});
-      |  svg.addEventListener('click',ev=>clicked(names,hit(list,ev.clientX,ev.clientY),ev.shiftKey));});
+      |  svg.addEventListener('click',ev=>{if(svg._dragged){svg._dragged=false;return;}
+      |    clearBoxes();clicked(names,hit(list,ev.clientX,ev.clientY),ev.shiftKey);});
+      |  const box=svg.closest('.tda4j-panel');const bn=box&&box.getAttribute('data-brush');
+      |  if(bn&&sel[bn])brushing(svg,list,bn);});
       |const api={root:root,controls:spec,selections:choices,
       |  get:n=>sel[n]?keysOf(n):state[n],
       |  set:(n,v)=>sel[n]?pinAll(n,v):put(ctl[n],v),
