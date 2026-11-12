@@ -10,5 +10,5 @@
     <circle cx="76" cy="75" r="8" fill="#205976"/>
     <circle cx="146" cy="75" r="8" fill="#ffffff"/>
   </g>
-  <text x="218" y="123" font-size="66" fill="#205976">tda<tspan fill="#ffffff">4</tspan>j</text>
+  <text x="218" y="123" font-size="66" fill="#ffffff">tda<tspan fill="#205976">4</tspan>j</text>
 </svg>
