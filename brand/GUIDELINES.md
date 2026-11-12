@@ -16,7 +16,7 @@ Choose light or dark treatments for their intended surfaces. Preserve the teal/g
 
 - **Approved current assets:** retain their existing values unless an explicit revision is accepted. Their hex values are reproducible references, not immutable laws.
 - **White-field decision:** the horizontal white sticker uses UI-safe teal `#205976`, brand-mark gold `#d6a20a`, and 40% fill opacity in both circles. In the side-by-side discussion, denser interiors were clearly preferred, and the hybrid palette was chosen over both uniform tiers. This is an **asset-specific selection**, not a global recoloring of the icon, docs, charts, or existing square badges. The khaki/brown *full-field* print result does not establish how `#866504` behaves as a small accent on white. Test the exact SVG colors, not a generative image approximation.
-- **Full-bleed fields:** bright teal (`#1a729b`) and bright sticker gold (`#f2b705`) remain the current recipes. Do not use the darker UI gold as a full sticker field without new evidence.
+- **Full-bleed fields:** bright teal (`#1a729b`) and bright sticker gold (`#f2b705`) remain the current recipes. On the gold field, the selected wordmark is **white `tda`/`j` with UI teal `#205976` for the `4`** in both square and horizontal stickers; the circle colors, geometry, and fills remain unchanged. This makes the `4` the high-contrast accent and mirrors the teal sticker's white text / gold `4` logic. The trade-off is deliberate: white text against this gold is only about 1.8:1, so the wordmark is less robust at small sizes and in print than the previous teal-text treatment. Do not use the darker UI gold as a full sticker field without new evidence.
 - **Fill opacity:** the original 0.16/0.18 translucent lenses felt washed out on white despite heavy outlines; 0.40/0.40 was preferred in the white horizontal sticker. This is a medium/layout decision, not a mandate to increase opacity in every master. In future comparisons vary opacity independently from color whenever possible.
 - **Promotion rule:** record an accepted design choice separately from its verification status. The hybrid white sticker is selected for further production work, **not yet print-validated**. Once a change is adopted across the whole identity, update `DECISIONS.md`, all affected masters, and this guide together.
 
@@ -42,6 +42,12 @@ This is a **working identity before 1.0 and before broad launch**. Previous deci
 - **Keep hard constraints distinct from aesthetic preferences:** preserve accessible text, data-viz contrast/CVD checks, readable small-size marks, and reproducible print assets. Treat color tier, opacity, and relative mark size as design choices open to evidence.
 - **Record outcomes in three categories:** *selected* (the direction chosen), *validated* (what was actually rendered, tested, or printed), and *open* (what remains uncertain). A rendered comparison is not a print test, and a print failure in one composition is not a universal color failure.
 - **Update deliberately:** retain rejected alternatives and the reason for rejection in the worklog; revise `DECISIONS.md` when a choice becomes identity-wide, and update every affected master/export. Do not rewrite historical worklogs to make the path look inevitable.
+
+### Current decision record: gold-field stickers
+
+**Selected:** both `badge-sticker-gold.svg` (square/vertical composition) and `sticker-horizontal-gold.svg` use the existing bright gold field `#f2b705`, white `tda`/`j`, and UI teal `#205976` for the `4`. This reverses **only the wordmark colors** from the prior gold versions; icon strokes, circle fills, geometry, type styling, and layout are unchanged. The chosen rationale is a stronger focal `4`, more playful merchandise treatment, and a clearer inverse relationship to the teal sticker.
+
+**Trade-offs and open checks:** white-on-gold contrast is approximately 1.8:1, so four letters are less legible than in the teal-text version. The white right circle already shares this limitation. This is an intentional graphic-sticker compromise, **not** a pattern to copy into functional text or small UI labels. Review actual-size prints, material finish, and legibility at distance; no physical print proof of the reversed wordmark has been performed. Generated image previews that changed stroke widths or typography were rejected as uncontrolled evidence; the selected comparison held the SVG constant except for the text fills.
 
 ### Current decision record: white horizontal sticker
 
@@ -76,11 +82,11 @@ Four 3:1 rounded-rectangle compositions are available as editable SVG masters. C
 | File | Field | Composition |
 | --- | --- | --- |
 | `sticker-horizontal-teal.svg` | Brand teal | Large symbol, white wordmark, warm-gold 4 |
-| `sticker-horizontal-gold.svg` | Bright sticker gold | Large symbol, deep-teal wordmark, white 4 |
+| `sticker-horizontal-gold.svg` | Bright sticker gold | Large symbol, white wordmark, deep-teal 4 |
 | `sticker-horizontal-white.svg` | White | Selected hybrid: UI-safe teal `#205976`, bright brand gold `#d6a20a`, 40% circle lenses |
 | `sticker-horizontal-dark.svg` | Dark surface | Compact heavy-stroke symbol, light-teal wordmark, light-gold 4 |
 
-The 600 × 200 viewBox defines the intended 3:1 sticker trim, **not a print-ready bleed or cutline**. Ask the printer for bleed, safe-zone, corner-radius, color profile and cutline specifications before manufacturing; convert text to outlines and proof at actual size. The gold-field variant intentionally uses the existing white 4 and gold circle; inspect those low-contrast elements in print rather than assuming they are safe.
+The 600 × 200 viewBox defines the intended 3:1 sticker trim, **not a print-ready bleed or cutline**. Ask the printer for bleed, safe-zone, corner-radius, color profile and cutline specifications before manufacturing; convert text to outlines and proof at actual size. The gold-field variants now use white `tda`/`j` and teal `4`; inspect the low-contrast white letters and white circle details in print rather than assuming they are safe.
 
 ## Scaling, alignment, and misuse
 
