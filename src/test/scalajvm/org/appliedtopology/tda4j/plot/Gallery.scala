@@ -300,8 +300,7 @@ object Gallery:
       java.nio.file.Path.of(out("interactive-zoom-words.json")),
       s"""{"windows":${manyWindows.map(listed(_)).mkString("[", ",", "]")},"words":${words.mkString("[", ",", "]")}}"""
     )
-    val finite = exploreBars.filter(_.death.isFinite).map(_.death)
-    val diagramWindow = Window(0.02, 0.6 * finite.max, 0.02, 0.6 * finite.max)
+    val diagramWindow = Window(-0.1, 0.6, 0.1, 0.8)
     explored.at(PageState().zoom(1, diagramWindow)).save(out("interactive-explore-zoomed.svg"))
     java.nio.file.Files.writeString(
       java.nio.file.Path.of(out("interactive-zoom.json")),

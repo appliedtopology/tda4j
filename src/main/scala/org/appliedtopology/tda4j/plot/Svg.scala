@@ -597,7 +597,9 @@ object Svg:
         case Ticks.Labelled(words) => ("f", "null", "null", words)
       s"""{"m":"$mode","lo":$lo,"hi":$hi,"fx":${pairs(fixed)},"ex":${pairs(a.extra)}}"""
     val zoomAttr = tags.zoom.fold("")(axes =>
-      " data-zm=\"" + escape(s"""{"ax":"$axes","x":${zoomAxis(fig.x)},"y":${zoomAxis(fig.y)}}""") + "\""
+      " data-zm=\"" + escape(s"""{"ax":"$axes","asp":${aspectRatio.fold("null")(_.toString)},"x":${zoomAxis(
+          fig.x
+        )},"y":${zoomAxis(fig.y)}}""") + "\""
     )
     val frameAttr =
       if !tags.frame && !zoomOn then ""

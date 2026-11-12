@@ -1405,11 +1405,15 @@ object Interactive:
       |  const g=document.createElementNS(NS,'g');g.setAttribute('data-gen','1');
       |  grid.concat(marks,labels).forEach(e=>g.appendChild(e));
       |  z.svg.insertBefore(g,z.svg.querySelector('g[clip-path]'));z.gen=g;}
-      |function setWindow(z,w){
+      |function setWindow(z,w){clearBoxes();
       |  const X=z.ax[0],Y=z.ax[1],full=z.full;w=w.slice();
-      |  for(const i of [0,2]){const fw=full[i+1]-full[i],wd=Math.min(Math.max(w[i+1]-w[i],fw/MAXZ),fw),a=Math.min(Math.max(w[i],full[i]),full[i+1]-wd);w[i]=a;w[i+1]=a+wd;}
       |  if(z.axes==='x'){w[2]=full[2];w[3]=full[3];}
       |  if(z.axes==='y'){w[0]=full[0];w[1]=full[1];}
+      |  // a picture drawn with a fixed ratio of the lengths of a y unit and an x unit widens one range of a window, as the renderer does
+      |  if(z.asp&&z.axes==='b'){const sx=(w[1]-w[0])/X.n,sy=(w[3]-w[2])/Y.n,wanted=sx/z.asp;
+      |    if(sy<wanted){const c=(w[2]+w[3])/2;w[2]=c-wanted*Y.n/2;w[3]=c+wanted*Y.n/2;}
+      |    else{const c=(w[0]+w[1])/2;w[0]=c-sy*z.asp*X.n/2;w[1]=c+sy*z.asp*X.n/2;}}
+      |  for(const i of [0,2]){const fw=full[i+1]-full[i],wd=Math.min(Math.max(w[i+1]-w[i],fw/MAXZ),fw),a=Math.min(Math.max(w[i],full[i]),full[i+1]-wd);w[i]=a;w[i+1]=a+wd;}
       |  z.win=w;
       |  const sx=(X.hi-X.lo)/(w[1]-w[0]),tx=X.o+(X.lo-w[0])/(w[1]-w[0])*X.n-sx*X.o;
       |  const sy=(Y.hi-Y.lo)/(w[3]-w[2]),ty=Y.o+Y.n-(Y.lo-w[2])/(w[3]-w[2])*Y.n-sy*(Y.o+Y.n);
@@ -1425,7 +1429,7 @@ object Interactive:
       |root.querySelectorAll('.tda4j-panel').forEach((box,pi)=>{
       |  const svg=box.querySelector('svg[data-zm]');if(!svg)return;
       |  const ax=axesOf(svg),z={svg:svg,pi:pi,ax:ax,spec:JSON.parse(svg.getAttribute('data-zm')),axes:'b',tpl:{},mode:'pan'};
-      |  z.axes=z.spec.ax;z.full=[ax[0].lo,ax[0].hi,ax[1].lo,ax[1].hi];z.win=z.full.slice();
+      |  z.axes=z.spec.ax;z.asp=z.spec.asp;z.full=[ax[0].lo,ax[0].hi,ax[1].lo,ax[1].hi];z.win=z.full.slice();
       |  z.orig=Array.from(svg.querySelectorAll('[data-k]'));
       |  ['gx','mx','lx','gy','my','ly'].forEach(k=>{z.tpl[k]=svg.querySelector('[data-k="'+k+'"]');});
       |  z.off=0;if(z.tpl.ly){z.off=+z.tpl.ly.getAttribute('y')-(ax[1].o+ax[1].n-(+z.tpl.ly.getAttribute('data-v')-ax[1].lo)/(ax[1].hi-ax[1].lo)*ax[1].n);}

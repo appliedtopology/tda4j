@@ -15,8 +15,8 @@ enum ZoomAxes:
     case Y    => "y"
 
 /** The range of a picture a viewer has zoomed to: `x0` to `x1` along the horizontal axis and `y0` to `y1` along the
-  * vertical one, in data units. [[PageState.zoom]] puts it in a still picture. On a figure drawn with equal aspect,
-  * give a window with the aspect of the picture (the page's own zoom keeps it).
+  * vertical one, in data units. [[PageState.zoom]] puts it in a still picture. A figure drawn with equal aspect widens
+  * one range of the window to keep it, in a still as on the page, so the picture shows a little more than asked for.
   */
 final case class Window(x0: Double, x1: Double, y0: Double, y1: Double):
   require(

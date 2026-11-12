@@ -402,5 +402,94 @@ const matches = (a, b, tol = 0.1) => {
   await page.close();
 }
 
+{ // zoom together with the selections: the diagram of the explore page zoomed, brushed and panned
+  const meta = JSON.parse(fs.readFileSync(dir + '/interactive-explore.json', 'utf8'));
+  const zw = JSON.parse(fs.readFileSync(dir + '/interactive-zoom.json', 'utf8')).diagram;
+  const page = await browser.newPage({ viewport: { width: 1800, height: 900 } });
+  const errors = [];
+  page.on('pageerror', e => errors.push(String(e)));
+  page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+  await page.goto('file://' + dir + '/interactive-explore.html');
+  const chosen = () => page.evaluate(() => document.querySelector('.tda4j-ia').tda4j.selection('class'));
+  const drag = async (x0, y0, x1, y1) => {
+    await page.mouse.move(x0, y0); await page.mouse.down(); await page.mouse.move((x0 + x1) / 2, (y0 + y1) / 2, { steps: 4 });
+    await page.mouse.move(x1, y1, { steps: 4 }); await page.mouse.up(); await page.waitForTimeout(150);
+  };
+  check(await page.evaluate(() => document.querySelectorAll('.tda4j-panel').length) === 3, 'the explore page has three panels');
+  const buttons = await page.evaluate(() => [...document.querySelectorAll('.tda4j-panel')].map(p => p.querySelectorAll('.tda4j-zoombar button').length));
+  check(JSON.stringify(buttons) === '[3,4,4]', `every panel zooms, and the ones that also brush have a button to pan instead (${buttons})`);
+
+  // the diagram, zoomed, is the still of the same window
+  const live = panel => page.evaluate(`(() => { const g = ${geometry.toString()}; return g(document.querySelectorAll('.tda4j-ia svg[role=img]')[${panel}]); })()`);
+  const stillOf = async (file, panel) => {
+    const text = fs.readFileSync(`${dir}/${file}`, 'utf8').replace(/^<\?xml[^>]*\?>\s*/, '');
+    return page.evaluate(`(() => { const g = ${geometry.toString()}; const holder = document.createElement('div');
+      holder.style.cssText = 'position:absolute;left:0;top:0;width:900px;visibility:hidden'; holder.innerHTML = ${JSON.stringify(text)}; document.body.appendChild(holder);
+      const s = [...holder.querySelectorAll('svg[role=img]')].filter(x => x.querySelector('g[clip-path]'))[${panel}];
+      const r = g(s); holder.remove(); return r; })()`);
+  };
+  await page.evaluate(w => document.querySelector('.tda4j-ia').tda4j.zoom(1, w), zw);
+  for (const panel of [0, 1]) { // (the board of the still resizes the barcode)
+    const mine = await live(panel), theirs = await stillOf('interactive-explore-zoomed.svg', panel);
+    const m = matches(mine, theirs);
+    check(m.ok, `explore panel ${panel}${panel === 1 ? ' zoomed' : ' untouched'}: ${mine.length} drawn elements as in the still (${theirs.length})` + (m.ok ? '' : ` -- not in the still: ${m.missing.join(' | ')}`));
+  }
+
+  // a drag across the whole zoomed diagram chooses what is in the window, and not what is behind the axes
+  const where = (x, y) => page.evaluate(([x, y]) => { const svg = document.querySelectorAll('.tda4j-ia svg[role=img]')[1], fr = svg.getAttribute('data-fr').split(';').map(s => s.split(',').map(Number)), w = document.querySelector('.tda4j-ia').tda4j.window(1);
+    const px = fr[0][0] + (x - w[0]) / (w[1] - w[0]) * fr[0][1], py = fr[1][0] + fr[1][1] - (y - w[2]) / (w[3] - w[2]) * fr[1][1];
+    const p = new DOMPoint(px, py).matrixTransform(svg.getScreenCTM()); return [p.x, p.y]; }, [x, y]);
+  const svgBox = await page.evaluate(() => { const r = document.querySelectorAll('.tda4j-ia svg[role=img]')[1].getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; });
+  const ew = await page.evaluate(() => document.querySelector('.tda4j-ia').tda4j.window(1));
+  check(ew[1] - ew[0] > zw[1] - zw[0] && Math.abs((ew[1] - ew[0]) / (ew[3] - ew[2]) - 486 / 420) < 1e-9, 'the diagram keeps its equal aspect: the window asked for is widened along x');
+  const pl = await where(ew[0], ew[3]), pr = await where(ew[1], ew[2]);   // the plot area's corners
+  const finite = meta.bars.map((b, k) => ({ k, b })).filter(e => e.b[2] !== null);
+  const points = [];
+  for (const e of finite) points.push({ k: e.k, p: await where(e.b[1], e.b[2]) });
+  const margin = 7;
+  const mustIn = points.filter(q => q.p[0] > pl[0] + margin && q.p[0] < pr[0] - margin && q.p[1] > pl[1] + margin && q.p[1] < pr[1] - margin).map(q => q.k);
+  const mustOut = points.filter(q => q.p[0] < pl[0] - margin || q.p[0] > pr[0] + margin || q.p[1] < pl[1] - margin || q.p[1] > pr[1] + margin).map(q => q.k);
+  check(mustIn.length >= 3 && mustOut.length >= 3, `the window has ${mustIn.length} points inside it and ${mustOut.length} outside, so the drag tells something`);
+  // pointing: a class in the window answers, a class the window has cut away does not, though it sits under the pointer
+  const hidden = points.filter(q => mustOut.includes(q.k) && q.p[0] > svgBox[0] + 4 && q.p[0] < svgBox[2] - 4 && q.p[1] > svgBox[1] + 4 && q.p[1] < svgBox[3] - 4);
+  const shown = points.find(q => mustIn.includes(q.k));
+  await page.mouse.move(shown.p[0], shown.p[1]); await page.waitForTimeout(150);
+  check(JSON.stringify(await chosen()) === JSON.stringify([shown.k]), `pointing at a class in the window chooses it (${shown.k})`);
+  check(hidden.length > 0, `${hidden.length} classes cut away by the window lie inside the picture's frame, under the margins`);
+  await page.mouse.move(svgBox[0] + 3, svgBox[1] + 3);
+  let leaked = [];
+  for (const q of hidden) { await page.mouse.move(q.p[0], q.p[1]); await page.waitForTimeout(120); if ((await chosen()).includes(q.k)) leaked.push(q.k); }
+  check(leaked.length === 0, `pointing at the place where a cut-away class lies, outside the plot area, chooses nothing (${leaked.length} of ${hidden.length} leaked)`);
+  await page.mouse.move(svgBox[0] + 3, svgBox[1] + 3); await page.waitForTimeout(100);
+  await drag(svgBox[0] + 2, svgBox[1] + 2, svgBox[2] - 2, svgBox[3] - 2);
+  const got = await chosen();
+  check(mustIn.every(k => got.includes(k)), `a drag across the whole picture chooses the classes shown in it (${mustIn.length})`);
+  check(mustOut.every(k => !got.includes(k)), `and none of those the window has cut away (${mustOut.length} outside, ${mustOut.filter(k => got.includes(k)).length} chosen)`);
+  check(await page.evaluate(() => document.querySelectorAll('.tda4j-brush').length) === 1, 'the rectangle is there');
+
+  // the pan button turns the drag into a pan: the selection stays, and the rectangle goes
+  const bar = page.locator('.tda4j-panel').nth(1).locator('.tda4j-zoombar');
+  await bar.locator('button[aria-label^="drag to pan"]').click();
+  const w0 = await page.evaluate(() => document.querySelector('.tda4j-ia').tda4j.window(1));
+  await drag(svgBox[0] + 200, svgBox[1] + 200, svgBox[0] + 230, svgBox[1] + 170);
+  const w1 = await page.evaluate(() => document.querySelector('.tda4j-ia').tda4j.window(1));
+  check(w1[0] < w0[0] && w1[2] > w0[2] - 1e-12 || w1[0] !== w0[0], 'in pan mode a drag moves the window');
+  check(JSON.stringify((await chosen()).sort()) === JSON.stringify(got.sort()), 'and does not touch the selection');
+  check(await page.evaluate(() => document.querySelectorAll('.tda4j-brush').length) === 0, 'the rectangle of the old window is taken away when the window moves');
+  await bar.locator('button[aria-label^="drag to pan"]').click();
+  await bar.locator('button[aria-label="show everything"]').click();
+  const full = await page.evaluate(() => document.querySelector('.tda4j-ia').tda4j.window(1));
+  check(full[0] < 0.02 && full[1] > zw[1], 'the 1:1 button shows everything again');
+
+  // the barcode zooms along the filtration only
+  const bw0 = await page.evaluate(() => document.querySelector('.tda4j-ia').tda4j.window(2));
+  await page.locator('.tda4j-panel').nth(2).locator('.tda4j-zoombar button[aria-label="zoom in"]').click();
+  const bw1 = await page.evaluate(() => document.querySelector('.tda4j-ia').tda4j.window(2));
+  check(Math.abs((bw1[1] - bw1[0]) - (bw0[1] - bw0[0]) / 2) < 1e-9 && bw1[2] === bw0[2] && bw1[3] === bw0[3], 'the barcode zooms along the filtration and keeps all its rows');
+
+  check(errors.length === 0, `no errors while zooming the explore page ${errors.join(' | ')}`);
+  await page.close();
+}
+
 await browser.close();
 process.exit(failures ? 1 : 0);
