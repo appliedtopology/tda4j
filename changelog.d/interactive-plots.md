@@ -1,6 +1,6 @@
 ### Added
 
-- Interactive plots (#102). `Plot.filtration(points)` is a self-contained HTML page with a slider for the scale: the
+- Interactive plots (#102, #332). `Plot.filtration(points)` is a self-contained HTML page with a slider for the scale: the
   complex at that scale (balls, edges and triangles) beside the persistence diagram, where each class is a vertical
   segment from the diagonal up to the line that follows the slider, and a point once the line passes its death.
   `Plot.filtration3D` has the complex in 3-D, `barcode = true` swaps the diagram for the barcode, `stops = true` makes
