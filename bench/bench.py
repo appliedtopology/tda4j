@@ -9,7 +9,7 @@
     bench.py constraints RESULTS                         a pip constraints file from the run's env.json
 
 Normally driven by bench/run.sh, which builds the tools and sets the environment variables read here
-(TDA4J_CP, TDA4J_JS, NODE, RIPSER_BIN, RIPSER_COEFF_BIN, REDZED_BIN, JULIA, RIPSERER_PROJECT, JAVAPLEX_JAR, JAVAPLEX_BUILD). A tool
+(TDA4J_CP, TDA4J_JS, NODE, RIPSER_BIN, RIPSER_COEFF_BIN, RIPSER_PATCHED_BIN, RIPSER_PATCHED_COEFF_BIN, REDZED_BIN, REDZED_PATCHED_BIN, JULIA, RIPSERER_PROJECT, JAVAPLEX_JAR, JAVAPLEX_BUILD). A tool
 whose variable is unset, or whose Python package is missing, is skipped and listed as `missing`.
 
 The `tda4j-js*` tools are the Scala.js build, packaged as the npm package and run on Node.js
@@ -212,10 +212,16 @@ TOOLS = [
     ("tda4j-parallel-mt", "tda4j", "vr",
      {"engine": "parallel", "reps": "none", "threads": "ALL", "multithreaded": True, "experiment": True}),
     ("ripser.cpp", "ripser", "vr", {}),
+    # A fork or patched branch of ripser.cpp, built by `run.sh setup ripser` from RIPSER_PATCHED_REPO / RIPSER_PATCHED_REF
+    # (README, "Forked builds"): a row of its own beside the stock one, left out ("missing") when the variable is unset. It
+    # is never the reference, so its agreement column is its barcode against stock ripser.cpp's.
+    ("ripser.cpp-patched", "ripser", "vr", {"binary": "RIPSER_PATCHED_BIN", "coeff_binary": "RIPSER_PATCHED_COEFF_BIN"}),
     # RedZeD (Kapulkin and Kershaw, arXiv:2606.06310; C++17, one thread): Z/2 only, Vietoris-Rips only, homology; the output is
     # the bars, with no representatives. Its input is the binary lower triangle of the distance matrix, made before the run
     # and not timed (redzed_io.py), as DIPHA's is; it caps the threshold at the enclosing radius itself.
     ("redzed", "redzed", "vr", {"only_p": 2}),
+    # A fork of RedZeD, from REDZED_PATCHED_REPO / REDZED_PATCHED_REF, as ripser.cpp-patched is for ripser.cpp.
+    ("redzed-patched", "redzed", "vr", {"only_p": 2, "binary": "REDZED_PATCHED_BIN"}),
     # DIPHA (Bauer, Kerber and Reininghaus; MPI): Z/2 only, always the dualized algorithm (as in the Ripser paper's
     # Dockerfile). Its input is a sparse distance matrix with the threshold in it, made before the run and not timed
     # (dipha_io.py); `dipha-mt` is the same under mpiexec with a rank per core, and its memory is the sum over the ranks.
@@ -665,9 +671,9 @@ def available(kind, opts, python):
     if kind == "tda4j-js":
         return bool(env.get("TDA4J_JS")) and Path(env["TDA4J_JS"]).exists() and shutil.which(env.get("NODE", "node")) is not None
     if kind == "ripser":
-        return bool(env.get("RIPSER_BIN"))
+        return bool(env.get(opts.get("binary", "RIPSER_BIN")))
     if kind == "redzed":
-        return bool(env.get("REDZED_BIN"))
+        return bool(env.get(opts.get("binary", "REDZED_BIN")))
     if kind == "julia":
         return bool(env.get("JULIA")) and bool(env.get(JULIA_TOOLS[opts.get("julia_tool", "ripserer")][0]))
     if kind == "phat":
@@ -749,12 +755,13 @@ def command(kind, name, opts, case, data, p, threshold, warmup, trials, out, arg
         return cmd + [str(matrix), str(Path(out).with_suffix(".pairs"))]
     if kind == "redzed":
         source = redzed_io.prepare_input(lambda: np.loadtxt(data / fname, ndmin=2), fmt, data / "redzed" / f"{case.name}.lower")
-        cmd = [os.environ["REDZED_BIN"], str(source), str(dim), "--lower", "--barcode"]
+        cmd = [os.environ[opts.get("binary", "REDZED_BIN")], str(source), str(dim), "--lower", "--barcode"]
         if threshold is not None:
             cmd += ["--threshold", repr(threshold)]
         return cmd
     if kind == "ripser":
-        binary = os.environ["RIPSER_BIN"] if p == 2 else os.environ.get("RIPSER_COEFF_BIN", "")
+        binary = (os.environ[opts.get("binary", "RIPSER_BIN")] if p == 2
+                  else os.environ.get(opts.get("coeff_binary", "RIPSER_COEFF_BIN"), ""))
         if not binary:
             return None
         cmd = [binary, str(data / fname), "--dim", str(dim),
@@ -1308,6 +1315,11 @@ def write_env(out, args):
         "julia": cmd_out([os.environ["JULIA"], "--version"]) if os.environ.get("JULIA") else "",
         "ripser_git": cmd_out(["git", "-C", str(Path(os.environ.get("RIPSER_BIN", ".")).parent), "rev-parse", "HEAD"]),
         "redzed_git": cmd_out(["git", "-C", str(Path(os.environ.get("REDZED_BIN", ".")).parent), "rev-parse", "HEAD"]),
+        # the forked builds (README, "Forked builds"): the commit each was built from, "" where there is none
+        "ripser_patched_git": cmd_out(["git", "-C", str(Path(os.environ.get("RIPSER_PATCHED_BIN", ".")).parent), "rev-parse", "HEAD"])
+        if os.environ.get("RIPSER_PATCHED_BIN") else "",
+        "redzed_patched_git": cmd_out(["git", "-C", str(Path(os.environ.get("REDZED_PATCHED_BIN", ".")).parent), "rev-parse", "HEAD"])
+        if os.environ.get("REDZED_PATCHED_BIN") else "",
         **revision(classes_directory()),
         **js_revision(os.environ.get("TDA4J_JS_GIT"), checkout_of(classes_directory())),
         "jvm_flags": jvm_flags(args.jvm_heap, args.jvm_opts, getattr(args, "jvm_fixed_heap", False)),

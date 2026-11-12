@@ -35,6 +35,10 @@
 #   NODE           node binary for the Scala.js build of TDA4j (20.16 or newer; default: node on PATH); tda4j-js is
 #                  skipped if there is none
 #   SKIP_TDA4J_BUILD=1   reuse the classpath file from a previous setup
+#   RIPSER_PATCHED_REPO, RIPSER_PATCHED_REF, REDZED_PATCHED_REPO, REDZED_PATCHED_REF, REDZED_PATCHED_SRC
+#                  a fork or patched branch of ripser.cpp or RedZeD (a URL or local path; a branch, tag or commit): `setup
+#                  ripser redzed` builds it too, and the rows `ripser.cpp-patched` and `redzed-patched` run beside the stock
+#                  ones (README, "Forked builds"). Unset: no such rows.
 #   RESULTS_DIR    where `run` writes (default: $WORKDIR/results/<timestamp>); bench/final_run.sh names its stages
 #   PIP_CONSTRAINTS   a pip constraints file for `setup python` (`bench.py constraints DIR` writes one from a run's
 #                  env.json), to install the versions an earlier run measured
@@ -82,6 +86,44 @@ setup_ripser() {
   if [ ! -d "$TOOLS/ripser" ]; then git clone --depth 1 https://github.com/Ripser/ripser.git "$TOOLS/ripser"; fi
   (cd "$TOOLS/ripser" && make ripser ripser-coeff)
   "$TOOLS/ripser/ripser" --help >/dev/null 2>&1 || true
+  setup_forked ripser-patched "${RIPSER_PATCHED_REPO:-}" "${RIPSER_PATCHED_REF:-}"
+}
+
+# A fork or patched branch of ripser.cpp or RedZeD, as a row of its own beside the stock one (README, "Forked builds").
+#   setup_forked ripser-patched|redzed-patched REPO [REF]
+# REPO is a URL or a local path, REF a branch, tag or commit (default: the repository's HEAD). It is cloned into
+# $TOOLS/<name>, fetched again at each setup (so a branch that moved is rebuilt), and built exactly as the stock tool is.
+# Nothing happens where REPO is empty. A failure removes the binary: the row is reported as missing, the stock rows stand.
+setup_forked() {
+  local name="$1" repo="$2" ref="${3:-}"
+  if [ -z "$repo" ]; then return; fi
+  local dir="$TOOLS/$name"
+  log "$name: $repo @ ${ref:-HEAD}"
+  { [ -d "$dir/.git" ] || git clone --quiet "$repo" "$dir"; } \
+    && git -C "$dir" fetch --quiet origin "${ref:-HEAD}" \
+    && git -C "$dir" checkout --quiet --detach FETCH_HEAD \
+    || { echo "WARNING: $name could not be fetched; it will be reported as missing"; rm -f "$dir/ripser" "$dir/ripser-coeff" "$dir/redzed"; return; }
+  echo "$name: built from $(git -C "$dir" rev-parse HEAD)"
+  case "$name" in
+    ripser-patched)
+      rm -f "$dir/ripser" "$dir/ripser-coeff"
+      # -B: the checkout may have moved to older files than the objects. The coefficient build is optional in a fork.
+      (cd "$dir" && make -B ripser) \
+        || { echo "WARNING: $name did not build; it will be reported as missing"; return; }
+      (cd "$dir" && make -B ripser-coeff) \
+        || echo "WARNING: $name has no ripser-coeff target: its row runs over Z/2 only"
+      if ! "$dir/ripser" "$BENCH/smoke-points.txt" --dim 1 --format point-cloud >/dev/null; then
+        echo "WARNING: $name failed its smoke test (stock ripser.cpp's command line); it will be reported as missing"
+        rm -f "$dir/ripser" "$dir/ripser-coeff"
+      fi
+      ;;
+    redzed-patched)
+      rm -f "$dir/redzed"
+      # REDZED_PATCHED_SRC: the source file to compile, relative to the repository (default: the stock one's)
+      g++ -O3 -std=c++17 -DNDEBUG -o "$dir/redzed" "$dir/${REDZED_PATCHED_SRC:-python/cpp/redzed.cpp}" \
+        || echo "WARNING: $name did not build; it will be reported as missing"
+      ;;
+  esac
 }
 
 setup_redzed() {
@@ -93,6 +135,7 @@ setup_redzed() {
   (cd "$TOOLS/redzed" && git checkout --quiet 22ef1bf8696bccad02b041a83863d12d4bd92766) \
     && g++ -O3 -std=c++17 -DNDEBUG -o "$TOOLS/redzed/redzed" "$TOOLS/redzed/python/cpp/redzed.cpp" \
     || { echo "WARNING: RedZeD did not build; it will be reported as missing"; return; }
+  setup_forked redzed-patched "${REDZED_PATCHED_REPO:-}" "${REDZED_PATCHED_REF:-}"
 }
 
 setup_julia() {
@@ -298,8 +341,15 @@ export_env() {
   export RIPSER_COEFF_BIN="$TOOLS/ripser/ripser-coeff"
   [ -x "$RIPSER_BIN" ] || unset RIPSER_BIN
   [ -x "$RIPSER_COEFF_BIN" ] || unset RIPSER_COEFF_BIN
+  # the forked builds exist only where `setup` was given RIPSER_PATCHED_REPO / REDZED_PATCHED_REPO; their rows are "missing" otherwise
+  export RIPSER_PATCHED_BIN="$TOOLS/ripser-patched/ripser"
+  export RIPSER_PATCHED_COEFF_BIN="$TOOLS/ripser-patched/ripser-coeff"
+  [ -x "$RIPSER_PATCHED_BIN" ] || unset RIPSER_PATCHED_BIN
+  [ -x "$RIPSER_PATCHED_COEFF_BIN" ] || unset RIPSER_PATCHED_COEFF_BIN
   export REDZED_BIN="$TOOLS/redzed/redzed"
   [ -x "$REDZED_BIN" ] || unset REDZED_BIN
+  export REDZED_PATCHED_BIN="$TOOLS/redzed-patched/redzed"
+  [ -x "$REDZED_PATCHED_BIN" ] || unset REDZED_PATCHED_BIN
   if [ -s "$TOOLS/julia.path" ]; then
     export JULIA="$(cat "$TOOLS/julia.path")" RIPSERER_PROJECT="$TOOLS/julia"
   fi
