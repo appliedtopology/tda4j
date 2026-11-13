@@ -42,7 +42,7 @@ on `/events`), on `127.0.0.1` unless `tda4j.plot.host` names another address (a 
 `testFull` opens a tab). The server starts FROM a daemon thread with a daemon XNIO worker, so it never keeps a
 REPL alive; `PlotSpec` reads an event with a 10 s deadline (a lost event must fail, not hang CI).
 `Plot.viewWith(target)(body)` sends the block's `view()`s to `target` instead (the demo's web page); a host must run
-user code on its OWN copy of the library's classes, where the target is set (`WORKLOG-web-playground-build.md`).
+user code on the copy of the library's classes that set the target (`WORKLOG-web-playground-build.md`).
 A plot prints as one line (`Figure("Barcode", 50 marks)`), because a REPL echoes `fig.view()`; a new plot kind too.
 
 **Look at what you draw.** `src/test/.../plot/Gallery.scala` writes every kind of plot and the customizations (`sbt

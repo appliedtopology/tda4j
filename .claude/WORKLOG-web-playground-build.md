@@ -36,6 +36,7 @@ two threads on one processor, which hung the page).
    | `Parallel.threads` forced to 1 (probe) | 8 of 8, 4.6 to 5.0 s |
    | `Parallel.sequentially` around the run (the fix) | 8 of 8, 4.3 to 4.6 s |
    | the fix, and no class loader of our own (below) | 8 of 8, 4.3 to 4.7 s |
+   | the final build (one object, `WebRepl`) | 6 of 6, 4.4 to 4.7 s |
 
    What did not find it: a CDP pause of the spinning tab shows CheerpJ's compiled frames as `J_00xxxxxx`, no Java
    names; `Thread.getAllStackTraces` returns an empty map there, so a watchdog thread in Java cannot dump the others.
