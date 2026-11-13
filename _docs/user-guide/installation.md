@@ -100,7 +100,7 @@ a first call and for building the wheel from a [source checkout](#from-source).
 The same REPL runs without Java in two more ways:
 
 - **In a browser tab**, at [tda4j.appliedtopology.org/playground](https://tda4j.appliedtopology.org/playground/).
-  Nothing is installed and plots appear under the line that drew them. It takes about 20 seconds to start and
+  Nothing is installed and plots appear under the line that drew them. It takes 20 to 30 seconds to start and
   computes roughly ten times slower than a Java runtime, so it suits small examples.
 - **In a container**, at full speed:
 

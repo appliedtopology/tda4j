@@ -2,7 +2,7 @@
 
 - The demo REPL runs in a browser tab: a page that needs nothing installed, with the same imports and session as
   `tda4j-demo-<version>.jar` and each plot under the line that drew it. It is published on the docs site under
-  `/playground/`; `sbt webSite` in `demo/` builds it for another host. It starts in about 20 seconds and computes
+  `/playground/`; `sbt webSite` in `demo/` builds it for another host. It starts in 20 to 30 seconds and computes
   roughly ten times slower than a Java runtime (`demo/README.md`, "In a web page").
 - The demo REPL as a container image, `ghcr.io/appliedtopology/tda4j-demo`, for a machine with Docker and no Java:
   `docker run --rm -p 127.0.0.1:7681:7681 -p 127.0.0.1:8337:8337 ghcr.io/appliedtopology/tda4j-demo` serves the REPL as

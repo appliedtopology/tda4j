@@ -4,7 +4,8 @@
 runs in a static page on CheerpJ 5.0). The project lead's ask after it: "wire up the cheerpj route as well as see
 whether something can be built with a container for tutorial participants to download that gives them a local thing to
 run for a local web terminal." Both are built. Open items: #334 (what has not been run), #335 (gh-pages size), #336
-(upstream reports), #337 (ulp-long H2 bars in the first example), #338 (the page's limits).
+(upstream reports), #337 (ulp-long H2 bars in the first example), #338 (the page's limits), #339 (the library counts
+two threads on one processor, which hung the page).
 
 ## What exists now
 
@@ -12,7 +13,7 @@ run for a local web terminal." Both are built. Open items: #334 (what has not be
 |---|---|
 | `Plot.viewWith(target)(body)`: `view()` inside the block goes to `target`, not to the viewer | `plot/Plot.scala`, `PlotViewWithSpec` (JVM and JS), `PlotSpec` |
 | `tda4j.plot.host` / `TDA4J_PLOT_HOST`: the viewer's listen address (default `127.0.0.1`) | `plot/Viewer.scala` (JVM), `PlotSpec` |
-| the page's driver: `WebRepl` (what the page calls) and `WebSession` (the compiler, one input at a time) | `demo/src/...` |
+| the page's driver `WebRepl`: the compiler, one input at a time, each on one thread | `demo/src/...` |
 | `WebPatch`: rewrites the classes CheerpJ cannot run into a second jar | `demo/src/...` |
 | the page, a Range-capable local server, `sbt webSite` | `demo/web/`, `demo/build.sbt` |
 | the container image: Java 21, the jar, ttyd, dtach, tini | `demo/container/` |
@@ -21,17 +22,37 @@ run for a local web terminal." Both are built. Open items: #334 (what has not be
 
 ## The page: what had to be found out
 
-1. **The REPL must not run in the class loader CheerpJ gives the entry class.** With `ReplDriver`'s class loader set
-   to that loader (so that the user's lines share the library with the driver), the first line that needed a library
-   class not loaded yet never returned: `Persistence(points)` hung until the 240 s timeout. With a plain
-   `URLClassLoader(jars, platformLoader)` made by us it returns in about 4 s. Hence two objects: `WebRepl` is loaded by
-   the runtime, makes that loader, loads `WebSession` in it reflectively and forwards strings. Why CheerpJ's own loader
-   hangs was not found.
-2. **One copy of the library, or `view()` is not captured.** `Plot.viewWith`'s target lives in the `Plot` object of the
-   loader that set it. The REPL makes a second copy in two ways by default: its own `URLClassLoader` over the class
-   path, and `-Xrepl-interrupt-instrumentation` (default on), which re-defines every class a line touches, rewritten
-   for Ctrl-C. `WebSession` passes its own loader and switches the instrumentation off. With instrumentation on (and
-   the loader of point 1) the first library call also hung.
+1. **Every input runs inside `Parallel.sequentially`, or the page hangs at random.** `Persistence(points)` (50 points
+   on a circle) never came back in 7 of 10 fresh sessions of the same build: one renderer thread at 100% of a core,
+   memory flat near 650 MB, until the 240 s timeout. The cause is in the library: `Parallel.threads` is the common
+   pool's parallelism plus the caller, the JDK never reports a parallelism below 1, so on CheerpJ's one processor the
+   count is 2, `Engine.Auto` chooses `ParallelRipser`, and its fork-join threads never finish there. `WebRepl.eval`
+   wraps the driver's run in `Parallel.sequentially`; the library's count itself is #339. Trials, each a new browser
+   and a new session, the input `val diagram = Persistence(points)` after the same `points`:
+
+   | build | result |
+   |---|---|
+   | as first committed | 3 of 10 came back |
+   | `Parallel.threads` forced to 1 (probe) | 8 of 8, 4.6 to 5.0 s |
+   | `Parallel.sequentially` around the run (the fix) | 8 of 8, 4.3 to 4.6 s |
+   | the fix, and no class loader of our own (below) | 8 of 8, 4.3 to 4.7 s |
+
+   What did not find it: a CDP pause of the spinning tab shows CheerpJ's compiled frames as `J_00xxxxxx`, no Java
+   names; `Thread.getAllStackTraces` returns an empty map there, so a watchdog thread in Java cannot dump the others.
+   What found it: asking which code path differs between a browser and the terminal check of the same jar (the
+   processor count), then the two-line probe.
+2. **A wrong conclusion the same hang produced, and its removal.** The first build ran the session in a class loader of
+   its own (`WebRepl` made a `URLClassLoader(jars, platformLoader)`, loaded a second object `WebSession` in it
+   reflectively and forwarded strings), because "with the loader CheerpJ gives the entry class the first library call
+   hangs, with our own it returns in 4 s". Each side of that comparison was one or two runs of a session that hangs
+   7 times in 10 whatever its loader. With the fix of point 1 the page calls the session object directly, loaded by
+   `cheerpjRunLibrary(classPath)`: 8 of 8, and the whole check script passes. The second object and the reflection are
+   gone. The same goes for "with `-Xrepl-interrupt-instrumentation` on the first library call also hung": not shown.
+   **Rule: a hang seen once is a rate until it has been repeated; compare variants over several fresh sessions.**
+   What stands: **one copy of the library, or `view()` is not captured.** `Plot.viewWith`'s target lives in the `Plot`
+   object of the loader that set it, and the REPL makes a second copy in two ways by default: its own `URLClassLoader`
+   over the class path, and `-Xrepl-interrupt-instrumentation` (default on), which re-defines every class a line
+   touches, rewritten for Ctrl-C. `WebRepl` passes its own loader to the driver and switches the instrumentation off.
 3. **`wide` instructions for `long`, `float`, `double` stop CheerpJ 5.0**, not only in `Flags$` (the feasibility
    round's one patch). The current library's `plot.Svg$.render` has `double` slots above 255, so every plot died.
    `WebPatch` now scans the whole jar: any method with a `long`/`float`/`double` variable instruction on a slot above
@@ -48,7 +69,7 @@ run for a local web terminal." Both are built. Open items: #334 (what has not be
    in `StackTraceOps`. Reproduced on HotSpot with a hand-made `StackTraceElement`. `WebPatch` substitutes
    `"Unknown Source"` (`BUGS-IN-REFERENCES.md`).
 5. **After the driver itself throws, the next definition breaks** (`NoClassDefFoundError: Could not initialize class
-   rs$line$N`): the half-loaded wrapper object's index is reused. `WebSession.eval` advances `objectIndex` and adds the
+   rs$line$N`): the half-loaded wrapper object's index is reused. `WebRepl.eval` advances `objectIndex` and adds the
    old one to `invalidObjectIndexes`.
 6. **`ParseResult.isIncomplete` needs the raw text.** An indented block is "incomplete" until an empty line, as in the
    terminal. The page asks with the textarea's value untrimmed, so the empty line reaches the compiler; a right-trimmed
@@ -57,25 +78,25 @@ run for a local web terminal." Both are built. Open items: #334 (what has not be
 ## The page: measurements
 
 Headless Chromium (Playwright 1.63), cloud container, jar on localhost, CheerpJ 5.0 from its CDN.
-`check-web-playground.mjs`: 22 checks pass in 72 s.
+`check-web-playground.mjs` on the final build (one thread, no loader of our own): 22 checks pass in 76 s.
 
 | step | time |
 |---|---|
-| page load to first prompt (runtime, jar, compiler start, imports) | 21.1 s |
+| page load to first prompt (runtime, jar, compiler start, imports) | 24.0 s (21.1 and 26.3 s in two other runs) |
 | `1 + 1` (first line) | 1.1 s |
-| `val points = Array.tabulate(50)(...)` | 7.0 s |
-| `Persistence(points)` | 4.4 s |
-| `Plot.barcode(diagram).view()` | 1.9 s |
-| two plots in one input | 0.8 s |
+| `val points = Array.tabulate(50)(...)` | 7.1 s |
+| `Persistence(points)` | 4.2 s |
+| `Plot.barcode(diagram).view()` | 2.1 s |
+| two plots in one input | 0.9 s |
 | a call of an earlier definition | 0.4 s |
-| an exception with its trace | 1.8 s |
-| the library's own `require` failure | 0.7 s |
-| the first type error | 30.6 s |
-| `println` after the failures | 0.8 s |
+| an exception with its trace | 1.7 s |
+| the library's own `require` failure | 0.8 s |
+| the first type error | 32.6 s |
+| `println` after the failures | 0.7 s |
 
-The "about 40 MB fetched on a first visit" in the README and the page is the feasibility round's figure (42 MB of the
-jar, Range requests counted). The check script now prints the megabytes fetched from the site; that line has not
-been read yet, because the run that would have shown it ended with the session's machine restarting (below).
+The whole session fetched 51.3 MB from the site (51.7 MB in another run): the Range requests for the two jars and the
+page, summed by the check script. The README and the page say "about 50 MB on a first visit"; the feasibility round's
+"about 40 MB" was a shorter session.
 
 ## The container: decisions
 
@@ -97,9 +118,10 @@ been read yet, because the run that would have shown it ended with the session's
 - **Any user id.** `/work` and the home folder are world-writable, so `--user "$(id -u):$(id -g)"` with a mounted
   folder works (checked with uid 12345: `Plot.save` wrote a file owned by it).
 - **Base image** `eclipse-temurin:21-jre` (Ubuntu 26.04: ttyd 1.7.7, dtach 0.9, tini from its archive). Image 602 MB
-  on disk, 185 MB compressed, 183 MB as `docker save | gzip`. `docker run` to first prompt: 2.6 s.
+  on disk, 185 MB compressed, 183 MB as `docker save | gzip`. `docker run` to first prompt: 2.6 s, and 8.1 s for the
+  first container of a newly built image.
 
-`check-demo-container.mjs`: 13 checks pass in 12 s (title, imports and `Persistence`, Tab completion, `view()` and the
+`check-demo-container.mjs`: 13 checks pass in 12 to 19 s, the last time on the image with the final jar (title, imports and `Persistence`, Tab completion, `view()` and the
 plot on the published port, the viewer's page, non-ASCII in and out, a pasted block, reload keeps the session, `:quit`
 starts a new one, the container survives, no zombies).
 
@@ -129,6 +151,6 @@ build and push the image for amd64 and arm64 with plain `docker` commands (no th
   A local base image with the CA, `Acquire::https::Proxy` and `https://` sources, passed as `--build-arg BASE=...`
   with `--network host`, builds the real Dockerfile unchanged (the `BASE` argument exists for this).
 - Running `docker save | gzip` and then the Chromium check in one command ended with exit 137 and a restarted machine.
-  Files on disk survived, the Docker daemon and its images did not. Commit before heavy runs.
+  Files on disk and Docker's images survived; the daemon had to be started again. Commit before heavy runs.
 - `pgrep -f pattern` inside a command whose own text contains the pattern kills the shell: use
   `ps -eo pid,args | grep "[p]attern"`.

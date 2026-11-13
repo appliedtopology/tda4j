@@ -99,7 +99,7 @@
     A plot you <code>view()</code> appears below the line that made it.</p>
   <p>This is the demo jar, <code>java -jar tda4j-demo.jar</code>, running in a Java runtime inside the page. It is
     several times slower than Java on your own machine, and an input with a type error can take ten seconds or more to
-    answer. The first visit downloads about 40 MB. For bigger examples, or with no network, use the jar.</p>
+    answer. The first visit downloads about 50 MB. For bigger examples, or with no network, use the jar.</p>
   <p>Built with <a href="https://cheerpj.com/">CheerpJ</a>.</p>
 </footer>
 
@@ -109,10 +109,9 @@
   const RUNTIME = "https://cjrtnc.leaningtech.com/5.0/loader.js";
   // CheerpJ shows this page's origin to Java as the directory /app, so the two jars beside this page are:
   const here = "/app" + location.pathname.replace(/[^/]*$/, "");
-  const demoJar = here + "tda4j-demo.jar";
-  // The session's class path. The patch jar goes first: its classes replace the ones of the same name in the demo
-  // jar, which this runtime cannot run as they are.
-  const classPath = here + "tda4j-demo-web-patch.jar:" + demoJar;
+  // The class path, for the runtime and for the Scala compiler in it. The patch jar goes first: its classes replace
+  // the ones of the same name in the demo jar, which this runtime cannot run as they are.
+  const classPath = here + "tda4j-demo-web-patch.jar:" + here + "tda4j-demo.jar";
 
   const transcript = document.getElementById("transcript");
   const form = document.getElementById("prompt");
@@ -292,8 +291,8 @@
       say("Starting the Java runtime…");
       await loadRuntime();
       await cheerpjInit({ version: 17, status: "none" });
-      say("Opening the library (a first visit downloads about 40 MB)…");
-      const library = await cheerpjRunLibrary(demoJar);
+      say("Opening the library (a first visit downloads about 50 MB)…");
+      const library = await cheerpjRunLibrary(classPath);
       repl = await library.org.appliedtopology.tda4j.demo.WebRepl;
       say("Starting Scala…");
       const greeting = String(await repl.start(classPath));

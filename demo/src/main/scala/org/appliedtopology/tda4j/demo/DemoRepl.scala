@@ -11,7 +11,7 @@ import java.util.logging.{Level, Logger}
   * wins (`-Xrepl-print-height:100` for longer output).
   */
 object DemoRepl:
-  // Shared with `WebSession`, the same session for a web page.
+  // Shared with `WebRepl`, the same session for a web page.
   private[demo] val predef: String =
     """import scala.language.experimental.modularity
       |import cats.syntax.show.*

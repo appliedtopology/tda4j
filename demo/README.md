@@ -49,7 +49,7 @@ downloads the jar and runs it in [CheerpJ](https://cheerpj.com/), a Java runtime
   empty line, as in the terminal. The Run button runs what is there. The up and down arrows walk through earlier
   inputs. There is no Tab completion and no Ctrl-C: reloading the page is the way out of a computation that takes too
   long, and it starts a new session.
-- **Speed.** The page needs about 20 seconds to reach its first prompt and downloads about 40 MB on a first visit.
+- **Speed.** The page needs 20 to 30 seconds to reach its first prompt and downloads about 50 MB on a first visit.
   A line then takes from half a second to a few seconds, and the first compile error of a session about half a
   minute. A computation runs roughly ten times slower than on a Java runtime, on one thread, in at most 2 GB: right
   for point clouds of tens to a few hundred points, wrong for the patches example.
@@ -71,8 +71,9 @@ try on your own machine. Opening `index.html` as a file does not work either.
 `tda4j-demo-web-patch.jar` holds the few classes of the jar that the runtime cannot run as they are: CheerpJ 5.0 stops
 on a method that keeps a `long`, `float` or `double` in a local variable beyond the 255th. `WebPatch` finds those
 methods in the jar (the compiler's flag table and the plots' SVG writer among them), renumbers their variables, and
-writes the rewritten classes to the second jar, which the page puts ahead of the first on the class path. It also makes the REPL's error printer accept a stack frame with no file name, which is every frame in this
-runtime. `WebRepl` is what the page calls; `WebSession` drives the compiler one input at a time.
+writes the rewritten classes to the second jar, which the page puts ahead of the first on the class path. It also
+makes the REPL's error printer accept a stack frame with no file name, which is every frame in this runtime. `WebRepl`
+is what the page calls: it drives the compiler one input at a time, each on one thread.
 
 ## In a container
 
