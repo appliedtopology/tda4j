@@ -54,3 +54,26 @@ assembly / assemblyMergeStrategy := {
   case PathList("scala", "collection", "internal", "pprint", _*) => MergeStrategy.first
   case other                                                     => (assembly / assemblyMergeStrategy).value(other)
 }
+
+// The same REPL as a web page (README.md, "In a web page"): `sbt webSite` fills demo/target/web with the page, the jar
+// under a fixed name, and the classes the page's Java runtime cannot run as they are, rewritten. The rewriting program
+// is in the jar itself (`WebPatch`) and reads the jar it runs from, so it runs from the jar just built.
+lazy val webSite = taskKey[File](
+  "The demo REPL as a static web site: the page, the jar, the classes rewritten for the page's Java runtime"
+)
+
+webSite := Def.uncached {
+  val _ = assembly.value
+  val jar = (assembly / assemblyOutputPath).value
+  val site = baseDirectory.value / "target" / "web"
+  IO.delete(site)
+  IO.copyDirectory(baseDirectory.value / "web", site)
+  IO.copyFile(jar, site / "tda4j-demo.jar")
+  val java = (file(sys.props("java.home")) / "bin" / "java").getPath
+  val patch = site / "tda4j-demo-web-patch.jar"
+  val command = Seq(java, "-cp", jar.getPath, "org.appliedtopology.tda4j.demo.WebPatch", patch.getPath)
+  val exit = scala.sys.process.Process(command).!
+  if (exit != 0) sys.error(s"WebPatch failed (exit $exit): the web page cannot start without its jar")
+  streams.value.log.info(s"web site in $site; try it with: node ${site / "serve.mjs"}")
+  site
+}

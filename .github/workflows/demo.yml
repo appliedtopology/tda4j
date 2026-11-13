@@ -1,0 +1,176 @@
+name: Demo
+
+# The demo REPL for people who install nothing (demo/README.md), in two forms built from one ref:
+#
+#   - the page that runs the REPL in a browser, published on the docs site under /playground/;
+#   - the container image that serves the REPL as a terminal page, published as ghcr.io/<owner>/tda4j-demo.
+#
+# Both are used in a headless browser before anything is published, and both replace what was published before: the
+# page and the image's `latest` tag are always the last ones this workflow built.
+#
+# Run it by hand for a branch (a tutorial that needs what is on `scala` today gets the snapshot); release.yml calls it
+# for every release tag, after the release itself.
+#
+# No `concurrency` group here, although the job pushes to gh-pages as docs.yml and release.yml do: release.yml holds
+# that group for its whole run, this job included, and a called workflow that asks for its caller's group is cancelled
+# as a deadlock. The push below rebases and tries again instead. A docs.yml run that fetches gh-pages in the few
+# seconds before this job pushes has its own push refused: run it again.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch or tag to build"
+        required: true
+        default: scala
+  workflow_call:
+    inputs:
+      ref:
+        description: "Branch or tag to build"
+        type: string
+        required: true
+
+permissions:
+  contents: write # the push to gh-pages
+  packages: write # the push to ghcr.io
+
+jobs:
+  demo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      REF: ${{ inputs.ref }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+      - name: Find the demo and its version
+        id: demo
+        run: |
+          # release.yml can be dispatched for a tag older than the page and the image; there is nothing to build there.
+          if ! [ -f demo/web/index.html ] || ! [ -f demo/container/Dockerfile ]; then
+            echo "::notice::'$REF' has no web page or container for the demo: nothing to build"
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # A release tag names the version, as in release.yml; anything else builds what version.sbt says.
+          if [[ "$REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-.+)?$ ]] && git rev-parse -q --verify "refs/tags/$REF" > /dev/null; then
+            VERSION="${REF#v}"
+          else
+            VERSION=$(sed -n 's/.*"\(.*\)".*/\1/p' version.sbt)
+          fi
+          [ -n "$VERSION" ] || { echo "::error::no version found for '$REF'"; exit 1; }
+          echo "found=true" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "jar=target/out/jvm/scala-3.9.0/tda4j-demo/tda4j-demo-$VERSION.jar" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/tda4j-demo" >> "$GITHUB_OUTPUT"
+      - name: Setup JDK
+        if: steps.demo.outputs.found == 'true'
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Setup Node.js
+        if: steps.demo.outputs.found == 'true'
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Setup sbt launcher
+        if: steps.demo.outputs.found == 'true'
+        uses: sbt/setup-sbt@v1
+      - name: Build the library, the demo jar and the page
+        if: steps.demo.outputs.found == 'true'
+        env:
+          VERSION: ${{ steps.demo.outputs.version }}
+          TDA4J_VERSION: ${{ steps.demo.outputs.version }}
+        run: |
+          # The demo is a separate sbt build that depends on a VERSION of the library: this checkout's own, published to
+          # ~/.ivy2/local first (without the scaladoc jar, which nothing here reads). `--server`, the pinned version and
+          # the switched-off disk cache: as in release.yml, which says why.
+          sbt --server "set ThisBuild / version := \"$VERSION\" ; set LocalProject(\"tda4j\") / Compile / packageDoc / publishArtifact := false ; tda4j/publishLocal"
+          cd demo
+          sbt --server "set Global / cacheStores := Nil ; ++3.9.0! ; webSite"
+          test -f "${{ steps.demo.outputs.jar }}" || { echo "::error::${{ steps.demo.outputs.jar }} was not built"; exit 1; }
+      - name: Run the page's session on this JVM
+        if: steps.demo.outputs.found == 'true'
+        working-directory: demo/target/web
+        run: |
+          # What the page calls, from a terminal, with the rewritten classes ahead of the jar as the page has them.
+          # -Xverify:all: a rewritten class that no longer verifies fails here, not in a participant's browser.
+          cp="tda4j-demo-web-patch.jar:tda4j-demo.jar"
+          out=$(timeout 300 java -Xverify:all -cp "$cp" org.appliedtopology.tda4j.demo.WebRepl "$cp" \
+            'val d = Persistence(Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0)))' \
+            'Plot.barcode(d).view()' 2>&1)
+          echo "$out" | tail -8
+          echo "$out" | grep -q "H1: 1 bar" || { echo "::error::the page's session did not compute the square's loop"; exit 1; }
+          echo "$out" | grep -q "a plot:" || { echo "::error::view() did not hand its plot to the page"; exit 1; }
+      - name: Install a headless browser
+        if: steps.demo.outputs.found == 'true'
+        run: |
+          # Outside the checkout; the check scripts find it through NODE_PATH.
+          npm install --prefix "$RUNNER_TEMP/playwright" playwright@1.63.0
+          "$RUNNER_TEMP/playwright/node_modules/.bin/playwright" install --with-deps chromium
+          echo "NODE_PATH=$RUNNER_TEMP/playwright/node_modules" >> "$GITHUB_ENV"
+      - name: Use the page in the browser
+        if: steps.demo.outputs.found == 'true'
+        # The page loads its Java runtime (CheerpJ) from the vendor's CDN: this step also fails when that is down.
+        run: node .claude/scripts/check-web-playground.mjs demo/target/web
+      - name: Build the container image and use it in the browser
+        if: steps.demo.outputs.found == 'true'
+        run: |
+          docker build -f demo/container/Dockerfile --build-arg "JAR=${{ steps.demo.outputs.jar }}" -t tda4j-demo:check demo
+          node .claude/scripts/check-demo-container.mjs tda4j-demo:check
+      - name: Publish the page
+        if: steps.demo.outputs.found == 'true'
+        env:
+          VERSION: ${{ steps.demo.outputs.version }}
+        run: |
+          set -e
+          site=demo/target/web
+          # GitHub refuses a push with a file of 100 MB or more.
+          if [ "$(stat -c %s "$site/tda4j-demo.jar")" -ge 100000000 ]; then
+            echo "::error::the demo jar has reached 100 MB and cannot be pushed to gh-pages"; exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin gh-pages
+          git worktree add -B gh-pages-demo /tmp/gh-pages origin/gh-pages
+          # The page and its two jars, which must come from the page's own site; nothing else of the site is touched.
+          # docs.yml keeps this folder when it replaces the site's root.
+          rm -rf /tmp/gh-pages/playground
+          mkdir /tmp/gh-pages/playground
+          cp "$site/index.html" "$site/tda4j-demo.jar" "$site/tda4j-demo-web-patch.jar" /tmp/gh-pages/playground/
+          cd /tmp/gh-pages
+          git add -A playground
+          if git diff --cached --quiet; then
+            echo "No changes to publish."
+            exit 0
+          fi
+          git commit -m "Publish the demo page for $VERSION"
+          for attempt in 1 2 3 4 5; do
+            if git push origin HEAD:gh-pages; then exit 0; fi
+            echo "push refused (attempt $attempt): gh-pages moved, rebasing on it"
+            git fetch origin gh-pages
+            git rebase origin/gh-pages
+          done
+          echo "::error::could not push the demo page to gh-pages"; exit 1
+      - name: Publish the container image
+        if: steps.demo.outputs.found == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.demo.outputs.version }}
+          IMAGE: ${{ steps.demo.outputs.image }}
+        run: |
+          # For Intel and ARM machines (an Apple Silicon laptop pulls the ARM one). The jar is the same in both; the ARM
+          # image's packages are installed under emulation, and that image is never run here.
+          echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker run --privileged --rm tonistiigi/binfmt --install arm64
+          docker buildx create --use --name demo
+          docker buildx build --platform linux/amd64,linux/arm64 --push \
+            -f demo/container/Dockerfile --build-arg "JAR=${{ steps.demo.outputs.jar }}" \
+            --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+            --label "org.opencontainers.image.description=The TDA4j demo REPL as a terminal in a web page" \
+            --label "org.opencontainers.image.version=$VERSION" \
+            -t "$IMAGE:$VERSION" -t "$IMAGE:latest" demo
+          echo "::notice::published $IMAGE:$VERSION and $IMAGE:latest"
