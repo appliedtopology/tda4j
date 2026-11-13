@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TDA4j in your browser</title>
+<style>
+  :root {
+    --page: #f8f7f4; --panel: #ffffff; --ink: #1d2a30; --muted: #5b6b73; --rule: #d9d6cd;
+    --accent: #205976; --gold: #866504; --error: #a4262c; --focus: #206f6f;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", "DejaVu Sans Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page: #161b1e; --panel: #1d2428; --ink: #e6ecef; --muted: #9aa9b1; --rule: #33404a;
+      --accent: #81bde0; --gold: #f0c647; --error: #ff9a94; --focus: #75c7c7;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { color-scheme: light dark; }
+  body {
+    margin: 0; background: var(--page); color: var(--ink);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  header, main, footer { max-width: 60rem; margin: 0 auto; padding: 0 1rem; }
+  header { padding-top: 1.5rem; }
+  h1 { margin: 0; font-size: 1.5rem; color: var(--accent); }
+  h1 small { font-size: 0.875rem; font-weight: normal; color: var(--muted); margin-left: 0.5rem; }
+  .lede { margin: 0.25rem 0 1rem; color: var(--muted); }
+  code, pre, textarea { font-family: var(--mono); font-size: 0.875rem; }
+  #session { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 0.75rem 1rem; }
+  #transcript:empty { display: none; }
+  #transcript { margin-bottom: 0.75rem; }
+  .entry + .entry { margin-top: 0.75rem; }
+  pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+  pre.in { color: var(--accent); }
+  pre.out.failed { color: var(--error); }
+  .took { color: var(--muted); font-size: 0.75rem; }
+  iframe.plot { display: block; width: 100%; height: 520px; border: 1px solid var(--rule); border-radius: 4px; margin-top: 0.5rem; background: var(--page); }
+  #prompt { display: flex; align-items: flex-start; gap: 0.5rem; }
+  #prompt label { font-family: var(--mono); font-size: 0.875rem; color: var(--gold); padding-top: 0.45rem; white-space: nowrap; }
+  textarea {
+    flex: 1; min-width: 0; resize: none; padding: 0.4rem 0.5rem; line-height: 1.5;
+    color: var(--ink); background: var(--page); border: 1px solid var(--rule); border-radius: 4px;
+  }
+  button {
+    font: inherit; color: var(--accent); background: transparent; border: 1px solid var(--accent); border-radius: 4px;
+    padding: 0.35rem 0.8rem; cursor: pointer;
+  }
+  button:disabled, textarea:disabled { opacity: 0.55; cursor: default; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  #status { margin: 0.5rem 0 0; min-height: 1.5rem; color: var(--muted); font-size: 0.875rem; }
+  #status.failed { color: var(--error); }
+  #examples { margin: 1rem 0 0; }
+  #examples p { margin: 0 0 0.4rem; color: var(--muted); font-size: 0.875rem; }
+  #examples button {
+    display: block; width: 100%; text-align: left; margin-top: 0.35rem; border-color: var(--rule); color: var(--ink);
+    font-family: var(--mono); font-size: 0.8125rem; overflow-wrap: anywhere;
+  }
+  .keys { color: var(--muted); font-size: 0.875rem; margin: 0.75rem 0 0; }
+  footer { padding-top: 1.5rem; padding-bottom: 2rem; color: var(--muted); font-size: 0.875rem; }
+  footer p { margin: 0 0 0.5rem; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>TDA4j in your browser <small id="version"></small></h1>
+  <p class="lede">A Scala 3 prompt with the library loaded. Nothing to install: it runs in this tab.</p>
+</header>
+
+<main>
+  <section id="session" aria-label="Scala session">
+    <div id="transcript" aria-live="polite"></div>
+    <form id="prompt">
+      <label for="input">scala&gt;</label>
+      <textarea id="input" rows="1" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" disabled></textarea>
+      <button id="run" type="submit" disabled>Run</button>
+    </form>
+    <p id="status" role="status">Starting…</p>
+  </section>
+
+  <section id="examples" aria-label="Examples">
+    <p>To start with, one after the other (a click puts the line at the prompt):</p>
+    <button type="button">val points = Array.tabulate(50)(i =&gt; Array(100*math.cos(i * math.Pi / 25), 100*math.sin(i * math.Pi / 25)))</button>
+    <button type="button">val diagram = Persistence(points)</button>
+    <button type="button">Plot.barcode(diagram).view()</button>
+    <button type="button">println(diagram.dim(1).longest(1).show)</button>
+  </section>
+
+  <p class="keys">Enter runs the input, or opens a new line while it is unfinished; an indented block ends with an empty
+    line, as in the terminal. Shift+Enter always opens a new line, and Run runs what is there. The up and down arrows
+    bring back earlier inputs.</p>
+</main>
+
+<footer>
+  <p>Already imported: <code>scala.language.experimental.modularity</code>, <code>cats.syntax.show.*</code>,
+    <code>org.appliedtopology.tda4j.*</code> and <code>org.appliedtopology.tda4j.plot.*</code>.
+    A plot you <code>view()</code> appears below the line that made it.</p>
+  <p>This is the demo jar, <code>java -jar tda4j-demo.jar</code>, running in a Java runtime inside the page. It is
+    several times slower than Java on your own machine, and an input with a type error can take ten seconds or more to
+    answer. The first visit downloads about 40 MB. For bigger examples, or with no network, use the jar.</p>
+  <p>Built with <a href="https://cheerpj.com/">CheerpJ</a>.</p>
+</footer>
+
+<script>
+(() => {
+  // The Java runtime: CheerpJ, from its own CDN (its licence for open-source projects asks for exactly that).
+  const RUNTIME = "https://cjrtnc.leaningtech.com/5.0/loader.js";
+  // CheerpJ shows this page's origin to Java as the directory /app, so the two jars beside this page are:
+  const here = "/app" + location.pathname.replace(/[^/]*$/, "");
+  const demoJar = here + "tda4j-demo.jar";
+  // The session's class path. The patch jar goes first: its classes replace the ones of the same name in the demo
+  // jar, which this runtime cannot run as they are.
+  const classPath = here + "tda4j-demo-web-patch.jar:" + demoJar;
+
+  const transcript = document.getElementById("transcript");
+  const form = document.getElementById("prompt");
+  const input = document.getElementById("input");
+  const runButton = document.getElementById("run");
+  const status = document.getElementById("status");
+
+  let repl = null;
+  let busy = true;
+  const history = [];
+  let recalled = 0;      // index into history while the arrows walk it; history.length is the line being typed
+  let draft = "";
+
+  function say(text, failed) {
+    status.textContent = text;
+    status.classList.toggle("failed", Boolean(failed));
+  }
+
+  function setBusy(now) {
+    busy = now;
+    input.disabled = now;
+    runButton.disabled = now;
+    if (!now) input.focus();
+  }
+
+  function fitInput() {
+    input.rows = Math.min(12, input.value.split("\n").length);
+  }
+
+  function setInput(text) {
+    input.value = text;
+    fitInput();
+    input.setSelectionRange(text.length, text.length);
+  }
+
+  function seconds(ms) {
+    return ms < 950 ? "under a second" : (ms / 1000).toFixed(ms < 9500 ? 1 : 0) + " s";
+  }
+
+  function addEntry(source) {
+    const entry = document.createElement("div");
+    entry.className = "entry";
+    const echo = document.createElement("pre");
+    echo.className = "in";
+    echo.textContent = source.split("\n").map((line, i) => (i === 0 ? "scala> " : "     | ") + line).join("\n");
+    entry.appendChild(echo);
+    transcript.appendChild(entry);
+    return entry;
+  }
+
+  function addOutput(entry, text, failed) {
+    if (!text) return;
+    const out = document.createElement("pre");
+    out.className = failed ? "out failed" : "out";
+    out.textContent = text.replace(/\n+$/, "");
+    entry.appendChild(out);
+  }
+
+  function addPlot(entry, page, number) {
+    const frame = document.createElement("iframe");
+    frame.className = "plot";
+    frame.title = "Plot " + number;
+    frame.addEventListener("load", () => {
+      // The frame is this page's own document (srcdoc), so its height can be read and the frame made to fit it.
+      try {
+        const height = frame.contentDocument.documentElement.scrollHeight;
+        if (height > 0) frame.style.height = Math.min(900, height + 2) + "px";
+      } catch (unreadable) { /* keep the default height */ }
+    });
+    frame.srcdoc = page;
+    entry.appendChild(frame);
+  }
+
+  let plotsShown = 0;
+
+  async function run(source) {
+    setBusy(true);
+    const entry = addEntry(source);
+    entry.scrollIntoView({ block: "nearest" });
+    const started = performance.now();
+    const ticking = setInterval(() => say("Running… " + Math.round((performance.now() - started) / 1000) + " s"), 1000);
+    say("Running…");
+    try {
+      addOutput(entry, String(await repl.eval(source)), false);
+      for (;;) {
+        const page = String(await repl.nextPlot());
+        if (!page) break;
+        plotsShown += 1;
+        addPlot(entry, page, plotsShown);
+      }
+      say("Ready. The last input took " + seconds(performance.now() - started) + ".");
+    } catch (failure) {
+      addOutput(entry, "The Java runtime failed on this input: " + (failure && failure.message ? failure.message : failure), true);
+      say("The Java runtime reported a failure. If the prompt stops answering, reload the page.", true);
+    } finally {
+      clearInterval(ticking);
+      setBusy(false);
+      form.scrollIntoView({ block: "nearest" });
+    }
+  }
+
+  async function submit(alwaysRun) {
+    const typed = input.value;
+    const source = typed.replace(/\s+$/, "");
+    if (busy || !source.trim()) return;
+    if (!alwaysRun) {
+      // Ask the compiler's own parser whether more is coming: an open brace, a `def` with no body yet, or an indented
+      // block, which only an empty line ends (so the question is about what was typed, its last empty line included).
+      setBusy(true);
+      let unfinished = false;
+      try { unfinished = Boolean(await repl.isIncomplete(typed)); } catch (ignored) { unfinished = false; }
+      setBusy(false);
+      if (unfinished) {
+        setInput(input.value + "\n");
+        return;
+      }
+    }
+    history.push(source);
+    recalled = history.length;
+    draft = "";
+    setInput("");
+    await run(source);
+  }
+
+  form.addEventListener("submit", event => {
+    event.preventDefault();
+    submit(true);   // the Run button runs what is there, finished or not: the compiler says what is missing
+  });
+
+  input.addEventListener("input", fitInput);
+
+  input.addEventListener("keydown", event => {
+    if (event.isComposing) return;
+    const before = input.value.slice(0, input.selectionStart);
+    const after = input.value.slice(input.selectionEnd);
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      submit(false);
+    } else if (event.key === "ArrowUp" && !before.includes("\n") && recalled > 0) {
+      event.preventDefault();
+      if (recalled === history.length) draft = input.value;
+      recalled -= 1;
+      setInput(history[recalled]);
+    } else if (event.key === "ArrowDown" && !after.includes("\n") && recalled < history.length) {
+      event.preventDefault();
+      recalled += 1;
+      setInput(recalled === history.length ? draft : history[recalled]);
+    }
+  });
+
+  for (const example of document.querySelectorAll("#examples button")) {
+    example.addEventListener("click", () => {
+      if (busy) return;
+      setInput(example.textContent);
+      input.focus();
+    });
+  }
+
+  function loadRuntime() {
+    return new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = RUNTIME;
+      script.onload = resolve;
+      script.onerror = () => reject(new Error("could not load " + RUNTIME));
+      document.head.appendChild(script);
+    });
+  }
+
+  async function start() {
+    if (location.protocol === "file:") {
+      say("This page has to come from a web server, because the Java runtime fetches the jar beside it piece by " +
+          "piece. In this folder: node serve.mjs", true);
+      return;
+    }
+    const started = performance.now();
+    try {
+      say("Starting the Java runtime…");
+      await loadRuntime();
+      await cheerpjInit({ version: 17, status: "none" });
+      say("Opening the library (a first visit downloads about 40 MB)…");
+      const library = await cheerpjRunLibrary(demoJar);
+      repl = await library.org.appliedtopology.tda4j.demo.WebRepl;
+      say("Starting Scala…");
+      const greeting = String(await repl.start(classPath));
+      document.getElementById("version").textContent = String(await repl.version());
+      if (greeting.trim()) addOutput(addEntry("// the imports"), greeting, true);
+      say("Ready after " + seconds(performance.now() - started) + ". The first inputs are the slowest.");
+      setBusy(false);
+    } catch (failure) {
+      say("The session could not start: " + (failure && failure.message ? failure.message : failure) +
+          ". This page needs a network connection (the Java runtime comes from cjrtnc.leaningtech.com); " +
+          "the demo jar itself works without one.", true);
+    }
+  }
+
+  start();
+})();
+</script>
+</body>
+</html>
