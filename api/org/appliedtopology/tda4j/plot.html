@@ -226,7 +226,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/plot/Plot.scala#L273" target="_blank">Plot.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/plot/Plot.scala#L277" target="_blank">Plot.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -296,7 +296,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/plot/Plot.scala#L283" target="_blank">Plot.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/plot/Plot.scala#L287" target="_blank">Plot.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -371,7 +371,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/plot/Plot.scala#L231" target="_blank">Plot.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/plot/Plot.scala#L235" target="_blank">Plot.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -472,7 +472,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/plot/Plot.scala#L62" target="_blank">Plot.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/plot/Plot.scala#L66" target="_blank">Plot.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -3614,7 +3614,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/plot/Plot.scala#L298" target="_blank">Plot.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/plot/Plot.scala#L302" target="_blank">Plot.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes
@@ -6099,6 +6099,7 @@
              <div class="doc">
               <p>The live viewer: one browser tab that shows every plot <code>view()</code>ed from this JVM, newest first, as it arrives.</p>
               <p>The first <code>view()</code> starts a small web server on <code>127.0.0.1</code> (port 8337, or a free one when that is taken; set another with the system property <code>tda4j.plot.port</code> or the environment variable <code>TDA4J_PLOT_PORT</code>) and opens the page in the default browser. Where there is no desktop to open it on (a remote machine, a container), it prints the address instead: open it yourself, forwarding the port if needed (<code>ssh -L 8337:localhost:8337 host</code>). Set <code>TDA4J_PLOT_BROWSER=none</code> (or the system property <code>tda4j.plot.browser=none</code>) to never open a browser. The page keeps a list of every plot shown, and reconnects by itself when the JVM restarts on the same port.</p>
+              <p>Only programs on the same machine can reach <code>127.0.0.1</code>. Where the page is read from somewhere else and the port cannot be forwarded (a container that publishes the port to its host), name the address to listen on with the system property <code>tda4j.plot.host</code> or the environment variable <code>TDA4J_PLOT_HOST</code>; <code>0.0.0.0</code> is every address of the machine. The page has no password: whoever reaches the port sees the plots.</p>
               <p>The server's threads are daemon threads: a REPL or script exits as usual, and the page then waits for a new one. Nothing here uses Swing or AWT windows, so it works the same from <code>sbt console</code>, <code>scala</code> and scala-cli on any OS.</p>
              </div>
              <h2 class="h200">Attributes</h2>
@@ -6113,7 +6114,7 @@
                Source
               </dt>
               <dd class="body-medium">
-               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scalajvm/org/appliedtopology/tda4j/plot/Viewer.scala#L24" target="_blank">Viewer.scala</a>
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scalajvm/org/appliedtopology/tda4j/plot/Viewer.scala#L29" target="_blank">Viewer.scala</a>
               </dd>
               <dt class="body-small">
                Supertypes

@@ -265,6 +265,20 @@
  <section id="try-it-without-installing-anything-to-your-project">
   <h2 class="h500"><a href="#try-it-without-installing-anything-to-your-project" class="anchor"></a>Try it without installing anything to your project</h2>
   <p><code>tda4j-demo-VERSION.jar</code> from the releases is a Scala REPL with the library and its imports in place: <code>java -jar tda4j-demo-VERSION.jar</code>.</p>
+  <p>The same REPL runs without Java in two more ways:</p>
+  <ul>
+   <li>
+    <p><strong>In a browser tab</strong>, at <a href="https://tda4j.appliedtopology.org/playground/">tda4j.appliedtopology.org/playground</a>. Nothing is installed and plots appear under the line that drew them. It takes 20 to 30 seconds to start and computes roughly ten times slower than a Java runtime, so it suits small examples.</p></li>
+   <li>
+    <p><strong>In a container</strong>, at full speed:</p>
+    <div class="snippet mono-small-block">
+     <pre><code class="language-"><span line-number="1" class=""><span class="tooltip-container"></span>docker run --rm -p 127.0.0.1:7681:7681 -p 127.0.0.1:8337:8337 ghcr.io/appliedtopology/tda4j-demo
+</span></code></pre>
+     <div class="buttons"></div>
+    </div>
+    <p><code>http://localhost:7681</code> is then the REPL as a terminal in a web page, and <code>http://localhost:8337</code> shows the plots.</p></li>
+  </ul>
+  <p>The <a href="https://github.com/appliedtopology/tda4j/blob/scala/demo/README.md">demo's README</a> has the details of all three: loading your own files, memory, and what each one cannot do.</p>
  </section>
  <section id="development-snapshots">
   <h2 class="h500"><a href="#development-snapshots" class="anchor"></a>Development snapshots</h2>

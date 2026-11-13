@@ -174,6 +174,22 @@
    <div class="buttons"></div>
   </div>
   <p>The first <code>view()</code> starts a small web server on your machine (<code>http://127.0.0.1:8337/</code>) and opens it in your browser: one tab that lists every plot you have viewed, newest first, and shows each new one as it arrives. Nothing to install, no windows to manage, and the REPL exits as usual. On a remote machine or in a container the address is printed instead; forward the port (<code>ssh -L 8337:localhost:8337 host</code>) and open it locally. Set <code>TDA4J_PLOT_BROWSER=none</code> (or the system property <code>tda4j.plot.browser=none</code>) to never open a browser, and the system property <code>tda4j.plot.port</code> (or <code>TDA4J_PLOT_PORT</code>) for another port.</p>
+  <p>The server answers only programs on your own machine. Where the page has to be read from elsewhere and the port cannot be forwarded (a container that publishes the port to its host), set <code>TDA4J_PLOT_HOST</code> (or the system property <code>tda4j.plot.host</code>) to the address to listen on; <code>0.0.0.0</code> is every address the machine has. The page has no password, so whoever reaches the port sees the plots.</p>
+  <p>A program that runs your code for you and has its own place for plots (a notebook, a page that hosts a REPL) takes them with <code>Plot.viewWith</code>: every <code>view()</code> inside its block goes to the function it was given, and the viewer does not start.</p>
+  <div class="snippet mono-small-block" scala-snippet="" runnable="">
+   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import scala.language.experimental.modularity
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.*
+</span><span line-number="3" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.plot.*
+</span><span line-number="4" class=""><span class="tooltip-container"></span>
+</span><span line-number="5" class=""><span class="tooltip-container"></span>val square = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0))
+</span><span line-number="6" class=""><span class="tooltip-container"></span>val pages = scala.collection.mutable.ArrayBuffer.empty[String]
+</span><span line-number="7" class=""><span class="tooltip-container"></span>
+</span><span line-number="8" class=""><span class="tooltip-container"></span>Plot.viewWith(plot =&gt; pages += plot.html()) {
+</span><span line-number="9" class=""><span class="tooltip-container"></span>  Plot.barcode(Persistence(square)).view()      // goes to `pages`, not to a browser tab
+</span><span line-number="10" class=""><span class="tooltip-container"></span>}
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
  </section>
  <section id="into-files-save">
   <h2 class="h500"><a href="#into-files-save" class="anchor"></a>Into files: <code>save</code></h2>
