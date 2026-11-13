@@ -97,6 +97,22 @@ a first call and for building the wheel from a [source checkout](#from-source).
 `tda4j-demo-VERSION.jar` from the releases is a Scala REPL with the library and its imports in place:
 `java -jar tda4j-demo-VERSION.jar`.
 
+The same REPL runs without Java in two more ways:
+
+- **In a browser tab**, at [tda4j.appliedtopology.org/playground](https://tda4j.appliedtopology.org/playground/).
+  Nothing is installed and plots appear under the line that drew them. It takes about 20 seconds to start and
+  computes roughly ten times slower than a Java runtime, so it suits small examples.
+- **In a container**, at full speed:
+
+  ```
+  docker run --rm -p 127.0.0.1:7681:7681 -p 127.0.0.1:8337:8337 ghcr.io/appliedtopology/tda4j-demo
+  ```
+
+  `http://localhost:7681` is then the REPL as a terminal in a web page, and `http://localhost:8337` shows the plots.
+
+The [demo's README](https://github.com/appliedtopology/tda4j/blob/scala/demo/README.md) has the details of all three:
+loading your own files, memory, and what each one cannot do.
+
 ## Development snapshots
 
 The `scala` branch is published as a `-SNAPSHOT` of the next version (the one in `version.sbt`) to Maven Central's snapshot
