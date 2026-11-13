@@ -20,9 +20,13 @@ trait Plot:
     */
   def svgFile(theme: Theme = Theme.Light): String
 
-  /** Shows the plot in the live viewer, a browser tab that adds every plot `view()`ed (see [[Viewer]]). */
+  /** Shows the plot in the live viewer, a browser tab that adds every plot `view()`ed (see [[Viewer]]). Inside
+    * [[Plot.viewWith]] the plot goes to the program that hosts the session instead.
+    */
   def view(): this.type =
-    Viewer.show(this)
+    Plot.viewTarget.value match
+      case Some(target) => target(this)
+      case None         => Viewer.show(this)
     this
 
   /** Writes the plot to `path`: an `.svg` file in plain light colors with no background (another `theme` on request;
@@ -298,6 +302,23 @@ object BarOrder:
 object Plot:
   /** A diagram or a list of bars. */
   type Bars = PersistenceDiagram[?] | Seq[PersistenceBar[Double, ?]]
+
+  // Where `view()` sends a plot on this thread: a host's target, or the live viewer when there is none.
+  private val viewTarget: scala.util.DynamicVariable[Option[Plot => Unit]] = scala.util.DynamicVariable(None)
+
+  /** Runs `body` with every plot it `view()`s handed to `target` instead of the live viewer. For a program that hosts
+    * the library and has its own place for a plot (a notebook cell, a page that runs a REPL): `target` gets the plot
+    * itself, and shows `plot.html()`, `plot.fragment()` or `plot.svg()` where it likes.
+    *
+    * {{{
+    * val pages = collection.mutable.ArrayBuffer.empty[String]
+    * Plot.viewWith(plot => pages += plot.html()) { runTheUsersLine() }
+    * }}}
+    *
+    * It holds on the thread that runs `body` and on threads started from it, and ends with `body`; a `viewWith` inside
+    * another takes the plots of its own body.
+    */
+  def viewWith[A](target: Plot => Unit)(body: => A): A = viewTarget.withValue(Some(target))(body)
 
   // Shared by the three plot kinds' one-line `toString`; scratch for this package, not part of the API.
   private[plot] def describe(kind: String, title: String, size: String): String =

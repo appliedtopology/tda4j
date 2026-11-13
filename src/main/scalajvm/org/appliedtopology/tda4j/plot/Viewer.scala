@@ -18,6 +18,11 @@ import scala.collection.mutable
   * `TDA4J_PLOT_BROWSER=none` (or the system property `tda4j.plot.browser=none`) to never open a browser. The page keeps
   * a list of every plot shown, and reconnects by itself when the JVM restarts on the same port.
   *
+  * Only programs on the same machine can reach `127.0.0.1`. Where the page is read from somewhere else and the port
+  * cannot be forwarded (a container that publishes the port to its host), name the address to listen on with the system
+  * property `tda4j.plot.host` or the environment variable `TDA4J_PLOT_HOST`; `0.0.0.0` is every address of the machine.
+  * The page has no password: whoever reaches the port sees the plots.
+  *
   * The server's threads are daemon threads: a REPL or script exits as usual, and the page then waits for a new one.
   * Nothing here uses Swing or AWT windows, so it works the same from `sbt console`, `scala` and scala-cli on any OS.
   */
@@ -57,6 +62,9 @@ object Viewer extends cask.MainRoutes:
   private def configuredPort: Int =
     sys.props.get("tda4j.plot.port").orElse(sys.env.get("TDA4J_PLOT_PORT")).flatMap(_.toIntOption).getOrElse(8337)
 
+  private def configuredHost: String =
+    sys.props.get("tda4j.plot.host").orElse(sys.env.get("TDA4J_PLOT_HOST")).filter(_.nonEmpty).getOrElse("127.0.0.1")
+
   private val daemons: ThreadFactory = r =>
     val t = Thread(r, "tda4j-plot-viewer")
     t.setDaemon(true)
@@ -92,7 +100,7 @@ object Viewer extends cask.MainRoutes:
     val http = Undertow
       .builder()
       .setWorker(worker)
-      .addHttpListener(port, "127.0.0.1")
+      .addHttpListener(port, configuredHost)
       .setHandler(defaultHandler)
       .build()
     try

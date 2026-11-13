@@ -221,9 +221,15 @@ class PlotSpec extends Specification:
         while !seen.startsWith("data:") do seen = lines.next()
         seen
       }(using scala.concurrent.ExecutionContext.global)
+      // A plot viewed inside `Plot.viewWith` goes to its target and never to the page; the next one outside it is the
+      // page's second plot, not its third.
+      val taken = scala.collection.mutable.ArrayBuffer.empty[String]
+      Plot.viewWith(p => taken += p.title)(Plot.barcode(circleDiagram).copy(title = "taken by a host").view())
+      taken.toList must beEqualTo(List("taken by a host"))
       Plot.diagram(circleDiagram).copy(title = "second plot").view()
       scala.concurrent.Await.result(firstEvent, scala.concurrent.duration.Duration(10, "s")) must beEqualTo("data: 2")
       get("list") must contain("second plot")
+      get("list") must not(contain("taken by a host"))
 
       import scala.jdk.CollectionConverters.*
       val serverThreads = Thread.getAllStackTraces.keySet.asScala.filter(t =>
@@ -233,5 +239,41 @@ class PlotSpec extends Specification:
       serverThreads.forall(_.isDaemon) must beTrue
       Viewer.stop()
       ok
+    }
+
+    "answer this machine only, until `tda4j.plot.host` names another address to listen on" in {
+      import scala.jdk.CollectionConverters.*
+      // An address of this machine that is not the loopback one: what another machine, or the host of a container,
+      // would connect to.
+      val outside = java.net.NetworkInterface.getNetworkInterfaces.asScala
+        .filter(i => i.isUp && !i.isLoopback)
+        .flatMap(_.getInetAddresses.asScala)
+        .collectFirst { case a: java.net.Inet4Address => a.getHostAddress }
+      outside match
+        case None          => skipped("this machine has no network address besides the loopback one")
+        case Some(address) =>
+          sys.props("tda4j.plot.port") = "0"
+          sys.props("tda4j.plot.browser") = "none"
+          val http = HttpClient.newHttpClient()
+          def listFrom(host: String) =
+            val port = URI(Viewer.url).getPort
+            http.send(
+              HttpRequest.newBuilder(URI(s"http://$host:$port/list")).build(),
+              HttpResponse.BodyHandlers.ofString()
+            )
+          try
+            Viewer.stop()
+            Plot.barcode(circleDiagram).copy(title = "for this machine").view()
+            listFrom("127.0.0.1").body() must contain("for this machine")
+            listFrom(address) must throwA[java.io.IOException]
+
+            Viewer.stop()
+            sys.props("tda4j.plot.host") = "0.0.0.0"
+            Plot.barcode(circleDiagram).copy(title = "for every machine").view()
+            listFrom("127.0.0.1").body() must contain("for every machine")
+            listFrom(address).body() must contain("for every machine")
+          finally
+            sys.props.remove("tda4j.plot.host")
+            Viewer.stop()
     }
   }

@@ -66,8 +66,9 @@ needed, see "Givens"). The core's source directories are **file organization onl
   `src/*/scalajs`, JVM-only in `src/*/scalajvm`, and `src/{main,test}/scala` compiles for BOTH (no JVM-only library, no
   `java.nio.file`/`java.io.File`/threads there). Seams, limits: `rules/scalajs.md`.
 - `python/` (the `tda4j` wheel, not a package): JPype over the `matlab` facade.
-- `demo/` (not a package): a SEPARATE sbt build for a talk's REPL jar (`demo/README.md`, `WORKLOG-demo-jar.md`,
-  `WORKLOG-demo-release.md`); the root build neither builds nor sees it, `release.yml` attaches it.
+- `demo/` (not a package): a SEPARATE sbt build for a talk's REPL jar, its web page and container image
+  (`demo/README.md`, `WORKLOG-demo-jar.md`, `WORKLOG-demo-release.md`, `WORKLOG-web-playground-build.md`); the root build
+  neither builds nor sees it, `release.yml` attaches the jar, `demo.yml` publishes the other two.
 - Tests mirror this. `src/test/scala/tda4juser/` is deliberately OUTSIDE the package: it checks what a user's code
   sees (`UserImportsSpec`, `TDAlabAloneSpec`); the `tutorial` specs and generated page scripts are INSIDE it, so only
   `sbt doc` checks that doc fences resolve from outside.
@@ -114,7 +115,7 @@ sbt -DrunBenchmarks=true tda4j/test   # also run benchmark/profiling specs — N
 No `sbt` on `PATH`: `.claude/scripts/install-sbt.sh`. A cloud Setup script
 should hold `.claude/scripts/cloud-setup-script.sh` (installer plus warmed dependencies), else a session starts cold (~1 h).
 
-No linter beyond scalafmt; tests are specs2. CI jobs (`test.yml`, `lint.yml`) and their local equivalents: steward skill. The ~319 `-Wunused:all` warnings stay
+No linter beyond scalafmt; tests are specs2. The ~319 `-Wunused:all` warnings stay
 (`WORKLOG-compiler-warnings.md`). Docs build with 3.8.4 (a FRESH sbt server only: `rules/docs-and-tutorials.md`). After
 `sbt package` or a docs build a test compile can miss main classes ("Not found: TDAlab"): `sbt clean`. **scalafmt only sees git-tracked files**: `git add` a new file before `scalafmtAll`.
 

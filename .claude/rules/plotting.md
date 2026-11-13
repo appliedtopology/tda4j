@@ -8,19 +8,18 @@ paths:
 
 # The `plot` subpackage
 
-Project-wide rules: `.claude/CLAUDE.md`. Platform choice and its
+Loads when you work in the `plot` subpackage. Project-wide rules: `.claude/CLAUDE.md`. Platform choice and its
 evidence: `DESIGN-plotting.md`; the build-out: `WORKLOG-plotting.md`; the move into the core: `WORKLOG-plot-into-core.md`;
 the customization grammar (tweaks, scales, styles): `WORKLOG-plot-grammar.md`; interactive pages and the video recipe:
 `WORKLOG-interactive-plots.md`.
 
 **A leaf subpackage of the core** (`org.appliedtopology.tda4j.plot`, directory `plot/`), like `matlab`/`cli`: nothing in the
-core uses it. Its one dependency is cask (Undertow and XNIO, for `view()` only). **A plot feature that needs a library
-goes in a new module**; `view()`'s cask is the standing exception (`WORKLOG-demo-jar.md`). Not
+core uses it. **A plot feature that needs a library goes in a new module**; the one dependency, cask (Undertow and
+XNIO, for `view()` only), is the standing exception (`WORKLOG-demo-jar.md`). Not
 re-exported by the labs. `matlab.PersistenceResult`'s `plot...` methods (hence the CLI's `--plot`) draw through it
 (`WORKLOG-facade-plots.md`).
 
-**Public core API only.** It must not use `private[tda4j]` members: what it needs, a user's own
-plotting code needs too.
+**Public core API only.** No `private[tda4j]` members: what it needs, a user's own plotting code needs too.
 
 **Scene model, two renderers.** `Figure` = marks in data coordinates (`Mark.Points/Segments/Polygons/Discs/Boxes/Line/
 Text`, one paint or one per item, optional tooltip per item = SVG `<title>`), axes, legend, colorbar; `Svg.render` draws it.
@@ -29,7 +28,7 @@ Text`, one paint or one per item, optional tooltip per item = SVG `<title>`), ax
 purpose. Every plot is an immutable value. Representatives are `Plot.Terms` (`Chain[C, ?] | Seq[(C, Double)]`, like
 `Plot.Bars`): never build a `Chain` just to plot (an invented real field's epsilon drops small coefficients).
 `save(path)` exists without the default argument for Java/MATLAB. Each render numbers its `<svg>` id (`tda4jN`).
-`Viewer.browse` alone opens a browser.
+Only `Viewer.browse` opens a browser.
 
 **Colors are roles, resolved by `Palette` x `Theme`** (the developer's guide has the roles). `Paint.Series(k)` is homological
 degree `k` (never its rank); `Paint.Value(v)` is colored by the figure's `ColorScale` through the palette AT RENDER, and `Fixed(hex)`
@@ -39,15 +38,22 @@ hex (files; `.svg` saves default to `Light`). `Palette.brand` (default, `brand/D
 slots 0-2 pass ALL pairs in both modes, 0-7 adjacent pairs; re-run it after changing a slot, never cycle hues past 8.
 
 **Live viewer** (`Viewer`): one page listing every `view()`ed plot (iframe per plot, `/list`, `/plot/<n>`, server-sent events
-on `/events`), browser opened via `java.awt.Desktop` when there is a desktop, else the URL printed
-(`tda4j.plot.browser=none`/`TDA4J_PLOT_BROWSER=none`: never; `PlotSpec` sets it, or `sbt testFull` would open a tab). The
-server starts FROM a daemon thread with a daemon XNIO worker (never keeps a REPL alive). A plot prints as one line (`Figure("Barcode", 50 marks)`): a REPL echoes `fig.view()`; keep it so.
+on `/events`), on `127.0.0.1` unless `tda4j.plot.host` names another address (a container); browser opened via
+`java.awt.Desktop` when there is a desktop, else the URL printed (`tda4j.plot.browser=none`: never; `PlotSpec` sets it, or
+`testFull` opens a tab). The server starts FROM a daemon thread with a daemon XNIO worker, so it never keeps a
+REPL alive; `PlotSpec` reads an event with a 10 s deadline (a lost event must fail, not hang CI).
+`Plot.viewWith(target)(body)` sends the block's `view()`s to `target` instead (the demo's web page); a host must run
+user code on the copy of the library's classes that set the target (`WORKLOG-web-playground-build.md`).
+A plot prints as one line (`Figure("Barcode", 50 marks)`), because a REPL echoes `fig.view()`; a new plot kind too.
 
 **Look at what you draw.** `src/test/.../plot/Gallery.scala` writes every kind of plot and the customizations (`sbt
-"Test/runMain org.appliedtopology.tda4j.plot.Gallery <dir>"`). Screenshot with node Playwright
-(`/opt/node-tools/node_modules/playwright`, chromium at `/opt/pw-browsers/chromium`) and read the PNGs. Specs check
-structure, not looks; Firefox, Safari and MATLAB cannot be checked here (#98, #330). **Docs fences in
-`_docs/user-guide/plotting.md` are compiled** like every fence (each self-contained); a spec runs the same calls.
+"Test/runMain org.appliedtopology.tda4j.plot.Gallery <dir>"`). Screenshot with node Playwright (`require("playwright")`
+works anywhere in a cloud session; the SVG file opens by `file://`, or put its text in a page and take an element
+screenshot) and read the PNGs. Specs check structure, not looks. Chromium's
+accessibility tree, a canvas drag and text widths can be checked there (`WORKLOG-plot-issues-sweep.md`); Firefox, Safari
+and MATLAB cannot (#98, #330).
+
+**Docs fences in `_docs/user-guide/plotting.md` are compiled**, each alone; `PlotSpec` and the gallery run the same calls.
 
 **The grammar** (`Tweak.scala`, `Style.scala`, `ColorScale.scala`, `Transform.scala`; `WORKLOG-plot-grammar.md`). A plot
 constructor chooses WHAT is drawn (data, statistic, marks); everything else is a `Tweak` added with `+`, never a new
