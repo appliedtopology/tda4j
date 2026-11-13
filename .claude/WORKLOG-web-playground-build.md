@@ -79,7 +79,7 @@ two threads on one processor, which hung the page).
 ## The page: measurements
 
 Headless Chromium (Playwright 1.63), cloud container, jar on localhost, CheerpJ 5.0 from its CDN.
-`check-web-playground.mjs` on the final build (one thread, no loader of our own): 22 checks pass in 76 s.
+`check-web-playground.mjs` on the final build (one thread, no loader of our own): 21 checks pass in 76 s.
 
 | step | time |
 |---|---|
@@ -155,3 +155,9 @@ build and push the image for amd64 and arm64 with plain `docker` commands (no th
   Files on disk and Docker's images survived; the daemon had to be started again. Commit before heavy runs.
 - `pgrep -f pattern` inside a command whose own text contains the pattern kills the shell: use
   `ps -eo pid,args | grep "[p]attern"`.
+
+## Addendum, 2026-11-13: #339 fixed on the same pull request
+
+The library now counts one thread on one processor (`WORKLOG-one-processor-threads.md`). With that fix and without
+`WebRepl`'s `Parallel.sequentially`, 8 of 8 fresh sessions came back from `Persistence(points)`: the count was the
+cause of point 1's hang. The guard stays in `WebRepl`, for a runtime that reports more processors.

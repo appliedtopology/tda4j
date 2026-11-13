@@ -71,10 +71,11 @@ object WebRepl:
       val next =
         try
           Plot.viewWith(plot => plots.enqueue(plot.html(Theme.Auto))) {
-            // On one thread. The page's runtime has one processor, where the library still counts two threads (the
-            // caller and the common pool's one worker) and so chooses its parallel engine; that engine's threads
-            // never finish there. `Persistence(points)` came back in 3 of 10 sessions with them, and in 8 of 8 on
-            // one thread (`.claude/WORKLOG-web-playground-build.md`).
+            // On one thread, whatever the runtime reports. Fork-join threads never finish in the page's runtime:
+            // while the library counted two threads on its one processor, `Persistence(points)` came back in 3 of
+            // 10 sessions. The library counts one there now, which alone was enough (8 of 8); this keeps the page
+            // on one thread if the runtime ever reports more processors
+            // (`.claude/WORKLOG-web-playground-build.md`, `.claude/WORKLOG-one-processor-threads.md`).
             Parallel.sequentially {
               Console.withOut(out)(Console.withErr(out)(driver.run(input)(using state)))
             }
