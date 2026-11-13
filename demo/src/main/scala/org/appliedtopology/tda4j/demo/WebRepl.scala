@@ -52,4 +52,7 @@ object WebRepl:
     for input <- args.tail do
       println(s"scala> $input${if isIncomplete(input) then "   (incomplete without an empty line)" else ""}")
       print(eval(input))
-      Iterator.continually(nextPlot()).takeWhile(_.nonEmpty).foreach(page => println(s"[a plot: ${page.length} characters]"))
+      Iterator
+        .continually(nextPlot())
+        .takeWhile(_.nonEmpty)
+        .foreach(page => println(s"[a plot: ${page.length} characters]"))

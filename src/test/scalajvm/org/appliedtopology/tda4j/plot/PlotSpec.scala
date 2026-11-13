@@ -250,14 +250,17 @@ class PlotSpec extends Specification:
         .flatMap(_.getInetAddresses.asScala)
         .collectFirst { case a: java.net.Inet4Address => a.getHostAddress }
       outside match
-        case None => skipped("this machine has no network address besides the loopback one")
+        case None          => skipped("this machine has no network address besides the loopback one")
         case Some(address) =>
           sys.props("tda4j.plot.port") = "0"
           sys.props("tda4j.plot.browser") = "none"
           val http = HttpClient.newHttpClient()
           def listFrom(host: String) =
             val port = URI(Viewer.url).getPort
-            http.send(HttpRequest.newBuilder(URI(s"http://$host:$port/list")).build(), HttpResponse.BodyHandlers.ofString())
+            http.send(
+              HttpRequest.newBuilder(URI(s"http://$host:$port/list")).build(),
+              HttpResponse.BodyHandlers.ofString()
+            )
           try
             Viewer.stop()
             Plot.barcode(circleDiagram).copy(title = "for this machine").view()

@@ -21,11 +21,11 @@ import scala.jdk.CollectionConverters.*
   *
   *   - '''Local slots above 255.''' A method with more than 256 local slots reaches the high ones with the `wide` forms
   *     of the load and store instructions. CheerpJ 5.0 runs the forms for `int`s and references and stops the page at
-  *     the ones for `float`, `long` and `double`. Every method of the jar that has one is rewritten: a value stored
-  *     and loaded again by the very next instruction, from a slot used nowhere else, stays on the stack; then the slots
-  *     are dealt out again, `long`s and `double`s first, `float`s next, so that only `int`s and references are left
-  *     above 255. In the Scala compiler that is `dotty.tools.dotc.core.Flags$` (its flag sets are `long`s; nothing
-  *     compiles without it), in the library the plot renderer.
+  *     the ones for `float`, `long` and `double`. Every method of the jar that has one is rewritten: a value stored and
+  *     loaded again by the very next instruction, from a slot used nowhere else, stays on the stack; then the slots are
+  *     dealt out again, `long`s and `double`s first, `float`s next, so that only `int`s and references are left above
+  *     255. In the Scala compiler that is `dotty.tools.dotc.core.Flags$` (its flag sets are `long`s; nothing compiles
+  *     without it), in the library the plot renderer.
   *   - '''`dotty.tools.repl.StackTraceOps$`''' prints the stack trace of an exception the user's line threw, and fails
   *     on a frame with no file name. Every frame in CheerpJ is one. The file name becomes `Unknown Source` there, the
   *     text `StackTraceElement.toString` itself uses.
@@ -48,7 +48,14 @@ object WebPatch:
         names.flatMap { name =>
           val bytes = zip.getInputStream(zip.getEntry(name)).readAllBytes()
           val className = name.stripSuffix(".class")
-          if className == stackTraces then Some(name -> rewrite(bytes, node => { lowerWideSlots(node); nameless(node) }))
+          if className == stackTraces then
+            Some(
+              name -> rewrite(
+                bytes,
+                node =>
+                  lowerWideSlots(node); nameless(node)
+              )
+            )
           else if needsLowering(bytes) then Some(name -> rewrite(bytes, lowerWideSlots))
           else None
         }.toList
@@ -107,7 +114,8 @@ object WebPatch:
   private def nextInstruction(from: AbstractInsnNode): Option[AbstractInsnNode] =
     Iterator.iterate(from.getNext)(_.getNext).takeWhile(_ != null).find(_.getOpcode >= 0)
 
-  /** Every method of `node` that would stop the runtime, with its `float`s, `long`s and `double`s in slots below 256. */
+  /** Every method of `node` that would stop the runtime, with its `float`s, `long`s and `double`s in slots below 256.
+    */
   private def lowerWideSlots(node: ClassNode): Unit =
     for method <- node.methods.asScala if stopsTheRuntime(method) do
       // 1. A temporary: stored, loaded at once, and its slot used for nothing else. It stays on the stack.
@@ -131,7 +139,10 @@ object WebPatch:
       // (verified code never reads one kind where it wrote another, so a slot the compiler used for two kinds in
       // turn is two variables). The receiver and the parameters keep their slots: the caller put them there.
       val firstFree =
-        (if (method.access & Opcodes.ACC_STATIC) != 0 then 0 else 1) + Type.getArgumentTypes(method.desc).map(_.getSize).sum
+        (if (method.access & Opcodes.ACC_STATIC) != 0 then 0 else 1) + Type
+          .getArgumentTypes(method.desc)
+          .map(_.getSize)
+          .sum
       val variables = mutable.LinkedHashSet.empty[(Int, Kind)]
       method.instructions.iterator.asScala.foreach {
         case v: VarInsnNode if v.`var` >= firstFree  => variables += ((v.`var`, kindOf(v.getOpcode)))

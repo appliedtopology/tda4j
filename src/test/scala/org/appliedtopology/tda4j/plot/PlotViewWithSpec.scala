@@ -28,7 +28,9 @@ class PlotViewWithSpec extends Specification:
       }
       result must beEqualTo("done")
       // The plots themselves, not copies or their pages: a host chooses how to show one (`html`, `fragment`, `svg`).
-      seen.toList.map(System.identityHashCode) must beEqualTo(List(barcode, scene, diagram).map(System.identityHashCode))
+      seen.toList.map(System.identityHashCode) must beEqualTo(
+        List(barcode, scene, diagram).map(System.identityHashCode)
+      )
     }
 
     "leave `view()` returning the plot it was called on, as it does with the viewer" in {

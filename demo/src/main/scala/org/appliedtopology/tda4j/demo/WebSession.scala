@@ -54,7 +54,7 @@ object WebSession:
     * error.
     */
   def eval(input: String): String = session match
-    case None => "The session has not started."
+    case None                  => "The session has not started."
     case Some((driver, state)) =>
       buffer.reset()
       val next =

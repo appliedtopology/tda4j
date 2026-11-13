@@ -58,7 +58,9 @@ assembly / assemblyMergeStrategy := {
 // The same REPL as a web page (README.md, "In a web page"): `sbt webSite` fills demo/target/web with the page, the jar
 // under a fixed name, and the classes the page's Java runtime cannot run as they are, rewritten. The rewriting program
 // is in the jar itself (`WebPatch`) and reads the jar it runs from, so it runs from the jar just built.
-lazy val webSite = taskKey[File]("The demo REPL as a static web site: the page, the jar, the classes rewritten for the page's Java runtime")
+lazy val webSite = taskKey[File](
+  "The demo REPL as a static web site: the page, the jar, the classes rewritten for the page's Java runtime"
+)
 
 webSite := Def.uncached {
   val _ = assembly.value
