@@ -306,7 +306,9 @@ object Panel:
         linked.reactEach(shape, lit)
       }
 
-  /** A 3-D panel; only [[Behavior.Shown]] and [[Behavior.Custom]] can be carried out on a canvas. */
+  /** A 3-D panel. A canvas carries out [[Behavior.Shown]], [[Behavior.Selected]] and [[Behavior.Selects]] on any layer
+    * and [[Behavior.Radius]] on balls ([[Layer.Balls]]); [[Behavior.Custom]] is yours.
+    */
   final case class Spatial(scene: Scene, reactions: Map[Int, IndexedSeq[Reaction]] = Map.empty) extends Panel:
     /** `layer` added to the scene, its items all reacting as `behavior` says. */
     def react(layer: Layer, behavior: Behavior): Spatial = reactEach(layer, IndexedSeq(Reaction(Vector(behavior))))
@@ -319,15 +321,7 @@ object Panel:
       val items = Interactive.itemCount(layer)
       Panel.sizeCheck("the layer", reactions, items)
       reactions.foreach(r =>
-        Panel.check(
-          "3-D",
-          "a layer",
-          r,
-          {
-            case _: Behavior.Shown | _: Behavior.Custom => true
-            case _                                      => false
-          }
-        )
+        Panel.check("3-D", s"a ${Interactive.nameOf(layer)} layer", r, Interactive.fitsLayer(layer))
       )
       copy(
         scene = scene.copy(layers = scene.layers :+ layer),
@@ -336,6 +330,35 @@ object Panel:
 
     /** The same with `change` applied to the scene. */
     def mapScene(change: Scene => Scene): Spatial = copy(scene = change(scene))
+
+    /** The layer at `index` of the scene, linked to the selection `selection`: pointing at its item `i` chooses the key
+      * `keys(i)` there, and a click pins it (a canvas is turned by dragging, so there is no brushing). With `halo`, a
+      * translucent shape over each item (a ring around a point, a thicker line, a darker triangle) is added to the
+      * scene and appears while the item's key is chosen, whoever chose it. See [[Panel.Flat.selecting]].
+      */
+    def selecting(index: Int, selection: String, keys: IndexedSeq[Int], halo: Boolean = true): Spatial =
+      require(
+        scene.layers.indices.contains(index),
+        s"Panel.selecting: the scene has ${scene.layers.size} layers, so there is no layer $index"
+      )
+      val layer = scene.layers(index)
+      val items = Interactive.itemCount(layer)
+      require(
+        keys.size == items,
+        s"Panel.selecting: layer $index has $items items, so it takes $items keys (one for each), not ${keys.size}"
+      )
+      val before = (0 until items).map(i => reactions.get(index).fold(Reaction.none)(Interactive.reactionOf(_, i)))
+      val chosen = before.indices.map(i => before(i) + Behavior.Selects(selection, keys(i)))
+      val linked = copy(reactions = reactions.updated(index, chosen))
+      Interactive.halo(layer).filter(_ => halo).fold(linked) { shape =>
+        val lit = before.indices.map { i =>
+          Reaction(before(i).behaviors.filterNot(_.isInstanceOf[Behavior.Selects])) + Behavior.Selected(
+            selection,
+            keys(i)
+          )
+        }
+        linked.reactEach(shape, lit)
+      }
 
   // ----- panels from the plots of persistent homology
 
@@ -784,7 +807,7 @@ final case class Interactive(
     }
     val shown = panels.zipWithIndex.map {
       case (Panel.Flat(figure, rs, _, _), k) => Interactive.still(figure, rs, now, chosen, state.windows.get(k))
-      case (Panel.Spatial(scene, rs), _)     => Interactive.still(scene, rs, now)
+      case (Panel.Spatial(scene, rs), _)     => Interactive.still(scene, rs, now, chosen)
     }
     val sliders = controls.map(c => s"${c.shownName} = ${Svg.number(now(c.name))}")
     val picked = selections.flatMap { s =>
@@ -923,6 +946,30 @@ object Interactive:
     case l: Layer.Points    => l.at.size
     case l: Layer.Segments  => l.ends.size
     case l: Layer.Triangles => l.corners.size
+    case l: Layer.Balls     => l.centers.size
+    case l: Layer.Halos     => l.at.size
+
+  private[plot] def nameOf(l: Layer): String = l match
+    case _: Layer.Points    => "points"
+    case _: Layer.Segments  => "segments"
+    case _: Layer.Triangles => "triangles"
+    case _: Layer.Balls     => "balls"
+    case _: Layer.Halos     => "halos"
+
+  /** The shape that lights up the layer `l` while it is chosen (see [[Panel.Spatial.selecting]]); none for balls and
+    * halos, which nothing chooses.
+    */
+  private[plot] def halo(l: Layer): Option[Layer] = l match
+    case l: Layer.Points    => Some(Layer.Halos(l.at, l.paints, l.radius + 5.0, 0.3))
+    case l: Layer.Segments  => Some(Layer.Segments(l.ends, l.paints, l.width + 6.0, 0.3))
+    case l: Layer.Triangles => Some(Layer.Triangles(l.corners, l.paints, math.min(0.9, l.opacity + 0.35)))
+    case _                  => None
+
+  /** Which behaviors a layer can carry out: everything that needs no axis, and a radius for balls. */
+  private[plot] def fitsLayer(l: Layer)(b: Behavior): Boolean = (l, b) match
+    case (_, _: Behavior.Shown | _: Behavior.Custom | _: Behavior.Selects | _: Behavior.Selected) => true
+    case (_: Layer.Balls, _: Behavior.Radius)                                                     => true
+    case _                                                                                        => false
 
   /** The shape that lights up `m` while it is chosen (see [[Panel.Flat.selecting]]), with the same items in the same
     * places; none for a mark that has no good one.
@@ -1227,17 +1274,30 @@ object Interactive:
       case m: Mark.Line => Option.when(keep.head)(m)
       case other        => Some(other)
 
-  /** `scene` with the controls at `values`: the items that are not shown dropped. */
-  private[plot] def still(scene: Scene, reactions: Map[Int, IndexedSeq[Reaction]], values: Map[String, Double]): Scene =
+  /** `scene` with the controls and selections as they are: the items that are not shown dropped, the balls resized. */
+  private[plot] def still(
+    scene: Scene,
+    reactions: Map[Int, IndexedSeq[Reaction]],
+    values: Map[String, Double],
+    chosen: Map[String, Set[Int]]
+  ): Scene =
     val layers = scene.layers.zipWithIndex.map { (layer, index) =>
       reactions.get(index).fold(layer) { rs =>
         val n = itemCount(layer)
-        val keep = (0 until n).map(i => reactionOf(rs, i).behaviors.forall(inside(_, values, Map.empty)))
+        val per = (0 until n).map(reactionOf(rs, _))
+        val keep = per.map(_.behaviors.forall(inside(_, values, chosen)))
         layer match
           case l: Layer.Points    => l.copy(at = keepItems(l.at, keep), paints = keepPaints(l.paints, keep, n))
           case l: Layer.Segments  => l.copy(ends = keepItems(l.ends, keep), paints = keepPaints(l.paints, keep, n))
           case l: Layer.Triangles =>
             l.copy(corners = keepItems(l.corners, keep), paints = keepPaints(l.paints, keep, n))
+          case l: Layer.Halos => l.copy(at = keepItems(l.at, keep), paints = keepPaints(l.paints, keep, n))
+          case l: Layer.Balls =>
+            val radius = per.headOption
+              .flatMap(_.behaviors.collectFirst { case Behavior.Radius(c, factor) => values.get(c).map(_ * factor) })
+              .flatten
+              .getOrElse(l.radius)
+            l.copy(centers = keepItems(l.centers, keep), radius = radius, paints = keepPaints(l.paints, keep, n))
       }
     }
     scene.copy(layers = layers)
@@ -1327,14 +1387,17 @@ object Interactive:
       |  for(const n of names){const s=sel[n];if(!s.c.hover)continue;
       |    s.hov=new Set(it?it.picks.filter(p=>p.n===n).map(p=>p.key):[]);commit(n);}
       |  svg.style.cursor=it?'pointer':'';}
+      |function clickKeys(n,ks,shift){const s=sel[n];if(!s||!s.c.click)return;
+      |  if(!ks.length){if(s.pin.size){s.pin=new Set();commit(n);}return;}
+      |  if(shift)ks.forEach(k=>{if(s.pin.has(k))s.pin.delete(k);else s.pin.add(k);});
+      |  else{const same=s.pin.size===ks.length&&ks.every(k=>s.pin.has(k));s.pin=same?new Set():new Set(ks);}
+      |  commit(n);}
+      |function hoverKeys(n,ks){const s=sel[n];if(!s||!s.c.hover)return;s.hov=new Set(ks);commit(n);}
       |function clicked(names,it,shift){
-      |  for(const n of names){const s=sel[n];if(!s.c.click)continue;
-      |    if(!it){if(s.pin.size){s.pin=new Set();commit(n);}continue;}
+      |  for(const n of names){
+      |    if(!it){clickKeys(n,[],shift);continue;}
       |    const ks=it.picks.filter(p=>p.n===n).map(p=>p.key);
-      |    if(!ks.length)continue;
-      |    if(shift)ks.forEach(k=>{if(s.pin.has(k))s.pin.delete(k);else s.pin.add(k);});
-      |    else{const same=s.pin.size===ks.length&&ks.every(k=>s.pin.has(k));s.pin=same?new Set():new Set(ks);}
-      |    commit(n);}}
+      |    if(ks.length)clickKeys(n,ks,shift);}}
       |const NS='http://www.w3.org/2000/svg';
       |const boxed=[];
       |const clearBoxes=()=>boxed.forEach(s=>{if(s._box){s._box.remove();s._box=null;}});
@@ -1461,6 +1524,8 @@ object Interactive:
       |  get:n=>sel[n]?keysOf(n):state[n],
       |  set:(n,v)=>sel[n]?pinAll(n,v):put(ctl[n],v),
       |  select:pinAll,
+      |  hover:hoverKeys,
+      |  click:clickKeys,
       |  selection:keysOf,
       |  onChange:(n,f)=>{(watch[n]=watch[n]||[]).push(f);f(sel[n]?keysOf(n):state[n]);},
       |  reactor:(k,f)=>{reactors[k]=f;for(const n in ctl)apply(n);for(const n in sel)custom(n);},

@@ -914,25 +914,30 @@ object Plot:
     )
 
   /** [[filtrationOf]] with the complex in 3-D (the first three coordinates of the points): a canvas to turn and zoom,
-    * whose triangles and edges come and go with the slider, beside the diagram. No balls are drawn.
+    * whose triangles and edges come and go with the slider and whose balls grow with it, beside the diagram. With
+    * `link`, the views are linked as in [[filtrationOf]]: pointing at a class of the diagram or the barcode lights it
+    * up in the other and draws its cycle in the canvas.
     */
   def filtration3DOf(
     points: PointCloud,
     stream: CellStream[Simplex[Int], Double],
     bars: Bars,
+    balls: Optional[Double] = Optional.empty,
     max: Optional[Double] = Optional.empty,
     start: Optional[Double] = Optional.empty,
     barcode: Boolean = false,
     stops: Boolean = false,
     maxCells: Int = 20000,
     title: String = "",
-    palette: Optional[Palette] = Optional.empty
+    palette: Optional[Palette] = Optional.empty,
+    link: Boolean = false,
+    cycles: Optional[Cycles] = Optional.empty
   )(using look: Look): Interactive =
     sweptFiltration(
       points,
       stream,
       bars,
-      None,
+      balls.toOption,
       max.toOption,
       start.toOption,
       barcode,
@@ -941,27 +946,46 @@ object Plot:
       title,
       "Complex",
       palette,
-      spatial = true
+      spatial = true,
+      link = link,
+      cycles = cycles.toOption
     )
 
   /** [[filtration]] with the complex in 3-D: the complex `kind` of `points` (their first three coordinates), a canvas
-    * to turn and zoom whose triangles and edges come and go with the slider, beside the diagram.
+    * to turn and zoom whose triangles and edges come and go with the slider and whose balls grow with it, beside the
+    * diagram. See [[filtration]] for the parameters.
     */
   def filtration3D(
     points: PointCloud,
     kind: PointCloudComplex = VietorisRips,
     max: Optional[Double] = Optional.empty,
     start: Optional[Double] = Optional.empty,
+    balls: Boolean = true,
     barcode: Boolean = false,
     stops: Boolean = false,
     maxCells: Int = 20000,
     title: String = "",
-    palette: Optional[Palette] = Optional.empty
+    palette: Optional[Palette] = Optional.empty,
+    link: Boolean = false
   )(using look: Look): Interactive =
     val stream =
       if kind eq AlphaShapes then kind.fromPoints(points, 2, None) else kind.fromPoints(points, 1, max.toOption)
     val bars = Persistence(points, maxDimension = 1, maxFiltrationValue = max, complex = kind)
-    filtration3DOf(points, stream, bars, max, start, barcode, stops, maxCells, title, palette)
+    val factor = Option.when(balls)(if kind eq VietorisRips then 0.5 else 1.0)
+    filtration3DOf(
+      points,
+      stream,
+      bars,
+      Optional(factor),
+      max,
+      start,
+      barcode,
+      stops,
+      maxCells,
+      title,
+      palette,
+      link
+    )
 
   private def sweptFiltration(
     points: PointCloud,
@@ -980,10 +1004,6 @@ object Plot:
     link: Boolean = false,
     cycles: Option[Cycles] = None
   )(using look: Look): Interactive =
-    require(
-      !(link && spatial),
-      "Plot.filtration3D: linked views are for the 2-D page (Plot.filtration with link = true)"
-    )
     val limit = max.getOrElse(Double.PositiveInfinity)
     val cells = stream.iterator.filter(c => c.dim >= 1 && c.dim <= 2 && stream.filtrationValue(c) <= limit).toVector
     require(cells.nonEmpty, "Plot.filtration: the complex has no edges up to the largest scale; give a larger max")
@@ -1006,9 +1026,11 @@ object Plot:
         val pts = xyz(points)
         val tris = cells.filter(_.dim == 2)
         val edges = cells.filter(_.dim == 1)
+        val ballLayer = factor.map(f => Layer.Balls(pts, f * control.value, IndexedSeq(Paint.Series(0)), 0.09))
+        val first = if ballLayer.isDefined then 1 else 0
         val scene = look.scene(
           Scene(
-            Vector(
+            ballLayer.toVector ++ Vector(
               Layer.Triangles(
                 tris.map(t => (pts(t.first), pts(t.toIndexedSeq(1)), pts(t.last))),
                 IndexedSeq(Paint.Series(0)),
@@ -1020,7 +1042,11 @@ object Plot:
             title = name
           )
         )
-        Panel.Spatial(scene, Map(0 -> entering(tris), 1 -> entering(edges)))
+        Panel.Spatial(
+          scene,
+          Map(first -> entering(tris), first + 1 -> entering(edges)) ++
+            ballLayer.map(_ => 0 -> IndexedSeq(Reaction(Vector(Behavior.radius("t", factor.getOrElse(1.0))))))
+        )
       else
         // the figure's range comes from the points, not from the balls, so that it stays put as they grow
         val xs = xy(points)
@@ -1043,8 +1069,11 @@ object Plot:
     val linkOf = (keys: Seq[IndexedSeq[Int]]) => Option.when(link)((classes, keys))
     val withCycles = complexPanel match
       case flat: Panel.Flat if link =>
-        val overlay = cycleOverlay(points, all, classes, maxCells, cycles)
-        overlay.fold(flat)(o => o.addTo(flat)).zoomableIfPossible(ZoomAxes.Both)
+        val overlay = cycleOverlay(xy(points).size, all, classes, maxCells, cycles)
+        overlay.fold(flat)(o => o.addTo(flat, xy(points))).zoomableIfPossible(ZoomAxes.Both)
+      case space: Panel.Spatial if link =>
+        val overlay = cycleOverlay(xyz(points).size, all, classes, maxCells, cycles)
+        overlay.fold(space)(o => o.addTo(space, xyz(points)))
       case other => other
     // a linked page is one to explore: its pictures also zoom
     def brushed(panel: Panel.Flat, axes: ZoomAxes): Panel.Flat =
@@ -1078,11 +1107,10 @@ object Plot:
   val classes: String = "class"
 
   /** The representative cycles of some bars drawn on a point cloud: each shown only while the key of its bar is chosen.
+    * `cells` holds, for each cell of a cycle, the paint of its degree, the key of its bar and its tooltip.
     */
   private[plot] final case class CycleOverlay(
-    triangles: Vector[(IndexedSeq[XY], Paint, Int, String)],
-    edges: Vector[((XY, XY), Paint, Int, String)],
-    vertices: Vector[(XY, Paint, Int, String)],
+    cells: Vector[(Simplex[Int], Paint, Int, String)],
     selection: String,
     drawn: Int,
     candidates: Int
@@ -1090,26 +1118,62 @@ object Plot:
     private def shows(keys: Seq[Int]): IndexedSeq[Reaction] =
       keys.map(k => Reaction(Vector(Behavior.Selected(selection, k)))).toIndexedSeq
 
-    /** `panel` with the overlay on top of its marks. */
-    def addTo(panel: Panel.Flat): Panel.Flat =
+    private def ofDim(d: Int) = cells.filter(_._1.dim == d)
+
+    /** `panel` with the overlay on top of its marks, the cells placed at `points` (the plane). */
+    def addTo(panel: Panel.Flat, points: IndexedSeq[XY]): Panel.Flat =
+      val (triangles, edges, vertices) = (ofDim(2), ofDim(1), ofDim(0))
       val withTriangles =
         if triangles.isEmpty then panel
         else
           panel.reactEach(
-            Mark.Polygons(triangles.map(_._1), triangles.map(_._2), 0.45, triangles.map(_._4)),
+            Mark.Polygons(triangles.map(_._1.toIndexedSeq.map(points)), triangles.map(_._2), 0.45, triangles.map(_._4)),
             shows(triangles.map(_._3))
           )
       val withEdges =
         if edges.isEmpty then withTriangles
         else
           withTriangles.reactEach(
-            Mark.Segments(edges.map(_._1), edges.map(_._2), width = 3, tips = edges.map(_._4)),
+            Mark.Segments(
+              edges.map(e => (points(e._1.first), points(e._1.last))),
+              edges.map(_._2),
+              width = 3,
+              tips = edges.map(_._4)
+            ),
             shows(edges.map(_._3))
           )
       if vertices.isEmpty then withEdges
       else
         withEdges.reactEach(
-          Mark.Points(vertices.map(_._1), vertices.map(_._2), 5, tips = vertices.map(_._4)),
+          Mark.Points(vertices.map(v => points(v._1.first)), vertices.map(_._2), 5, tips = vertices.map(_._4)),
+          shows(vertices.map(_._3))
+        )
+
+    /** `panel` with the overlay on top of its layers, the cells placed at `points` (space). */
+    def addTo(panel: Panel.Spatial, points: IndexedSeq[XYZ]): Panel.Spatial =
+      val (triangles, edges, vertices) = (ofDim(2), ofDim(1), ofDim(0))
+      val withTriangles =
+        if triangles.isEmpty then panel
+        else
+          panel.reactEach(
+            Layer.Triangles(
+              triangles.map(t => (points(t._1.first), points(t._1.toIndexedSeq(1)), points(t._1.last))),
+              triangles.map(_._2),
+              0.45
+            ),
+            shows(triangles.map(_._3))
+          )
+      val withEdges =
+        if edges.isEmpty then withTriangles
+        else
+          withTriangles.reactEach(
+            Layer.Segments(edges.map(e => (points(e._1.first), points(e._1.last))), edges.map(_._2), 3),
+            shows(edges.map(_._3))
+          )
+      if vertices.isEmpty then withEdges
+      else
+        withEdges.reactEach(
+          Layer.Points(vertices.map(v => points(v._1.first)), vertices.map(_._2), 5),
           shows(vertices.map(_._3))
         )
 
@@ -1137,13 +1201,12 @@ object Plot:
     * (a bar whose cycle would not fit is left out); none when no bar has a cycle to draw.
     */
   private[plot] def cycleOverlay(
-    points: PointCloud,
+    vertices: Int,
     all: Seq[PersistenceBar[Double, ?]],
     selection: String,
     maxCells: Int,
     own: Option[Cycles] = None
   ): Option[CycleOverlay] =
-    val pts = xy(points)
     own.foreach(c =>
       require(
         c.size == all.size,
@@ -1151,7 +1214,7 @@ object Plot:
       )
     )
     val withCycles = all.zipWithIndex
-      .map((b, k) => (b, k, own.fold(simplicialTerms(b, pts.size))(_(k))))
+      .map((b, k) => (b, k, own.fold(simplicialTerms(b, vertices))(_(k))))
       .filter(_._3.nonEmpty)
       .sortBy((b, k, _) => (-b.persistence, k))
     var used = 0
@@ -1168,14 +1231,7 @@ object Plot:
         val dim = terms.map(_._1.dim).maxOption.getOrElse(1)
         terms.map((cell, c) => (cell, Paint.Series(dim): Paint, k, tip(cell, c)))
       }
-      CycleOverlay(
-        rows.filter(_._1.dim == 2).map((cell, p, k, t) => (cell.toIndexedSeq.map(pts), p, k, t)),
-        rows.filter(_._1.dim == 1).map((cell, p, k, t) => ((pts(cell.first), pts(cell.last)), p, k, t)),
-        rows.filter(_._1.dim == 0).map((cell, p, k, t) => (pts(cell.first), p, k, t)),
-        selection,
-        chosen.size,
-        withCycles.size
-      )
+      CycleOverlay(rows.filter(_._1.dim <= 2), selection, chosen.size, withCycles.size)
     }
 
   /** Persistence bars to explore: the diagram, the barcode and, given the point cloud they were computed on, the cloud
@@ -1258,7 +1314,7 @@ object Plot:
       .brushable(classes)
       .zoomableIfPossible(ZoomAxes.X)
     val cloudPanel = points.map { cloud =>
-      val overlay = cycleOverlay(cloud, all, classes, maxCycleCells, cycles)
+      val overlay = cycleOverlay(xy(cloud).size, all, classes, maxCycleCells, cycles)
       require(
         overlay.nonEmpty,
         "Plot.explore: none of the bars carries a representative made of simplices on these points; compute them " +
@@ -1270,7 +1326,10 @@ object Plot:
         if drawn.drawn < drawn.candidates then
           s"cycles of the ${drawn.drawn} most persistent of ${drawn.candidates} bars"
         else ""
-      overlay.get.addTo(Panel.Flat(base.copy(subtitle = note))).mapFigure(styled).zoomableIfPossible(ZoomAxes.Both)
+      overlay.get
+        .addTo(Panel.Flat(base.copy(subtitle = note)), xy(cloud))
+        .mapFigure(styled)
+        .zoomableIfPossible(ZoomAxes.Both)
     }
     val chooser = Selection.listing(classes, all.map(interval)).withTitle("class")
     Interactive(

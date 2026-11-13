@@ -241,7 +241,49 @@ object Gallery:
     val sweep = Plot.filtration(circle, barcode = true).withTitle("Noisy circle").withPlay(8)
     sweep.save(out("interactive-filtration.html"))
     Seq(0.15, 0.3, 0.5).foreach(t => sweep.at(t).save(out(f"interactive-still-$t%.2f.svg")))
-    Plot.filtration3D(sphere, max = 0.8, title = "Sphere").withPlay(8).save(out("interactive-sphere.html"))
+    // four times the unit sphere: a ball's radius in the picture's units is not its radius in the data's
+    val bigSphere = sphere.map(_.map(_ * 4))
+    val sphere3 = Plot.filtration3D(bigSphere, max = 3.2, title = "Sphere").withPlay(8)
+    sphere3.save(out("interactive-sphere.html"))
+    Seq(1.2, 2.4).foreach(t => sphere3.at(t).save(out(f"interactive-sphere-still-$t%.2f.svg")))
+    // a canvas whose items choose keys: a triangle, two segments and three points, far enough apart to point at
+    val pickScene = Scene(
+      Vector(
+        Layer.Triangles(
+          IndexedSeq(((-2.0, 0.0, 0.0), (-1.0, 0.0, 0.0), (-1.5, 1.0, 0.0))),
+          IndexedSeq(Paint.Series(0)),
+          0.35
+        ),
+        Layer.Segments(
+          IndexedSeq(((0.0, -1.0, 0.0), (0.0, 1.0, 0.0)), ((0.8, 0.0, -1.0), (0.8, 0.0, 1.0))),
+          IndexedSeq(Paint.Secondary),
+          2.0
+        ),
+        Layer.Points(IndexedSeq((2.0, -0.5, 0.0), (2.2, 0.5, 0.0), (2.2, -1.0, 0.5)), IndexedSeq(Paint.Ink), 4.0)
+      ),
+      title = "Pointing in 3-D"
+    )
+    val picking = Interactive()
+      .withSelection(Selection.listing("item", Seq.tabulate(21)(i => s"item $i")))
+      .withPanel(
+        Panel(pickScene)
+          .selecting(2, "item", IndexedSeq(0, 1, 2))
+          .selecting(1, "item", IndexedSeq(10, 11))
+          .selecting(0, "item", IndexedSeq(20))
+      )
+      .withTitle("Pointing in 3-D")
+    picking.save(out("interactive-pick-3d.html"))
+    picking.at(PageState().select("item", 10)).save(out("interactive-pick-3d-still.svg"))
+    // a linked 3-D filtration: the diagram, the barcode and a canvas that draws the chosen class's cycle
+    val ring3 = circle.map(p => Array(p(0), p(1), 0.3 * p(0) * p(1)))
+    val ringBars = Persistence(ring3, maxDimension = 1, maxFiltrationValue = 1.0).bars
+    val ringKey = ringBars.indices.filter(ringBars(_).dim == 1).maxBy(ringBars(_).persistence)
+    val ringT = (ringBars(ringKey).birth + math.min(ringBars(ringKey).death, 1.0)) / 2
+    val linked3 = Plot.filtration3D(ring3, max = 1.0, link = true, barcode = true, title = "Noisy circle in space")
+    linked3.save(out("interactive-linked-3d.html"))
+    linked3.at(PageState().value("t", ringT).select("class", ringKey)).save(out("interactive-linked-3d-still.svg"))
+    java.nio.file.Files
+      .writeString(java.nio.file.Path.of(out("interactive-linked-3d.json")), s"""{"key":$ringKey,"t":$ringT}""")
     // linked views: pointing at a class in one picture lights it up in the others, with its cycle on the input
     val exploreBars = Persistence(circle, maxDimension = 1).bars
     val exploreKey = exploreBars.indices.filter(exploreBars(_).dim == 1).maxBy(exploreBars(_).persistence)

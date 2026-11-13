@@ -381,7 +381,7 @@ class InteractiveSpec extends Specification:
 
     "tell the canvas which values each item is shown for, and listen for the page's changes" in {
       val html = sweep3.fragment(Theme.Light)
-      html must contain(""""ia":[[""")
+      html must contain(""""sh":{"c":"t"""")
       html must contain("closest('.tda4j-ia')")
       html must contain("tda4j:change")
     }
@@ -396,7 +396,7 @@ class InteractiveSpec extends Specification:
     "leave a 3-D scene that is not on an interactive page exactly as it was" in {
       val plain = Plot.points3D(circle3).fragment(Theme.Light)
       plain must not(contain("tda4j:change"))
-      plain must contain("for(const it of L.items){")
+      plain must not(contain("hid(L,k)"))
     }
 
     "refuse a behavior a canvas cannot carry out" in {

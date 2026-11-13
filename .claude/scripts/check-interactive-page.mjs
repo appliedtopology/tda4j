@@ -88,8 +88,8 @@ const describe = (svg, visibleOnly) => {
   page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
   await page.goto('file://' + dir + '/interactive-sphere.html');
   const shot = async t => { await page.evaluate(v => document.querySelector('.tda4j-ia').tda4j.set('t', v), t); return await page.evaluate(() => document.querySelector('canvas').toDataURL()); };
-  const a = await shot(0.2), b = await shot(0.6), c = await shot(0.2);
-  check(a !== b && a === c, 'the canvas differs between 0.2 and 0.6 and is the same on returning to 0.2');
+  const a = await shot(0.8), b = await shot(2.4), c = await shot(0.8);
+  check(a !== b && a === c, 'the canvas differs between 0.8 and 2.4 and is the same on returning to 0.8');
   await page.focus('input[type=range]');
   await page.keyboard.press('ArrowRight');
   const readout = await page.textContent('output');
@@ -98,10 +98,159 @@ const describe = (svg, visibleOnly) => {
   const mid = await page.evaluate(() => document.querySelector('.tda4j-ia').tda4j.get('t'));
   await page.waitForTimeout(8000);
   const end = await page.evaluate(() => document.querySelector('.tda4j-ia').tda4j.get('t'));
-  check(mid > 0.2 && mid < end && Math.abs(end - 0.8) < 1e-9, `play moves the slider to its end: ${mid.toFixed(3)} then ${end.toFixed(3)}`);
-  const evt = await page.evaluate(() => new Promise(res => { const r = document.querySelector('.tda4j-ia'); r.addEventListener('tda4j:change', e => res(e.detail), { once: true }); r.tda4j.set('t', 0.4); }));
-  check(evt.name === 't' && evt.value === 0.4, `a change is announced: ${JSON.stringify(evt)}`);
+  check(mid > 0.8 && mid < end && Math.abs(end - 3.2) < 1e-9, `play moves the slider to its end: ${mid.toFixed(3)} then ${end.toFixed(3)}`);
+  const evt = await page.evaluate(() => new Promise(res => { const r = document.querySelector('.tda4j-ia'); r.addEventListener('tda4j:change', e => res(e.detail), { once: true }); r.tda4j.set('t', 1.6); }));
+  check(evt.name === 't' && evt.value === 1.6, `a change is announced: ${JSON.stringify(evt)}`);
   check(errors.length === 0, `no errors on the 3-D page ${errors.join(' | ')}`);
+  await page.close();
+}
+
+// What a 3-D canvas draws, read off the 2-D context as it draws: every filled or stroked path of the last redraw, so a
+// check can count the items, find where one is, and compare them with the still picture of the same state.
+const spy = `(() => {
+  const P = CanvasRenderingContext2D.prototype, o = {};
+  for (const m of ['beginPath', 'moveTo', 'lineTo', 'arc', 'fill', 'stroke', 'fillRect']) o[m] = P[m];
+  let path = null; window.__shapes = [];
+  P.fillRect = function (...a) { window.__shapes = []; return o.fillRect.apply(this, a); };
+  P.beginPath = function () { path = []; return o.beginPath.call(this); };
+  P.moveTo = function (x, y) { if (path) path.push(['m', x, y]); return o.moveTo.call(this, x, y); };
+  P.lineTo = function (x, y) { if (path) path.push(['l', x, y]); return o.lineTo.call(this, x, y); };
+  P.arc = function (x, y, r, a, b) { if (path) path.push(['a', x, y, r]); return o.arc.call(this, x, y, r, a, b); };
+  P.fill = function () { if (path) window.__shapes.push({ op: 'fill', alpha: this.globalAlpha, path: path.slice() }); return o.fill.apply(this, arguments); };
+  P.stroke = function () { if (path) window.__shapes.push({ op: 'stroke', alpha: this.globalAlpha, width: this.lineWidth, path: path.slice() }); return o.stroke.apply(this, arguments); };
+})()`;
+// the kind of a recorded shape: a triangle, a segment, a disc (point, ball or halo)
+const kindOf = s => s.path[0][0] === 'a' ? (s.op === 'fill' ? 'disc' : 'ring') : s.path.length === 3 ? 'triangle' : 'segment';
+const kinds = shapes => { const n = { triangle: 0, segment: 0, disc: 0 }; shapes.forEach(s => { const k = kindOf(s); if (k in n) n[k]++; }); return n; };
+// what a still picture holds, read in a blank page (Node has no DOM): the counts of the scene's polygons, lines and circles
+// per 3-D scene, and the balls (the circles of opacity 0.09)
+const reader = await browser.newPage();
+const inStill = (text, fn) => reader.evaluate(`(() => { const doc = new DOMParser().parseFromString(${JSON.stringify(text.replace(/^<\?xml[^>]*\?>\s*/, ''))}, 'image/svg+xml'); return (${fn.toString()})(doc); })()`);
+const stillKinds = text => inStill(text, doc => { const scenes = [...doc.querySelectorAll('svg[id^="tda4j3d"]')];
+  return (scenes.length ? scenes : [doc]).map(s => ({ triangle: s.querySelectorAll('polygon').length, segment: s.querySelectorAll('line').length, disc: s.querySelectorAll('circle').length })); });
+const stillBalls = text => inStill(text, doc => [...doc.querySelectorAll('circle')].filter(c => /fill-opacity:0\.09(;|$)/.test(c.getAttribute('style') || ''))
+  .map(c => ({ x: +c.getAttribute('cx'), y: +c.getAttribute('cy'), r: +c.getAttribute('r') })));
+const middle = s => { const pts = s.path.map(p => p.slice(1, 3)); return [pts.reduce((a, p) => a + p[0], 0) / pts.length, pts.reduce((a, p) => a + p[1], 0) / pts.length]; };
+const read = f => fs.readFileSync(dir + '/' + f, 'utf8');
+
+{ // 3-D canvas: pointing at an item chooses its keys, clicking pins them, the halo is what the still of that choice shows
+  const page = await browser.newPage({ viewport: { width: 1300, height: 800 } });
+  const errors = [];
+  page.on('pageerror', e => errors.push(String(e)));
+  page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+  await page.addInitScript(spy);
+  await page.goto('file://' + dir + '/interactive-pick-3d.html');
+  const shapes = () => page.evaluate(() => window.__shapes);
+  const origin = () => page.evaluate(() => { const r = document.querySelector('canvas').getBoundingClientRect(); return [r.left, r.top]; });
+  const chosen = () => page.evaluate(() => [...document.querySelector('.tda4j-ia').tda4j.selection('item')].sort((a, b) => a - b));
+  const settle = () => page.waitForTimeout(120);
+  const [ox, oy] = await origin();
+  const initial = await shapes();
+  const pickable = initial.filter(s => ['triangle', 'segment'].includes(kindOf(s)) || (kindOf(s) === 'disc' && s.alpha === 1));
+  check(JSON.stringify(kinds(initial)) === JSON.stringify({ triangle: 1, segment: 2, disc: 3 }), `the canvas draws ${JSON.stringify(kinds(initial))}`);
+  // pointing: each item chooses its own keys while the pointer is on it, and nothing once it leaves
+  const found = [];
+  for (const s of pickable) {
+    const [x, y] = middle(s);
+    await page.mouse.move(ox + x, oy + y); await settle();
+    const keys = await chosen();
+    found.push(...keys);
+    check(keys.length >= 1 && keys.length <= 1, `pointing at a ${kindOf(s)} chooses its key: [${keys}]`);
+    await page.mouse.move(ox + 4, oy + 4); await settle();
+    check((await chosen()).length === 0, 'moving away chooses nothing again');
+  }
+  check(JSON.stringify(found.sort((a, b) => a - b)) === '[0,1,2,10,11,20]', `the six items choose six different keys: [${found}]`);
+  // clicking pins: the choice stays when the pointer leaves, a second click clears it, shift adds
+  const seg = pickable.filter(s => kindOf(s) === 'segment');
+  let k10 = null;
+  for (const s of seg) {
+    const [x, y] = middle(s);
+    await page.mouse.click(ox + x, oy + y); await settle();
+    const keys = await chosen();
+    await page.mouse.move(ox + 4, oy + 4); await settle();
+    check(JSON.stringify(await chosen()) === JSON.stringify(keys) && keys.length === 1, `a click on a segment pins its key and the pointer leaving keeps it: [${keys}]`);
+    if (keys[0] === 10) {
+      k10 = s;
+      const now = await shapes();
+      const ref = (await stillKinds(read('interactive-pick-3d-still.svg')))[0];
+      check(JSON.stringify(kinds(now)) === JSON.stringify(ref), `with key 10 chosen the canvas draws ${JSON.stringify(kinds(now))} as the still does ${JSON.stringify(ref)}`);
+      const halo = now.filter(t => kindOf(t) === 'segment' && t.alpha < 1 && t.width > 4);
+      check(halo.length === 1, `exactly one halo segment, wider than the segment it lights (${halo.map(h => h.width)})`);
+    }
+    await page.mouse.click(ox + x, oy + y);
+    await page.mouse.move(ox + 4, oy + 4); await settle();
+    check((await chosen()).length === 0, 'a second click on the same item clears it');
+  }
+  check(k10 !== null, 'one of the segments chooses key 10');
+  const [px, py] = middle(pickable.find(s => kindOf(s) === 'disc'));
+  await page.mouse.click(ox + px, oy + py); await settle();
+  await page.keyboard.down('Shift');
+  await page.mouse.click(ox + middle(k10)[0], oy + middle(k10)[1]); await settle();
+  await page.keyboard.up('Shift');
+  check((await chosen()).length === 2, `shift adds a second item: [${await chosen()}]`);
+  await page.mouse.click(ox + 4, oy + 4); await settle();
+  check((await chosen()).length === 0, 'a click on nothing clears the choice');
+  // dragging turns the picture and chooses nothing
+  const before = JSON.stringify(await shapes());
+  await page.mouse.move(ox + 300, oy + 200); await page.mouse.down(); await page.mouse.move(ox + 380, oy + 230, { steps: 5 }); await page.mouse.up(); await settle();
+  check(JSON.stringify(await shapes()) !== before && (await chosen()).length === 0, 'a drag turns the picture and chooses nothing');
+  check(errors.length === 0, `no errors on the picking page ${errors.join(' | ')}`);
+  await page.close();
+}
+
+{ // the 3-D sphere: the balls follow the slider and are the balls of the still of that value
+  const page = await browser.newPage({ viewport: { width: 1300, height: 800 } });
+  const errors = [];
+  page.on('pageerror', e => errors.push(String(e)));
+  page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+  await page.addInitScript(spy);
+  await page.goto('file://' + dir + '/interactive-sphere.html');
+  // the ball radius against the spread of the centres, which both drawings share whatever their size
+  const ratio = discs => { const xs = discs.map(d => d.x), ys = discs.map(d => d.y), r = discs[0].r;
+    return r / Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)); };
+  const live = async t => { await page.evaluate(v => document.querySelector('.tda4j-ia').tda4j.set('t', v), t);
+    const sh = await page.evaluate(() => window.__shapes);
+    const balls = sh.filter(s => kindOf0(s) === 'ball').map(s => ({ x: s.path[0][1], y: s.path[0][2], r: s.path[0][3] }));
+    return { balls, counts: kinds(sh) }; };
+  const kindOf0 = s => (s.path[0][0] === 'a' && s.op === 'fill' && Math.abs(s.alpha - 0.09) < 1e-9) ? 'ball' : 'other';
+  const small = await live(1.2), large = await live(2.4);
+  check(small.balls.length > 0 && large.balls.length >= small.balls.length, `balls on the page: ${small.balls.length} at 1.2, ${large.balls.length} at 2.4`);
+  check(large.balls[0].r > small.balls[0].r * 1.5, `a ball grows with the slider: ${small.balls[0].r.toFixed(2)} px then ${large.balls[0].r.toFixed(2)} px`);
+  for (const [t, now] of [[1.2, small], [2.4, large]]) {
+    const ref = await stillBalls(read(`interactive-sphere-still-${t.toFixed(2)}.svg`));
+    check(ref.length === now.balls.length, `t=${t}: ${now.balls.length} balls on the page, ${ref.length} in the still`);
+    const a = ratio(now.balls), b = ratio(ref);
+    check(Math.abs(a - b) < 0.01 * b, `t=${t}: ball radius over spread ${a.toFixed(4)} on the page, ${b.toFixed(4)} in the still`);
+  }
+  check(errors.length === 0, `no errors on the sphere page ${errors.join(' | ')}`);
+  await page.close();
+}
+
+{ // the linked 3-D filtration: choosing a class in the diagram draws its cycle in the canvas, as the still does
+  const { key, t } = JSON.parse(read('interactive-linked-3d.json'));
+  const page = await browser.newPage({ viewport: { width: 1800, height: 800 } });
+  const errors = [];
+  page.on('pageerror', e => errors.push(String(e)));
+  page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+  await page.addInitScript(spy);
+  await page.goto('file://' + dir + '/interactive-linked-3d.html');
+  await page.evaluate(v => document.querySelector('.tda4j-ia').tda4j.set('t', v), t);
+  const none = kinds(await page.evaluate(() => window.__shapes));
+  // click the class's mark in the diagram, in the 2-D panel
+  const at = await page.evaluate(k => { const it = document.querySelector('.tda4j-ia').tda4j.items.find(i => i.picks.some(p => p.n === 'class' && p.key === k) && i.el.getClientRects().length);
+    const r = it.el.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }, key);
+  await page.mouse.click(at[0], at[1]); await page.waitForTimeout(150);
+  const chosen = await page.evaluate(() => [...document.querySelector('.tda4j-ia').tda4j.selection('class')]);
+  check(chosen.length === 1 && chosen[0] === key, `a click in the diagram chooses class ${key}: [${chosen}]`);
+  const now = kinds(await page.evaluate(() => window.__shapes));
+  check(now.segment > none.segment, `the cycle's edges are drawn: ${none.segment} segments before, ${now.segment} after`);
+  // the still holds every panel; its scene is the one `tda4j3d` svg
+  const sceneRef = await stillKinds(read('interactive-linked-3d-still.svg'));
+  check(sceneRef.length >= 1 && JSON.stringify(sceneRef[0]) === JSON.stringify(now), `the canvas draws ${JSON.stringify(now)}, the still of the same state ${JSON.stringify(sceneRef[0])}`);
+  await page.mouse.click(at[0], at[1]); await page.mouse.move(2, 2); await page.waitForTimeout(150);
+  const gone = kinds(await page.evaluate(() => window.__shapes));
+  check(JSON.stringify(gone) === JSON.stringify(none), 'a second click removes the cycle again');
+  check(errors.length === 0, `no errors on the linked 3-D page ${errors.join(' | ')}`);
   await page.close();
 }
 
