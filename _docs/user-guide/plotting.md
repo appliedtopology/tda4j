@@ -32,6 +32,28 @@ no windows to manage, and the REPL exits as usual. On a remote machine or in a c
 forward the port (`ssh -L 8337:localhost:8337 host`) and open it locally. Set `TDA4J_PLOT_BROWSER=none` (or the system property
 `tda4j.plot.browser=none`) to never open a browser, and the system property `tda4j.plot.port` (or `TDA4J_PLOT_PORT`) for another port.
 
+The server answers only programs on your own machine. Where the page has to be read from elsewhere and the port cannot be
+forwarded (a container that publishes the port to its host), set `TDA4J_PLOT_HOST` (or the system property
+`tda4j.plot.host`) to the address to listen on; `0.0.0.0` is every address the machine has. The page has no password, so
+whoever reaches the port sees the plots.
+
+A program that runs your code for you and has its own place for plots (a notebook, a page that hosts a REPL) takes
+them with `Plot.viewWith`: every `view()` inside its block goes to the function it was given, and the viewer does not
+start.
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val square = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0))
+val pages = scala.collection.mutable.ArrayBuffer.empty[String]
+
+Plot.viewWith(plot => pages += plot.html()) {
+  Plot.barcode(Persistence(square)).view()      // goes to `pages`, not to a browser tab
+}
+```
+
 ## Into files: `save`
 
 ```scala

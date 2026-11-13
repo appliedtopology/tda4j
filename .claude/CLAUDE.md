@@ -66,8 +66,9 @@ needed, see "Givens"). The core's source directories are **file organization onl
   `src/*/scalajs`, JVM-only in `src/*/scalajvm`, and `src/{main,test}/scala` compiles for BOTH (no JVM-only library, no
   `java.nio.file`/`java.io.File`/threads there). Seams, limits: `rules/scalajs.md`.
 - `python/` (the `tda4j` wheel, not a package): JPype over the `matlab` facade.
-- `demo/` (not a package): a SEPARATE sbt build for a talk's REPL jar (`demo/README.md`, `WORKLOG-demo-jar.md`,
-  `WORKLOG-demo-release.md`); the root build neither builds nor sees it, `release.yml` attaches it.
+- `demo/` (not a package): a SEPARATE sbt build for a talk's REPL jar, its web page and container image
+  (`demo/README.md`, `WORKLOG-demo-jar.md`, `WORKLOG-demo-release.md`, `WORKLOG-web-playground-build.md`); the root build
+  neither builds nor sees it, `release.yml` attaches the jar, `demo.yml` publishes the other two.
 - Tests mirror this. `src/test/scala/tda4juser/` is deliberately OUTSIDE the package: it checks what a user's code
   sees (`UserImportsSpec`, `TDAlabAloneSpec`); the `tutorial` specs and generated page scripts are INSIDE it, so only
   `sbt doc` checks that doc fences resolve from outside.
@@ -114,7 +115,7 @@ sbt -DrunBenchmarks=true tda4j/test   # also run benchmark/profiling specs — N
 No `sbt` on `PATH`: `.claude/scripts/install-sbt.sh`. A cloud Setup script
 should hold `.claude/scripts/cloud-setup-script.sh` (installer plus warmed dependencies), else a session starts cold (~1 h).
 
-No linter beyond scalafmt; tests are specs2. CI jobs (`test.yml`, `lint.yml`) and their local equivalents: steward skill. The ~319 `-Wunused:all` warnings stay
+No linter beyond scalafmt; tests are specs2. The ~319 `-Wunused:all` warnings stay
 (`WORKLOG-compiler-warnings.md`). Docs build with 3.8.4 (a FRESH sbt server only: `rules/docs-and-tutorials.md`). After
 `sbt package` or a docs build a test compile can miss main classes ("Not found: TDAlab"): `sbt clean`. **scalafmt only sees git-tracked files**: `git add` a new file before `scalafmtAll`.
 
@@ -246,7 +247,8 @@ file before changing that subsystem; this table is the index, in case a rule did
 | `rules/python.md` | the Python package: facade mirror, options, wheel, CI | `python/` |
 | `rules/scalajs.md` | the Scala.js build: platform seams, shared-code limits, JS API, npm package | `scalajs/`, `scalajvm/`, `build.sbt`, `npm/` |
 | `rules/docs-and-tutorials.md` | docs site, tutorial pages (the docs are the tests), language tabs | `_docs/`, tutorial specs, `build.sbt` |
-| `rules/plotting.md` | the `plot` subpackage: scene model, tweaks, looks, live viewer, gallery, interactive pages | `plot/` (main and test) |
+| `rules/plotting.md` | the `plot` subpackage: scene model, tweaks, looks, live viewer, gallery | `plot/` (main and test) |
+| `rules/interactive-plots.md` | interactive pages: behaviors, stills as reference semantics, selections, brushing, zoom | `Interactive`, `Selection`, `Zoom` |
 | `rules/algebra.md` | fields, chains and cells: `RingModule`, `Field`, `Chain`, `Cell` | `algebra/`, `cells/` |
 | `rules/testing.md` | writing specs: shared generators, specs2 traps | `src/test/**` |
 | `rules/scala-style.md` | the Scala 3 idioms used throughout, opaque-type and extension-method hazards | `src/**/*.scala` |

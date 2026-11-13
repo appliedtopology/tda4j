@@ -174,3 +174,38 @@ flaky about one run in twelve until it was judged by a linear scan.
 **What tda4j did**: `VantagePointTreeOracleSpec` asserts `VantagePointTree` against the linear scan and counts jvptree's
 defects instead of asserting them; `VantagePointTreeSpec` pins the one-ulp case against our own pruning slack. Not reported
 upstream.
+
+## CheerpJ 5.0 cannot run the `wide` forms of `lload`, `lstore` and `fload`
+
+2026-11-12, cloud session building the demo's web page (`.claude/WORKLOG-web-playground.md`,
+`.claude/WORKLOG-web-playground-build.md`). CheerpJ (Leaning Technologies) is a Java runtime that runs in a browser;
+the page loads version 5.0 from the vendor's CDN. A method that keeps a `long`, `float` or `double` in a local variable
+whose slot is above 255 needs the `wide` prefix on its load and store instructions, and CheerpJ 5.0 ends the page when
+it executes one: `runWideOpcode 37, PC: 3291` in the console, then a `TypeError`. CheerpJ 4.2 and 4.3 hang at the same
+place without a message.
+
+What was verified: (1) the Scala 3.9.0 compiler's `dotty.tools.dotc.core.Flags$.<clinit>` uses `lstore_w`/`lload_w`
+and is where the unpatched REPL stops; with those instructions rewritten away the REPL starts. (2) A test class from
+`javac --release 17` with 300 local variables: the methods whose high slots hold `int`s and references (`wide iload`,
+`istore`, `iinc`, `aload`, `astore`) return the right values in CheerpJ 5.0, and the method whose high slots hold
+`float`s stops the page. Not verified: `wide dload`/`dstore`/`fstore` on their own (the rewriter treats every
+`long`/`float`/`double` slot above 255 as fatal), and what the number in `runWideOpcode 37` counts.
+
+What tda4j does: `demo/.../WebPatch.scala` scans the demo jar for such methods, renumbers their local variables so
+that the two-slot and `float` ones come first, and writes the rewritten classes to a second jar that precedes the first
+on the page's class path. Not reported upstream (#336).
+
+## The Scala 3 REPL's error printer fails on a stack frame without a file name
+
+2026-11-12, same session. `dotty.tools.repl.StackTraceOps` (Scala 3.9.0) colours a stack trace with
+`fansi.Str(frame.getFileName)`, and `fansi.Str.apply(null)` throws a `NullPointerException`. `getFileName` is `null`
+for a class compiled without debug information; in CheerpJ it is `null` for every frame. The REPL then reports its own
+`NullPointerException` instead of the user's exception.
+
+Verified on HotSpot, not only in the browser: at the prompt of an unpatched 3.9.0 REPL, throwing an exception whose
+trace was set to `Array(new StackTraceElement("Foo", "bar", null, -1))` fails inside `fansi.Str.apply`. Not checked
+against a newer compiler.
+
+What tda4j does: `WebPatch` inserts, after each `getFileName` call in `StackTraceOps$`, a replacement of `null` by
+`"Unknown Source"` (what `StackTraceElement.toString` prints for such a frame), and fails the build when it finds no
+such call to rewrite. The terminal demo jar is not patched. Not reported upstream (#336).

@@ -5,13 +5,13 @@ title: Plotting internals
 
 The plots are a leaf subpackage of the core, `org.appliedtopology.tda4j.plot`
 (directory `plot/` under the core's sources), like `matlab` and `cli`. Nothing
-in the core uses it, and it needs no dependency: plots are SVG strings and
-HTML pages, and the live viewer uses the JDK's own HTTP server. What a user
-calls is on the [Plotting](../user-guide/plotting.md) page of the user guide;
-this page is about how it is built.
+in the core uses it. Plots are SVG strings and HTML pages, which need no
+dependency; the live viewer's web server is cask, the subpackage's one
+library. What a user calls is on the [Plotting](../user-guide/plotting.md)
+page of the user guide; this page is about how it is built.
 
-It stays in the core only while it needs nothing outside the JDK. A plotting
-feature that needs a library (PNG export, a native window) belongs in a
+It stays in the core only while it needs no other library. A plotting
+feature that needs one (PNG export, a native window) belongs in a
 separate module, so that the core does not take on the dependency.
 
 ## Public core API only
@@ -214,16 +214,24 @@ and a scene pass it to their panels and their heading, too); `Style.print` is
 `view()` hands a plot to `Viewer`. On first use it starts an HTTP server on
 `127.0.0.1` (port 8337, or a free one) serving one page that lists every
 viewed plot, newest first. Each plot is in its own iframe. New plots arrive as
-server-sent events on `/events`.
+server-sent events on `/events`. `tda4j.plot.host` (or `TDA4J_PLOT_HOST`)
+names another address to listen on, which a container needs: Docker publishes
+a port of the container's network address, not of its loopback one.
+
+Inside `Plot.viewWith(target) { ... }`, `view()` calls `target` and never
+reaches `Viewer`. The target is held in a `DynamicVariable`, so it is set for
+the block's thread (and the threads that thread starts) and restored when the
+block ends or throws. The demo's web page uses it: a browser tab has no
+sockets for a server, and the page shows each plot under its line.
 
 The viewer opens a browser through `java.awt.Desktop` where there is a desktop,
 and prints the URL otherwise. The system property `tda4j.plot.browser=none`
 (or `TDA4J_PLOT_BROWSER=none`) stops it from opening one, and the specs set
 it.
 
-**Trap:** start the server from a daemon thread. The JDK's HTTP dispatcher
-inherits its creator's daemon status, and a non-daemon dispatcher keeps a REPL
-from exiting. `PlotSpec` checks the threads.
+**Trap:** the server must never keep a REPL from exiting. It is started from
+a daemon thread and its XNIO worker is a daemon too; a non-daemon thread of
+either would hold the JVM open after `:quit`. `PlotSpec` checks the threads.
 
 ## Tests
 
