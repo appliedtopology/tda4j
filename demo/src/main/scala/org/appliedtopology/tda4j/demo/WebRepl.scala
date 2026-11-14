@@ -97,7 +97,11 @@ object WebRepl:
   def nextPlot(): String = if plots.isEmpty then "" else plots.dequeue()
 
   /** The session from a terminal, one argument per input, as the page would drive it: for checking the driver without a
-    * browser (`java -cp tda4j-demo.jar org.appliedtopology.tda4j.demo.WebRepl tda4j-demo.jar '1 + 1'`).
+    * browser, with the page's class path (`sbt webSite` writes the jars; run it in that folder):
+    * {{{
+    * cp=tda4j-demo-web-patch.jar:tda4j-demo-project.jar:tda4j-demo-libs.jar
+    * java -cp $cp org.appliedtopology.tda4j.demo.WebRepl $cp '1 + 1'
+    * }}}
     */
   def main(args: Array[String]): Unit =
     print(start(args.head))

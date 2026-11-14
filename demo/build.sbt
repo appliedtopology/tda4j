@@ -55,12 +55,94 @@ assembly / assemblyMergeStrategy := {
   case other                                                     => (assembly / assemblyMergeStrategy).value(other)
 }
 
-// The same REPL as a web page (README.md, "In a web page"): `sbt webSite` fills demo/target/web with the page, the jar
-// under a fixed name, and the classes the page's Java runtime cannot run as they are, rewritten. The rewriting program
-// is in the jar itself (`WebPatch`) and reads the jar it runs from, so it runs from the jar just built.
+// The same REPL as a web page (README.md, "In a web page"): `sbt webSite` fills demo/target/web with the page, the
+// classes the page's Java runtime cannot run as they are, rewritten, and the assembly in two jars. The page is
+// published to the docs site, a git branch, and git keeps every version of every file it is given: one 73 MB jar
+// per publish would add 73 MB to that branch's history each time. So the page's jars are cut where the changes are:
+//
+//   - `tda4j-demo-project.jar`: everything under `org/appliedtopology/tda4j/` (the library and the demo's own
+//     classes), which changes with every publish: about 6 MB;
+//   - `tda4j-demo-libs.jar`: everything else (the Scala compiler, cats, the viewer's web server, ...), which changes
+//     only when a dependency does: about 62 MB, written the same bytes every time, so that git stores it once.
+//
+// Together they hold exactly what the assembly holds (`splitAssembly` checks it). The rewriting program is in the
+// assembly itself (`WebPatch`) and reads the jar it runs from, so it runs from the jar just built.
 lazy val webSite = taskKey[File](
-  "The demo REPL as a static web site: the page, the jar, the classes rewritten for the page's Java runtime"
+  "The demo REPL as a static web site: the page, the jars cut where they change, the classes rewritten for the page's Java runtime"
 )
+
+// The part of the assembly that is this repository's own: the library and the demo's classes.
+val projectPrefix = "org/appliedtopology/tda4j/"
+
+/** Cuts the assembly `whole` into `project` (the entries under [[projectPrefix]], with the assembly's manifest) and
+  * `libs` (the rest, with a manifest that names nothing that changes between builds), and checks that every file of the
+  * assembly is in exactly one of them, byte for byte. Both jars are written the same way every time: entries sorted by
+  * name, one fixed time, the same compression.
+  */
+def splitAssembly(whole: File, project: File, libs: File): Unit = {
+  import java.io.{ByteArrayOutputStream, FileOutputStream}
+  import java.time.LocalDateTime
+  import java.util.jar.{Attributes, Manifest}
+  import java.util.zip.{ZipEntry, ZipFile, ZipOutputStream}
+  import scala.jdk.CollectionConverters.*
+
+  val zip = new ZipFile(whole)
+  try {
+    val entries = zip.entries.asScala.toVector.sortBy(_.getName)
+    val manifestName = "META-INF/MANIFEST.MF"
+    // `org/` and `org/appliedtopology/` are the folders of both halves.
+    def inProject(name: String) =
+      name.startsWith(projectPrefix) || (name.endsWith("/") && projectPrefix.startsWith(name))
+    def inLibs(name: String) = !name.startsWith(projectPrefix)
+
+    val libsManifest = new Manifest()
+    libsManifest.getMainAttributes.put(Attributes.Name.MANIFEST_VERSION, "1.0")
+    val projectManifest = new Manifest(zip.getInputStream(zip.getEntry(manifestName)))
+    // The page needs the version (`WebRepl.version`) and not the way into the REPL's terminal.
+    projectManifest.getMainAttributes.remove(Attributes.Name.MAIN_CLASS)
+    def bytes(m: Manifest) = { val b = new ByteArrayOutputStream; m.write(b); b.toByteArray }
+
+    def write(target: File, manifest: Manifest, keep: String => Boolean): Unit = {
+      val out = new ZipOutputStream(new FileOutputStream(target))
+      def put(name: String, content: Array[Byte]): Unit = {
+        val entry = new ZipEntry(name)
+        // One time for every entry, in nobody's time zone. Not 1980-01-01 00:00:00: the zip classes take that for "before
+        // 1980" and add an extended timestamp field with a UTC time, which differs from one time zone to the next.
+        entry.setTimeLocal(LocalDateTime.of(2000, 1, 1, 0, 0, 0))
+        out.putNextEntry(entry)
+        out.write(content)
+        out.closeEntry()
+      }
+      try {
+        put(manifestName, bytes(manifest))
+        entries.filter(e => e.getName != manifestName && keep(e.getName)).foreach { e =>
+          put(e.getName, if (e.isDirectory) Array.emptyByteArray else zip.getInputStream(e).readAllBytes())
+        }
+      } finally out.close()
+    }
+    IO.createDirectory(project.getParentFile)
+    write(project, projectManifest, inProject)
+    write(libs, libsManifest, inLibs)
+
+    // Every file of the assembly, once, with the same bytes.
+    def files(jar: File): Map[String, Long] = {
+      val z = new ZipFile(jar)
+      try
+        z.entries.asScala
+          .filterNot(e => e.isDirectory || e.getName == manifestName)
+          .map(e => e.getName -> e.getCrc)
+          .toMap
+      finally z.close()
+    }
+    val (inProjectJar, inLibsJar) = (files(project), files(libs))
+    val both = inProjectJar.keySet.intersect(inLibsJar.keySet)
+    if (both.nonEmpty) sys.error(s"the page's two jars both hold ${both.take(3).mkString(", ")}")
+    val expected =
+      entries.filterNot(e => e.isDirectory || e.getName == manifestName).map(e => e.getName -> e.getCrc).toMap
+    if (expected != inProjectJar ++ inLibsJar)
+      sys.error(s"the page's two jars do not hold exactly what ${whole.getName} holds")
+  } finally zip.close()
+}
 
 webSite := Def.uncached {
   val _ = assembly.value
@@ -68,12 +150,12 @@ webSite := Def.uncached {
   val site = baseDirectory.value / "target" / "web"
   IO.delete(site)
   IO.copyDirectory(baseDirectory.value / "web", site)
-  IO.copyFile(jar, site / "tda4j-demo.jar")
+  splitAssembly(jar, site / "tda4j-demo-project.jar", site / "tda4j-demo-libs.jar")
   val java = (file(sys.props("java.home")) / "bin" / "java").getPath
   val patch = site / "tda4j-demo-web-patch.jar"
   val command = Seq(java, "-cp", jar.getPath, "org.appliedtopology.tda4j.demo.WebPatch", patch.getPath)
   val exit = scala.sys.process.Process(command).!
-  if (exit != 0) sys.error(s"WebPatch failed (exit $exit): the web page cannot start without its jar")
+  if (exit != 0) sys.error(s"WebPatch failed (exit $exit): the web page cannot start without its jars")
   streams.value.log.info(s"web site in $site; try it with: node ${site / "serve.mjs"}")
   site
 }

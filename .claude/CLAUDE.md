@@ -68,7 +68,9 @@ needed, see "Givens"). The core's source directories are **file organization onl
 - `python/` (the `tda4j` wheel, not a package): JPype over the `matlab` facade.
 - `demo/` (not a package): a SEPARATE sbt build for a talk's REPL jar, its web page and container image
   (`demo/README.md`, `WORKLOG-demo-jar.md`, `WORKLOG-demo-release.md`, `WORKLOG-web-playground-build.md`); the root build
-  neither builds nor sees it, `release.yml` attaches the jar, `demo.yml` publishes the other two.
+  neither builds nor sees it, `release.yml` attaches the jar, `demo.yml` publishes the other two. The page's jar is cut in
+  two (`webSite`: the library, and a libs jar of the same bytes every build) so `gh-pages` stores the big half once
+  (`WORKLOG-demo-page-jars.md`).
 - Tests mirror this. `src/test/scala/tda4juser/` is deliberately OUTSIDE the package: it checks what a user's code
   sees (`UserImportsSpec`, `TDAlabAloneSpec`); the `tutorial` specs and generated page scripts are INSIDE it, so only
   `sbt doc` checks that doc fences resolve from outside.
