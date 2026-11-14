@@ -273,8 +273,11 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     name = "plot",
     noshort = true,
     descr = "instead of writing the diagram, draw: barcode, diagram, representative (a bar's cycle or cocycle over " +
-      "the points or image), input, complex (at --at), landscape, persistence-image, or input-3d, complex-3d, " +
-      "representative-3d. Into --output (.svg in plain light colors, .html a page that follows the reader's light " +
+      "the points or image), input, complex (at --at), landscape, persistence-image, filtration (a page with a " +
+      "slider for the scale, from 0 to --at, over the complex and its diagram), explore (a page of linked " +
+      "views: point at a class of the diagram or barcode and its cycle appears on the points; zoom, pan and drag " +
+      "a rectangle to choose classes), linked-filtration (filtration with those links, at --at), or input-3d, " +
+      "complex-3d, representative-3d, filtration-3d. Into --output (.svg in plain light colors, .html a page that follows the reader's light " +
       "or dark setting), or without --output into a page opened in the browser. A comma list of 2-D kinds " +
       "(barcode,diagram) draws them on one board, in a row or on --layout"
   )
@@ -305,7 +308,8 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
   val at: ScallopOption[Double] = opt[Double](
     name = "at",
     noshort = true,
-    descr = "the scale, in the units of the complex: required for --plot complex; for --plot representative, a " +
+    descr = "the scale, in the units of the complex: required for --plot complex, and for --plot filtration or " +
+      "linked-filtration the largest scale of its slider; for --plot representative, a " +
       "cycle is drawn over the complex at this scale and a cocycle restricted to it (default for a cocycle: its " +
       "bar's birth; Infinity draws it whole)"
   )

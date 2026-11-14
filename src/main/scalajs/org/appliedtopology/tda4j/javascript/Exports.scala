@@ -944,6 +944,23 @@ final class Result private[javascript] (underlying: PersistenceResult):
   @JSExport
   def plotComplex(at: Double): Chart = Exports.guarded(Chart(underlying.plotComplex(at)))
 
+  /** The complex as a page with a slider for the scale, from 0 to `max`, beside the persistence diagram: `html()` is
+    * the self-contained page, `show()` opens it.
+    */
+  @JSExport
+  def plotFiltration(max: Double): Chart = Exports.guarded(Chart(underlying.plotFiltration(max)))
+
+  /** The bars as linked views, a page: the persistence diagram, the barcode and the points. Pointing at a class in one
+    * lights it up in the other and draws its cycle on the points; the pictures zoom and pan, and dragging a rectangle
+    * chooses the classes it touches. `html()` is the self-contained page, `show()` opens it.
+    */
+  @JSExport
+  def plotExplore(): Chart = Exports.guarded(Chart(underlying.plotExplore()))
+
+  /** [[plotFiltration]] with its views linked as [[plotExplore]] links them. */
+  @JSExport
+  def plotLinkedFiltration(max: Double): Chart = Exports.guarded(Chart(underlying.plotLinkedFiltration(max)))
+
   /** The representative of `bars[i]` over the input, at scale `at` when given. */
   @JSExport
   def plotRepresentative(i: Int, at: js.UndefOr[Double] = js.undefined): Chart =

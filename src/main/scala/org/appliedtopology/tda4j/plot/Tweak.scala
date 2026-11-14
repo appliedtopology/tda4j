@@ -35,6 +35,14 @@ trait Tweak:
   /** `board` with this change in every figure of it. */
   def onBoard(board: Board): Board = board.copy(plots = board.plots.map(onFigure))
 
+  /** `page` with this change in every panel of it; a tweak a 3-D panel cannot have leaves that panel as it is. */
+  def onInteractive(page: Interactive): Interactive = page.mapPanels(
+    onFigure,
+    scene =>
+      try onScene(scene)
+      catch case _: UnsupportedOperationException => scene
+  )
+
   /** This change, then `that` one. */
   def +(that: Tweak): Tweak = Tweak.Both(this, that)
 
@@ -44,6 +52,7 @@ object Tweak:
     def onFigure(figure: Figure): Figure = second.onFigure(first.onFigure(figure))
     override def onScene(scene: Scene): Scene = second.onScene(first.onScene(scene))
     override def onBoard(board: Board): Board = second.onBoard(first.onBoard(board))
+    override def onInteractive(page: Interactive): Interactive = second.onInteractive(first.onInteractive(page))
 
   /** A tweak of your own, from a function on figures: `fig + Tweak(_.copy(equalAspect = true))`. */
   def apply(change: Figure => Figure): Tweak = new Tweak:
@@ -120,6 +129,18 @@ final case class Labels(
       heading = title.getOrElse(b.heading),
       plots = b.plots.map(copy(title = Optional.empty).onFigure)
     )
+
+  // An interactive page's title is the page's own; every panel keeps its own, and takes the other labels.
+  override def onInteractive(page: Interactive): Interactive =
+    val rest = copy(title = Optional.empty)
+    page
+      .mapPanels(
+        rest.onFigure,
+        scene =>
+          try rest.onScene(scene)
+          catch case _: UnsupportedOperationException => scene
+      )
+      .copy(title = title.getOrElse(page.title))
 
 /** The size of a plot in pixels, width by height. Only what is given changes (`Size(width = 900)`); the plot area takes
   * what the margins leave. The plots choose a height that suits what they draw (a barcode grows with its bars), so give

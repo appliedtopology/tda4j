@@ -182,6 +182,102 @@ class PersistenceResultPlotSpec extends Specification:
     }
   }
 
+  "plotFiltration" should {
+    val r = TDA4j.computeFromPoints(circle, Array("maxDimension", "1"))
+    "show, at each scale, the cells plotComplex draws there: none under the side 0.39, the 16 sides after it" >> {
+      val page = r.plotFiltration(1.0)
+      def cellsAt(t: Double) = tips(page.at(t).svgFile(plot.Theme.Light), "∆(").sorted
+      val sides = tips(r.plotComplex(0.5).svg(), "∆(").sorted
+      (cellsAt(0.3) must beEmpty) and
+        (cellsAt(0.5) must beEqualTo(sides)) and
+        (sides.size must beGreaterThanOrEqualTo(16)) and
+        (cellsAt(0.9) must beEqualTo(tips(r.plotComplex(0.9).svg(), "∆(").sorted))
+    }
+    "run its slider over the scales the computation reached, and say which complex it draws" >> {
+      val stopped = TDA4j.computeFromPoints(circle, Array("maxDimension", "1", "maxFiltrationValue", "0.5"))
+      val page = stopped.plotFiltration(2.0)
+      (page.controls.head.max must beCloseTo(0.5, 1e-12)) and (page.controls.head.min must beEqualTo(0.0)) and
+        (page.title must contain("Vietoris-Rips"))
+    }
+    "keep the hook of the other plots: a chained tweak and a theme reach every panel, and the page holds the diagram" >> {
+      val page = r.plotFiltration(1.0).withPalette("print").withTitle("A circle").withPlay(5.0)
+      (page.html() must contain("A circle")) and (page.panels.size must beEqualTo(2)) and
+        (page.controls.head.play must beSome(5.0))
+    }
+    "write its frames from a word and a path, as MATLAB and Python call it" >> {
+      val dir = java.nio.file.Files.createTempDirectory("tda4j-facade-frames").toString
+      val written = r.plotFiltration(1.0).saveFrames(dir, 3, "light")
+      (written.length must beEqualTo(3)) and (written.forall(p => new java.io.File(p).length() > 1000) must beTrue) and
+        (r.plotFiltration(1.0).saveFrames(dir, 2).length must beEqualTo(2))
+    }
+    "draw 3-D with a scene panel, and refuse a result that has no points to draw" >> {
+      val torusLike = Array.tabulate(30)(i =>
+        val t = 2 * math.Pi * i / 30
+        Array(math.cos(t), math.sin(t), 0.3 * math.sin(3 * t))
+      )
+      val r3 = TDA4j.computeFromPoints(torusLike, Array("maxDimension", "1"))
+      val distances = Array(Array(0.0, 1.0, 1.0), Array(1.0, 0.0, 1.0), Array(1.0, 1.0, 0.0))
+      (r3.plotFiltration3D(0.5).html() must contain("<canvas")) and
+        (TDA4j.computeFromDistanceMatrix(distances).plotFiltration(1.0) must throwA[UnsupportedOperationException](
+          message = "distance matrix"
+        ))
+    }
+  }
+
+  "plotExplore" should {
+    // a circle with every bar of a different length, so a key taken from another order is another cycle
+    val wobbly = Array.tabulate(24) { i =>
+      val t = 2 * math.Pi * i / 24 + 0.06 * math.cos(3.0 * i)
+      val rad = 1.0 + 0.15 * math.sin(5.0 * i)
+      Array(rad * math.cos(t), rad * math.sin(t))
+    }
+    val r = TDA4j.computeFromPoints(wobbly, Array("maxDimension", "1", "minPersistenceFraction", "0.1"))
+    val page = r.plotExplore()
+
+    "give every reported bar a class, and draw the cycle of the class chosen: that bar's representative" >> {
+      val reported = r.size()
+      val drawn = (0 until reported).map { k =>
+        val chosen = tips(page.at(plot.PageState().select("class", k)).svgFile(plot.Theme.Light), "∆(").sorted
+        chosen === tips(r.plotRepresentative(k).svg(), "∆(").sorted
+      }
+      (reported must beGreaterThan(10)) and (r.hiddenCount() must beGreaterThan(0)) and
+        (drawn.forall(_.isSuccess) must beTrue)
+    }
+
+    "zoom and brush its diagram and barcode, and name its classes by bar" >> {
+      val html = page.html()
+      (html must contain("data-zoomable=\"b\"")) and (html must contain("data-brush=\"class\"")) and
+        (page.selections.head.labels.size must beEqualTo(r.size()))
+    }
+
+    "refuse a result with no points to draw them on" >> {
+      val distances = Array(Array(0.0, 1.0, 1.0), Array(1.0, 0.0, 1.0), Array(1.0, 1.0, 0.0))
+      TDA4j.computeFromDistanceMatrix(distances).plotExplore() must throwA[UnsupportedOperationException](
+        message = "distance matrix"
+      )
+    }
+  }
+
+  "plotLinkedFiltration" should {
+    val wobbly = Array.tabulate(24) { i =>
+      val t = 2 * math.Pi * i / 24 + 0.06 * math.cos(3.0 * i)
+      val rad = 1.0 + 0.15 * math.sin(5.0 * i)
+      Array(rad * math.cos(t), rad * math.sin(t))
+    }
+    val r = TDA4j.computeFromPoints(wobbly, Array("maxDimension", "1", "minPersistenceFraction", "0.1"))
+
+    "be the slider page with its views linked: the loop's cycle appears on the complex when the class is chosen" >> {
+      val page = r.plotLinkedFiltration(1.5)
+      val loop = r.mostPersistentBar(1)
+      val state = plot.PageState().value("t", 1.4).select("class", loop)
+      val on = tips(page.at(state).svgFile(plot.Theme.Light), "∆(").sorted
+      val off = tips(page.at(plot.PageState().value("t", 1.4)).svgFile(plot.Theme.Light), "∆(").sorted
+      val cycle = tips(r.plotRepresentative(loop).svg(), "∆(").sorted
+      (page.panels.size must beEqualTo(3)) and (page.selections.size must beEqualTo(1)) and
+        (cycle.size must beGreaterThan(10)) and ((on.diff(off)) must beEqualTo(cycle))
+    }
+  }
+
   "vectorization plots" should
     "use every bar, as the numeric landscape does" >> {
       val r = TDA4j.computeFromPoints(circle, Array("maxDimension", "1"))

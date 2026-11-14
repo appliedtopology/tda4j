@@ -141,6 +141,12 @@ export class Result {
   plotDiagram(): Chart;
   /** The complex at scale `at`, over the input points. */
   plotComplex(at: number): Chart;
+  /** The complex as a page with a slider for the scale, from 0 to `max`, beside the persistence diagram: `html()` is the self-contained page. */
+  plotFiltration(max: number): Chart;
+  /** The bars as linked views, a page: the diagram, the barcode and the points. Pointing at a class lights it up in the other views and draws its cycle on the points; the pictures zoom and pan, and dragging a rectangle chooses classes. `html()` is the self-contained page. */
+  plotExplore(): Chart;
+  /** `plotFiltration` with its views linked as `plotExplore` links them. */
+  plotLinkedFiltration(max: number): Chart;
   /** The representative of `bars[i]` over the input, at scale `at` when given. */
   plotRepresentative(i: number, at?: number): Chart;
   /** Writes the result as JSON (Node.js only). Returns the absolute path. */

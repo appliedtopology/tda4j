@@ -237,4 +237,73 @@ object Gallery:
       Mark.Rule.vertical(0.6)).save(out("custom-diagram-threshold.svg"))
     (scene + Style.slides + Palette.reference + Labels(subtitle = "slides style, reference palette"))
       .save(out("custom-sphere.svg"))
+    // interactive pages: the page itself and its stills at three scales
+    val sweep = Plot.filtration(circle, barcode = true).withTitle("Noisy circle").withPlay(8)
+    sweep.save(out("interactive-filtration.html"))
+    Seq(0.15, 0.3, 0.5).foreach(t => sweep.at(t).save(out(f"interactive-still-$t%.2f.svg")))
+    Plot.filtration3D(sphere, max = 0.8, title = "Sphere").withPlay(8).save(out("interactive-sphere.html"))
+    // linked views: pointing at a class in one picture lights it up in the others, with its cycle on the input
+    val exploreBars = Persistence(circle, maxDimension = 1).bars
+    val exploreKey = exploreBars.indices.filter(exploreBars(_).dim == 1).maxBy(exploreBars(_).persistence)
+    val explored = Plot.exploreOn(circle, exploreBars).withTitle("Noisy circle")
+    explored.save(out("interactive-explore.html"))
+    explored.at(PageState().select("class", exploreKey)).save(out("interactive-explore-still.svg"))
+    val barList =
+      exploreBars.map(b => s"[${b.dim},${b.birth},${if b.death.isFinite then b.death.toString else "null"}]")
+    java.nio.file.Files.writeString(
+      java.nio.file.Path.of(out("interactive-explore.json")),
+      s"""{"key":$exploreKey,"bars":${barList.mkString("[", ",", "]")}}"""
+    )
+    val linked = Plot.filtration(circle, barcode = true, link = true).withTitle("Noisy circle")
+    linked.save(out("interactive-linked.html"))
+    linked.at(PageState().value("t", 0.5).select("class", exploreKey)).save(out("interactive-linked-still.svg"))
+    // zoom and pan: a page that only zooms, with numbers of several magnitudes, and stills of windows the check script
+    // brings the page to; the explore page zoomed into a region of its diagram
+    val wide = Figure(
+      marks = Vector(
+        Mark.Segments(
+          IndexedSeq(((0.0, 0.0), (270000.0, 0.002)), ((0.0, 0.002), (270000.0, 0.0))),
+          IndexedSeq(Paint.Secondary)
+        ),
+        Mark.Points(IndexedSeq.tabulate(10)(i => (i * 30000.0, ((i * 37) % 50) * 4e-5)), IndexedSeq(Paint.Ink))
+      ),
+      x = Axis(label = "x"),
+      y = Axis(label = "y"),
+      title = "Numbers of every size"
+    )
+    val zoomPage = Interactive().withPanel(Panel(wide).zoomable()).withTitle("Zoom and pan")
+    zoomPage.save(out("interactive-zoom.html"))
+    val zoomWindows = Seq(
+      Window(50000.0, 150000.0, 4e-4, 1.2e-3),
+      Window(0.0, 30000.0, 0.0, 1e-4),
+      Window(120000.0, 130000.0, 1e-3, 1.1e-3)
+    )
+    zoomWindows.zipWithIndex.foreach { (w, i) =>
+      zoomPage.at(PageState().zoom(0, w)).save(out(s"interactive-zoom-$i.svg"))
+    }
+    def listed(w: Window) = s"[${w.x0},${w.x1},${w.y0},${w.y1}]"
+    // sixty windows of every size and place, with the words the still writes on them: the page must write the same
+    val random = scala.util.Random(7)
+    def inside(lo: Double, hi: Double): (Double, Double) =
+      val width = (hi - lo) * math.pow(10, -2.1 * random.nextDouble())
+      val start = lo + random.nextDouble() * (hi - lo - width)
+      (start, start + width)
+    val manyWindows = Seq.fill(60) {
+      val ((x0, x1), (y0, y1)) = (inside(0.0, 270000.0), inside(0.0, 0.002))
+      Window(x0, x1, y0, y1)
+    }
+    val words = manyWindows.map { w =>
+      val svg = zoomPage.at(PageState().zoom(0, w)).svgFile(Theme.Light)
+      """<text[^>]*>([^<]*)</text>""".r.findAllMatchIn(svg).map(m => "\"" + m.group(1) + "\"").mkString("[", ",", "]")
+    }
+    java.nio.file.Files.writeString(
+      java.nio.file.Path.of(out("interactive-zoom-words.json")),
+      s"""{"windows":${manyWindows.map(listed(_)).mkString("[", ",", "]")},"words":${words.mkString("[", ",", "]")}}"""
+    )
+    val diagramWindow = Window(-0.1, 0.6, 0.1, 0.8)
+    explored.at(PageState().zoom(1, diagramWindow)).save(out("interactive-explore-zoomed.svg"))
+    java.nio.file.Files.writeString(
+      java.nio.file.Path.of(out("interactive-zoom.json")),
+      s"""{"windows":${zoomWindows.map(listed).mkString("[", ",", "]")},"diagram":${listed(diagramWindow)}}"""
+    )
     println(s"wrote the gallery to $dir")

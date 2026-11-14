@@ -388,6 +388,14 @@ class ExportsSpec extends Specification:
         (essentialCells.birth.asInstanceOf[js.Array[Int]].length must beEqualTo(1)) and
         (essentialCells.death == null must beTrue)
     }
+    "draw its bars as linked views, a page that zooms and chooses classes, and refuse a result without points" >> {
+      val page = result.plotExplore().html()
+      val sweep = result.plotLinkedFiltration(1.0).html()
+      val flat = Exports.persistenceFromDistances(js.Array(js.Array(0.0, 1.0), js.Array(1.0, 0.0)))
+      (page must contain("data-brush=\"class\"")) and (page must contain("data-zoomable=\"b\"")) and
+        (sweep must contain("type=\"range\"")) and (sweep must contain("data-brush=\"class\"")) and
+        (flat.plotExplore() must throwA[js.JavaScriptException])
+    }
     "export its boundary matrix, columns in filtration order" >> {
       val boundary = dynamic(result.boundary())
       val rows = boundary.rows.asInstanceOf[js.Array[Int]]

@@ -101,7 +101,8 @@ class ResultFileSpec extends Specification:
         (svg(loaded.plotRepresentative(loop)) must beEqualTo(svg(original.plotRepresentative(loop)))) and
         (svg(loaded.plotRepresentative(loop, 0.6)) must beEqualTo(svg(original.plotRepresentative(loop, 0.6)))) and
         (svg(loaded.plotInput()) must beEqualTo(svg(original.plotInput()))) and
-        (svg(loaded.plotComplex(0.4)) must beEqualTo(svg(original.plotComplex(0.4))))
+        (svg(loaded.plotComplex(0.4)) must beEqualTo(svg(original.plotComplex(0.4)))) and
+        (svg(loaded.plotFiltration(0.8).at(0.4)) must beEqualTo(svg(original.plotFiltration(0.8).at(0.4))))
     }
     "save to the same file again" >> {
       val first = tempPath(".json")
