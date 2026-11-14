@@ -99,17 +99,20 @@ constructor under a look and checks each one, so a new constructor goes in its t
 `Interactive` (`Interactive.scala`) is a `Plot` made of panels and controls. A `Control` is a named slider. A `Behavior`
 is what a control does to one item of a mark: `Shown(from, until)` (the item is there while `from <= v < until`),
 `Follows` (a coordinate, or an end of a segment, equals the value held between `lo` and `hi`), `Radius` (the radius of
-a disc is `factor` times the value) and `Custom` (a kind of your own). A `Reaction` is a list of behaviors for one item,
+a disc, or of the balls of a 3-D layer, is `factor` times the value) and `Custom` (a kind of your own). A `Reaction` is a list of behaviors for one item,
 and a `Panel` is a `Figure` (`Panel.Flat`) or a `Scene` (`Panel.Spatial`) with a reaction for all items of a mark or one
 for each (`reactions: Map[markIndex, IndexedSeq[Reaction]]`, the convention of `paints`). A panel refuses a behavior its
-mark cannot carry out, naming the reason (`Radius` on a log axis, `Follows` on a 3-D layer).
+mark cannot carry out, naming the reason (`Radius` on a log axis, `Follows` on a 3-D layer). `Follows` is not built for 3-D:
+nothing in 3-D follows a value in the library's pages (the sweeping line is in the 2-D diagram), a coordinate that moves also
+moves the item in the layer's depth order, which the still and the canvas would have to recompute at every value, and a
+`Behavior.Custom` with a script does it for a page that needs it.
 
 **Stills are the reference semantics.** `Interactive.at(values)` applies the behaviors in Scala: it filters the items
 with `Shown`, moves the ends with `Follows`, resizes the discs, and draws the figure again, with the axes pinned to the
 ranges of the full figure so nothing jumps between frames. `frames`, `saveFrames` and the specs use it. The page's
 controller is a second implementation of the same rules in about a hundred lines of JavaScript (`Interactive.runtime`),
-and the two are compared on the same values in Chromium (the page's visible items against the still's), because a
-page that differs from its frames is a bug in one of them. `InteractiveSpec` checks the Scala side cell for cell
+and the two are compared on the same values in Chromium, Firefox and WebKit (the page's visible items against the still's;
+see "Checking the pages in browsers" below), because a page that differs from its frames is a bug in one of them. `InteractiveSpec` checks the Scala side cell for cell
 against the stream (`from <= v` at the exact value a cell enters, a diagram checked against `diagram.at(t)`), and that
 what the page is told matches what the renderer draws.
 
@@ -136,7 +139,11 @@ of `Behavior`, its rule in `inside`/`follow` for the stills, in `Svg.Tags` for t
 `Plot.filtration`, `filtrationOf` and `filtration3D` build the page of a filtration from a point cloud and a stream:
 `Panel.sweepDiagram` turns a diagram into segments that grow until the line passes their death and then points. The cells are
 reactions of their own (`Shown` from the value at which each enters), so the page holds every cell up to the largest scale
-(`maxCells` refuses a page that would be too large, and says to lower the scale).
+(`maxCells` refuses a page that would be too large, and says to lower the scale). Above `Plot.svgCells` (20,000) cells the complex
+is drawn on a canvas seen from above instead of an SVG (`Scene` with `turns = false`: a drag pans, the wheel zooms about the
+pointer, and no axes), which takes about a seventh of the bytes and a hundredth of the elements; `canvas = true` or `false`
+chooses. A 3-D page's balls are a `Layer.Balls` whose radius is a `Radius` reaction of the slider. The scene's range comes from
+the points, not from the balls, so that the frame stays still while they grow and a ball larger than the picture is cut at its edge.
 
 ### Linked views, brushing and zoom
 
@@ -149,7 +156,22 @@ page keeps pinned keys (click, shift-click, brush) and hovered keys apart and sh
 (within 4 pixels, nearest first). A still takes the same choice as data: `Interactive.at(PageState().select("class", 3))`.
 
 **Brushing.** `Panel.Flat.brushable(name)`: a drag of more than 5 pixels draws a rectangle (`.tda4j-brush`) and chooses the items
-whose boxes touch it; the click that ends a drag is swallowed.
+whose boxes touch it; the click that ends a drag is swallowed. The rectangle is page state like the others: `PageState.brush(panel,
+window)` is the still of it, a `Mark.Region` (a translucent dashed box in data units that does not enter the plot's range) added by `Interactive.at`, which refuses a panel that is not brushable and a window the axis
+cannot place. What the rectangle touches is chosen with `select`, as the page does, so a state with both is what a viewer sees.
+On a 3-D canvas an item is chosen by pointing, nearest first; a rectangle is not built there.
+
+**The keyboard.** A brushable or zoomable picture takes focus (`tabindex=0`). Where a drag pans, the arrows pan by 10% of the window
+(`Shift`: 50%); `+`, `-` and `0` zoom about the middle and show everything. Where a drag chooses, the arrows move a cross
+(`.tda4j-cursor`, 4% of the plot area, `Shift`: 16%), `Enter` or space sets a corner and then chooses (with `Shift`: adds), and
+`Escape` or leaving the picture lets go. The cross and the rectangle go through the same `choose` as a drag, so one rule decides
+what a rectangle touches.
+
+**Touch.** A flat picture listens to touch events and sets `touch-action: pan-x pan-y`: one finger scrolls the page (and a tap
+chooses), two fingers zoom by the distance between them and pan by their midpoint (`keep` puts the point between the fingers
+where it was, on every kind of axis, reversed ones included). A 3-D canvas listens to pointer events with `touch-action: none`,
+so one finger turns it and two pinch; the page around it scrolls from outside the canvas. A brush by touch is not offered: the
+finger that would drag it is the one that scrolls.
 
 **Zoom.** `Panel.Flat.zoomable(axes)` asks the renderer for zoom tags (`Svg.Tags.zoom`): each mark is wrapped by kind (`<g data-z="s">`
 for strokes and areas, moved by one `matrix()` with `vector-effect: non-scaling-stroke`; `<g data-z="p">` for points and text, each
@@ -163,6 +185,15 @@ stills', and a few hundred formatted numbers with what `RootText.format` writes.
 `PageState.zoom(panel, Window)` is the still of a window; a figure of equal aspect widens one range of a window to keep it,
 in the still and on the page alike. Axes the page cannot draw again are refused when the page is built
 (`Interactive.zoomProblem` says why), and `Interactive.zoomable()` skips them.
+
+**Checking the pages in browsers.** `.claude/scripts/check-interactive-page.mjs` drives every page of a `Gallery` in a browser
+(`BROWSER=chromium|firefox|webkit`) and compares what the page draws with the still for the same state: the visible items, the
+axes' lines and words, the halos and the cycles, the rectangle, the keyboard's and the touch gestures' effects, and the canvas
+through the context it draws on. The CI job `interactive-pages` of `test.yml` writes the Gallery and runs the script in all three
+(Playwright 1.63.0). Touch gestures reach the page through the Chrome DevTools protocol and so run in Chromium only. A change to
+the page runtime, `Svg.niceTicks`, `Svg.number` or a renderer tag is checked there. The job runs when the other build jobs do:
+a pull request that touches only `.github/` or `.claude/`, the script included, skips it, so run the script yourself after
+changing it.
 
 **Facades.** A result keeps its representatives as arrays, so `PersistenceResult.plotExplore` and `plotLinkedFiltration` give
 `Plot.exploreOn` and `filtrationOf` the cycles of the reported bars as simplices with coefficients (`cycles = ...`), in place of

@@ -47,7 +47,10 @@ A `Result` also has `bottleneckDistance(other, dimension)`, `wassersteinDistance
 `plotComplex(at)`, `plotFiltration(max)` (a page with a slider for the scale beside the persistence diagram: `html()` is the
 self-contained page), `plotExplore()` and `plotLinkedFiltration(max)` (pages whose pictures are [linked, zoom and choose
 classes](plotting.md#exploring-a-barcode)) and `plotRepresentative(i, at)`. A plot has `svg()` and `html()` for the text of a picture or a page,
-`show()` to put it in the page (in a browser) or open it in the default browser (from Node.js), and `save(path)`.
+`show()` to put it in the page (in a browser) or open it in the default browser (from Node.js), and `save(path)`. A plot with a slider
+(`plotFiltration`, `plotLinkedFiltration`) also has `frames(count)`, `count` still pictures as an array of SVG documents, one for each scale
+from the slider's start to its end (in a browser too), and on Node.js `saveFrames(directory, count)`, which writes them as `frame-0000.svg` and
+on and returns the paths: the frames of a video or the slides of a talk, see [frames](plotting.md#frames-a-video-and-a-slide).
 
 A `Result` also has `persistenceImage(dimension, sigma, birthMin, birthMax, persistenceMin, persistenceMax,
 birthResolution, persistenceResolution)`, and the complex it was computed from: `numCells`, `boundary()` (the nonzero

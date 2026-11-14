@@ -324,6 +324,7 @@ and the other look flags apply to every panel. A 3-D plot is drawn on its own.
 | `--bar N` | for `representative`: the bar, by its 0-based line number in the text output; default the most persistent bar of `--dimension` |
 | `--dimension D` | for `representative` (without `--bar`), `landscape` and `persistence-image`; default `1` |
 | `--at X` | the scale: required for `complex`, and for `filtration` and `linked-filtration` the largest scale of its slider; for `representative`, a cycle is drawn over the complex at `X` and a cocycle restricted to it (a cocycle is restricted to its bar's birth unless you say; `--at Infinity` draws it whole) |
+| `--frames N` | for `filtration`, `filtration-3d` and `linked-filtration`: writes `N` (2 or more) still pictures, one for each scale from 0 to `--at`, as `frame-0000.svg` and on, into the folder `--output` names (not a file); the frames of a video or the slides of a talk, see [frames](plotting.md#frames-a-video-and-a-slide) |
 | `--layout RxC`, `--tagged` | for a list of kinds: the grid of the board, `2x2` or `1x3`, and lettered panels |
 | `--title`, `--x-label`, `--y-label` | the words |
 | `--caption`, `--tag`, `--description` | a line under the plot, a letter in its corner for one panel of a figure (`(a)`), and what a screen reader says of it; 2-D plots only |

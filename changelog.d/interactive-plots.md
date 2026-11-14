@@ -32,4 +32,4 @@
   `Behavior.selected` make selections of your own. The stills follow: `page.at(PageState().select("class", 3).zoom(1,
   Window(...)))`. `plotExplore()` and `plotLinkedFiltration(max)` (MATLAB, Java, JavaScript), `plot_explore()` and
   `plot_linked_filtration(max)` (Python) and `--plot explore` / `linked-filtration` (CLI) draw a result's own bars and cycles.
-  The user guide's plotting page has a section on it. Checked in Chromium only; touch and 3-D linking are left (#333).
+  The user guide's plotting page has a section on it.
