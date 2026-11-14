@@ -415,6 +415,10 @@ class ExportsSpec extends Specification:
         )) and
         ((numbered(FileAccess.readText(written(2))) == numbered(frames(2))) must beTrue) and
         (result.plotDiagram().frames(3) must throwA[js.JavaScriptException]) and
+        // a linked page has no slider either: the error says what a frame needs, not that a requirement failed
+        (result.plotExplore().frames(3) must throwA[js.JavaScriptException].like { case e =>
+          (e.getMessage must contain("with a slider")) and (e.getMessage must not(contain("requirement failed")))
+        }) and
         (page.frames(1) must throwA[js.JavaScriptException])
     }
     "export its boundary matrix, columns in filtration order" >> {

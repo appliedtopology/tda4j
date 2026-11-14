@@ -1017,9 +1017,10 @@ final class Chart private[javascript] (underlying: plot.Plot):
       js.Array(withSlider("saveFrames").saveFrames(directory, count, theme.fold(plot.Theme.Light)(plot.Theme.named))*)
     }
 
+  // `plotExplore` is a page too, but one without a slider: frames need a control to sweep
   private def withSlider(method: String): plot.Interactive = underlying match
-    case page: plot.Interactive => page
-    case _                      =>
+    case page: plot.Interactive if page.controls.nonEmpty => page
+    case _                                                =>
       throw new IllegalArgumentException(
         s"$method is for a plot with a slider (plotFiltration, plotLinkedFiltration); this plot has none"
       )
