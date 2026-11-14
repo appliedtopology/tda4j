@@ -313,6 +313,13 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
       "cycle is drawn over the complex at this scale and a cocycle restricted to it (default for a cocycle: its " +
       "bar's birth; Infinity draws it whole)"
   )
+  val frames: ScallopOption[Int] = opt[Int](
+    name = "frames",
+    noshort = true,
+    descr = "for --plot filtration, filtration-3d or linked-filtration: instead of the page, write this many still " +
+      "pictures (2 or more), one for each scale of the slider from 0 to --at, as frame-0000.svg and on, into the " +
+      "directory --output names (made if it is missing); --theme picks the colors (default: light)"
+  )
   val saveResult: ScallopOption[String] = opt[String](
     name = "save-result",
     noshort = true,

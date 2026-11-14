@@ -24,10 +24,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# Six independent jobs (they run in parallel, and each shows up as its own check on a pull request): `test` (the JVM
+# Seven independent jobs (they run in parallel, and each shows up as its own check on a pull request): `test` (the JVM
 # build), `test-js` (the Scala.js build, on Node.js), `npm-package` (the npm tarball, installed and run),
-# `python-package` (the Python wheel, installed and tested), `docs-build` (named to differ from the deploying job `docs`
-# in docs.yml) and `mima`. A branch rule for `scala` can require any of
+# `interactive-pages` (the interactive plot pages, in Chromium, Firefox and WebKit), `python-package` (the Python wheel,
+# installed and tested), `docs-build` (named to differ from the deploying job `docs` in docs.yml) and `mima`. A branch rule for `scala` can require any of
 # them by job name. The sbt projects are `tda4j` (JVM) and `tda4jJS` (Scala.js): every command here names one.
 #
 # Every sbt call in every workflow runs with `--server`: sbt in the foreground, finished when its step is. Through sbt
@@ -156,6 +156,59 @@ jobs:
           printf '0,0\n1,0\n1,1\n0,1\n' > square.csv
           bars=$(npx tda4j --max-dimension 1 square.csv | grep -c '^1:')
           test "$bars" = 1 || { echo "expected one degree-1 bar from the command, got $bars"; exit 1; }
+
+  # The interactive plot pages in browsers (#330, #333): `Gallery` writes the pages and the stills of the states the
+  # script drives them to (a slider value, a zoom window on every kind of axis, a brushed rectangle), and
+  # `.claude/scripts/check-interactive-page.mjs` compares what each page draws, element for element, with its still. It
+  # runs in Playwright's Chromium, Firefox and WebKit (a Safari-engine build, not Safari itself); touch gestures go
+  # through the Chrome DevTools protocol and so are checked in Chromium only. Each browser is its own step so that one
+  # failing does not hide the others.
+  interactive-pages:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Setup JDK
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Setup sbt launcher
+        uses: sbt/setup-sbt@v1
+      - name: Write the Gallery
+        run: sbt --server "tda4j/Test/runMain org.appliedtopology.tda4j.plot.Gallery $RUNNER_TEMP/gallery"
+      - name: Install Playwright and its browsers
+        run: |
+          set -e
+          mkdir "$RUNNER_TEMP/playwright" && cd "$RUNNER_TEMP/playwright"
+          npm init -y > /dev/null
+          npm install playwright@1.63.0
+          npx playwright install --with-deps chromium firefox webkit
+      - name: Check the pages in Chromium
+        if: always()
+        env:
+          BROWSER: chromium
+          NODE_PATH: ${{ runner.temp }}/playwright/node_modules
+        run: node .claude/scripts/check-interactive-page.mjs "$RUNNER_TEMP/gallery"
+      - name: Check the pages in Firefox
+        if: always()
+        env:
+          BROWSER: firefox
+          NODE_PATH: ${{ runner.temp }}/playwright/node_modules
+        run: node .claude/scripts/check-interactive-page.mjs "$RUNNER_TEMP/gallery"
+      - name: Check the pages in WebKit
+        if: always()
+        env:
+          BROWSER: webkit
+          NODE_PATH: ${{ runner.temp }}/playwright/node_modules
+        run: node .claude/scripts/check-interactive-page.mjs "$RUNNER_TEMP/gallery"
 
   # The Python package the release attaches (and publishes to PyPI once that is set up, see release.yml and RELEASE.md): the
   # wheel built around the fat jar, installed into clean virtual environments on the oldest and the newest Python it

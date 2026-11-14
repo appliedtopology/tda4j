@@ -1,5 +1,6 @@
 package org.appliedtopology.tda4j.javascript
 
+import org.appliedtopology.tda4j.FileAccess
 import org.appliedtopology.tda4j.SpecThrows.throwWith
 import org.specs2.mutable.Specification
 
@@ -395,6 +396,26 @@ class ExportsSpec extends Specification:
       (page must contain("data-brush=\"class\"")) and (page must contain("data-zoomable=\"b\"")) and
         (sweep must contain("type=\"range\"")) and (sweep must contain("data-brush=\"class\"")) and
         (flat.plotExplore() must throwA[js.JavaScriptException])
+    }
+    "give a still picture of a page with a slider at each of its scales, as text or as files, and refuse a plot with no slider" >> {
+      val page = result.plotFiltration(1.0)
+      val frames = page.frames(3)
+      val dark = page.frames(2, "dark")
+      val directory = FileAccess.tempFile("tda4j-frames-", ".tmp") + "-dir"
+      val written = page.saveFrames(directory, 3)
+      def lines(svg: String) = "<line".r.findAllIn(svg).size
+      // each render numbers its clip paths
+      def numbered(svg: String) = svg.replaceAll("tda4j[0-9]+", "tda4jN")
+      (frames.length must beEqualTo(3)) and
+        // the complex grows with the slider, so the last frame has more lines than the first
+        (lines(frames(0)) must beLessThan(lines(frames(2)))) and
+        (dark(1) must not(beEqualTo(page.frames(2)(1)))) and
+        (written.toSeq.map(_.split("/").last) must beEqualTo(
+          Seq("frame-0000.svg", "frame-0001.svg", "frame-0002.svg")
+        )) and
+        ((numbered(FileAccess.readText(written(2))) == numbered(frames(2))) must beTrue) and
+        (result.plotDiagram().frames(3) must throwA[js.JavaScriptException]) and
+        (page.frames(1) must throwA[js.JavaScriptException])
     }
     "export its boundary matrix, columns in filtration order" >> {
       val boundary = dynamic(result.boundary())

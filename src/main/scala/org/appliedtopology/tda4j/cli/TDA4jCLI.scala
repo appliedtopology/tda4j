@@ -1117,7 +1117,8 @@ object TDA4jCLI:
       "--at" -> (
         conf.at.isSupplied,
         Set("representative", "complex", "complex-3d", "filtration", "filtration-3d", "linked-filtration")
-      )
+      ),
+      "--frames" -> (conf.frames.isSupplied, Set("filtration", "filtration-3d", "linked-filtration"))
     )
     val looks = Seq(
       "--title" -> conf.title.isSupplied,
@@ -1186,6 +1187,17 @@ object TDA4jCLI:
           throw new IllegalArgumentException(
             "give --bar (one bar) or --dimension (its most persistent bar), not both"
           )
+        conf.frames.toOption.foreach { count =>
+          if count < 2 then throw new IllegalArgumentException(s"--frames needs at least 2 pictures, not $count")
+          if !conf.output.isSupplied then
+            throw new IllegalArgumentException(
+              "--frames writes its pictures into a directory: give it with --output (made if it is missing)"
+            )
+          conf.output.foreach { path =>
+            if FileAccess.isFile(path) then
+              throw new IllegalArgumentException(s"--frames writes into a directory, but --output $path is a file")
+          }
+        }
         listed.find(kind => kind == "complex" || kind == "complex-3d").foreach { kind =>
           if !conf.at.isSupplied then
             throw new IllegalArgumentException(s"--plot $kind needs --at, the scale of the complex to draw")
@@ -1227,7 +1239,9 @@ object TDA4jCLI:
           )
         conf.output.toOption.foreach { path =>
           val lower = path.toLowerCase
-          if !(lower.endsWith(".svg") || lower.endsWith(".html") || lower.endsWith(".htm")) then
+          // with --frames the output is a directory, checked with the other --frames rules
+          if !conf.frames.isSupplied && !(lower.endsWith(".svg") || lower.endsWith(".html") || lower.endsWith(".htm"))
+          then
             throw new IllegalArgumentException(
               s"--plot writes an .svg file or an .html page; --output '$path' is neither"
             )
@@ -1328,9 +1342,15 @@ object TDA4jCLI:
       case b: Board if conf.tagged() => b.tagged()
       case other                     => other
     val theme = conf.theme.toOption.map(Theme.named)
-    conf.output.toOption match
-      case Some(path) => drawn.save(path, theme)
-      case None       =>
+    (conf.frames.toOption, conf.output.toOption) match
+      case (Some(count), Some(directory)) =>
+        tweaked match
+          case page: Interactive =>
+            val written = page.saveFrames(directory, count, theme.getOrElse(Theme.Light))
+            err.println(s"tda4j: wrote ${written.size} frames to ${FileAccess.absolute(directory)}")
+          case other => throw new IllegalStateException(s"unreachable: --frames for a $other")
+      case (_, Some(path)) => drawn.save(path, theme)
+      case _               =>
         val page = FileAccess.tempFile(s"tda4j-${listed.mkString("-")}-", ".html")
         FileAccess.writeText(page, drawn.html(theme.getOrElse(Theme.Auto)))
         val opened = Viewer.browse(FileAccess.fileUri(page))

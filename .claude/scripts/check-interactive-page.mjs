@@ -5,15 +5,19 @@
 //   sbt "tda4j/Test/runMain org.appliedtopology.tda4j.plot.Gallery /tmp/gallery"
 //   NODE_PATH=/opt/node-tools/node_modules node .claude/scripts/check-interactive-page.mjs /tmp/gallery
 //
-// Prints one line per check and exits 1 when one fails. Not part of CI (rules/plotting.md).
+// Prints one line per check and exits 1 when one fails. CI runs it in Chromium (the `interactive-pages` job of test.yml).
 import { createRequire } from 'module';
 import fs from 'fs';
 const require = createRequire((process.env.NODE_PATH || '/opt/node-tools/node_modules') + '/');
-const { chromium } = require('playwright');
+const playwright = require('playwright');
 
 const dir = process.argv[2];
 if (!dir) { console.error('usage: check-interactive-page.mjs <gallery directory>'); process.exit(2); }
-const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || '/opt/pw-browsers/chromium', args: ['--no-sandbox'] });
+// BROWSER=firefox or webkit runs the same checks in that engine (Playwright's browsers must be installed); the touch gestures
+// are sent through the Chrome DevTools protocol, so they run in Chromium only
+const engine = process.env.BROWSER || 'chromium';
+const chromiumPath = process.env.CHROMIUM || (fs.existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : undefined);
+const browser = await playwright[engine].launch(engine === 'chromium' ? { executablePath: chromiumPath, args: ['--no-sandbox'] } : {});
 let failures = 0;
 const check = (ok, what) => { console.log(ok ? 'ok  ' : 'FAIL', what); if (!ok) failures++; };
 
@@ -212,7 +216,7 @@ const read = f => fs.readFileSync(dir + '/' + f, 'utf8');
     const sh = await page.evaluate(() => window.__shapes);
     const balls = sh.filter(s => kindOf0(s) === 'ball').map(s => ({ x: s.path[0][1], y: s.path[0][2], r: s.path[0][3] }));
     return { balls, counts: kinds(sh) }; };
-  const kindOf0 = s => (s.path[0][0] === 'a' && s.op === 'fill' && Math.abs(s.alpha - 0.09) < 1e-9) ? 'ball' : 'other';
+  const kindOf0 = s => (s.path[0][0] === 'a' && s.op === 'fill' && Math.abs(s.alpha - 0.09) < 1e-6) ? 'ball' : 'other';
   const small = await live(1.2), large = await live(2.4);
   check(small.balls.length > 0 && large.balls.length >= small.balls.length, `balls on the page: ${small.balls.length} at 1.2, ${large.balls.length} at 2.4`);
   check(large.balls[0].r > small.balls[0].r * 1.5, `a ball grows with the slider: ${small.balls[0].r.toFixed(2)} px then ${large.balls[0].r.toFixed(2)} px`);
@@ -340,10 +344,20 @@ const read = f => fs.readFileSync(dir + '/' + f, 'utf8');
     }
     check(bad.length === 0, `${name}: ${meta.windows.length} windows draw the axes of their stills (${drawn} elements)` + (bad.length ? ` -- ${bad.slice(0, 2).join(' || ')}` : ''));
     // a drag moves every mark with the pointer, and the wheel zooms about it, whatever the direction and scale of the axes
-    const centre = async () => page.evaluate(() => { const c = [...document.querySelectorAll('.tda4j-ia svg[data-zm] g[data-z=p] [data-c]')].filter(e => e.getClientRects().length)[3] || document.querySelector('.tda4j-ia svg[data-zm] g[data-z=p] [data-c]');
-      const r = c.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; });
+    // one mark, the nearest to the middle of the whole picture, followed through the drag and the zoom; a window is put around it
+    // first (a mark outside the picture could not be pointed at: the wheel would go to the page, and zoom that)
+    let which = null;
+    const centre = async () => { const got = await page.evaluate(which => { const svg = document.querySelector('.tda4j-ia svg[data-zm]'), box = svg.getBoundingClientRect();
+        const all = [...svg.querySelectorAll('g[data-z=p] [data-c]')].map(e => e.getBoundingClientRect()), mid = [box.left + box.width / 2, box.top + box.height / 2];
+        const k = which ?? all.map((r, i) => [i, Math.hypot(r.left + r.width / 2 - mid[0], r.top + r.height / 2 - mid[1])]).sort((a, b) => a[1] - b[1])[0][0];
+        const r = all[k]; return [k, r.left + r.width / 2, r.top + r.height / 2]; }, which);
+      which = got[0]; return [got[1], got[2]]; };
     await page.evaluate(() => document.querySelector('.tda4j-ia').tda4j.resetZoom(0));
-    await page.evaluate(() => { const t = document.querySelector('.tda4j-ia').tda4j, w = t.window(0); t.zoom(0, [w[0] + 0.1 * (w[1] - w[0]), w[0] + 0.7 * (w[1] - w[0]), w[2] + 0.1 * (w[3] - w[2]), w[2] + 0.7 * (w[3] - w[2])].map((v, i) => v)); });
+    {
+      const [mx, my] = await centre();
+      const [a, b] = await page.evaluate(([x, y]) => [document.querySelector('.tda4j-ia').tda4j.pointAt(0, x - 110, y - 80), document.querySelector('.tda4j-ia').tda4j.pointAt(0, x + 110, y + 80)], [mx, my]);
+      await page.evaluate(w => document.querySelector('.tda4j-ia').tda4j.zoom(0, w), [Math.min(a[0], b[0]), Math.max(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[1], b[1])]);
+    }
     const p0 = await centre();
     const svgBox = await page.evaluate(() => { const r = document.querySelector('.tda4j-ia svg[data-zm]').getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; });
     const [gx, gy] = [svgBox[0] + svgBox[2] * 0.5, svgBox[1] + svgBox[3] * 0.5];
@@ -754,7 +768,7 @@ const matches = (a, b, tol = 0.1) => {
 
 { // brushing on a page of forty points: the rectangle is the one of the still (dragged, set from the data, or walked out with the keyboard)
   const meta = JSON.parse(read('interactive-brush.json'));
-  const context = await browser.newContext({ viewport: { width: 900, height: 900 }, hasTouch: true });
+  const context = await browser.newContext({ viewport: { width: 900, height: 900 }, hasTouch: engine === 'chromium' });
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(String(e)));
@@ -823,6 +837,13 @@ const matches = (a, b, tol = 0.1) => {
   await press('ArrowLeft'); await press('Enter'); await press('ArrowDown'); await press('Escape');
   check(await page.evaluate(() => !document.querySelector('.tda4j-brush')) && JSON.stringify(await chosen()) === JSON.stringify(added), 'Escape lets go: no rectangle, nothing changed');
 
+  // one press moves the cross a twenty-fifth of the plot area (shift: 4/25)
+  await press('ArrowRight'); await press('Enter'); await press('ArrowRight', 5); await press('ArrowDown', 2); await press('Enter');
+  const small = await pageRect();
+  check(near(small, [X0 + W / 2 + 0.04 * W, Y0 + H / 2, 0.2 * W, 0.08 * H], 0.05), `plain arrows move the cross 4% of the plot area: ${small && small.map(v => v.toFixed(1))}`);
+  await page.mouse.click(bx + 5, by + 5);
+  await page.focus('.tda4j-ia svg[tabindex]');
+
   // zoomed, a rectangle that runs over the margin chooses only what the plot area shows of it
   await api('t.zoom(0, [2, 6, 2, 6]);');
   const [zx, zy, zw, zh] = await svgBox(), area = (await domPoints()).plot;
@@ -856,100 +877,103 @@ const matches = (a, b, tol = 0.1) => {
   await page.keyboard.press('-');
   check(JSON.stringify(await api('return t.window(0);')) === JSON.stringify(whole), '- cannot zoom out past the whole picture');
 
-  // touch: two fingers pinch (the distance) and drag (the midpoint); one finger leaves the picture to the page, a tap chooses
-  const cdp = await context.newCDPSession(page);
-  const touch = (type, pts) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map(([x, y], id) => ({ x, y, id })) });
-  const gesture = async (from, to, steps = 6) => {
-    await touch('touchStart', from);
-    for (let i = 1; i <= steps; i++) await touch('touchMove', from.map((p, k) => [p[0] + (to[k][0] - p[0]) * i / steps, p[1] + (to[k][1] - p[1]) * i / steps]));
-    await touch('touchEnd', []);
-    await page.waitForTimeout(60);
-  };
-  await page.locator('.tda4j-zoombar button[aria-label="show everything"]').click();
-  check(await page.evaluate(() => getComputedStyle(document.querySelector('.tda4j-ia svg[tabindex]')).touchAction) === 'pan-x pan-y', 'the picture leaves one-finger scrolling to the page (touch-action: pan-x pan-y)');
-  const [tx, ty, tw, th] = await svgBox();
-  const [mx, my] = [tx + 0.45 * tw, ty + 0.5 * th];
-  const w0 = await api('return t.window(0);'), c0 = await api('return t.pointAt(0, arg[0], arg[1]);', [mx, my]);
-  await gesture([[mx - 40, my], [mx + 40, my]], [[mx - 80, my], [mx + 80, my]]);
-  const w1 = await api('return t.window(0);'), c1 = await api('return t.pointAt(0, arg[0], arg[1]);', [mx, my]);
-  check(Math.abs((w1[1] - w1[0]) - (w0[1] - w0[0]) / 2) < 1e-6 * (w0[1] - w0[0]) && Math.abs((w1[3] - w1[2]) - (w0[3] - w0[2]) / 2) < 1e-6 * (w0[3] - w0[2]), `two fingers twice as far apart show half the window: width ${(w1[1] - w1[0]).toFixed(3)} from ${(w0[1] - w0[0]).toFixed(3)}`);
-  check(Math.abs(c1[0] - c0[0]) < 1e-6 && Math.abs(c1[1] - c0[1]) < 1e-6, `and what was between the fingers still is: (${c0.map(v => v.toFixed(3))}) then (${c1.map(v => v.toFixed(3))})`);
-  const w2in = await api('return t.window(0);');
-  await gesture([[mx - 40, my], [mx + 40, my]], [[mx - 40 + 70, my - 50], [mx + 40 + 70, my - 50]]);
-  const w2 = await api('return t.window(0);'), c2 = await api('return t.pointAt(0, arg[0], arg[1]);', [mx + 70, my - 50]);
-  check(Math.abs((w2[1] - w2[0]) - (w2in[1] - w2in[0])) < 1e-9 && Math.abs(c2[0] - c1[0]) < 1e-6 && Math.abs(c2[1] - c1[1]) < 1e-6, 'two fingers moving together carry what is between them along, and keep the size');
-  const w3in = await api('return t.window(0);'), c3in = await api('return t.pointAt(0, arg[0], arg[1]);', [mx + 20, my + 20]);
-  await gesture([[mx - 30 + 20, my + 20], [mx + 30 + 20, my + 20]], [[mx - 60 - 30, my - 10], [mx + 60 - 30, my - 10]]);
-  const w3 = await api('return t.window(0);'), c3 = await api('return t.pointAt(0, arg[0], arg[1]);', [mx - 30, my - 10]);
-  check(Math.abs((w3[1] - w3[0]) - (w3in[1] - w3in[0]) / 2) < 1e-6 * (w3in[1] - w3in[0]) && Math.abs(c3[0] - c3in[0]) < 1e-6 && Math.abs(c3[1] - c3in[1]) < 1e-6, 'pinching and moving at once does both');
-  await gesture([[mx - 40, my], [mx + 40, my]], [[mx - 4000, my], [mx + 4000, my]]);
-  const deep = await api('return t.window(0);'), full = await api('return t.pointAt(0, arg[0], arg[1]);', [mx, my]);
-  check(deep[1] - deep[0] >= (whole[1] - whole[0]) / 200 - 1e-12, `pinching out stops at 1/200 of the picture (${((whole[1] - whole[0]) / (deep[1] - deep[0])).toFixed(1)}x)`);
-  await page.locator('.tda4j-zoombar button[aria-label="show everything"]').click();
-  const stay = await api('return t.window(0);');
-  await touch('touchStart', [[mx, my]]); for (let i = 1; i <= 5; i++) await touch('touchMove', [[mx + 12 * i, my + 8 * i]]); await touch('touchEnd', []);
-  check(JSON.stringify(await api('return t.window(0);')) === JSON.stringify(stay) && await pageRect() === null, 'one finger moving leaves the window alone, and draws no rectangle');
-  const target = (await domPoints()).pts.find(p => p.key === 7).box.map((v, i, b) => (v + b[(i + 2) % 4]) / 2).slice(0, 2);
-  await touch('touchStart', [target]); await touch('touchEnd', []); await page.waitForTimeout(100);
-  check(JSON.stringify(await chosen()) === JSON.stringify([7]), `a tap on a point chooses it: [${await chosen()}]`);
-  check(errors.length === 0, `no errors on the brush page ${errors.join(' | ')}`);
+  if (engine !== 'chromium') console.log(`skip  touch gestures: they are sent through the Chrome DevTools protocol, and this is ${engine}`);
+  else {
+    // touch: two fingers pinch (the distance) and drag (the midpoint); one finger leaves the picture to the page, a tap chooses
+    const cdp = await context.newCDPSession(page);
+    const touch = (type, pts) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map(([x, y], id) => ({ x, y, id })) });
+    const gesture = async (from, to, steps = 6) => {
+      await touch('touchStart', from);
+      for (let i = 1; i <= steps; i++) await touch('touchMove', from.map((p, k) => [p[0] + (to[k][0] - p[0]) * i / steps, p[1] + (to[k][1] - p[1]) * i / steps]));
+      await touch('touchEnd', []);
+      await page.waitForTimeout(60);
+    };
+    await page.locator('.tda4j-zoombar button[aria-label="show everything"]').click();
+    check(await page.evaluate(() => getComputedStyle(document.querySelector('.tda4j-ia svg[tabindex]')).touchAction) === 'pan-x pan-y', 'the picture leaves one-finger scrolling to the page (touch-action: pan-x pan-y)');
+    const [tx, ty, tw, th] = await svgBox();
+    const [mx, my] = [tx + 0.45 * tw, ty + 0.5 * th];
+    const w0 = await api('return t.window(0);'), c0 = await api('return t.pointAt(0, arg[0], arg[1]);', [mx, my]);
+    await gesture([[mx - 40, my], [mx + 40, my]], [[mx - 80, my], [mx + 80, my]]);
+    const w1 = await api('return t.window(0);'), c1 = await api('return t.pointAt(0, arg[0], arg[1]);', [mx, my]);
+    check(Math.abs((w1[1] - w1[0]) - (w0[1] - w0[0]) / 2) < 1e-6 * (w0[1] - w0[0]) && Math.abs((w1[3] - w1[2]) - (w0[3] - w0[2]) / 2) < 1e-6 * (w0[3] - w0[2]), `two fingers twice as far apart show half the window: width ${(w1[1] - w1[0]).toFixed(3)} from ${(w0[1] - w0[0]).toFixed(3)}`);
+    check(Math.abs(c1[0] - c0[0]) < 1e-6 && Math.abs(c1[1] - c0[1]) < 1e-6, `and what was between the fingers still is: (${c0.map(v => v.toFixed(3))}) then (${c1.map(v => v.toFixed(3))})`);
+    const w2in = await api('return t.window(0);');
+    await gesture([[mx - 40, my], [mx + 40, my]], [[mx - 40 + 70, my - 50], [mx + 40 + 70, my - 50]]);
+    const w2 = await api('return t.window(0);'), c2 = await api('return t.pointAt(0, arg[0], arg[1]);', [mx + 70, my - 50]);
+    check(Math.abs((w2[1] - w2[0]) - (w2in[1] - w2in[0])) < 1e-9 && Math.abs(c2[0] - c1[0]) < 1e-6 && Math.abs(c2[1] - c1[1]) < 1e-6, 'two fingers moving together carry what is between them along, and keep the size');
+    const w3in = await api('return t.window(0);'), c3in = await api('return t.pointAt(0, arg[0], arg[1]);', [mx + 20, my + 20]);
+    await gesture([[mx - 30 + 20, my + 20], [mx + 30 + 20, my + 20]], [[mx - 60 - 30, my - 10], [mx + 60 - 30, my - 10]]);
+    const w3 = await api('return t.window(0);'), c3 = await api('return t.pointAt(0, arg[0], arg[1]);', [mx - 30, my - 10]);
+    check(Math.abs((w3[1] - w3[0]) - (w3in[1] - w3in[0]) / 2) < 1e-6 * (w3in[1] - w3in[0]) && Math.abs(c3[0] - c3in[0]) < 1e-6 && Math.abs(c3[1] - c3in[1]) < 1e-6, 'pinching and moving at once does both');
+    await gesture([[mx - 40, my], [mx + 40, my]], [[mx - 4000, my], [mx + 4000, my]]);
+    const deep = await api('return t.window(0);'), full = await api('return t.pointAt(0, arg[0], arg[1]);', [mx, my]);
+    check(deep[1] - deep[0] >= (whole[1] - whole[0]) / 200 - 1e-12, `pinching out stops at 1/200 of the picture (${((whole[1] - whole[0]) / (deep[1] - deep[0])).toFixed(1)}x)`);
+    await page.locator('.tda4j-zoombar button[aria-label="show everything"]').click();
+    const stay = await api('return t.window(0);');
+    await touch('touchStart', [[mx, my]]); for (let i = 1; i <= 5; i++) await touch('touchMove', [[mx + 12 * i, my + 8 * i]]); await touch('touchEnd', []);
+    check(JSON.stringify(await api('return t.window(0);')) === JSON.stringify(stay) && await pageRect() === null, 'one finger moving leaves the window alone, and draws no rectangle');
+    const target = (await domPoints()).pts.find(p => p.key === 7).box.map((v, i, b) => (v + b[(i + 2) % 4]) / 2).slice(0, 2);
+    await touch('touchStart', [target]); await touch('touchEnd', []); await page.waitForTimeout(100);
+    check(JSON.stringify(await chosen()) === JSON.stringify([7]), `a tap on a point chooses it: [${await chosen()}]`);
+    check(errors.length === 0, `no errors on the brush page ${errors.join(' | ')}`);
 
-  // the touch on pages with other axes: the data between the fingers stays between them (reversed axes, a log axis)
-  for (const name of ['reversed', 'log', 'symlog']) {
-    const tab = await context.newPage();
-    await tab.goto(`file://${dir}/zoomaxes-${name}.html`);
-    const cd = await context.newCDPSession(tab);
-    const tch = (type, pts) => cd.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map(([x, y], id) => ({ x, y, id })) });
-    const box = await tab.evaluate(() => { const r = document.querySelector('.tda4j-ia svg[tabindex]').getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; });
-    const [qx, qy] = [box[0] + 0.5 * box[2], box[1] + 0.5 * box[3]];
-    const at = (x, y) => tab.evaluate(([x, y]) => document.querySelector('.tda4j-ia').tda4j.pointAt(0, x, y), [x, y]);
-    const before = await at(qx, qy);
-    const from = [[qx - 40, qy], [qx + 40, qy]], to = [[qx - 70 + 30, qy - 20], [qx + 70 + 30, qy - 20]];
-    await tch('touchStart', from); for (let i = 1; i <= 6; i++) await tch('touchMove', from.map((p, k) => [p[0] + (to[k][0] - p[0]) * i / 6, p[1] + (to[k][1] - p[1]) * i / 6])); await tch('touchEnd', []);
-    await tab.waitForTimeout(60);
-    const after = await at(qx + 30, qy - 20);
-    const rel = (u, v) => Math.abs(u - v) / (Math.abs(v) || 1);
-    check(rel(after[0], before[0]) < 1e-6 && rel(after[1], before[1]) < 1e-6, `${name}: after a pinch and a move, what was between the fingers is: (${before.map(v => v.toPrecision(5))}) then (${after.map(v => v.toPrecision(5))})`);
-    const spanned = await tab.evaluate(() => document.querySelector('.tda4j-ia').tda4j.window(0));
-    check(spanned.every(isFinite), `${name}: the window is still numbers`);
-    if (name === 'reversed') { // on an axis that runs backwards the right arrow moves the view to the right, which is toward smaller values
-      await tab.evaluate(() => { const t = document.querySelector('.tda4j-ia').tda4j; t.resetZoom(0); const w = t.window(0);
-        t.zoom(0, [w[0] + 0.3 * (w[1] - w[0]), w[0] + 0.6 * (w[1] - w[0]), w[2] + 0.3 * (w[3] - w[2]), w[2] + 0.6 * (w[3] - w[2])]); });
-      const k0 = await tab.evaluate(() => document.querySelector('.tda4j-ia').tda4j.window(0));
-      await tab.focus('.tda4j-ia svg[tabindex]'); await tab.keyboard.press('ArrowRight'); await tab.keyboard.press('ArrowUp');
-      const k1 = await tab.evaluate(() => document.querySelector('.tda4j-ia').tda4j.window(0));
-      check(Math.abs((k1[0] - k0[0]) + 0.1 * (k0[1] - k0[0])) < 1e-6 * (k0[1] - k0[0]) && Math.abs((k1[2] - k0[2]) + 0.1 * (k0[3] - k0[2])) < 1e-6 * (k0[3] - k0[2]),
-        `reversed: right and up arrows move the window toward smaller values (${(k1[0] - k0[0]).toFixed(2)}, ${(k1[2] - k0[2]).toFixed(2)})`);
+    // the touch on pages with other axes: the data between the fingers stays between them (reversed axes, a log axis)
+    for (const name of ['reversed', 'log', 'symlog']) {
+      const tab = await context.newPage();
+      await tab.goto(`file://${dir}/zoomaxes-${name}.html`);
+      const cd = await context.newCDPSession(tab);
+      const tch = (type, pts) => cd.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map(([x, y], id) => ({ x, y, id })) });
+      const box = await tab.evaluate(() => { const r = document.querySelector('.tda4j-ia svg[tabindex]').getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; });
+      const [qx, qy] = [box[0] + 0.5 * box[2], box[1] + 0.5 * box[3]];
+      const at = (x, y) => tab.evaluate(([x, y]) => document.querySelector('.tda4j-ia').tda4j.pointAt(0, x, y), [x, y]);
+      const before = await at(qx, qy);
+      const from = [[qx - 40, qy], [qx + 40, qy]], to = [[qx - 70 + 30, qy - 20], [qx + 70 + 30, qy - 20]];
+      await tch('touchStart', from); for (let i = 1; i <= 6; i++) await tch('touchMove', from.map((p, k) => [p[0] + (to[k][0] - p[0]) * i / 6, p[1] + (to[k][1] - p[1]) * i / 6])); await tch('touchEnd', []);
+      await tab.waitForTimeout(60);
+      const after = await at(qx + 30, qy - 20);
+      const rel = (u, v) => Math.abs(u - v) / (Math.abs(v) || 1);
+      check(rel(after[0], before[0]) < 1e-6 && rel(after[1], before[1]) < 1e-6, `${name}: after a pinch and a move, what was between the fingers is: (${before.map(v => v.toPrecision(5))}) then (${after.map(v => v.toPrecision(5))})`);
+      const spanned = await tab.evaluate(() => document.querySelector('.tda4j-ia').tda4j.window(0));
+      check(spanned.every(isFinite), `${name}: the window is still numbers`);
+      if (name === 'reversed') { // on an axis that runs backwards the right arrow moves the view to the right, which is toward smaller values
+        await tab.evaluate(() => { const t = document.querySelector('.tda4j-ia').tda4j; t.resetZoom(0); const w = t.window(0);
+          t.zoom(0, [w[0] + 0.3 * (w[1] - w[0]), w[0] + 0.6 * (w[1] - w[0]), w[2] + 0.3 * (w[3] - w[2]), w[2] + 0.6 * (w[3] - w[2])]); });
+        const k0 = await tab.evaluate(() => document.querySelector('.tda4j-ia').tda4j.window(0));
+        await tab.focus('.tda4j-ia svg[tabindex]'); await tab.keyboard.press('ArrowRight'); await tab.keyboard.press('ArrowUp');
+        const k1 = await tab.evaluate(() => document.querySelector('.tda4j-ia').tda4j.window(0));
+        check(Math.abs((k1[0] - k0[0]) + 0.1 * (k0[1] - k0[0])) < 1e-6 * (k0[1] - k0[0]) && Math.abs((k1[2] - k0[2]) + 0.1 * (k0[3] - k0[2])) < 1e-6 * (k0[3] - k0[2]),
+          `reversed: right and up arrows move the window toward smaller values (${(k1[0] - k0[0]).toFixed(2)}, ${(k1[2] - k0[2]).toFixed(2)})`);
+      }
+      await tab.close();
     }
-    await tab.close();
-  }
 
-  // the 3-D canvas: two fingers pinch to zoom and drag to turn; a flat canvas pans and zooms about the fingers
-  for (const [file, turns] of [['interactive-pick-3d.html', true], ['interactive-large.html', false]]) {
-    const tab = await context.newPage();
-    await tab.addInitScript(spy);
-    await tab.goto(`file://${dir}/${file}`);
-    const cd = await context.newCDPSession(tab);
-    const tch = (type, pts) => cd.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map(([x, y], id) => ({ x, y, id })) });
-    const extent = async () => tab.evaluate(() => { const xs = [], ys = []; window.__shapes.forEach(s => s.path.forEach(p => { xs.push(p[1]); ys.push(p[2]); }));
-      return [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)]; });
-    const cv = await tab.evaluate(() => { const r = document.querySelector('canvas').getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; });
-    const [cx, cy] = [cv[0] + cv[2] / 2, cv[1] + Math.min(cv[3], 500) / 2];
-    const e0 = await extent();
-    const from = [[cx - 30, cy], [cx + 30, cy]], to = [[cx - 60, cy], [cx + 60, cy]];
-    await tch('touchStart', from); for (let i = 1; i <= 6; i++) await tch('touchMove', from.map((p, k) => [p[0] + (to[k][0] - p[0]) * i / 6, p[1] + (to[k][1] - p[1]) * i / 6])); await tch('touchEnd', []);
-    await tab.waitForTimeout(100);
-    const e1 = await extent();
-    const ratio = (e1[1] - e1[0]) / (e0[1] - e0[0]);
-    check(Math.abs(ratio - 2) < 0.08, `${file}: fingers twice as far apart draw it ${ratio.toFixed(2)} times as wide`);
-    if (!turns) {
-      const f2 = [[cx - 60, cy], [cx + 60, cy]], t2 = [[cx - 60 + 40, cy + 25], [cx + 60 + 40, cy + 25]];
-      await tch('touchStart', f2); for (let i = 1; i <= 6; i++) await tch('touchMove', f2.map((p, k) => [p[0] + (t2[k][0] - p[0]) * i / 6, p[1] + (t2[k][1] - p[1]) * i / 6])); await tch('touchEnd', []);
+    // the 3-D canvas: two fingers pinch to zoom and drag to turn; a flat canvas pans and zooms about the fingers
+    for (const [file, turns] of [['interactive-pick-3d.html', true], ['interactive-large.html', false]]) {
+      const tab = await context.newPage();
+      await tab.addInitScript(spy);
+      await tab.goto(`file://${dir}/${file}`);
+      const cd = await context.newCDPSession(tab);
+      const tch = (type, pts) => cd.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map(([x, y], id) => ({ x, y, id })) });
+      const extent = async () => tab.evaluate(() => { const xs = [], ys = []; window.__shapes.forEach(s => s.path.forEach(p => { xs.push(p[1]); ys.push(p[2]); }));
+        return [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)]; });
+      const cv = await tab.evaluate(() => { const r = document.querySelector('canvas').getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; });
+      const [cx, cy] = [cv[0] + cv[2] / 2, cv[1] + Math.min(cv[3], 500) / 2];
+      const e0 = await extent();
+      const from = [[cx - 30, cy], [cx + 30, cy]], to = [[cx - 60, cy], [cx + 60, cy]];
+      await tch('touchStart', from); for (let i = 1; i <= 6; i++) await tch('touchMove', from.map((p, k) => [p[0] + (to[k][0] - p[0]) * i / 6, p[1] + (to[k][1] - p[1]) * i / 6])); await tch('touchEnd', []);
       await tab.waitForTimeout(100);
-      const e2 = await extent();
-      check(Math.abs((e2[0] - e1[0]) - 40) < 1.5 && Math.abs((e2[2] - e1[2]) - 25) < 1.5, `${file}: two fingers moving together pan it by (${(e2[0] - e1[0]).toFixed(1)}, ${(e2[2] - e1[2]).toFixed(1)})`);
+      const e1 = await extent();
+      const ratio = (e1[1] - e1[0]) / (e0[1] - e0[0]);
+      check(Math.abs(ratio - 2) < 0.08, `${file}: fingers twice as far apart draw it ${ratio.toFixed(2)} times as wide`);
+      if (!turns) {
+        const f2 = [[cx - 60, cy], [cx + 60, cy]], t2 = [[cx - 60 + 40, cy + 25], [cx + 60 + 40, cy + 25]];
+        await tch('touchStart', f2); for (let i = 1; i <= 6; i++) await tch('touchMove', f2.map((p, k) => [p[0] + (t2[k][0] - p[0]) * i / 6, p[1] + (t2[k][1] - p[1]) * i / 6])); await tch('touchEnd', []);
+        await tab.waitForTimeout(100);
+        const e2 = await extent();
+        check(Math.abs((e2[0] - e1[0]) - 40) < 1.5 && Math.abs((e2[2] - e1[2]) - 25) < 1.5, `${file}: two fingers moving together pan it by (${(e2[0] - e1[0]).toFixed(1)}, ${(e2[2] - e1[2]).toFixed(1)})`);
+      }
+      await tab.close();
     }
-    await tab.close();
   }
   await page.close();
   await context.close();

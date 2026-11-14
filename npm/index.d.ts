@@ -78,6 +78,10 @@ export class Chart {
   save(path: string): string;
   /** Appends the plot to the page in a browser; opens it in the default browser from Node.js. */
   show(): void;
+  /** For a plot with a slider (`plotFiltration`, `plotLinkedFiltration`): `count` (2 or more) still pictures, one SVG document for each scale from the slider's minimum to its maximum, the frames of a video or the slides of a talk. Works in a browser too. */
+  frames(count: number, theme?: "light" | "dark"): string[];
+  /** `frames` written into `directory` (Node.js only) as `frame-0000.svg` and on. Returns the paths. */
+  saveFrames(directory: string, count: number, theme?: "light" | "dark"): string[];
 }
 
 export class Result {

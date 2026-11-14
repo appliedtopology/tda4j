@@ -11,6 +11,11 @@ trait Plot:
   /** The plot as a fragment to embed in a page (an `<svg>`, or a `<div>` with its own script for 3-D). */
   def fragment(theme: Theme = Theme.Auto): String
 
+  /** [[fragment]] in the theme called `theme` (`auto`, `light` or `dark`), for callers that have a word, not a `Theme`
+    * (Python: a notebook shows an interactive plot by its fragment).
+    */
+  def fragment(theme: String): String = fragment(Theme.named(theme))
+
   /** A complete HTML page, following the reader's light or dark setting under `Theme.Auto`. */
   def html(theme: Theme = Theme.Auto): String
 

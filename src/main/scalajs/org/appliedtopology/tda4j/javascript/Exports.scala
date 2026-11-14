@@ -1000,6 +1000,30 @@ final class Chart private[javascript] (underlying: plot.Plot):
   @JSExport
   def save(path: String): String = Exports.guarded(underlying.save(path))
 
+  /** For a plot with a slider (`plotFiltration`, `plotLinkedFiltration`): `count` (2 or more) still pictures as SVG
+    * documents, one for each scale from the slider's minimum to its maximum, in a browser as well as in Node.js.
+    */
+  @JSExport
+  def frames(count: Int, theme: js.UndefOr[String] = js.undefined): js.Array[String] =
+    Exports.guarded {
+      val shown = theme.fold(plot.Theme.Light)(plot.Theme.named)
+      js.Array(withSlider("frames").frames(count).map(_.svgFile(shown))*)
+    }
+
+  /** `frames` written into `directory` (Node.js) as `frame-0000.svg` and on; returns the paths. */
+  @JSExport
+  def saveFrames(directory: String, count: Int, theme: js.UndefOr[String] = js.undefined): js.Array[String] =
+    Exports.guarded {
+      js.Array(withSlider("saveFrames").saveFrames(directory, count, theme.fold(plot.Theme.Light)(plot.Theme.named))*)
+    }
+
+  private def withSlider(method: String): plot.Interactive = underlying match
+    case page: plot.Interactive => page
+    case _                      =>
+      throw new IllegalArgumentException(
+        s"$method is for a plot with a slider (plotFiltration, plotLinkedFiltration); this plot has none"
+      )
+
   /** Shows the plot: appended to the page in a browser, opened in the default browser from Node.js. */
   @JSExport
   def show(): Unit = underlying.view()
