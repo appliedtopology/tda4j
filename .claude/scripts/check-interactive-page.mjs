@@ -230,6 +230,40 @@ const read = f => fs.readFileSync(dir + '/' + f, 'utf8');
   await page.close();
 }
 
+{ // a plane and a pole that follow the slider in z, points that appear as it reaches them: the page and the still of the
+  // same value draw the same items, in the same depth order, in the same places
+  const page = await browser.newPage({ viewport: { width: 1300, height: 800 } });
+  const errors = [];
+  page.on('pageerror', e => errors.push(String(e)));
+  page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+  await page.addInitScript(spy);
+  await page.goto('file://' + dir + '/interactive-rising.html');
+  // the items of a drawing, back to front, each with the kind and the middle of its shape; positions are measured from the
+  // centre of all of them in units of their largest spread, which the page and the still share whatever their size
+  const items = sh => sh.filter(s => ['triangle', 'segment'].includes(kindOf(s)) || (kindOf(s) === 'disc')).map(s => ({ kind: kindOf(s), at: middle(s) }));
+  const stillItems = text => inStill(text, doc => [...doc.querySelectorAll('svg[id^="tda4j3d"] > polygon, svg[id^="tda4j3d"] > line, svg[id^="tda4j3d"] > circle')].map(e => {
+    if (e.tagName === 'polygon') { const q = e.getAttribute('points').trim().split(/\s+/).map(p => p.split(',').map(Number)); return { kind: 'triangle', at: [q.reduce((a, p) => a + p[0], 0) / q.length, q.reduce((a, p) => a + p[1], 0) / q.length] }; }
+    if (e.tagName === 'line') return { kind: 'segment', at: [(+e.getAttribute('x1') + +e.getAttribute('x2')) / 2, (+e.getAttribute('y1') + +e.getAttribute('y2')) / 2] };
+    return { kind: 'disc', at: [+e.getAttribute('cx'), +e.getAttribute('cy')] }; }));
+  const normal = list => { const xs = list.map(i => i.at[0]), ys = list.map(i => i.at[1]);
+    const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2, w = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) || 1;
+    return list.map(i => ({ kind: i.kind, at: [(i.at[0] - cx) / w, (i.at[1] - cy) / w] })); };
+  // the values in an order that makes each one's depth order differ from the one before it
+  let orders = [];
+  for (const t of [0.2, 0.9, 0.5, 0.05, 0.2]) {
+    await page.evaluate(v => document.querySelector('.tda4j-ia').tda4j.set('t', v), t);
+    const live = normal(items(await page.evaluate(() => window.__shapes)));
+    const ref = normal(await stillItems(read(`interactive-rising-still-${t.toFixed(2)}.svg`)));
+    check(live.length === ref.length && live.every((a, i) => a.kind === ref[i].kind), `t=${t}: the page draws ${live.map(a => a.kind[0]).join('')}, the still ${ref.map(a => a.kind[0]).join('')} (depth order)`);
+    const worst = live.length === ref.length ? Math.max(...live.map((a, i) => Math.hypot(a.at[0] - ref[i].at[0], a.at[1] - ref[i].at[1]))) : Infinity;
+    check(worst < 0.01, `t=${t}: every item is within ${worst.toFixed(4)} of the still's place`);
+    orders.push(live.map(a => a.kind[0]).join(''));
+  }
+  check(new Set(orders).size >= 3, `the depth order changes as the plane rises and the clamped ends hold it: ${orders.join(' ')}`);
+  check(errors.length === 0, `no errors on the rising-plane page ${errors.join(' | ')}`);
+  await page.close();
+}
+
 { // the linked 3-D filtration: choosing a class in the diagram draws its cycle in the canvas, as the still does
   const { key, t } = JSON.parse(read('interactive-linked-3d.json'));
   const page = await browser.newPage({ viewport: { width: 1800, height: 800 } });

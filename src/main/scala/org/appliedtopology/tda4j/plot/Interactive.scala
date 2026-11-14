@@ -4,12 +4,14 @@ import org.appliedtopology.tda4j.*
 
 import java.util.concurrent.atomic.AtomicLong
 
-/** Which coordinate of an item a [[Behavior.Follows]] moves. */
+/** Which coordinate of an item a [[Behavior.Follows]] moves: `X` and `Y` in a picture, and `Z` as well in a 3-D scene
+  * (the data's coordinates, not the screen's).
+  */
 enum Coordinate:
-  case X, Y
+  case X, Y, Z
 
-/** Which end of a segment a [[Behavior.Follows]] moves: the first, the second, or both (a rule has one place and counts
-  * as both).
+/** Which end of a segment a [[Behavior.Follows]] moves: the first, the second, or both (a rule, a point, a ball and a
+  * triangle have one place, or move as a whole, and count as both).
   */
 enum Ends:
   case First, Second, Both
@@ -22,7 +24,9 @@ enum Ends:
   *     enters the filtration at `f` is shown from `f`; a class that lives on `[b, d)` is shown from `b` until `d`.
   *   - [[Behavior.Follows]]: a coordinate of the item (of one or both ends of a segment, or of a rule) is the control's
   *     value held between `lo` and `hi`. A rule that follows the control is the movable line; a segment that follows it
-  *     between `b` and `d` is a bar growing until the line passes its death.
+  *     between `b` and `d` is a bar growing until the line passes its death. In a 3-D scene a point, a segment, a
+  *     triangle or a ball follows too, in any of the three coordinates, and the scene keeps its place in the picture
+  *     (see [[Panel.Spatial]]).
   *   - [[Behavior.Radius]]: the radius of the discs of a mark (data units) is `factor` times the control's value: the
   *     balls whose overlaps a Vietoris-Rips or Cech complex records.
   *   - [[Behavior.Selects]]: pointing at the item (or clicking it) chooses a key of a [[Selection]]. What the item
@@ -37,7 +41,9 @@ enum Behavior:
   /** Shown while `from <= v < until` for the value `v` of `control`. */
   case Shown(control: String, from: Double, until: Double)
 
-  /** `coordinate` of `ends` is the value of `control`, no less than `lo` and no more than `hi`. */
+  /** `coordinate` of `ends` is the value of `control`, no less than `lo` and no more than `hi`. A coordinate that is
+    * `Z` belongs to a 3-D layer.
+    */
   case Follows(control: String, coordinate: Coordinate, ends: Ends, lo: Double, hi: Double)
 
   /** The radius, in data units, of the discs of the mark is `factor` times the value of `control`. */
@@ -95,6 +101,16 @@ object Behavior:
     hi: Double = Double.PositiveInfinity,
     ends: Ends = Ends.Both
   ): Behavior = Follows(control, Coordinate.Y, ends, lo, hi)
+
+  /** The z coordinate (the data's third, in a 3-D scene) follows `control`, held between `lo` and `hi`; of both ends
+    * unless `ends` says one.
+    */
+  def followsZ(
+    control: String,
+    lo: Double = Double.NegativeInfinity,
+    hi: Double = Double.PositiveInfinity,
+    ends: Ends = Ends.Both
+  ): Behavior = Follows(control, Coordinate.Z, ends, lo, hi)
 
   /** The radius of the discs is `factor` times the value of `control`. */
   def radius(control: String, factor: Double = 1.0): Behavior = Radius(control, factor)
@@ -729,7 +745,8 @@ final case class Interactive(
           brush,
           zoom.map(_.code)
         )
-      case (Panel.Spatial(scene, rs), k) => panelBox(scene.width, scene.fragmentReacting(theme, rs, s"$id-p$k"))
+      case (Panel.Spatial(scene, rs), k) =>
+        panelBox(scene.width, Interactive.fitted(scene, rs, controls).fragmentReacting(theme, rs, s"$id-p$k"))
     }
     val headline =
       if title.isEmpty then ""
@@ -836,7 +853,7 @@ final case class Interactive(
     val shown = panels.zipWithIndex.map {
       case (Panel.Flat(figure, rs, _, _), k) =>
         Interactive.still(figure, rs, now, chosen, state.windows.get(k), state.brushes.get(k))
-      case (Panel.Spatial(scene, rs), _) => Interactive.still(scene, rs, now, chosen)
+      case (Panel.Spatial(scene, rs), _) => Interactive.still(Interactive.fitted(scene, rs, controls), rs, now, chosen)
     }
     val sliders = controls.map(c => s"${c.shownName} = ${Svg.number(now(c.name))}")
     val picked = selections.flatMap { s =>
@@ -994,10 +1011,14 @@ object Interactive:
     case l: Layer.Triangles => Some(Layer.Triangles(l.corners, l.paints, math.min(0.9, l.opacity + 0.35)))
     case _                  => None
 
-  /** Which behaviors a layer can carry out: everything that needs no axis, and a radius for balls. */
+  /** Which behaviors a layer can carry out: everything that needs no axis, a radius for balls, and a coordinate that
+    * follows a control. A segment moves either end or both; a point, a ball, a halo and a triangle move as a whole.
+    */
   private[plot] def fitsLayer(l: Layer)(b: Behavior): Boolean = (l, b) match
     case (_, _: Behavior.Shown | _: Behavior.Custom | _: Behavior.Selects | _: Behavior.Selected) => true
     case (_: Layer.Balls, _: Behavior.Radius)                                                     => true
+    case (_: Layer.Segments, _: Behavior.Follows)                                                 => true
+    case (_, f: Behavior.Follows)                                                                 => f.ends == Ends.Both
     case _                                                                                        => false
 
   /** The shape that lights up `m` while it is chosen (see [[Panel.Flat.selecting]]), with the same items in the same
@@ -1023,8 +1044,9 @@ object Interactive:
   /** Which behaviors a mark can carry out. */
   private[plot] def fitsMark(m: Mark)(b: Behavior): Boolean = (m, b) match
     case (_, _: Behavior.Shown | _: Behavior.Custom | _: Behavior.Selects | _: Behavior.Selected) => true
-    case (_: Mark.Segments, f: Behavior.Follows)                                                  => true
-    case (r: Mark.Rule, f: Behavior.Follows) => (f.coordinate == Coordinate.X) == r.vertical
+    case (_: Mark.Segments, f: Behavior.Follows) => f.coordinate != Coordinate.Z
+    case (r: Mark.Rule, f: Behavior.Follows)     =>
+      f.coordinate != Coordinate.Z && (f.coordinate == Coordinate.X) == r.vertical
     case (_: Mark.Discs, _: Behavior.Radius) => true
     case _                                   => false
 
@@ -1050,7 +1072,11 @@ object Interactive:
             Seq(
               "f",
               c,
-              if coordinate == Coordinate.X then "x" else "y",
+              coordinate match
+                case Coordinate.X => "x"
+                case Coordinate.Y => "y"
+                case Coordinate.Z => "z"
+              ,
               ends match
                 case Ends.First  => "1"
                 case Ends.Second => "2"
@@ -1312,7 +1338,50 @@ object Interactive:
       case m: Mark.Line => Option.when(keep.head)(m)
       case other        => Some(other)
 
-  /** `scene` with the controls and selections as they are: the items that are not shown dropped, the balls resized. */
+  // where a coordinate of `p` goes when the behaviors in `follows` (those of one item) have their controls at `values`
+  private def placed(p: XYZ, follows: Seq[Behavior.Follows], values: Map[String, Double], end: Int): XYZ =
+    follows.foldLeft(p) { (q, f) =>
+      val moves = f.ends == Ends.Both || (f.ends == Ends.First && end == 0) || (f.ends == Ends.Second && end == 1)
+      values.get(f.control).filter(_ => moves).fold(q) { v =>
+        val x = clamp(v, f.lo, f.hi)
+        f.coordinate match
+          case Coordinate.X => (x, q._2, q._3)
+          case Coordinate.Y => (q._1, x, q._3)
+          case Coordinate.Z => (q._1, q._2, x)
+      }
+    }
+
+  private def followsOf(r: Reaction): Vector[Behavior.Follows] = r.behaviors.collect { case f: Behavior.Follows => f }
+
+  /** `scene` fitted into its picture by the places every item of it can be at: its points, and the places the items
+    * that follow a control go to as the control runs from its least to its greatest value. The page and the stills of
+    * it are fitted alike, so the picture stays put while items come and go and move.
+    */
+  private[plot] def fitted(scene: Scene, reactions: Map[Int, IndexedSeq[Reaction]], controls: Vector[Control]): Scene =
+    val starts = controls.map(c => c.name -> c.value).toMap
+    val extras = for
+      (layer, index) <- scene.layers.zipWithIndex
+      rs <- reactions.get(index).toSeq
+      i <- 0 until itemCount(layer)
+      follows = followsOf(reactionOf(rs, i))
+      if follows.nonEmpty
+      c <- follows.map(_.control).distinct.flatMap(name => controls.find(_.name == name))
+      v <- Seq(c.min, c.max)
+      p <- cornersOf(layer, i).zipWithIndex.map((p, end) => placed(p, follows, starts.updated(c.name, v), end))
+    yield p
+    if extras.isEmpty then scene.fitting(Seq.empty) else scene.fitting(extras)
+
+  // the places of item `i` of a layer: one, or the ends of a segment, or the corners of a triangle
+  private def cornersOf(layer: Layer, i: Int): Seq[XYZ] = layer match
+    case l: Layer.Points    => Seq(l.at(i))
+    case l: Layer.Segments  => Seq(l.ends(i)._1, l.ends(i)._2)
+    case l: Layer.Triangles => Seq(l.corners(i)._1, l.corners(i)._2, l.corners(i)._3)
+    case l: Layer.Balls     => Seq(l.centers(i))
+    case l: Layer.Halos     => Seq(l.at(i))
+
+  /** `scene` with the controls and selections as they are: the items that are not shown dropped, the ones that follow a
+    * control moved, the balls resized. The scene keeps the place it has in the picture (it is [[fitted]] first).
+    */
   private[plot] def still(
     scene: Scene,
     reactions: Map[Int, IndexedSeq[Reaction]],
@@ -1324,18 +1393,34 @@ object Interactive:
         val n = itemCount(layer)
         val per = (0 until n).map(reactionOf(rs, _))
         val keep = per.map(_.behaviors.forall(inside(_, values, chosen)))
+        val follows = per.map(followsOf)
+        def at(i: Int, p: XYZ): XYZ = placed(p, follows(i), values, 0)
         layer match
-          case l: Layer.Points    => l.copy(at = keepItems(l.at, keep), paints = keepPaints(l.paints, keep, n))
-          case l: Layer.Segments  => l.copy(ends = keepItems(l.ends, keep), paints = keepPaints(l.paints, keep, n))
+          case l: Layer.Points =>
+            l.copy(at = keepItems(l.at.indices.map(i => at(i, l.at(i))), keep), paints = keepPaints(l.paints, keep, n))
+          case l: Layer.Segments =>
+            val moved = l.ends.indices.map { i =>
+              (placed(l.ends(i)._1, follows(i), values, 0), placed(l.ends(i)._2, follows(i), values, 1))
+            }
+            l.copy(ends = keepItems(moved, keep), paints = keepPaints(l.paints, keep, n))
           case l: Layer.Triangles =>
-            l.copy(corners = keepItems(l.corners, keep), paints = keepPaints(l.paints, keep, n))
-          case l: Layer.Halos => l.copy(at = keepItems(l.at, keep), paints = keepPaints(l.paints, keep, n))
+            val moved = l.corners.indices.map { i =>
+              val (a, b, c) = l.corners(i)
+              (at(i, a), at(i, b), at(i, c))
+            }
+            l.copy(corners = keepItems(moved, keep), paints = keepPaints(l.paints, keep, n))
+          case l: Layer.Halos =>
+            l.copy(at = keepItems(l.at.indices.map(i => at(i, l.at(i))), keep), paints = keepPaints(l.paints, keep, n))
           case l: Layer.Balls =>
             val radius = per.headOption
               .flatMap(_.behaviors.collectFirst { case Behavior.Radius(c, factor) => values.get(c).map(_ * factor) })
               .flatten
               .getOrElse(l.radius)
-            l.copy(centers = keepItems(l.centers, keep), radius = radius, paints = keepPaints(l.paints, keep, n))
+            l.copy(
+              centers = keepItems(l.centers.indices.map(i => at(i, l.centers(i))), keep),
+              radius = radius,
+              paints = keepPaints(l.paints, keep, n)
+            )
       }
     }
     scene.copy(layers = layers)

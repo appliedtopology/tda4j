@@ -89,6 +89,104 @@ class SpatialSpec extends Specification:
     }
   }
 
+  "an item of a 3-D layer that follows a slider" should {
+    // seen from the side (azimuth 0, elevation 0): x goes right, z goes up, y is depth, and what is farther is drawn first
+    def view(layers: Layer*): Scene = Scene(layers.toVector, azimuth = 0, elevation = 0)
+    val a: XYZ = (0.0, 2.0, 0.0)
+    val b: XYZ = (0.5, 1.0, 0.0)
+    val dots = Layer.Points(IndexedSeq(a, b), IndexedSeq(Paint.Ink), 3.5)
+    def page(first: Reaction) =
+      Interactive()
+        .withSlider("t", 0, 5)
+        .withPanel(Panel.Spatial(view()).reactEach(dots, IndexedSeq(first, Reaction.none)))
+    val rises = page(Reaction(Vector(Behavior.followsZ("t"))))
+    val nears = page(Reaction(Vector(Behavior.Follows("t", Coordinate.Y, Ends.Both, 0.0, 4.0))))
+
+    def points(s: Snapshot): IndexedSeq[XYZ] = sceneOf(s).layers.head.asInstanceOf[Layer.Points].at
+    // the dots of a still, in drawing order, as (cx, cy)
+    def drawn(s: Snapshot): Seq[(Double, Double)] =
+      """<circle cx="([^"]+)" cy="([^"]+)" r="3.5"""".r
+        .findAllMatchIn(sceneOf(s).staticSvg(Theme.Light))
+        .map(m => (m.group(1).toDouble, m.group(2).toDouble))
+        .toSeq
+
+    "be at the control's value in that coordinate, held between the least and the greatest" in {
+      val held = page(Reaction(Vector(Behavior.Follows("t", Coordinate.Z, Ends.Both, 1.0, 3.0))))
+      Seq(0.0, 2.0, 5.0).map(t => points(held.at(t)).head._3) === Seq(1.0, 2.0, 3.0)
+      // the other coordinates and the other item stay
+      points(held.at(5.0)) === IndexedSeq((0.0, 2.0, 3.0), b)
+    }
+
+    "keep every other item where the picture put it: the frame covers the places the item can be at" in {
+      // item b is fixed; a rises to z = 5, far outside the picture the points alone would give. A picture fitted to the
+      // items as they are at a value would move b as a rises
+      val places = Seq(0.0, 1.0, 2.5, 5.0).map(t => drawn(rises.at(t)).maxBy(_._1))
+      places.distinct.size === 1
+    }
+
+    "be drawn in the depth order of where it is: farther first" in {
+      // a moves from in front of b (y = 0 against 1) to behind it (y = 4): the order they are drawn in flips
+      val front = drawn(nears.at(0.0)).map(_._1)
+      val back = drawn(nears.at(4.0)).map(_._1)
+      (front.size === 2)
+        .and(back.size === 2)
+        .and(front.reverse === back)
+        .and(front.head must not(beEqualTo(front.last)))
+    }
+
+    "tell the canvas the coordinate, the ends and the limits, and leave the others as they are" in {
+      val html = rises.fragment(Theme.Light)
+      html must contain(""""fo":[[["t",2,3,-Infinity,Infinity]],null]""")
+    }
+
+    "move one end of a segment, or both" in {
+      val segment = Layer.Segments(IndexedSeq((a, b)), IndexedSeq(Paint.Ink), 1.0)
+      def ends(e: Ends) =
+        Interactive()
+          .withSlider("t", 0, 5)
+          .withPanel(Panel.Spatial(view()).react(segment, Behavior.Follows("t", Coordinate.Z, e, 0.0, 5.0)))
+      def at(e: Ends) = sceneOf(ends(e).at(4.0)).layers.head.asInstanceOf[Layer.Segments].ends.head
+      at(Ends.First) === ((0.0, 2.0, 4.0), b)
+      at(Ends.Second) === (a, (0.5, 1.0, 4.0))
+      at(Ends.Both) === ((0.0, 2.0, 4.0), (0.5, 1.0, 4.0))
+    }
+
+    "move a triangle's corners, a ball's centre and a halo with the item it rings" in {
+      val tri = Layer.Triangles(IndexedSeq((a, b, (1.0, 1.0, 0.0))), IndexedSeq(Paint.Series(0)), 0.2)
+      val ball = Layer.Balls(IndexedSeq(a), 0.3, IndexedSeq(Paint.Series(0)))
+      val follows = Behavior.Follows("t", Coordinate.Z, Ends.Both, 0.0, 5.0)
+      val chosen = Panel
+        .Spatial(view())
+        .react(tri, follows)
+        .react(ball, follows)
+        .react(dots, follows)
+        .selecting(2, "c", IndexedSeq(0, 1))
+      val moved = Interactive()
+        .withSlider("t", 0, 5)
+        .withSelection("c")
+        .withPanel(chosen)
+        .at(PageState().value("t", 3.0).select("c", 0))
+      val layers = sceneOf(moved).layers
+      layers.collect { case l: Layer.Triangles => l.corners.head }.head === (
+        (0.0, 2.0, 3.0),
+        (0.5, 1.0, 3.0),
+        (1.0, 1.0, 3.0)
+      )
+      layers.collect { case l: Layer.Balls => l.centers }.head === IndexedSeq((0.0, 2.0, 3.0))
+      layers.collect { case l: Layer.Halos => l.at }.head === IndexedSeq((0.0, 2.0, 3.0))
+    }
+
+    "be refused where it cannot be carried out: one end of a point, a z in a picture" in {
+      val point = Layer.Points(IndexedSeq(a), IndexedSeq(Paint.Ink), 3.0)
+      Panel
+        .Spatial(view())
+        .react(point, Behavior.followsX("t", ends = Ends.First)) must throwAn[IllegalArgumentException]
+      val figure = Figure(marks = Vector.empty)
+      Panel(figure).react(Mark.Rule.horizontal(0.0), Behavior.Follows("t", Coordinate.Z, Ends.Both, 0.0, 1.0)) must
+        throwAn[IllegalArgumentException]
+    }
+  }
+
   "a layer of a canvas" should {
     val scene = Scene(
       Vector(
@@ -149,15 +247,16 @@ class SpatialSpec extends Specification:
       )
     }
 
-    "carry a radius only on balls, and no coordinate that follows a control" in {
+    "carry a radius only on balls, and a coordinate that follows a control only as a whole (a segment's ends apart)" in {
       val ball = Layer.Balls(points3, 0.2, IndexedSeq(Paint.Series(0)))
       Panel(scene).react(ball, Behavior.radius("t")).scene.layers.size === 4
+      Panel(scene).react(scene.layers.head, Behavior.followsY("t")).scene.layers.size === 4
+      Panel(scene).react(scene.layers(1), Behavior.followsY("t", ends = Ends.First)).scene.layers.size === 4
       (Panel(scene).react(scene.layers.head, Behavior.radius("t")) must throwAn[IllegalArgumentException](
         ".*cannot be attached.*"
       )).and(
-        Panel(scene).react(scene.layers.head, Behavior.followsY("t")) must throwAn[IllegalArgumentException](
-          ".*cannot be attached.*"
-        )
+        Panel(scene).react(scene.layers.head, Behavior.followsY("t", ends = Ends.First)) must
+          throwAn[IllegalArgumentException](".*cannot be attached.*")
       )
     }
 

@@ -44,6 +44,10 @@ object Layer:
   * With `turns = false` the view stays as `azimuth` and `elevation` give it and a drag pans instead; the scroll wheel
   * zooms about the pointer. A flat picture (points in the plane, seen from above: `azimuth = 0`, `elevation = 90`) is
   * drawn this way when it has too many items for an SVG, which a canvas draws in a fraction of the time and bytes.
+  *
+  * The scene is fitted into the picture by its points (the centres of balls and halos count, their extent does not).
+  * `fitted` gives the centre and the radius to fit to instead: an interactive page does so for a scene whose items come
+  * and go or move with a control, so that the picture stays put (see [[Interactive]]).
   */
 final case class Scene(
   layers: Vector[Layer] = Vector.empty,
@@ -58,7 +62,8 @@ final case class Scene(
   degrees: Map[Int, DegreeStyle] = Map.empty,
   elements: Elements = Elements(),
   zoom: Double = 1.0,
-  turns: Boolean = true
+  turns: Boolean = true,
+  fitted: Option[(XYZ, Double)] = None
 ) extends Plot:
   def +(layer: Layer): Scene = copy(layers = layers :+ layer)
   def ++(more: IterableOnce[Layer]): Scene = copy(layers = layers ++ more)
@@ -181,15 +186,20 @@ final case class Scene(
     case l: Layer.Halos     => l.at
   }
 
-  /** The centre and radius that fit the scene into a unit ball. */
-  private def frame: (XYZ, Double) =
-    val ps = allPoints
+  /** The centre and radius that fit `ps` into a unit ball. */
+  private def fit(ps: Seq[XYZ]): (XYZ, Double) =
     if ps.isEmpty then ((0.0, 0.0, 0.0), 1.0)
     else
       def mid(f: XYZ => Double) = (ps.map(f).min + ps.map(f).max) / 2
       val c = (mid(_._1), mid(_._2), mid(_._3))
       val r = ps.map(p => math.sqrt(math.pow(p._1 - c._1, 2) + math.pow(p._2 - c._2, 2) + math.pow(p._3 - c._3, 2))).max
       (c, if r > 0 then r else 1.0)
+
+  /** The centre and radius that fit the scene into a unit ball: its own points, unless it is [[fitted]]. */
+  private[plot] def frame: (XYZ, Double) = fitted.getOrElse(fit(allPoints))
+
+  /** This scene fitted to its points and `extra` ones: the places an item can be at when it moves. */
+  private[plot] def fitting(extra: Seq[XYZ]): Scene = copy(fitted = Some(fit(allPoints ++ extra)))
 
   /** A scene's point as it is drawn: round and filled, with a ring of 1.5 pixels in the surface color, then whatever
     * the scene's marker changes (its size, opacity and edge).
@@ -397,6 +407,27 @@ final case class Scene(
             }
             s""","ia":${entries.mkString("[", ",", "]")}"""
         val ball = radius.fold("")((ctl, factor) => s""","ra":["$ctl",${short(factor / r)}]""")
+        // the items that move with a control: which coordinate (0, 1, 2), of which ends (1 first, 2 second, 3 all), between
+        val follows = per.map(_.collect { case f: Behavior.Follows => f })
+        val moves =
+          if follows.forall(_.isEmpty) then ""
+          else
+            val entries = follows.map { fs =>
+              if fs.isEmpty then "null"
+              else
+                fs.map { f =>
+                  val axis = f.coordinate match
+                    case Coordinate.X => 0
+                    case Coordinate.Y => 1
+                    case Coordinate.Z => 2
+                  val ends = f.ends match
+                    case Ends.First  => 1
+                    case Ends.Second => 2
+                    case Ends.Both   => 3
+                  s"""["${f.control}",$axis,$ends,${number(f.lo)},${number(f.hi)}]"""
+                }.mkString("[", ",", "]")
+            }
+            s""","fo":${entries.mkString("[", ",", "]")}"""
         val chooses =
           if picks.forall(_.isEmpty) then ""
           else
@@ -404,7 +435,7 @@ final case class Scene(
               if ps.isEmpty then "null" else ps.map((sel, key) => s"""["$sel",$key]""").mkString("[", ",", "]")
             )
             s""","pk":${entries.mkString("[", ",", "]")}"""
-        shown + ball + chooses
+        shown + ball + chooses + moves
       }
     val layerJson = layers.zipWithIndex.map { (layer, li) =>
       val n = Interactive.itemCount(layer)
@@ -438,16 +469,27 @@ final case class Scene(
     val hook =
       if reacting.isEmpty then ""
       else
-        """
-          |const ia=root.closest('.tda4j-ia'),vals={};
-          |function hid(L,k){
-          |  if(L.sh){const v=vals[L.sh.c];if(v!==undefined&&!(v>=L.sh.f[k]&&v<(L.sh.u?L.sh.u[k]:Infinity)))return true;}
-          |  const a=L.ia&&L.ia[k];
-          |  if(a)for(const e of a){const v=vals[e[1]];
-          |    if(e[0]==='v'){if(v!==undefined&&!(v>=e[2]&&v<e[3]))return true;}
-          |    else if(!v||v.indexOf(e[2])<0)return true;}
-          |  return false;}
-          |if(ia)ia.addEventListener('tda4j:change',e=>{vals[e.detail.name]=e.detail.value;draw();});""".stripMargin
+        s"""
+           |const ia=root.closest('.tda4j-ia'),vals={};
+           |function hid(L,k){
+           |  if(L.sh){const v=vals[L.sh.c];if(v!==undefined&&!(v>=L.sh.f[k]&&v<(L.sh.u?L.sh.u[k]:Infinity)))return true;}
+           |  const a=L.ia&&L.ia[k];
+           |  if(a)for(const e of a){const v=vals[e[1]];
+           |    if(e[0]==='v'){if(v!==undefined&&!(v>=e[2]&&v<e[3]))return true;}
+           |    else if(!v||v.indexOf(e[2])<0)return true;}
+           |  return false;}
+           |// an item that follows a control has a position of its own (a slot after the shared ones) for each end that moves
+           |const FR=[${short(c._1)},${short(c._2)},${short(c._3)},${short(r)}],movers=[],follow=new Set();
+           |layers.forEach(L=>{if(!L.fo)return;const m=L.k==='s'?2:L.k==='t'?3:1;
+           |  L.fo.forEach((fs,k)=>{if(!fs)return;
+           |    for(let j=0;j<m;j++){const sp=fs.filter(s=>s[2]===3||s[2]===j+1);if(!sp.length)continue;
+           |      const at=L.i[m*k+j],slot=P.length/3;P.push(P[3*at],P[3*at+1],P[3*at+2]);L.i[m*k+j]=slot;
+           |      movers.push({s:slot,b:[P[3*at],P[3*at+1],P[3*at+2]],sp:sp});sp.forEach(s=>follow.add(s[0]));}});});
+           |// the unit-ball position of a coordinate that is the control's value held between lo and hi (data units)
+           |function moveAll(){for(const q of movers){const p=q.b.slice();
+           |  for(const s of q.sp){const v=vals[s[0]];if(v!==undefined)p[s[1]]=(Math.min(Math.max(v,s[3]),s[4])-FR[s[1]])/FR[3];}
+           |  P[3*q.s]=p[0];P[3*q.s+1]=p[1];P[3*q.s+2]=p[2];}}
+           |if(ia)ia.addEventListener('tda4j:change',e=>{vals[e.detail.name]=e.detail.value;if(follow.has(e.detail.name)){moveAll();order=null;}draw();});""".stripMargin
     val id = named.getOrElse(s"tda4j3d${Scene.counter.incrementAndGet()}")
     val vars = if theme == Theme.Auto then pal.cssVariables(s"#$id") else ""
     s"""<div id="$id" style="position:relative;width:${width}px;max-width:100%;font-family:${Svg.escape(style.font)}">

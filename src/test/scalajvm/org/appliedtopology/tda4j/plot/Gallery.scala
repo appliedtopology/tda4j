@@ -274,6 +274,34 @@ object Gallery:
       .withTitle("Pointing in 3-D")
     picking.save(out("interactive-pick-3d.html"))
     picking.at(PageState().select("item", 10)).save(out("interactive-pick-3d-still.svg"))
+    // a plane rises through a helix of points: the plane (held between 0.1 and 0.8) and the free end of a pole follow the
+    // slider in z, the points appear as the plane reaches them, and the order the items are drawn in changes as the plane passes them
+    val helix: IndexedSeq[XYZ] = IndexedSeq.tabulate(14)(i => (math.cos(i * 0.9), math.sin(i * 0.9), i / 13.0))
+    val corner = IndexedSeq((-1.3, -1.3, 0.0), (1.3, -1.3, 0.0), (1.3, 1.3, 0.0), (-1.3, 1.3, 0.0))
+    val rising = Interactive()
+      .withSlider("t", 0.0, 1.0)
+      .withPanel(
+        Panel(Scene(title = "A plane through a helix"))
+          .react(
+            Layer.Triangles(
+              IndexedSeq((corner(0), corner(1), corner(2)), (corner(0), corner(2), corner(3))),
+              IndexedSeq(Paint.Series(1)),
+              0.25
+            ),
+            Behavior.followsZ("t", 0.1, 0.8)
+          )
+          .react(
+            Layer.Segments(IndexedSeq(((0.0, 0.0, 0.0), (0.0, 0.0, 1.0))), IndexedSeq(Paint.Secondary), 2.0),
+            Behavior.followsZ("t", 0.0, 1.0, Ends.Second)
+          )
+          .reactEach(
+            Layer.Points(helix, IndexedSeq(Paint.Ink), 3.5),
+            helix.map(p => Reaction(Vector(Behavior.shownFrom("t", p._3))))
+          )
+      )
+      .withTitle("A plane through a helix")
+    rising.save(out("interactive-rising.html"))
+    Seq(0.05, 0.2, 0.5, 0.9).foreach(t => rising.at(t).save(out(f"interactive-rising-still-$t%.2f.svg")))
     // a linked 3-D filtration: the diagram, the barcode and a canvas that draws the chosen class's cycle
     val ring3 = circle.map(p => Array(p(0), p(1), 0.3 * p(0) * p(1)))
     val ringBars = Persistence(ring3, maxDimension = 1, maxFiltrationValue = 1.0).bars
