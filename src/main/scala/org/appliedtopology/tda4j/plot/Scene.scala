@@ -5,19 +5,45 @@ import org.appliedtopology.tda4j.*
 /** A point in 3-D data coordinates. */
 type XYZ = (Double, Double, Double)
 
-/** What a 3-D scene is made of: points, segments and triangles, each with one paint or one per item. */
+/** What a 3-D scene is made of: points, segments and triangles, each with one paint or one per item; balls around
+  * points (translucent discs, as a sphere looks in an orthographic view) and halos (discs of a size in pixels, to ring
+  * a point).
+  */
 sealed trait Layer:
   def paints: IndexedSeq[Paint]
   final def paintAt(i: Int): Paint = if paints.size == 1 then paints(0) else paints(i)
 
 object Layer:
   final case class Points(at: IndexedSeq[XYZ], paints: IndexedSeq[Paint], radius: Double = 3.5) extends Layer
-  final case class Segments(ends: IndexedSeq[(XYZ, XYZ)], paints: IndexedSeq[Paint], width: Double = 1.2) extends Layer
+  final case class Segments(
+    ends: IndexedSeq[(XYZ, XYZ)],
+    paints: IndexedSeq[Paint],
+    width: Double = 1.2,
+    opacity: Double = 1.0
+  ) extends Layer
   final case class Triangles(corners: IndexedSeq[(XYZ, XYZ, XYZ)], paints: IndexedSeq[Paint], opacity: Double = 0.25)
+      extends Layer
+
+  /** Balls of `radius` (in data units) around `centers`: what the overlaps of a Vietoris-Rips or Cech complex record.
+    * An orthographic view of a ball is a disc of the same radius, so a ball is drawn as a translucent disc; the scene's
+    * frame comes from the centres, so the picture stays put as the balls grow (an item of an interactive page can
+    * follow a control with [[Behavior.Radius]]).
+    */
+  final case class Balls(centers: IndexedSeq[XYZ], radius: Double, paints: IndexedSeq[Paint], opacity: Double = 0.09)
+      extends Layer
+
+  /** Translucent discs of `radius` pixels at `at`: a ring around a point (the halo of a chosen item, see
+    * [[Panel.Spatial.selecting]]).
+    */
+  final case class Halos(at: IndexedSeq[XYZ], paints: IndexedSeq[Paint], radius: Double = 8.5, opacity: Double = 0.3)
       extends Layer
 
 /** A 3-D plot. In a page (`html`, the live viewer) it is drawn on a canvas you can turn (drag) and zoom (scroll), with
   * no library to load; as an `.svg` file it is one view, from `azimuth`/`elevation` (degrees), drawn back to front.
+  *
+  * With `turns = false` the view stays as `azimuth` and `elevation` give it and a drag pans instead; the scroll wheel
+  * zooms about the pointer. A flat picture (points in the plane, seen from above: `azimuth = 0`, `elevation = 90`) is
+  * drawn this way when it has too many items for an SVG, which a canvas draws in a fraction of the time and bytes.
   */
 final case class Scene(
   layers: Vector[Layer] = Vector.empty,
@@ -31,7 +57,8 @@ final case class Scene(
   style: Style = Style.default,
   degrees: Map[Int, DegreeStyle] = Map.empty,
   elements: Elements = Elements(),
-  zoom: Double = 1.0
+  zoom: Double = 1.0,
+  turns: Boolean = true
 ) extends Plot:
   def +(layer: Layer): Scene = copy(layers = layers :+ layer)
   def ++(more: IterableOnce[Layer]): Scene = copy(layers = layers ++ more)
@@ -145,10 +172,13 @@ final case class Scene(
   /** This scene's layers drawn over `under`'s. */
   def over(under: Scene): Scene = copy(layers = under.layers ++ layers)
 
+  // the centres of balls and halos count, their extent does not: a ball that grows leaves the picture where it was
   private def allPoints: Seq[XYZ] = layers.flatMap {
     case l: Layer.Points    => l.at
     case l: Layer.Segments  => l.ends.flatMap((a, b) => Seq(a, b))
     case l: Layer.Triangles => l.corners.flatMap((a, b, c) => Seq(a, b, c))
+    case l: Layer.Balls     => l.centers
+    case l: Layer.Halos     => l.at
   }
 
   /** The centre and radius that fit the scene into a unit ball. */
@@ -215,7 +245,26 @@ final case class Scene(
           val (va, vb) = (view(a), view(b))
           (va._3 + vb._3) / 2 - 1e-6 -> s"""<line x1="${sx(va)}" y1="${sy(va)}" x2="${sx(vb)}" y2="${sy(
               vb
-            )}" style="stroke:${paint(l.paintAt(i))}" stroke-width="${l.width * ink}" stroke-linecap="round"/>"""
+            )}" style="stroke:${paint(l.paintAt(i))}${
+              if l.opacity == 1.0 then ""
+              else s";stroke-opacity:${l.opacity}"
+            }" stroke-width="${l.width * ink}" stroke-linecap="round"/>"""
+        }
+      case l: Layer.Balls =>
+        l.centers.indices.map { i =>
+          val v = view(l.centers(i))
+          v._3 + 1e-6 -> s"""<circle cx="${sx(v)}" cy="${sy(
+              v
+            )}" r="${f"${l.radius / r * scale}%.2f"}" style="fill:${paint(
+              l.paintAt(i)
+            )};fill-opacity:${l.opacity}"/>"""
+        }
+      case l: Layer.Halos =>
+        l.at.indices.map { i =>
+          val v = view(l.at(i))
+          v._3 - 3e-6 -> s"""<circle cx="${sx(v)}" cy="${sy(v)}" r="${l.radius * ink}" style="fill:${paint(
+              l.paintAt(i)
+            )};fill-opacity:${l.opacity}"/>"""
         }
       case l: Layer.Points =>
         l.at.indices.map { i =>
@@ -271,7 +320,17 @@ final case class Scene(
 
   // ----- the interactive view (canvas)
 
-  def fragment(theme: Theme = Theme.Auto): String =
+  def fragment(theme: Theme = Theme.Auto): String = build(theme, None, None)
+
+  /** This scene as one panel of an [[Interactive]] page: the items whose reaction is [[Behavior.Shown]] come and go as
+    * the controls move, balls follow a [[Behavior.Radius]], items appear while a key is chosen ([[Behavior.Selected]])
+    * and choose one when the pointer is on them ([[Behavior.Selects]]. The canvas listens for the page's `tda4j:change`
+    * events.
+    */
+  private[plot] def fragmentReacting(theme: Theme, reactions: Map[Int, IndexedSeq[Reaction]], id: String): String =
+    build(theme, Some(reactions), Some(id))
+
+  private def build(theme: Theme, reacting: Option[Map[Int, IndexedSeq[Reaction]]], named: Option[String]): String =
     val pal = palette.withDegrees(degrees)
     val (ts, ink) = (style.textScale, style.markScale)
     def px(v: Double) = if v == v.toLong then v.toLong.toString else f"$v%.2f"
@@ -287,33 +346,109 @@ final case class Scene(
         case Anchor.End    => "text-align:right;"
       s"font-size:${px(f.size * ts)}px;$weight$slant$family$align$rest"
     val (c, r) = frame
-    def num(v: Double) = f"$v%.5f"
-    def pos(p: XYZ) = s"[${num((p._1 - c._1) / r)},${num((p._2 - c._2) / r)},${num((p._3 - c._3) / r)}]"
     def col(p: Paint) = "\"" + (if theme == Theme.Auto then pal.css(p) else pal.hex(p, theme)) + "\""
-    val json = layers
-      .map {
+    // The positions are written once, as a flat list of x, y, z (in the unit ball); a layer's items are numbers into it.
+    // A cell that two layers share, or a point that many cells share, costs a number, not three.
+    val places = scala.collection.mutable.LinkedHashMap.empty[XYZ, Int]
+    def at(p: XYZ): Int = places.getOrElseUpdate(p, places.size)
+    def short(v: Double): String =
+      val t = f"$v%.5f".reverse.dropWhile(_ == '0').reverse
+      if t.endsWith(".") then t.dropRight(1) else if t == "-0" then "0" else t
+    // the paints of a layer: a table of CSS colors and which entry each item takes (one number when all do)
+    def paintsOf(l: Layer, n: Int): String =
+      val table = (0 until n).map(i => col(l.paintAt(i))).distinct
+      val which =
+        if l.paints.size == 1 || table.size == 1 then "0"
+        else (0 until n).map(i => table.indexOf(col(l.paintAt(i)))).mkString("[", ",", "]")
+      s""""pal":[${(if table.isEmpty then Seq(col(l.paintAt(0))) else table).mkString(",")}],"c":$which"""
+    // what the controls and selections ask of the items of a layer, for a panel of an interactive page
+    def reacts(index: Int, layer: Layer): String =
+      reacting.flatMap(_.get(index)).fold("") { rs =>
+        val n = Interactive.itemCount(layer)
+        val per = (0 until n).map(i => Interactive.reactionOf(rs, i).behaviors)
+        val radius = per.headOption.flatMap(_.collectFirst { case Behavior.Radius(ctl, factor) => (ctl, factor) })
+        val rest = per.map(_.filter {
+          case _: Behavior.Radius | _: Behavior.Custom | _: Behavior.Selects | _: Behavior.Follows => false
+          case _                                                                                   => true
+        })
+        val picks = per.map(_.collect { case Behavior.Selects(sel, key) => (sel, key) })
+        def number(v: Double) =
+          if v.isPosInfinity then "Infinity" else if v.isNegInfinity then "-Infinity" else v.toString
+        val shownOnly = rest.forall(_ match
+          case Seq(_: Behavior.Shown) => true
+          case _                      => false)
+        val controls = rest.flatMap(_.collect { case Behavior.Shown(ctl, _, _) => ctl }).distinct
+        val shown =
+          if n > 0 && shownOnly && controls.size == 1 then
+            val sh = rest.map { case Seq(Behavior.Shown(_, from, until)) => (from, until); case _ => (0.0, 0.0) }
+            val untils =
+              if sh.forall(_._2.isPosInfinity) then "null" else sh.map(x => number(x._2)).mkString("[", ",", "]")
+            s""","sh":{"c":"${controls.head}","f":${sh.map(x => number(x._1)).mkString("[", ",", "]")},"u":$untils}"""
+          else if rest.forall(_.isEmpty) then ""
+          else
+            val entries = rest.map { bs =>
+              if bs.isEmpty then "null"
+              else
+                bs.map {
+                  case Behavior.Shown(ctl, from, until) => s"""["v","$ctl",${number(from)},${number(until)}]"""
+                  case Behavior.Selected(sel, key)      => s"""["w","$sel",$key]"""
+                  case _                                => "null"
+                }.mkString("[", ",", "]")
+            }
+            s""","ia":${entries.mkString("[", ",", "]")}"""
+        val ball = radius.fold("")((ctl, factor) => s""","ra":["$ctl",${short(factor / r)}]""")
+        val chooses =
+          if picks.forall(_.isEmpty) then ""
+          else
+            val entries = picks.map(ps =>
+              if ps.isEmpty then "null" else ps.map((sel, key) => s"""["$sel",$key]""").mkString("[", ",", "]")
+            )
+            s""","pk":${entries.mkString("[", ",", "]")}"""
+        shown + ball + chooses
+      }
+    val layerJson = layers.zipWithIndex.map { (layer, li) =>
+      val n = Interactive.itemCount(layer)
+      val body = layer match
         case l: Layer.Points =>
           val face = sceneMarker(l.radius, l.paints.headOption.getOrElse(Paint.Ink))
           val edge = if face.edge.visible then face.edge.width else 0.0
-          s"""{"kind":"p","r":${face.size * ink},"op":${face.opacity},"ew":$edge,"ec":${col(
+          s""""k":"p","r":${short(face.size * ink)},"op":${face.opacity},"ew":$edge,"ec":${col(
               face.edge.paint
-            )},"items":[${l.at.indices
-              .map(i => s"[${pos(l.at(i))},${col(l.paintAt(i))}]")
-              .mkString(",")}]}"""
+            )},"i":${l.at.map(at).mkString("[", ",", "]")}"""
         case l: Layer.Segments =>
-          s"""{"kind":"s","w":${l.width * ink},"items":[${l.ends.indices
-              .map(i => s"[${pos(l.ends(i)._1)},${pos(l.ends(i)._2)},${col(l.paintAt(i))}]")
-              .mkString(",")}]}"""
+          s""""k":"s","w":${short(l.width * ink)},"op":${l.opacity},"i":${l.ends
+              .flatMap((a, b) => Seq(at(a), at(b)))
+              .mkString("[", ",", "]")}"""
         case l: Layer.Triangles =>
-          s"""{"kind":"t","o":${l.opacity},"items":[${l.corners.indices
-              .map { i =>
-                val (a, b, d) = l.corners(i)
-                s"[${pos(a)},${pos(b)},${pos(d)},${col(l.paintAt(i))}]"
-              }
-              .mkString(",")}]}"""
-      }
-      .mkString("[", ",", "]")
-    val id = s"tda4j3d${Scene.counter.incrementAndGet()}"
+          s""""k":"t","op":${l.opacity},"i":${l.corners
+              .flatMap((a, b, d) => Seq(at(a), at(b), at(d)))
+              .mkString("[", ",", "]")}"""
+        case l: Layer.Balls =>
+          s""""k":"b","rad":${short(l.radius / r)},"op":${l.opacity},"i":${l.centers.map(at).mkString("[", ",", "]")}"""
+        case l: Layer.Halos =>
+          s""""k":"h","r":${short(l.radius * ink)},"op":${l.opacity},"i":${l.at.map(at).mkString("[", ",", "]")}"""
+      s"""{$body,${paintsOf(layer, n)}${reacts(li, layer)}}"""
+    }
+    // `keys` is a Set: flatMap over it would collapse equal coordinates, so go through a Vector
+    val positions = places.keys.toVector.flatMap(p =>
+      Seq(short((p._1 - c._1) / r), short((p._2 - c._2) / r), short((p._3 - c._3) / r))
+    )
+    val json = layerJson.mkString("[", ",", "]")
+    // the script of a panel of an interactive page also asks which items the controls and selections leave out
+    val hook =
+      if reacting.isEmpty then ""
+      else
+        """
+          |const ia=root.closest('.tda4j-ia'),vals={};
+          |function hid(L,k){
+          |  if(L.sh){const v=vals[L.sh.c];if(v!==undefined&&!(v>=L.sh.f[k]&&v<(L.sh.u?L.sh.u[k]:Infinity)))return true;}
+          |  const a=L.ia&&L.ia[k];
+          |  if(a)for(const e of a){const v=vals[e[1]];
+          |    if(e[0]==='v'){if(v!==undefined&&!(v>=e[2]&&v<e[3]))return true;}
+          |    else if(!v||v.indexOf(e[2])<0)return true;}
+          |  return false;}
+          |if(ia)ia.addEventListener('tda4j:change',e=>{vals[e.detail.name]=e.detail.value;draw();});""".stripMargin
+    val id = named.getOrElse(s"tda4j3d${Scene.counter.incrementAndGet()}")
     val vars = if theme == Theme.Auto then pal.cssVariables(s"#$id") else ""
     s"""<div id="$id" style="position:relative;width:${width}px;max-width:100%;font-family:${Svg.escape(style.font)}">
        |<style>$vars #$id canvas{display:block;width:100%;touch-action:none;cursor:grab;border-radius:4px}</style>
@@ -337,35 +472,105 @@ final case class Scene(
        |<div style="${css(
         TextRole.Note,
         s"color:${col(elements.face(TextRole.Note).paint).replace("\"", "")};margin-top:4px"
-      )}">drag to turn, scroll to zoom</div>
+      )}">${if turns then "drag to turn, scroll to zoom" else "drag to pan, scroll to zoom"}</div>
        |<script>(function(){
        |const root=document.getElementById('$id'),cv=root.querySelector('canvas'),g=cv.getContext('2d');
-       |const layers=$json;
-       |const css=getComputedStyle(root);
-       |const color=s=>s.startsWith('var(')?css.getPropertyValue(s.slice(4,-1)).trim():s;
+       |const P=${positions.mkString("[", ",", "]")},layers=$json;$hook
+       |const css=getComputedStyle(root),np=P.length/3,Q=new Float64Array(3*np),resolved=new Map();
+       |const color=s=>{if(!s.startsWith('var('))return s;let c=resolved.get(s);
+       |  if(c===undefined){c=css.getPropertyValue(s.slice(4,-1)).trim();resolved.set(s,c);}return c;};
        |let az=${math.toRadians(azimuth)},el=${math.toRadians(elevation)},zoom=${Svg.number(zoom)};
-       |function proj(p){const x1=p[0]*Math.cos(az)-p[1]*Math.sin(az),y1=p[0]*Math.sin(az)+p[1]*Math.cos(az);
-       |  return [x1,y1*Math.sin(el)+p[2]*Math.cos(el),y1*Math.cos(el)-p[2]*Math.sin(el)];}
+       |let pan=[0,0];const turns=$turns,ends=L=>L.k==='s'?2:L.k==='t'?3:1,count=L=>L.i.length/ends(L),tint=(L,k)=>L.pal[typeof L.c==='number'?L.c:L.c[k]];
+       |function project(){const ca=Math.cos(az),sa=Math.sin(az),ce=Math.cos(el),se=Math.sin(el);
+       |  for(let i=0;i<np;i++){const x=P[3*i],y=P[3*i+1],z=P[3*i+2],x1=x*ca-y*sa,y1=x*sa+y*ca;
+       |    Q[3*i]=x1;Q[3*i+1]=y1*se+z*ce;Q[3*i+2]=y1*ce-z*se;}}
+       |let last=[],sc=1,ox=0,oy=0;
+       |const X=i=>ox+Q[3*i]*sc,Y=i=>oy-Q[3*i+1]*sc;
+       |// the painting order depends on the view alone, not on the sliders or the zoom: it is sorted when the view turns
+       |const off=[];let total=0;layers.forEach(L=>{off.push(total);total+=count(L);});
+       |const LI=new Uint16Array(total),KK=new Int32Array(total),dep=new Float64Array(total);let order=null;
+       |layers.forEach((L,li)=>{const n=count(L);for(let k=0;k<n;k++){LI[off[li]+k]=li;KK[off[li]+k]=k;}});
+       |function sortAll(){project();
+       |  layers.forEach((L,li)=>{const n=count(L),o=off[li];
+       |    for(let k=0;k<n;k++){let d;
+       |      if(L.k==='t')d=(Q[3*L.i[3*k]+2]+Q[3*L.i[3*k+1]+2]+Q[3*L.i[3*k+2]+2])/3;
+       |      else if(L.k==='s')d=(Q[3*L.i[2*k]+2]+Q[3*L.i[2*k+1]+2])/2-1e-6;
+       |      else d=Q[3*L.i[k]+2]+(L.k==='p'?-2e-6:L.k==='b'?1e-6:-3e-6);
+       |      dep[o+k]=d;}});
+       |  order=new Int32Array(total);for(let i=0;i<total;i++)order[i]=i;order.sort((u,v)=>dep[v]-dep[u]);}
        |function draw(){const dpr=window.devicePixelRatio||1,W=cv.clientWidth,H=W*cv.height/cv.width;
        |  if(cv.width!==Math.round(W*dpr)){cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);}
        |  g.setTransform(dpr,0,0,dpr,0,0);g.fillStyle=color(${col(Paint.Surface)});g.fillRect(0,0,W,H);
-       |  const s=0.46*Math.min(W,H)*zoom,cx=W/2,cy=H/2,items=[];
-       |  for(const L of layers){for(const it of L.items){
-       |    if(L.kind==='t'){const a=proj(it[0]),b=proj(it[1]),c=proj(it[2]);items.push([(a[2]+b[2]+c[2])/3,0,L,[a,b,c],it[3]]);}
-       |    else if(L.kind==='s'){const a=proj(it[0]),b=proj(it[1]);items.push([(a[2]+b[2])/2-1e-6,1,L,[a,b],it[2]]);}
-       |    else{const a=proj(it[0]);items.push([a[2]-2e-6,2,L,[a],it[1]]);}}}
-       |  items.sort((u,v)=>v[0]-u[0]);
-       |  const X=p=>cx+p[0]*s,Y=p=>cy-p[1]*s,surface=color(${col(Paint.Surface)});
-       |  for(const [d,k,L,ps,col] of items){const c=color(col);
-       |    if(k===0){g.globalAlpha=L.o;g.fillStyle=c;g.beginPath();g.moveTo(X(ps[0]),Y(ps[0]));g.lineTo(X(ps[1]),Y(ps[1]));g.lineTo(X(ps[2]),Y(ps[2]));g.closePath();g.fill();g.globalAlpha=1;}
-       |    else if(k===1){g.strokeStyle=c;g.lineWidth=L.w;g.lineCap='round';g.beginPath();g.moveTo(X(ps[0]),Y(ps[0]));g.lineTo(X(ps[1]),Y(ps[1]));g.stroke();}
-       |    else{g.globalAlpha=L.op;g.fillStyle=c;g.beginPath();g.arc(X(ps[0]),Y(ps[0]),L.r,0,2*Math.PI);g.fill();if(L.ew>0){g.strokeStyle=color(L.ec);g.lineWidth=L.ew;g.stroke();}g.globalAlpha=1;}}}
-       |let drag=null;
-       |cv.addEventListener('pointerdown',e=>{drag=[e.clientX,e.clientY,az,el];cv.setPointerCapture(e.pointerId);cv.style.cursor='grabbing';});
-       |cv.addEventListener('pointermove',e=>{if(!drag)return;az=drag[2]+(e.clientX-drag[0])*0.01;el=Math.max(-1.55,Math.min(1.55,drag[3]+(e.clientY-drag[1])*0.01));draw();});
-       |cv.addEventListener('pointerup',()=>{drag=null;cv.style.cursor='grab';});
-       |cv.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.max(0.2,Math.min(8,zoom*Math.exp(-e.deltaY*0.001)));draw();},{passive:false});
-       |matchMedia('(prefers-color-scheme: dark)').addEventListener('change',draw);
+       |  if(!order)sortAll();sc=0.46*Math.min(W,H)*zoom;ox=W/2+pan[0];oy=H/2+pan[1];last=[];
+       |  for(let q=0;q<total;q++){const gi=order[q],li=LI[gi],k=KK[gi],L=layers[li];
+       |    ${
+        if reacting.isEmpty then "" else "if(hid(L,k))continue;"
+      }
+       |    if(L.pk&&L.pk[k])last.push([dep[gi],li,k]);
+       |    const c=color(tint(L,k));
+       |    if(L.k==='t'){g.globalAlpha=L.op;g.fillStyle=c;g.beginPath();g.moveTo(X(L.i[3*k]),Y(L.i[3*k]));g.lineTo(X(L.i[3*k+1]),Y(L.i[3*k+1]));g.lineTo(X(L.i[3*k+2]),Y(L.i[3*k+2]));g.closePath();g.fill();g.globalAlpha=1;}
+       |    else if(L.k==='s'){g.globalAlpha=L.op;g.strokeStyle=c;g.lineWidth=L.w;g.lineCap='round';g.beginPath();g.moveTo(X(L.i[2*k]),Y(L.i[2*k]));g.lineTo(X(L.i[2*k+1]),Y(L.i[2*k+1]));g.stroke();g.globalAlpha=1;}
+       |    else if(L.k==='p'){g.globalAlpha=L.op;g.fillStyle=c;g.beginPath();g.arc(X(L.i[k]),Y(L.i[k]),L.r,0,2*Math.PI);g.fill();if(L.ew>0){g.strokeStyle=color(L.ec);g.lineWidth=L.ew;g.stroke();}g.globalAlpha=1;}
+       |    else{const rad=L.k==='b'?radiusOf(L)*sc:L.r;g.globalAlpha=L.op;g.fillStyle=c;g.beginPath();g.arc(X(L.i[k]),Y(L.i[k]),rad,0,2*Math.PI);g.fill();g.globalAlpha=1;}}}
+       |function radiusOf(L){if(L.ra){const v=vals[L.ra[0]];if(v!==undefined)return v*L.ra[1];}return L.rad;}
+       |// what the pointer is over: the nearest drawn item of a layer that chooses, within 4 pixels of its shape
+       |const segDist=(px,py,ax,ay,bx,by)=>{const dx=bx-ax,dy=by-ay,l=dx*dx+dy*dy,t=l?Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/l)):0;return Math.hypot(px-ax-t*dx,py-ay-t*dy);};
+       |function reach(L,k,x,y){
+       |  if(L.k==='p')return Math.max(0,Math.hypot(x-X(L.i[k]),y-Y(L.i[k]))-L.r);
+       |  if(L.k==='s')return Math.max(0,segDist(x,y,X(L.i[2*k]),Y(L.i[2*k]),X(L.i[2*k+1]),Y(L.i[2*k+1]))-L.w/2);
+       |  if(L.k!=='t')return Infinity;
+       |  const a=L.i[3*k],b=L.i[3*k+1],c=L.i[3*k+2],ax=X(a),ay=Y(a),bx=X(b),by=Y(b),cx=X(c),cy=Y(c);
+       |  const s1=(x-bx)*(ay-by)-(ax-bx)*(y-by),s2=(x-cx)*(by-cy)-(bx-cx)*(y-cy),s3=(x-ax)*(cy-ay)-(cx-ax)*(y-ay);
+       |  if(!((s1<0||s2<0||s3<0)&&(s1>0||s2>0||s3>0)))return 0;
+       |  return Math.min(segDist(x,y,ax,ay,bx,by),segDist(x,y,bx,by,cx,cy),segDist(x,y,cx,cy,ax,ay));}
+       |const choosers=new Set();layers.forEach(L=>{if(L.pk)L.pk.forEach(p=>{if(p)p.forEach(q=>choosers.add(q[0]));});});
+       |function pickAt(clientX,clientY){const r=cv.getBoundingClientRect(),x=(clientX-r.left)*cv.clientWidth/r.width,y=(clientY-r.top)*cv.clientWidth/r.width;
+       |  let best=null,bd=Infinity,bz=Infinity;
+       |  for(const it of last){const L=layers[it[1]];if(!L.pk||!L.pk[it[2]])continue;
+       |    const d=reach(L,it[2],x,y);if(d>4)continue;
+       |    if(d<bd||(d===bd&&it[0]<bz)){bd=d;bz=it[0];best=L.pk[it[2]];}}
+       |  return best;}
+       |const keysFor=(pk,n)=>pk?pk.filter(q=>q[0]===n).map(q=>q[1]):[];
+       |const link=()=>ia&&ia.tda4j;
+       |let frame=0,xy=null;
+       |function hoverAt(e){if(!choosers.size||!link())return;xy=[e.clientX,e.clientY];
+       |  if(frame)return;
+       |  frame=requestAnimationFrame(()=>{frame=0;const pk=pickAt(xy[0],xy[1]);
+       |    choosers.forEach(n=>link().hover(n,keysFor(pk,n)));cv.style.cursor=pk?'pointer':'grab';});}
+       |function leave(){if(frame){cancelAnimationFrame(frame);frame=0;}
+       |  if(link())choosers.forEach(n=>link().hover(n,[]));cv.style.cursor='grab';}
+       |let drag=null,moved=0;
+       |// two fingers: the distance between them zooms (about their midpoint on a flat canvas) and their midpoint turns or pans
+       |const fingers=new Map();let pinch=null;
+       |const spread=()=>{const f=[...fingers.values()];return {d:Math.hypot(f[0][0]-f[1][0],f[0][1]-f[1][1]),m:[(f[0][0]+f[1][0])/2,(f[0][1]+f[1][1])/2]};};
+       |cv.addEventListener('pointerdown',e=>{
+       |  if(e.pointerType==='touch'){fingers.set(e.pointerId,[e.clientX,e.clientY]);
+       |    if(fingers.size===2){const s=spread();pinch={d:s.d,m:s.m,zoom:zoom,az:az,el:el,pan:pan.slice()};drag=null;moved=99;cv.setPointerCapture(e.pointerId);return;}}
+       |  drag=[e.clientX,e.clientY,az,el,pan[0],pan[1]];moved=0;cv.setPointerCapture(e.pointerId);cv.style.cursor='grabbing';});
+       |cv.addEventListener('pointermove',e=>{
+       |  if(fingers.has(e.pointerId)){fingers.set(e.pointerId,[e.clientX,e.clientY]);
+       |    if(pinch&&fingers.size===2){const s=spread(),z=Math.max(0.2,Math.min(turns?8:200,pinch.zoom*s.d/Math.max(pinch.d,1)));
+       |      const dx=s.m[0]-pinch.m[0],dy=s.m[1]-pinch.m[1];
+       |      if(turns){az=pinch.az+dx*0.01;el=Math.max(-1.55,Math.min(1.55,pinch.el+dy*0.01));order=null;}
+       |      else{const r=cv.getBoundingClientRect(),k=cv.clientWidth/r.width,x=(pinch.m[0]-r.left)*k-cv.clientWidth/2,y=(pinch.m[1]-r.top)*k-cv.clientHeight/2;
+       |        pan=[x-(x-pinch.pan[0])*z/pinch.zoom+dx*k,y-(y-pinch.pan[1])*z/pinch.zoom+dy*k];}
+       |      zoom=z;draw();return;}}
+       |  if(!drag){hoverAt(e);return;}
+       |  moved=Math.max(moved,Math.hypot(e.clientX-drag[0],e.clientY-drag[1]));
+       |  if(moved<4)return;
+       |  if(turns){az=drag[2]+(e.clientX-drag[0])*0.01;el=Math.max(-1.55,Math.min(1.55,drag[3]+(e.clientY-drag[1])*0.01));order=null;}
+       |  else pan=[drag[4]+(e.clientX-drag[0])*cv.clientWidth/cv.getBoundingClientRect().width,drag[5]+(e.clientY-drag[1])*cv.clientWidth/cv.getBoundingClientRect().width];
+       |  draw();});
+       |const lift=e=>{fingers.delete(e.pointerId);if(fingers.size<2)pinch=null;};
+       |cv.addEventListener('pointercancel',e=>{lift(e);drag=null;});
+       |cv.addEventListener('pointerup',e=>{lift(e);const was=drag;drag=null;cv.style.cursor='grab';
+       |  if(was&&moved<4&&choosers.size&&link()){const pk=pickAt(e.clientX,e.clientY);choosers.forEach(n=>link().click(n,keysFor(pk,n),e.shiftKey));}});
+       |cv.addEventListener('pointerleave',leave);
+       |cv.addEventListener('wheel',e=>{e.preventDefault();const z=Math.max(0.2,Math.min(turns?8:200,zoom*Math.exp(-e.deltaY*0.001)));
+       |  if(!turns){const r=cv.getBoundingClientRect(),k=cv.clientWidth/r.width,x=(e.clientX-r.left)*k-cv.clientWidth/2,y=(e.clientY-r.top)*k-cv.clientHeight/2;
+       |    pan=[x-(x-pan[0])*z/zoom,y-(y-pan[1])*z/zoom];}
+       |  zoom=z;draw();},{passive:false});
+       |matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{resolved.clear();draw();});
        |window.addEventListener('resize',draw);draw();})();</script>
        |</div>""".stripMargin
 

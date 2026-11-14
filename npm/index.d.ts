@@ -78,6 +78,10 @@ export class Chart {
   save(path: string): string;
   /** Appends the plot to the page in a browser; opens it in the default browser from Node.js. */
   show(): void;
+  /** For a plot with a slider (`plotFiltration`, `plotLinkedFiltration`): `count` (2 or more) still pictures, one SVG document for each scale from the slider's minimum to its maximum, the frames of a video or the slides of a talk. Works in a browser too. */
+  frames(count: number, theme?: "light" | "dark"): string[];
+  /** `frames` written into `directory` (Node.js only) as `frame-0000.svg` and on. Returns the paths. */
+  saveFrames(directory: string, count: number, theme?: "light" | "dark"): string[];
 }
 
 export class Result {
@@ -141,6 +145,12 @@ export class Result {
   plotDiagram(): Chart;
   /** The complex at scale `at`, over the input points. */
   plotComplex(at: number): Chart;
+  /** The complex as a page with a slider for the scale, from 0 to `max`, beside the persistence diagram: `html()` is the self-contained page. */
+  plotFiltration(max: number): Chart;
+  /** The bars as linked views, a page: the diagram, the barcode and the points. Pointing at a class lights it up in the other views and draws its cycle on the points; the pictures zoom and pan, and dragging a rectangle chooses classes. `html()` is the self-contained page. */
+  plotExplore(): Chart;
+  /** `plotFiltration` with its views linked as `plotExplore` links them. */
+  plotLinkedFiltration(max: number): Chart;
   /** The representative of `bars[i]` over the input, at scale `at` when given. */
   plotRepresentative(i: number, at?: number): Chart;
   /** Writes the result as JSON (Node.js only). Returns the absolute path. */

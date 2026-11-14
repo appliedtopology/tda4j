@@ -82,6 +82,16 @@ class Plot:
             return str(self._j.save(_jvm.path_in(path)))
         return str(self._j.save(_jvm.path_in(path), theme))
 
+    def save_frames(self, directory: str | os.PathLike, count: int, theme: str | None = None) -> list[str]:
+        """For a plot with a slider (``plot_filtration``): writes ``count`` still pictures, ``frame-0000.svg`` and on, one
+        for each scale from the slider's minimum to its maximum, and returns their paths."""
+        if not hasattr(self._j, "saveFrames"):
+            raise ValueError("tda4j: only a plot with a slider has frames (plot_filtration)")
+        paths = self._j.saveFrames(_jvm.path_in(directory), int(count)) if theme is None else self._j.saveFrames(
+            _jvm.path_in(directory), int(count), theme
+        )
+        return [str(p) for p in paths]
+
     def view(self) -> "Plot":
         """Adds the plot to the live viewer, a browser tab."""
         self._j.view()
@@ -89,6 +99,13 @@ class Plot:
 
     def _repr_svg_(self) -> str:
         return self.svg()
+
+    def _repr_html_(self) -> str | None:
+        """A notebook shows a plot with a slider or linked views (``plot_filtration``, ``plot_explore``) as the live page,
+        scripts and all (a notebook has to be trusted to run them); any other plot is shown as its SVG."""
+        if not hasattr(self._j, "saveFrames"):
+            return None
+        return str(self._j.fragment("auto"))
 
     def __getattr__(self, name: str):
         """The tweaks of the plotting page that take plain arguments, in snake_case: ``plot.with_title("A circle")``,
@@ -301,6 +318,27 @@ class Result:
     def plot_complex(self, at: float) -> Plot:
         """The complex at filtration value ``at`` (up to its triangles)."""
         return Plot(self._j.plotComplex(float(at)))
+
+    def plot_filtration(self, max: float) -> Plot:
+        """The complex as a page with a slider for the scale, from 0 to ``max``, beside the persistence diagram, where each
+        class is a vertical segment until the slider's line passes its death and then a point. Save it as ``.html``; chain
+        ``with_play(seconds)`` and ``with_title(text)``; ``save_frames(directory, count)`` writes a still per scale."""
+        return Plot(self._j.plotFiltration(float(max)))
+
+    def plot_explore(self) -> Plot:
+        """The bars as linked views, a page: the persistence diagram, the barcode and the points. Pointing at a class in one
+        lights it up in the other and draws its cycle on the points; a click keeps it chosen, dragging a rectangle chooses
+        the classes it touches, and every picture zooms (buttons, or Ctrl and the wheel) and pans. Save it as ``.html``;
+        chain ``with_title(text)``. Needs the points, and bars with representatives."""
+        return Plot(self._j.plotExplore())
+
+    def plot_linked_filtration(self, max: float) -> Plot:
+        """``plot_filtration`` with its views linked as ``plot_explore`` links them."""
+        return Plot(self._j.plotLinkedFiltration(float(max)))
+
+    def plot_filtration_3d(self, max: float) -> Plot:
+        """``plot_filtration`` with the complex in 3-D, to turn and zoom."""
+        return Plot(self._j.plotFiltration3D(float(max)))
 
     def plot_representative(self, i: int, at: float | None = None) -> Plot:
         self._check(i)

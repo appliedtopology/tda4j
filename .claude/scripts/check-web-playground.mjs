@@ -2,12 +2,12 @@
 // Drives the demo's web page (demo/web/index.html) in headless Chromium, as a participant would: types inputs at the
 // prompt, reads what the page shows, and fails on the first thing that is not what the terminal REPL would show.
 //
-//   (cd demo && sbt webSite)                                  # demo/target/web: the page, the jar, the patch jar
+//   (cd demo && sbt webSite)                                  # demo/target/web: the page, three jars
 //   node .claude/scripts/check-web-playground.mjs [site]      # default site: demo/target/web
 //
 // Needs Playwright with its Chromium, and the network: the page loads its Java runtime (CheerpJ) from the vendor's
 // CDN. Behind a proxy that HTTPS_PROXY names, the browser is told to use it. Prints the time of every input: those
-// numbers are this machine's, with the jar on localhost.
+// numbers are this machine's, with the jars on localhost.
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

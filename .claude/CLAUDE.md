@@ -40,14 +40,13 @@ renames/signature changes; a break inside a series is a commented `mimaBinaryIss
 - A defect or overage you notice on the way (a file over its budget, a stale doc, an unfiled limitation) is fixed in
   the same change or filed as an issue before you finish, not reported as pre-existing.
 - Assume local modifications are intentional parts of the branch and summarize them as your own work. If unsure about
-  one after a /compact or a /clear, review it with `git diff` and the relevant worklog instead of apologizing or
-  disclaiming it.
+  one after a /compact or a /clear, review it with `git diff` and the worklog instead of disclaiming it.
 
 ## Package layout
 
-**One flat core package plus one add-on** (`DESIGN-package-structure.md`, derivation `WORKLOG-package-flatten.md`). Everything a persistent-homology user needs is
-in `org.appliedtopology.tda4j` itself, so users write `import org.appliedtopology.tda4j.*` (no `given` selector
-needed, see "Givens"). The core's source directories are **file organization only, not packages**:
+**One flat core package plus one add-on** (`DESIGN-package-structure.md`, `WORKLOG-package-flatten.md`). Everything a
+persistent-homology user needs is in `org.appliedtopology.tda4j` itself, so users write `import org.appliedtopology.tda4j.*`
+(no `given` selector needed, see "Givens"). The core's source directories are **file organization only, not packages**:
 
 - `algebra/` — `RingModule`, `Field`, `FiniteField`, `Chain`, `Cell`/`OrderedCell`/`OrderedBasis`, `LinearAlgebra`.
 - `cells/` — `Simplex`, `Cube` and their `OrderedCell` instances.
@@ -68,7 +67,8 @@ needed, see "Givens"). The core's source directories are **file organization onl
 - `python/` (the `tda4j` wheel, not a package): JPype over the `matlab` facade.
 - `demo/` (not a package): a SEPARATE sbt build for a talk's REPL jar, its web page and container image
   (`demo/README.md`, `WORKLOG-demo-jar.md`, `WORKLOG-demo-release.md`, `WORKLOG-web-playground-build.md`); the root build
-  neither builds nor sees it, `release.yml` attaches the jar, `demo.yml` publishes the other two.
+  neither builds nor sees it, `release.yml` attaches the jar, `demo.yml` publishes the other two. The page's jar is cut in
+  two so `gh-pages` stores the big half once (`WORKLOG-demo-page-jars.md`).
 - Tests mirror this. `src/test/scala/tda4juser/` is deliberately OUTSIDE the package: it checks what a user's code
   sees (`UserImportsSpec`, `TDAlabAloneSpec`); the `tutorial` specs and generated page scripts are INSIDE it, so only
   `sbt doc` checks that doc fences resolve from outside.
@@ -248,6 +248,7 @@ file before changing that subsystem; this table is the index, in case a rule did
 | `rules/scalajs.md` | the Scala.js build: platform seams, shared-code limits, JS API, npm package | `scalajs/`, `scalajvm/`, `build.sbt`, `npm/` |
 | `rules/docs-and-tutorials.md` | docs site, tutorial pages (the docs are the tests), language tabs | `_docs/`, tutorial specs, `build.sbt` |
 | `rules/plotting.md` | the `plot` subpackage: scene model, tweaks, looks, live viewer, gallery | `plot/` (main and test) |
+| `rules/interactive-plots.md` | interactive pages: stills, selections, zoom, touch, keyboard | `Interactive`, `Selection`, `Zoom` |
 | `rules/algebra.md` | fields, chains and cells: `RingModule`, `Field`, `Chain`, `Cell` | `algebra/`, `cells/` |
 | `rules/testing.md` | writing specs: shared generators, specs2 traps | `src/test/**` |
 | `rules/scala-style.md` | the Scala 3 idioms used throughout, opaque-type and extension-method hazards | `src/**/*.scala` |

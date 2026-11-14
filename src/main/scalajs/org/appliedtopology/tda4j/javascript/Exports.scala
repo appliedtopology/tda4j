@@ -944,6 +944,23 @@ final class Result private[javascript] (underlying: PersistenceResult):
   @JSExport
   def plotComplex(at: Double): Chart = Exports.guarded(Chart(underlying.plotComplex(at)))
 
+  /** The complex as a page with a slider for the scale, from 0 to `max`, beside the persistence diagram: `html()` is
+    * the self-contained page, `show()` opens it.
+    */
+  @JSExport
+  def plotFiltration(max: Double): Chart = Exports.guarded(Chart(underlying.plotFiltration(max)))
+
+  /** The bars as linked views, a page: the persistence diagram, the barcode and the points. Pointing at a class in one
+    * lights it up in the other and draws its cycle on the points; the pictures zoom and pan, and dragging a rectangle
+    * chooses the classes it touches. `html()` is the self-contained page, `show()` opens it.
+    */
+  @JSExport
+  def plotExplore(): Chart = Exports.guarded(Chart(underlying.plotExplore()))
+
+  /** [[plotFiltration]] with its views linked as [[plotExplore]] links them. */
+  @JSExport
+  def plotLinkedFiltration(max: Double): Chart = Exports.guarded(Chart(underlying.plotLinkedFiltration(max)))
+
   /** The representative of `bars[i]` over the input, at scale `at` when given. */
   @JSExport
   def plotRepresentative(i: Int, at: js.UndefOr[Double] = js.undefined): Chart =
@@ -982,6 +999,31 @@ final class Chart private[javascript] (underlying: plot.Plot):
   /** Writes the plot to `path` (Node.js): an `.svg` file, or an HTML page for any other extension. */
   @JSExport
   def save(path: String): String = Exports.guarded(underlying.save(path))
+
+  /** For a plot with a slider (`plotFiltration`, `plotLinkedFiltration`): `count` (2 or more) still pictures as SVG
+    * documents, one for each scale from the slider's minimum to its maximum, in a browser as well as in Node.js.
+    */
+  @JSExport
+  def frames(count: Int, theme: js.UndefOr[String] = js.undefined): js.Array[String] =
+    Exports.guarded {
+      val shown = theme.fold(plot.Theme.Light)(plot.Theme.named)
+      js.Array(withSlider("frames").frames(count).map(_.svgFile(shown))*)
+    }
+
+  /** `frames` written into `directory` (Node.js) as `frame-0000.svg` and on; returns the paths. */
+  @JSExport
+  def saveFrames(directory: String, count: Int, theme: js.UndefOr[String] = js.undefined): js.Array[String] =
+    Exports.guarded {
+      js.Array(withSlider("saveFrames").saveFrames(directory, count, theme.fold(plot.Theme.Light)(plot.Theme.named))*)
+    }
+
+  // `plotExplore` is a page too, but one without a slider: frames need a control to sweep
+  private def withSlider(method: String): plot.Interactive = underlying match
+    case page: plot.Interactive if page.controls.nonEmpty => page
+    case _                                                =>
+      throw new IllegalArgumentException(
+        s"$method is for a plot with a slider (plotFiltration, plotLinkedFiltration); this plot has none"
+      )
 
   /** Shows the plot: appended to the page in a browser, opened in the default browser from Node.js. */
   @JSExport

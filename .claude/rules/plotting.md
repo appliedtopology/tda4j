@@ -8,7 +8,7 @@ paths:
 
 # The `plot` subpackage
 
-Loads when you work in the `plot` subpackage. Project-wide rules: `.claude/CLAUDE.md`. Platform choice and its
+Project-wide rules: `.claude/CLAUDE.md`. Platform choice and its
 evidence: `DESIGN-plotting.md`; the build-out: `WORKLOG-plotting.md`; the move into the core: `WORKLOG-plot-into-core.md`.
 
 **A leaf subpackage of the core** (`org.appliedtopology.tda4j.plot`, directory `plot/`), like `matlab`/`cli`: nothing in the
@@ -25,16 +25,15 @@ Text`, one paint or one per item, optional tooltip per item = SVG `<title>`), ax
 `trait Plot` (`view`, `save`, `html`, `fragment`, `svgFile`) + `object Plot` (the TDA constructors) share the name on
 purpose. Every plot is an immutable value. Representatives are `Plot.Terms` (`Chain[C, ?] | Seq[(C, Double)]`, like
 `Plot.Bars`): never build a `Chain` just to plot (an invented real field's epsilon drops small coefficients).
-`save(path)` exists without the default argument for Java/MATLAB. Each render numbers its `<svg>` id (`tda4jN`).
-Only `Viewer.browse` opens a browser.
+`save(path)` exists without the default argument for Java/MATLAB. Each render numbers its `<svg>` id (`tda4jN`). Only `Viewer.browse` opens a browser.
 
 **Colors are roles, resolved by `Palette` x `Theme`.** `Paint.Series(k)` for homological degree `k` (never by rank),
 chrome roles (`Ink`, `Muted`, `Grid`, ...), `Paint.Value(v)` for a data value that the figure's `ColorScale` (ramp, limits,
 transform, stops) colors through the palette AT RENDER, `Fixed(hex)` only for a color the user chose. A mark never holds a
 color computed from a palette at construction: that is what made `copy(palette = ...)` leave heatmaps behind. `Theme.Auto` = CSS variables of the `<svg>` with a
 `prefers-color-scheme` block (pages, viewer); `Light`/`Dark` = plain hex (files; `.svg` saves default to `Light`).
-`Palette.brand` (default, Teal & Gold from `brand/DECISIONS.md`) is checked with the dataviz validator: slots 0-2 pass ALL
-pairs in both modes (a diagram puts any two degrees side by side), 0-7 adjacent pairs. Re-run the validator after changing any slot; never cycle hues past 8. Degree also gets a marker shape.
+`Palette.brand` (default, `brand/DECISIONS.md`) is checked with the dataviz validator: slots 0-2 pass ALL pairs in both
+modes (a diagram puts any two degrees side by side), 0-7 adjacent pairs. Re-run it after changing any slot; never cycle hues past 8. Degree also gets a marker shape.
 
 **Live viewer** (`Viewer`): one page listing every `view()`ed plot (iframe per plot, `/list`, `/plot/<n>`, server-sent events
 on `/events`), on `127.0.0.1` unless `tda4j.plot.host` names another address (a container); browser opened via
@@ -109,8 +108,9 @@ API). Rules:
   `y = 0`), kept only when that axis's range BEFORE the equal-aspect widening shows the value (else the axis stays at the
   edge and a note says why). A diagram's `Board.heading` and a color bar's `barTicks` are drawn in the renderer, not the
   constructors; `plotRepresentative(i)` draws a cocycle at its bar's birth.
-- PNG and PDF are documented external conversion only (project lead, #101): no rasterizer module; interactivity (#102) is not
-  wanted. A command in that section is run before it is written down (`cairosvg` and Chromium were; the others come from manuals).
+- PNG and PDF are documented external conversion only (project lead, #101): no rasterizer module. A command in that section
+  is run before it is written down (`cairosvg` and Chromium were; the others come from manuals).
+- **Interactive pages, selections, zoom** (#102): `rules/interactive-plots.md`.
 - **`Look` (session defaults)**: every public constructor of `Plot` that returns a `Figure` or `Scene` takes `(using look:
   Look)`; one that builds the plot wraps its body in `look.figure(palette):` / `look.scene:`, one that delegates passes the
   given on, and a call to a public constructor inside a wrapped body passes `Look.none` (applied once). A named `palette` is

@@ -1,5 +1,6 @@
 import itertools
 import math
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -166,6 +167,43 @@ def test_the_most_persistent_bar_and_the_3d_plots(tmp_path, circle):
     assert "<html" in (tmp_path / "points.html").read_text().lower() and written.endswith("points.html")
     assert result.plot_complex_3d(1.0).save(tmp_path / "complex.html")
     assert result.plot_representative_3d(i).save(tmp_path / "loop.html")
+
+
+def test_a_filtration_page_has_a_slider_and_its_frames_show_the_complex_at_each_scale(tmp_path, circle):
+    result = tda4j.persistence(circle(16), max_dimension=1)
+    page = result.plot_filtration(1.0).with_title("A circle").with_play(4.0)
+    html = page.save(tmp_path / "filtration.html")
+    text = (tmp_path / "filtration.html").read_text()
+    assert html.endswith("filtration.html") and 'type="range"' in text and "A circle" in text
+    frames = page.save_frames(tmp_path / "frames", 3)
+    assert [Path(f).name for f in frames] == ["frame-0000.svg", "frame-0001.svg", "frame-0002.svg"]
+    # the sides of the 16-gon (2 sin(pi/16) = 0.39) come in with the slider: none in the first frame, all of them in the last
+    sides = [Path(f).read_text(encoding="utf-8").count("∆(") for f in frames]
+    assert sides[0] == 0 and sides[2] >= 16 and sides[1] <= sides[2]
+    assert "<canvas" in result.plot_filtration_3d(1.0).html()
+    with pytest.raises(ValueError, match="slider"):
+        result.plot_diagram().save_frames(tmp_path / "none", 3)
+
+
+def test_a_notebook_shows_a_page_with_a_slider_as_the_live_page_and_the_rest_as_svg(circle):
+    result = tda4j.persistence(circle(16), max_dimension=1)
+    live = result.plot_filtration(1.0)._repr_html_()
+    # the fragment of the page (not a whole document), with its slider and its script
+    assert 'type="range"' in live and "<script>" in live and "<html" not in live.lower()
+    assert 'data-brush="class"' in result.plot_explore()._repr_html_()
+    # a plot with no controls is left to _repr_svg_: notebooks fall back to it when this is None
+    assert result.plot_diagram()._repr_html_() is None and "<svg" in result.plot_diagram()._repr_svg_()
+
+
+def test_linked_views_are_a_page_that_zooms_and_chooses_classes(tmp_path, circle):
+    result = tda4j.persistence(circle(16), max_dimension=1)
+    path = result.plot_explore().with_title("A circle").save(tmp_path / "explore.html")
+    text = Path(path).read_text()
+    assert 'data-brush="class"' in text and 'data-zoomable="b"' in text and "A circle" in text
+    linked = result.plot_linked_filtration(1.0).html()
+    assert 'type="range"' in linked and 'data-brush="class"' in linked
+    with pytest.raises(Exception, match="distance matrix"):
+        tda4j.persistence_from_distances([[0.0, 1.0], [1.0, 0.0]]).plot_explore()
 
 
 def test_plots_go_side_by_side(tmp_path, square):

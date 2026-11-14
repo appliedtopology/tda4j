@@ -96,9 +96,9 @@ jobs:
         if: steps.demo.outputs.found == 'true'
         working-directory: demo/target/web
         run: |
-          # What the page calls, from a terminal, with the rewritten classes ahead of the jar as the page has them.
+          # What the page calls, from a terminal, with the rewritten classes ahead of the two jars as the page has them.
           # -Xverify:all: a rewritten class that no longer verifies fails here, not in a participant's browser.
-          cp="tda4j-demo-web-patch.jar:tda4j-demo.jar"
+          cp="tda4j-demo-web-patch.jar:tda4j-demo-project.jar:tda4j-demo-libs.jar"
           out=$(timeout 300 java -Xverify:all -cp "$cp" org.appliedtopology.tda4j.demo.WebRepl "$cp" \
             'val d = Persistence(Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0)))' \
             'Plot.barcode(d).view()' 2>&1)
@@ -129,18 +129,29 @@ jobs:
           set -e
           site=demo/target/web
           # GitHub refuses a push with a file of 100 MB or more.
-          if [ "$(stat -c %s "$site/tda4j-demo.jar")" -ge 100000000 ]; then
-            echo "::error::the demo jar has reached 100 MB and cannot be pushed to gh-pages"; exit 1
-          fi
+          for jar in "$site"/*.jar; do
+            if [ "$(stat -c %s "$jar")" -ge 100000000 ]; then
+              echo "::error::$(basename "$jar") has reached 100 MB and cannot be pushed to gh-pages"; exit 1
+            fi
+          done
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git fetch origin gh-pages
           git worktree add -B gh-pages-demo /tmp/gh-pages origin/gh-pages
-          # The page and its two jars, which must come from the page's own site; nothing else of the site is touched.
+          # The page and its three jars, which must come from the page's own site; nothing else of the site is touched.
           # docs.yml keeps this folder when it replaces the site's root.
+          #
+          # gh-pages keeps every version of every file, so a publish that rewrites a 66 MB jar adds 66 MB to the branch
+          # for good. The jars are cut for that (demo/build.sbt, `webSite`): the libraries jar is written the same bytes
+          # every time and git stores it once; the project jar and the patch jar, about 6.5 MB together, are what a
+          # publish adds. Say so when the libraries jar changes, which a dependency bump should be the only reason for.
+          old=/tmp/gh-pages/playground/tda4j-demo-libs.jar
+          if [ -f "$old" ] && ! cmp -s "$old" "$site/tda4j-demo-libs.jar"; then
+            echo "::notice::tda4j-demo-libs.jar changed: this publish adds up to $(stat -c %s "$site/tda4j-demo-libs.jar") bytes to gh-pages (less where the new jar resembles the old), not just the project jar's"
+          fi
           rm -rf /tmp/gh-pages/playground
           mkdir /tmp/gh-pages/playground
-          cp "$site/index.html" "$site/tda4j-demo.jar" "$site/tda4j-demo-web-patch.jar" /tmp/gh-pages/playground/
+          cp "$site/index.html" "$site/tda4j-demo-project.jar" "$site/tda4j-demo-libs.jar" "$site/tda4j-demo-web-patch.jar" /tmp/gh-pages/playground/
           cd /tmp/gh-pages
           git add -A playground
           if git diff --cached --quiet; then
