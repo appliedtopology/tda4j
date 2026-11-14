@@ -15,6 +15,14 @@
   a 3-D canvas; one finger scrolls the page and a tap chooses. From the keyboard a picture takes focus: `+`, `-`, `0` and
   the arrows zoom and pan, and where a drag chooses, the arrows move a cross, `Enter` sets the corners of a rectangle and
   chooses, `Escape` lets go.
+- The rest of the interactive pages (#342). `Behavior.followsZ` and the other `Follows` rules now work on a 3-D layer: a plane
+  rises with a slider while the picture stays still. `Panel.Spatial.brushable` gives a 3-D canvas a `box` button that makes a
+  drag draw a rectangle in the plane of the view; `PageState.brush` and `Interactive.touched` give its still and the keys it
+  touches. A brushable flat picture has a `touch` button that lets one finger draw the rectangle. `Scene.withAxes` gives a flat
+  scene (seen from above) an x axis and a y axis that follow the pan and the zoom, and `Plot.filtration`'s canvas of a large
+  complex has them. In a picture where a drag chooses, `]` and `[` (or `Page Down` and `Page Up`) put the keyboard's cross on
+  the next and the previous item and `Home` and `End` on the first and the last, so two `Enter`s around two items take the
+  rectangle between them; a brushable 3-D canvas takes the same keys.
 - `PageState.brush(panel, window)` and `Mark.Region`: the still of a rectangle a viewer has dragged out (a dashed box in the
   plot's units, with `select` for what it touches). On the page, `tda4j.brush(panel, [x0, x1, y0, y1])` draws or clears the
   rectangle and `tda4j.pointAt(panel, clientX, clientY)` gives the data under a point.

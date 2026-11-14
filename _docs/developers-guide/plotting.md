@@ -102,10 +102,11 @@ is what a control does to one item of a mark: `Shown(from, until)` (the item is 
 a disc, or of the balls of a 3-D layer, is `factor` times the value) and `Custom` (a kind of your own). A `Reaction` is a list of behaviors for one item,
 and a `Panel` is a `Figure` (`Panel.Flat`) or a `Scene` (`Panel.Spatial`) with a reaction for all items of a mark or one
 for each (`reactions: Map[markIndex, IndexedSeq[Reaction]]`, the convention of `paints`). A panel refuses a behavior its
-mark cannot carry out, naming the reason (`Radius` on a log axis, `Follows` on a 3-D layer). `Follows` is not built for 3-D:
-nothing in 3-D follows a value in the library's pages (the sweeping line is in the 2-D diagram), a coordinate that moves also
-moves the item in the layer's depth order, which the still and the canvas would have to recompute at every value, and a
-`Behavior.Custom` with a script does it for a page that needs it.
+mark cannot carry out, naming the reason (`Radius` on a log axis). `Follows` works on a 3-D layer too, in x, y or z of the data
+(`Behavior.followsZ`): the canvas gives each end that moves a slot of its own in the position table, rewrites it when the control
+moves and sorts the items again, because a coordinate that moves also moves the item in the depth order. The scene fits its
+frame to every place an item can reach (`Scene.fitted`), so the picture stays still while a plane rises; the still of a value
+does the same sums in Scala.
 
 **Stills are the reference semantics.** `Interactive.at(values)` applies the behaviors in Scala: it filters the items
 with `Shown`, moves the ends with `Follows`, resizes the discs, and draws the figure again, with the axes pinned to the
@@ -140,8 +141,8 @@ of `Behavior`, its rule in `inside`/`follow` for the stills, in `Svg.Tags` for t
 `Panel.sweepDiagram` turns a diagram into segments that grow until the line passes their death and then points. The cells are
 reactions of their own (`Shown` from the value at which each enters), so the page holds every cell up to the largest scale
 (`maxCells` refuses a page that would be too large, and says to lower the scale). Above `Plot.svgCells` (20,000) cells the complex
-is drawn on a canvas seen from above instead of an SVG (`Scene` with `turns = false`: a drag pans, the wheel zooms about the
-pointer, and no axes), which takes about a seventh of the bytes and a hundredth of the elements; `canvas = true` or `false`
+is drawn on a canvas seen from above instead of an SVG (`Scene` with `turns = false` and `axes = true`: a drag pans, the wheel
+zooms about the pointer, and the axes are redrawn for what the plot area shows), which takes about a seventh of the bytes and a hundredth of the elements; `canvas = true` or `false`
 chooses. A 3-D page's balls are a `Layer.Balls` whose radius is a `Radius` reaction of the slider. The scene's range comes from
 the points, not from the balls, so that the frame stays still while they grow and a ball larger than the picture is cut at its edge.
 
@@ -159,19 +160,31 @@ page keeps pinned keys (click, shift-click, brush) and hovered keys apart and sh
 whose boxes touch it; the click that ends a drag is swallowed. The rectangle is page state like the others: `PageState.brush(panel,
 window)` is the still of it, a `Mark.Region` (a translucent dashed box in data units that does not enter the plot's range) added by `Interactive.at`, which refuses a panel that is not brushable and a window the axis
 cannot place. What the rectangle touches is chosen with `select`, as the page does, so a state with both is what a viewer sees.
-On a 3-D canvas an item is chosen by pointing, nearest first; a rectangle is not built there.
+On a 3-D canvas an item is chosen by pointing, nearest first, and `Panel.Spatial.brushable(name)` adds a rectangle: the `box`
+button makes a drag draw one (otherwise a drag turns or pans the picture), in the plane of the view and in the units of the frame
+radius, x to the right and y up, whatever the zoom, pan and canvas size (`PageState.brush` and `Interactive.touched` speak those
+units, and the still draws the rectangle there). What a rectangle touches is geometric and the same in Scala (`Scene.touching`)
+and in the page: a point whose centre is in it, a segment that meets it, a triangle that overlaps it; sizes and widths do not
+count. A rectangle chooses only what the canvas draws now, so an item a `Shown` hides stays out.
 
 **The keyboard.** A brushable or zoomable picture takes focus (`tabindex=0`). Where a drag pans, the arrows pan by 10% of the window
 (`Shift`: 50%); `+`, `-` and `0` zoom about the middle and show everything. Where a drag chooses, the arrows move a cross
-(`.tda4j-cursor`, 4% of the plot area, `Shift`: 16%), `Enter` or space sets a corner and then chooses (with `Shift`: adds), and
-`Escape` or leaving the picture lets go. The cross and the rectangle go through the same `choose` as a drag, so one rule decides
+(`.tda4j-cursor`, 4% of the plot area, `Shift`: 16%), `]` and `[` (or `Page Down` and `Page Up`) put it on the next and the
+previous item the rectangle can choose, in the plot area, left to right and top to bottom, and `Home` and `End` on the first and
+the last (the middle of an item's box; every item at one place lights up, as a click there would choose them all). `Enter` or space
+sets a corner and then chooses (with `Shift`: adds), and `Escape` or leaving the picture lets go. So a rectangle can have items for
+corners, however far apart they are. A brushable 3-D canvas takes the same keys whenever it has focus, with the box button on or
+off: the arrows move the cross over the plot area, the stepping keys step through the items drawn (a point, the middle of a
+segment, the centroid of a triangle). The cross and the rectangle go through the same `choose` as a drag, so one rule decides
 what a rectangle touches.
 
 **Touch.** A flat picture listens to touch events and sets `touch-action: pan-x pan-y`: one finger scrolls the page (and a tap
 chooses), two fingers zoom by the distance between them and pan by their midpoint (`keep` puts the point between the fingers
 where it was, on every kind of axis, reversed ones included). A 3-D canvas listens to pointer events with `touch-action: none`,
-so one finger turns it and two pinch; the page around it scrolls from outside the canvas. A brush by touch is not offered: the
-finger that would drag it is the one that scrolls.
+so one finger turns it and two pinch; the page around it scrolls from outside the canvas. A brush by touch is an opt-in, because the
+finger that would drag it is the one that scrolls: a brushable flat picture has a `touch` button that lets one finger draw the
+rectangle (`touch-action: none` while it is on), a 3-D canvas turns a finger into the rectangle with its `box` button, a second
+finger landing is a pinch and drops the rectangle, and a cancelled touch clears it.
 
 **Zoom.** `Panel.Flat.zoomable(axes)` asks the renderer for zoom tags (`Svg.Tags.zoom`): each mark is wrapped by kind (`<g data-z="s">`
 for strokes and areas, moved by one `matrix()` with `vector-effect: non-scaling-stroke`; `<g data-z="p">` for points and text, each
@@ -191,7 +204,7 @@ in the still and on the page alike. Axes the page cannot draw again are refused 
 axes' lines and words, the halos and the cycles, the rectangle, the keyboard's and the touch gestures' effects, and the canvas
 through the context it draws on. The CI job `interactive-pages` of `test.yml` writes the Gallery and runs the script in all three
 (Playwright 1.63.0). Touch gestures reach the page through the Chrome DevTools protocol and so run in Chromium only. A change to
-the page runtime, `Svg.niceTicks`, `Svg.number` or a renderer tag is checked there. The job runs when the other build jobs do:
+the page runtime, `Svg.niceTicks`, `Svg.number`, `Scene.tickScript` or a renderer tag is checked there. The job runs when the other build jobs do:
 a pull request that touches only `.github/` or `.claude/`, the script included, skips it, so run the script yourself after
 changing it.
 
