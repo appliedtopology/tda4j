@@ -1061,7 +1061,8 @@ object Plot:
             title = name,
             azimuth = if flat then 0 else Scene().azimuth,
             elevation = if flat then 90 else Scene().elevation,
-            turns = !flat
+            turns = !flat,
+            axes = flat
           )
         )
         Panel.Spatial(

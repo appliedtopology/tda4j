@@ -782,6 +782,7 @@ final case class Interactive(
       .replace("__ID__", id)
       .replace("__CONTROLS__", spec)
       .replace("__SELECTIONS__", choices)
+      .replace("__TICKS__", Scene.tickScript)
       .replace("__SCRIPTS__", mine)
     s"""<div id="$id" class="tda4j-ia">
        |<style>${Interactive.styles(
@@ -1341,6 +1342,7 @@ object Interactive:
             coordinate match
               case Coordinate.X => ((if first then x else ax, ay), (if second then x else bx, by))
               case Coordinate.Y => ((ax, if first then x else ay), (bx, if second then x else by))
+              case Coordinate.Z => ((ax, ay), (bx, by)) // a 2-D mark has no z (`fitsMark` refuses it)
           }
         case (end, _) => end
       }
@@ -1634,12 +1636,29 @@ object Interactive:
       |    if(!svg._dragged)return;
       |    try{svg.releasePointerCapture(ev.pointerId);}catch(e){}
       |    choose(Math.min(start[0],ev.clientX),Math.min(start[1],ev.clientY),Math.max(start[0],ev.clientX),Math.max(start[1],ev.clientY),ev.shiftKey);});
-      |  // the keyboard: arrows move a cross over the plot area (shift: further), Enter sets the first corner and then the second, which
-      |  // chooses (with shift: adds), Escape lets go; where a drag pans, the arrows pan
+      |  // the keyboard: arrows move a cross over the plot area (shift: further), ] and [ put it on the next and the previous item (left to
+      |  // right, top to bottom; Page Down and Page Up too), Home and End on the first and the last, Enter sets the first corner and then
+      |  // the second, which chooses (with shift: adds), Escape lets go; where a drag pans, the arrows pan
       |  const cursorAt=(x,y)=>{
       |    if(!svg._cur){svg._cur=document.createElementNS(NS,'path');svg._cur.setAttribute('class','tda4j-cursor');svg.appendChild(svg._cur);}
       |    svg._cur.setAttribute('d','M'+(x-8)+' '+y+'H'+(x+8)+'M'+x+' '+(y-8)+'V'+(y+8));};
-      |  const leave=()=>{kb=null;if(svg._cur){svg._cur.remove();svg._cur=null;}};
+      |  const leave=()=>{if(kb)hover(svg,namesOf(list),null);kb=null;if(svg._cur){svg._cur.remove();svg._cur=null;}};
+      |  // the middles of the items the rectangle can choose, in the plot area, in the order the cross steps through them
+      |  const placesOf=P=>{const m=svg.getScreenCTM().inverse(),out=[];
+      |    for(const it of list){if(!it.el.getClientRects().length||!it.picks.some(p=>p.n===n))continue;
+      |      const r=it.el.getBoundingClientRect(),q=new DOMPoint((r.left+r.right)/2,(r.top+r.bottom)/2).matrixTransform(m);
+      |      if(q.x>=P.x&&q.x<=P.x+P.w&&q.y>=P.y&&q.y<=P.y+P.h)out.push([q.x,q.y,it]);}
+      |    return out.sort((u,v)=>u[0]-v[0]||u[1]-v[1]);};
+      |  const stepTo=(P,dir)=>{const ps=placesOf(P);if(!ps.length)return;let q;
+      |    if(dir==='first'||(dir==='next'&&!kb))q=ps[0];
+      |    else if(dir==='last'||(dir==='prev'&&!kb))q=ps[ps.length-1];
+      |    else if(dir==='next')q=ps.find(u=>u[0]>kb.x+1e-6||(Math.abs(u[0]-kb.x)<=1e-6&&u[1]>kb.y+1e-6));
+      |    else q=ps.slice().reverse().find(u=>u[0]<kb.x-1e-6||(Math.abs(u[0]-kb.x)<=1e-6&&u[1]<kb.y-1e-6));
+      |    if(!q)return;
+      |    kb=kb||{x:q[0],y:q[1],from:null};kb.x=q[0];kb.y=q[1];
+      |    // every item at that place lights up, as a click there would choose them all
+      |    const here=ps.filter(u=>Math.abs(u[0]-q[0])<=1e-6&&Math.abs(u[1]-q[1])<=1e-6);
+      |    cursorAt(kb.x,kb.y);if(kb.from)showBox(kb.from,kb);hover(svg,namesOf(list),{picks:here.flatMap(u=>u[2].picks)});};
       |  svg.addEventListener('keydown',ev=>{
       |    if(svg._pan||ev.ctrlKey||ev.metaKey||ev.altKey)return;
       |    const ax=axesOf(svg),P=ax?{x:ax[0].o,y:ax[1].o,w:ax[0].n,h:ax[1].n}:{x:0,y:0,w:svg.viewBox.baseVal.width,h:svg.viewBox.baseVal.height};
@@ -1647,6 +1666,8 @@ object Interactive:
       |    if(d){ev.preventDefault();kb=kb||{x:P.x+P.w/2,y:P.y+P.h/2,from:null};const step=ev.shiftKey?0.16:0.04;
       |      kb.x=Math.min(Math.max(kb.x+d[0]*step*P.w,P.x),P.x+P.w);kb.y=Math.min(Math.max(kb.y+d[1]*step*P.h,P.y),P.y+P.h);
       |      cursorAt(kb.x,kb.y);if(kb.from)showBox(kb.from,kb);return;}
+      |    const dir={']':'next','}':'next',PageDown:'next','[':'prev','{':'prev',PageUp:'prev',Home:'first',End:'last'}[ev.key];
+      |    if(dir){ev.preventDefault();stepTo(P,dir);return;}
       |    if((ev.key==='Enter'||ev.key===' ')&&kb){ev.preventDefault();
       |      if(!kb.from){clearBoxes();kb.from={x:kb.x,y:kb.y};showBox(kb.from,kb);return;}
       |      const m=svg.getScreenCTM(),a=new DOMPoint(kb.from.x,kb.from.y).matrixTransform(m),b=new DOMPoint(kb.x,kb.y).matrixTransform(m);
@@ -1663,15 +1684,7 @@ object Interactive:
       |  const box=svg.closest('.tda4j-panel');const bn=box&&box.getAttribute('data-brush');
       |  if(bn&&sel[bn]){svg.setAttribute('tabindex','0');brushing(svg,list,bn,Array.from(root.querySelectorAll('.tda4j-panel')).indexOf(box));}});
       |const MAXZ=200,zooms={};
-      |function numberText(v){const a=Math.abs(v);if(v===0)return '0';
-      |  if(a>=1e5||a<1e-3){if(a<1e-3&&a>=1e-4)return v.toPrecision(3);
-      |    const m=/^(-?[0-9.]+)e([+-])([0-9]+)$/.exec(v.toExponential(2));return m[1]+'e'+m[2]+(m[3].length<2?'0'+m[3]:m[3]);}
-      |  const s=String(Number(v.toPrecision(4)));return s==='-0'?'0':s;}
-      |function niceTicks(lo,hi,target){
-      |  if(!(hi>lo)||!isFinite(hi)||!isFinite(lo))return [lo];
-      |  const raw=(hi-lo)/target,mag=Math.pow(10,Math.floor(Math.log10(raw))),norm=raw/mag;
-      |  const step=mag*(norm<1.5?1:norm<3?2:norm<7?5:10),first=Math.ceil(lo/step-1e-9),last=Math.floor(hi/step+1e-9),out=[];
-      |  for(let i=first;i<=last;i++){const t=i*step;out.push(t===0?0:t);}return out;}
+      |__TICKS__
       |const inv={i:u=>u,l:u=>Math.pow(10,u),s:u=>Math.sign(u)*u*u,m:(u,c)=>Math.sign(u)*c*(Math.pow(10,Math.abs(u))-1)};
       |// numbers as the plot writes them: `String.format`'s %f and %e (rounding the shortest decimal half up, as Java does) and NumberStyle
       |function digitsOf(a){if(a===0)return {d:'0',e:0};

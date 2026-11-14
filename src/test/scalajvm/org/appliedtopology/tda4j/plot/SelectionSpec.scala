@@ -358,14 +358,17 @@ class SelectionSpec extends Specification:
         .and(panel.selecting(5, "c", IndexedSeq(0)) must throwAn[IllegalArgumentException](".*no mark 5.*"))
     }
 
-    "carry a selection to a 3-D layer, and no slider's coordinate" in {
+    "carry a selection and a slider's coordinate to a 3-D layer, and no radius to points" in {
       val scene = Scene(Vector(Layer.Points(IndexedSeq((0.0, 0.0, 0.0)), IndexedSeq(Paint.Ink), 3.0)))
       val carried = Panel(scene).react(scene.layers.head, Behavior.selected("c", 0))
-      (carried.reactions.size === 1).and(
-        Panel(scene).react(scene.layers.head, Behavior.followsX("t")) must throwAn[IllegalArgumentException](
-          ".*cannot be attached.*"
+      val moving = Panel(scene).react(scene.layers.head, Behavior.followsX("t"))
+      (carried.reactions.size === 1)
+        .and(moving.reactions.size === 1)
+        .and(
+          Panel(scene).react(scene.layers.head, Behavior.radius("t")) must throwAn[IllegalArgumentException](
+            ".*cannot be attached.*"
+          )
         )
-      )
     }
 
     "refuse a still of a selection the plot does not have" in {

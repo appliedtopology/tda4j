@@ -113,26 +113,30 @@ const describe = (svg, visibleOnly) => {
 // check can count the items, find where one is, and compare them with the still picture of the same state.
 const spy = `(() => {
   const P = CanvasRenderingContext2D.prototype, o = {};
-  for (const m of ['beginPath', 'moveTo', 'lineTo', 'arc', 'rect', 'fill', 'stroke', 'fillRect']) o[m] = P[m];
-  let path = null; window.__shapes = [];
-  P.fillRect = function (...a) { window.__shapes = []; return o.fillRect.apply(this, a); };
+  for (const m of ['beginPath', 'moveTo', 'lineTo', 'arc', 'rect', 'fill', 'stroke', 'fillRect', 'fillText']) o[m] = P[m];
+  let path = null; window.__shapes = []; window.__texts = [];
+  P.fillRect = function (...a) { window.__shapes = []; window.__texts = []; return o.fillRect.apply(this, a); };
+  P.fillText = function (t, x, y) { window.__texts.push({ text: t, x, y, align: this.textAlign }); return o.fillText.apply(this, arguments); };
   P.rect = function (x, y, w, h) { if (path) path.push(['r', x, y, w, h]); return o.rect.call(this, x, y, w, h); };
   P.beginPath = function () { path = []; return o.beginPath.call(this); };
   P.moveTo = function (x, y) { if (path) path.push(['m', x, y]); return o.moveTo.call(this, x, y); };
   P.lineTo = function (x, y) { if (path) path.push(['l', x, y]); return o.lineTo.call(this, x, y); };
   P.arc = function (x, y, r, a, b) { if (path) path.push(['a', x, y, r]); return o.arc.call(this, x, y, r, a, b); };
-  P.fill = function () { if (path) window.__shapes.push({ op: 'fill', alpha: this.globalAlpha, path: path.slice() }); return o.fill.apply(this, arguments); };
-  P.stroke = function () { if (path) window.__shapes.push({ op: 'stroke', alpha: this.globalAlpha, width: this.lineWidth, path: path.slice() }); return o.stroke.apply(this, arguments); };
+  // ink is the font in force: only the axes of a flat canvas set one, so their lines are told apart from the items by it
+  P.fill = function () { if (path) window.__shapes.push({ op: 'fill', alpha: this.globalAlpha, path: path.slice(), ink: this.font }); return o.fill.apply(this, arguments); };
+  P.stroke = function () { if (path) window.__shapes.push({ op: 'stroke', alpha: this.globalAlpha, width: this.lineWidth, path: path.slice(), ink: this.font }); return o.stroke.apply(this, arguments); };
 })()`;
 // the kind of a recorded shape: a triangle, a segment, a disc (point, ball or halo)
 const kindOf = s => s.path[0][0] === 'r' ? 'box' : s.path[0][0] === 'a' ? (s.op === 'fill' ? 'disc' : 'ring') : s.path.length === 3 ? 'triangle' : 'segment';
-const kinds = shapes => { const n = { triangle: 0, segment: 0, disc: 0 }; shapes.forEach(s => { const k = kindOf(s); if (k in n) n[k]++; }); return n; };
+// the axes of a flat canvas (lines drawn with a font in force; Chromium, Firefox and WebKit all start from 10px sans-serif) are no item
+const axisShape = s => s.ink !== undefined && s.ink !== '10px sans-serif';
+const kinds = shapes => { const n = { triangle: 0, segment: 0, disc: 0 }; shapes.filter(s => !axisShape(s)).forEach(s => { const k = kindOf(s); if (k in n) n[k]++; }); return n; };
 // what a still picture holds, read in a blank page (Node has no DOM): the counts of the scene's polygons, lines and circles
 // per 3-D scene, and the balls (the circles of opacity 0.09)
 const reader = await browser.newPage();
 const inStill = (text, fn) => reader.evaluate(`(() => { const doc = new DOMParser().parseFromString(${JSON.stringify(text.replace(/^<\?xml[^>]*\?>\s*/, ''))}, 'image/svg+xml'); return (${fn.toString()})(doc); })()`);
 const stillKinds = text => inStill(text, doc => { const scenes = [...doc.querySelectorAll('svg[id^="tda4j3d"]')];
-  return (scenes.length ? scenes : [doc]).map(s => ({ triangle: s.querySelectorAll('polygon').length, segment: s.querySelectorAll('line').length, disc: s.querySelectorAll('circle').length })); });
+  return (scenes.length ? scenes : [doc]).map(s => ({ triangle: s.querySelectorAll('polygon').length, segment: s.querySelectorAll('line:not(.tda4j-axes line)').length, disc: s.querySelectorAll('circle').length })); });
 const stillBalls = text => inStill(text, doc => [...doc.querySelectorAll('circle')].filter(c => /fill-opacity:0\.09(;|$)/.test(c.getAttribute('style') || ''))
   .map(c => ({ x: +c.getAttribute('cx'), y: +c.getAttribute('cy'), r: +c.getAttribute('r') })));
 const middle = s => { const pts = s.path.map(p => p.slice(1, 3)); return [pts.reduce((a, p) => a + p[0], 0) / pts.length, pts.reduce((a, p) => a + p[1], 0) / pts.length]; };
@@ -292,6 +296,59 @@ const read = f => fs.readFileSync(dir + '/' + f, 'utf8');
   check(near(await window_(), [-0.15, 0.15, 0.35, 0.55], 1e-6) && boxes(await shapes()).length === 1, 'brush(panel, window) puts the same rectangle on the page');
   await api('t.brush(0, null);');
   check((await window_()) === null && boxes(await shapes()).length === 0, 'brush(panel, null) takes it away');
+  // the keyboard: ] [ Home End step through the items drawn (left to right, top to bottom), and two Enters take the rectangle between
+  // two of them, which a drag over a hair more than the same rectangle takes just the same
+  {
+    await api("t.set('t', 0); t.select('item', []);"); await settle();
+    // at t = 0 the chosen things are the triangle (key 20), the segment (key 10) and two points on one place (keys 0 and 2); the six small
+    // points that frame the picture choose nothing, and key 1 is not shown yet
+    const found = (await shapes()).filter(s => ['triangle', 'segment'].includes(kindOf(s)) || (kindOf(s) === 'disc' && s.alpha === 1 && s.path[0][3] === 4)).map(middle);
+    const order = found.filter((p, i) => found.findIndex(q => Math.abs(q[0] - p[0]) < 1e-6 && Math.abs(q[1] - p[1]) < 1e-6) === i).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const litAt = [[20], [10], [0, 2]];
+    const crossNow = () => page.evaluate(() => { const c = window.__shapes.find(s => s.op === 'stroke' && s.width === 1.5 && s.path.length === 4 && s.ink === '10px sans-serif'); return c ? [c.path[0][1] + 8, c.path[0][2]] : null; });
+    const toPixels = ([x, y]) => page.evaluate(([x, y]) => { const cv = document.querySelector('canvas'), r = cv.getBoundingClientRect(), k = r.width / cv.clientWidth; return [r.left + x * k, r.top + y * k]; }, [x, y]);
+    const key = async (k, n = 1) => { for (let i = 0; i < n; i++) await page.keyboard.press(k); await page.waitForTimeout(30); };
+    const onPlace = async (i, what) => { const c = await crossNow(), want = order[i], lit = await chosen();
+      check(c && Math.abs(c[0] - want[0]) < 0.6 && Math.abs(c[1] - want[1]) < 0.6 && JSON.stringify(lit) === JSON.stringify(litAt[i]),
+        `${what}: the cross is on place ${i} of ${order.length} and lights [${litAt[i]}]: cross ${c && c.map(v => v.toFixed(1))}, wanted ${want.map(v => v.toFixed(1))}, lit [${lit}]`); };
+    check(order.length === 3, `${order.length} places to step through: the triangle's middle, the segment's and the points'`);
+    await page.mouse.move(6, 6); await page.focus('canvas'); await page.waitForTimeout(100);
+    await key(']'); await onPlace(0, '] with no cross');
+    await key(']'); await onPlace(1, '] again');
+    await key(']'); await onPlace(2, 'a third time: both points at that place light up');
+    await key(']'); await onPlace(2, '] at the last place stays');
+    await key('['); await onPlace(1, '[');
+    await key('Home'); await onPlace(0, 'Home');
+    await key('['); await onPlace(0, '[ at the first place stays');
+    await key('End'); await onPlace(2, 'End');
+    await key('Escape');
+    check(await crossNow() === null && (await chosen()).length === 0, 'Escape takes the cross away and puts the light out');
+    // the keyboard and the mouse take the same rectangle (the mouse's is two pixels larger all round: no item is within two pixels of it)
+    const outset = ([a, b]) => [[Math.min(a[0], b[0]) - 2, Math.min(a[1], b[1]) - 2], [Math.max(a[0], b[0]) + 2, Math.max(a[1], b[1]) + 2]];
+    for (const [i, j, expected] of [[0, 1, [0, 2, 10, 20]], [0, 2, [0, 2, 20]]]) {
+      await api("t.select('item', []);"); await settle(); await page.mouse.move(6, 6);
+      await page.focus('canvas'); await key('Home'); await key(']', i); await key('Enter'); await key('Home'); await key(']', j);
+      const [a, b] = [await toPixels(order[i]), await toPixels(order[j])];
+      await key('Enter');
+      const byKeys = await chosen(), win = await window_();
+      check(JSON.stringify(byKeys) === JSON.stringify(expected), `places ${i} and ${j} as corners choose [${expected}]: [${byKeys}]`);
+      check(await crossNow() === null && boxes(await shapes()).length === 1 && win && win[0] < win[1] && win[2] < win[3], `the cross is gone, the rectangle stays and is a window: [${win && win.map(v => v.toFixed(3))}]`);
+      await api("t.select('item', []);"); await settle();
+      const [c, d] = outset([a, b]);
+      await page.mouse.move(...c); await page.mouse.down(); await page.mouse.move(...d, { steps: 6 }); await page.mouse.up(); await page.mouse.move(6, 6); await settle();
+      check(JSON.stringify(await chosen()) === JSON.stringify(byKeys), `a drag over the same corners chooses the same: [${await chosen()}]`);
+    }
+    // Enter at one place twice chooses what is there (a rectangle of no size), the next place replaces it, and shift adds
+    await api("t.select('item', []);"); await settle(); await page.focus('canvas');
+    await key('Home'); await key('Enter'); await key('Enter');
+    const there = await chosen();
+    await key('Home'); await key(']'); await key('Enter'); await key('Enter');
+    check(JSON.stringify(there) === '[20]' && JSON.stringify(await chosen()) === '[10]', `two Enters at a place choose what is there, and the next place replaces it: [${there}] then [${await chosen()}]`);
+    await key('Home'); await key('Enter'); await page.keyboard.press('Shift+Enter'); await settle();
+    check(JSON.stringify(await chosen()) === '[10,20]', `with shift it is added: [${await chosen()}]`);
+    await api("t.select('item', []); t.brush(0, null);"); await settle();
+  }
+
   // box mode off again: a drag turns
   await button.click();
   check(await button.getAttribute('aria-pressed') === 'false', 'a second click on the box button lets go of it');
@@ -463,6 +520,212 @@ const read = f => fs.readFileSync(dir + '/' + f, 'utf8');
   check(Math.abs(p1[1] - p0[1]) < 1 && Math.abs(p1[2] - p0[2]) < 1, `zooming at a point keeps it in place (${(p1[1] - p0[1]).toFixed(2)}, ${(p1[2] - p0[2]).toFixed(2)})`);
   check(s1 > 1.3 * s0 && s1 < 1.7 * s0, `the picture grew from ${s0.toFixed(0)} to ${s1.toFixed(0)} px across`);
   check(errors.length === 0, `no errors on the large page ${errors.join(' | ')}`);
+  await page.close();
+}
+
+// the pixels that differ from the first one in the strips above and to the right of a plot box of a canvas: nothing is drawn there
+const marginOf = (page, box) => page.evaluate(([x0, y0, x1, y1]) => { const c = document.querySelector('canvas'), k = c.width / c.getBoundingClientRect().width, ctx = c.getContext('2d');
+  const strip = (xa, ya, xb, yb) => { const d = ctx.getImageData(Math.round(xa * k), Math.round(ya * k), Math.max(1, Math.round((xb - xa) * k)), Math.max(1, Math.round((yb - ya) * k))).data;
+    let odd = 0; for (let i = 4; i < d.length; i += 4) if (d[i] !== d[0] || d[i + 1] !== d[1] || d[i + 2] !== d[2]) odd++; return odd; };
+  return [strip(x0, 0, x1, y0 - 1), strip(x1 + 1, 0, c.getBoundingClientRect().width, y1)]; }, box);
+// a checksum of the same two strips, to tell whether anything was painted over them since the last look (a uniform tint passes marginOf)
+const marginHash = (page, box) => page.evaluate(([x0, y0, x1, y1]) => { const c = document.querySelector('canvas'), k = c.width / c.getBoundingClientRect().width, ctx = c.getContext('2d');
+  const sum = (xa, ya, xb, yb) => { const d = ctx.getImageData(Math.round(xa * k), Math.round(ya * k), Math.max(1, Math.round((xb - xa) * k)), Math.max(1, Math.round((yb - ya) * k))).data;
+    let h = 0; for (let i = 0; i < d.length; i++) h = (h * 31 + d[i]) % 1000003; return h; };
+  return [sum(x0, 0, x1, y0 - 1), sum(x1 + 1, 0, c.getBoundingClientRect().width, y1)]; }, box);
+// the axes of a flat canvas as the spy saw them (helpers of the next two blocks)
+// what the canvas painted last: the plot box (the first two lines), the tick marks, the tick words, and where the discs are
+const paintedOf = page => page.evaluate(() => {
+  const plain = s => s.ink === undefined || s.ink === '10px sans-serif';
+  const lines = window.__shapes.filter(s => !plain(s)).map(s => [s.path[0][1], s.path[0][2], s.path[1][1], s.path[1][2]]);
+  return { lines, texts: window.__texts, discs: window.__shapes.filter(s => plain(s) && s.path[0][0] === 'a' && s.op === 'fill').map(s => [s.path[0][1], s.path[0][2]]) };
+});
+// the axes as numbers: a tick is its value and the pixel it is drawn at
+const ticksOf = p => {
+  const [bottom, left] = p.lines;
+  const marks = p.lines.slice(2);
+  const xm = marks.filter(l => l[0] === l[2]).map(l => l[0]), ym = marks.filter(l => l[1] === l[3]).map(l => l[1]);
+  const xw = p.texts.filter(t => t.align === 'center'), yw = p.texts.filter(t => t.align === 'right');
+  return { box: [left[0], left[1], bottom[2], bottom[3]], xm, ym, xw: xw.map(t => t.text), yw: yw.map(t => t.text), xwAt: xw.map(t => t.x) };
+};
+// the pixel of a data value according to the ticks: the line through the first and the last
+const place = (marks, words) => { const v = words.map(parseFloat), a = 0, b = words.length - 1; return x => marks[a] + (x - v[a]) / (v[b] - v[a]) * (marks[b] - marks[a]); };
+const fits = (marks, words) => { const f = place(marks, words), v = words.map(parseFloat); return words.length >= 3 && v.every((x, i) => Math.abs(f(x) - marks[i]) < 0.01); };
+
+{ // the axes of a flat canvas: the ticks it paints are the still's at the start, and after a zoom and a pan they still say what the picture shows
+  const { points } = JSON.parse(read('interactive-large.json'));
+  const page = await browser.newPage({ viewport: { width: 1800, height: 800 } });
+  const errors = [];
+  page.on('pageerror', e => errors.push(String(e)));
+  page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+  await page.addInitScript(spy);
+  await page.goto('file://' + dir + '/interactive-large.html');
+  const painted = () => paintedOf(page);
+  // does every data point have its disc where the ticks put it?
+  const agree = (p, t) => { const px = place(t.xm, t.xw), py = place(t.ym, t.yw);
+    const miss = points.filter(([x, y]) => !p.discs.some(d => Math.abs(d[0] - px(x)) < 0.6 && Math.abs(d[1] - py(y)) < 0.6));
+    return miss.length; };
+
+  const p0 = await painted(), t0 = ticksOf(p0);
+  check(t0.xw.length >= 3 && t0.yw.length >= 3 && t0.xm.length === t0.xw.length && t0.ym.length === t0.yw.length, `the canvas has a mark for each word: x ${t0.xw}, y ${t0.yw}`);
+  check(t0.xwAt.every((x, i) => Math.abs(x - t0.xm[i]) < 1e-6), 'each word of the x axis stands at its mark');
+  check(fits(t0.xm, t0.xw) && fits(t0.ym, t0.yw), 'the marks are evenly spaced as their words say');
+  check(agree(p0, t0) === 0, `at the start every point is where its ticks put it (${agree(p0, t0)} of ${points.length} are not)`);
+  // the still of the same picture: the same words, at the same places in the plot box
+  const stillAxes = await inStill(read('interactive-large-still.svg'), doc => {
+    const g = doc.querySelector('g.tda4j-axes'), ls = [...g.querySelectorAll('line')].map(l => ['x1', 'y1', 'x2', 'y2'].map(a => +l.getAttribute(a)));
+    const [bottom, left] = ls, marks = ls.slice(2), box = [left[0], left[1], bottom[2], bottom[3]];
+    const xs = marks.filter(l => l[0] === l[2]).map(l => (l[0] - box[0]) / (box[2] - box[0])), ys = marks.filter(l => l[1] === l[3]).map(l => (l[1] - box[1]) / (box[3] - box[1]));
+    return { xs, ys, xw: [...g.querySelectorAll('text[text-anchor=middle]')].map(t => t.textContent), yw: [...g.querySelectorAll('text[text-anchor=end]')].map(t => t.textContent) };
+  });
+  const frac = (ms, lo, hi) => ms.map(m => (m - lo) / (hi - lo));
+  const near = (a, b) => a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) < 0.003);
+  check(JSON.stringify(t0.xw) === JSON.stringify(stillAxes.xw) && JSON.stringify(t0.yw) === JSON.stringify(stillAxes.yw), `the canvas says ${t0.xw} / ${t0.yw}, the still ${stillAxes.xw} / ${stillAxes.yw}`);
+  check(near(frac(t0.xm, t0.box[0], t0.box[2]), stillAxes.xs) && near(frac(t0.ym, t0.box[1], t0.box[3]), stillAxes.ys), 'the marks stand at the same fractions of the plot box as the still\'s');
+
+  const cv = await page.evaluate(() => { const r = document.querySelector('canvas').getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; });
+  // the wheel zooms about a point of the picture: the words change, and they still say where things are
+  const [qx, qy] = [cv[0] + t0.box[0] + 0.3 * (t0.box[2] - t0.box[0]), cv[1] + t0.box[1] + 0.6 * (t0.box[3] - t0.box[1])];
+  await page.mouse.move(qx, qy); await page.mouse.wheel(0, -500); await page.waitForTimeout(200);
+  const p1 = await painted(), t1 = ticksOf(p1);
+  check(JSON.stringify(t1.xw) !== JSON.stringify(t0.xw), `zooming in changes the words: ${t0.xw} then ${t1.xw}`);
+  check(t1.xw.length >= 3 && fits(t1.xm, t1.xw) && fits(t1.ym, t1.yw), 'the words are evenly spaced after the zoom');
+  check(agree(p1, t1) === 0, `after the zoom every point is where its ticks put it (${agree(p1, t1)} of ${points.length} are not)`);
+  check(JSON.stringify(t1.box) === JSON.stringify(t0.box), 'the plot box does not move with the picture');
+  // a drag pans: the words follow
+  await page.mouse.move(cv[0] + t0.box[0] + 100, cv[1] + t0.box[1] + 100); await page.mouse.down();
+  await page.mouse.move(cv[0] + t0.box[0] + 330, cv[1] + t0.box[1] + 40, { steps: 8 }); await page.mouse.up(); await page.waitForTimeout(200);
+  const p2 = await painted(), t2 = ticksOf(p2);
+  check(JSON.stringify(t2.xw) !== JSON.stringify(t1.xw) || JSON.stringify(t2.yw) !== JSON.stringify(t1.yw), `panning changes the words: ${t1.xw} / ${t1.yw} then ${t2.xw} / ${t2.yw}`);
+  check(fits(t2.xm, t2.xw) && fits(t2.ym, t2.yw), 'the words are evenly spaced after the pan');
+  check(agree(p2, t2) === 0, `after the pan every point is where its ticks put it (${agree(p2, t2)} of ${points.length} are not)`);
+  // the items are cut at the plot box: a disc centred beyond it leaves nothing in the margin above or to the right of it
+  const beyond = p2.discs.filter(d => d[1] < t2.box[1] - 1 || d[0] > t2.box[2] + 1).length;
+  const margin = await marginOf(page, t2.box);
+  check(beyond > 0, `after zooming and panning ${beyond} discs are centred above or right of the plot box, so the clip has something to hide`);
+  check(margin[0] === 0 && margin[1] === 0, `the margins above and right of the plot box hold nothing but the surface (${margin} pixels differ)`);
+  check(errors.length === 0, `no errors on the canvas axes ${errors.join(' | ')}`);
+  await page.close();
+}
+
+{ // a flat canvas with axes whose points choose and that takes a rectangle: pointing and the rectangle see only what the plot area shows
+  const page = await browser.newPage({ viewport: { width: 1300, height: 800 } });
+  const errors = [];
+  page.on('pageerror', e => errors.push(String(e)));
+  page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+  await page.addInitScript(spy);
+  await page.goto('file://' + dir + '/interactive-axes-pick.html');
+  const grid = []; for (const y of [-1, 0, 1]) for (const x of [-2, -1, 0, 1, 2]) grid.push([x, y]); // the Gallery's points: the key is the index
+  const cv = await page.evaluate(() => { const r = document.querySelector('canvas').getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; });
+  const chosen = () => page.evaluate(() => [...document.querySelector('.tda4j-ia').tda4j.selection('item')].sort((a, b) => a - b));
+  const view = async () => { const t = ticksOf(await paintedOf(page)); return { t, px: place(t.xm, t.xw), py: place(t.ym, t.yw) }; };
+  let v = await view();
+  const at = k => [cv[0] + v.px(grid[k][0]), cv[1] + v.py(grid[k][1])];
+  const corner = () => [cv[0] + v.t.box[0] + 3, cv[1] + v.t.box[1] + 3];
+  for (const k of [0, 7, 14]) {
+    await page.mouse.click(...corner()); await page.mouse.click(...at(k)); await page.waitForTimeout(80);
+    const got = await chosen();
+    check(got.length === 1 && got[0] === k, `pointing at item ${k} in the plot box chooses it: [${got}]`);
+  }
+  // a drag pans the picture down until the bottom row (keys 0 to 4) lies in the margin below the plot box
+  const dy = v.t.box[3] + 12 - v.py(-1);
+  await page.mouse.click(...corner());
+  await page.mouse.move(cv[0] + v.t.box[0] + 200, cv[1] + v.t.box[1] + 100); await page.mouse.down();
+  await page.mouse.move(cv[0] + v.t.box[0] + 200, cv[1] + v.t.box[1] + 100 + dy, { steps: 8 }); await page.mouse.up(); await page.waitForTimeout(150);
+  v = await view();
+  check(Math.abs(v.py(-1) - (v.t.box[3] + 12)) < 1, `the bottom row lies ${(v.py(-1) - v.t.box[3]).toFixed(1)} px below the plot box`);
+  await page.mouse.click(...at(2)); await page.waitForTimeout(80);
+  check((await chosen()).length === 0, `pointing at an item in the margin chooses nothing: [${await chosen()}]`);
+  await page.mouse.click(...at(7)); await page.waitForTimeout(80);
+  check(JSON.stringify(await chosen()) === '[7]', `pointing at one in the plot box still does: [${await chosen()}]`);
+  // the box button: a rectangle drawn only in the margin touches nothing, one that starts there takes what is inside the plot box
+  await page.click('.tda4j-box');
+  const drag = async (a, b) => { await page.mouse.move(...a); await page.mouse.down(); await page.mouse.move(...b, { steps: 8 }); await page.mouse.up(); await page.waitForTimeout(100); };
+  await drag([cv[0] + v.t.box[0] + 8, cv[1] + v.t.box[3] + 4], [cv[0] + v.t.box[2] - 8, cv[1] + v.t.box[3] + 22]);
+  check((await chosen()).length === 0, `a rectangle in the margin chooses nothing: [${await chosen()}]`);
+  await drag([cv[0] + v.t.box[0] + 8, cv[1] + v.t.box[3] + 22], [cv[0] + v.t.box[2] - 8, cv[1] + v.py(0) - 6]);
+  check(JSON.stringify(await chosen()) === '[5,6,7,8,9]', `a rectangle from the margin up past the middle row chooses that row alone: [${await chosen()}]`);
+  // the keyboard: ] [ Home End step through the items the plot box shows (left to right, top to bottom), and two Enters take the rectangle between two of them
+  await page.mouse.click(...corner());
+  await page.focus('canvas');
+  const crossNow = () => page.evaluate(() => { const c = window.__shapes.find(s => s.op === 'stroke' && s.width === 1.5 && s.path.length === 4 && s.ink === '10px sans-serif'); return c ? [c.path[0][1] + 8, c.path[0][2]] : null; });
+  const keyPress = async (k, n = 1) => { for (let i = 0; i < n; i++) await page.keyboard.press(k); await page.waitForTimeout(30); };
+  // what is in the plot box now: the bottom row (keys 0 to 4) is in the margin; top to bottom is y descending
+  const seen = [10, 5, 11, 6, 12, 7, 13, 8, 14, 9];
+  const where = k => [v.px(grid[k][0]), v.py(grid[k][1])];
+  const onItem = async (i, what) => { const c = await crossNow(), want = where(seen[i]), lit = await chosen();
+    check(c && Math.abs(c[0] - want[0]) < 0.6 && Math.abs(c[1] - want[1]) < 0.6 && JSON.stringify(lit) === JSON.stringify([seen[i]]),
+      `${what}: the cross is on item ${seen[i]} and lights it: cross ${c && c.map(x => x.toFixed(1))}, wanted ${want.map(x => x.toFixed(1))}, lit [${lit}]`); };
+  // a pointer move still waiting for its frame must not put out the light that the key has just lit (WebKit ran the frame after the key)
+  await page.evaluate(() => { const c = document.querySelector('canvas'), r = c.getBoundingClientRect();
+    c.dispatchEvent(new PointerEvent('pointermove', { clientX: r.left + 2, clientY: r.top + 2, pointerId: 1, bubbles: true }));
+    c.dispatchEvent(new KeyboardEvent('keydown', { key: ']', bubbles: true })); });
+  await page.waitForTimeout(80); await onItem(0, '] with no cross, a pointer move waiting for its frame');
+  await keyPress(']'); await onItem(1, '] again');
+  await keyPress(']', 2); await onItem(3, 'two more');
+  await keyPress('['); await onItem(2, '[');
+  await keyPress('End'); await onItem(9, 'End (the hidden row is skipped)');
+  await keyPress(']'); await onItem(9, '] at the last item stays');
+  await keyPress('Home'); await onItem(0, 'Home');
+  await keyPress('PageDown'); await onItem(1, 'Page Down');
+  await keyPress('PageDown'); await onItem(2, 'Page Down again');
+  await keyPress('PageUp'); await onItem(1, 'Page Up');
+  await keyPress('Home');
+  await keyPress('['); await onItem(0, '[ at the first item stays');
+  await keyPress('Escape');
+  check(await crossNow() === null && (await chosen()).length === 0, 'Escape takes the cross away and puts the light out');
+  // the rectangle from item 6 (x -1, y 0) to item 11 (x 2, y 1): the items of the plot box inside it
+  await keyPress('Home'); await keyPress(']', 3); await keyPress('Enter'); await keyPress(']', 5);
+  const rubberband = await page.evaluate(() => window.__shapes.some(s => s.path[0][0] === 'r'));
+  await keyPress('Enter');
+  const [xa, xb] = [-1, 2], [ya, yb] = [0, 1];
+  const expectKeys = grid.map((g, k) => [g, k]).filter(([g]) => g[0] >= xa && g[0] <= xb && g[1] >= ya && g[1] <= yb).map(([, k]) => k).sort((a, b) => a - b);
+  check(rubberband, 'the rectangle is drawn between the two Enters');
+  check(JSON.stringify(await chosen()) === JSON.stringify(expectKeys), `the rectangle between items 6 and 14 chooses what lies in it: [${await chosen()}], wanted [${expectKeys}]`);
+  check(await crossNow() === null, 'the cross is gone once it has chosen');
+  await keyPress('Home'); await keyPress('Enter'); await keyPress('Enter');
+  check(JSON.stringify(await chosen()) === '[10]', `two Enters on one item choose it alone: [${await chosen()}]`);
+  // the arrows move the cross a twenty-fifth of the plot box (shift: four twenty-fifths) and hold it inside
+  await page.mouse.click(...corner()); await page.focus('canvas');
+  const [bx0, by0, bx1, by1] = v.t.box, [mx0, my0] = [(bx0 + bx1) / 2, (by0 + by1) / 2];
+  const crossIs = async (want, what) => { const c = await crossNow(); check(c && Math.abs(c[0] - want[0]) < 0.6 && Math.abs(c[1] - want[1]) < 0.6, `${what}: ${c && c.map(x => x.toFixed(1))}, wanted ${want.map(x => x.toFixed(1))}`); };
+  await keyPress('ArrowRight'); await crossIs([mx0 + 0.04 * (bx1 - bx0), my0], 'one arrow moves the cross 4% of the box');
+  await keyPress('Shift+ArrowUp'); await crossIs([mx0 + 0.04 * (bx1 - bx0), my0 - 0.16 * (by1 - by0)], 'shift-arrow moves it 16%');
+  await keyPress('Shift+ArrowRight', 8); await crossIs([bx1, my0 - 0.16 * (by1 - by0)], 'and it stays inside the box on the right');
+  await keyPress('Shift+ArrowUp', 8); await crossIs([bx1, by0], 'and at the top');
+  await keyPress('Escape');
+  // a rectangle set from the data may reach beyond the plot box (here far beyond): it is cut at the box, over the margins as well
+  await page.mouse.click(...corner()); await page.waitForTimeout(100);
+  const quiet = await marginHash(page, v.t.box);
+  await page.evaluate(() => document.querySelector('.tda4j-ia').tda4j.brush(0, [-9, 9, -9, 9])); await page.waitForTimeout(100);
+  const over = await marginHash(page, v.t.box);
+  check(await page.evaluate(() => window.__shapes.some(s => s.path[0][0] === 'r')) && JSON.stringify(over) === JSON.stringify(quiet), `a rectangle larger than the plot box leaves the margins above and right of it as they were (${quiet} then ${over})`);
+  await page.evaluate(() => document.querySelector('.tda4j-ia').tda4j.brush(0, null));
+  check(errors.length === 0, `no errors on the flat axes page ${errors.join(' | ')}`);
+  await page.close();
+}
+
+{ // two items on one place: the cross steps to the place, and every item there lights up
+  const page = await browser.newPage({ viewport: { width: 900, height: 900 } });
+  const errors = [];
+  page.on('pageerror', e => errors.push(String(e)));
+  page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+  await page.goto(`file://${dir}/interactive-brush-twins.html`);
+  const items = await page.evaluate(() => [...document.querySelectorAll('.tda4j-ia svg[tabindex] [data-ia]')].filter(e => /(^|;)s,/.test(e.getAttribute('data-ia')) && e.getClientRects().length).map(e => {
+    const r = e.getBoundingClientRect(); return { key: +e.getAttribute('data-ia').split(';').find(s => s.startsWith('s,')).split(',')[2], at: [(r.left + r.right) / 2, (r.top + r.bottom) / 2] }; }));
+  const groups = []; for (const it of items) { const g = groups.find(h => Math.abs(h.at[0] - it.at[0]) < 1e-6 && Math.abs(h.at[1] - it.at[1]) < 1e-6); if (g) g.keys.push(it.key); else groups.push({ at: it.at, keys: [it.key] }); }
+  groups.sort((a, b) => a.at[0] - b.at[0] || a.at[1] - b.at[1]);
+  const lit = () => page.evaluate(() => [...document.querySelector('.tda4j-ia').tda4j.selection('c')].sort((a, b) => a - b));
+  check(groups.length === 40 && groups.filter(g => g.keys.length === 2).length === 2, `${groups.length} places, two of them with two items: ${groups.filter(g => g.keys.length === 2).map(g => '[' + g.keys.sort((a, b) => a - b) + ']')}`);
+  await page.focus('.tda4j-ia svg[tabindex]'); await page.mouse.move(2, 2); await page.waitForTimeout(100);
+  const bad = [];
+  for (let i = 0; i < groups.length; i++) { await page.keyboard.press(']'); const got = await lit(), want = groups[i].keys.slice().sort((a, b) => a - b);
+    if (JSON.stringify(got) !== JSON.stringify(want)) bad.push(`place ${i}: lit [${got}], wanted [${want}]`); }
+  check(bad.length === 0, `stepping with ] through every place lights exactly the items there` + (bad.length ? ` -- ${bad.slice(0, 3).join(' || ')}` : ''));
+  await page.keyboard.press(']');
+  check(JSON.stringify(await lit()) === JSON.stringify(groups[groups.length - 1].keys.slice().sort((a, b) => a - b)), 'one more ] stays on the last place');
+  await page.keyboard.press('Escape');
+  check(errors.length === 0, `no errors on the twins page ${errors.join(' | ')}`);
   await page.close();
 }
 
@@ -1006,6 +1269,67 @@ const matches = (a, b, tol = 0.1) => {
   await page.mouse.click(bx + 5, by + 5);
   await page.focus('.tda4j-ia svg[tabindex]');
 
+  // ] and [ put the cross on the next and the previous point (left to right, top to bottom), Home and End on the first and the last,
+  // and two Enters around two of them take the rectangle between them, which the mouse takes just the same
+  {
+    const ps = await domPoints();
+    const mid = p => [(p.box[0] + p.box[2]) / 2, (p.box[1] + p.box[3]) / 2];
+    const inside = p => { const [x, y] = mid(p); return x >= ps.plot[0] && x <= ps.plot[2] && y >= ps.plot[1] && y <= ps.plot[3]; };
+    const order = ps.pts.filter(inside).sort((a, b) => mid(a)[0] - mid(b)[0] || mid(a)[1] - mid(b)[1]);
+    const crossAt = () => page.evaluate(() => { const c = document.querySelector('.tda4j-cursor'); if (!c) return null;
+      const m = /^M(-?[0-9.]+) (-?[0-9.]+)H/.exec(c.getAttribute('d')), svg = document.querySelector('.tda4j-ia svg[tabindex]'), p = new DOMPoint(+m[1] + 8, +m[2]).matrixTransform(svg.getScreenCTM());
+      return [p.x, p.y]; });
+    const onPoint = async (i, what) => { const c = await crossAt(), want = mid(order[i]), lit = await chosen();
+      check(c && Math.abs(c[0] - want[0]) < 0.6 && Math.abs(c[1] - want[1]) < 0.6 && JSON.stringify(lit) === JSON.stringify([order[i].key]),
+        `${what}: the cross is on point ${i} of ${order.length} (key ${order[i].key}) and lights it: cross ${c && c.map(v => v.toFixed(1))}, wanted ${want.map(v => v.toFixed(1))}, lit [${lit}]`); };
+    check(order.length >= 20, `${order.length} points lie in the plot area to step through`);
+    await page.waitForTimeout(120); // a hover from the mouse's last move would otherwise light its own point after the first key
+    await press(']'); await onPoint(0, '] with no cross');
+    await press(']'); await onPoint(1, '] again');
+    await press('['); await onPoint(0, '[');
+    await press('End'); await onPoint(order.length - 1, 'End');
+    await press(']'); await onPoint(order.length - 1, '] at the last point stays');
+    await press('PageUp'); await onPoint(order.length - 2, 'Page Up');
+    await press('Home'); await onPoint(0, 'Home');
+    await press('['); await onPoint(0, '[ at the first point stays');
+    await press('PageDown'); await onPoint(1, 'Page Down');
+    await press('Escape');
+    check(await crossAt() === null && (await chosen()).length === 0, 'Escape takes the cross away and puts the light out');
+    await press('['); await onPoint(order.length - 1, '[ with no cross starts at the last point');
+    await press('Escape');
+    // the rectangle between two points that hold a third, set by the keyboard (which two depends on the layout: the fonts of a browser
+    // move the plot area, so a fixed pair of positions has nothing between them in one browser and three points in another)
+    const rectOf = (u, v) => { const [a, b] = [mid(u), mid(v)]; return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])]; };
+    const holdsThird = (i, j) => { const r = rectOf(order[i], order[j]);
+      return order.some((p, k) => k !== i && k !== j && mid(p)[0] > r[0] + 3 && mid(p)[0] < r[2] - 3 && mid(p)[1] > r[1] + 3 && mid(p)[1] < r[3] - 3); };
+    let pair = null;
+    for (let i = 0; i < order.length && !pair; i++) for (let j = i + 3; j < order.length && !pair; j++) if (holdsThird(i, j)) pair = [i, j];
+    check(pair !== null, `two points of the ${order.length} have a third inside the rectangle between them: ${pair}`);
+    const [i0, j0] = pair || [3, 9];
+    await press('Home'); await press(']', i0); await press('Enter'); await press(']', j0 - i0);
+    await press('Enter');
+    const want = rectOf(order[i0], order[j0]);
+    const got = await rectClient(), keysK = await chosen();
+    check(near(got, want, 0.6), `Home, ] ${i0} times, Enter, ] ${j0 - i0} times, Enter draws the rectangle between points ${i0} and ${j0}: ${got.map(v => v.toFixed(1))}, wanted ${want.map(v => v.toFixed(1))}`);
+    check(JSON.stringify(keysK) === JSON.stringify(touched(await domPoints(), got, false)) && keysK.includes(order[i0].key) && keysK.includes(order[j0].key) && keysK.length > 2, `it chooses the points it touches, both ends among them: [${keysK}]`);
+    check(await crossAt() === null, 'the cross is gone once it has chosen');
+    // and the mouse, dragged over the same rectangle, chooses the same
+    await page.mouse.click(bx + 5, by + 5);
+    await page.mouse.move(got[0], got[1]); await page.mouse.down(); await page.mouse.move(got[2], got[3], { steps: 8 }); await page.mouse.up();
+    check(JSON.stringify(await chosen()) === JSON.stringify(keysK), `a drag over the same rectangle chooses the same points: [${await chosen()}]`);
+    await page.mouse.click(bx + 5, by + 5);
+    await page.focus('.tda4j-ia svg[tabindex]');
+    // shift-Enter adds to what is there, with stepping too
+    await press('Home'); await press('Enter'); await press('Enter');
+    const one = await chosen();
+    await press('End'); await press('Enter'); await press('Enter');
+    check(JSON.stringify(one) === JSON.stringify([order[0].key]) && JSON.stringify(await chosen()) === JSON.stringify([order[order.length - 1].key]), `two Enters on one point choose that point alone: [${one}] then [${await chosen()}]`);
+    await press('Home'); await press('Enter'); await page.keyboard.press('Shift+Enter');
+    check(JSON.stringify(await chosen()) === JSON.stringify([order[0].key, order[order.length - 1].key].sort((u, v) => u - v)), `with shift the point is added: [${await chosen()}]`);
+    await page.mouse.click(bx + 5, by + 5);
+    await page.focus('.tda4j-ia svg[tabindex]');
+  }
+
   // zoomed, a rectangle that runs over the margin chooses only what the plot area shows of it
   await api('t.zoom(0, [2, 6, 2, 6]);');
   const [zx, zy, zw, zh] = await svgBox(), area = (await domPoints()).plot;
@@ -1014,6 +1338,16 @@ const matches = (a, b, tol = 0.1) => {
   const clipped = await chosen(), zoomedPts = await domPoints();
   check(JSON.stringify(clipped) === JSON.stringify(touched(zoomedPts, [R[0][0], R[0][1], R[1][0], R[1][1]], true)), `zoomed, a drag over the margin chooses what the plot area shows: [${clipped}]`);
   check(touched(zoomedPts, [R[0][0], R[0][1], R[1][0], R[1][1]], false).length > clipped.length, 'and there were points under the margin that it leaves out');
+  { // and the cross steps through the points the plot area shows, not the ones under the margin
+    const mid = p => [(p.box[0] + p.box[2]) / 2, (p.box[1] + p.box[3]) / 2];
+    const inside = p => { const [x, y] = mid(p); return x >= zoomedPts.plot[0] && x <= zoomedPts.plot[2] && y >= zoomedPts.plot[1] && y <= zoomedPts.plot[3]; };
+    const order = zoomedPts.pts.filter(inside).sort((a, b) => mid(a)[0] - mid(b)[0] || mid(a)[1] - mid(b)[1]);
+    await page.mouse.click(bx + 5, by + 5); await page.focus('.tda4j-ia svg[tabindex]'); await page.waitForTimeout(120);
+    await press('Home'); const first = await chosen(); await press('End'); const last = await chosen();
+    await press('Escape');
+    check(order.length >= 2 && order.length < zoomedPts.pts.length && JSON.stringify(first) === JSON.stringify([order[0].key]) && JSON.stringify(last) === JSON.stringify([order[order.length - 1].key]),
+      `zoomed, Home and End reach the first and the last of the ${order.length} points shown (of ${zoomedPts.pts.length}): [${first}] and [${last}], wanted [${order[0].key}] and [${order[order.length - 1].key}]`);
+  }
   await api('t.resetZoom(0);');
   await page.mouse.click(bx + 5, by + 5);
 
@@ -1182,7 +1516,7 @@ const matches = (a, b, tol = 0.1) => {
       await tab.goto(`file://${dir}/${file}`);
       const cd = await context.newCDPSession(tab);
       const tch = (type, pts) => cd.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map(([x, y], id) => ({ x, y, id })) });
-      const extent = async () => tab.evaluate(() => { const xs = [], ys = []; window.__shapes.forEach(s => s.path.forEach(p => { xs.push(p[1]); ys.push(p[2]); }));
+      const extent = async () => tab.evaluate(() => { const xs = [], ys = []; window.__shapes.filter(s => s.ink === undefined || s.ink === '10px sans-serif').forEach(s => s.path.forEach(p => { xs.push(p[1]); ys.push(p[2]); }));
         return [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)]; });
       const cv = await tab.evaluate(() => { const r = document.querySelector('canvas').getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; });
       const [cx, cy] = [cv[0] + cv[2] / 2, cv[1] + Math.min(cv[3], 500) / 2];

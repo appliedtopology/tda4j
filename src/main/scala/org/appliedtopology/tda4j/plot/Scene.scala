@@ -49,6 +49,11 @@ object Layer:
   * `fitted` gives the centre and the radius to fit to instead: an interactive page does so for a scene whose items come
   * and go or move with a control, so that the picture stays put (see [[Interactive]]).
   *
+  * `axes` draws an x axis along the foot of the picture and a y axis along its left edge, numbered with the coordinates
+  * of the plane at round values as a plot's axes are, for a flat picture (seen from above: `azimuth = 0`,
+  * `elevation = 90`). The picture then keeps to the room inside the axes, and a canvas that pans and zooms numbers its
+  * axes again for what it shows.
+  *
   * `region` is a rectangle drawn over the picture, a translucent fill with a dashed outline, in the units of the view
   * plane: the view from `azimuth` and `elevation` (at `zoom` 1), `x` to the right and `y` up, in the radius of the
   * fitted frame. [[PageState.brush]] puts it in a still picture of a [[Panel.Spatial]], where it is the rectangle a
@@ -69,7 +74,8 @@ final case class Scene(
   zoom: Double = 1.0,
   turns: Boolean = true,
   fitted: Option[(XYZ, Double)] = None,
-  region: Option[Window] = None
+  region: Option[Window] = None,
+  axes: Boolean = false
 ) extends Plot:
   def +(layer: Layer): Scene = copy(layers = layers :+ layer)
   def ++(more: IterableOnce[Layer]): Scene = copy(layers = layers ++ more)
@@ -106,6 +112,11 @@ final case class Scene(
 
   /** The camera by plain numbers, for MATLAB and Java: `withCamera(-35, 25, 1)` is the default view. */
   def withCamera(azimuth: Double, elevation: Double, zoom: Double): Scene = this + Camera(azimuth, elevation, zoom)
+
+  /** This scene with an x axis and a y axis, numbered with the coordinates of the plane: for a flat picture, seen from
+    * above (`azimuth = 0`, `elevation = 90`). See [[Scene]].
+    */
+  def withAxes: Scene = copy(axes = true)
 
   /** This palette. */
   def withPalette(palette: Palette): Scene = this + palette
@@ -258,6 +269,16 @@ final case class Scene(
         case _ => Seq.empty
     }
 
+  // the axes of a flat picture: the room they take (left, right, top, bottom, in pixels at text scale 1), and the plot
+  // area that is left, which the picture is fitted into
+  private def axisRoom: (Double, Double, Double, Double) =
+    require(
+      azimuth == 0.0 && elevation == 90.0,
+      s"Scene: axes number the plane of a picture seen from above, so they need azimuth = 0 and elevation = 90 (this scene is seen from azimuth $azimuth, elevation $elevation)"
+    )
+    val ts = style.textScale
+    (48.0 * ts, 8.0, 8.0, 26.0 * ts)
+
   // ----- the static view (SVG)
 
   def svgFile(theme: Theme = Theme.Light): String =
@@ -273,8 +294,14 @@ final case class Scene(
     val (c, r) = frame
     val view = viewer
     val top = if title.nonEmpty then 16.0 + 24.0 * ts * (elements.face(TextRole.Title).size / 15.0) else 12.0
-    val scale = 0.46 * math.min(width, height - top) * zoom
-    val (cx, cy) = (width / 2.0, top + (height - top) / 2.0)
+    // the plot area: all of the picture, or what is left inside the axes
+    val (boxL, boxR, boxT, boxB) =
+      if axes then
+        val (l, r_, t_, b) = axisRoom
+        (l, width - r_, top + t_, height - b)
+      else (0.0, width.toDouble, top, height.toDouble)
+    val scale = 0.46 * math.min(boxR - boxL, boxB - boxT) * zoom
+    val (cx, cy) = ((boxL + boxR) / 2.0, (boxT + boxB) / 2.0)
     def sx(v: (Double, Double, Double)) = f"${cx + v._1 * scale}%.2f"
     def sy(v: (Double, Double, Double)) = f"${cy - v._2 * scale}%.2f"
     val items = layers.flatMap {
@@ -323,14 +350,50 @@ final case class Scene(
           v._3 - 2e-6 -> s"""<circle cx="${sx(v)}" cy="${sy(v)}" r="${face.size * ink}" $attrs/>"""
         }
     }
-    val body = items.sortBy(-_._1).map(_._2).mkString + region.fold("") { w =>
+    val id = s"tda4j3d${Scene.counter.incrementAndGet()}"
+    // the axes of a flat picture: the items are clipped to the plot area, and the axes lie outside it
+    val drawn =
+      val picture = items.sortBy(-_._1).map(_._2).mkString
+      if !axes then picture
+      else
+        val face = elements.face(TextRole.TickLabel)
+        val size = face.size * ts
+        val ink2 = paint(face.paint)
+        def p2(v: Double) = f"$v%.2f"
+        val xs = Svg.niceTicks(c._1 + r * (boxL - cx) / scale, c._1 + r * (boxR - cx) / scale)
+        val ys = Svg.niceTicks(c._2 + r * (cy - boxB) / scale, c._2 + r * (cy - boxT) / scale)
+        def line(x1: Double, y1: Double, x2: Double, y2: Double) =
+          s"""<line x1="${p2(x1)}" y1="${p2(y1)}" x2="${p2(x2)}" y2="${p2(y2)}"/>"""
+        def label(x: Double, y: Double, anchor: String, v: Double) =
+          s"""<text x="${p2(x)}" y="${p2(y)}" text-anchor="$anchor" font-size="${Svg.number(
+              size
+            )}" style="fill:$ink2;stroke:none">${Svg
+              .number(v)}</text>"""
+        val xTicks = xs.map { v =>
+          val px = cx + (v - c._1) / r * scale
+          line(px, boxB, px, boxB + 4) + label(px, boxB + 4 + size, "middle", v)
+        }
+        val yTicks = ys.map { v =>
+          val py = cy - (v - c._2) / r * scale
+          line(boxL - 4, py, boxL, py) + label(boxL - 6, py + 0.35 * size, "end", v)
+        }
+        val clip = s"$id-clip"
+        s"""<defs><clipPath id="$clip"><rect x="${p2(boxL)}" y="${p2(boxT)}" width="${p2(boxR - boxL)}" height="${p2(
+            boxB - boxT
+          )}"/></clipPath></defs><g clip-path="url(#$clip)">$picture</g>""" +
+          s"""<g class="tda4j-axes" style="stroke:$ink2" stroke-width="1">${line(boxL, boxB, boxR, boxB)}${line(
+              boxL,
+              boxT,
+              boxL,
+              boxB
+            )}${xTicks.mkString}${yTicks.mkString}</g>"""
+    val body = drawn + region.fold("") { w =>
       val color = paint(Paint.Series(0))
       s"""<rect x="${f"${cx + w.x0 * scale}%.2f"}" y="${f"${cy - w.y1 * scale}%.2f"}" width="${f"${(w.x1 - w.x0) * scale}%.2f"}" height="${f"${(w.y1 - w.y0) * scale}%.2f"}" style="fill:$color;fill-opacity:.12;stroke:$color" stroke-width="${Svg
           .number(ink)}" stroke-dasharray="${Svg.number(4 * ink)} ${Svg.number(
           3 * ink
         )}"/>"""
     }
-    val id = s"tda4j3d${Scene.counter.incrementAndGet()}"
     val css = if theme == Theme.Auto then s"<style>${pal.cssVariables(s"#$id")}</style>" else ""
     def num(v: Double) = if v == v.toLong then v.toLong.toString else f"$v%.2f"
     // the title and the subtitle, as the style and the text roles have them
@@ -521,9 +584,9 @@ final case class Scene(
     val json = layerJson.mkString("[", ",", "]")
     // choosing by rectangle: the box button, what a drag draws, and what it touches
     val brushing = brush.isDefined
-    val clearRect = if brushing then "rect=null;" else ""
-    val dropRect = if brushing then "if(rect){rect=null;draw();}" else ""
-    val paintBox = if brushing then "if(rect)paintRect();" else ""
+    val clearRect = if brushing then "rect=null;kb=null;" else ""
+    val dropRect = if brushing then "if(rect||kb){rect=null;kb=null;draw();}" else ""
+    val paintBox = if brushing then "if(rect)paintRect();if(kb)paintCross();" else ""
     val dragBox =
       if brushing then
         "if(boxMode){const a=loc(drag[0],drag[1]),b=loc(e.clientX,e.clientY);rect=[a[0],a[1],b[0],b[1]];draw();return;}"
@@ -536,8 +599,10 @@ final case class Scene(
          |const BR=${"\"" + Svg.escape(selection) + "\""},S0=color(${col(Paint.Series(0))}),SF=color(${col(
           Paint.Surface
         )});
-         |const loc=(cx,cy)=>{const r=cv.getBoundingClientRect(),k=cv.clientWidth/r.width;return[(cx-r.left)*k,(cy-r.top)*k];};
-         |function paintRect(){g.save();g.beginPath();g.rect(Math.min(rect[0],rect[2]),Math.min(rect[1],rect[3]),Math.abs(rect[2]-rect[0]),Math.abs(rect[3]-rect[1]));
+         |// a corner of the rectangle is held inside the plot area (the canvas when there are no axes), as a flat panel's is
+         |const loc=(cx,cy)=>{const r=cv.getBoundingClientRect(),k=cv.clientWidth/r.width;
+         |  return[Math.min(Math.max((cx-r.left)*k,box[0]),box[2]),Math.min(Math.max((cy-r.top)*k,box[1]),box[3])];};
+         |function paintRect(){g.save();g.beginPath();g.rect(box[0],box[1],box[2]-box[0],box[3]-box[1]);g.clip();g.beginPath();g.rect(Math.min(rect[0],rect[2]),Math.min(rect[1],rect[3]),Math.abs(rect[2]-rect[0]),Math.abs(rect[3]-rect[1]));
          |  g.globalAlpha=0.12;g.fillStyle=S0;g.fill();g.globalAlpha=1;g.strokeStyle=S0;g.lineWidth=1;g.setLineDash([4,3]);g.stroke();g.restore();}
          |const inBox=(x,y,x0,y0,x1,y1)=>x>=x0&&x<=x1&&y>=y0&&y<=y1;
          |// does the segment from a to b meet the box (Liang-Barsky)
@@ -563,7 +628,43 @@ final case class Scene(
          |  boxBtn.style.background=boxMode?S0:'transparent';boxBtn.style.color=boxMode?SF:'inherit';cv.style.cursor=idle();rect=null;draw();});
          |// for the page's `brush(panel, window)`: the rectangle in the units of the view plane (x to the right, y up, the radius of the frame)
          |root._region={show:w=>{if(!w){rect=null;draw();return;}rect=[ox+w[0]*sc,oy-w[3]*sc,ox+w[1]*sc,oy-w[2]*sc];draw();},
-         |  window:()=>rect?[(Math.min(rect[0],rect[2])-ox)/sc,(Math.max(rect[0],rect[2])-ox)/sc,(oy-Math.max(rect[1],rect[3]))/sc,(oy-Math.min(rect[1],rect[3]))/sc]:null};"""
+         |  window:()=>rect?[(Math.min(rect[0],rect[2])-ox)/sc,(Math.max(rect[0],rect[2])-ox)/sc,(oy-Math.max(rect[1],rect[3]))/sc,(oy-Math.min(rect[1],rect[3]))/sc]:null};
+         |// the keyboard (a focused canvas): arrows move a cross over the plot area (shift: further), ] and [ put it on the next and the
+         |// previous item drawn (left to right, top to bottom; Page Down and Page Up too), Home and End on the first and the last, Enter
+         |// sets the first corner and then the second, which chooses (with shift: adds), Escape lets go
+         |let kb=null;
+         |function paintCross(){g.save();g.strokeStyle=S0;g.lineWidth=1.5;g.beginPath();g.moveTo(kb.x-8,kb.y);g.lineTo(kb.x+8,kb.y);g.moveTo(kb.x,kb.y-8);g.lineTo(kb.x,kb.y+8);g.stroke();g.restore();}
+         |const lightUp=pk=>{if(frame){cancelAnimationFrame(frame);frame=0;}if(link())choosers.forEach(n=>link().hover(n,keysFor(pk,n)));};
+         |// the middles of the items the rectangle can choose that the plot area shows, in the order the cross steps through them
+         |function placesOf(){const out=[];
+         |  for(const it of last){const L=layers[it[1]],k=it[2],pk=L.pk&&L.pk[k];if(!pk||!pk.some(q=>q[0]===BR))continue;let x,y;
+         |    if(L.k==='p'){x=X(L.i[k]);y=Y(L.i[k]);}
+         |    else if(L.k==='s'){x=(X(L.i[2*k])+X(L.i[2*k+1]))/2;y=(Y(L.i[2*k])+Y(L.i[2*k+1]))/2;}
+         |    else if(L.k==='t'){const a=L.i[3*k],b=L.i[3*k+1],c=L.i[3*k+2];x=(X(a)+X(b)+X(c))/3;y=(Y(a)+Y(b)+Y(c))/3;}
+         |    else continue;
+         |    if(inBox(x,y,box[0],box[1],box[2],box[3]))out.push([x,y,pk]);}
+         |  return out.sort((u,v)=>u[0]-v[0]||u[1]-v[1]);}
+         |function stepTo(dir){const ps=placesOf();if(!ps.length)return;let q;
+         |  if(dir==='first'||(dir==='next'&&!kb))q=ps[0];
+         |  else if(dir==='last'||(dir==='prev'&&!kb))q=ps[ps.length-1];
+         |  else if(dir==='next')q=ps.find(u=>u[0]>kb.x+1e-6||(Math.abs(u[0]-kb.x)<=1e-6&&u[1]>kb.y+1e-6));
+         |  else q=ps.slice().reverse().find(u=>u[0]<kb.x-1e-6||(Math.abs(u[0]-kb.x)<=1e-6&&u[1]<kb.y-1e-6));
+         |  if(!q)return;
+         |  kb=kb||{x:q[0],y:q[1],from:null};kb.x=q[0];kb.y=q[1];if(kb.from)rect=[kb.from.x,kb.from.y,kb.x,kb.y];
+         |  lightUp(ps.filter(u=>Math.abs(u[0]-q[0])<=1e-6&&Math.abs(u[1]-q[1])<=1e-6).flatMap(u=>u[2]));draw();}
+         |function letGo(){if(!kb)return;kb=null;lightUp(null);draw();}
+         |cv.addEventListener('blur',letGo);
+         |cv.addEventListener('keydown',e=>{if(e.ctrlKey||e.metaKey||e.altKey)return;
+         |  const d={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];
+         |  if(d){e.preventDefault();kb=kb||{x:(box[0]+box[2])/2,y:(box[1]+box[3])/2,from:null};const st=e.shiftKey?0.16:0.04;
+         |    kb.x=Math.min(Math.max(kb.x+d[0]*st*(box[2]-box[0]),box[0]),box[2]);kb.y=Math.min(Math.max(kb.y+d[1]*st*(box[3]-box[1]),box[1]),box[3]);
+         |    if(kb.from)rect=[kb.from.x,kb.from.y,kb.x,kb.y];draw();return;}
+         |  const dir={']':'next','}':'next',PageDown:'next','[':'prev','{':'prev',PageUp:'prev',Home:'first',End:'last'}[e.key];
+         |  if(dir){e.preventDefault();stepTo(dir);return;}
+         |  if((e.key==='Enter'||e.key===' ')&&kb){e.preventDefault();
+         |    if(!kb.from){kb.from={x:kb.x,y:kb.y};rect=[kb.x,kb.y,kb.x,kb.y];draw();return;}
+         |    rect=[kb.from.x,kb.from.y,kb.x,kb.y];chooseBox(e.shiftKey);kb=null;lightUp(null);draw();return;}
+         |  if(e.key==='Escape'&&kb){e.preventDefault();kb=null;rect=null;lightUp(null);draw();}});"""
     }
     // the script of a panel of an interactive page also asks which items the controls and selections leave out
     val hook =
@@ -590,6 +691,37 @@ final case class Scene(
            |  for(const s of q.sp){const v=vals[s[0]];if(v!==undefined)p[s[1]]=(Math.min(Math.max(v,s[3]),s[4])-FR[s[1]])/FR[3];}
            |  P[3*q.s]=p[0];P[3*q.s+1]=p[1];P[3*q.s+2]=p[2];}}
            |if(ia)ia.addEventListener('tda4j:change',e=>{vals[e.detail.name]=e.detail.value;if(follow.has(e.detail.name)){moveAll();order=null;}draw();});""".stripMargin
+    // the axes of a flat picture: the plot area they leave, the clip to it, and the ticks, drawn from the same rules as the still's
+    val tickFace = elements.face(TextRole.TickLabel)
+    val tickSize = tickFace.size * ts
+    val (axL, axR, axT, axB) = if axes then axisRoom else (0.0, 0.0, 0.0, 0.0)
+    val geometry =
+      if axes then
+        s"const bx0=${px(axL)},bx1=W-${px(axR)},by0=${px(axT)},by1=H-${px(axB)};sc=0.46*Math.min(bx1-bx0,by1-by0)*zoom;box=[bx0,by0,bx1,by1];bc=[(bx0+bx1)/2,(by0+by1)/2];ox=bc[0]+pan[0];oy=bc[1]+pan[1];"
+      else "sc=0.46*Math.min(W,H)*zoom;box=[0,0,W,H];bc=[W/2,H/2];ox=W/2+pan[0];oy=H/2+pan[1];"
+    val openClip = if axes then "g.save();g.beginPath();g.rect(bx0,by0,bx1-bx0,by1-by0);g.clip();" else ""
+    val closeClip = if axes then "g.restore();paintAxes();" else ""
+    val fontJs = "\"" + s"${px(tickSize)}px ${style.font}".replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+    val axesScript =
+      if !axes then ""
+      else
+        s"""
+           |// the axes: ticks at round values of the plane's coordinates over what the plot area shows now
+           |${Scene.tickScript}
+           |const AX=[${short(c._1)},${short(c._2)},${short(r)}],AXC=color(${col(tickFace.paint)});
+           |function paintAxes(){
+           |  g.save();g.strokeStyle=AXC;g.fillStyle=AXC;g.lineWidth=1;g.globalAlpha=1;g.font=$fontJs;
+           |  const line=(x1,y1,x2,y2)=>{g.beginPath();g.moveTo(x1,y1);g.lineTo(x2,y2);g.stroke();};
+           |  line(box[0],box[3],box[2],box[3]);line(box[0],box[1],box[0],box[3]);
+           |  g.textAlign='center';
+           |  for(const v of niceTicks(AX[0]+AX[2]*(box[0]-ox)/sc,AX[0]+AX[2]*(box[2]-ox)/sc,5)){const x=ox+(v-AX[0])/AX[2]*sc;line(x,box[3],x,box[3]+4);g.fillText(numberText(v),x,box[3]+4+${px(
+            tickSize
+          )});}
+           |  g.textAlign='right';
+           |  for(const v of niceTicks(AX[1]+AX[2]*(oy-box[3])/sc,AX[1]+AX[2]*(oy-box[1])/sc,5)){const y=oy-(v-AX[1])/AX[2]*sc;line(box[0]-4,y,box[0],y);g.fillText(numberText(v),box[0]-6,y+0.35*${px(
+            tickSize
+          )});}
+           |  g.restore();}""".stripMargin
     val id = named.getOrElse(s"tda4j3d${Scene.counter.incrementAndGet()}")
     val vars = if theme == Theme.Auto then pal.cssVariables(s"#$id") else ""
     s"""<div id="$id" style="position:relative;width:${width}px;max-width:100%;font-family:${Svg.escape(style.font)}">
@@ -610,7 +742,7 @@ final case class Scene(
             )}">${Svg.escape(subtitle)}</div>"""
         else ""
       }
-       |<canvas width="$width" height="${height - 40}"></canvas>
+       |<canvas width="$width" height="${height - 40}"${if brushing then " tabindex=\"0\"" else ""}></canvas>
        |<div style="${css(
         TextRole.Note,
         s"color:${col(elements.face(TextRole.Note).paint).replace("\"", "")};margin-top:4px"
@@ -630,7 +762,7 @@ final case class Scene(
        |function project(){const ca=Math.cos(az),sa=Math.sin(az),ce=Math.cos(el),se=Math.sin(el);
        |  for(let i=0;i<np;i++){const x=P[3*i],y=P[3*i+1],z=P[3*i+2],x1=x*ca-y*sa,y1=x*sa+y*ca;
        |    Q[3*i]=x1;Q[3*i+1]=y1*se+z*ce;Q[3*i+2]=y1*ce-z*se;}}
-       |let last=[],sc=1,ox=0,oy=0;
+       |let last=[],sc=1,ox=0,oy=0,bc=[0,0],box=[0,0,0,0];
        |const X=i=>ox+Q[3*i]*sc,Y=i=>oy-Q[3*i+1]*sc;
        |// the painting order depends on the view alone, not on the sliders or the zoom: it is sorted when the view turns
        |const off=[];let total=0;layers.forEach(L=>{off.push(total);total+=count(L);});
@@ -647,7 +779,7 @@ final case class Scene(
        |function draw(){const dpr=window.devicePixelRatio||1,W=cv.clientWidth,H=W*cv.height/cv.width;
        |  if(cv.width!==Math.round(W*dpr)){cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);}
        |  g.setTransform(dpr,0,0,dpr,0,0);g.fillStyle=color(${col(Paint.Surface)});g.fillRect(0,0,W,H);
-       |  if(!order)sortAll();sc=0.46*Math.min(W,H)*zoom;ox=W/2+pan[0];oy=H/2+pan[1];last=[];
+       |  if(!order)sortAll();$geometry last=[];$openClip
        |  for(let q=0;q<total;q++){const gi=order[q],li=LI[gi],k=KK[gi],L=layers[li];
        |    ${
         if reacting.isEmpty then "" else "if(hid(L,k))continue;"
@@ -657,7 +789,7 @@ final case class Scene(
        |    if(L.k==='t'){g.globalAlpha=L.op;g.fillStyle=c;g.beginPath();g.moveTo(X(L.i[3*k]),Y(L.i[3*k]));g.lineTo(X(L.i[3*k+1]),Y(L.i[3*k+1]));g.lineTo(X(L.i[3*k+2]),Y(L.i[3*k+2]));g.closePath();g.fill();g.globalAlpha=1;}
        |    else if(L.k==='s'){g.globalAlpha=L.op;g.strokeStyle=c;g.lineWidth=L.w;g.lineCap='round';g.beginPath();g.moveTo(X(L.i[2*k]),Y(L.i[2*k]));g.lineTo(X(L.i[2*k+1]),Y(L.i[2*k+1]));g.stroke();g.globalAlpha=1;}
        |    else if(L.k==='p'){g.globalAlpha=L.op;g.fillStyle=c;g.beginPath();g.arc(X(L.i[k]),Y(L.i[k]),L.r,0,2*Math.PI);g.fill();if(L.ew>0){g.strokeStyle=color(L.ec);g.lineWidth=L.ew;g.stroke();}g.globalAlpha=1;}
-       |    else{const rad=L.k==='b'?radiusOf(L)*sc:L.r;g.globalAlpha=L.op;g.fillStyle=c;g.beginPath();g.arc(X(L.i[k]),Y(L.i[k]),rad,0,2*Math.PI);g.fill();g.globalAlpha=1;}}$paintBox}
+       |    else{const rad=L.k==='b'?radiusOf(L)*sc:L.r;g.globalAlpha=L.op;g.fillStyle=c;g.beginPath();g.arc(X(L.i[k]),Y(L.i[k]),rad,0,2*Math.PI);g.fill();g.globalAlpha=1;}}$closeClip$paintBox}
        |function radiusOf(L){if(L.ra){const v=vals[L.ra[0]];if(v!==undefined)return v*L.ra[1];}return L.rad;}
        |// what the pointer is over: the nearest drawn item of a layer that chooses, within 4 pixels of its shape
        |const segDist=(px,py,ax,ay,bx,by)=>{const dx=bx-ax,dy=by-ay,l=dx*dx+dy*dy,t=l?Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/l)):0;return Math.hypot(px-ax-t*dx,py-ay-t*dy);};
@@ -672,6 +804,7 @@ final case class Scene(
        |  return Math.min(segDist(x,y,ax,ay,bx,by),segDist(x,y,bx,by,cx,cy),segDist(x,y,cx,cy,ax,ay));}
        |const choosers=new Set();layers.forEach(L=>{if(L.pk)L.pk.forEach(p=>{if(p)p.forEach(q=>choosers.add(q[0]));});});
        |function pickAt(clientX,clientY){const r=cv.getBoundingClientRect(),x=(clientX-r.left)*cv.clientWidth/r.width,y=(clientY-r.top)*cv.clientWidth/r.width;
+       |  if(x<box[0]||x>box[2]||y<box[1]||y>box[3])return null;
        |  let best=null,bd=Infinity,bz=Infinity;
        |  for(const it of last){const L=layers[it[1]];if(!L.pk||!L.pk[it[2]])continue;
        |    const d=reach(L,it[2],x,y);if(d>4)continue;
@@ -699,7 +832,7 @@ final case class Scene(
        |    if(pinch&&fingers.size===2){const s=spread(),z=Math.max(0.2,Math.min(turns?8:200,pinch.zoom*s.d/Math.max(pinch.d,1)));
        |      const dx=s.m[0]-pinch.m[0],dy=s.m[1]-pinch.m[1];
        |      if(turns){az=pinch.az+dx*0.01;el=Math.max(-1.55,Math.min(1.55,pinch.el+dy*0.01));order=null;}
-       |      else{const r=cv.getBoundingClientRect(),k=cv.clientWidth/r.width,x=(pinch.m[0]-r.left)*k-cv.clientWidth/2,y=(pinch.m[1]-r.top)*k-cv.clientHeight/2;
+       |      else{const r=cv.getBoundingClientRect(),k=cv.clientWidth/r.width,x=(pinch.m[0]-r.left)*k-bc[0],y=(pinch.m[1]-r.top)*k-bc[1];
        |        pan=[x-(x-pinch.pan[0])*z/pinch.zoom+dx*k,y-(y-pinch.pan[1])*z/pinch.zoom+dy*k];}
        |      zoom=z;draw();return;}}
        |  if(!drag){hoverAt(e);return;}
@@ -716,10 +849,10 @@ final case class Scene(
        |  if(was&&moved<4&&choosers.size&&link()){const pk=pickAt(e.clientX,e.clientY);choosers.forEach(n=>link().click(n,keysFor(pk,n),e.shiftKey));}});
        |cv.addEventListener('pointerleave',leave);
        |cv.addEventListener('wheel',e=>{e.preventDefault();${clearRect}const z=Math.max(0.2,Math.min(turns?8:200,zoom*Math.exp(-e.deltaY*0.001)));
-       |  if(!turns){const r=cv.getBoundingClientRect(),k=cv.clientWidth/r.width,x=(e.clientX-r.left)*k-cv.clientWidth/2,y=(e.clientY-r.top)*k-cv.clientHeight/2;
+       |  if(!turns){const r=cv.getBoundingClientRect(),k=cv.clientWidth/r.width,x=(e.clientX-r.left)*k-bc[0],y=(e.clientY-r.top)*k-bc[1];
        |    pan=[x-(x-pan[0])*z/zoom,y-(y-pan[1])*z/zoom];}
        |  zoom=z;draw();},{passive:false});
-       |$boxScript
+       |$boxScript$axesScript
        |matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{resolved.clear();draw();});
        |window.addEventListener('resize',()=>{${clearRect}draw();});draw();})();</script>
        |</div>""".stripMargin
@@ -729,6 +862,20 @@ final case class Scene(
 object Scene:
   // Element ids for the fragments of one page; scratch, no meaning outside this file.
   private[plot] val counter = new java.util.concurrent.atomic.AtomicLong()
+
+  // `Svg.number` and `Svg.niceTicks` in JavaScript, for the axes the page draws itself: a zoomed figure's (the page's
+  // script) and a flat canvas's (the canvas's). One source for both; change it with the Scala ones: the check script
+  // compares the ticks of a page with those of the still picture of it.
+  private[plot] val tickScript: String =
+    """function numberText(v){const a=Math.abs(v);if(v===0)return '0';
+  if(a>=1e5||a<1e-3){if(a<1e-3&&a>=1e-4)return v.toPrecision(3);
+    const m=/^(-?[0-9.]+)e([+-])([0-9]+)$/.exec(v.toExponential(2));return m[1]+'e'+m[2]+(m[3].length<2?'0'+m[3]:m[3]);}
+  const s=String(Number(v.toPrecision(4)));return s==='-0'?'0':s;}
+function niceTicks(lo,hi,target){
+  if(!(hi>lo)||!isFinite(hi)||!isFinite(lo))return [lo];
+  const raw=(hi-lo)/target,mag=Math.pow(10,Math.floor(Math.log10(raw))),norm=raw/mag;
+  const step=mag*(norm<1.5?1:norm<3?2:norm<7?5:10),first=Math.ceil(lo/step-1e-9),last=Math.floor(hi/step+1e-9),out=[];
+  for(let i=first;i<=last;i++){const t=i*step;out.push(t===0?0:t);}return out;}"""
 
   // The geometry of choosing by rectangle, in the plane of the view; the page's script does the same sums on the pixels
   // (a place in the plane and its pixel are an affine map apart, so what meets what is the same).

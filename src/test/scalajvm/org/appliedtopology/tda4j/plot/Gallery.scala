@@ -386,6 +386,24 @@ object Gallery:
     linked3.at(PageState().value("t", ringT).select("class", ringKey)).save(out("interactive-linked-3d-still.svg"))
     java.nio.file.Files
       .writeString(java.nio.file.Path.of(out("interactive-linked-3d.json")), s"""{"key":$ringKey,"t":$ringT}""")
+    // a flat canvas with axes whose points choose and that takes a rectangle: pointing and the rectangle see only what the plot area shows
+    val gridAt = for y <- Seq(-1.0, 0.0, 1.0); x <- Seq(-2.0, -1.0, 0.0, 1.0, 2.0) yield (x, y, 0.0)
+    val axesPage = Interactive()
+      .withSelection(Selection.listing("item", Seq.tabulate(gridAt.size)(i => s"item $i")))
+      .withPanel(
+        Panel(
+          Scene(
+            Vector(Layer.Points(gridAt.toIndexedSeq, IndexedSeq(Paint.Ink), 4.0)),
+            azimuth = 0,
+            elevation = 90,
+            turns = false
+          ).withAxes
+        )
+          .selecting(0, "item", gridAt.indices)
+          .brushable("item")
+      )
+      .withTitle("Choosing on a flat canvas with axes")
+    axesPage.save(out("interactive-axes-pick.html"))
     // a complex with too many cells for an SVG: a flat canvas to pan and zoom, linked to the diagram and the barcode
     val ringLarge = noisyCircle(60, 0.1, 3)
     val largeBars = Persistence(ringLarge, maxDimension = 1, maxFiltrationValue = 2.5).bars
@@ -396,7 +414,7 @@ object Gallery:
     manyCells.at(PageState().value("t", largeT).select("class", largeKey)).save(out("interactive-large-still.svg"))
     java.nio.file.Files.writeString(
       java.nio.file.Path.of(out("interactive-large.json")),
-      s"""{"key":$largeKey,"t":$largeT}"""
+      s"""{"key":$largeKey,"t":$largeT,"points":${ringLarge.map(p => s"[${p(0)},${p(1)}]").mkString("[", ",", "]")}}"""
     )
     // linked views: pointing at a class in one picture lights it up in the others, with its cycle on the input
     val exploreBars = Persistence(circle, maxDimension = 1).bars
@@ -617,6 +635,27 @@ object Gallery:
         )
         .withTitle("Brush, no zoom")
         .save(out("interactive-brush-plain.html"))
+      // two of the points drawn a second time by a mark of their own, which chooses its own keys: the cross steps to a place, and
+      // every item at that place lights up
+      Interactive()
+        .withSelection("c")
+        .withPanel(
+          Panel(
+            Figure(
+              marks = Vector(
+                Mark.Points(cloud, IndexedSeq(Paint.Ink)),
+                Mark.Points(IndexedSeq(cloud(0), cloud(5)), IndexedSeq(Paint.Series(1)))
+              ),
+              x = Axis(label = "x"),
+              y = Axis(label = "y")
+            )
+          )
+            .selecting(0, "c", IndexedSeq.range(0, 40))
+            .selecting(1, "c", IndexedSeq(40, 41))
+            .brushable("c")
+        )
+        .withTitle("Brush, twins")
+        .save(out("interactive-brush-twins.html"))
       def box(r: scala.util.Random, lo: Double, hi: Double) =
         val (a, b) = (lo + (hi - lo) * r.nextDouble(), lo + (hi - lo) * r.nextDouble())
         (math.min(a, b), math.max(a, b) + 0.05)

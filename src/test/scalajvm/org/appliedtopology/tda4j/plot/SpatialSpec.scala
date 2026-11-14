@@ -381,6 +381,17 @@ class SpatialSpec extends Specification:
       plain must not(contain("chooseBox"))
     }
 
+    "take focus and the keyboard on a canvas that chooses by rectangle, and a plain canvas neither" in {
+      val html = page.fragment(Theme.Light)
+      html must contain("""tabindex="0"></canvas>""")
+      html must contain("function stepTo(dir)")
+      html must contain("e.key==='Escape'")
+      val plain = pageOf(panelAt(0)).fragment(Theme.Light)
+      plain must not(contain("""tabindex="0"></canvas>"""))
+      plain must contain("</canvas>")
+      plain must not(contain("function stepTo(dir)"))
+    }
+
     "be refused where there is nothing to choose, or no such panel" in {
       pageOf(panelAt(0).brushable("nope")).fragment() must throwAn[IllegalArgumentException](
         ".*selection called nope.*"
@@ -408,6 +419,122 @@ class SpatialSpec extends Specification:
             .brushable("c")
         )
       flat.touched(0, Window(0, 1, 0, 1), "c") must throwAn[IllegalArgumentException](".*2-D panel.*")
+    }
+  }
+
+  "the axes of a flat picture" should {
+    // points on the corners and the middle of a 10 by 4 rectangle, seen from above: x to the right, y up
+    val spots: IndexedSeq[XYZ] =
+      IndexedSeq((0.0, 0.0, 0.0), (10.0, 0.0, 0.0), (0.0, 4.0, 0.0), (10.0, 4.0, 0.0), (5.0, 2.0, 0.0))
+    def flat(more: Scene => Scene = identity) =
+      more(Scene(Vector(Layer.Points(spots, IndexedSeq(Paint.Ink), 3.0)), azimuth = 0, elevation = 90, axes = true))
+    def dots(svg: String): Seq[(Double, Double)] =
+      """<circle cx="([^"]+)" cy="([^"]+)"""".r
+        .findAllMatchIn(svg)
+        .map(m => (m.group(1).toDouble, m.group(2).toDouble))
+        .toSeq
+    // the labels written under and beside the plot area: (text, x, y, anchor)
+    def labels(svg: String): Seq[(String, Double, Double, String)] =
+      """<text x="([^"]+)" y="([^"]+)" text-anchor="([^"]+)" font-size="[^"]+" style="[^"]+">([^<]+)</text>""".r
+        .findAllMatchIn(svg)
+        .map(m => (m.group(4), m.group(1).toDouble, m.group(2).toDouble, m.group(3)))
+        .toSeq
+
+    "number the plane where the points are: a tick is at the place of the data it names" in {
+      val svg = flat().staticSvg(Theme.Light)
+      val d = dots(svg)
+      // the pixel of a data x and y, from the points at the ends of the ranges (the picture draws them in depth order)
+      val (left, right, top, bottom) = (d.map(_._1).min, d.map(_._1).max, d.map(_._2).min, d.map(_._2).max)
+      def px(v: Double) = left + (right - left) * v / 10
+      def py(v: Double) = bottom - (bottom - top) * v / 4
+      val ls = labels(svg)
+      val xs = ls.filter(_._4 == "middle")
+      val ys = ls.filter(_._4 == "end")
+      xs.map(_._1).toSet must contain("0")
+      xs.map(_._1).toSet must contain("10")
+      ys.map(_._1).toSet must contain("4")
+      xs.map(l => math.abs(l._2 - px(l._1.toDouble))).max must beLessThan(0.02)
+      // a label's baseline is a third of its height below the tick it names
+      ys.map(l => math.abs(l._3 - 0.35 * 11 - py(l._1.toDouble))).max must beLessThan(0.02)
+    }
+
+    "keep the picture inside the axes, in the room the margins leave" in {
+      val d = dots(flat().staticSvg(Theme.Light))
+      // 48 pixels on the left for the numbers, a margin of 8 on the right, and 26 under the picture
+      d.map(_._1).min must beGreaterThan(48.0)
+      d.map(_._1).max must beLessThan(640.0 - 8.0)
+      d.map(_._2).max must beLessThan(520.0 - 26.0)
+    }
+
+    "make room for the numbers as the text grows" in {
+      // the axes lie along the edges of the plot area: the first line of the group is the x axis (its y is the foot of the
+      // area), the second the y axis (its x is the left edge)
+      def edges(svg: String): (Double, Double) =
+        val g =
+          """<g class="tda4j-axes"[^>]*><line x1="[^"]+" y1="([^"]+)" x2="[^"]+" y2="[^"]+"/><line x1="([^"]+)"""".r
+        val m = g.findFirstMatchIn(svg).get
+        (m.group(2).toDouble, m.group(1).toDouble)
+      edges(flat().staticSvg(Theme.Light)) === (48.0, 520.0 - 26.0)
+      edges(flat(_.withTextScale(2.0)).staticSvg(Theme.Light)) === (96.0, 520.0 - 52.0)
+      val d = dots(flat(_.withTextScale(2.0)).staticSvg(Theme.Light))
+      d.map(_._1).min must beGreaterThan(96.0)
+      d.map(_._2).max must beLessThan(520.0 - 52.0)
+    }
+
+    "be numbered again for what a zoomed picture shows" in {
+      val whole = labels(flat().staticSvg(Theme.Light)).filter(_._4 == "middle").map(_._1)
+      val closer = labels(flat(_.copy(zoom = 4.0)).staticSvg(Theme.Light)).filter(_._4 == "middle").map(_._1)
+      // four times closer shows a quarter of the range, so its ticks are finer and fewer of the points' numbers are among them
+      (closer.toSet != whole.toSet) must beTrue
+      closer.size must beGreaterThan(0)
+    }
+
+    "clip the picture to the plot area, and leave the axes out of the clip" in {
+      val svg = flat().staticSvg(Theme.Light)
+      svg must contain("<clipPath")
+      svg must contain("""<g class="tda4j-axes"""")
+      val clipped = svg.indexOf("""<g clip-path=""")
+      val axes = svg.indexOf("""<g class="tda4j-axes"""")
+      (clipped >= 0 && axes > clipped) must beTrue
+    }
+
+    "leave a scene that has none as it was" in {
+      val svg = flat(_.copy(axes = false)).staticSvg(Theme.Light)
+      svg must not(contain("tda4j-axes"))
+      svg must not(contain("clipPath"))
+      // a picture without axes is centred in the whole picture, not in the room inside the axes
+      val xs = dots(svg).map(_._1)
+      ((xs.min + xs.max) / 2) must beCloseTo(320.0, 0.01)
+      val inside = dots(flat().staticSvg(Theme.Light)).map(_._1)
+      ((inside.min + inside.max) / 2) must beCloseTo((48.0 + 632.0) / 2, 0.01)
+    }
+
+    "be refused for a picture that is not seen from above, with the way out" in {
+      val tilted = flat(_.copy(elevation = 25))
+      tilted.staticSvg(Theme.Light) must throwAn[IllegalArgumentException](".*azimuth = 0 and elevation = 90.*")
+      tilted.fragment(Theme.Light) must throwAn[IllegalArgumentException](".*azimuth = 0 and elevation = 90.*")
+    }
+
+    "be asked for with withAxes, and be on a flat canvas of Plot.filtration but not on a turning one" in {
+      Scene().withAxes.axes must beTrue
+      Scene().axes must beFalse
+      val ring = Array.tabulate(22)(i => Array(math.cos(2 * math.Pi * i / 22), math.sin(2 * math.Pi * i / 22)))
+      val canvas = Plot.filtration(ring, max = 1.5, canvas = true).panels.head.asInstanceOf[Panel.Spatial].scene
+      canvas.axes must beTrue
+      val ring3 = ring.map(p => Array(p(0), p(1), 0.3 * p(0) * p(1)))
+      Plot.filtration3D(ring3, max = 1.5).panels.head.asInstanceOf[Panel.Spatial].scene.axes must beFalse
+    }
+
+    "give the canvas the same tick rules as the zoomed figures: one script for both" in {
+      val canvas = Interactive()
+        .withSlider("t", 0, 1)
+        .withPanel(Panel(flat()).react(Layer.Points(spots, IndexedSeq(Paint.Ink), 3.0), Behavior.shownFrom("t", 0.0)))
+        .fragment(Theme.Light)
+      canvas must contain(Scene.tickScript)
+      canvas must contain("function paintAxes")
+      // the page's own script has the same text
+      val page = Interactive().withPanel(Panel(Figure()).zoomable()).fragment(Theme.Light)
+      page must contain(Scene.tickScript)
     }
   }
 
