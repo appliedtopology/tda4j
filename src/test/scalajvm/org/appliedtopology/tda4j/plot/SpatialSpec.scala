@@ -215,4 +215,85 @@ class SpatialSpec extends Specification:
       flat.panels.head must beAnInstanceOf[Panel.Flat]
       space.panels.head must beAnInstanceOf[Panel.Spatial]
     }
+
+  }
+
+  "a complex too large for an SVG" should {
+    type Edge = ((Double, Double), (Double, Double))
+    // a ring of 22 points with a wiggle: 1,540 triangles, enough to tell the routes apart with a small limit
+    val ring = Array.tabulate(22)(i =>
+      Array(math.cos(2 * math.Pi * i / 22) * (1 + 0.1 * math.sin(i)), math.sin(2 * math.Pi * i / 22))
+    )
+    def corners(s: Snapshot): Set[Set[(Double, Double)]] =
+      val found: Seq[Set[(Double, Double)]] = s.parts(0) match
+        case f: Figure =>
+          f.marks.flatMap {
+            case p: Mark.Polygons => p.corners.map(c => Set.from(c))
+            case _                => Seq.empty[Set[(Double, Double)]]
+          }
+        case sc: Scene =>
+          sc.layers.flatMap {
+            case l: Layer.Triangles =>
+              l.corners.map { case (a, b, c) => Set((a._1, a._2), (b._1, b._2), (c._1, c._2)) }
+            case _ => Seq.empty[Set[(Double, Double)]]
+          }
+        case other => sys.error(s"unexpected panel $other")
+      Set.from(found)
+
+    "be drawn on a flat canvas that pans, with the triangles of the SVG page at the same places" in {
+      val svg = Plot.filtration(ring, max = 1.5, canvas = false)
+      val canvas = Plot.filtration(ring, max = 1.5, canvas = true)
+      svg.panels.head must beAnInstanceOf[Panel.Flat]
+      canvas.panels.head must beAnInstanceOf[Panel.Spatial]
+      val scene = canvas.panels.head.asInstanceOf[Panel.Spatial].scene
+      (scene.azimuth, scene.elevation, scene.turns) === (0.0, 90.0, false)
+      val a = corners(svg.at(0.9))
+      val b = corners(canvas.at(0.9))
+      a.nonEmpty must beTrue
+      (a == b) must beTrue
+    }
+
+    "be the choice for more cells than an SVG page holds, and the SVG below that" in {
+      // 52 points have 22,100 triangles, 40 have 9,880 (all of them, at a scale past every edge)
+      def cloud(n: Int) = Array.tabulate(n)(i => Array(math.cos(2.4 * i) * (1 + 0.1 * math.sin(i)), math.sin(2.4 * i)))
+      Plot.svgCells === 20000
+      Plot.filtration(cloud(40), max = 10.0).panels.head must beAnInstanceOf[Panel.Flat]
+      Plot.filtration(cloud(52), max = 10.0).panels.head must beAnInstanceOf[Panel.Spatial]
+      // what the caller says wins either way
+      Plot.filtration(cloud(52), max = 10.0, canvas = false).panels.head must beAnInstanceOf[Panel.Flat]
+      Plot.filtration(cloud(12), max = 10.0, canvas = true).panels.head must beAnInstanceOf[Panel.Spatial]
+    }
+
+    "weigh a fraction of the SVG page and say how it moves" in {
+      val svg = Plot.filtration(ring, max = 3.0, canvas = false).fragment(Theme.Light)
+      val canvas = Plot.filtration(ring, max = 3.0, canvas = true).fragment(Theme.Light)
+      (canvas.length * 3 < svg.length) must beTrue
+      canvas must contain("drag to pan, scroll to zoom")
+      canvas must contain("const turns=false")
+      canvas must not(contain("drag to turn"))
+    }
+
+    "link its cycles like the SVG page, on the same cells" in {
+      val bars = Persistence(ring, maxDimension = 1, maxFiltrationValue = 1.5).bars
+      val k = bars.indices.filter(bars(_).dim == 1).maxBy(bars(_).persistence)
+      val svg = Plot.filtration(ring, max = 1.5, link = true, canvas = false)
+      val canvas = Plot.filtration(ring, max = 1.5, link = true, canvas = true)
+      def thick(s: Snapshot): Set[Edge] =
+        val found: Seq[Edge] = s.parts(0) match
+          case f: Figure =>
+            f.marks.flatMap {
+              case m: Mark.Segments if m.width == 3.0 => m.ends
+              case _                                  => Seq.empty[Edge]
+            }
+          case sc: Scene =>
+            sc.layers.flatMap {
+              case l: Layer.Segments if l.width == 3.0 => l.ends.map { case ((a, b, _), (c, d, _)) => ((a, b), (c, d)) }
+              case _                                   => Seq.empty[Edge]
+            }
+          case other => sys.error(s"unexpected panel $other")
+        Set.from(found)
+      val state = PageState().value("t", 1.5).select("class", k)
+      thick(svg.at(state)).nonEmpty must beTrue
+      (thick(svg.at(state)) == thick(canvas.at(state))) must beTrue
+    }
   }

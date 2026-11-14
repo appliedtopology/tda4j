@@ -810,7 +810,9 @@ object Plot:
     * point.
     *
     * The page holds every cell up to the slider's maximum, so a large complex makes a large page: it refuses more than
-    * `maxCells` of them, and the remedy is a smaller `max`.
+    * `maxCells` of them, and the remedy is a smaller `max`. Up to 20,000 cells the complex is an SVG with axes, one
+    * element per cell; above that it is a canvas (a flat picture you pan and zoom, with no axes), which takes a seventh
+    * of the bytes and a hundredth of the elements.
     *
     * @param balls
     *   the radius of the balls around the points as a multiple of the filtration value (`0.5` for Vietoris-Rips, where
@@ -831,6 +833,9 @@ object Plot:
     *   link the views as [[explore]] does: pointing at a class of the diagram or the barcode lights it up in the other,
     *   and draws its representative cycle on the complex (the bars must carry representatives, which the default of
     *   `Persistence` does)
+    * @param canvas
+    *   draw the complex on a canvas (`true`) or as an SVG with axes (`false`); by default the canvas for more than
+    *   20,000 cells
     * @param cycles
     *   with `link`, the cycle of each bar (bar `k`'s as simplices with coefficients) for bars that carry no
     *   representative of their own; used in place of the bars' representatives when given
@@ -844,11 +849,12 @@ object Plot:
     start: Optional[Double] = Optional.empty,
     barcode: Boolean = false,
     stops: Boolean = false,
-    maxCells: Int = 20000,
+    maxCells: Int = 200000,
     title: String = "",
     palette: Optional[Palette] = Optional.empty,
     link: Boolean = false,
-    cycles: Optional[Cycles] = Optional.empty
+    cycles: Optional[Cycles] = Optional.empty,
+    canvas: Optional[Boolean] = Optional.empty
   )(using look: Look): Interactive =
     sweptFiltration(
       points,
@@ -865,7 +871,8 @@ object Plot:
       palette,
       spatial = false,
       link = link,
-      cycles = cycles.toOption
+      cycles = cycles.toOption,
+      canvas = canvas.toOption
     )
 
   /** The complex `kind` (`VietorisRips`, `Cech` or `AlphaShapes`) of `points` as an [[Interactive]] page with a slider
@@ -886,10 +893,11 @@ object Plot:
     balls: Boolean = true,
     barcode: Boolean = false,
     stops: Boolean = false,
-    maxCells: Int = 20000,
+    maxCells: Int = 200000,
     title: String = "",
     palette: Optional[Palette] = Optional.empty,
-    link: Boolean = false
+    link: Boolean = false,
+    canvas: Optional[Boolean] = Optional.empty
   )(using look: Look): Interactive =
     val stream =
       if kind eq AlphaShapes then kind.fromPoints(points, 1, None) else kind.fromPoints(points, 1, max.toOption)
@@ -910,7 +918,8 @@ object Plot:
       s"$name complex",
       palette,
       spatial = false,
-      link = link
+      link = link,
+      canvas = canvas.toOption
     )
 
   /** [[filtrationOf]] with the complex in 3-D (the first three coordinates of the points): a canvas to turn and zoom,
@@ -927,7 +936,7 @@ object Plot:
     start: Optional[Double] = Optional.empty,
     barcode: Boolean = false,
     stops: Boolean = false,
-    maxCells: Int = 20000,
+    maxCells: Int = 200000,
     title: String = "",
     palette: Optional[Palette] = Optional.empty,
     link: Boolean = false,
@@ -963,7 +972,7 @@ object Plot:
     balls: Boolean = true,
     barcode: Boolean = false,
     stops: Boolean = false,
-    maxCells: Int = 20000,
+    maxCells: Int = 200000,
     title: String = "",
     palette: Optional[Palette] = Optional.empty,
     link: Boolean = false
@@ -1002,7 +1011,8 @@ object Plot:
     palette: Optional[Palette],
     spatial: Boolean,
     link: Boolean = false,
-    cycles: Option[Cycles] = None
+    cycles: Option[Cycles] = None,
+    canvas: Option[Boolean] = None
   )(using look: Look): Interactive =
     val limit = max.getOrElse(Double.PositiveInfinity)
     val cells = stream.iterator.filter(c => c.dim >= 1 && c.dim <= 2 && stream.filtrationValue(c) <= limit).toVector
@@ -1021,9 +1031,13 @@ object Plot:
     def styled(f: Figure): Figure = look.figure(palette)(f)
     val entering = (cs: Vector[Simplex[Int]]) =>
       cs.map(c => Reaction(Vector(Behavior.shownFrom("t", stream.filtrationValue(c))))).toIndexedSeq
+    // a flat picture drawn on a canvas, seen from above and panned, when there are too many cells for an SVG
+    val onCanvas = spatial || canvas.getOrElse(cells.size > Plot.svgCells)
+    val flat = onCanvas && !spatial
+    val pts3: IndexedSeq[XYZ] = if flat then xy(points).map((x, y) => (x, y, 0.0)) else xyz(points)
     val complexPanel: Panel =
-      if spatial then
-        val pts = xyz(points)
+      if onCanvas then
+        val pts = pts3
         val tris = cells.filter(_.dim == 2)
         val edges = cells.filter(_.dim == 1)
         val ballLayer = factor.map(f => Layer.Balls(pts, f * control.value, IndexedSeq(Paint.Series(0)), 0.09))
@@ -1039,7 +1053,10 @@ object Plot:
               Layer.Segments(edges.map(e => (pts(e.first), pts(e.last))), IndexedSeq(Paint.Secondary), 1),
               Layer.Points(pts, IndexedSeq(Paint.Ink), 2.5)
             ),
-            title = name
+            title = name,
+            azimuth = if flat then 0 else Scene().azimuth,
+            elevation = if flat then 90 else Scene().elevation,
+            turns = !flat
           )
         )
         Panel.Spatial(
@@ -1072,8 +1089,8 @@ object Plot:
         val overlay = cycleOverlay(xy(points).size, all, classes, maxCells, cycles)
         overlay.fold(flat)(o => o.addTo(flat, xy(points))).zoomableIfPossible(ZoomAxes.Both)
       case space: Panel.Spatial if link =>
-        val overlay = cycleOverlay(xyz(points).size, all, classes, maxCells, cycles)
-        overlay.fold(space)(o => o.addTo(space, xyz(points)))
+        val overlay = cycleOverlay(pts3.size, all, classes, maxCells, cycles)
+        overlay.fold(space)(o => o.addTo(space, pts3))
       case other => other
     // a linked page is one to explore: its pictures also zoom
     def brushed(panel: Panel.Flat, axes: ZoomAxes): Panel.Flat =
@@ -1100,6 +1117,9 @@ object Plot:
     Interactive(panels, Vector(control), title, Vector.empty, if link then Vector(chooser) else Vector.empty)
 
   // ----- linked views: pointing at a class of one picture lights it up in the others
+
+  /** The most cells an SVG page holds before [[filtration]] draws the complex on a canvas instead. */
+  private[plot] val svgCells: Int = 20000
 
   /** The name of the selection that links the views of [[explore]] and of a linked [[filtration]]: its keys are the
     * positions of the bars in the list or diagram given.

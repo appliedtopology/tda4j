@@ -40,6 +40,10 @@ object Layer:
 
 /** A 3-D plot. In a page (`html`, the live viewer) it is drawn on a canvas you can turn (drag) and zoom (scroll), with
   * no library to load; as an `.svg` file it is one view, from `azimuth`/`elevation` (degrees), drawn back to front.
+  *
+  * With `turns = false` the view stays as `azimuth` and `elevation` give it and a drag pans instead; the scroll wheel
+  * zooms about the pointer. A flat picture (points in the plane, seen from above: `azimuth = 0`, `elevation = 90`) is
+  * drawn this way when it has too many items for an SVG, which a canvas draws in a fraction of the time and bytes.
   */
 final case class Scene(
   layers: Vector[Layer] = Vector.empty,
@@ -53,7 +57,8 @@ final case class Scene(
   style: Style = Style.default,
   degrees: Map[Int, DegreeStyle] = Map.empty,
   elements: Elements = Elements(),
-  zoom: Double = 1.0
+  zoom: Double = 1.0,
+  turns: Boolean = true
 ) extends Plot:
   def +(layer: Layer): Scene = copy(layers = layers :+ layer)
   def ++(more: IterableOnce[Layer]): Scene = copy(layers = layers ++ more)
@@ -467,7 +472,7 @@ final case class Scene(
        |<div style="${css(
         TextRole.Note,
         s"color:${col(elements.face(TextRole.Note).paint).replace("\"", "")};margin-top:4px"
-      )}">drag to turn, scroll to zoom</div>
+      )}">${if turns then "drag to turn, scroll to zoom" else "drag to pan, scroll to zoom"}</div>
        |<script>(function(){
        |const root=document.getElementById('$id'),cv=root.querySelector('canvas'),g=cv.getContext('2d');
        |const P=${positions.mkString("[", ",", "]")},layers=$json;$hook
@@ -475,25 +480,34 @@ final case class Scene(
        |const color=s=>{if(!s.startsWith('var('))return s;let c=resolved.get(s);
        |  if(c===undefined){c=css.getPropertyValue(s.slice(4,-1)).trim();resolved.set(s,c);}return c;};
        |let az=${math.toRadians(azimuth)},el=${math.toRadians(elevation)},zoom=${Svg.number(zoom)};
-       |const ends=L=>L.k==='s'?2:L.k==='t'?3:1,count=L=>L.i.length/ends(L),tint=(L,k)=>L.pal[typeof L.c==='number'?L.c:L.c[k]];
+       |let pan=[0,0];const turns=$turns,ends=L=>L.k==='s'?2:L.k==='t'?3:1,count=L=>L.i.length/ends(L),tint=(L,k)=>L.pal[typeof L.c==='number'?L.c:L.c[k]];
        |function project(){const ca=Math.cos(az),sa=Math.sin(az),ce=Math.cos(el),se=Math.sin(el);
        |  for(let i=0;i<np;i++){const x=P[3*i],y=P[3*i+1],z=P[3*i+2],x1=x*ca-y*sa,y1=x*sa+y*ca;
        |    Q[3*i]=x1;Q[3*i+1]=y1*se+z*ce;Q[3*i+2]=y1*ce-z*se;}}
        |let last=[],sc=1,ox=0,oy=0;
        |const X=i=>ox+Q[3*i]*sc,Y=i=>oy-Q[3*i+1]*sc;
+       |// the painting order depends on the view alone, not on the sliders or the zoom: it is sorted when the view turns
+       |const off=[];let total=0;layers.forEach(L=>{off.push(total);total+=count(L);});
+       |const LI=new Uint16Array(total),KK=new Int32Array(total),dep=new Float64Array(total);let order=null;
+       |layers.forEach((L,li)=>{const n=count(L);for(let k=0;k<n;k++){LI[off[li]+k]=li;KK[off[li]+k]=k;}});
+       |function sortAll(){project();
+       |  layers.forEach((L,li)=>{const n=count(L),o=off[li];
+       |    for(let k=0;k<n;k++){let d;
+       |      if(L.k==='t')d=(Q[3*L.i[3*k]+2]+Q[3*L.i[3*k+1]+2]+Q[3*L.i[3*k+2]+2])/3;
+       |      else if(L.k==='s')d=(Q[3*L.i[2*k]+2]+Q[3*L.i[2*k+1]+2])/2-1e-6;
+       |      else d=Q[3*L.i[k]+2]+(L.k==='p'?-2e-6:L.k==='b'?1e-6:-3e-6);
+       |      dep[o+k]=d;}});
+       |  order=new Int32Array(total);for(let i=0;i<total;i++)order[i]=i;order.sort((u,v)=>dep[v]-dep[u]);}
        |function draw(){const dpr=window.devicePixelRatio||1,W=cv.clientWidth,H=W*cv.height/cv.width;
        |  if(cv.width!==Math.round(W*dpr)){cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);}
        |  g.setTransform(dpr,0,0,dpr,0,0);g.fillStyle=color(${col(Paint.Surface)});g.fillRect(0,0,W,H);
-       |  project();sc=0.46*Math.min(W,H)*zoom;ox=W/2;oy=H/2;const items=[];
-       |  layers.forEach((L,li)=>{const n=count(L),m=ends(L);
-       |    for(let k=0;k<n;k++){${if reacting.isEmpty then "" else "if(hid(L,k))continue;"}
-       |      let d;if(L.k==='t')d=(Q[3*L.i[3*k]+2]+Q[3*L.i[3*k+1]+2]+Q[3*L.i[3*k+2]+2])/3;
-       |      else if(L.k==='s')d=(Q[3*L.i[2*k]+2]+Q[3*L.i[2*k+1]+2])/2-1e-6;
-       |      else{d=Q[3*L.i[k]+2]+(L.k==='p'?-2e-6:L.k==='b'?1e-6:-3e-6);}
-       |      items.push([d,li,k]);}});
-       |  items.sort((u,v)=>v[0]-u[0]);last=items;
-       |  const surface=color(${col(Paint.Surface)});
-       |  for(const [d,li,k] of items){const L=layers[li],c=color(tint(L,k));
+       |  if(!order)sortAll();sc=0.46*Math.min(W,H)*zoom;ox=W/2+pan[0];oy=H/2+pan[1];last=[];
+       |  for(let q=0;q<total;q++){const gi=order[q],li=LI[gi],k=KK[gi],L=layers[li];
+       |    ${
+        if reacting.isEmpty then "" else "if(hid(L,k))continue;"
+      }
+       |    if(L.pk&&L.pk[k])last.push([dep[gi],li,k]);
+       |    const c=color(tint(L,k));
        |    if(L.k==='t'){g.globalAlpha=L.op;g.fillStyle=c;g.beginPath();g.moveTo(X(L.i[3*k]),Y(L.i[3*k]));g.lineTo(X(L.i[3*k+1]),Y(L.i[3*k+1]));g.lineTo(X(L.i[3*k+2]),Y(L.i[3*k+2]));g.closePath();g.fill();g.globalAlpha=1;}
        |    else if(L.k==='s'){g.globalAlpha=L.op;g.strokeStyle=c;g.lineWidth=L.w;g.lineCap='round';g.beginPath();g.moveTo(X(L.i[2*k]),Y(L.i[2*k]));g.lineTo(X(L.i[2*k+1]),Y(L.i[2*k+1]));g.stroke();g.globalAlpha=1;}
        |    else if(L.k==='p'){g.globalAlpha=L.op;g.fillStyle=c;g.beginPath();g.arc(X(L.i[k]),Y(L.i[k]),L.r,0,2*Math.PI);g.fill();if(L.ew>0){g.strokeStyle=color(L.ec);g.lineWidth=L.ew;g.stroke();}g.globalAlpha=1;}
@@ -526,15 +540,20 @@ final case class Scene(
        |function leave(){if(frame){cancelAnimationFrame(frame);frame=0;}
        |  if(link())choosers.forEach(n=>link().hover(n,[]));cv.style.cursor='grab';}
        |let drag=null,moved=0;
-       |cv.addEventListener('pointerdown',e=>{drag=[e.clientX,e.clientY,az,el];moved=0;cv.setPointerCapture(e.pointerId);cv.style.cursor='grabbing';});
+       |cv.addEventListener('pointerdown',e=>{drag=[e.clientX,e.clientY,az,el,pan[0],pan[1]];moved=0;cv.setPointerCapture(e.pointerId);cv.style.cursor='grabbing';});
        |cv.addEventListener('pointermove',e=>{if(!drag){hoverAt(e);return;}
        |  moved=Math.max(moved,Math.hypot(e.clientX-drag[0],e.clientY-drag[1]));
        |  if(moved<4)return;
-       |  az=drag[2]+(e.clientX-drag[0])*0.01;el=Math.max(-1.55,Math.min(1.55,drag[3]+(e.clientY-drag[1])*0.01));draw();});
+       |  if(turns){az=drag[2]+(e.clientX-drag[0])*0.01;el=Math.max(-1.55,Math.min(1.55,drag[3]+(e.clientY-drag[1])*0.01));order=null;}
+       |  else pan=[drag[4]+(e.clientX-drag[0])*cv.clientWidth/cv.getBoundingClientRect().width,drag[5]+(e.clientY-drag[1])*cv.clientWidth/cv.getBoundingClientRect().width];
+       |  draw();});
        |cv.addEventListener('pointerup',e=>{const was=drag;drag=null;cv.style.cursor='grab';
        |  if(was&&moved<4&&choosers.size&&link()){const pk=pickAt(e.clientX,e.clientY);choosers.forEach(n=>link().click(n,keysFor(pk,n),e.shiftKey));}});
        |cv.addEventListener('pointerleave',leave);
-       |cv.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.max(0.2,Math.min(8,zoom*Math.exp(-e.deltaY*0.001)));draw();},{passive:false});
+       |cv.addEventListener('wheel',e=>{e.preventDefault();const z=Math.max(0.2,Math.min(turns?8:200,zoom*Math.exp(-e.deltaY*0.001)));
+       |  if(!turns){const r=cv.getBoundingClientRect(),k=cv.clientWidth/r.width,x=(e.clientX-r.left)*k-cv.clientWidth/2,y=(e.clientY-r.top)*k-cv.clientHeight/2;
+       |    pan=[x-(x-pan[0])*z/zoom,y-(y-pan[1])*z/zoom];}
+       |  zoom=z;draw();},{passive:false});
        |matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{resolved.clear();draw();});
        |window.addEventListener('resize',draw);draw();})();</script>
        |</div>""".stripMargin

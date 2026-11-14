@@ -254,6 +254,52 @@ const read = f => fs.readFileSync(dir + '/' + f, 'utf8');
   await page.close();
 }
 
+{ // a complex too large for an SVG is a flat canvas: the page draws what the still shows, pans with a drag, zooms about the pointer
+  const { key, t } = JSON.parse(read('interactive-large.json'));
+  const page = await browser.newPage({ viewport: { width: 1800, height: 800 } });
+  const errors = [];
+  page.on('pageerror', e => errors.push(String(e)));
+  page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+  await page.addInitScript(spy);
+  const t0 = Date.now();
+  await page.goto('file://' + dir + '/interactive-large.html');
+  const load = Date.now() - t0;
+  check(fs.statSync(dir + '/interactive-large.html').size < 4e6, `the page of ${(fs.statSync(dir + '/interactive-large.html').size / 1e6).toFixed(2)} MB loads in ${load} ms`);
+  const shapes = () => page.evaluate(() => window.__shapes);
+  await page.evaluate(() => { const a = document.querySelector('.tda4j-ia').tda4j; a.set('t', a.controls[0].max); });
+  const everything = kinds(await shapes());
+  check(everything.triangle > 20000, `at the largest scale the canvas draws ${everything.triangle} triangles, more than an SVG page holds`);
+  await page.evaluate(v => document.querySelector('.tda4j-ia').tda4j.set('t', v), t);
+  const asDrawn = kinds(await shapes());
+  const ref = (await stillKinds(read('interactive-large-still.svg')))[0];
+  const withoutSelection = JSON.stringify(asDrawn);
+  const bar = await page.evaluate(k => { const it = document.querySelector('.tda4j-ia').tda4j.items.find(i => i.picks.some(p => p.n === 'class' && p.key === k) && i.el.getClientRects().length);
+    const r = it.el.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }, key);
+  await page.mouse.click(bar[0], bar[1]); await page.waitForTimeout(300);
+  const chosen = await shapes();
+  check(JSON.stringify(kinds(chosen)) === JSON.stringify(ref), `with the class chosen the canvas draws ${JSON.stringify(kinds(chosen))}, the still ${JSON.stringify(ref)}`);
+  await page.mouse.click(bar[0], bar[1]); await page.mouse.move(2, 2); await page.waitForTimeout(300);
+  check(JSON.stringify(kinds(await shapes())) === withoutSelection, 'a second click removes the cycle again');
+  // a drag pans: every item moves by the drag, nothing turns
+  const canvas = await page.evaluate(() => { const r = document.querySelector('canvas').getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; });
+  const firstDisc = s => s.find(x => kindOf(x) === 'disc' && x.alpha === 1);
+  const before = firstDisc(await shapes()).path[0];
+  const [cx, cy] = [canvas[0] + canvas[2] / 2, canvas[1] + canvas[3] / 2];
+  await page.mouse.move(cx, cy); await page.mouse.down(); await page.mouse.move(cx + 60, cy + 25, { steps: 6 }); await page.mouse.up(); await page.waitForTimeout(200);
+  const after = firstDisc(await shapes()).path[0];
+  check(Math.abs(after[1] - before[1] - 60) < 1 && Math.abs(after[2] - before[2] - 25) < 1, `a drag of (60, 25) moves a point by (${(after[1] - before[1]).toFixed(1)}, ${(after[2] - before[2]).toFixed(1)})`);
+  // the wheel zooms about the pointer: the point under it stays there
+  const spread = sh => { const xs = sh.filter(x => kindOf(x) === 'disc' && x.alpha === 1).map(x => x.path[0][1]); return Math.max(...xs) - Math.min(...xs); };
+  const sh0 = await shapes(), p0 = firstDisc(sh0).path[0], s0 = spread(sh0);
+  const [px, py] = [canvas[0] + p0[1], canvas[1] + p0[2]];
+  await page.mouse.move(px, py); await page.mouse.wheel(0, -400); await page.waitForTimeout(200);
+  const sh1 = await shapes(), p1 = firstDisc(sh1).path[0], s1 = spread(sh1);
+  check(Math.abs(p1[1] - p0[1]) < 1 && Math.abs(p1[2] - p0[2]) < 1, `zooming at a point keeps it in place (${(p1[1] - p0[1]).toFixed(2)}, ${(p1[2] - p0[2]).toFixed(2)})`);
+  check(s1 > 1.3 * s0 && s1 < 1.7 * s0, `the picture grew from ${s0.toFixed(0)} to ${s1.toFixed(0)} px across`);
+  check(errors.length === 0, `no errors on the large page ${errors.join(' | ')}`);
+  await page.close();
+}
+
 { // linked views: pointing at a class lights it up in every picture, as the still of that class does
   const key = JSON.parse(fs.readFileSync(dir + '/interactive-explore.json', 'utf8')).key;
   const still = fs.readFileSync(dir + '/interactive-explore-still.svg', 'utf8').replace(/^<\?xml[^>]*\?>\s*/, '');

@@ -284,6 +284,18 @@ object Gallery:
     linked3.at(PageState().value("t", ringT).select("class", ringKey)).save(out("interactive-linked-3d-still.svg"))
     java.nio.file.Files
       .writeString(java.nio.file.Path.of(out("interactive-linked-3d.json")), s"""{"key":$ringKey,"t":$ringT}""")
+    // a complex with too many cells for an SVG: a flat canvas to pan and zoom, linked to the diagram and the barcode
+    val ringLarge = noisyCircle(60, 0.1, 3)
+    val largeBars = Persistence(ringLarge, maxDimension = 1, maxFiltrationValue = 2.5).bars
+    val largeKey = largeBars.indices.filter(largeBars(_).dim == 1).maxBy(largeBars(_).persistence)
+    val largeT = (largeBars(largeKey).birth + math.min(largeBars(largeKey).death, 2.5)) / 2
+    val manyCells = Plot.filtration(ringLarge, max = 2.5, barcode = true, link = true, title = "Sixty points")
+    manyCells.save(out("interactive-large.html"))
+    manyCells.at(PageState().value("t", largeT).select("class", largeKey)).save(out("interactive-large-still.svg"))
+    java.nio.file.Files.writeString(
+      java.nio.file.Path.of(out("interactive-large.json")),
+      s"""{"key":$largeKey,"t":$largeT}"""
+    )
     // linked views: pointing at a class in one picture lights it up in the others, with its cycle on the input
     val exploreBars = Persistence(circle, maxDimension = 1).bars
     val exploreKey = exploreBars.indices.filter(exploreBars(_).dim == 1).maxBy(exploreBars(_).persistence)
