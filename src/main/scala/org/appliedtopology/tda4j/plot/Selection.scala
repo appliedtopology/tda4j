@@ -76,14 +76,22 @@ object Selection:
   *   the keys chosen in each selection (none by default)
   * @param windows
   *   the range of each zoomed panel, by the panel's number (none by default: every panel shows all of its picture)
+  * @param brushes
+  *   the rectangle dragged out in each brushable panel, by the panel's number (none by default)
   */
 final case class PageState(
   values: Map[String, Double] = Map.empty,
   selected: Map[String, Set[Int]] = Map.empty,
-  windows: Map[Int, Window] = Map.empty
+  windows: Map[Int, Window] = Map.empty,
+  brushes: Map[Int, Window] = Map.empty
 ):
   /** This state with the zoomable panel number `panel` (counting every panel of the page from 0) showing `window`. */
   def zoom(panel: Int, window: Window): PageState = copy(windows = windows.updated(panel, window))
+
+  /** This state with the rectangle `window` (in the data's units) dragged out in the panel number `panel`, which has to
+    * be brushable. It draws the rectangle only: what it touches is chosen with [[select]], as the page chooses it.
+    */
+  def brush(panel: Int, window: Window): PageState = copy(brushes = brushes.updated(panel, window))
 
   /** This state with the slider `name` at `v`. */
   def value(name: String, v: Double): PageState = copy(values = values.updated(name, v))

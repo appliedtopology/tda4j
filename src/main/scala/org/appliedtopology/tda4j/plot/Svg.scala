@@ -133,10 +133,10 @@ object Svg:
           f((c._1 - m.radius, c._2 - m.radius)); f((c._1 + m.radius, c._2 + m.radius))
         else f(c)
       }
-    case m: Mark.Boxes                   => m.boxes.foreach { b => f((b._1, b._2)); f((b._3, b._4)) }
-    case m: Mark.Line                    => m.at.foreach(f)
-    case m: Mark.Text                    => f(m.at)
-    case _: Mark.Diagonal | _: Mark.Rule => ()
+    case m: Mark.Boxes                                    => m.boxes.foreach { b => f((b._1, b._2)); f((b._3, b._4)) }
+    case m: Mark.Line                                     => m.at.foreach(f)
+    case m: Mark.Text                                     => f(m.at)
+    case _: Mark.Diagonal | _: Mark.Rule | _: Mark.Region => ()
   }
 
   /** What an axis has to place: whether any value is negative, and the smallest nonzero magnitude. */
@@ -363,6 +363,7 @@ object Svg:
       case m: Mark.Boxes                   => m.boxes.count(b => !(ok((b._1, b._2)) && ok((b._3, b._4))))
       case m: Mark.Line                    => if m.at.forall(ok) then 0 else 1
       case m: Mark.Text                    => if ok(m.at) then 0 else 1
+      case m: Mark.Region                  => if ok((m.box._1, m.box._2)) && ok((m.box._3, m.box._4)) then 0 else 1
       case _: Mark.Diagonal | _: Mark.Rule => 0
     }.sum
 
@@ -580,26 +581,39 @@ object Svg:
     val f = Frame(xt, yt, x0, x1, y0, y1, left, top, w, h, bandX, bandY, fig.x.reverse, fig.y.reverse)
 
     val zoomOn = tags.zoom.isDefined
+    // the text of a tick at `v`: the axis's number format, or the plain way for its transform
+    def labelText(a: Axis, tr: Transform): Double => String = a.format match
+      case Some(pattern) => v => RootText.format(pattern, Double.box(v))
+      case None          => tr.tickLabel
     // how an axis draws its ticks again for another window: the rule (`a`utomatic, `w`ithin a range, `f`ixed list) and
     // the labels the rule does not make (the `∞` of a diagram)
-    def zoomAxis(a: Axis): String =
-      def json(t: String): String =
-        "\"" + t.flatMap {
-          case '"'  => "\\\""
-          case '\\' => "\\\\"
-          case c    => c.toString
-        } + "\""
+    def json(t: String): String =
+      "\"" + t.flatMap {
+        case '"'  => "\\\""
+        case '\\' => "\\\\"
+        case c    => c.toString
+      } + "\""
+    def zoomAxis(a: Axis, tr: Transform): String =
       def pairs(ps: Seq[(Double, String)]): String = ps.map((v, t) => s"[$v,${json(t)}]").mkString("[", ",", "]")
+      val text = labelText(a, tr)
       val (mode, lo, hi, fixed) = a.ticks match
         case Ticks.Auto            => ("a", "null", "null", Seq.empty[(Double, String)])
         case Ticks.Within(l, h)    => ("w", l.toString, h.toString, Seq.empty[(Double, String)])
-        case Ticks.At(positions)   => ("f", "null", "null", positions.map(v => (v, Transform.Identity.tickLabel(v))))
-        case Ticks.Labelled(words) => ("f", "null", "null", words)
-      s"""{"m":"$mode","lo":$lo,"hi":$hi,"fx":${pairs(fixed)},"ex":${pairs(a.extra)}}"""
+        case Ticks.At(positions)   => ("f", "null", "null", positions.map(v => (v, text(v))))
+        case Ticks.Labelled(words) => ("l", "null", "null", words)
+      val pattern = a.format.fold("null")(json)
+      s"""{"m":"$mode","lo":$lo,"hi":$hi,"fx":${pairs(fixed)},"ex":${pairs(a.extra)},"f":$pattern}"""
+    // how the page writes a number: the separators of `NumberStyle`, or null for the plain way
+    def numberSpec: String =
+      val n = el.numbers
+      if n.isDefault then "null"
+      else
+        def word(o: Option[String]): String = o.fold("null")(json)
+        s"[${word(n.decimal)},${word(n.grouping)},${word(n.minus)}]"
     val zoomAttr = tags.zoom.fold("")(axes =>
-      " data-zm=\"" + escape(s"""{"ax":"$axes","asp":${aspectRatio.fold("null")(_.toString)},"x":${zoomAxis(
-          fig.x
-        )},"y":${zoomAxis(fig.y)}}""") + "\""
+      " data-zm=\"" + escape(s"""{"ax":"$axes","asp":${aspectRatio.fold("null")(_.toString)},"n":$numberSpec,"a":${face(
+          TextRole.TickLabel
+        ).angle},"x":${zoomAxis(fig.x, xt)},"y":${zoomAxis(fig.y, yt)}}""") + "\""
     )
     val frameAttr =
       if !tags.frame && !zoomOn then ""
@@ -672,9 +686,7 @@ object Svg:
 
     // grid, ticks, axes
     def mainTicks(a: Axis, tr: Transform, t0: Double, t1: Double): IndexedSeq[(Double, String)] =
-      val text: Double => String = a.format match
-        case Some(pattern) => v => RootText.format(pattern, Double.box(v))
-        case None          => tr.tickLabel
+      val text = labelText(a, tr)
       val seen = (tr.inverse(math.min(t0, t1)), tr.inverse(math.max(t0, t1)))
       // an automatic tick keeps clear of an extra one (the `∞`), so that the two labels never overprint
       def clear(v: Double): Boolean = a.extra.forall((at, _) => math.abs(tr(v) - tr(at)) >= 0.05 * math.abs(t1 - t0))
@@ -954,6 +966,24 @@ object Svg:
             s"""<line x1="${fmt(x1p)}" y1="${fmt(y1p)}" x2="${fmt(x2p)}" y2="${fmt(y2p)}" style="stroke:${paint(
                 m.paint
               )}" stroke-width="${fmt(m.width * ink)}"${dash(m.dashed)}/>""",
+            markIndex,
+            0
+          )
+      case m: Mark.Region =>
+        val (rx0, ry0, rx1, ry1) = m.box
+        if ok((rx0, ry0)) && ok((rx1, ry1)) then
+          // an axis that runs backwards puts the larger value first, so the corners are sorted on the page
+          val (ax, bx) = (f.px(rx0), f.px(rx1))
+          val (ay, by) = (f.py(ry0), f.py(ry1))
+          val color = paint(m.paint)
+          sb ++= tags.tag(
+            s"""<rect x="${fmt(math.min(ax, bx))}" y="${fmt(math.min(ay, by))}" width="${fmt(
+                math.abs(bx - ax)
+              )}" height="${fmt(
+                math.abs(by - ay)
+              )}" style="fill:$color;fill-opacity:.12;stroke:$color" stroke-width="${fmt(
+                ink
+              )}" stroke-dasharray="${fmt(4 * ink)} ${fmt(3 * ink)}"/>""",
             markIndex,
             0
           )

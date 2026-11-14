@@ -300,6 +300,71 @@ const read = f => fs.readFileSync(dir + '/' + f, 'utf8');
   await page.close();
 }
 
+{ // zoom on log, square-root, symmetric log, reversed and formatted axes: the axes of the page are the axes of the still of the same window
+  // what an axis draws: its lines and texts (not the marks, which the zoom moves as a whole), where, and as which words
+  const axisRecords = root => {
+    const hidden = e => { for (let n = e; n && n.nodeType === 1; n = n.parentNode) if (n.style && n.style.display === 'none') return true; return false; };
+    const out = [];
+    root.querySelectorAll('line, text').forEach(e => {
+      if (e.closest('g[clip-path]') || e.closest('g[data-z]') || hidden(e)) return;
+      if (e.getAttribute('font-weight') === '600' && +e.getAttribute('y') < 30) return; // the figure's title: a still draws it, the page puts it in its own heading
+      const tag = e.tagName.toLowerCase();
+      const nums = tag === 'line' ? ['x1', 'y1', 'x2', 'y2'].map(a => +e.getAttribute(a)) : [+e.getAttribute('x'), +e.getAttribute('y')];
+      out.push({ tag, text: tag === 'text' ? e.textContent : '', nums, tr: ((e.getAttribute('transform') || '').match(/-?[0-9.]+/g) || []).map(Number), anchor: e.getAttribute('text-anchor') || '' });
+    });
+    return out;
+  };
+  const alike = (a, b) => a.tag === b.tag && a.text === b.text && a.anchor === b.anchor && a.nums.length === b.nums.length && a.tr.length === b.tr.length &&
+    a.nums.every((v, i) => Math.abs(v - b.nums[i]) < 0.02) && a.tr.every((v, i) => Math.abs(v - b.tr[i]) < 0.02);
+  const unmatched = (xs, ys) => { const rest = ys.slice(); const lost = [];
+    for (const x of xs) { const i = rest.findIndex(y => alike(x, y)); if (i < 0) lost.push(x); else rest.splice(i, 1); }
+    return { lost, extra: rest }; };
+  const show = r => `${r.tag}${r.text ? ' "' + r.text + '"' : ''} @${r.nums.map(n => n.toFixed(1))}${r.tr.length ? ' rot' + r.tr[0] : ''}`;
+  const liveRecords = page => page.evaluate(`(() => { const axisRecords = ${axisRecords.toString()}; return axisRecords(document.querySelector('.tda4j-ia svg[data-zm]')); })()`);
+  for (const name of ['log', 'sqrt', 'symlog', 'reversed', 'format', 'logfar', 'extras']) {
+    const meta = JSON.parse(read(`zoomaxes-${name}.json`));
+    const page = await browser.newPage({ viewport: { width: 1000, height: 800 } });
+    const errors = [];
+    page.on('pageerror', e => errors.push(String(e)));
+    page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+    await page.goto(`file://${dir}/zoomaxes-${name}.html`);
+    const bad = []; let drawn = 0, minor = 0;
+    for (const [i, w] of meta.windows.entries()) {
+      await page.evaluate(w => document.querySelector('.tda4j-ia').tda4j.zoom(0, w), w);
+      const live = await liveRecords(page);
+      const ref = await reader.evaluate(`(() => { const axisRecords = ${axisRecords.toString()}; const doc = new DOMParser().parseFromString(${JSON.stringify(meta.stills[i].replace(/^<\?xml[^>]*\?>\s*/, ''))}, 'image/svg+xml');
+        const svg = [...doc.querySelectorAll('svg')].find(s => s.querySelector('g[clip-path]')); return axisRecords(svg); })()`);
+      drawn += live.length; minor += live.filter(r => r.tag === 'line').length;
+      const { lost, extra } = unmatched(live, ref);
+      if (lost.length || extra.length) bad.push(`window ${i} ${JSON.stringify(w.map(v => +v.toPrecision(4)))}: page only ${lost.slice(0, 2).map(show)}; still only ${extra.slice(0, 2).map(show)}`);
+    }
+    check(bad.length === 0, `${name}: ${meta.windows.length} windows draw the axes of their stills (${drawn} elements)` + (bad.length ? ` -- ${bad.slice(0, 2).join(' || ')}` : ''));
+    // a drag moves every mark with the pointer, and the wheel zooms about it, whatever the direction and scale of the axes
+    const centre = async () => page.evaluate(() => { const c = [...document.querySelectorAll('.tda4j-ia svg[data-zm] g[data-z=p] [data-c]')].filter(e => e.getClientRects().length)[3] || document.querySelector('.tda4j-ia svg[data-zm] g[data-z=p] [data-c]');
+      const r = c.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; });
+    await page.evaluate(() => document.querySelector('.tda4j-ia').tda4j.resetZoom(0));
+    await page.evaluate(() => { const t = document.querySelector('.tda4j-ia').tda4j, w = t.window(0); t.zoom(0, [w[0] + 0.1 * (w[1] - w[0]), w[0] + 0.7 * (w[1] - w[0]), w[2] + 0.1 * (w[3] - w[2]), w[2] + 0.7 * (w[3] - w[2])].map((v, i) => v)); });
+    const p0 = await centre();
+    const svgBox = await page.evaluate(() => { const r = document.querySelector('.tda4j-ia svg[data-zm]').getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; });
+    const [gx, gy] = [svgBox[0] + svgBox[2] * 0.5, svgBox[1] + svgBox[3] * 0.5];
+    await page.mouse.move(gx, gy); await page.mouse.down(); await page.mouse.move(gx + 50, gy - 25, { steps: 6 }); await page.mouse.up(); await page.waitForTimeout(100);
+    const p1 = await centre();
+    check(Math.abs(p1[0] - p0[0] - 50) < 1.5 && Math.abs(p1[1] - p0[1] + 25) < 1.5, `${name}: a drag of (50, -25) moves a mark by (${(p1[0] - p0[0]).toFixed(1)}, ${(p1[1] - p0[1]).toFixed(1)})`);
+    await page.mouse.move(p1[0], p1[1]); await page.keyboard.down('Control'); await page.mouse.wheel(0, -300); await page.keyboard.up('Control'); await page.waitForTimeout(100);
+    const p2 = await centre();
+    check(Math.abs(p2[0] - p1[0]) < 1.5 && Math.abs(p2[1] - p1[1]) < 1.5, `${name}: zooming at a mark keeps it where it is (${(p2[0] - p1[0]).toFixed(1)}, ${(p2[1] - p1[1]).toFixed(1)})`);
+    check(errors.length === 0, `${name}: no errors ${errors.join(' | ')}`);
+    if (name === 'format') { // the page writes %f and %e itself: as String.format does, over the cases the Gallery asked Java for
+      const cases = JSON.parse(read('formats.json')).cases;
+      const got = await page.evaluate(cs => { const f = document.querySelector('.tda4j-ia').tda4j.text.format; return cs.map(c => f(c.p, Number(c.v))); }, cases);
+      const wrong = cases.map((c, i) => [c, got[i]]).filter(([c, g]) => g !== c.out);
+      check(wrong.length === 0, `format: ${cases.length} number formats read as Java writes them` +
+        (wrong.length ? ` -- ${wrong.length} differ, e.g. ${wrong.slice(0, 4).map(([c, g]) => `${c.p} of ${c.v}: java "${c.out}", page "${g}"`).join('; ')}` : ''));
+    }
+    await page.close();
+  }
+}
+
 { // linked views: pointing at a class lights it up in every picture, as the still of that class does
   const key = JSON.parse(fs.readFileSync(dir + '/interactive-explore.json', 'utf8')).key;
   const still = fs.readFileSync(dir + '/interactive-explore-still.svg', 'utf8').replace(/^<\?xml[^>]*\?>\s*/, '');
@@ -685,6 +750,209 @@ const matches = (a, b, tol = 0.1) => {
 
   check(errors.length === 0, `no errors while zooming the explore page ${errors.join(' | ')}`);
   await page.close();
+}
+
+{ // brushing on a page of forty points: the rectangle is the one of the still (dragged, set from the data, or walked out with the keyboard)
+  const meta = JSON.parse(read('interactive-brush.json'));
+  const context = await browser.newContext({ viewport: { width: 900, height: 900 }, hasTouch: true });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push(String(e)));
+  page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+  await page.goto(`file://${dir}/interactive-brush.html`);
+  const api = (body, arg) => page.evaluate(`((arg) => { const t = document.querySelector('.tda4j-ia').tda4j; ${body} })(${JSON.stringify(arg ?? null)})`);
+  const pageRect = () => page.evaluate(() => { const r = document.querySelector('.tda4j-brush'); return r ? ['x', 'y', 'width', 'height'].map(a => +r.getAttribute(a)) : null; });
+  const stillRect = text => inStill(text, doc => { const r = doc.querySelector('rect[stroke-dasharray]'); return r ? ['x', 'y', 'width', 'height'].map(a => +r.getAttribute(a)) : null; });
+  const near = (a, b, tol = 0.02) => a && b && a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) <= tol);
+  const chosen = () => api("return [...t.selection('c')].sort((a, b) => a - b);");
+  const svgBox = () => page.evaluate(() => { const r = document.querySelector('.tda4j-ia svg[tabindex]').getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; });
+  // the points the page draws (key and box, in client pixels) and the plot area, read off the document, whatever the zoom
+  const domPoints = () => page.evaluate(() => { const svg = document.querySelector('.tda4j-ia svg[tabindex]'), m = svg.getScreenCTM();
+    const ax = svg.getAttribute('data-fr').split(';').map(s => s.split(',').map(Number)), a = new DOMPoint(ax[0][0], ax[1][0]).matrixTransform(m), b = new DOMPoint(ax[0][0] + ax[0][1], ax[1][0] + ax[1][1]).matrixTransform(m);
+    const pts = [...svg.querySelectorAll('[data-ia]')].filter(e => /(^|;)s,/.test(e.getAttribute('data-ia')) && e.getClientRects().length).map(e => { const r = e.getBoundingClientRect();
+      return { key: +decodeURIComponent(e.getAttribute('data-ia').split(';').find(s => s.startsWith('s,')).split(',')[2]), box: [r.left, r.top, r.right, r.bottom] }; });
+    return { pts, plot: [a.x, a.y, b.x, b.y] }; });
+  // the keys a client rectangle touches: the points whose discs meet it (and, when asked, the part of it that is over the plot area)
+  const touched = (d, [x0, y0, x1, y1], clip) => { if (clip) { x0 = Math.max(x0, d.plot[0]); y0 = Math.max(y0, d.plot[1]); x1 = Math.min(x1, d.plot[2]); y1 = Math.min(y1, d.plot[3]); }
+    return d.pts.filter(p => p.box[2] >= x0 && p.box[0] <= x1 && p.box[3] >= y0 && p.box[1] <= y1).map(p => p.key).sort((a, b) => a - b); };
+  const rectClient = () => page.evaluate(() => { const r = document.querySelector('.tda4j-brush').getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; });
+
+  // the rectangle set from the data is the still's, zoomed or not
+  const bad = [];
+  for (const [i, c] of meta.cases.entries()) {
+    await api('if (arg[0]) t.zoom(0, arg[0]); else t.resetZoom(0); t.brush(0, arg[1]);', [c.zoom, c.brush]);
+    const mine = await pageRect(), theirs = await stillRect(c.still);
+    if (!near(mine, theirs)) bad.push(`case ${i} (${c.zoom ? 'zoomed' : 'whole'}): page ${mine && mine.map(v => v.toFixed(2))}, still ${theirs && theirs.map(v => v.toFixed(2))}`);
+  }
+  check(bad.length === 0, `${meta.cases.length} rectangles set from the data are those of their stills` + (bad.length ? ` -- ${bad.slice(0, 2).join(' || ')}` : ''));
+  await api('t.resetZoom(0); t.brush(0, null);');
+  check(await pageRect() === null, 'brush(0, null) takes the rectangle away');
+
+  // a drag draws the rectangle that its two corners name, and chooses the points it touches
+  const [bx, by, bw, bh] = await svgBox();
+  const [P, Q] = [[bx + 0.3 * bw, by + 0.35 * bh], [bx + 0.65 * bw, by + 0.7 * bh]];
+  await page.mouse.move(...P); await page.mouse.down(); await page.mouse.move(...Q, { steps: 8 }); await page.mouse.up();
+  const dragged = await pageRect(), picked = await chosen(), where = await domPoints();
+  const [a, b] = await api('return [t.pointAt(0, arg[0][0], arg[0][1]), t.pointAt(0, arg[1][0], arg[1][1])];', [P, Q]);
+  await api('t.brush(0, arg);', [Math.min(a[0], b[0]), Math.max(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[1], b[1])]);
+  check(near(dragged, await pageRect()), `a drag from ${P.map(Math.round)} to ${Q.map(Math.round)} draws the rectangle of the data under its corners`);
+  check(JSON.stringify(picked) === JSON.stringify(touched(where, [P[0], P[1], Q[0], Q[1]], false)) && picked.length > 0, `and chooses the points it touches: [${picked}]`);
+  await page.mouse.click(bx + 5, by + 5);
+  check((await chosen()).length === 0, 'a click on nothing clears the choice');
+
+  // the keyboard: arrows move a cross, Enter sets the corners, shift-Enter adds, Escape lets go
+  await page.focus('.tda4j-ia svg[tabindex]');
+  const press = async (key, times = 1) => { for (let i = 0; i < times; i++) await page.keyboard.press(key); };
+  const frame = await page.evaluate(() => document.querySelector('.tda4j-ia svg[tabindex]').getAttribute('data-fr').split(';').map(s => s.split(',').map(Number)));
+  const [W, H, X0, Y0] = [frame[0][1], frame[1][1], frame[0][0], frame[1][0]];
+  await press('Shift+ArrowLeft'); await press('Shift+ArrowUp'); await press('Enter');
+  await press('Shift+ArrowRight', 3); await press('Shift+ArrowDown', 2);
+  const rubber = await pageRect();
+  await press('Enter');
+  const walked = await pageRect(), keys1 = await chosen();
+  const expected = [X0 + W / 2 - 0.16 * W, Y0 + H / 2 - 0.16 * H, 0.48 * W, 0.32 * H];
+  check(near(walked, expected, 0.05), `arrows and Enter walk out the rectangle ${expected.map(v => v.toFixed(1))}: ${walked && walked.map(v => v.toFixed(1))}`);
+  check(rubber && near(rubber, walked, 0.01), 'the rectangle follows the cross between the two Enters');
+  check(JSON.stringify(keys1) === JSON.stringify(touched(await domPoints(), await rectClient(), false)) && keys1.length >= 3, `the keyboard chooses the points it touches, as the mouse does: [${keys1}]`);
+  check(await page.evaluate(() => !document.querySelector('.tda4j-cursor')), 'the cross is gone once the rectangle is chosen');
+  await press('Shift+ArrowLeft', 3); await press('Shift+ArrowUp', 2); await press('Enter');
+  await press('Shift+ArrowDown', 4); await press('Shift+ArrowRight'); await page.keyboard.press('Shift+Enter');
+  const added = await chosen(), second = touched(await domPoints(), await rectClient(), false);
+  const union = [...new Set([...keys1, ...second])].sort((a, b) => a - b);
+  check(JSON.stringify(added) === JSON.stringify(union) && second.some(k => !keys1.includes(k)), `shift-Enter adds a second rectangle to the first: [${keys1}] and [${second}] make [${added}]`);
+  await press('ArrowLeft'); await press('Enter'); await press('ArrowDown'); await press('Escape');
+  check(await page.evaluate(() => !document.querySelector('.tda4j-brush')) && JSON.stringify(await chosen()) === JSON.stringify(added), 'Escape lets go: no rectangle, nothing changed');
+
+  // zoomed, a rectangle that runs over the margin chooses only what the plot area shows of it
+  await api('t.zoom(0, [2, 6, 2, 6]);');
+  const [zx, zy, zw, zh] = await svgBox(), area = (await domPoints()).plot;
+  const R = [[area[0] + 0.5 * (area[2] - area[0]), area[1] + 0.4 * (area[3] - area[1])], [zx + zw - 2, zy + zh - 2]];
+  await page.mouse.move(...R[0]); await page.mouse.down(); await page.mouse.move(...R[1], { steps: 6 }); await page.mouse.up();
+  const clipped = await chosen(), zoomedPts = await domPoints();
+  check(JSON.stringify(clipped) === JSON.stringify(touched(zoomedPts, [R[0][0], R[0][1], R[1][0], R[1][1]], true)), `zoomed, a drag over the margin chooses what the plot area shows: [${clipped}]`);
+  check(touched(zoomedPts, [R[0][0], R[0][1], R[1][0], R[1][1]], false).length > clipped.length, 'and there were points under the margin that it leaves out');
+  await api('t.resetZoom(0);');
+  await page.mouse.click(bx + 5, by + 5);
+
+  // + and - zoom about the middle, 0 shows everything, and in pan mode the arrows pan
+  await api('t.brush(0, null); t.resetZoom(0);');
+  const whole = await api('return t.window(0);');
+  await page.focus('.tda4j-ia svg[tabindex]');
+  await page.keyboard.press('+');
+  const half = await api('return t.window(0);');
+  check(Math.abs((half[1] - half[0]) - (whole[1] - whole[0]) / 2) < 1e-9 && Math.abs((half[0] + half[1]) / 2 - (whole[0] + whole[1]) / 2) < 1e-9, '+ halves the window about its middle');
+  await page.keyboard.press('ArrowRight');
+  check(JSON.stringify(await api('return t.window(0);')) === JSON.stringify(half), 'where a drag chooses, the arrows do not pan');
+  await page.locator('.tda4j-zoombar button[aria-label^="drag to pan"]').click();
+  await page.focus('.tda4j-ia svg[tabindex]');
+  await page.keyboard.press('ArrowRight');
+  const right = await api('return t.window(0);');
+  check(Math.abs(right[0] - half[0] - 0.1 * (half[1] - half[0])) < 1e-9 && right[2] === half[2], 'in pan mode the right arrow moves the window a tenth of its width to the right');
+  await page.keyboard.press('Shift+ArrowUp');
+  const up = await api('return t.window(0);');
+  check(Math.abs(up[2] - right[2] - 0.5 * (right[3] - right[2])) < 1e-9, 'shift and the up arrow move it half its height up');
+  await page.keyboard.press('0');
+  check(JSON.stringify(await api('return t.window(0);')) === JSON.stringify(whole), '0 shows everything');
+  await page.keyboard.press('-');
+  check(JSON.stringify(await api('return t.window(0);')) === JSON.stringify(whole), '- cannot zoom out past the whole picture');
+
+  // touch: two fingers pinch (the distance) and drag (the midpoint); one finger leaves the picture to the page, a tap chooses
+  const cdp = await context.newCDPSession(page);
+  const touch = (type, pts) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map(([x, y], id) => ({ x, y, id })) });
+  const gesture = async (from, to, steps = 6) => {
+    await touch('touchStart', from);
+    for (let i = 1; i <= steps; i++) await touch('touchMove', from.map((p, k) => [p[0] + (to[k][0] - p[0]) * i / steps, p[1] + (to[k][1] - p[1]) * i / steps]));
+    await touch('touchEnd', []);
+    await page.waitForTimeout(60);
+  };
+  await page.locator('.tda4j-zoombar button[aria-label="show everything"]').click();
+  check(await page.evaluate(() => getComputedStyle(document.querySelector('.tda4j-ia svg[tabindex]')).touchAction) === 'pan-x pan-y', 'the picture leaves one-finger scrolling to the page (touch-action: pan-x pan-y)');
+  const [tx, ty, tw, th] = await svgBox();
+  const [mx, my] = [tx + 0.45 * tw, ty + 0.5 * th];
+  const w0 = await api('return t.window(0);'), c0 = await api('return t.pointAt(0, arg[0], arg[1]);', [mx, my]);
+  await gesture([[mx - 40, my], [mx + 40, my]], [[mx - 80, my], [mx + 80, my]]);
+  const w1 = await api('return t.window(0);'), c1 = await api('return t.pointAt(0, arg[0], arg[1]);', [mx, my]);
+  check(Math.abs((w1[1] - w1[0]) - (w0[1] - w0[0]) / 2) < 1e-6 * (w0[1] - w0[0]) && Math.abs((w1[3] - w1[2]) - (w0[3] - w0[2]) / 2) < 1e-6 * (w0[3] - w0[2]), `two fingers twice as far apart show half the window: width ${(w1[1] - w1[0]).toFixed(3)} from ${(w0[1] - w0[0]).toFixed(3)}`);
+  check(Math.abs(c1[0] - c0[0]) < 1e-6 && Math.abs(c1[1] - c0[1]) < 1e-6, `and what was between the fingers still is: (${c0.map(v => v.toFixed(3))}) then (${c1.map(v => v.toFixed(3))})`);
+  const w2in = await api('return t.window(0);');
+  await gesture([[mx - 40, my], [mx + 40, my]], [[mx - 40 + 70, my - 50], [mx + 40 + 70, my - 50]]);
+  const w2 = await api('return t.window(0);'), c2 = await api('return t.pointAt(0, arg[0], arg[1]);', [mx + 70, my - 50]);
+  check(Math.abs((w2[1] - w2[0]) - (w2in[1] - w2in[0])) < 1e-9 && Math.abs(c2[0] - c1[0]) < 1e-6 && Math.abs(c2[1] - c1[1]) < 1e-6, 'two fingers moving together carry what is between them along, and keep the size');
+  const w3in = await api('return t.window(0);'), c3in = await api('return t.pointAt(0, arg[0], arg[1]);', [mx + 20, my + 20]);
+  await gesture([[mx - 30 + 20, my + 20], [mx + 30 + 20, my + 20]], [[mx - 60 - 30, my - 10], [mx + 60 - 30, my - 10]]);
+  const w3 = await api('return t.window(0);'), c3 = await api('return t.pointAt(0, arg[0], arg[1]);', [mx - 30, my - 10]);
+  check(Math.abs((w3[1] - w3[0]) - (w3in[1] - w3in[0]) / 2) < 1e-6 * (w3in[1] - w3in[0]) && Math.abs(c3[0] - c3in[0]) < 1e-6 && Math.abs(c3[1] - c3in[1]) < 1e-6, 'pinching and moving at once does both');
+  await gesture([[mx - 40, my], [mx + 40, my]], [[mx - 4000, my], [mx + 4000, my]]);
+  const deep = await api('return t.window(0);'), full = await api('return t.pointAt(0, arg[0], arg[1]);', [mx, my]);
+  check(deep[1] - deep[0] >= (whole[1] - whole[0]) / 200 - 1e-12, `pinching out stops at 1/200 of the picture (${((whole[1] - whole[0]) / (deep[1] - deep[0])).toFixed(1)}x)`);
+  await page.locator('.tda4j-zoombar button[aria-label="show everything"]').click();
+  const stay = await api('return t.window(0);');
+  await touch('touchStart', [[mx, my]]); for (let i = 1; i <= 5; i++) await touch('touchMove', [[mx + 12 * i, my + 8 * i]]); await touch('touchEnd', []);
+  check(JSON.stringify(await api('return t.window(0);')) === JSON.stringify(stay) && await pageRect() === null, 'one finger moving leaves the window alone, and draws no rectangle');
+  const target = (await domPoints()).pts.find(p => p.key === 7).box.map((v, i, b) => (v + b[(i + 2) % 4]) / 2).slice(0, 2);
+  await touch('touchStart', [target]); await touch('touchEnd', []); await page.waitForTimeout(100);
+  check(JSON.stringify(await chosen()) === JSON.stringify([7]), `a tap on a point chooses it: [${await chosen()}]`);
+  check(errors.length === 0, `no errors on the brush page ${errors.join(' | ')}`);
+
+  // the touch on pages with other axes: the data between the fingers stays between them (reversed axes, a log axis)
+  for (const name of ['reversed', 'log', 'symlog']) {
+    const tab = await context.newPage();
+    await tab.goto(`file://${dir}/zoomaxes-${name}.html`);
+    const cd = await context.newCDPSession(tab);
+    const tch = (type, pts) => cd.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map(([x, y], id) => ({ x, y, id })) });
+    const box = await tab.evaluate(() => { const r = document.querySelector('.tda4j-ia svg[tabindex]').getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; });
+    const [qx, qy] = [box[0] + 0.5 * box[2], box[1] + 0.5 * box[3]];
+    const at = (x, y) => tab.evaluate(([x, y]) => document.querySelector('.tda4j-ia').tda4j.pointAt(0, x, y), [x, y]);
+    const before = await at(qx, qy);
+    const from = [[qx - 40, qy], [qx + 40, qy]], to = [[qx - 70 + 30, qy - 20], [qx + 70 + 30, qy - 20]];
+    await tch('touchStart', from); for (let i = 1; i <= 6; i++) await tch('touchMove', from.map((p, k) => [p[0] + (to[k][0] - p[0]) * i / 6, p[1] + (to[k][1] - p[1]) * i / 6])); await tch('touchEnd', []);
+    await tab.waitForTimeout(60);
+    const after = await at(qx + 30, qy - 20);
+    const rel = (u, v) => Math.abs(u - v) / (Math.abs(v) || 1);
+    check(rel(after[0], before[0]) < 1e-6 && rel(after[1], before[1]) < 1e-6, `${name}: after a pinch and a move, what was between the fingers is: (${before.map(v => v.toPrecision(5))}) then (${after.map(v => v.toPrecision(5))})`);
+    const spanned = await tab.evaluate(() => document.querySelector('.tda4j-ia').tda4j.window(0));
+    check(spanned.every(isFinite), `${name}: the window is still numbers`);
+    if (name === 'reversed') { // on an axis that runs backwards the right arrow moves the view to the right, which is toward smaller values
+      await tab.evaluate(() => { const t = document.querySelector('.tda4j-ia').tda4j; t.resetZoom(0); const w = t.window(0);
+        t.zoom(0, [w[0] + 0.3 * (w[1] - w[0]), w[0] + 0.6 * (w[1] - w[0]), w[2] + 0.3 * (w[3] - w[2]), w[2] + 0.6 * (w[3] - w[2])]); });
+      const k0 = await tab.evaluate(() => document.querySelector('.tda4j-ia').tda4j.window(0));
+      await tab.focus('.tda4j-ia svg[tabindex]'); await tab.keyboard.press('ArrowRight'); await tab.keyboard.press('ArrowUp');
+      const k1 = await tab.evaluate(() => document.querySelector('.tda4j-ia').tda4j.window(0));
+      check(Math.abs((k1[0] - k0[0]) + 0.1 * (k0[1] - k0[0])) < 1e-6 * (k0[1] - k0[0]) && Math.abs((k1[2] - k0[2]) + 0.1 * (k0[3] - k0[2])) < 1e-6 * (k0[3] - k0[2]),
+        `reversed: right and up arrows move the window toward smaller values (${(k1[0] - k0[0]).toFixed(2)}, ${(k1[2] - k0[2]).toFixed(2)})`);
+    }
+    await tab.close();
+  }
+
+  // the 3-D canvas: two fingers pinch to zoom and drag to turn; a flat canvas pans and zooms about the fingers
+  for (const [file, turns] of [['interactive-pick-3d.html', true], ['interactive-large.html', false]]) {
+    const tab = await context.newPage();
+    await tab.addInitScript(spy);
+    await tab.goto(`file://${dir}/${file}`);
+    const cd = await context.newCDPSession(tab);
+    const tch = (type, pts) => cd.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map(([x, y], id) => ({ x, y, id })) });
+    const extent = async () => tab.evaluate(() => { const xs = [], ys = []; window.__shapes.forEach(s => s.path.forEach(p => { xs.push(p[1]); ys.push(p[2]); }));
+      return [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)]; });
+    const cv = await tab.evaluate(() => { const r = document.querySelector('canvas').getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; });
+    const [cx, cy] = [cv[0] + cv[2] / 2, cv[1] + Math.min(cv[3], 500) / 2];
+    const e0 = await extent();
+    const from = [[cx - 30, cy], [cx + 30, cy]], to = [[cx - 60, cy], [cx + 60, cy]];
+    await tch('touchStart', from); for (let i = 1; i <= 6; i++) await tch('touchMove', from.map((p, k) => [p[0] + (to[k][0] - p[0]) * i / 6, p[1] + (to[k][1] - p[1]) * i / 6])); await tch('touchEnd', []);
+    await tab.waitForTimeout(100);
+    const e1 = await extent();
+    const ratio = (e1[1] - e1[0]) / (e0[1] - e0[0]);
+    check(Math.abs(ratio - 2) < 0.08, `${file}: fingers twice as far apart draw it ${ratio.toFixed(2)} times as wide`);
+    if (!turns) {
+      const f2 = [[cx - 60, cy], [cx + 60, cy]], t2 = [[cx - 60 + 40, cy + 25], [cx + 60 + 40, cy + 25]];
+      await tch('touchStart', f2); for (let i = 1; i <= 6; i++) await tch('touchMove', f2.map((p, k) => [p[0] + (t2[k][0] - p[0]) * i / 6, p[1] + (t2[k][1] - p[1]) * i / 6])); await tch('touchEnd', []);
+      await tab.waitForTimeout(100);
+      const e2 = await extent();
+      check(Math.abs((e2[0] - e1[0]) - 40) < 1.5 && Math.abs((e2[2] - e1[2]) - 25) < 1.5, `${file}: two fingers moving together pan it by (${(e2[0] - e1[0]).toFixed(1)}, ${(e2[2] - e1[2]).toFixed(1)})`);
+    }
+    await tab.close();
+  }
+  await page.close();
+  await context.close();
 }
 
 await browser.close();

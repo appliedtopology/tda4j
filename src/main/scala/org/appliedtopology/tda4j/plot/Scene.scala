@@ -540,14 +540,30 @@ final case class Scene(
        |function leave(){if(frame){cancelAnimationFrame(frame);frame=0;}
        |  if(link())choosers.forEach(n=>link().hover(n,[]));cv.style.cursor='grab';}
        |let drag=null,moved=0;
-       |cv.addEventListener('pointerdown',e=>{drag=[e.clientX,e.clientY,az,el,pan[0],pan[1]];moved=0;cv.setPointerCapture(e.pointerId);cv.style.cursor='grabbing';});
-       |cv.addEventListener('pointermove',e=>{if(!drag){hoverAt(e);return;}
+       |// two fingers: the distance between them zooms (about their midpoint on a flat canvas) and their midpoint turns or pans
+       |const fingers=new Map();let pinch=null;
+       |const spread=()=>{const f=[...fingers.values()];return {d:Math.hypot(f[0][0]-f[1][0],f[0][1]-f[1][1]),m:[(f[0][0]+f[1][0])/2,(f[0][1]+f[1][1])/2]};};
+       |cv.addEventListener('pointerdown',e=>{
+       |  if(e.pointerType==='touch'){fingers.set(e.pointerId,[e.clientX,e.clientY]);
+       |    if(fingers.size===2){const s=spread();pinch={d:s.d,m:s.m,zoom:zoom,az:az,el:el,pan:pan.slice()};drag=null;moved=99;cv.setPointerCapture(e.pointerId);return;}}
+       |  drag=[e.clientX,e.clientY,az,el,pan[0],pan[1]];moved=0;cv.setPointerCapture(e.pointerId);cv.style.cursor='grabbing';});
+       |cv.addEventListener('pointermove',e=>{
+       |  if(fingers.has(e.pointerId)){fingers.set(e.pointerId,[e.clientX,e.clientY]);
+       |    if(pinch&&fingers.size===2){const s=spread(),z=Math.max(0.2,Math.min(turns?8:200,pinch.zoom*s.d/Math.max(pinch.d,1)));
+       |      const dx=s.m[0]-pinch.m[0],dy=s.m[1]-pinch.m[1];
+       |      if(turns){az=pinch.az+dx*0.01;el=Math.max(-1.55,Math.min(1.55,pinch.el+dy*0.01));order=null;}
+       |      else{const r=cv.getBoundingClientRect(),k=cv.clientWidth/r.width,x=(pinch.m[0]-r.left)*k-cv.clientWidth/2,y=(pinch.m[1]-r.top)*k-cv.clientHeight/2;
+       |        pan=[x-(x-pinch.pan[0])*z/pinch.zoom+dx*k,y-(y-pinch.pan[1])*z/pinch.zoom+dy*k];}
+       |      zoom=z;draw();return;}}
+       |  if(!drag){hoverAt(e);return;}
        |  moved=Math.max(moved,Math.hypot(e.clientX-drag[0],e.clientY-drag[1]));
        |  if(moved<4)return;
        |  if(turns){az=drag[2]+(e.clientX-drag[0])*0.01;el=Math.max(-1.55,Math.min(1.55,drag[3]+(e.clientY-drag[1])*0.01));order=null;}
        |  else pan=[drag[4]+(e.clientX-drag[0])*cv.clientWidth/cv.getBoundingClientRect().width,drag[5]+(e.clientY-drag[1])*cv.clientWidth/cv.getBoundingClientRect().width];
        |  draw();});
-       |cv.addEventListener('pointerup',e=>{const was=drag;drag=null;cv.style.cursor='grab';
+       |const lift=e=>{fingers.delete(e.pointerId);if(fingers.size<2)pinch=null;};
+       |cv.addEventListener('pointercancel',e=>{lift(e);drag=null;});
+       |cv.addEventListener('pointerup',e=>{lift(e);const was=drag;drag=null;cv.style.cursor='grab';
        |  if(was&&moved<4&&choosers.size&&link()){const pk=pickAt(e.clientX,e.clientY);choosers.forEach(n=>link().click(n,keysFor(pk,n),e.shiftKey));}});
        |cv.addEventListener('pointerleave',leave);
        |cv.addEventListener('wheel',e=>{e.preventDefault();const z=Math.max(0.2,Math.min(turns?8:200,zoom*Math.exp(-e.deltaY*0.001)));

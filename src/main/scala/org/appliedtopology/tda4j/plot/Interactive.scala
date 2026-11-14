@@ -225,9 +225,11 @@ object Panel:
       * dragging pans (in a panel that brushes too, a button chooses what dragging does). Points and text keep their
       * size and lines their width; everything else moves with the data. `axes` says which axes the zoom changes.
       *
-      * The axes have to be linear, forward, and written as the plot writes them (no `Axis.format`, slanted numbers or
-      * number style): a log axis, for one, is refused, and the message says so. [[PageState.zoom]] gives the still
-      * picture of a window.
+      * Linear, logarithmic, square-root, symmetric-log and reversed axes zoom, with their number formats, number style,
+      * slanted labels and minor ticks; the page draws them as the plot does. What it cannot compute is refused, and the
+      * message says what: a transform of your own, a log axis with a `-∞` line for what is at 0, a number format other
+      * than `%f` and `%e` (with the flags `-`, `+`, `0` and `,`, a width and a precision). [[PageState.zoom]] gives the
+      * still picture of a window.
       */
     def zoomable(axes: ZoomAxes = ZoomAxes.Both): Flat = copy(zoom = Some(axes))
 
@@ -797,17 +799,44 @@ final case class Interactive(
       )
     }
     val chosen = selections.map(s => s.name -> state.chosen(s.name)).toMap
-    state.windows.keys.foreach { k =>
+    state.windows.foreach { (k, w) =>
       val zoomable = panels.zipWithIndex.collect { case (Panel.Flat(_, _, _, Some(_)), i) => i }
       require(
         zoomable.contains(k),
         s"Interactive.at: panel $k is not a zoomable panel (zoomable panels: " +
           (if zoomable.isEmpty then "none" else zoomable.mkString(", ")) + ")"
       )
+      panels(k) match
+        case Panel.Flat(figure, _, _, _) =>
+          val (xt, yt) = Svg.resolved(figure)
+          Seq("x" -> (xt, w.x0, w.x1), "y" -> (yt, w.y0, w.y1)).foreach { case (axis, (t, lo, hi)) =>
+            require(
+              t(lo).isFinite && t(hi).isFinite,
+              s"Interactive.at: the window of panel $k runs from $lo to $hi along its $axis axis, which a ${t.label} " +
+                "axis cannot show (positive numbers only, on a log axis)"
+            )
+          }
+        case _ =>
+    }
+    state.brushes.foreach { (k, w) =>
+      val brushable = panels.zipWithIndex.collect { case (Panel.Flat(_, _, Some(_), _), i) => i }
+      require(
+        brushable.contains(k),
+        s"Interactive.at: panel $k is not a brushable panel (brushable panels: " +
+          (if brushable.isEmpty then "none" else brushable.mkString(", ")) + ")"
+      )
+      val (xt, yt) = panels(k) match
+        case Panel.Flat(figure, _, _, _) => Svg.resolved(figure)
+        case _                           => (Transform.Identity, Transform.Identity)
+      require(
+        Seq(xt(w.x0), xt(w.x1), yt(w.y0), yt(w.y1)).forall(_.isFinite),
+        s"Interactive.at: the brush of panel $k runs over $w, which an axis cannot show (positive numbers only, on a log axis)"
+      )
     }
     val shown = panels.zipWithIndex.map {
-      case (Panel.Flat(figure, rs, _, _), k) => Interactive.still(figure, rs, now, chosen, state.windows.get(k))
-      case (Panel.Spatial(scene, rs), _)     => Interactive.still(scene, rs, now, chosen)
+      case (Panel.Flat(figure, rs, _, _), k) =>
+        Interactive.still(figure, rs, now, chosen, state.windows.get(k), state.brushes.get(k))
+      case (Panel.Spatial(scene, rs), _) => Interactive.still(scene, rs, now, chosen)
     }
     val sliders = controls.map(c => s"${c.shownName} = ${Svg.number(now(c.name))}")
     val picked = selections.flatMap { s =>
@@ -1111,6 +1140,8 @@ object Interactive:
        else
          s"""
             |#$id .tda4j-brush{fill:var(--s0);fill-opacity:.12;stroke:var(--s0);stroke-dasharray:4 3;pointer-events:none}
+            |#$id .tda4j-cursor{fill:none;stroke:var(--s0);stroke-width:1.5;pointer-events:none}
+            |#$id svg:focus-visible{outline:2px solid var(--s0);outline-offset:2px}
             |#$id [data-brush] svg{user-select:none}""".stripMargin) +
       (if !zooming then ""
        else
@@ -1134,31 +1165,35 @@ object Interactive:
 
   private[plot] def reactionOf(rs: IndexedSeq[Reaction], i: Int): Reaction = rs(if rs.size == 1 then 0 else i)
 
-  /** Why the page cannot zoom a picture of `figure` (it draws ticks for linear axes that run forward, with plain
-    * numbers), or `None` when it can.
+  /** Why the page cannot zoom a picture of `figure` (it draws the ticks of the linear, logarithmic, square-root and
+    * symmetric-log axes, forward or reversed, with the number formats it can write), or `None` when it can.
     */
   private[plot] def zoomProblem(figure: Figure): Option[String] =
     val (xt, yt) = Svg.resolved(figure)
-    val transform = Seq("x" -> xt, "y" -> yt).collectFirst {
-      case (axis, t) if t != Transform.Identity =>
-        s"its $axis axis is $t; zooming needs linear axes (the page cannot draw the ticks of another transform)"
+    val (zeroX, zeroY) = Svg.atMinusInfinity(figure)
+    val custom = Seq("x" -> xt, "y" -> yt).collectFirst { case (axis, t @ Transform.Custom(_, _, _)) =>
+      s"its $axis axis uses a transform of your own (${t.label}) that the page cannot compute; " +
+        "use identity, log, sqrt or symlog"
     }
-    transform
-      .orElse(
-        Option.when(figure.x.reverse || figure.y.reverse)(
-          "an axis runs backwards; zooming needs axes that run forward"
-        )
-      )
-      .orElse(
-        Option.when(figure.x.format.nonEmpty || figure.y.format.nonEmpty)(
-          "an axis has a number format (Axis.format); the page cannot write the numbers of another range that way"
-        )
-      )
-      .orElse(
-        Option.when(figure.elements.face(TextRole.TickLabel).angle != 0.0 || !figure.elements.numbers.isDefault)(
-          "its tick labels are slanted or use a number style; the page writes the numbers of another range plain"
-        )
-      )
+    // a log axis with something at 0 has a `-∞` line below the numbers, which a window could not move with the rest
+    val band = Seq("x" -> (xt, zeroX, figure.x), "y" -> (yt, zeroY, figure.y)).collectFirst {
+      case (axis, (Transform.Log10, zero, a)) if zero || a.minusInfinity.contains(true) =>
+        s"its $axis axis is logarithmic with a `-∞` line for what is at 0; zooming needs the numbers alone " +
+          "(Axis(minusInfinity = Some(false)) leaves such marks out)"
+    }
+    val format = Seq("x" -> figure.x, "y" -> figure.y).collectFirst {
+      case (axis, a) if a.format.exists(!formatSupported(_)) =>
+        s"its $axis axis has the number format ${a.format.get}, which the page cannot write; it writes %f and %e " +
+          "with the flags - + 0 and , (for f), a width and a precision"
+    }
+    custom.orElse(band).orElse(format)
+
+  // the number formats the page writes as `String.format` does: `%f` and `%e` (or `%E`) with a width, a precision and
+  // the flags `-`, `+`, `0` (and `,` for `f`), between any text and `%%`
+  private val formatPattern =
+    """(?:[^%]|%%|%(?:[-+0]*,?[-+0]*[0-9]*(?:\.[0-9]+)?f|[-+0]*[0-9]*(?:\.[0-9]+)?[eE]))*""".r
+
+  private[plot] def formatSupported(pattern: String): Boolean = formatPattern.matches(pattern)
 
   // the items of `xs` that stay
   private def keepItems[A](xs: IndexedSeq[A], keep: IndexedSeq[Boolean]): IndexedSeq[A] =
@@ -1181,7 +1216,8 @@ object Interactive:
     reactions: Map[Int, IndexedSeq[Reaction]],
     values: Map[String, Double],
     chosen: Map[String, Set[Int]] = Map.empty,
-    window: Option[Window] = None
+    window: Option[Window] = None,
+    brush: Option[Window] = None
   ): Figure =
     val marks = figure.marks.zipWithIndex.flatMap { (mark, index) =>
       reactions.get(index).fold(Option(mark))(rs => stillMark(mark, rs, values, chosen))
@@ -1197,12 +1233,14 @@ object Interactive:
       )
     val whole = figure.copy(marks = marks, x = pinned(figure.x, rangeX, zeroX), y = pinned(figure.y, rangeY, zeroY))
     // a zoomed picture shows the window as asked; what lies outside it is clipped
-    window.fold(whole)(w =>
+    val zoomed = window.fold(whole)(w =>
       whole.copy(
         x = whole.x.copy(min = Some(w.x0), max = Some(w.x1)),
         y = whole.y.copy(min = Some(w.y0), max = Some(w.y1))
       )
     )
+    // the rectangle a viewer has dragged out lies over everything the panel draws
+    brush.fold(zoomed)(b => zoomed.copy(marks = zoomed.marks :+ Mark.Region((b.x0, b.y0, b.x1, b.y1))))
 
   private def stillMark(
     mark: Mark,
@@ -1401,29 +1439,54 @@ object Interactive:
       |const NS='http://www.w3.org/2000/svg';
       |const boxed=[];
       |const clearBoxes=()=>boxed.forEach(s=>{if(s._box){s._box.remove();s._box=null;}});
-      |function brushing(svg,list,n){let from=null;
+      |const brushes={};
+      |function brushing(svg,list,n,pi){let from=null,kb=null;
       |  boxed.push(svg);
+      |  const showBox=(a,b)=>{
+      |    if(!svg._box){svg._box=document.createElementNS(NS,'rect');svg._box.setAttribute('class','tda4j-brush');svg.appendChild(svg._box);}
+      |    svg._box.setAttribute('x',Math.min(a.x,b.x));svg._box.setAttribute('y',Math.min(a.y,b.y));
+      |    svg._box.setAttribute('width',Math.abs(a.x-b.x));svg._box.setAttribute('height',Math.abs(a.y-b.y));};
+      |  // the items a rectangle (in client pixels) touches; a zoomed picture takes only what the plot area shows
+      |  const choose=(x0,y0,x1,y1,shift)=>{
+      |    const ax=axesOf(svg);
+      |    if(ax&&svg._zoomed){const m=svg.getScreenCTM(),a=new DOMPoint(ax[0].o,ax[1].o).matrixTransform(m),b=new DOMPoint(ax[0].o+ax[0].n,ax[1].o+ax[1].n).matrixTransform(m);
+      |      x0=Math.max(x0,a.x);y0=Math.max(y0,a.y);x1=Math.min(x1,b.x);y1=Math.min(y1,b.y);}
+      |    const keys=new Set(shift?sel[n].pin:[]);
+      |    for(const it of list){if(!it.el.getClientRects().length)continue;
+      |      const r=it.el.getBoundingClientRect();
+      |      if(r.right>=x0&&r.left<=x1&&r.bottom>=y0&&r.top<=y1)it.picks.forEach(p=>{if(p.n===n)keys.add(p.key);});}
+      |    sel[n].pin=keys;commit(n);};
+      |  brushes[pi]={svg:svg,show:showBox};
       |  svg.addEventListener('pointerdown',ev=>{svg._dragged=false;
       |    if(ev.button!==0||ev.pointerType==='touch'||svg._pan)return;from=[ev.clientX,ev.clientY];});
       |  svg.addEventListener('pointermove',ev=>{if(!from)return;
       |    if(!svg._dragged){if(Math.hypot(ev.clientX-from[0],ev.clientY-from[1])<5)return;
-      |      svg._dragged=true;try{svg.setPointerCapture(ev.pointerId);}catch(e){}clearBoxes();
-      |      svg._box=document.createElementNS(NS,'rect');svg._box.setAttribute('class','tda4j-brush');svg.appendChild(svg._box);}
-      |    const m=svg.getScreenCTM().inverse(),a=new DOMPoint(from[0],from[1]).matrixTransform(m),b=new DOMPoint(ev.clientX,ev.clientY).matrixTransform(m);
-      |    svg._box.setAttribute('x',Math.min(a.x,b.x));svg._box.setAttribute('y',Math.min(a.y,b.y));
-      |    svg._box.setAttribute('width',Math.abs(a.x-b.x));svg._box.setAttribute('height',Math.abs(a.y-b.y));});
+      |      svg._dragged=true;try{svg.setPointerCapture(ev.pointerId);}catch(e){}clearBoxes();}
+      |    const m=svg.getScreenCTM().inverse();
+      |    showBox(new DOMPoint(from[0],from[1]).matrixTransform(m),new DOMPoint(ev.clientX,ev.clientY).matrixTransform(m));});
       |  svg.addEventListener('pointerup',ev=>{if(!from)return;const start=from;from=null;
       |    if(!svg._dragged)return;
       |    try{svg.releasePointerCapture(ev.pointerId);}catch(e){}
-      |    let x0=Math.min(start[0],ev.clientX),x1=Math.max(start[0],ev.clientX),y0=Math.min(start[1],ev.clientY),y1=Math.max(start[1],ev.clientY);
-      |    const ax=axesOf(svg);
-      |    if(ax&&svg._zoomed){const m=svg.getScreenCTM(),a=new DOMPoint(ax[0].o,ax[1].o).matrixTransform(m),b=new DOMPoint(ax[0].o+ax[0].n,ax[1].o+ax[1].n).matrixTransform(m);
-      |      x0=Math.max(x0,a.x);y0=Math.max(y0,a.y);x1=Math.min(x1,b.x);y1=Math.min(y1,b.y);}
-      |    const keys=new Set(ev.shiftKey?sel[n].pin:[]);
-      |    for(const it of list){if(!it.el.getClientRects().length)continue;
-      |      const r=it.el.getBoundingClientRect();
-      |      if(r.right>=x0&&r.left<=x1&&r.bottom>=y0&&r.top<=y1)it.picks.forEach(p=>{if(p.n===n)keys.add(p.key);});}
-      |    sel[n].pin=keys;commit(n);});}
+      |    choose(Math.min(start[0],ev.clientX),Math.min(start[1],ev.clientY),Math.max(start[0],ev.clientX),Math.max(start[1],ev.clientY),ev.shiftKey);});
+      |  // the keyboard: arrows move a cross over the plot area (shift: further), Enter sets the first corner and then the second, which
+      |  // chooses (with shift: adds), Escape lets go; where a drag pans, the arrows pan
+      |  const cursorAt=(x,y)=>{
+      |    if(!svg._cur){svg._cur=document.createElementNS(NS,'path');svg._cur.setAttribute('class','tda4j-cursor');svg.appendChild(svg._cur);}
+      |    svg._cur.setAttribute('d','M'+(x-8)+' '+y+'H'+(x+8)+'M'+x+' '+(y-8)+'V'+(y+8));};
+      |  const leave=()=>{kb=null;if(svg._cur){svg._cur.remove();svg._cur=null;}};
+      |  svg.addEventListener('keydown',ev=>{
+      |    if(svg._pan||ev.ctrlKey||ev.metaKey||ev.altKey)return;
+      |    const ax=axesOf(svg),P=ax?{x:ax[0].o,y:ax[1].o,w:ax[0].n,h:ax[1].n}:{x:0,y:0,w:svg.viewBox.baseVal.width,h:svg.viewBox.baseVal.height};
+      |    const d={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[ev.key];
+      |    if(d){ev.preventDefault();kb=kb||{x:P.x+P.w/2,y:P.y+P.h/2,from:null};const step=ev.shiftKey?0.16:0.04;
+      |      kb.x=Math.min(Math.max(kb.x+d[0]*step*P.w,P.x),P.x+P.w);kb.y=Math.min(Math.max(kb.y+d[1]*step*P.h,P.y),P.y+P.h);
+      |      cursorAt(kb.x,kb.y);if(kb.from)showBox(kb.from,kb);return;}
+      |    if((ev.key==='Enter'||ev.key===' ')&&kb){ev.preventDefault();
+      |      if(!kb.from){clearBoxes();kb.from={x:kb.x,y:kb.y};showBox(kb.from,kb);return;}
+      |      const m=svg.getScreenCTM(),a=new DOMPoint(kb.from.x,kb.from.y).matrixTransform(m),b=new DOMPoint(kb.x,kb.y).matrixTransform(m);
+      |      choose(Math.min(a.x,b.x),Math.min(a.y,b.y),Math.max(a.x,b.x),Math.max(a.y,b.y),ev.shiftKey);leave();return;}
+      |    if(ev.key==='Escape'&&kb){ev.preventDefault();clearBoxes();leave();}});
+      |  svg.addEventListener('blur',leave);}
       |pickers.forEach((list,svg)=>{const names=namesOf(list);
       |  svg.addEventListener('pointermove',ev=>{if(ev.pointerType==='touch'||svg._dragged||ev.buttons)return;svg._xy=[ev.clientX,ev.clientY];
       |    if(svg._raf)return;
@@ -1432,7 +1495,7 @@ object Interactive:
       |  svg.addEventListener('click',ev=>{if(svg._dragged){svg._dragged=false;return;}
       |    clearBoxes();clicked(names,hit(list,ev.clientX,ev.clientY),ev.shiftKey);});
       |  const box=svg.closest('.tda4j-panel');const bn=box&&box.getAttribute('data-brush');
-      |  if(bn&&sel[bn])brushing(svg,list,bn);});
+      |  if(bn&&sel[bn]){svg.setAttribute('tabindex','0');brushing(svg,list,bn,Array.from(root.querySelectorAll('.tda4j-panel')).indexOf(box));}});
       |const MAXZ=200,zooms={};
       |function numberText(v){const a=Math.abs(v);if(v===0)return '0';
       |  if(a>=1e5||a<1e-3){if(a<1e-3&&a>=1e-4)return v.toPrecision(3);
@@ -1443,28 +1506,89 @@ object Interactive:
       |  const raw=(hi-lo)/target,mag=Math.pow(10,Math.floor(Math.log10(raw))),norm=raw/mag;
       |  const step=mag*(norm<1.5?1:norm<3?2:norm<7?5:10),first=Math.ceil(lo/step-1e-9),last=Math.floor(hi/step+1e-9),out=[];
       |  for(let i=first;i<=last;i++){const t=i*step;out.push(t===0?0:t);}return out;}
-      |function ticksFor(s,a,b){let major;
-      |  if(s.m==='f')major=s.fx.slice();
-      |  else{const lo=s.m==='w'?Math.max(s.lo,a):a,hi=s.m==='w'?Math.min(s.hi,b):b;
-      |    const clear=v=>s.ex.every(e=>Math.abs(v-e[0])>=0.05*Math.abs(b-a));
-      |    major=niceTicks(lo,hi,5).filter(clear).map(v=>[v,numberText(v)]);}
-      |  return major.concat(s.ex).filter(t=>t[0]>=a&&t[0]<=b);}
+      |const inv={i:u=>u,l:u=>Math.pow(10,u),s:u=>Math.sign(u)*u*u,m:(u,c)=>Math.sign(u)*c*(Math.pow(10,Math.abs(u))-1)};
+      |// numbers as the plot writes them: `String.format`'s %f and %e (rounding the shortest decimal half up, as Java does) and NumberStyle
+      |function digitsOf(a){if(a===0)return {d:'0',e:0};
+      |  const m=/^([0-9])(?:\.([0-9]+))?e([+-][0-9]+)$/.exec(a.toExponential());return {d:m[1]+(m[2]||''),e:+m[3]};}
+      |function scaled(a,frac){const g=digitsOf(a),keep=g.e+1+frac;if(keep<0)return 0n;
+      |  let n=keep===0?0n:BigInt(g.d.slice(0,keep).padEnd(keep,'0'));if(g.d.charAt(keep)>='5')n+=1n;return n;}
+      |function expo(a,prec){if(a===0)return [prec>0?'0.'+'0'.repeat(prec):'0',0];
+      |  const g=digitsOf(a),keep=prec+1;let n=BigInt(g.d.slice(0,keep).padEnd(keep,'0'));if(g.d.charAt(keep)>='5')n+=1n;
+      |  let t=n.toString(),e=g.e;if(t.length>keep){t=t.slice(0,keep);e+=1;}
+      |  return [t.charAt(0)+(prec>0?'.'+t.slice(1):''),e];}
+      |function javaFormat(pattern,v){
+      |  return pattern.replace(/%(?:(%)|([-+0]*,?[-+0]*)([0-9]*)(?:\.([0-9]+))?([feE]))/g,(all,pct,flags,width,prec,conv)=>{
+      |    if(pct)return '%';
+      |    const w=width?+width:0;
+      |    // NaN and the infinities are words: padded with spaces (never zeros), a sign only on an infinity
+      |    if(!isFinite(v)){let word=isNaN(v)?'NaN':(v<0?'-':flags.includes('+')?'+':'')+'Infinity';if(conv==='E')word=word.toUpperCase();
+      |      return word.length>=w?word:flags.includes('-')?word.padEnd(w):word.padStart(w);}
+      |    const neg=v<0||Object.is(v,-0),a=Math.abs(v),sign=neg?'-':flags.includes('+')?'+':'',p=prec===undefined?6:+prec;
+      |    let text;
+      |    if(conv==='f'){const n=scaled(a,p).toString().padStart(p+1,'0'),whole=n.slice(0,n.length-p),part=n.slice(n.length-p);
+      |      text=(flags.includes(',')?whole.replace(/\B(?=([0-9]{3})+(?![0-9]))/g,','):whole)+(p>0?'.'+part:'');}
+      |    else{const x=expo(a,p),ae=Math.abs(x[1]);text=x[0]+'e'+(x[1]<0?'-':'+')+(ae<10?'0'+ae:String(ae));if(conv==='E')text=text.toUpperCase();}
+      |    let out=sign+text;
+      |    if(out.length<w){if(flags.includes('-'))out=out.padEnd(w);else if(flags.includes('0'))out=sign+text.padStart(w-sign.length,'0');else out=out.padStart(w);}
+      |    return out;});}
+      |function localize(t,ns){if(!ns)return t;const dec=ns[0]||'.',grp=ns[1],mi=ns[2]||'-';
+      |  if(t.startsWith('-∞'))return mi+t.slice(1);
+      |  return t.replace(/(-?)([0-9]+)(?:\.([0-9]+))?(?:e(-?[0-9]+))?/g,(m,sg,wh,fr,ex)=>{
+      |    const rev=Array.from(wh).reverse().join(''),grouped=grp?Array.from(rev.match(/.{1,3}/g).join(Array.from(grp).reverse().join(''))).reverse().join(''):wh;
+      |    return (sg?mi:'')+grouped+(fr!==undefined?dec+fr:'')+(ex!==undefined?'e'+ex.replace('-',mi):'');});}
+      |function logLabel(v){if(v>0&&(v<1e-3||v>=1e5)){const e=Math.floor(Math.log10(v)+1e-9),m=v/Math.pow(10,e);
+      |  if(Math.abs(m-Math.round(m))<1e-9)return Math.round(m)+'e'+e;}return numberText(v);}
+      |const tickText=(s,t,v)=>s.f!==null&&s.f!==undefined?javaFormat(s.f,v):t==='l'?logLabel(v):numberText(v);
+      |function logTicks(lo,hi,target){
+      |  if(!(lo>0&&hi>lo&&isFinite(hi)))return [];
+      |  const kLo=Math.floor(Math.log10(lo)),kHi=Math.ceil(Math.log10(hi)),decades=kHi-kLo,stride=Math.max(1,Math.ceil(decades/6)),multiples=decades>=4?[1]:[1,2,5],found=[];
+      |  for(let k=kLo;k<=kHi;k+=stride)for(const m of multiples){const t=m*Math.pow(10,k);if(t>=lo*(1-1e-9)&&t<=hi*(1+1e-9))found.push(t);}
+      |  return found.length>=2?found:niceTicks(lo,hi,target);}
+      |function trTicks(t,c,lo,hi,target){
+      |  if(t==='l')return logTicks(lo,hi,target);
+      |  if(t==='m'){const reach=Math.max(Math.abs(lo),Math.abs(hi));if(reach<=10*c)return niceTicks(lo,hi,target);
+      |    const mag=logTicks(c,reach,target);return mag.map(x=>-x).reverse().concat([0],mag).filter(x=>x>=lo&&x<=hi);}
+      |  return niceTicks(lo,hi,target);}
+      |// the minor ticks between `majors`: the whole numbers of each decade on a log axis, else the halves between ticks
+      |function minorPositions(t,c,majors,lo,hi){
+      |  const T=tr[t],U=inv[t],ms=Array.from(new Set(majors.filter(v=>isFinite(T(v,c))))).sort((a,b)=>a-b);
+      |  if(ms.length<2)return [];
+      |  const whole=v=>v>0&&Math.abs(v/Math.pow(10,Math.floor(Math.log10(v)+1e-12))-Math.round(v/Math.pow(10,Math.floor(Math.log10(v)+1e-12))))<1e-9;
+      |  let cand=[];
+      |  if(t==='l'&&ms.every(whole)){const k0=Math.floor(Math.log10(Math.max(lo,1e-300))),k1=Math.ceil(Math.log10(hi));
+      |    for(let k=k0;k<=k1;k++)for(let j=1;j<=9;j++)cand.push(j*Math.pow(10,k));}
+      |  else{const us=ms.map(v=>T(v,c)),steps=us.slice(1).map((b,i)=>b-us[i]),edges=[us[0]-steps[0]].concat(us,[us[us.length-1]+steps[steps.length-1]]);
+      |    cand=edges.slice(1).map((b,i)=>U((edges[i]+b)/2,c));}
+      |  return cand.filter(v=>isFinite(T(v,c))&&v>=lo&&v<=hi&&!ms.some(m=>Math.abs(T(m,c)-T(v,c))<1e-9*(1+Math.abs(T(m,c)))));}
+      |// the ticks of an axis showing positions `a` to `b` (of its transform): the labelled ones and the minor ones
+      |function ticksFor(s,t,c,a,b){const T=tr[t],U=inv[t],lo=U(a,c),hi=U(b,c),span=Math.abs(b-a);let major;
+      |  if(s.m==='f'||s.m==='l')major=s.fx.slice();
+      |  else{const l=s.m==='w'?Math.max(s.lo,lo):lo,h=s.m==='w'?Math.min(s.hi,hi):hi;
+      |    const clear=v=>s.ex.every(e=>Math.abs(T(v,c)-T(e[0],c))>=0.05*span);
+      |    major=trTicks(t,c,l,h,5).filter(clear).map(v=>[v,tickText(s,t,v)]);}
+      |  const inside=v=>{const u=T(v,c);return u>=a&&u<=b;};
+      |  const minor=s.m==='l'?[]:minorPositions(t,c,major.map(x=>x[0]),lo,hi).filter(inside);
+      |  return {major:major.concat(s.ex).filter(x=>inside(x[0])),minor:minor};}
+      |// where a position `u` of axis `a` lands, when the axis shows `lo` to `hi`
+      |function posFn(a,lo,hi,vertical){const n=a.n,o=a.o;
+      |  if(!vertical)return a.rev?u=>o+(hi-u)/(hi-lo)*n:u=>o+(u-lo)/(hi-lo)*n;
+      |  return a.rev?u=>o+(u-lo)/(hi-lo)*n:u=>o+n-(u-lo)/(hi-lo)*n;}
       |function drawAxes(z,whole){
       |  if(z.gen){z.gen.remove();z.gen=null;}
       |  z.orig.forEach(e=>{e.style.display=whole?'':'none';});
       |  if(whole)return;
-      |  const w=z.win,X=z.ax[0],Y=z.ax[1],px=v=>X.o+(v-w[0])/(w[1]-w[0])*X.n,py=v=>Y.o+Y.n-(v-w[2])/(w[3]-w[2])*Y.n;
-      |  const grid=[],marks=[],labels=[];
+      |  const w=z.win,X=z.ax[0],Y=z.ax[1],px=posFn(X,w[0],w[1],false),py=posFn(Y,w[2],w[3],true);
+      |  const grid=[],marks=[],labels=[],ns=z.spec.n,angle=z.spec.a;
       |  for(const axis of ['x','y']){
-      |    const a=axis==='x'?[w[0],w[1]]:[w[2],w[3]];
-      |    for(const t of ticksFor(z.spec[axis],a[0],a[1])){const v=t[0],at=axis==='x'?px(v):py(v);
-      |      [['g',grid],['m',marks]].forEach(([k,list])=>{const tp=z.tpl[k+axis];if(!tp)return;const e=tp.cloneNode(false);e.style.removeProperty('display');
-      |        e.removeAttribute('data-k');
-      |        if(axis==='x'){e.setAttribute('x1',at);e.setAttribute('x2',at);}else{e.setAttribute('y1',at);e.setAttribute('y2',at);}
-      |        list.push(e);});
+      |    const A=axis==='x'?X:Y,lo=axis==='x'?w[0]:w[2],hi=axis==='x'?w[1]:w[3],T=tr[A.t],tk=ticksFor(z.spec[axis],A.t,A.c,lo,hi);
+      |    const place=(tp,at,list)=>{if(!tp)return;const e=tp.cloneNode(false);e.style.removeProperty('display');e.removeAttribute('data-k');
+      |      if(axis==='x'){e.setAttribute('x1',at);e.setAttribute('x2',at);}else{e.setAttribute('y1',at);e.setAttribute('y2',at);}list.push(e);};
+      |    for(const t of tk.major){const at=(axis==='x'?px:py)(T(t[0],A.c));
+      |      place(z.tpl['g'+axis],at,grid);place(z.tpl['m'+axis],at,marks);
       |      const tl=z.tpl['l'+axis];
-      |      if(tl){const e=tl.cloneNode(false);e.style.removeProperty('display');e.removeAttribute('data-k');e.removeAttribute('data-v');e.textContent=t[1];
-      |        if(axis==='x')e.setAttribute('x',at);else e.setAttribute('y',at+z.off);labels.push(e);}}}
+      |      if(tl){const e=tl.cloneNode(false);e.style.removeProperty('display');e.removeAttribute('data-k');e.removeAttribute('data-v');e.textContent=localize(t[1],ns);
+      |        if(axis==='x'){e.setAttribute('x',at);if(angle)e.setAttribute('transform','rotate('+(-angle)+' '+at+' '+z.labelY+')');}else e.setAttribute('y',at+z.off);labels.push(e);}}
+      |    for(const v of tk.minor){const at=(axis==='x'?px:py)(T(v,A.c));place(z.tpl['n'+axis],at,grid);place(z.tpl['i'+axis],at,marks);}}
       |  const g=document.createElementNS(NS,'g');g.setAttribute('data-gen','1');
       |  grid.concat(marks,labels).forEach(e=>g.appendChild(e));
       |  z.svg.insertBefore(g,z.svg.querySelector('g[clip-path]'));z.gen=g;}
@@ -1478,24 +1602,35 @@ object Interactive:
       |    else{const c=(w[0]+w[1])/2;w[0]=c-sy*z.asp*X.n/2;w[1]=c+sy*z.asp*X.n/2;}}
       |  for(const i of [0,2]){const fw=full[i+1]-full[i],wd=Math.min(Math.max(w[i+1]-w[i],fw/MAXZ),fw),a=Math.min(Math.max(w[i],full[i]),full[i+1]-wd);w[i]=a;w[i+1]=a+wd;}
       |  z.win=w;
-      |  const sx=(X.hi-X.lo)/(w[1]-w[0]),tx=X.o+(X.lo-w[0])/(w[1]-w[0])*X.n-sx*X.o;
-      |  const sy=(Y.hi-Y.lo)/(w[3]-w[2]),ty=Y.o+Y.n-(Y.lo-w[2])/(w[3]-w[2])*Y.n-sy*(Y.o+Y.n);
+      |  const fx=posFn(X,X.lo,X.hi,false),wx=posFn(X,w[0],w[1],false),fy=posFn(Y,Y.lo,Y.hi,true),wy=posFn(Y,w[2],w[3],true);
+      |  const sx=(wx(X.hi)-wx(X.lo))/(fx(X.hi)-fx(X.lo)),tx=wx(X.lo)-sx*fx(X.lo);
+      |  const sy=(wy(Y.hi)-wy(Y.lo))/(fy(Y.hi)-fy(Y.lo)),ty=wy(Y.lo)-sy*fy(Y.lo);
       |  const whole=Math.abs(sx-1)<1e-12&&Math.abs(sy-1)<1e-12&&Math.abs(tx)<1e-9&&Math.abs(ty)<1e-9;
       |  z.svg._zoomed=!whole;
       |  z.svg.querySelectorAll('g[data-z=s]').forEach(g=>{if(whole)g.removeAttribute('transform');else g.setAttribute('transform','matrix('+sx+' 0 0 '+sy+' '+tx+' '+ty+')');});
       |  z.pts.forEach(p=>{if(whole)p.el.removeAttribute('transform');else p.el.setAttribute('transform','translate('+((sx-1)*p.cx+tx)+' '+((sy-1)*p.cy+ty)+')');});
       |  drawAxes(z,whole);
-      |  root.dispatchEvent(new CustomEvent('tda4j:zoom',{detail:{panel:z.pi,window:w.slice()},bubbles:true}));}
-      |function dataAt(z,ev){const p=new DOMPoint(ev.clientX,ev.clientY).matrixTransform(z.svg.getScreenCTM().inverse()),w=z.win,X=z.ax[0],Y=z.ax[1];
-      |  return [w[0]+(p.x-X.o)/X.n*(w[1]-w[0]),w[2]+(Y.o+Y.n-p.y)/Y.n*(w[3]-w[2])];}
+      |  root.dispatchEvent(new CustomEvent('tda4j:zoom',{detail:{panel:z.pi,window:toData(z,w)},bubbles:true}));}
+      |// a window in the units of the data, and in the positions of the axes' transforms (which the page draws in)
+      |const toData=(z,w)=>[inv[z.ax[0].t](w[0],z.ax[0].c),inv[z.ax[0].t](w[1],z.ax[0].c),inv[z.ax[1].t](w[2],z.ax[1].c),inv[z.ax[1].t](w[3],z.ax[1].c)];
+      |function toSpace(z,w){const r=[tr[z.ax[0].t](w[0],z.ax[0].c),tr[z.ax[0].t](w[1],z.ax[0].c),tr[z.ax[1].t](w[2],z.ax[1].c),tr[z.ax[1].t](w[3],z.ax[1].c)];
+      |  if(!r.every(isFinite))throw new Error('the window '+w.join(', ')+' has an end that its axis cannot show (positive numbers only, on a log axis)');return r;}
+      |// what a picture shows now (its window, if it zooms), and where a client point is in the positions of its axes' transforms
+      |function viewOf(svg,z){const ax=axesOf(svg),w=z?z.win:[ax[0].lo,ax[0].hi,ax[1].lo,ax[1].hi],px=posFn(ax[0],w[0],w[1],false),py=posFn(ax[1],w[2],w[3],true);
+      |  return{ax:ax,w:w,x:v=>px(tr[ax[0].t](v,ax[0].c)),y:v=>py(tr[ax[1].t](v,ax[1].c))};}
+      |function spaceAt(svg,z,cx,cy){const p=new DOMPoint(cx,cy).matrixTransform(svg.getScreenCTM().inverse()),v=viewOf(svg,z),X=v.ax[0],Y=v.ax[1],w=v.w;
+      |  const fx=(p.x-X.o)/X.n,fy=(Y.o+Y.n-p.y)/Y.n;
+      |  return [X.rev?w[1]-fx*(w[1]-w[0]):w[0]+fx*(w[1]-w[0]),Y.rev?w[3]-fy*(w[3]-w[2]):w[2]+fy*(w[3]-w[2])];}
+      |const dataAt=(z,ev)=>spaceAt(z.svg,z,ev.clientX,ev.clientY);
       |function zoomBy(z,f,cx,cy){const w=z.win;setWindow(z,[cx-(cx-w[0])*f,cx+(w[1]-cx)*f,cy-(cy-w[2])*f,cy+(w[3]-cy)*f]);}
       |root.querySelectorAll('.tda4j-panel').forEach((box,pi)=>{
       |  const svg=box.querySelector('svg[data-zm]');if(!svg)return;
       |  const ax=axesOf(svg),z={svg:svg,pi:pi,ax:ax,spec:JSON.parse(svg.getAttribute('data-zm')),axes:'b',tpl:{},mode:'pan'};
       |  z.axes=z.spec.ax;z.asp=z.spec.asp;z.full=[ax[0].lo,ax[0].hi,ax[1].lo,ax[1].hi];z.win=z.full.slice();
       |  z.orig=Array.from(svg.querySelectorAll('[data-k]'));
-      |  ['gx','mx','lx','gy','my','ly'].forEach(k=>{z.tpl[k]=svg.querySelector('[data-k="'+k+'"]');});
-      |  z.off=0;if(z.tpl.ly){z.off=+z.tpl.ly.getAttribute('y')-(ax[1].o+ax[1].n-(+z.tpl.ly.getAttribute('data-v')-ax[1].lo)/(ax[1].hi-ax[1].lo)*ax[1].n);}
+      |  ['gx','mx','lx','nx','ix','gy','my','ly','ny','iy'].forEach(k=>{z.tpl[k]=svg.querySelector('[data-k="'+k+'"]');});
+      |  z.off=0;if(z.tpl.ly){z.off=+z.tpl.ly.getAttribute('y')-posFn(ax[1],ax[1].lo,ax[1].hi,true)(tr[ax[1].t](+z.tpl.ly.getAttribute('data-v'),ax[1].c));}
+      |  z.labelY=z.tpl.lx?+z.tpl.lx.getAttribute('y'):0;
       |  z.pts=Array.from(svg.querySelectorAll('g[data-z=p] [data-c]')).map(el=>{const c=el.getAttribute('data-c').split(',');return{el:el,cx:+c[0],cy:+c[1]};});
       |  zooms[pi]=z;
       |  const bar=document.createElement('div');bar.className='tda4j-zoombar';
@@ -1511,13 +1646,40 @@ object Interactive:
       |  box.insertBefore(bar,svg);
       |  svg.addEventListener('wheel',ev=>{if(!(ev.ctrlKey||ev.metaKey))return;ev.preventDefault();
       |    const c=dataAt(z,ev);zoomBy(z,Math.exp(ev.deltaY*0.0015),c[0],c[1]);},{passive:false});
+      |  // the keyboard: + and - zoom about the middle, 0 shows everything, and where a drag pans, the arrows pan (shift: further)
+      |  svg.setAttribute('tabindex','0');
+      |  svg.addEventListener('keydown',ev=>{if(ev.ctrlKey||ev.metaKey||ev.altKey)return;
+      |    const c=centre(),w=z.win;
+      |    if(ev.key==='+'||ev.key==='='){ev.preventDefault();zoomBy(z,0.5,c[0],c[1]);return;}
+      |    if(ev.key==='-'||ev.key==='_'){ev.preventDefault();zoomBy(z,2,c[0],c[1]);return;}
+      |    if(ev.key==='0'){ev.preventDefault();setWindow(z,z.full);return;}
+      |    const d={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,1],ArrowDown:[0,-1]}[ev.key];
+      |    if(!d||z.mode!=='pan')return;ev.preventDefault();
+      |    const f=ev.shiftKey?0.5:0.1,dx=d[0]*(ax[0].rev?-1:1)*f*(w[1]-w[0]),dy=d[1]*(ax[1].rev?-1:1)*f*(w[3]-w[2]);
+      |    setWindow(z,[w[0]+dx,w[1]+dx,w[2]+dy,w[3]+dy]);});
+      |  // touch: two fingers pinch and drag the picture (the distance zooms, the midpoint pans), one finger scrolls the page and a tap
+      |  // chooses; touch events, because a page keeps scrolling under one finger. Put both fingers down, then move.
+      |  svg.style.touchAction='pan-x pan-y';
+      |  let pinch=null;
+      |  const fingers=ev=>{const t=Array.from(ev.touches).filter(x=>svg.contains(x.target));if(t.length!==2)return null;
+      |    const m=svg.getScreenCTM().inverse(),a=new DOMPoint(t[0].clientX,t[0].clientY).matrixTransform(m),b=new DOMPoint(t[1].clientX,t[1].clientY).matrixTransform(m);
+      |    return{x:(a.x+b.x)/2,y:(a.y+b.y)/2,d:Math.hypot(a.x-b.x,a.y-b.y)};};
+      |  // the window of one axis that keeps what was under the first midpoint (p0) under the current one (p1), `f` as wide
+      |  const keep=(A,lo,hi,p0,p1,f,vertical)=>{const W=(hi-lo)*f,fr=p=>vertical?(A.o+A.n-p)/A.n:(p-A.o)/A.n,
+      |    anchor=A.rev?hi-fr(p0)*(hi-lo):lo+fr(p0)*(hi-lo),a=A.rev?anchor+fr(p1)*W-W:anchor-fr(p1)*W;return[a,a+W];};
+      |  svg.addEventListener('touchstart',ev=>{const g=fingers(ev);if(!g){pinch=null;return;}ev.preventDefault();clearBoxes();pinch={g:g,win:z.win.slice()};},{passive:false});
+      |  svg.addEventListener('touchmove',ev=>{const g=fingers(ev);if(!g||!pinch)return;ev.preventDefault();
+      |    const s=pinch.g,w=pinch.win,f=Math.max(s.d,1)/Math.max(g.d,1),xs=keep(ax[0],w[0],w[1],s.x,g.x,f,false),ys=keep(ax[1],w[2],w[3],s.y,g.y,f,true);
+      |    setWindow(z,[xs[0],xs[1],ys[0],ys[1]]);},{passive:false});
+      |  const lift=ev=>{if(Array.from(ev.touches).filter(x=>svg.contains(x.target)).length<2)pinch=null;};
+      |  svg.addEventListener('touchend',lift);svg.addEventListener('touchcancel',lift);
       |  let from=null,start=null;
       |  svg.addEventListener('pointerdown',ev=>{if(ev.button!==0||ev.pointerType==='touch'||z.mode!=='pan')return;
       |    svg._dragged=false;from=[ev.clientX,ev.clientY];start=z.win.slice();});
       |  svg.addEventListener('pointermove',ev=>{if(!from)return;
       |    if(!svg._dragged){if(Math.hypot(ev.clientX-from[0],ev.clientY-from[1])<5)return;svg._dragged=true;try{svg.setPointerCapture(ev.pointerId);}catch(e){}}
       |    const m=svg.getScreenCTM().inverse(),a=new DOMPoint(from[0],from[1]).matrixTransform(m),b=new DOMPoint(ev.clientX,ev.clientY).matrixTransform(m);
-      |    const dx=-(b.x-a.x)/ax[0].n*(start[1]-start[0]),dy=(b.y-a.y)/ax[1].n*(start[3]-start[2]);
+      |    const dx=(ax[0].rev?1:-1)*(b.x-a.x)/ax[0].n*(start[1]-start[0]),dy=(ax[1].rev?-1:1)*(b.y-a.y)/ax[1].n*(start[3]-start[2]);
       |    setWindow(z,[start[0]+dx,start[1]+dx,start[2]+dy,start[3]+dy]);});
       |  svg.addEventListener('pointerup',ev=>{if(!from)return;from=null;try{svg.releasePointerCapture(ev.pointerId);}catch(e){}});});
       |const api={root:root,controls:spec,selections:choices,
@@ -1529,8 +1691,16 @@ object Interactive:
       |  selection:keysOf,
       |  onChange:(n,f)=>{(watch[n]=watch[n]||[]).push(f);f(sel[n]?keysOf(n):state[n]);},
       |  reactor:(k,f)=>{reactors[k]=f;for(const n in ctl)apply(n);for(const n in sel)custom(n);},
-      |  zoom:(i,w)=>{if(!zooms[i])throw new Error('no zoomable panel '+i);setWindow(zooms[i],w);},
-      |  window:i=>zooms[i]?zooms[i].win.slice():null,
+      |  zoom:(i,w)=>{if(!zooms[i])throw new Error('no zoomable panel '+i);setWindow(zooms[i],toSpace(zooms[i],w));},
+      |  // the rectangle of a brushable panel, a window in the data's units (none clears it), drawn as a drag draws it; the keys it touches
+      |  // are chosen with `select`. `pointAt` is the data under a client point of a panel that zooms or brushes.
+      |  brush:(i,w)=>{const b=brushes[i];if(!b)throw new Error('no brushable panel '+i);clearBoxes();if(!w)return;
+      |    if(!w.every(isFinite))throw new Error('the brush '+w.join(', ')+' has an end that is not a number');
+      |    const v=viewOf(b.svg,zooms[i]);b.show({x:v.x(w[0]),y:v.y(w[2])},{x:v.x(w[1]),y:v.y(w[3])});},
+      |  pointAt:(i,cx,cy)=>{const svg=brushes[i]?brushes[i].svg:zooms[i]&&zooms[i].svg;if(!svg)throw new Error('no panel '+i+' that zooms or brushes');
+      |    const u=spaceAt(svg,zooms[i],cx,cy),ax=axesOf(svg);return [inv[ax[0].t](u[0],ax[0].c),inv[ax[1].t](u[1],ax[1].c)];},
+      |  window:i=>zooms[i]?toData(zooms[i],zooms[i].win):null,
+      |  text:{format:javaFormat,number:numberText,localize:localize,ticks:(i,axis)=>{const z=zooms[i],k=axis==='x'?0:1,A=z.ax[k];return ticksFor(z.spec[axis],A.t,A.c,z.win[2*k],z.win[2*k+1]);}},
       |  resetZoom:i=>{if(zooms[i])setWindow(zooms[i],zooms[i].full);},
       |  items:items};
       |root.tda4j=api;

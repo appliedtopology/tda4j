@@ -154,9 +154,12 @@ whose boxes touch it; the click that ends a drag is swallowed.
 **Zoom.** `Panel.Flat.zoomable(axes)` asks the renderer for zoom tags (`Svg.Tags.zoom`): each mark is wrapped by kind (`<g data-z="s">`
 for strokes and areas, moved by one `matrix()` with `vector-effect: non-scaling-stroke`; `<g data-z="p">` for points and text, each
 moved by a `translate` from its own centre, so sizes are kept), and every axis element carries its kind (`data-k`, and `data-v` for
-a label), with the rule that makes the ticks and the aspect in the picture's `data-zm`. The script draws the axes again for the
-window it shows with its own copy of `Svg.niceTicks` and `Svg.number` (including the exponent form outside 1e-3 to 1e5), so a
-change to either goes in both and in `check-interactive-page.mjs`, which compares the words of sixty windows with the stills'.
+a label), with the rule that makes the ticks and the aspect in the picture's `data-zm`: per axis its transform and direction,
+the number format, the number style, the label slant, and for a labelled axis its fixed ticks. The script draws the axes again for the
+window it shows with its own copy of `Svg.niceTicks`, `Svg.number`, the log and symmetric-log tick rules, the minor ticks and
+`String.format`'s `%f` and `%e` (`javaFormat`: the shortest decimal rounded half up, as Java does), so a change to any of them goes
+in both and in `check-interactive-page.mjs`, which compares every line and word of thirty windows on each kind of axis with the
+stills', and a few hundred formatted numbers with what `RootText.format` writes.
 `PageState.zoom(panel, Window)` is the still of a window; a figure of equal aspect widens one range of a window to keep it,
 in the still and on the page alike. Axes the page cannot draw again are refused when the page is built
 (`Interactive.zoomProblem` says why), and `Interactive.zoomable()` skips them.

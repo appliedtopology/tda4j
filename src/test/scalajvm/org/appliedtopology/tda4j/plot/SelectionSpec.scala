@@ -235,6 +235,91 @@ class SelectionSpec extends Specification:
     }
   }
 
+  "the rectangle a viewer has dragged out" should {
+    val points = Mark.Points(IndexedSeq((0.0, 0.0), (10.0, 5.0), (3.0, 4.0)), IndexedSeq(Paint.Ink))
+    def pageOf(x: Axis = Axis(), zoom: Boolean = false): Interactive =
+      val panel = Panel(Figure(marks = Vector(points), x = x)).selecting(0, "c", IndexedSeq(0, 1, 2)).brushable("c")
+      Interactive().withSelection("c").withPanel(if zoom then panel.zoomable() else panel)
+
+    /** The dashed rectangle of a still as (x, y, width, height), and where the still puts the two corners it is drawn
+      * between: a point at each, in the same picture.
+      */
+    def rectOf(state: PageState, page: Interactive): (Seq[Double], Seq[Double]) =
+      val fig = figureOf(page.at(state), 0)
+      val region = fig.marks.collect { case r: Mark.Region => r }.head
+      val (x0, y0, x1, y1) = region.box
+      val svg = Svg.render(
+        fig.copy(marks = fig.marks :+ Mark.Points(IndexedSeq((x0, y0), (x1, y1)), IndexedSeq(Paint.Ink))),
+        Theme.Light
+      )
+      def attr(tag: String, name: String): Seq[Double] =
+        s"""<$tag [^>]*$name="([^"]*)"""".r.findAllMatchIn(svg).map(_.group(1).toDouble).toSeq
+      val rect = """<rect [^>]*stroke-dasharray[^>]*/>""".r.findFirstIn(svg).get
+      def of(name: String) = s"""$name="([^"]*)"""".r.findFirstMatchIn(rect).get.group(1).toDouble
+      (
+        Seq(of("x"), of("y"), of("width"), of("height")),
+        attr("circle", "cx").takeRight(2) ++ attr("circle", "cy").takeRight(2)
+      )
+
+    "be drawn between the corners of the window, over the plot" in {
+      val (rect, corners) = rectOf(PageState().brush(0, Window(2.0, 8.0, 1.0, 4.0)), pageOf())
+      val Seq(cx0, cx1, cy0, cy1) = corners
+      (rect(0) must beCloseTo(math.min(cx0, cx1), 0.01))
+        .and(rect(2) must beCloseTo(math.abs(cx1 - cx0), 0.01))
+        .and(rect(1) must beCloseTo(math.min(cy0, cy1), 0.01))
+        .and(rect(3) must beCloseTo(math.abs(cy1 - cy0), 0.01))
+    }
+
+    "have its corners sorted on a reversed axis, where the larger value is on the left" in {
+      val (rect, corners) = rectOf(PageState().brush(0, Window(2.0, 8.0, 1.0, 4.0)), pageOf(Axis(reverse = true)))
+      val Seq(cx0, cx1, _, _) = corners
+      (cx0 must beGreaterThan(cx1)).and(rect(2) must beGreaterThan(0.0)).and(rect(0) must beCloseTo(cx1, 0.01))
+    }
+
+    "go through the transform of its axis" in {
+      val linear = rectOf(PageState().brush(0, Window(1.0, 100.0, 1.0, 4.0)), pageOf())._1
+      val logged = rectOf(PageState().brush(0, Window(1.0, 100.0, 1.0, 4.0)), pageOf(Axis(transform = Transform.Log10)))
+      // 100 on a log axis from 1 to 10 shows up beyond the plot; what matters is that the corner is where a point at 10 is
+      val (rect, corners) = (logged._1, logged._2)
+      (rect(0) must beCloseTo(math.min(corners(0), corners(1)), 0.01)).and(rect(2) must not(beCloseTo(linear(2), 1.0)))
+    }
+
+    "lie where the zoom window puts the data" in {
+      val zoomed = Window(2.0, 6.0, 1.0, 4.5)
+      val (rect, corners) =
+        rectOf(PageState().zoom(0, zoomed).brush(0, Window(3.0, 5.0, 2.0, 4.0)), pageOf(zoom = true))
+      val (whole, _) = rectOf(PageState().brush(0, Window(3.0, 5.0, 2.0, 4.0)), pageOf(zoom = true))
+      (rect(0) must beCloseTo(math.min(corners(0), corners(1)), 0.01)).and(rect(2) must not(beCloseTo(whole(2), 1.0)))
+    }
+
+    "take no part in the range of the axes" in {
+      def words(fig: Figure) =
+        """<text[^>]*>([^<]*)</text>""".r.findAllMatchIn(Svg.render(fig, Theme.Light)).map(_.group(1)).toSeq
+      val plain = Figure(marks = Vector(points))
+      words(plain.copy(marks = plain.marks :+ Mark.Region((-500.0, -500.0, 900.0, 900.0)))) === words(plain)
+    }
+
+    "leave a region with a corner that is not a number out of the picture" in {
+      val fig = Figure(marks = Vector(points, Mark.Region((Double.NaN, 0.0, 1.0, 1.0))))
+      Svg.render(fig, Theme.Light) must not(contain("stroke-dasharray"))
+    }
+
+    "be absent unless the state has one" in
+      (figureOf(pageOf().at(PageState()), 0).marks.collect { case r: Mark.Region => r } must beEmpty)
+
+    "be refused for a panel that does not brush, or beyond what an axis can show" in {
+      val plain = Interactive().withSelection("c").withPanel(Panel(Figure(marks = Vector(points))))
+      (plain.at(PageState().brush(0, Window(0.0, 1.0, 0.0, 1.0))) must throwAn[IllegalArgumentException](
+        ".*panel 0 is not a brushable panel.*none.*"
+      ))
+        .and(
+          pageOf(Axis(transform = Transform.Log10)).at(PageState().brush(0, Window(-1.0, 1.0, 0.0, 1.0))) must throwAn[
+            IllegalArgumentException
+          ](".*brush of panel 0.*cannot show.*")
+        )
+    }
+  }
+
   "building a selection" should {
     val fig = Figure()
     val rule = Mark.Rule.horizontal(0.0)

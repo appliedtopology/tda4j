@@ -542,8 +542,10 @@ gridlines and numbers for the range shown, written as the plot writes them, whil
 size. Zooming stops at 1/200 of the picture, and the picture of an equal-aspect plot keeps its aspect (the barcode zooms
 along the filtration only, and keeps all its rows). What the window cuts away cannot be pointed at or chosen. A page that
 only zooms needs no slider: `Interactive().withPanel(Panel(figure).zoomable())`, or `page.zoomable()` on any page, which
-makes zoomable every flat panel whose axes the page can draw again. A logarithmic or reversed axis, an axis with a number
-format (`Axis.format`) and slanted tick labels cannot be: `Panel.zoomable` refuses them with the reason, and `zoomable()`
+makes zoomable every flat panel whose axes the page can draw again: linear, logarithmic, square-root, symmetric-log and
+reversed axes, with their number formats, number style, slanted labels and minor ticks. Three things it cannot draw again: a
+transform of your own, a logarithmic axis with a `-∞` line for what is at 0, and a number format other than `%f` and `%e` (with
+the flags `-`, `+`, `0` and `,`, a width and a precision). `Panel.zoomable` refuses them with the reason, and `zoomable()`
 leaves those panels as they are. The 3-D canvases have a zoom of their own.
 
 **Stills.** A viewer's choice is a value like a slider's: `page.at(PageState().select("class", 3).zoom(1, Window(-0.1, 0.6,
