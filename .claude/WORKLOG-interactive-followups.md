@@ -91,3 +91,13 @@ that kill them were added: one failure each.
 - A brush by touch and a rectangle in 3-D (above).
 - Axes on the flat canvas: not built; the canvas is for the sizes where an SVG is the problem.
 - Jupyter itself (#331 item 3).
+
+## Addendum (2026-11-14): checks after the merge of #332's current head
+
+- The npm package, packed and installed in an empty project: `plotFiltration(2.5).frames(3)` gives three different SVGs,
+  `saveFrames` writes `frame-0000.svg` and on. `plotExplore().frames(3)` threw the library's "requirement failed" (a linked
+  page is an `Interactive` without a control, the export only tested for the type); the export now checks for a control and
+  `ExportsSpec` pins the message.
+- `TDA4J_SCALA_VERSION=3.8.4 sbt tda4j/doc` on a fresh server: passes (every fence of the new pages compiled).
+- Merging #332's branch at `f8cbb439` (it had merged `scala` and split the rules): `rules/plotting.md` is that branch's
+  version, and what this log's work adds to the rules is in `rules/interactive-plots.md`.
