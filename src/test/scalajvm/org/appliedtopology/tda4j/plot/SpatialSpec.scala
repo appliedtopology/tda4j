@@ -267,6 +267,150 @@ class SpatialSpec extends Specification:
     }
   }
 
+  "a rectangle on a 3-D panel" should {
+    // seen from the side (azimuth 0, elevation 0) the view plane is x to the right and z up; the six anchors make the frame
+    // the unit ball around the origin, so that a place's view coordinates are its own x and z
+    val anchors = Layer.Points(
+      IndexedSeq(
+        (1.0, 0.0, 0.0),
+        (-1.0, 0.0, 0.0),
+        (0.0, 1.0, 0.0),
+        (0.0, -1.0, 0.0),
+        (0.0, 0.0, 1.0),
+        (0.0, 0.0, -1.0)
+      ),
+      IndexedSeq(Paint.Ink),
+      1.0
+    )
+    val dots = Layer.Points(IndexedSeq((0.0, 0.0, 0.0), (0.4, 0.0, 0.4), (0.0, 0.0, 0.0)), IndexedSeq(Paint.Ink), 3.5)
+    val stick = Layer.Segments(IndexedSeq(((-0.7, 0.0, 0.45), (0.7, 0.0, 0.45))), IndexedSeq(Paint.Ink), 1.0)
+    // the half of a square below the line x + z = 0: its bounding box is the whole square
+    val plate = Layer.Triangles(
+      IndexedSeq(((-0.7, 0.0, -0.7), (0.7, 0.0, -0.7), (-0.7, 0.0, 0.7))),
+      IndexedSeq(Paint.Series(1)),
+      0.3
+    )
+    val comes = Reaction(Vector(Behavior.shownFrom("t", 0.5)))
+    val rises = Reaction(Vector(Behavior.followsZ("t", 0.0, 0.7)))
+    def panelAt(azimuth: Double) =
+      Panel(Scene(Vector(anchors), azimuth = azimuth, elevation = 0))
+        .reactEach(dots, IndexedSeq(Reaction.none, comes, rises))
+        .react(stick, Reaction.none)
+        .react(plate, Reaction.none)
+        .selecting(1, "c", IndexedSeq(0, 1, 2), halo = false)
+        .selecting(2, "c", IndexedSeq(10), halo = false)
+        .selecting(3, "c", IndexedSeq(20), halo = false)
+    def pageOf(panel: Panel) = Interactive().withSlider("t", 0, 1).withSelection("c").withPanel(panel)
+    val page = pageOf(panelAt(0).brushable("c"))
+    def touched(w: Window, t: Double = 0.0, on: Interactive = page) =
+      on.touched(0, w, "c", PageState().value("t", t))
+
+    "choose a segment that crosses it with both ends outside, and not only the points inside" in
+      touched(Window(-0.15, 0.15, 0.35, 0.55)) === Set(10)
+
+    "choose a triangle only where it is, not where its bounding box is" in
+      // the box 0.3..0.5 by 0.3..0.42 is in the corner of the triangle's bounding box, away from the triangle
+      touched(Window(0.3, 0.5, 0.3, 0.42), t = 0.5) === Set(1)
+
+    "choose a triangle that a rectangle lies inside, though none of its edges meets the rectangle" in
+      touched(Window(-0.6, -0.4, -0.6, -0.4)) === Set(20)
+
+    "leave a point whose centre is outside, however close, and let the size of its marker not count" in {
+      touched(Window(0.41, 0.5, 0.3, 0.39), t = 0.5) must beEmpty
+    }
+
+    "count the outline of the rectangle as part of it" in {
+      // the point (0.4, 0.4) is at the corner of the rectangle, and the segment at height 0.45 crosses its side
+      touched(Window(0.4, 0.5, 0.4, 0.5), t = 0.5) === Set(1, 10)
+      touched(Window(0.3, 0.4, 0.3, 0.4), t = 0.5) === Set(1)
+    }
+
+    "choose only what the page draws: an item that has not come yet is not there to choose" in {
+      val w = Window(0.3, 0.5, 0.3, 0.42)
+      touched(w, t = 0.49) must beEmpty
+      touched(w, t = 0.5) === Set(1)
+    }
+
+    "choose a moving item where the control has put it" in {
+      val w = Window(-0.1, 0.1, 0.55, 0.75)
+      touched(w, t = 0.0) must beEmpty
+      touched(w, t = 0.9) === Set(2)
+      // held at the least and the greatest value its coordinate runs over: 0.7, whatever the slider says
+      touched(w, t = 1.0) === Set(2)
+    }
+
+    "choose in its own selection and leave the keys an item has in another one alone" in {
+      val two = Interactive()
+        .withSlider("t", 0, 1)
+        .withSelection("c")
+        .withSelection("d")
+        .withPanel(panelAt(0).selecting(1, "d", IndexedSeq(5, 6, 7), halo = false).brushable("c"))
+      two.touched(0, Window(0.3, 0.5, 0.3, 0.42), "c", PageState().value("t", 0.5)) === Set(1)
+      two.touched(0, Window(0.3, 0.5, 0.3, 0.42), "d", PageState().value("t", 0.5)) === Set(6)
+    }
+
+    "be a rectangle in the view the scene is seen from, so that turning the scene chooses something else" in {
+      // from the side the point at (0.4, 0, 0.4) is in the rectangle; seen along the x axis it is at the middle, away from it
+      val w = Window(0.3, 0.5, 0.3, 0.42)
+      touched(w, t = 0.5) === Set(1)
+      touched(w, t = 0.5, on = pageOf(panelAt(90).brushable("c"))) must beEmpty
+    }
+
+    "draw in a still the rectangle it was given, in the units of the view plane" in {
+      val still = sceneOf(page.at(PageState().brush(0, Window(-0.15, 0.15, 0.35, 0.55))))
+      still.region === Some(Window(-0.15, 0.15, 0.35, 0.55))
+      val svg = still.staticSvg(Theme.Light)
+      // 0.46 of the smaller side, the room under a 12 pixel margin: 0.46 * 508, from the middle (320, 12 + 254)
+      val scale = 0.46 * 508
+      svg must contain(
+        f"""<rect x="${320 - 0.15 * scale}%.2f" y="${266 - 0.55 * scale}%.2f" width="${0.3 * scale}%.2f" height="${0.2 * scale}%.2f""""
+      )
+      svg must contain("stroke-dasharray")
+    }
+
+    "draw no rectangle in the picture that was not given one" in {
+      sceneOf(page.at(PageState())).staticSvg(Theme.Light) must not(contain("stroke-dasharray"))
+    }
+
+    "give the page a box button and a script for it, and a page that does not choose by rectangle neither" in {
+      val html = page.fragment(Theme.Light)
+      html must contain("""class="tda4j-box"""")
+      html must contain("function chooseBox")
+      val plain = pageOf(panelAt(0)).fragment(Theme.Light)
+      plain must not(contain("tda4j-box"))
+      plain must not(contain("chooseBox"))
+    }
+
+    "be refused where there is nothing to choose, or no such panel" in {
+      pageOf(panelAt(0).brushable("nope")).fragment() must throwAn[IllegalArgumentException](
+        ".*selection called nope.*"
+      )
+      Interactive()
+        .withSlider("t", 0, 1)
+        .withSelection("c")
+        .withPanel(Panel(Scene(Vector(anchors))).brushable("c"))
+        .fragment() must throwAn[IllegalArgumentException](".*none of its items chooses in c.*")
+      page.at(PageState().brush(1, Window(0, 1, 0, 1))) must throwAn[IllegalArgumentException](
+        ".*not a brushable panel.*"
+      )
+      pageOf(panelAt(0)).at(PageState().brush(0, Window(0, 1, 0, 1))) must throwAn[IllegalArgumentException](
+        ".*not a brushable panel.*"
+      )
+    }
+
+    "say that a 2-D panel's rectangle is the browser's to work out" in {
+      val flat = Interactive()
+        .withSlider("t", 0, 1)
+        .withSelection("c")
+        .withPanel(
+          Panel(Figure(marks = Vector(Mark.Points(IndexedSeq((0.0, 0.0)), IndexedSeq(Paint.Series(0))))))
+            .selecting(0, "c", IndexedSeq(0))
+            .brushable("c")
+        )
+      flat.touched(0, Window(0, 1, 0, 1), "c") must throwAn[IllegalArgumentException](".*2-D panel.*")
+    }
+  }
+
   "a linked 3-D filtration" should {
     lazy val noisy = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
     lazy val bars = Persistence(noisy, maxDimension = 1, maxFiltrationValue = 1.0).bars.reverse

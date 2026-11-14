@@ -327,7 +327,23 @@ object Panel:
   /** A 3-D panel. A canvas carries out [[Behavior.Shown]], [[Behavior.Selected]] and [[Behavior.Selects]] on any layer
     * and [[Behavior.Radius]] on balls ([[Layer.Balls]]); [[Behavior.Custom]] is yours.
     */
-  final case class Spatial(scene: Scene, reactions: Map[Int, IndexedSeq[Reaction]] = Map.empty) extends Panel:
+  final case class Spatial(
+    scene: Scene,
+    reactions: Map[Int, IndexedSeq[Reaction]] = Map.empty,
+    brush: Option[String] = None
+  ) extends Panel:
+    /** This panel with a rectangle choosing, in the selection `selection`, the keys of every item of this panel that it
+      * touches (a shift-drag adds to what is chosen). A drag turns the canvas, so a `box` button beside the picture
+      * makes a drag (of a mouse, a pen or a finger) draw a rectangle instead. The rectangle is on the plane of the
+      * view, and what it touches is what its outline meets there: a point whose centre is inside, a segment that
+      * crosses or lies in it, a triangle that overlaps it (marker sizes and line widths do not count, so the answer
+      * does not depend on the size of the picture); items that are not drawn at the moment are not chosen. The
+      * rectangle stays until the next click or until the view moves. [[Interactive.touched]] says what a rectangle
+      * chooses, and [[PageState.brush]] draws it in a still picture. Some item of the panel has to choose in that
+      * selection ([[selecting]]).
+      */
+    def brushable(selection: String): Spatial = copy(brush = Some(selection))
+
     /** `layer` added to the scene, its items all reacting as `behavior` says. */
     def react(layer: Layer, behavior: Behavior): Spatial = reactEach(layer, IndexedSeq(Reaction(Vector(behavior))))
 
@@ -350,9 +366,10 @@ object Panel:
     def mapScene(change: Scene => Scene): Spatial = copy(scene = change(scene))
 
     /** The layer at `index` of the scene, linked to the selection `selection`: pointing at its item `i` chooses the key
-      * `keys(i)` there, and a click pins it (a canvas is turned by dragging, so there is no brushing). With `halo`, a
-      * translucent shape over each item (a ring around a point, a thicker line, a darker triangle) is added to the
-      * scene and appears while the item's key is chosen, whoever chose it. See [[Panel.Flat.selecting]].
+      * `keys(i)` there, and a click pins it (a canvas is turned by dragging, see [[brushable]] for choosing by
+      * rectangle). With `halo`, a translucent shape over each item (a ring around a point, a thicker line, a darker
+      * triangle) is added to the scene and appears while the item's key is chosen, whoever chose it. See
+      * [[Panel.Flat.selecting]].
       */
     def selecting(index: Int, selection: String, keys: IndexedSeq[Int], halo: Boolean = true): Spatial =
       require(
@@ -659,22 +676,7 @@ final case class Interactive(
               .zoomProblem(figure)
               .foreach(why => require(false, s"Interactive: panel $p is zoomable, but $why"))
           }
-          brush.foreach { b =>
-            require(
-              chosen(b),
-              s"Interactive: panel $p is brushable on a selection called $b, but the selections are: " +
-                (if selections.isEmpty then "none (add one with withSelection)"
-                 else selections.map(_.name).mkString(", "))
-            )
-            require(
-              rs.values.exists(_.exists(_.behaviors.exists {
-                case Behavior.Selects(c, _) => c == b
-                case _                      => false
-              })),
-              s"Interactive: panel $p is brushable on $b, but none of its items chooses in $b " +
-                "(Panel.selecting links a mark's items to a selection)"
-            )
-          }
+          brush.foreach(checkBrush(p, _, rs))
           val (xt, yt) = Svg.resolved(figure)
           val moving = rs.values.exists(_.exists(_.behaviors.exists {
             case _: Behavior.Follows | _: Behavior.Radius => true
@@ -693,8 +695,24 @@ final case class Interactive(
               s"Interactive: panel $p has balls that grow with a control (Behavior.Radius), which need linear axes " +
                 "(a ball is no longer round on a curved axis)"
             )
-        case _ =>
+        case Panel.Spatial(_, rs, brush) => brush.foreach(checkBrush(p, _, rs))
     }
+
+  // a brushable panel chooses in a selection of the page, one that some item of the panel chooses in
+  private def checkBrush(p: Int, b: String, rs: Map[Int, IndexedSeq[Reaction]]): Unit =
+    require(
+      selections.exists(_.name == b),
+      s"Interactive: panel $p is brushable on a selection called $b, but the selections are: " +
+        (if selections.isEmpty then "none (add one with withSelection)" else selections.map(_.name).mkString(", "))
+    )
+    require(
+      rs.values.exists(_.exists(_.behaviors.exists {
+        case Behavior.Selects(c, _) => c == b
+        case _                      => false
+      })),
+      s"Interactive: panel $p is brushable on $b, but none of its items chooses in $b " +
+        "(Panel.selecting links a mark's items to a selection)"
+    )
 
   // ----- the page
 
@@ -703,7 +721,7 @@ final case class Interactive(
   private def look: Palette =
     firstFigure
       .map(_.palette)
-      .orElse(panels.collectFirst { case Panel.Spatial(s, _) => s.palette })
+      .orElse(panels.collectFirst { case Panel.Spatial(s, _, _) => s.palette })
       .getOrElse(Palette.default)
 
   private def attrsFor(reactions: Map[Int, IndexedSeq[Reaction]])(mark: Int, item: Int): String =
@@ -745,8 +763,8 @@ final case class Interactive(
           brush,
           zoom.map(_.code)
         )
-      case (Panel.Spatial(scene, rs), k) =>
-        panelBox(scene.width, Interactive.fitted(scene, rs, controls).fragmentReacting(theme, rs, s"$id-p$k"))
+      case (Panel.Spatial(scene, rs, brush), k) =>
+        panelBox(scene.width, Interactive.fitted(scene, rs, controls).fragmentReacting(theme, rs, s"$id-p$k", brush))
     }
     val headline =
       if title.isEmpty then ""
@@ -836,7 +854,10 @@ final case class Interactive(
         case _ =>
     }
     state.brushes.foreach { (k, w) =>
-      val brushable = panels.zipWithIndex.collect { case (Panel.Flat(_, _, Some(_), _), i) => i }
+      val brushable = panels.zipWithIndex.collect {
+        case (Panel.Flat(_, _, Some(_), _), i) => i
+        case (Panel.Spatial(_, _, Some(_)), i) => i
+      }
       require(
         brushable.contains(k),
         s"Interactive.at: panel $k is not a brushable panel (brushable panels: " +
@@ -853,7 +874,8 @@ final case class Interactive(
     val shown = panels.zipWithIndex.map {
       case (Panel.Flat(figure, rs, _, _), k) =>
         Interactive.still(figure, rs, now, chosen, state.windows.get(k), state.brushes.get(k))
-      case (Panel.Spatial(scene, rs), _) => Interactive.still(Interactive.fitted(scene, rs, controls), rs, now, chosen)
+      case (Panel.Spatial(scene, rs, _), k) =>
+        Interactive.still(Interactive.fitted(scene, rs, controls), rs, now, chosen).copy(region = state.brushes.get(k))
     }
     val sliders = controls.map(c => s"${c.shownName} = ${Svg.number(now(c.name))}")
     val picked = selections.flatMap { s =>
@@ -865,6 +887,35 @@ final case class Interactive(
     }
     val readout = (sliders ++ picked).mkString("   ")
     Snapshot(shown, title, if title.isEmpty then readout else s"$title: $readout", now, chosen.filter(_._2.nonEmpty))
+
+  /** The keys of the selection `selection` that the rectangle `window` chooses on the 3-D panel number `panel`
+    * (counting every panel of the page from 0) with the sliders and selections as `state` has them: what the page
+    * chooses when the viewer drags that rectangle in the view of the scene (see [[Panel.Spatial.brushable]]). `window`
+    * is in the units of the view plane, as [[PageState.brush]] has it, and only items that are drawn in `state` count.
+    */
+  def touched(panel: Int, window: Window, selection: String, state: PageState = PageState()): Set[Int] =
+    validate()
+    require(
+      panels.indices.contains(panel),
+      s"Interactive.touched: there is no panel $panel (the page has ${panels.size}, from 0)"
+    )
+    require(
+      selections.exists(_.name == selection),
+      s"Interactive.touched: no selection called $selection (${
+          if selections.isEmpty then "this plot has none" else selections.map(_.name).mkString(", ")
+        })"
+    )
+    panels(panel) match
+      case Panel.Spatial(scene, rs, _) =>
+        val now = valuesWith(state.values)
+        val chosen = selections.map(s => s.name -> state.chosen(s.name)).toMap
+        val fitted = Interactive.fitted(scene, rs, controls)
+        Interactive.touchedKeys(fitted, rs, window, selection, now, chosen)
+      case _ =>
+        throw IllegalArgumentException(
+          s"Interactive.touched: panel $panel is a 2-D panel, whose rectangle chooses what the browser's bounding boxes " +
+            "meet; only a 3-D panel (Panel.Spatial) has a rectangle that can be worked out here"
+        )
 
   /** The still picture with the control `name` at `value`. */
   def at(name: String, value: Double): Snapshot = at(Map(name -> value))
@@ -1170,14 +1221,16 @@ object Interactive:
             |#$id svg:focus-visible{outline:2px solid var(--s0);outline-offset:2px}
             |#$id [data-brush] svg{user-select:none}""".stripMargin) +
       (if !zooming then ""
+       else s"""
+               |#$id [data-z=s] *{vector-effect:non-scaling-stroke}
+               |#$id [data-zoomable] svg{user-select:none}""".stripMargin) +
+      (if !(zooming || brushing) then ""
        else
          s"""
-            |#$id [data-z=s] *{vector-effect:non-scaling-stroke}
             |#$id .tda4j-panel{position:relative}
             |#$id .tda4j-zoombar{position:absolute;top:4px;right:4px;display:flex;gap:4px;z-index:1}
             |#$id .tda4j-zoombar button{min-width:26px;height:26px;padding:0 6px;font-size:14px;line-height:1;border:1px solid var(--ink2);border-radius:4px;background:var(--surface);color:var(--ink);cursor:pointer;opacity:.85}
-            |#$id .tda4j-zoombar button[aria-pressed=true]{background:var(--s0);color:var(--surface)}
-            |#$id [data-zoomable] svg{user-select:none}""".stripMargin)
+            |#$id .tda4j-zoombar button[aria-pressed=true]{background:var(--s0);color:var(--surface)}""".stripMargin)
 
   // ----- stills: the same behaviors, applied in Scala
 
@@ -1424,6 +1477,30 @@ object Interactive:
       }
     }
     scene.copy(layers = layers)
+
+  // the keys that the rectangle `window` of the view plane chooses in `selection` among the items of `scene` that the
+  // controls and selections leave drawn: the items that survive in `still` are numbered again, so they are traced back
+  private[plot] def touchedKeys(
+    scene: Scene,
+    reactions: Map[Int, IndexedSeq[Reaction]],
+    window: Window,
+    selection: String,
+    values: Map[String, Double],
+    chosen: Map[String, Set[Int]]
+  ): Set[Int] =
+    val drawn = still(scene, reactions, values, chosen)
+    val kept = scene.layers.indices.map { li =>
+      val all = (0 until itemCount(scene.layers(li))).toVector
+      reactions.get(li).fold(all)(rs => all.filter(i => reactionOf(rs, i).behaviors.forall(inside(_, values, chosen))))
+    }
+    drawn
+      .touching(window)
+      .flatMap { (li, j) =>
+        reactions.get(li).toSeq.flatMap { rs =>
+          reactionOf(rs, kept(li)(j)).behaviors.collect { case Behavior.Selects(c, key) if c == selection => key }
+        }
+      }
+      .toSet
 
   // ----- the page's controller
 
@@ -1767,10 +1844,13 @@ object Interactive:
       |    const dx=(ax[0].rev?1:-1)*(b.x-a.x)/ax[0].n*(start[1]-start[0]),dy=(ax[1].rev?-1:1)*(b.y-a.y)/ax[1].n*(start[3]-start[2]);
       |    setWindow(z,[start[0]+dx,start[1]+dx,start[2]+dy,start[3]+dy]);});
       |  svg.addEventListener('pointerup',ev=>{if(!from)return;from=null;try{svg.releasePointerCapture(ev.pointerId);}catch(e){}});});
+      |// a 3-D panel that chooses by rectangle keeps its rectangle's controls on its own element
+      |const regionOf=i=>{const d=document.getElementById('__ID__-p'+i);return d&&d._region||null;};
       |const api={root:root,controls:spec,selections:choices,
       |  get:n=>sel[n]?keysOf(n):state[n],
       |  set:(n,v)=>sel[n]?pinAll(n,v):put(ctl[n],v),
       |  select:pinAll,
+      |  choose:(n,ks,shift)=>{const s=sel[n];if(!s)throw new Error('no selection '+n);s.pin=new Set([...(shift?s.pin:[]),...Array.from(ks,Number)]);commit(n);},
       |  hover:hoverKeys,
       |  click:clickKeys,
       |  selection:keysOf,
@@ -1778,13 +1858,16 @@ object Interactive:
       |  reactor:(k,f)=>{reactors[k]=f;for(const n in ctl)apply(n);for(const n in sel)custom(n);},
       |  zoom:(i,w)=>{if(!zooms[i])throw new Error('no zoomable panel '+i);setWindow(zooms[i],toSpace(zooms[i],w));},
       |  // the rectangle of a brushable panel, a window in the data's units (none clears it), drawn as a drag draws it; the keys it touches
-      |  // are chosen with `select`. `pointAt` is the data under a client point of a panel that zooms or brushes.
-      |  brush:(i,w)=>{const b=brushes[i];if(!b)throw new Error('no brushable panel '+i);clearBoxes();if(!w)return;
+      |  // are chosen with `select`. A 3-D panel's window is in the units of its view plane (`region(i)` reads the one on the picture now).
+      |  // `pointAt` is the data under a client point of a panel that zooms or brushes.
+      |  brush:(i,w)=>{const r=regionOf(i);if(r){clearBoxes();if(w&&!w.every(isFinite))throw new Error('the brush '+w.join(', ')+' has an end that is not a number');r.show(w||null);return;}
+      |    const b=brushes[i];if(!b)throw new Error('no brushable panel '+i);clearBoxes();if(!w)return;
       |    if(!w.every(isFinite))throw new Error('the brush '+w.join(', ')+' has an end that is not a number');
       |    const v=viewOf(b.svg,zooms[i]);b.show({x:v.x(w[0]),y:v.y(w[2])},{x:v.x(w[1]),y:v.y(w[3])});},
       |  pointAt:(i,cx,cy)=>{const svg=brushes[i]?brushes[i].svg:zooms[i]&&zooms[i].svg;if(!svg)throw new Error('no panel '+i+' that zooms or brushes');
       |    const u=spaceAt(svg,zooms[i],cx,cy),ax=axesOf(svg);return [inv[ax[0].t](u[0],ax[0].c),inv[ax[1].t](u[1],ax[1].c)];},
       |  window:i=>zooms[i]?toData(zooms[i],zooms[i].win):null,
+      |  region:i=>{const r=regionOf(i);return r?r.window():null;},
       |  text:{format:javaFormat,number:numberText,localize:localize,ticks:(i,axis)=>{const z=zooms[i],k=axis==='x'?0:1,A=z.ax[k];return ticksFor(z.spec[axis],A.t,A.c,z.win[2*k],z.win[2*k+1]);}},
       |  resetZoom:i=>{if(zooms[i])setWindow(zooms[i],zooms[i].full);},
       |  items:items};

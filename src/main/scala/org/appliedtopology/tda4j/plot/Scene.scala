@@ -48,6 +48,11 @@ object Layer:
   * The scene is fitted into the picture by its points (the centres of balls and halos count, their extent does not).
   * `fitted` gives the centre and the radius to fit to instead: an interactive page does so for a scene whose items come
   * and go or move with a control, so that the picture stays put (see [[Interactive]]).
+  *
+  * `region` is a rectangle drawn over the picture, a translucent fill with a dashed outline, in the units of the view
+  * plane: the view from `azimuth` and `elevation` (at `zoom` 1), `x` to the right and `y` up, in the radius of the
+  * fitted frame. [[PageState.brush]] puts it in a still picture of a [[Panel.Spatial]], where it is the rectangle a
+  * viewer has dragged out.
   */
 final case class Scene(
   layers: Vector[Layer] = Vector.empty,
@@ -63,7 +68,8 @@ final case class Scene(
   elements: Elements = Elements(),
   zoom: Double = 1.0,
   turns: Boolean = true,
-  fitted: Option[(XYZ, Double)] = None
+  fitted: Option[(XYZ, Double)] = None,
+  region: Option[Window] = None
 ) extends Plot:
   def +(layer: Layer): Scene = copy(layers = layers :+ layer)
   def ++(more: IterableOnce[Layer]): Scene = copy(layers = layers ++ more)
@@ -212,6 +218,46 @@ final case class Scene(
       Seq(MarkerStyle(edge = LineStyle(width = Some(1.5))), elements.marker)
     )
 
+  /** Where the view takes a place: the screen x, the screen y (up) and the depth (away from the viewer), in the radius
+    * of the frame. The frame is worked out once, not for each place.
+    */
+  private def viewer: XYZ => (Double, Double, Double) =
+    val (c, r) = frame
+    val az = math.toRadians(azimuth)
+    val el = math.toRadians(elevation)
+    p =>
+      val (x, y, z) = ((p._1 - c._1) / r, (p._2 - c._2) / r, (p._3 - c._3) / r)
+      val x1 = x * math.cos(az) - y * math.sin(az)
+      val y1 = x * math.sin(az) + y * math.cos(az)
+      val y2 = y1 * math.cos(el) - z * math.sin(el)
+      val z2 = y1 * math.sin(el) + z * math.cos(el)
+      (x1, z2, y2)
+
+  /** The items, as (layer, item) pairs, whose shape meets the rectangle `w` of the view plane: a point whose centre is
+    * in it, a segment that crosses or lies in it, a triangle that overlaps it. Marker sizes and line widths do not
+    * count, so the answer does not depend on the size of the picture. Balls and halos are never chosen.
+    */
+  private[plot] def touching(w: Window): Seq[(Int, Int)] =
+    val view = viewer
+    def at(p: XYZ): (Double, Double) =
+      val v = view(p); (v._1, v._2)
+    val box = (w.x0, w.y0, w.x1, w.y1)
+    layers.zipWithIndex.flatMap { (layer, li) =>
+      layer match
+        case l: Layer.Points =>
+          l.at.indices.filter(i => Scene.inBox(at(l.at(i)), box)).map(li -> _)
+        case l: Layer.Segments =>
+          l.ends.indices.filter(i => Scene.cuts(at(l.ends(i)._1), at(l.ends(i)._2), box)).map(li -> _)
+        case l: Layer.Triangles =>
+          l.corners.indices
+            .filter { i =>
+              val (a, b, d) = l.corners(i)
+              Scene.overlaps(at(a), at(b), at(d), box)
+            }
+            .map(li -> _)
+        case _ => Seq.empty
+    }
+
   // ----- the static view (SVG)
 
   def svgFile(theme: Theme = Theme.Light): String =
@@ -225,15 +271,7 @@ final case class Scene(
     val (ts, ink) = (style.textScale, style.markScale)
     def paint(p: Paint) = if theme == Theme.Auto then pal.css(p) else pal.hex(p, theme)
     val (c, r) = frame
-    val az = math.toRadians(azimuth)
-    val el = math.toRadians(elevation)
-    def view(p: XYZ): (Double, Double, Double) =
-      val (x, y, z) = ((p._1 - c._1) / r, (p._2 - c._2) / r, (p._3 - c._3) / r)
-      val x1 = x * math.cos(az) - y * math.sin(az)
-      val y1 = x * math.sin(az) + y * math.cos(az)
-      val y2 = y1 * math.cos(el) - z * math.sin(el)
-      val z2 = y1 * math.sin(el) + z * math.cos(el)
-      (x1, z2, y2) // screen x, screen y (up), depth (away from the viewer)
+    val view = viewer
     val top = if title.nonEmpty then 16.0 + 24.0 * ts * (elements.face(TextRole.Title).size / 15.0) else 12.0
     val scale = 0.46 * math.min(width, height - top) * zoom
     val (cx, cy) = (width / 2.0, top + (height - top) / 2.0)
@@ -285,7 +323,13 @@ final case class Scene(
           v._3 - 2e-6 -> s"""<circle cx="${sx(v)}" cy="${sy(v)}" r="${face.size * ink}" $attrs/>"""
         }
     }
-    val body = items.sortBy(-_._1).map(_._2).mkString
+    val body = items.sortBy(-_._1).map(_._2).mkString + region.fold("") { w =>
+      val color = paint(Paint.Series(0))
+      s"""<rect x="${f"${cx + w.x0 * scale}%.2f"}" y="${f"${cy - w.y1 * scale}%.2f"}" width="${f"${(w.x1 - w.x0) * scale}%.2f"}" height="${f"${(w.y1 - w.y0) * scale}%.2f"}" style="fill:$color;fill-opacity:.12;stroke:$color" stroke-width="${Svg
+          .number(ink)}" stroke-dasharray="${Svg.number(4 * ink)} ${Svg.number(
+          3 * ink
+        )}"/>"""
+    }
     val id = s"tda4j3d${Scene.counter.incrementAndGet()}"
     val css = if theme == Theme.Auto then s"<style>${pal.cssVariables(s"#$id")}</style>" else ""
     def num(v: Double) = if v == v.toLong then v.toLong.toString else f"$v%.2f"
@@ -337,10 +381,20 @@ final case class Scene(
     * and choose one when the pointer is on them ([[Behavior.Selects]]. The canvas listens for the page's `tda4j:change`
     * events.
     */
-  private[plot] def fragmentReacting(theme: Theme, reactions: Map[Int, IndexedSeq[Reaction]], id: String): String =
-    build(theme, Some(reactions), Some(id))
+  private[plot] def fragmentReacting(
+    theme: Theme,
+    reactions: Map[Int, IndexedSeq[Reaction]],
+    id: String,
+    brush: Option[String] = None
+  ): String =
+    build(theme, Some(reactions), Some(id), brush)
 
-  private def build(theme: Theme, reacting: Option[Map[Int, IndexedSeq[Reaction]]], named: Option[String]): String =
+  private def build(
+    theme: Theme,
+    reacting: Option[Map[Int, IndexedSeq[Reaction]]],
+    named: Option[String],
+    brush: Option[String] = None
+  ): String =
     val pal = palette.withDegrees(degrees)
     val (ts, ink) = (style.textScale, style.markScale)
     def px(v: Double) = if v == v.toLong then v.toLong.toString else f"$v%.2f"
@@ -465,6 +519,52 @@ final case class Scene(
       Seq(short((p._1 - c._1) / r), short((p._2 - c._2) / r), short((p._3 - c._3) / r))
     )
     val json = layerJson.mkString("[", ",", "]")
+    // choosing by rectangle: the box button, what a drag draws, and what it touches
+    val brushing = brush.isDefined
+    val clearRect = if brushing then "rect=null;" else ""
+    val dropRect = if brushing then "if(rect){rect=null;draw();}" else ""
+    val paintBox = if brushing then "if(rect)paintRect();" else ""
+    val dragBox =
+      if brushing then
+        "if(boxMode){const a=loc(drag[0],drag[1]),b=loc(e.clientX,e.clientY);rect=[a[0],a[1],b[0],b[1]];draw();return;}"
+      else ""
+    val liftBox = if brushing then "if(was&&boxMode&&moved>=4&&rect){chooseBox(e.shiftKey);return;}" else ""
+    val boxScript = brush.fold("") { selection =>
+      s"""
+         |// a brushable panel: the box button makes a drag draw a rectangle (pixels of the canvas, kept until the next click or
+         |// until the view moves) that chooses the keys of the items it touches, those of the items drawn now
+         |const BR=${"\"" + Svg.escape(selection) + "\""},S0=color(${col(Paint.Series(0))}),SF=color(${col(
+          Paint.Surface
+        )});
+         |const loc=(cx,cy)=>{const r=cv.getBoundingClientRect(),k=cv.clientWidth/r.width;return[(cx-r.left)*k,(cy-r.top)*k];};
+         |function paintRect(){g.save();g.beginPath();g.rect(Math.min(rect[0],rect[2]),Math.min(rect[1],rect[3]),Math.abs(rect[2]-rect[0]),Math.abs(rect[3]-rect[1]));
+         |  g.globalAlpha=0.12;g.fillStyle=S0;g.fill();g.globalAlpha=1;g.strokeStyle=S0;g.lineWidth=1;g.setLineDash([4,3]);g.stroke();g.restore();}
+         |const inBox=(x,y,x0,y0,x1,y1)=>x>=x0&&x<=x1&&y>=y0&&y<=y1;
+         |// does the segment from a to b meet the box (Liang-Barsky)
+         |function cuts(ax,ay,bx,by,x0,y0,x1,y1){let t0=0,t1=1;const dx=bx-ax,dy=by-ay;
+         |  for(const[p,q]of[[-dx,ax-x0],[dx,x1-ax],[-dy,ay-y0],[dy,y1-ay]]){
+         |    if(p===0){if(q<0)return false;continue;}
+         |    const r=q/p;if(p<0){if(r>t1)return false;if(r>t0)t0=r;}else{if(r<t0)return false;if(r<t1)t1=r;}}
+         |  return true;}
+         |// a point whose centre is in the box, a segment that meets it, a triangle that overlaps it; sizes and widths do not count
+         |function touches(L,k,x0,y0,x1,y1){
+         |  if(L.k==='p')return inBox(X(L.i[k]),Y(L.i[k]),x0,y0,x1,y1);
+         |  if(L.k==='s')return cuts(X(L.i[2*k]),Y(L.i[2*k]),X(L.i[2*k+1]),Y(L.i[2*k+1]),x0,y0,x1,y1);
+         |  if(L.k!=='t')return false;
+         |  const a=L.i[3*k],b=L.i[3*k+1],c=L.i[3*k+2],ax=X(a),ay=Y(a),bx=X(b),by=Y(b),cx=X(c),cy=Y(c);
+         |  return cuts(ax,ay,bx,by,x0,y0,x1,y1)||cuts(bx,by,cx,cy,x0,y0,x1,y1)||cuts(cx,cy,ax,ay,x0,y0,x1,y1)||
+         |    [[x0,y0],[x1,y0],[x1,y1],[x0,y1]].some(q=>inTri(q[0],q[1],ax,ay,bx,by,cx,cy));}
+         |function chooseBox(shift){const x0=Math.min(rect[0],rect[2]),x1=Math.max(rect[0],rect[2]),y0=Math.min(rect[1],rect[3]),y1=Math.max(rect[1],rect[3]),ks=new Set();
+         |  for(const it of last){const L=layers[it[1]],pk=L.pk&&L.pk[it[2]];
+         |    if(pk&&touches(L,it[2],x0,y0,x1,y1))pk.forEach(q=>{if(q[0]===BR)ks.add(q[1]);});}
+         |  if(link())link().choose(BR,[...ks],shift);}
+         |const boxBtn=root.querySelector('.tda4j-box');
+         |boxBtn.addEventListener('click',()=>{boxMode=!boxMode;boxBtn.setAttribute('aria-pressed',String(boxMode));
+         |  boxBtn.style.background=boxMode?S0:'transparent';boxBtn.style.color=boxMode?SF:'inherit';cv.style.cursor=idle();rect=null;draw();});
+         |// for the page's `brush(panel, window)`: the rectangle in the units of the view plane (x to the right, y up, the radius of the frame)
+         |root._region={show:w=>{if(!w){rect=null;draw();return;}rect=[ox+w[0]*sc,oy-w[3]*sc,ox+w[1]*sc,oy-w[2]*sc];draw();},
+         |  window:()=>rect?[(Math.min(rect[0],rect[2])-ox)/sc,(Math.max(rect[0],rect[2])-ox)/sc,(oy-Math.max(rect[1],rect[3]))/sc,(oy-Math.min(rect[1],rect[3]))/sc]:null};"""
+    }
     // the script of a panel of an interactive page also asks which items the controls and selections leave out
     val hook =
       if reacting.isEmpty then ""
@@ -514,14 +614,18 @@ final case class Scene(
        |<div style="${css(
         TextRole.Note,
         s"color:${col(elements.face(TextRole.Note).paint).replace("\"", "")};margin-top:4px"
-      )}">${if turns then "drag to turn, scroll to zoom" else "drag to pan, scroll to zoom"}</div>
+      )}">${if turns then "drag to turn, scroll to zoom" else "drag to pan, scroll to zoom"}${brush.fold("")(_ =>
+        """ <button type="button" class="tda4j-box" aria-pressed="false" title="drag a rectangle to choose what it touches (a drag no longer turns the picture while this is on)" style="font:inherit;margin-left:6px;padding:1px 8px;border:1px solid currentColor;border-radius:4px;background:transparent;color:inherit;cursor:pointer">box</button>"""
+      )}</div>
        |<script>(function(){
        |const root=document.getElementById('$id'),cv=root.querySelector('canvas'),g=cv.getContext('2d');
        |const P=${positions.mkString("[", ",", "]")},layers=$json;$hook
        |const css=getComputedStyle(root),np=P.length/3,Q=new Float64Array(3*np),resolved=new Map();
        |const color=s=>{if(!s.startsWith('var('))return s;let c=resolved.get(s);
        |  if(c===undefined){c=css.getPropertyValue(s.slice(4,-1)).trim();resolved.set(s,c);}return c;};
-       |let az=${math.toRadians(azimuth)},el=${math.toRadians(elevation)},zoom=${Svg.number(zoom)};
+       |let az=${math.toRadians(azimuth)},el=${math.toRadians(elevation)},zoom=${Svg.number(
+        zoom
+      )},boxMode=false,rect=null;
        |let pan=[0,0];const turns=$turns,ends=L=>L.k==='s'?2:L.k==='t'?3:1,count=L=>L.i.length/ends(L),tint=(L,k)=>L.pal[typeof L.c==='number'?L.c:L.c[k]];
        |function project(){const ca=Math.cos(az),sa=Math.sin(az),ce=Math.cos(el),se=Math.sin(el);
        |  for(let i=0;i<np;i++){const x=P[3*i],y=P[3*i+1],z=P[3*i+2],x1=x*ca-y*sa,y1=x*sa+y*ca;
@@ -553,17 +657,18 @@ final case class Scene(
        |    if(L.k==='t'){g.globalAlpha=L.op;g.fillStyle=c;g.beginPath();g.moveTo(X(L.i[3*k]),Y(L.i[3*k]));g.lineTo(X(L.i[3*k+1]),Y(L.i[3*k+1]));g.lineTo(X(L.i[3*k+2]),Y(L.i[3*k+2]));g.closePath();g.fill();g.globalAlpha=1;}
        |    else if(L.k==='s'){g.globalAlpha=L.op;g.strokeStyle=c;g.lineWidth=L.w;g.lineCap='round';g.beginPath();g.moveTo(X(L.i[2*k]),Y(L.i[2*k]));g.lineTo(X(L.i[2*k+1]),Y(L.i[2*k+1]));g.stroke();g.globalAlpha=1;}
        |    else if(L.k==='p'){g.globalAlpha=L.op;g.fillStyle=c;g.beginPath();g.arc(X(L.i[k]),Y(L.i[k]),L.r,0,2*Math.PI);g.fill();if(L.ew>0){g.strokeStyle=color(L.ec);g.lineWidth=L.ew;g.stroke();}g.globalAlpha=1;}
-       |    else{const rad=L.k==='b'?radiusOf(L)*sc:L.r;g.globalAlpha=L.op;g.fillStyle=c;g.beginPath();g.arc(X(L.i[k]),Y(L.i[k]),rad,0,2*Math.PI);g.fill();g.globalAlpha=1;}}}
+       |    else{const rad=L.k==='b'?radiusOf(L)*sc:L.r;g.globalAlpha=L.op;g.fillStyle=c;g.beginPath();g.arc(X(L.i[k]),Y(L.i[k]),rad,0,2*Math.PI);g.fill();g.globalAlpha=1;}}$paintBox}
        |function radiusOf(L){if(L.ra){const v=vals[L.ra[0]];if(v!==undefined)return v*L.ra[1];}return L.rad;}
        |// what the pointer is over: the nearest drawn item of a layer that chooses, within 4 pixels of its shape
        |const segDist=(px,py,ax,ay,bx,by)=>{const dx=bx-ax,dy=by-ay,l=dx*dx+dy*dy,t=l?Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/l)):0;return Math.hypot(px-ax-t*dx,py-ay-t*dy);};
+       |const inTri=(x,y,ax,ay,bx,by,cx,cy)=>{const s1=(x-bx)*(ay-by)-(ax-bx)*(y-by),s2=(x-cx)*(by-cy)-(bx-cx)*(y-cy),s3=(x-ax)*(cy-ay)-(cx-ax)*(y-ay);
+       |  return !((s1<0||s2<0||s3<0)&&(s1>0||s2>0||s3>0));};
        |function reach(L,k,x,y){
        |  if(L.k==='p')return Math.max(0,Math.hypot(x-X(L.i[k]),y-Y(L.i[k]))-L.r);
        |  if(L.k==='s')return Math.max(0,segDist(x,y,X(L.i[2*k]),Y(L.i[2*k]),X(L.i[2*k+1]),Y(L.i[2*k+1]))-L.w/2);
        |  if(L.k!=='t')return Infinity;
        |  const a=L.i[3*k],b=L.i[3*k+1],c=L.i[3*k+2],ax=X(a),ay=Y(a),bx=X(b),by=Y(b),cx=X(c),cy=Y(c);
-       |  const s1=(x-bx)*(ay-by)-(ax-bx)*(y-by),s2=(x-cx)*(by-cy)-(bx-cx)*(y-cy),s3=(x-ax)*(cy-ay)-(cx-ax)*(y-ay);
-       |  if(!((s1<0||s2<0||s3<0)&&(s1>0||s2>0||s3>0)))return 0;
+       |  if(inTri(x,y,ax,ay,bx,by,cx,cy))return 0;
        |  return Math.min(segDist(x,y,ax,ay,bx,by),segDist(x,y,bx,by,cx,cy),segDist(x,y,cx,cy,ax,ay));}
        |const choosers=new Set();layers.forEach(L=>{if(L.pk)L.pk.forEach(p=>{if(p)p.forEach(q=>choosers.add(q[0]));});});
        |function pickAt(clientX,clientY){const r=cv.getBoundingClientRect(),x=(clientX-r.left)*cv.clientWidth/r.width,y=(clientY-r.top)*cv.clientWidth/r.width;
@@ -578,17 +683,17 @@ final case class Scene(
        |function hoverAt(e){if(!choosers.size||!link())return;xy=[e.clientX,e.clientY];
        |  if(frame)return;
        |  frame=requestAnimationFrame(()=>{frame=0;const pk=pickAt(xy[0],xy[1]);
-       |    choosers.forEach(n=>link().hover(n,keysFor(pk,n)));cv.style.cursor=pk?'pointer':'grab';});}
+       |    choosers.forEach(n=>link().hover(n,keysFor(pk,n)));cv.style.cursor=pk?'pointer':idle();});}
        |function leave(){if(frame){cancelAnimationFrame(frame);frame=0;}
-       |  if(link())choosers.forEach(n=>link().hover(n,[]));cv.style.cursor='grab';}
-       |let drag=null,moved=0;
+       |  if(link())choosers.forEach(n=>link().hover(n,[]));cv.style.cursor=idle();}
+       |let drag=null,moved=0;const idle=()=>boxMode?'crosshair':'grab';
        |// two fingers: the distance between them zooms (about their midpoint on a flat canvas) and their midpoint turns or pans
        |const fingers=new Map();let pinch=null;
        |const spread=()=>{const f=[...fingers.values()];return {d:Math.hypot(f[0][0]-f[1][0],f[0][1]-f[1][1]),m:[(f[0][0]+f[1][0])/2,(f[0][1]+f[1][1])/2]};};
        |cv.addEventListener('pointerdown',e=>{
        |  if(e.pointerType==='touch'){fingers.set(e.pointerId,[e.clientX,e.clientY]);
-       |    if(fingers.size===2){const s=spread();pinch={d:s.d,m:s.m,zoom:zoom,az:az,el:el,pan:pan.slice()};drag=null;moved=99;cv.setPointerCapture(e.pointerId);return;}}
-       |  drag=[e.clientX,e.clientY,az,el,pan[0],pan[1]];moved=0;cv.setPointerCapture(e.pointerId);cv.style.cursor='grabbing';});
+       |    if(fingers.size===2){const s=spread();pinch={d:s.d,m:s.m,zoom:zoom,az:az,el:el,pan:pan.slice()};drag=null;moved=99;${dropRect}cv.setPointerCapture(e.pointerId);return;}}
+       |  ${dropRect}drag=[e.clientX,e.clientY,az,el,pan[0],pan[1]];moved=0;cv.setPointerCapture(e.pointerId);cv.style.cursor=boxMode?'crosshair':'grabbing';});
        |cv.addEventListener('pointermove',e=>{
        |  if(fingers.has(e.pointerId)){fingers.set(e.pointerId,[e.clientX,e.clientY]);
        |    if(pinch&&fingers.size===2){const s=spread(),z=Math.max(0.2,Math.min(turns?8:200,pinch.zoom*s.d/Math.max(pinch.d,1)));
@@ -600,20 +705,23 @@ final case class Scene(
        |  if(!drag){hoverAt(e);return;}
        |  moved=Math.max(moved,Math.hypot(e.clientX-drag[0],e.clientY-drag[1]));
        |  if(moved<4)return;
+       |  $dragBox
        |  if(turns){az=drag[2]+(e.clientX-drag[0])*0.01;el=Math.max(-1.55,Math.min(1.55,drag[3]+(e.clientY-drag[1])*0.01));order=null;}
        |  else pan=[drag[4]+(e.clientX-drag[0])*cv.clientWidth/cv.getBoundingClientRect().width,drag[5]+(e.clientY-drag[1])*cv.clientWidth/cv.getBoundingClientRect().width];
        |  draw();});
        |const lift=e=>{fingers.delete(e.pointerId);if(fingers.size<2)pinch=null;};
        |cv.addEventListener('pointercancel',e=>{lift(e);drag=null;});
-       |cv.addEventListener('pointerup',e=>{lift(e);const was=drag;drag=null;cv.style.cursor='grab';
+       |cv.addEventListener('pointerup',e=>{lift(e);const was=drag;drag=null;cv.style.cursor=idle();
+       |  $liftBox
        |  if(was&&moved<4&&choosers.size&&link()){const pk=pickAt(e.clientX,e.clientY);choosers.forEach(n=>link().click(n,keysFor(pk,n),e.shiftKey));}});
        |cv.addEventListener('pointerleave',leave);
-       |cv.addEventListener('wheel',e=>{e.preventDefault();const z=Math.max(0.2,Math.min(turns?8:200,zoom*Math.exp(-e.deltaY*0.001)));
+       |cv.addEventListener('wheel',e=>{e.preventDefault();${clearRect}const z=Math.max(0.2,Math.min(turns?8:200,zoom*Math.exp(-e.deltaY*0.001)));
        |  if(!turns){const r=cv.getBoundingClientRect(),k=cv.clientWidth/r.width,x=(e.clientX-r.left)*k-cv.clientWidth/2,y=(e.clientY-r.top)*k-cv.clientHeight/2;
        |    pan=[x-(x-pan[0])*z/zoom,y-(y-pan[1])*z/zoom];}
        |  zoom=z;draw();},{passive:false});
+       |$boxScript
        |matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{resolved.clear();draw();});
-       |window.addEventListener('resize',draw);draw();})();</script>
+       |window.addEventListener('resize',()=>{${clearRect}draw();});draw();})();</script>
        |</div>""".stripMargin
 
   def html(theme: Theme = Theme.Auto): String = Html.page(title, fragment(theme), palette)
@@ -621,3 +729,40 @@ final case class Scene(
 object Scene:
   // Element ids for the fragments of one page; scratch, no meaning outside this file.
   private[plot] val counter = new java.util.concurrent.atomic.AtomicLong()
+
+  // The geometry of choosing by rectangle, in the plane of the view; the page's script does the same sums on the pixels
+  // (a place in the plane and its pixel are an affine map apart, so what meets what is the same).
+  private type Pt = (Double, Double)
+  private type Box = (Double, Double, Double, Double) // x0, y0, x1, y1
+
+  private[plot] def inBox(p: Pt, b: Box): Boolean = p._1 >= b._1 && p._1 <= b._3 && p._2 >= b._2 && p._2 <= b._4
+
+  // Liang-Barsky: does the segment from `a` to `b` meet the box?
+  private[plot] def cuts(a: Pt, b: Pt, box: Box): Boolean =
+    val (dx, dy) = (b._1 - a._1, b._2 - a._2)
+    var (t0, t1) = (0.0, 1.0)
+    var inside = true
+    for (p, q) <- Seq((-dx, a._1 - box._1), (dx, box._3 - a._1), (-dy, a._2 - box._2), (dy, box._4 - a._2)) do
+      if p == 0.0 then
+        if q < 0 then inside = false
+      else
+        val r = q / p
+        if p < 0 then
+          if r > t1 then inside = false
+          if r > t0 then t0 = r
+        else
+          if r < t0 then inside = false
+          if r < t1 then t1 = r
+    inside
+
+  // is `p` in the triangle `a b c` (its edges count)?
+  private def inTriangle(p: Pt, a: Pt, b: Pt, c: Pt): Boolean =
+    val s1 = (p._1 - b._1) * (a._2 - b._2) - (a._1 - b._1) * (p._2 - b._2)
+    val s2 = (p._1 - c._1) * (b._2 - c._2) - (b._1 - c._1) * (p._2 - c._2)
+    val s3 = (p._1 - a._1) * (c._2 - a._2) - (c._1 - a._1) * (p._2 - a._2)
+    !((s1 < 0 || s2 < 0 || s3 < 0) && (s1 > 0 || s2 > 0 || s3 > 0))
+
+  // does the triangle overlap the box: an edge meets it, or the box lies inside the triangle
+  private[plot] def overlaps(a: Pt, b: Pt, c: Pt, box: Box): Boolean =
+    cuts(a, b, box) || cuts(b, c, box) || cuts(c, a, box) ||
+      Seq((box._1, box._2), (box._3, box._2), (box._3, box._4), (box._1, box._4)).exists(inTriangle(_, a, b, c))

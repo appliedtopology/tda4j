@@ -113,9 +113,10 @@ const describe = (svg, visibleOnly) => {
 // check can count the items, find where one is, and compare them with the still picture of the same state.
 const spy = `(() => {
   const P = CanvasRenderingContext2D.prototype, o = {};
-  for (const m of ['beginPath', 'moveTo', 'lineTo', 'arc', 'fill', 'stroke', 'fillRect']) o[m] = P[m];
+  for (const m of ['beginPath', 'moveTo', 'lineTo', 'arc', 'rect', 'fill', 'stroke', 'fillRect']) o[m] = P[m];
   let path = null; window.__shapes = [];
   P.fillRect = function (...a) { window.__shapes = []; return o.fillRect.apply(this, a); };
+  P.rect = function (x, y, w, h) { if (path) path.push(['r', x, y, w, h]); return o.rect.call(this, x, y, w, h); };
   P.beginPath = function () { path = []; return o.beginPath.call(this); };
   P.moveTo = function (x, y) { if (path) path.push(['m', x, y]); return o.moveTo.call(this, x, y); };
   P.lineTo = function (x, y) { if (path) path.push(['l', x, y]); return o.lineTo.call(this, x, y); };
@@ -124,7 +125,7 @@ const spy = `(() => {
   P.stroke = function () { if (path) window.__shapes.push({ op: 'stroke', alpha: this.globalAlpha, width: this.lineWidth, path: path.slice() }); return o.stroke.apply(this, arguments); };
 })()`;
 // the kind of a recorded shape: a triangle, a segment, a disc (point, ball or halo)
-const kindOf = s => s.path[0][0] === 'a' ? (s.op === 'fill' ? 'disc' : 'ring') : s.path.length === 3 ? 'triangle' : 'segment';
+const kindOf = s => s.path[0][0] === 'r' ? 'box' : s.path[0][0] === 'a' ? (s.op === 'fill' ? 'disc' : 'ring') : s.path.length === 3 ? 'triangle' : 'segment';
 const kinds = shapes => { const n = { triangle: 0, segment: 0, disc: 0 }; shapes.forEach(s => { const k = kindOf(s); if (k in n) n[k]++; }); return n; };
 // what a still picture holds, read in a blank page (Node has no DOM): the counts of the scene's polygons, lines and circles
 // per 3-D scene, and the balls (the circles of opacity 0.09)
@@ -200,6 +201,133 @@ const read = f => fs.readFileSync(dir + '/' + f, 'utf8');
   check(JSON.stringify(await shapes()) !== before && (await chosen()).length === 0, 'a drag turns the picture and chooses nothing');
   check(errors.length === 0, `no errors on the picking page ${errors.join(' | ')}`);
   await page.close();
+}
+
+{ // a 3-D canvas that chooses by rectangle: the box button, what a drag chooses (the library's own answer for each rectangle), the still
+  const cases = JSON.parse(read('interactive-box-3d.json'));
+  const context = await browser.newContext({ viewport: { width: 1300, height: 800 }, hasTouch: engine === 'chromium' });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push(String(e)));
+  page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+  await page.addInitScript(spy);
+  await page.goto('file://' + dir + '/interactive-box-3d.html');
+  const api = (body, arg) => page.evaluate(`((arg) => { const t = document.querySelector('.tda4j-ia').tda4j; ${body} })(${JSON.stringify(arg ?? null)})`);
+  const shapes = () => page.evaluate(() => window.__shapes);
+  const settle = () => page.waitForTimeout(100);
+  const chosen = () => api("return [...t.selection('item')].sort((a, b) => a - b);");
+  // a place in the view plane (x right, y up, in the radius of the frame), as a client pixel of the canvas: its middle is the
+  // middle of the picture, and one unit is 0.46 of the smaller side
+  const toClient = async ([u, v]) => page.evaluate(([u, v]) => { const cv = document.querySelector('canvas'), r = cv.getBoundingClientRect(), W = cv.clientWidth, H = W * cv.height / cv.width,
+    sc = 0.46 * Math.min(W, H), k = r.width / W; return [r.left + (W / 2 + u * sc) * k, r.top + (H / 2 - v * sc) * k]; }, [u, v]);
+  const corners = async w => [await toClient([w[0], w[3]]), await toClient([w[1], w[2]])];
+  const drag = async (w, { shift = false } = {}) => { const [a, b] = await corners(w);
+    if (shift) await page.keyboard.down('Shift');
+    await page.mouse.move(...a); await page.mouse.down(); await page.mouse.move(...b, { steps: 6 }); await page.mouse.up();
+    if (shift) await page.keyboard.up('Shift');
+    await page.mouse.move(6, 6); await settle(); };
+  const window_ = () => api('return t.region(0);');
+  const near = (a, b, tol = 0.01) => a && b && a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) <= tol);
+  const nonBox = sh => sh.filter(s => kindOf(s) !== 'box');
+  const boxes = sh => sh.filter(s => kindOf(s) === 'box' && s.op === 'fill');
+  const button = page.locator('.tda4j-box');
+
+  check(await button.count() === 1 && await button.getAttribute('aria-pressed') === 'false', 'a panel that chooses by rectangle has a box button, not pressed');
+  // box mode off: a drag turns the picture, as before, and chooses nothing
+  const before = JSON.stringify(nonBox(await shapes()));
+  const [tl, br] = await corners([-0.5, 0.5, -0.5, 0.5]);
+  await page.mouse.move(...tl); await page.mouse.down(); await page.mouse.move(...br, { steps: 5 }); await page.mouse.up(); await page.mouse.move(6, 6); await settle();
+  check(JSON.stringify(nonBox(await shapes())) !== before && (await chosen()).length === 0 && boxes(await shapes()).length === 0, `without the box button a drag turns the picture: nothing chosen, no rectangle (moved ${JSON.stringify(nonBox(await shapes())) !== before}, chosen [${await chosen()}], boxes ${boxes(await shapes()).length})`);
+  await page.reload(); await page.waitForTimeout(100);
+  await button.click();
+  check(await button.getAttribute('aria-pressed') === 'true', 'the box button is pressed once clicked');
+
+  // each rectangle of the library's cases: the page chooses the keys the library says it does, and shows the rectangle it was dragged as
+  const picture = JSON.stringify(nonBox(await shapes()));
+  const bad = [];
+  for (const [i, c] of cases.entries()) {
+    await api("t.set('t', arg); t.select('item', []);", c.t);
+    await settle();
+    await drag(c.window);
+    const keys = await chosen(), win = await window_();
+    if (JSON.stringify(keys) !== JSON.stringify(c.keys)) bad.push(`case ${i} (t=${c.t}, [${c.window}]): page [${keys}], library [${c.keys}]`);
+    if (!near(win, c.window)) bad.push(`case ${i}: the rectangle on the page is [${win && win.map(v => v.toFixed(3))}], not [${c.window}]`);
+    if (boxes(await shapes()).length !== 1) bad.push(`case ${i}: ${boxes(await shapes()).length} rectangles drawn`);
+  }
+  check(bad.length === 0, `${cases.length} rectangles choose what the library says they do` + (bad.length ? ` -- ${bad.slice(0, 3).join(' || ')}` : ''));
+  check(cases.some(c => c.keys.length === 0) && cases.some(c => c.keys.length >= 4) && new Set(cases.flatMap(c => c.keys)).size >= 4, 'and the cases cover nothing chosen, several things chosen and every kind of item');
+  // a drag in box mode does not turn the picture
+  await api("t.set('t', 0.9); t.select('item', []);"); await settle();
+  const still0 = JSON.stringify(nonBox(await shapes()));
+  await drag([-0.3, 0.3, 0.1, 0.3]);
+  // the rectangle stays until the next click, and goes with a click or a turn of the wheel
+  check(boxes(await shapes()).length === 1, 'the rectangle stays on the picture after the drag');
+  await api("t.select('item', []);"); await settle();
+  check(JSON.stringify(nonBox(await shapes())) === still0, 'a drag in box mode leaves the picture in its view (nothing turns)');
+  const [mx, my] = await toClient([0.8, -0.8]);
+  await page.mouse.click(mx, my); await settle();
+  check(boxes(await shapes()).length === 0 && (await window_()) === null, 'a click removes it');
+  await drag([-0.3, 0.3, 0.35, 0.55]);
+  check(boxes(await shapes()).length === 1, 'drawn again');
+  await page.mouse.move(mx, my); await page.mouse.wheel(0, -100); await settle();
+  check(boxes(await shapes()).length === 0, 'the wheel takes it away, as zooming moves the picture from under it');
+  // a plain drag adds nothing and a shift-drag adds to what is chosen
+  await api("t.set('t', 0); t.select('item', []);");
+  await drag([-0.15, 0.15, 0.35, 0.55]);
+  const first = await chosen();
+  await drag([-0.6, -0.4, -0.6, -0.4]);
+  const second = await chosen();
+  await drag([-0.15, 0.15, 0.35, 0.55], { shift: true });
+  const third = await chosen();
+  check(JSON.stringify(first) === '[10]' && JSON.stringify(second) === '[20]' && JSON.stringify(third) === '[10,20]', `a drag replaces what is chosen and a shift-drag adds to it: [${first}] then [${second}] then [${third}]`);
+  // the library's still of the same rectangle draws it where the page does: the same window, read off the still's own anchors
+  const stillWin = await inStill(read('interactive-box-3d-still.svg'), doc => { const svg = doc.querySelector('svg[id^="tda4j3d"]'), r = svg.querySelector('rect[stroke-dasharray]');
+    const anchors = [...svg.querySelectorAll('circle')].filter(c => c.getAttribute('r') === '1.5'), xs = anchors.map(c => +c.getAttribute('cx')), ys = anchors.map(c => +c.getAttribute('cy'));
+    const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2, sc = (Math.max(...xs) - Math.min(...xs)) / 2;
+    const x = +r.getAttribute('x'), y = +r.getAttribute('y'), w = +r.getAttribute('width'), h = +r.getAttribute('height');
+    return [(x - cx) / sc, (x + w - cx) / sc, (cy - y - h) / sc, (cy - y) / sc]; });
+  check(near(stillWin, [-0.15, 0.15, 0.35, 0.55], 0.002), `the still draws the rectangle [-0.15, 0.15, 0.35, 0.55] where its own picture puts it: [${stillWin.map(v => v.toFixed(3))}]`);
+  // the page's own rectangle set from the data is that of the still
+  await api('t.brush(0, arg);', [-0.15, 0.15, 0.35, 0.55]);
+  check(near(await window_(), [-0.15, 0.15, 0.35, 0.55], 1e-6) && boxes(await shapes()).length === 1, 'brush(panel, window) puts the same rectangle on the page');
+  await api('t.brush(0, null);');
+  check((await window_()) === null && boxes(await shapes()).length === 0, 'brush(panel, null) takes it away');
+  // box mode off again: a drag turns
+  await button.click();
+  check(await button.getAttribute('aria-pressed') === 'false', 'a second click on the box button lets go of it');
+  await api("t.select('item', []);");
+  const turnFrom = JSON.stringify(nonBox(await shapes()));
+  await page.mouse.move(...tl); await page.mouse.down(); await page.mouse.move(...br, { steps: 5 }); await page.mouse.up(); await page.mouse.move(6, 6); await settle();
+  check(JSON.stringify(nonBox(await shapes())) !== turnFrom && (await chosen()).length === 0, 'and a drag turns the picture again');
+
+  if (engine !== 'chromium') console.log(`skip  box by touch: touch is sent through the Chrome DevTools protocol, and this is ${engine}`);
+  else { // one finger draws the rectangle in box mode and turns the picture otherwise; a second finger lands and it is a pinch
+    await page.reload(); await page.waitForTimeout(100);
+    const cdp = await context.newCDPSession(page);
+    const touch = (type, pts) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map(([x, y], id) => ({ x, y, id })) });
+    const finger = async (w, steps = 6) => { const [a, b] = await corners(w);
+      await touch('touchStart', [a]); for (let i = 1; i <= steps; i++) await touch('touchMove', [[a[0] + (b[0] - a[0]) * i / steps, a[1] + (b[1] - a[1]) * i / steps]]); await touch('touchEnd', []); await settle(); };
+    await api("t.set('t', 0.9);"); await settle();
+    const idle = JSON.stringify(nonBox(await shapes()));
+    await button.click();
+    await finger([-0.15, 0.15, 0.35, 0.55]);
+    check(JSON.stringify(await chosen()) === '[10]' && near(await window_(), [-0.15, 0.15, 0.35, 0.55], 0.01), `with the box button pressed one finger draws a rectangle and chooses what it touches: [${await chosen()}]`);
+    await api("t.select('item', []);"); await api('t.brush(0, null);'); await settle();
+    check(JSON.stringify(nonBox(await shapes())) === idle, 'and the picture keeps its view');
+    // a second finger turns the drag into a pinch: no rectangle is chosen
+    const [a0] = await corners([-0.3, 0.3, 0.1, 0.3]); const [b0] = await corners([0.3, 0.6, -0.2, 0.0]);
+    await touch('touchStart', [a0]); await touch('touchMove', [[a0[0] + 40, a0[1] + 20]]);
+    await touch('touchStart', [[a0[0] + 40, a0[1] + 20], b0]); await touch('touchMove', [[a0[0] + 40, a0[1] + 20], [b0[0] + 30, b0[1]]]); await touch('touchEnd', []); await settle();
+    check((await chosen()).length === 0 && boxes(await shapes()).length === 0, 'a second finger makes it a pinch: no rectangle, nothing chosen');
+    await button.click();
+    const turnTouch = JSON.stringify(nonBox(await shapes()));
+    const [t0, t1] = await corners([-0.5, 0.5, -0.5, 0.5]);
+    await touch('touchStart', [t0]); for (let i = 1; i <= 5; i++) await touch('touchMove', [[t0[0] + (t1[0] - t0[0]) * i / 5, t0[1] + (t1[1] - t0[1]) * i / 5]]); await touch('touchEnd', []); await settle();
+    check(JSON.stringify(nonBox(await shapes())) !== turnTouch, 'with the box button let go one finger turns the picture again');
+  }
+  check(errors.length === 0, `no errors on the rectangle page ${errors.join(' | ')}`);
+  await page.close();
+  await context.close();
 }
 
 { // the 3-D sphere: the balls follow the slider and are the balls of the still of that value

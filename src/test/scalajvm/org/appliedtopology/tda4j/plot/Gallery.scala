@@ -274,6 +274,80 @@ object Gallery:
       .withTitle("Pointing in 3-D")
     picking.save(out("interactive-pick-3d.html"))
     picking.at(PageState().select("item", 10)).save(out("interactive-pick-3d-still.svg"))
+    // a canvas that chooses by rectangle: a point that comes with the slider, one that rises with it, a segment and half a square,
+    // seen from the side, so that a rectangle on the picture is a rectangle in x and z; the cases are what the library says each
+    // rectangle chooses (`Interactive.touched`), which the page must choose too
+    val boxAnchors: IndexedSeq[XYZ] =
+      IndexedSeq(
+        (1.0, 0.0, 0.0),
+        (-1.0, 0.0, 0.0),
+        (0.0, 1.0, 0.0),
+        (0.0, -1.0, 0.0),
+        (0.0, 0.0, 1.0),
+        (0.0, 0.0, -1.0)
+      )
+    val boxScene = Scene(
+      Vector(Layer.Points(boxAnchors, IndexedSeq(Paint.Muted), 1.5)),
+      title = "Choosing by rectangle in 3-D",
+      azimuth = 0,
+      elevation = 0
+    )
+    val boxing = Interactive()
+      .withSlider("t", 0.0, 1.0)
+      .withSelection(Selection.listing("item", Seq.tabulate(21)(i => s"item $i")))
+      .withSelection("other")
+      .withPanel(
+        Panel(boxScene)
+          .reactEach(
+            Layer.Points(IndexedSeq((0.0, 0.0, 0.0), (0.4, 0.0, 0.4), (0.0, 0.0, 0.0)), IndexedSeq(Paint.Ink), 4.0),
+            IndexedSeq(
+              Reaction.none,
+              Reaction(Vector(Behavior.shownFrom("t", 0.5))),
+              Reaction(Vector(Behavior.followsZ("t", 0.0, 0.7)))
+            )
+          )
+          .react(
+            Layer.Segments(IndexedSeq(((-0.7, 0.0, 0.45), (0.7, 0.0, 0.45))), IndexedSeq(Paint.Secondary), 2.0),
+            Reaction.none
+          )
+          .react(
+            Layer.Triangles(
+              IndexedSeq(((-0.7, 0.0, -0.7), (0.7, 0.0, -0.7), (-0.7, 0.0, 0.7))),
+              IndexedSeq(Paint.Series(0)),
+              0.35
+            ),
+            Reaction.none
+          )
+          .selecting(1, "item", IndexedSeq(0, 1, 2))
+          .selecting(2, "item", IndexedSeq(10))
+          .selecting(3, "item", IndexedSeq(20))
+          // the same points choose in a second selection too, which a rectangle that chooses in "item" must leave alone
+          .selecting(1, "other", IndexedSeq(5, 6, 7), halo = false)
+          .brushable("item")
+      )
+      .withTitle("Choosing by rectangle in 3-D")
+    boxing.save(out("interactive-box-3d.html"))
+    val boxCases = Seq(
+      (0.0, Window(-0.15, 0.15, 0.35, 0.55)),
+      (0.5, Window(0.3, 0.5, 0.3, 0.42)),
+      (0.0, Window(0.3, 0.5, 0.3, 0.42)),
+      (0.0, Window(-0.6, -0.4, -0.6, -0.4)),
+      (0.9, Window(-0.1, 0.1, 0.55, 0.75)),
+      (0.9, Window(-0.9, 0.9, -0.9, 0.9)),
+      (0.5, Window(0.41, 0.5, 0.3, 0.39))
+    )
+    java.nio.file.Files.writeString(
+      java.nio.file.Path.of(out("interactive-box-3d.json")),
+      boxCases
+        .map { (t, w) =>
+          val keys = boxing.touched(0, w, "item", PageState().value("t", t)).toSeq.sorted.mkString("[", ",", "]")
+          s"""{"t":$t,"window":[${w.x0},${w.x1},${w.y0},${w.y1}],"keys":$keys}"""
+        }
+        .mkString("[", ",", "]")
+    )
+    boxing
+      .at(PageState().value("t", 0.9).select("item", 10).brush(0, Window(-0.15, 0.15, 0.35, 0.55)))
+      .save(out("interactive-box-3d-still.svg"))
     // a plane rises through a helix of points: the plane (held between 0.1 and 0.8) and the free end of a pole follow the
     // slider in z, the points appear as the plane reaches them, and the order the items are drawn in changes as the plane passes them
     val helix: IndexedSeq[XYZ] = IndexedSeq.tabulate(14)(i => (math.cos(i * 0.9), math.sin(i * 0.9), i / 13.0))
