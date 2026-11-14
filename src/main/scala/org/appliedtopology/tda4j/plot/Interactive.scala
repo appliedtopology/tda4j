@@ -256,7 +256,8 @@ object Panel:
     /** This panel with dragging a rectangle over it choosing, in the selection `selection`, the keys of every item of
       * this panel that the rectangle touches (a shift-drag adds to what is chosen): a region of a diagram, a stretch of
       * a barcode. Some item of the panel has to choose in that selection ([[selecting]]). The rectangle stays on the
-      * page until the next click. Brushing is with the mouse or a pen: a finger scrolls the page.
+      * page until the next click. A mouse or a pen drags the rectangle; a finger scrolls the page until the `touch`
+      * button beside the picture is pressed, and then draws it.
       */
     def brushable(selection: String): Flat = copy(brush = Some(selection))
 
@@ -1619,14 +1620,17 @@ object Interactive:
       |      if(r.right>=x0&&r.left<=x1&&r.bottom>=y0&&r.top<=y1)it.picks.forEach(p=>{if(p.n===n)keys.add(p.key);});}
       |    sel[n].pin=keys;commit(n);};
       |  brushes[pi]={svg:svg,show:showBox};
+      |  // a finger draws a rectangle only after the `touch` button: until then it scrolls the page; a second finger is a pinch and drops it
       |  svg.addEventListener('pointerdown',ev=>{svg._dragged=false;
-      |    if(ev.button!==0||ev.pointerType==='touch'||svg._pan)return;from=[ev.clientX,ev.clientY];});
-      |  svg.addEventListener('pointermove',ev=>{if(!from)return;
+      |    if(ev.pointerType==='touch'&&!ev.isPrimary){from=null;clearBoxes();return;}
+      |    if(ev.button!==0||(ev.pointerType==='touch'&&!svg._finger)||svg._pan)return;from=[ev.clientX,ev.clientY];});
+      |  svg.addEventListener('pointermove',ev=>{if(!from||(ev.pointerType==='touch'&&!ev.isPrimary))return;
       |    if(!svg._dragged){if(Math.hypot(ev.clientX-from[0],ev.clientY-from[1])<5)return;
       |      svg._dragged=true;try{svg.setPointerCapture(ev.pointerId);}catch(e){}clearBoxes();}
       |    const m=svg.getScreenCTM().inverse();
       |    showBox(new DOMPoint(from[0],from[1]).matrixTransform(m),new DOMPoint(ev.clientX,ev.clientY).matrixTransform(m));});
-      |  svg.addEventListener('pointerup',ev=>{if(!from)return;const start=from;from=null;
+      |  svg.addEventListener('pointercancel',()=>{from=null;svg._dragged=false;clearBoxes();});
+      |  svg.addEventListener('pointerup',ev=>{if(!from||(ev.pointerType==='touch'&&!ev.isPrimary))return;const start=from;from=null;
       |    if(!svg._dragged)return;
       |    try{svg.releasePointerCapture(ev.pointerId);}catch(e){}
       |    choose(Math.min(start[0],ev.clientX),Math.min(start[1],ev.clientY),Math.max(start[0],ev.clientX),Math.max(start[1],ev.clientY),ev.shiftKey);});
@@ -1846,6 +1850,16 @@ object Interactive:
       |  svg.addEventListener('pointerup',ev=>{if(!from)return;from=null;try{svg.releasePointerCapture(ev.pointerId);}catch(e){}});});
       |// a 3-D panel that chooses by rectangle keeps its rectangle's controls on its own element
       |const regionOf=i=>{const d=document.getElementById('__ID__-p'+i);return d&&d._region||null;};
+      |// choosing by finger: a finger scrolls the page, so the `touch` button lets it draw the rectangle instead (the bar is the zoom bar's)
+      |root.querySelectorAll('.tda4j-panel[data-brush]').forEach(box=>{
+      |  const svg=box.querySelector('svg[tabindex]'),bi=Array.from(root.querySelectorAll('.tda4j-panel')).indexOf(box);
+      |  if(!svg||!brushes[bi])return;
+      |  let bar=box.querySelector('.tda4j-zoombar');
+      |  if(!bar){bar=document.createElement('div');bar.className='tda4j-zoombar';box.insertBefore(bar,svg);}
+      |  const rest=svg.style.touchAction,label='choose with a finger: one finger drags a rectangle (the page does not scroll under it)';
+      |  const b=document.createElement('button');b.type='button';b.textContent='touch';b.setAttribute('aria-label',label);b.title=label;b.setAttribute('aria-pressed','false');
+      |  b.addEventListener('click',()=>{svg._finger=!svg._finger;b.setAttribute('aria-pressed',String(svg._finger));svg.style.touchAction=svg._finger?'none':rest;});
+      |  bar.appendChild(b);});
       |const api={root:root,controls:spec,selections:choices,
       |  get:n=>sel[n]?keysOf(n):state[n],
       |  set:(n,v)=>sel[n]?pinAll(n,v):put(ctl[n],v),

@@ -601,6 +601,22 @@ object Gallery:
         )
         .withTitle("Brush")
       brushPage.save(out("interactive-brush.html"))
+      // the same page without a zoom, whose only button is the one that lets a finger choose
+      Interactive()
+        .withSelection("c")
+        .withPanel(
+          Panel(
+            Figure(
+              marks = Vector(Mark.Points(cloud, IndexedSeq(Paint.Ink))),
+              x = Axis(label = "x"),
+              y = Axis(label = "y")
+            )
+          )
+            .selecting(0, "c", IndexedSeq.range(0, 40))
+            .brushable("c")
+        )
+        .withTitle("Brush, no zoom")
+        .save(out("interactive-brush-plain.html"))
       def box(r: scala.util.Random, lo: Double, hi: Double) =
         val (a, b) = (lo + (hi - lo) * r.nextDouble(), lo + (hi - lo) * r.nextDouble())
         (math.min(a, b), math.max(a, b) + 0.05)

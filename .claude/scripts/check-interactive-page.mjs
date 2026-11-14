@@ -854,7 +854,7 @@ const matches = (a, b, tol = 0.1) => {
   };
   check(await page.evaluate(() => document.querySelectorAll('.tda4j-panel').length) === 3, 'the explore page has three panels');
   const buttons = await page.evaluate(() => [...document.querySelectorAll('.tda4j-panel')].map(p => p.querySelectorAll('.tda4j-zoombar button').length));
-  check(JSON.stringify(buttons) === '[3,4,4]', `every panel zooms, and the ones that also brush have a button to pan instead (${buttons})`);
+  check(JSON.stringify(buttons) === '[3,5,5]', `every panel zooms, and the ones that also brush have a button to pan instead and one for a finger (${buttons})`);
 
   // the diagram, zoomed, is the still of the same window
   const live = panel => page.evaluate(`(() => { const g = ${geometry.toString()}; return g(document.querySelectorAll('.tda4j-ia svg[role=img]')[${panel}]); })()`);
@@ -1077,7 +1077,73 @@ const matches = (a, b, tol = 0.1) => {
     const target = (await domPoints()).pts.find(p => p.key === 7).box.map((v, i, b) => (v + b[(i + 2) % 4]) / 2).slice(0, 2);
     await touch('touchStart', [target]); await touch('touchEnd', []); await page.waitForTimeout(100);
     check(JSON.stringify(await chosen()) === JSON.stringify([7]), `a tap on a point chooses it: [${await chosen()}]`);
+    // choosing by finger: the touch button turns one finger into a brush, as the mouse is (and a second finger is still a pinch)
+    await page.mouse.click(bx + 5, by + 5);
+    await page.locator('.tda4j-zoombar button[aria-label^="drag to pan"]').click(); // back to choosing: the keyboard checks above left it at panning
+    const touchBtn = page.locator('.tda4j-zoombar button[aria-label^="choose with a finger"]');
+    check(await touchBtn.count() === 1 && await touchBtn.getAttribute('aria-pressed') === 'false', 'a brushable panel has a touch button, not pressed');
+    await touchBtn.click();
+    check(await touchBtn.getAttribute('aria-pressed') === 'true' && await page.evaluate(() => getComputedStyle(document.querySelector('.tda4j-ia svg[tabindex]')).touchAction) === 'none', 'pressed, the picture takes the finger (touch-action: none)');
+    await touch('touchStart', [P]); for (let i = 1; i <= 6; i++) await touch('touchMove', [[P[0] + (Q[0] - P[0]) * i / 6, P[1] + (Q[1] - P[1]) * i / 6]]); await touch('touchEnd', []);
+    await page.waitForTimeout(100);
+    check(near(await pageRect(), dragged) && JSON.stringify(await chosen()) === JSON.stringify(picked) && picked.length > 0, `one finger from ${P.map(Math.round)} to ${Q.map(Math.round)} draws the mouse's rectangle and chooses its points: [${await chosen()}]`);
+    await page.mouse.click(bx + 5, by + 5);
+    const pinchFrom = await api('return t.window(0);');
+    await gesture([[mx - 40, my], [mx + 40, my]], [[mx - 80, my], [mx + 80, my]]);
+    const pinched = await api('return t.window(0);');
+    check(Math.abs((pinched[1] - pinched[0]) - (pinchFrom[1] - pinchFrom[0]) / 2) < 1e-6 * (pinchFrom[1] - pinchFrom[0]) && await pageRect() === null && (await chosen()).length === 0, 'two fingers still pinch, and draw no rectangle');
+    await page.locator('.tda4j-zoombar button[aria-label="show everything"]').click();
+    await touchBtn.click();
+    check(await page.evaluate(() => getComputedStyle(document.querySelector('.tda4j-ia svg[tabindex]')).touchAction) === 'pan-x pan-y', 'a second press gives the finger back to the page (touch-action: pan-x pan-y)');
+    // a swipe the page can take is mostly vertical: a wide sideways one is the browser's "back", which leaves the page
+    const down = [P[0] + 10, Q[1]];
+    await touch('touchStart', [P]); for (let i = 1; i <= 6; i++) await touch('touchMove', [[P[0] + (down[0] - P[0]) * i / 6, P[1] + (down[1] - P[1]) * i / 6]]); await touch('touchEnd', []);
+    await page.waitForTimeout(100);
+    check(await pageRect() === null && (await chosen()).length === 0, 'and one finger draws nothing again');
     check(errors.length === 0, `no errors on the brush page ${errors.join(' | ')}`);
+
+    { // a brushable panel with no zoom has a bar of its own, with the one button
+      const tab = await context.newPage();
+      const tabErrors = [];
+      tab.on('pageerror', e => tabErrors.push(String(e)));
+      await tab.goto(`file://${dir}/interactive-brush-plain.html`);
+      const buttons = await tab.locator('.tda4j-zoombar button').count();
+      check(buttons === 1 && await tab.locator('.tda4j-zoombar button[aria-label^="choose with a finger"]').count() === 1, `a brushable panel that does not zoom has one button, the touch one (${buttons})`);
+      const sel = () => tab.evaluate(() => [...document.querySelector('.tda4j-ia').tda4j.selection('c')].sort((a, b) => a - b));
+      const rect = () => tab.evaluate(() => { const r = document.querySelector('.tda4j-brush'); return r ? ['x', 'y', 'width', 'height'].map(a => +r.getAttribute(a)) : null; });
+      const box = await tab.evaluate(() => { const r = document.querySelector('.tda4j-ia svg[tabindex]').getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; });
+      const [A, B] = [[box[0] + 0.3 * box[2], box[1] + 0.35 * box[3]], [box[0] + 0.65 * box[2], box[1] + 0.7 * box[3]]];
+      await tab.mouse.move(...A); await tab.mouse.down(); await tab.mouse.move(...B, { steps: 8 }); await tab.mouse.up();
+      const byMouse = { rect: await rect(), keys: await sel() };
+      await tab.mouse.click(box[0] + 5, box[1] + 5);
+      const cd = await context.newCDPSession(tab);
+      const tch = (type, pts) => cd.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map(([x, y], id) => ({ x, y, id })) });
+      const A2 = [A[0] + 10, B[1]];
+      await tch('touchStart', [A]); for (let i = 1; i <= 6; i++) await tch('touchMove', [[A[0] + (A2[0] - A[0]) * i / 6, A[1] + (A2[1] - A[1]) * i / 6]]); await tch('touchEnd', []);
+      await tab.waitForTimeout(100);
+      check(await rect() === null && (await sel()).length === 0, 'before the touch button is pressed a finger draws nothing');
+      await tab.locator('.tda4j-zoombar button').click();
+      await tch('touchStart', [A]); for (let i = 1; i <= 6; i++) await tch('touchMove', [[A[0] + (B[0] - A[0]) * i / 6, A[1] + (B[1] - A[1]) * i / 6]]); await tch('touchEnd', []);
+      await tab.waitForTimeout(100);
+      const byFinger = { rect: await rect(), keys: await sel() };
+      check(near(byFinger.rect, byMouse.rect) && JSON.stringify(byFinger.keys) === JSON.stringify(byMouse.keys) && byMouse.keys.length > 0, `after it, one finger draws the mouse's rectangle and chooses [${byFinger.keys}]`);
+      // a second finger landing during the drag drops the rectangle
+      await tab.mouse.click(box[0] + 5, box[1] + 5);
+      await tch('touchStart', [A]); await tch('touchMove', [[A[0] + 30, A[1] + 20]]);
+      await tch('touchStart', [[A[0] + 30, A[1] + 20], B]); await tch('touchMove', [[A[0] + 60, A[1] + 40], B]); await tch('touchEnd', []);
+      await tab.waitForTimeout(100);
+      check(await rect() === null && (await sel()).length === 0, 'a second finger landing during the drag drops the rectangle and chooses nothing');
+      // the browser taking the touch over (a system gesture) cancels the drag: no rectangle is left, and a mouse moving after it draws nothing
+      await tab.mouse.click(box[0] + 5, box[1] + 5);
+      await tch('touchStart', [A]); for (let i = 1; i <= 3; i++) await tch('touchMove', [[A[0] + (B[0] - A[0]) * i / 6, A[1] + (B[1] - A[1]) * i / 6]]);
+      const rubber = await rect();
+      await tch('touchCancel', []);
+      await tab.mouse.move(...B); await tab.mouse.move(B[0] + 20, B[1] + 20, { steps: 3 });
+      await tab.waitForTimeout(100);
+      check(rubber !== null && await rect() === null && (await sel()).length === 0, 'a cancelled touch leaves no rectangle, and nothing for a mouse to carry on with');
+      check(tabErrors.length === 0, `no errors on the plain brush page ${tabErrors.join(' | ')}`);
+      await tab.close();
+    }
 
     // the touch on pages with other axes: the data between the fingers stays between them (reversed axes, a log axis)
     for (const name of ['reversed', 'log', 'symlog']) {
