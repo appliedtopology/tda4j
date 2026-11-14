@@ -435,6 +435,288 @@
   </div>
   <p>A cocycle of a bar lives on the complex where the bar dies, so it has edges right across the data; restricted to the complex at the bar's birth (<code>at = loop.birth</code>) it shows the edges that cut the loop as it closes. A result's <code>plotRepresentative(i)</code> draws a cocycle that way, and <code>plotRepresentative(i, Inf)</code> draws it whole.</p>
  </section>
+ <section id="a-slider-through-the-filtration">
+  <h2 class="h500"><a href="#a-slider-through-the-filtration" class="anchor"></a>A slider through the filtration</h2>
+  <p><code>Plot.filtration</code> is a page with a slider for the scale. On the left, the complex at that scale: the balls around the points and the edges and triangles that have come in by then. On the right, the persistence diagram, where each class is a vertical segment from the diagonal up to the horizontal line that follows the slider, and becomes a point once the line passes its death. Classes that never die grow with the line.</p>
+  <div class="tabset">
+   <div class="tab" data-lang="Scala">
+    <div class="snippet mono-small-block" scala-snippet="" runnable="">
+     <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import scala.language.experimental.modularity
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.*
+</span><span line-number="3" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.plot.*
+</span><span line-number="4" class=""><span class="tooltip-container"></span>
+</span><span line-number="5" class=""><span class="tooltip-container"></span>val points = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
+</span><span line-number="6" class=""><span class="tooltip-container"></span>Plot.filtration(points, max = 1.0).withTitle("A noisy circle").withPlay(10.0).save("filtration.html")
+</span></code></pre>
+     <div class="buttons"></div>
+    </div>
+   </div>
+   <div class="tab" data-lang="MATLAB">
+    <div class="snippet mono-small-block">
+     <pre><code class="language-matlab"><span line-number="1" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.matlab.*;
+</span><span line-number="2" class=""><span class="tooltip-container"></span>
+</span><span line-number="3" class=""><span class="tooltip-container"></span>points = readmatrix('_docs/tutorials/data/noisy-circle.csv');
+</span><span line-number="4" class=""><span class="tooltip-container"></span>result = TDA4j.computeFromPoints(points, {'maxDimension', '1'});
+</span><span line-number="5" class=""><span class="tooltip-container"></span>
+</span><span line-number="6" class=""><span class="tooltip-container"></span>result.plotFiltration(1.0).withTitle('A noisy circle').withPlay(10.0).save('filtration.html');
+</span></code></pre>
+     <div class="buttons"></div>
+    </div>
+   </div>
+   <div class="tab" data-lang="Python">
+    <div class="snippet mono-small-block">
+     <pre><code class="language-python"><span line-number="1" class=""><span class="tooltip-container"></span>import tda4j
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import numpy as np
+</span><span line-number="3" class=""><span class="tooltip-container"></span>
+</span><span line-number="4" class=""><span class="tooltip-container"></span>points = np.loadtxt("_docs/tutorials/data/noisy-circle.csv", delimiter=",")
+</span><span line-number="5" class=""><span class="tooltip-container"></span>result = tda4j.persistence(points, max_dimension=1)
+</span><span line-number="6" class=""><span class="tooltip-container"></span>page = result.plot_filtration(1.0).with_title("A noisy circle").with_play(10.0)
+</span><span line-number="7" class=""><span class="tooltip-container"></span>page.save("filtration.html")
+</span></code></pre>
+     <div class="buttons"></div>
+    </div>
+   </div>
+  </div>
+  <p>From the command line, <code>tda4j --max-dimension 1 --plot filtration --at 1.0 --output filtration.html points.csv</code> writes the same page.</p>
+  <p>The page is one HTML file with its script inside: open it in a browser, send it by mail or put it on a web server. It needs no network and no library. Drag the slider, use the arrow keys, or press play (<code>withPlay(seconds)</code> sets how long a sweep takes). It follows the reader's light or dark setting like every page. The scale runs from 0 to <code>max</code>; the Scala call takes the largest scale as <code>max</code>, the facades as their argument. Options of <code>Plot.filtration</code>:</p>
+  <table>
+   <thead>
+    <tr>
+     <th>option</th>
+     <th>does</th>
+    </tr>
+   </thead>
+   <tbody>
+    <tr>
+     <td><code>kind = Cech</code>, <code>AlphaShapes</code></td>
+     <td>another complex (balls of radius equal to the scale instead of half of it)</td>
+    </tr>
+    <tr>
+     <td><code>balls = false</code></td>
+     <td>no balls</td>
+    </tr>
+    <tr>
+     <td><code>barcode = true</code></td>
+     <td>the barcode with a movable vertical line instead of the diagram: each bar grows until the line passes its death</td>
+    </tr>
+    <tr>
+     <td><code>stops = true</code></td>
+     <td>the slider steps through the values at which the complex changes, one step for each change of the picture</td>
+    </tr>
+    <tr>
+     <td><code>start</code></td>
+     <td>where the slider begins</td>
+    </tr>
+    <tr>
+     <td><code>link = true</code></td>
+     <td>the diagram (and the barcode) are <a href="#exploring-a-barcode">linked</a> to each other and to the complex, where a chosen class draws its cycle; the pictures zoom</td>
+    </tr>
+    <tr>
+     <td><code>maxCells</code></td>
+     <td>the page holds every edge and triangle up to <code>max</code>; asked for more than this (20,000 by default), it refuses and says to lower <code>max</code></td>
+    </tr>
+   </tbody>
+  </table>
+  <p><code>Plot.filtration3D(points)</code> is the same with the complex in 3-D, a canvas to turn and zoom beside the diagram; <code>result.plotFiltration3D(max)</code> from a result, <code>--plot filtration-3d</code> on the command line. <code>Plot.filtrationOf(points, stream, bars)</code> takes a complex and a diagram of your own, for instance a witness complex or one whose diagram you computed with another engine.</p>
+ </section>
+ <section id="frames-a-video-and-a-slide">
+  <h3 class="h400"><a href="#frames-a-video-and-a-slide" class="anchor"></a>Frames, a video and a slide</h3>
+  <p>An interactive page works in a browser and nowhere else, so the same plot also gives still pictures. <code>page.at(0.6)</code> is the picture with the slider at 0.6, <code>page.frames(60)</code> sixty of them from the smallest scale to the largest, and <code>page.saveFrames("frames", 60)</code> writes them as <code>frame-0000.svg</code> and on. The axes are fixed across frames, so nothing jumps when they are played. Each frame is built from the same rules as the page (a cell is shown from the value at which it enters, a class from its birth), so a frame at a scale shows the cells that <code>Plot.complex</code> shows at that scale.</p>
+  <p>The frames are SVG. A video needs pictures: convert them and let <code>ffmpeg</code> join them. A paper-white background (<code>withPalette("print")</code> and <code>withStyle("print")</code>) keeps the video from showing a transparent background as black:</p>
+  <div class="snippet mono-small-block" scala-snippet="" runnable="">
+   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import scala.language.experimental.modularity
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.*
+</span><span line-number="3" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.plot.*
+</span><span line-number="4" class=""><span class="tooltip-container"></span>
+</span><span line-number="5" class=""><span class="tooltip-container"></span>val points = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
+</span><span line-number="6" class=""><span class="tooltip-container"></span>val page = Plot.filtration(points, max = 1.0).withPalette("print").withStyle("print")
+</span><span line-number="7" class=""><span class="tooltip-container"></span>page.saveFrames("frames", 60)
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+  <div class="snippet mono-small-block">
+   <pre><code class="language-bash"><span line-number="1" class=""><span class="tooltip-container"></span>pip install cairosvg
+</span><span line-number="2" class=""><span class="tooltip-container"></span>python3 -c "
+</span><span line-number="3" class=""><span class="tooltip-container"></span>import cairosvg, glob, os
+</span><span line-number="4" class=""><span class="tooltip-container"></span>os.makedirs('png', exist_ok=True)
+</span><span line-number="5" class=""><span class="tooltip-container"></span>for f in sorted(glob.glob('frames/frame-*.svg')):
+</span><span line-number="6" class=""><span class="tooltip-container"></span>    cairosvg.svg2png(url=f, write_to='png/' + os.path.basename(f)[:-4] + '.png', scale=2)"
+</span><span line-number="7" class=""><span class="tooltip-container"></span>
+</span><span line-number="8" class=""><span class="tooltip-container"></span># an MP4 (H.264, plays in PowerPoint, Keynote and every browser); 12 pictures a second
+</span><span line-number="9" class=""><span class="tooltip-container"></span>ffmpeg -framerate 12 -i png/frame-%04d.png -c:v libx264 -pix_fmt yuv420p \
+</span><span line-number="10" class=""><span class="tooltip-container"></span>  -vf "pad=ceil(iw/2)*2:ceil(ih/2)*2" -movflags +faststart filtration.mp4
+</span><span line-number="11" class=""><span class="tooltip-container"></span>
+</span><span line-number="12" class=""><span class="tooltip-container"></span># or a GIF
+</span><span line-number="13" class=""><span class="tooltip-container"></span>ffmpeg -framerate 12 -i png/frame-%04d.png \
+</span><span line-number="14" class=""><span class="tooltip-container"></span>  -vf "split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=5" filtration.gif
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+  <p>(<code>ffmpeg</code> and <code>cairosvg</code> are separate programs; the commands were run with ffmpeg 6.1 and cairosvg 2.9 on 60 frames of a noisy circle, and give a 1132 by 558 MP4 of 5 seconds at 12 pictures a second.) Chromium or Inkscape make the PNGs just as well, see <a href="#png-and-pdf">PNG and PDF</a>. The stills show only the behaviors the library knows. A page with a script of your own (below) is recorded by driving the page itself: this Playwright script moves the slider through its range and takes a screenshot of the page at each step, which <code>ffmpeg</code> joins as above:</p>
+  <div class="snippet mono-small-block">
+   <pre><code class="language-js"><span line-number="1" class=""><span class="tooltip-container"></span>// node record.mjs filtration.html shots 60   (npm install playwright)
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import { chromium } from 'playwright';
+</span><span line-number="3" class=""><span class="tooltip-container"></span>import fs from 'fs';
+</span><span line-number="4" class=""><span class="tooltip-container"></span>const [file, dir, count] = process.argv.slice(2);
+</span><span line-number="5" class=""><span class="tooltip-container"></span>fs.mkdirSync(dir, { recursive: true });
+</span><span line-number="6" class=""><span class="tooltip-container"></span>const browser = await chromium.launch();
+</span><span line-number="7" class=""><span class="tooltip-container"></span>const page = await browser.newPage({ viewport: { width: 1200, height: 640 }, deviceScaleFactor: 2 });
+</span><span line-number="8" class=""><span class="tooltip-container"></span>await page.goto('file://' + process.cwd() + '/' + file);
+</span><span line-number="9" class=""><span class="tooltip-container"></span>const root = page.locator('.tda4j-ia');
+</span><span line-number="10" class=""><span class="tooltip-container"></span>const { n, min, max } = await root.evaluate(el =&gt; el.tda4j.controls[0]);
+</span><span line-number="11" class=""><span class="tooltip-container"></span>for (let i = 0; i &lt; +count; i++) {
+</span><span line-number="12" class=""><span class="tooltip-container"></span>  await root.evaluate((el, name, v) =&gt; el.tda4j.set(name, v), n, min + (max - min) * i / (count - 1));
+</span><span line-number="13" class=""><span class="tooltip-container"></span>  await root.screenshot({ path: `${dir}/shot-${String(i).padStart(4, '0')}.png` });
+</span><span line-number="14" class=""><span class="tooltip-container"></span>}
+</span><span line-number="15" class=""><span class="tooltip-container"></span>await browser.close();
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+  <p><strong>In PowerPoint.</strong> A slide cannot run the page: PowerPoint has no way to embed HTML and script, and an SVG on a slide is a still picture. What does work is the video: <em>Insert &gt; Video &gt; This Device</em> takes the MP4 and plays it in the slide show (<em>Playback &gt; Start: Automatically</em> starts it without a click). Where the slide should stay still while you talk, put one frame on each of several slides (<code>page.at(0.3)</code>, <code>page.at(0.6)</code>, ... saved as SVG or PNG): the picture changes when you click, and it is exactly the picture the page shows. A deck can also be made by a script: with <code>python-pptx</code>, <code>slide.shapes.add_movie("filtration.mp4", left, top, width, height, poster_frame_image="png/frame-0059.png", mime_type="video/mp4")</code> embeds the video and a poster frame, and LibreOffice opens the result and shows the poster (the video itself was not played, and nothing here was tried in PowerPoint itself). For a page that really moves in front of an audience, switch to the browser (Alt+Tab, or a hyperlink on the slide to the file). Microsoft's <em>Web Viewer</em> add-in can show a web page inside a slide, but only an <code>https</code> address and with an internet connection, so the page has to be on a server first, and Microsoft has changed what the add-in does more than once: test it on the machine you present from before relying on it.</p>
+  <p><strong>In reveal.js.</strong> The page is plain HTML and script, so a <a href="https://revealjs.com">reveal.js</a> deck runs it, and the slide moves with the slider. Either point a slide at the saved page, or paste <code>page.fragment()</code> into the slide's source:</p>
+  <div class="snippet mono-small-block">
+   <pre><code class="language-html"><span line-number="1" class=""><span class="tooltip-container"></span>&lt;section&gt;&lt;iframe class="r-stretch" data-src="filtration.html" style="width:100%;border:0"&gt;&lt;/iframe&gt;&lt;/section&gt;
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+  <p>Pages written by separate runs can share one deck: each page's element ids carry a token drawn per run, so a second page's slider never drives the first's picture. A page fits the room it is given: the panels sit side by side at their own size (1132 pixels for the two default ones) when there is room, shrink together when there is less, and stack below about 650 pixels. The arrow keys move a focused slider and leave the slide where it is. This was tried in Chromium with reveal.js 5.2.1; Firefox and Safari were not, and a fragment put in with <code>innerHTML</code> does not run its script (the browser skips it).</p>
+ </section>
+ <section id="interactivity-of-your-own">
+  <h3 class="h400"><a href="#interactivity-of-your-own" class="anchor"></a>Interactivity of your own</h3>
+  <p>The page is built from small values, with the same chained style as the rest of the plots. A <strong>control</strong> is a slider with a name. A <strong>behavior</strong> says what a control does to an item of a mark, and a <strong>panel</strong> is a figure (or a 3-D scene) with behaviors attached to the items of its marks, either one for all items or one for each, as <code>paints</code> work. An <code>Interactive</code> is panels and controls side by side:</p>
+  <table>
+   <thead>
+    <tr>
+     <th>behavior</th>
+     <th>the item</th>
+    </tr>
+   </thead>
+   <tbody>
+    <tr>
+     <td><code>Behavior.shownFrom(c, v)</code>, <code>shownUntil(c, v)</code>, <code>shownBetween(c, a, b)</code></td>
+     <td>is there while the value of control <code>c</code> is at least <code>v</code>, below <code>v</code>, or from <code>a</code> up to but not including <code>b</code></td>
+    </tr>
+    <tr>
+     <td><code>Behavior.followsX(c)</code>, <code>followsY(c, lo, hi, ends)</code></td>
+     <td>has this coordinate equal to the value of <code>c</code>, held between <code>lo</code> and <code>hi</code>: a movable line, a bar that grows</td>
+    </tr>
+    <tr>
+     <td><code>Behavior.radius(c, factor)</code></td>
+     <td>for the discs of a mark: radius is <code>factor</code> times the value (data units; linear axes only)</td>
+    </tr>
+    <tr>
+     <td><code>Behavior.custom(kind, c, args*)</code></td>
+     <td>whatever your script says (below)</td>
+    </tr>
+   </tbody>
+  </table>
+  <p><code>a + b</code> puts several behaviors on one item. This shows a point cloud one point at a time, and writes the same thing as 40 still frames:</p>
+  <div class="snippet mono-small-block" scala-snippet="" runnable="">
+   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import scala.language.experimental.modularity
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.*
+</span><span line-number="3" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.plot.*
+</span><span line-number="4" class=""><span class="tooltip-container"></span>
+</span><span line-number="5" class=""><span class="tooltip-container"></span>val points = Array.tabulate(40)(i =&gt; Array(math.cos(i * 0.157), math.sin(i * 0.157)))
+</span><span line-number="6" class=""><span class="tooltip-container"></span>val cloud = points.map(p =&gt; (p(0), p(1))).toIndexedSeq
+</span><span line-number="7" class=""><span class="tooltip-container"></span>
+</span><span line-number="8" class=""><span class="tooltip-container"></span>val reveal = Panel(Plot.points(points)).reactEach(
+</span><span line-number="9" class=""><span class="tooltip-container"></span>  Mark.Points(cloud, IndexedSeq(Paint.Series(1)), radius = 6),
+</span><span line-number="10" class=""><span class="tooltip-container"></span>  cloud.indices.map(i =&gt; Reaction(Vector(Behavior.shownFrom("t", i.toDouble))))
+</span><span line-number="11" class=""><span class="tooltip-container"></span>)
+</span><span line-number="12" class=""><span class="tooltip-container"></span>val page = Interactive().withSlider("t", 0, 39).withPanel(reveal).withTitle("One point at a time")
+</span><span line-number="13" class=""><span class="tooltip-container"></span>
+</span><span line-number="14" class=""><span class="tooltip-container"></span>page.save("reveal.html")
+</span><span line-number="15" class=""><span class="tooltip-container"></span>page.saveFrames("reveal-frames", 40)
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+  <p>Behaviors that the library cannot know are written in JavaScript: <code>withScript(js)</code> runs your script on the page, where <code>tda4j</code> is the page's controller with <code>get(name)</code>, <code>set(name, value)</code>, <code>onChange(name, f)</code> and <code>reactor(kind, f)</code>, which says what a <code>Behavior.custom(kind, ...)</code> does to its item (<code>f(item, behavior, value)</code>, <code>item.el</code> the SVG element). Each change of a control is also announced as a <code>tda4j:change</code> event on the page's element, for anything else on the page. A frame shows the item as it was drawn, without the effect of a custom behavior. A behavior the page cannot carry out (a <code>radius</code> on a logarithmic axis, a 3-D layer that follows a value) is refused when the panel is built, with the reason.</p>
+  <div class="snippet mono-small-block" scala-snippet="" runnable="">
+   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import scala.language.experimental.modularity
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.*
+</span><span line-number="3" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.plot.*
+</span><span line-number="4" class=""><span class="tooltip-container"></span>
+</span><span line-number="5" class=""><span class="tooltip-container"></span>val points = Array.tabulate(40)(i =&gt; Array(math.cos(i * 0.157), math.sin(i * 0.157)))
+</span><span line-number="6" class=""><span class="tooltip-container"></span>val cloud = points.map(p =&gt; (p(0), p(1))).toIndexedSeq
+</span><span line-number="7" class=""><span class="tooltip-container"></span>
+</span><span line-number="8" class=""><span class="tooltip-container"></span>val glowing = Panel(Plot.points(points)).react(
+</span><span line-number="9" class=""><span class="tooltip-container"></span>  Mark.Points(cloud, IndexedSeq(Paint.Series(2)), radius = 8),
+</span><span line-number="10" class=""><span class="tooltip-container"></span>  Behavior.custom("glow", "t")
+</span><span line-number="11" class=""><span class="tooltip-container"></span>)
+</span><span line-number="12" class=""><span class="tooltip-container"></span>Interactive()
+</span><span line-number="13" class=""><span class="tooltip-container"></span>  .withSlider("t", 0, 1)
+</span><span line-number="14" class=""><span class="tooltip-container"></span>  .withPanel(glowing)
+</span><span line-number="15" class=""><span class="tooltip-container"></span>  .withScript("tda4j.reactor('glow', (item, behavior, v) =&gt; { item.el.style.opacity = v; })")
+</span><span line-number="16" class=""><span class="tooltip-container"></span>  .save("glow.html")
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+  <p>Every plot tweak of this page reaches every panel: <code>page.withPalette("print")</code>, <code>withStyle</code>, <code>withTextScale</code>, <code>withSetting</code>. <code>Panel.sweepDiagram(figure, control)</code> and <code>Panel.sweepBarcode(figure, control)</code> turn a diagram or a barcode into the sweeping panel of this page, for a page of your own.</p>
+ </section>
+ <section id="exploring-a-barcode">
+  <h2 class="h500"><a href="#exploring-a-barcode" class="anchor"></a>Exploring a barcode</h2>
+  <p><code>Plot.exploreOn(points, bars)</code> is a page of three pictures that know about each other: the point cloud, the persistence diagram and the barcode. Point at a class in the diagram or the barcode and it lights up in the other one, and its representative cycle is drawn on the points. A click keeps the class chosen (a shift-click adds another, a click on the background lets them all go), dragging a rectangle over a diagram or a barcode chooses every class it touches, and the page lists what is chosen under the pictures. Every picture zooms and pans.</p>
+  <div class="tabset">
+   <div class="tab" data-lang="Scala">
+    <div class="snippet mono-small-block" scala-snippet="" runnable="">
+     <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import scala.language.experimental.modularity
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.*
+</span><span line-number="3" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.plot.*
+</span><span line-number="4" class=""><span class="tooltip-container"></span>
+</span><span line-number="5" class=""><span class="tooltip-container"></span>val points = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
+</span><span line-number="6" class=""><span class="tooltip-container"></span>val d = Persistence(points, maxDimension = 1)
+</span><span line-number="7" class=""><span class="tooltip-container"></span>Plot.exploreOn(points, d).withTitle("A noisy circle").save("explore.html")
+</span></code></pre>
+     <div class="buttons"></div>
+    </div>
+   </div>
+   <div class="tab" data-lang="MATLAB">
+    <div class="snippet mono-small-block">
+     <pre><code class="language-matlab"><span line-number="1" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.matlab.*;
+</span><span line-number="2" class=""><span class="tooltip-container"></span>
+</span><span line-number="3" class=""><span class="tooltip-container"></span>points = readmatrix('_docs/tutorials/data/noisy-circle.csv');
+</span><span line-number="4" class=""><span class="tooltip-container"></span>result = TDA4j.computeFromPoints(points, {'maxDimension', '1'});
+</span><span line-number="5" class=""><span class="tooltip-container"></span>
+</span><span line-number="6" class=""><span class="tooltip-container"></span>result.plotExplore().withTitle('A noisy circle').save('explore.html');
+</span></code></pre>
+     <div class="buttons"></div>
+    </div>
+   </div>
+   <div class="tab" data-lang="Python">
+    <div class="snippet mono-small-block">
+     <pre><code class="language-python"><span line-number="1" class=""><span class="tooltip-container"></span>import tda4j
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import numpy as np
+</span><span line-number="3" class=""><span class="tooltip-container"></span>
+</span><span line-number="4" class=""><span class="tooltip-container"></span>points = np.loadtxt("_docs/tutorials/data/noisy-circle.csv", delimiter=",")
+</span><span line-number="5" class=""><span class="tooltip-container"></span>result = tda4j.persistence(points, max_dimension=1)
+</span><span line-number="6" class=""><span class="tooltip-container"></span>result.plot_explore().with_title("A noisy circle").save("explore.html")
+</span></code></pre>
+     <div class="buttons"></div>
+    </div>
+   </div>
+  </div>
+  <p>On the command line, <code>tda4j --max-dimension 1 --plot explore --output explore.html points.csv</code> writes the same page. <code>Plot.explore(bars)</code> is the diagram and the barcode without the points, and <code>Plot.filtration(points, link = true)</code> is the slider page above with the same links, so that a class chosen in the diagram draws its cycle on the complex at the scale the slider shows. The cycles are the bars' representatives (<code>Persistence</code> records cycles by default; a cocycle is drawn as it is). A page holds every cell of every cycle, so <code>maxCycleCells</code> (20,000) keeps the most persistent bars' cycles and leaves the rest of the classes lit up in the diagram and the barcode without a cycle; the cloud's subtitle says so.</p>
+  <p><strong>Zoom and pan.</strong> Each picture has buttons in its corner: <code>+</code> and <code>−</code> zoom about the middle, <code>1:1</code> shows everything, and <code>Ctrl</code> (<code>Cmd</code> on a Mac) with the mouse wheel zooms about the pointer, which keeps the point under it where it was. Dragging pans; in a picture where dragging also chooses classes, the button <code>pan</code> switches what a drag does. The axes follow: new gridlines and numbers for the range shown, written as the plot writes them, while lines keep their width and points their size. Zooming stops at 1/200 of the picture, and the picture of an equal-aspect plot keeps its aspect (the barcode zooms along the filtration only, and keeps all its rows). What the window cuts away cannot be pointed at or chosen. A page that only zooms needs no slider: <code>Interactive().withPanel(Panel(figure).zoomable())</code>, or <code>page.zoomable()</code> on any page, which makes zoomable every flat panel whose axes the page can draw again. A logarithmic or reversed axis, an axis with a number format (<code>Axis.format</code>) and slanted tick labels cannot be: <code>Panel.zoomable</code> refuses them with the reason, and <code>zoomable()</code> leaves those panels as they are. The 3-D canvases have a zoom of their own.</p>
+  <p><strong>Stills.</strong> A viewer's choice is a value like a slider's: <code>page.at(PageState().select("class", 3).zoom(1, Window(-0.1, 0.6, 0.1, 0.8)))</code> is the picture with class 3 chosen (the key is the position of the bar in the list given) and the second picture, the diagram, showing that range (an equal-aspect picture widens one range of a window to keep its aspect, as the page does).</p>
+  <div class="snippet mono-small-block" scala-snippet="" runnable="">
+   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import scala.language.experimental.modularity
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.*
+</span><span line-number="3" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.plot.*
+</span><span line-number="4" class=""><span class="tooltip-container"></span>
+</span><span line-number="5" class=""><span class="tooltip-container"></span>val points = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
+</span><span line-number="6" class=""><span class="tooltip-container"></span>val d = Persistence(points, maxDimension = 1)
+</span><span line-number="7" class=""><span class="tooltip-container"></span>val page = Plot.exploreOn(points, d)
+</span><span line-number="8" class=""><span class="tooltip-container"></span>val chosen = d.bars.indices.maxBy(k =&gt; d.bars(k).persistence)
+</span><span line-number="9" class=""><span class="tooltip-container"></span>page.at(PageState().select("class", chosen).zoom(1, Window(-0.1, 0.6, 0.1, 0.8))).save("explore-still.svg")
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+ </section>
+ <section id="selections-of-your-own">
+  <h3 class="h400"><a href="#selections-of-your-own" class="anchor"></a>Selections of your own</h3>
+  <p>A <strong>selection</strong> is to a viewer's pointer what a slider is to a slider's value: a named set of whole-number keys that panels choose from and react to. <code>Panel.selecting(mark, name, keys)</code> makes the items of a mark choose the key <code>keys(i)</code> while the pointer is on them and lights a translucent halo round them while their key is chosen by anyone, <code>brushable(name)</code> lets a drag choose, and <code>Behavior.selected(name, key)</code> shows an item (a cycle, a label) only while a key is chosen, together with <code>shownFrom</code> and <code>followsY</code>, so a page can have both a slider and a selection. <code>Interactive.withSelection(Selection(name))</code> declares the selection (<code>withList</code>, <code>withLabels(...)</code>, <code>clickOnly</code>, <code>hoverOnly</code> change how it behaves and what the page writes under the pictures). On the page, <code>tda4j.selection(name)</code> gives the chosen keys to a script of your own, <code>tda4j.onChange(name, f)</code> calls <code>f</code> with the keys at every change, and the change is also announced as a <code>tda4j:change</code> event whose <code>value</code> is the array of keys. The zoom has <code>tda4j.zoom(panel, [x0, x1, y0, y1])</code>, <code>tda4j.window(panel)</code> and <code>tda4j.resetZoom(panel)</code> (panels counted from 0), and each new window is announced as a <code>tda4j:zoom</code> event. <code>Plot.explore</code> is built from exactly these pieces, so it is the example to read.</p>
+  <p>Chromium is the browser these pages were checked in; hovering, dragging and the wheel were not tried on a touch screen, where a drag scrolls the page as it always did and a tap chooses.</p>
+ </section>
  <section id="customizing-a-plot">
   <h2 class="h500"><a href="#customizing-a-plot" class="anchor"></a>Customizing a plot</h2>
   <p>A plot is an immutable value, and each customization returns a new plot, so they chain:</p>
@@ -1215,4 +1497,4 @@
   </div>
   <p>Every plot is an immutable value, and <code>Figure</code>, <code>Mark</code> and <code>Scene</code> are there to build plots of your own: <code>copy(...)</code> changes any part directly, <code>Tweak(f)</code> makes a tweak of your own from a function on figures, and <code>over</code> draws one figure on another.</p>
  </section>
-</main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#in-a-repl-view">In a REPL: view()</a></li><li><a href="#into-files-save">Into files: save</a><ul><li><a href="#png-and-pdf">PNG and PDF</a></li></ul></li><li><a href="#from-matlab-java-and-the-command-line">From MATLAB, Java and the command line</a><ul><li><a href="#saved-results">Saved results</a></li></ul></li><li><a href="#what-there-is">What there is</a></li><li><a href="#customizing-a-plot">Customizing a plot</a><ul><li><a href="#labels-size-and-scales">Labels, size and scales</a></li><li><a href="#colors">Colors</a></li><li><a href="#the-look">The look</a></li><li><a href="#markers">Markers</a></li><li><a href="#the-legend">The legend</a></li><li><a href="#the-bars-of-a-barcode">The bars of a barcode</a></li><li><a href="#finer-control-text-lines-the-plot-area-the-sides-of-the-axes">Finer control: text, lines, the plot area, the sides of the axes</a></li><li><a href="#the-axes-direction-room-shape-and-scales-of-your-own">The axes: direction, room, shape and scales of your own</a></li><li><a href="#numbers">Numbers</a></li><li><a href="#a-caption-a-panel-tag-and-a-description">A caption, a panel tag and a description</a></li><li><a href="#sizes-in-the-units-of-a-paper">Sizes in the units of a paper</a></li><li><a href="#the-camera-of-a-3-d-scene">The camera of a 3-D scene</a></li><li><a href="#for-a-paper-and-for-a-page-of-either-color">For a paper, and for a page of either color</a></li><li><a href="#defaults-for-every-plot-a-given-look">Defaults for every plot: a given Look</a></li><li><a href="#comparing-plots">Comparing plots</a></li><li><a href="#panels-on-a-grid">Panels on a grid</a></li><li><a href="#reference-lines-and-marks-of-your-own">Reference lines and marks of your own</a></li><li><a href="#from-matlab-and-the-command-line">From MATLAB and the command line</a></li></ul></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>
+</main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#in-a-repl-view">In a REPL: view()</a></li><li><a href="#into-files-save">Into files: save</a><ul><li><a href="#png-and-pdf">PNG and PDF</a></li></ul></li><li><a href="#from-matlab-java-and-the-command-line">From MATLAB, Java and the command line</a><ul><li><a href="#saved-results">Saved results</a></li></ul></li><li><a href="#what-there-is">What there is</a></li><li><a href="#a-slider-through-the-filtration">A slider through the filtration</a><ul><li><a href="#frames-a-video-and-a-slide">Frames, a video and a slide</a></li><li><a href="#interactivity-of-your-own">Interactivity of your own</a></li></ul></li><li><a href="#exploring-a-barcode">Exploring a barcode</a><ul><li><a href="#selections-of-your-own">Selections of your own</a></li></ul></li><li><a href="#customizing-a-plot">Customizing a plot</a><ul><li><a href="#labels-size-and-scales">Labels, size and scales</a></li><li><a href="#colors">Colors</a></li><li><a href="#the-look">The look</a></li><li><a href="#markers">Markers</a></li><li><a href="#the-legend">The legend</a></li><li><a href="#the-bars-of-a-barcode">The bars of a barcode</a></li><li><a href="#finer-control-text-lines-the-plot-area-the-sides-of-the-axes">Finer control: text, lines, the plot area, the sides of the axes</a></li><li><a href="#the-axes-direction-room-shape-and-scales-of-your-own">The axes: direction, room, shape and scales of your own</a></li><li><a href="#numbers">Numbers</a></li><li><a href="#a-caption-a-panel-tag-and-a-description">A caption, a panel tag and a description</a></li><li><a href="#sizes-in-the-units-of-a-paper">Sizes in the units of a paper</a></li><li><a href="#the-camera-of-a-3-d-scene">The camera of a 3-D scene</a></li><li><a href="#for-a-paper-and-for-a-page-of-either-color">For a paper, and for a page of either color</a></li><li><a href="#defaults-for-every-plot-a-given-look">Defaults for every plot: a given Look</a></li><li><a href="#comparing-plots">Comparing plots</a></li><li><a href="#panels-on-a-grid">Panels on a grid</a></li><li><a href="#reference-lines-and-marks-of-your-own">Reference lines and marks of your own</a></li><li><a href="#from-matlab-and-the-command-line">From MATLAB and the command line</a></li></ul></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>

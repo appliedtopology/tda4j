@@ -753,6 +753,14 @@
      <td><code>input-3d</code>, <code>complex-3d</code>, <code>representative-3d</code></td>
      <td>the same in 3-D, as a page you can turn</td>
     </tr>
+    <tr>
+     <td><code>explore</code>, <code>linked-filtration</code></td>
+     <td>pages whose pictures are linked: point at a class of the diagram or the barcode and its cycle appears on the points; the pictures zoom and pan, and a dragged rectangle chooses classes. <code>linked-filtration</code> is <code>filtration</code> with those links (it needs <code>--at</code>); give either alone, as <code>.html</code>; see <a href="plotting.html#exploring-a-barcode">exploring a barcode</a></td>
+    </tr>
+    <tr>
+     <td><code>filtration</code>, <code>filtration-3d</code></td>
+     <td>a page with a slider for the scale, from 0 to <code>--at</code>, beside the persistence diagram: the complex (the 3-D one to turn) and the classes as segments until the slider's line passes their death; give it alone, as <code>.html</code> (an <code>.svg</code> is the picture at the slider's start)</td>
+    </tr>
    </tbody>
   </table>
   <p>A comma list of 2-D kinds draws them on one board, left to right: <code>--plot barcode,diagram</code>. <code>--layout RxC</code> puts them on a grid instead, row by row (<code>--plot barcode,diagram,landscape --layout 2x2</code>), with <code>--width</code> and <code>--height</code> the size of the whole drawing (default 960 by 600); <code>--tagged</code> letters the panels <code>(a)</code>, <code>(b)</code>, ...; <code>--title</code> is the title of the board, and the other look flags apply to every panel. A 3-D plot is drawn on its own.</p>
@@ -774,7 +782,7 @@
     </tr>
     <tr>
      <td><code>--at X</code></td>
-     <td>the scale: required for <code>complex</code>; for <code>representative</code>, a cycle is drawn over the complex at <code>X</code> and a cocycle restricted to it (a cocycle is restricted to its bar's birth unless you say; <code>--at Infinity</code> draws it whole)</td>
+     <td>the scale: required for <code>complex</code>, and for <code>filtration</code> and <code>linked-filtration</code> the largest scale of its slider; for <code>representative</code>, a cycle is drawn over the complex at <code>X</code> and a cocycle restricted to it (a cocycle is restricted to its bar's birth unless you say; <code>--at Infinity</code> draws it whole)</td>
     </tr>
     <tr>
      <td><code>--layout RxC</code>, <code>--tagged</code></td>

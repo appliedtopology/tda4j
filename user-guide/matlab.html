@@ -607,6 +607,14 @@
      <td><code>plotInput3D()</code>, <code>plotComplex3D(at)</code>, <code>plotRepresentative3D(i)</code></td>
      <td>the same in 3-D, from the first three coordinates</td>
     </tr>
+    <tr>
+     <td><code>plotExplore()</code>, <code>plotLinkedFiltration(max)</code></td>
+     <td>the bars as linked views, a page: pointing at a class of the diagram or the barcode lights it up in the other and draws its cycle on the points; the pictures zoom and pan, and dragging a rectangle chooses classes. <code>plotLinkedFiltration</code> is <code>plotFiltration</code> with those links. <code>save('page.html')</code>, <code>withTitle(text)</code> to chain; see <a href="plotting.html#exploring-a-barcode">exploring a barcode</a></td>
+    </tr>
+    <tr>
+     <td><code>plotFiltration(max)</code>, <code>plotFiltration3D(max)</code></td>
+     <td>a page with a slider for the scale, from 0 to <code>max</code>: the complex (the 3-D one to turn) beside the persistence diagram, whose classes are segments until the slider's line passes their death. <code>save('page.html')</code> for the page, <code>saveFrames(directory, count)</code> for a still picture at each of <code>count</code> scales, <code>withPlay(seconds)</code> and <code>withTitle(text)</code> to chain; see <a href="plotting.html#a-slider-through-the-filtration">a slider through the filtration</a></td>
+    </tr>
    </tbody>
   </table>
   <p>A plot method needs the input the result was computed from; a result from <code>loadResult</code> has it.</p>
