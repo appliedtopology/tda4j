@@ -247,7 +247,8 @@ file before changing that subsystem; this table is the index, in case a rule did
 | `rules/python.md` | the Python package: facade mirror, options, wheel, CI | `python/` |
 | `rules/scalajs.md` | the Scala.js build: platform seams, shared-code limits, JS API, npm package | `scalajs/`, `scalajvm/`, `build.sbt`, `npm/` |
 | `rules/docs-and-tutorials.md` | docs site, tutorial pages (the docs are the tests), language tabs | `_docs/`, tutorial specs, `build.sbt` |
-| `rules/plotting.md` | the `plot` subpackage: scene model, tweaks, looks, live viewer, gallery, interactive pages | `plot/` (main and test) |
+| `rules/plotting.md` | the `plot` subpackage: scene model, tweaks, looks, live viewer, gallery | `plot/` (main and test) |
+| `rules/interactive-plots.md` | interactive pages: stills, selections, zoom, touch, keyboard | `Interactive`, `Selection`, `Zoom` |
 | `rules/algebra.md` | fields, chains and cells: `RingModule`, `Field`, `Chain`, `Cell` | `algebra/`, `cells/` |
 | `rules/testing.md` | writing specs: shared generators, specs2 traps | `src/test/**` |
 | `rules/scala-style.md` | the Scala 3 idioms used throughout, opaque-type and extension-method hazards | `src/**/*.scala` |
