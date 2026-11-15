@@ -142,7 +142,7 @@ of `Behavior`, its rule in `inside`/`follow` for the stills, in `Svg.Tags` for t
 reactions of their own (`Shown` from the value at which each enters), so the page holds every cell up to the largest scale
 (`maxCells` refuses a page that would be too large, and says to lower the scale). Above `Plot.svgCells` (20,000) cells the complex
 is drawn on a canvas seen from above instead of an SVG (`Scene` with `turns = false` and `axes = true`: a drag pans, the wheel
-zooms about the pointer, and the axes are redrawn for what the plot area shows), which takes about a seventh of the bytes and a hundredth of the elements; `canvas = true` or `false`
+zooms about the pointer, and the axes and gridlines are redrawn for what the plot area shows), which takes about a seventh of the bytes and a hundredth of the elements; `canvas = true` or `false`
 chooses. A 3-D page's balls are a `Layer.Balls` whose radius is a `Radius` reaction of the slider. The scene's range comes from
 the points, not from the balls, so that the frame stays still while they grow and a ball larger than the picture is cut at its edge.
 
@@ -198,6 +198,24 @@ stills', and a few hundred formatted numbers with what `RootText.format` writes.
 `PageState.zoom(panel, Window)` is the still of a window; a figure of equal aspect widens one range of a window to keep it,
 in the still and on the page alike. Axes the page cannot draw again are refused when the page is built
 (`Interactive.zoomProblem` says why), and `Interactive.zoomable()` skips them.
+
+**Axes on a flat canvas.** `Scene.withAxes` (a scene seen from above) numbers the plane, and the axes are an `Axis` each (`xAxis`,
+`yAxis`: `label`, `transform`, `grid`) that the grammar sets: `Labels(x, y)`, `Scale.x/y/xy(transform, grid)` and `Lines.grid`
+apply to a scene as to a `Figure`, and every other option of `Scale` is refused with a message, because a canvas's range is its
+view. The data pass through the transforms in one place, `Scene.place`, which `frame`, `viewer` and the canvas's position table
+share, so the picture is isotropic in transformed units and the marks, the gridlines and the points agree by construction; a
+value with no place on its scale (zero on a log axis) fails there, naming the axis and `SymLog`. The static SVG is the reference
+(`g.tda4j-grid` under the clipped picture, `g.tda4j-axes` with the marks, the words and the two `text.tda4j-axis-label`s). The
+page's script draws the same with `Scene.tickScript`, the script the zoomable figures share (`tr`, `inv`, `logTicks`, `trTicks`,
+`numberText`): `paintGrid` inside the clip, `paintAxes` after it. `check-interactive-page.mjs` tells the lines of the grid and
+the axes from the items by the font in force (both set one) and compares words, marks, gridlines and labels with the still of
+`interactive-axes-log` and `interactive-axes-scales`, after a zoom and a pan too. An item that follows a control is refused on
+transformed axes (the control's value is in data units, the position table after the transform).
+
+**Keys cost one redraw.** A key on a brushable canvas that moves the cross, steps to an item or lets go changes the light and the
+cross in one `afterwards(...)`, which redraws only if nothing in it did; a pointer move that is still waiting for its frame is
+cancelled by `lightUp`, so it cannot put out the light a key has just lit. The check counts the surface painted at the start of a
+redraw (`__draws`).
 
 **Checking the pages in browsers.** `.claude/scripts/check-interactive-page.mjs` drives every page of a `Gallery` in a browser
 (`BROWSER=chromium|firefox|webkit`) and compares what the page draws with the still for the same state: the visible items, the

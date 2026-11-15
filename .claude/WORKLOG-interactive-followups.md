@@ -215,3 +215,106 @@ Facades: no new option. `Plot.filtration`'s canvas has its axes in every facade 
 
 Still not checked: a real touch screen, Safari proper and phones (#341), and the keyboard route in Firefox and WebKit is the
 page check's, not a person's.
+
+## Addendum (2026-11-15): #344, the canvas's axes take the figure's grammar, and a key costs one redraw
+
+Two items, both from the first review of the flat canvas's axes (#342's addendum above).
+
+### The keyboard's cost (item 2)
+
+The issue said a key on a brushable canvas costs about 2.5 redraws and guessed at the cost of recomputing every place per key
+(`placesOf`, sorted). **The guess was wrong.** A scan instead of the sort (scratch pages, `]` on 20k and 200k points) was within
+noise: about 12% at 200k, not confirmed, not kept. Counting the surface painted at the start of a redraw (a `fillRect` on the
+spy) showed two redraws per `]`: `lightUp` drew, then the key handler drew again. The fix is the `afterwards(f)` wrapper of
+`stepTo`, `letGo` and the two `Enter`/`Escape` cases: it runs `f` and redraws only if `f` did not.
+
+Measured, one Chromium process per page, an idle machine except the first rows of the "before" runs (so those are upper bounds):
+
+| points | before, per `]` | after | one redraw alone |
+|---|---|---|---|
+| 20,000 | 190-240 ms | about 105 ms | about 90 ms |
+| 200,000 | 2.3-2.4 s | about 1.2 s | about 1.05 s |
+
+The cost of a key is now the redraw. Caching the places until the view changes (the issue's other "done") was not written: at
+200k the stepping itself is about 12% of a key and within noise of a scan; a cache is code for an effect nobody measured.
+
+A race the Firefox and WebKit runs found while the check was written: a pointer move waiting for its animation frame cleared the
+light a key had just lit (WebKit ran the frame after the key). `lightUp` now cancels the pending frame; the check dispatches a
+pointer move and a `]` in one task (mutant `cvframe`). The check also counts redraws (`__draws`): a key that steps, jumps or
+lets go costs exactly one.
+
+### Labels, gridlines and scales on a canvas (item 1)
+
+Done is "a `Scale`/`Labels` tweak applies to a canvas as it does to a `Figure`, the still stays the reference". It does:
+`Scene.xAxis`/`yAxis` (`Axis`: `label`, `transform`, `grid`), `Labels(x, y)`, `Scale.x/y/xy(transform, grid)`, `Lines.grid`, the
+chained `withXLabel`/`withYLabel`/`withXScale`/`withYScale`/`withXYScale` (and `withXScale("log")` for MATLAB). Decisions:
+
+- **The data pass through the transforms in one place** (`Scene.place`: `allPoints`, `fitting`, `viewer`, the canvas's position
+  table `at`). The picture is isotropic in transformed units, as a figure on a log axis is not (a figure draws two scales); a
+  scene has one camera, and `0.46 * min(box)` fits both axes.
+- **Gridlines are on by default**, as a figure's (`Style.grid`, `Elements.gridStroke`). This changes the default output of
+  `withAxes()` and of the large `Plot.filtration` canvas (the SVG route under 20,000 cells was already a figure with a grid); it is
+  listed in the changelog. `Scale.x(grid = false)`, `Style(grid = false)` and `Lines.grid(visible = false)` remove them.
+- **Refused, with a message** (#345): the other `Scale` options (a canvas's range is its view), `Transform.Custom` (no ticks the
+  page can draw), and `Follows` on transformed axes (the control's value is in data units, the position table after the
+  transform).
+- `Labels.onScene` took the x and y words out of the "no such label" list; a scene without axes still refuses them, naming
+  `withAxes()`.
+- The page shares the tick rules with the zoomable figures: `Scene.tickScript` now holds `tr`, `inv`, `logLabel`, `logTicks` and
+  `trTicks` as well as `numberText` and `niceTicks`; `Interactive.runtime` drops its own copies, so the existing `zoomaxes-*` checks
+  (thirty windows on log, sqrt, symlog) cover the canvas's tick rules too.
+
+Traps met:
+
+- **A stray quote in the grid group's markup** (`stroke-width="1"">`) made the whole still invalid XML: `DOMParser` returned an
+  error document, and the check reported that the still held no triangles, not that it was malformed. The spec now counts the
+  quotes of every tag (`wellQuoted`).
+- **A still and its canvas share a plot box only when the scene has a title.** The still holds a title inside its height (top
+  margin `16 + 24 * ts`), the page puts it above the canvas (canvas height `height - 40`); an untitled still keeps 12 px, so the boxes
+  differ by 12 px and every mark fraction differs with them. The two new Gallery pages have titles.
+- The spy tells axis lines from items by the font in force; the grid's lines had none until `paintGrid` set `g.font`, so they were
+  counted as items (mutant `gridfont`).
+- The y label is drawn at the origin of a turned context: the spy records the context's transform with each text
+  (`turn`), and a label reads upwards when `b < 0` (counter-clockwise), so a quarter turn the wrong way fails (`labelturn`).
+
+### Checks
+
+`check-interactive-page.mjs`: two new Gallery pages, `interactive-axes-log` (log-log, labels "birth" and "death") and
+`interactive-axes-scales` (square root over symmetric log with a stretch of 2, negative numbers, gridlines on x only, labels). For
+each: words, marks, gridlines and labels against the still's (positions as fractions of the plot box, label sizes), each point at
+the place the transformed ticks put it (the line through the first and last tick, in the transform's units), the gridlines on the
+marks, and the same after a zoom, a second zoom (inside a decade on the log page: 0.005, 0.01, 0.02, 0.05...) and a pan, with
+the labels and the box unmoved. The large page's block gains the grid and "no label asked for, none drawn". The keyboard block
+counts redraws.
+
+### Mutation checks (page runtime of the new pages; the number is the checks that fail)
+
+| mutant (a change to the generated page) | checks that fail |
+|---|---|
+| grid lines lose their font (counted as items, `gridfont`) | 6 |
+| grid lines shifted 3 px (`gridx`), cut short (`gridshort`), a y grid on an axis without one (`gridyadd`), no x grid (`gridxdrop`) | 5 each |
+| grid color (`gridcolor`), width (`gridwidth`) or opacity (`gridalpha`) wrong | 0 at first; **1 each** after the pens were compared with the still's |
+| the y label turned the other way (`labelturn`) | 2 (0 while the check took the absolute sign of the turn) |
+| x label too high (`xlabelpos`), y label too far right (`ylabelpos`), wrong text (`xlabeltext`), wrong size (`labelsize`) | 1 each |
+| x axis not log (`trlog`), y axis not log (`trlogy`), x not square root (`trsqrt`), symlog stretch 1 for 2 (`trsymlog`) | 11, 11, 11, 10 |
+| symlog without its sign (`symlogsign`) | 7 |
+| the signed square root without its sign (`sqrtsign`), its inverse (`invsqrt`) | 0 at first (no negative number on the square-root axis); **8 and 9** after `interactive-axes-scales` got negative x |
+| the log axis written as plain numbers (`logword`) | 0 at first (no number beyond 1e-3..1e5); **1** after the births ran from 1e-4 to 1e4 |
+| log ticks every decade (`logstride`) | 3 |
+| a key redraws twice again (`afterwards`) | 2 |
+| the symlog inverse without its stretch (`invsym`), on the scales page's copy | **0**: the window's edge falls between two ticks either way. The same text is `Scene.tickScript`, which the `zoomaxes-symlog` page also carries, and the mutant fails there (1), as `sqrtsign` does on `zoomaxes-sqrt` (1) |
+
+Scala side (`SpatialSpec`, "the axes of a flat picture"; each mutant changes the code under test, the number is the examples that fail):
+the stray quote of the grid group (2), an x or y gridline ignoring its axis's `grid` (1 each), the label's room ignoring the text scale
+(1), the square root placed linearly (1), x placed linearly (1), the x label 10 px too high (1), the y label turned the other way
+(1), the axis label's text not escaped (1), `<` not escaped in the script's string (1), `Follows` allowed on transformed axes (1), a
+number with no place on its scale let through (1), the page told a linear x axis for a log one (1), gridlines painted although the
+style has none (1), the options beyond `transform` and `grid` let through (1), the x label dropped by `Labels` (5). **Two survived
+the first spec**: the x tick words written with `Svg.number` instead of `Transform.tickLabel` (the tiny-number example looked at x and y
+words together, and y was right) and the same for y; the example now reads each axis's words, and both mutants fail it.
+
+Not done, left open: #345 (the other `Scale` options on a canvas, `Follows` on transformed axes, a custom transform).
+
+Default output: the `Gallery` stills and pages are unchanged except the three that carry axes (`interactive-large*`,
+`interactive-axes-pick`), which gain gridlines, and the new pages.
+

@@ -23,6 +23,12 @@
   complex has them. In a picture where a drag chooses, `]` and `[` (or `Page Down` and `Page Up`) put the keyboard's cross on
   the next and the previous item and `Home` and `End` on the first and the last, so two `Enter`s around two items take the
   rectangle between them; a brushable 3-D canvas takes the same keys.
+- The axes of a flat scene take what a figure's take (#344). `Scene.withXLabel`/`withYLabel` (and `Labels(x, y)`) name them,
+  `withXScale`/`withYScale`/`withXYScale` (and `Scale.x/y/xy(transform, grid)`) put an axis on a log, square-root or symmetric
+  log scale, and `Lines.grid` and `grid = false` style or remove the gridlines, in the still and on the canvas alike; the
+  canvas's numbers, gridlines and labels follow the pan and the zoom. A value with no place on its scale (zero on a log axis) is
+  refused with the way out, and so are the options that fix a range (`min`, `max`, `reverse`, ...), a transform of your own, and an
+  item that follows a control on transformed axes.
 - `PageState.brush(panel, window)` and `Mark.Region`: the still of a rectangle a viewer has dragged out (a dashed box in the
   plot's units, with `select` for what it touches). On the page, `tda4j.brush(panel, [x0, x1, y0, y1])` draws or clears the
   rectangle and `tda4j.pointAt(panel, clientX, clientY)` gives the data under a point.
@@ -33,6 +39,9 @@
 ### Changed
 
 - `Plot.filtration`'s `maxCells` default is 200,000, with the canvas above 20,000 cells (#331).
+- A scene with `withAxes`, and the canvas of a large `Plot.filtration`, draws gridlines at the numbers, as a figure does
+  (#344). `Scale.x(grid = false)`, `Scale.y(grid = false)` or `Style(grid = false)` takes them away.
+- On a brushable canvas a key that moves the cross, steps to an item or lets go redraws the picture once, not twice (#344).
 
 ### Build, CI and Documentation
 

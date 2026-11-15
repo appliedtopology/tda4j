@@ -321,7 +321,7 @@ call takes the largest scale as `max`, the facades as their argument. Options of
 | `start` | where the slider begins |
 | `link = true` | the diagram (and the barcode) are [linked](#exploring-a-barcode) to each other and to the complex, where a chosen class draws its cycle; the pictures zoom |
 | `maxCells` | the page holds every edge and triangle up to `max`; asked for more than this (200,000 by default), it refuses and says to lower `max` |
-| `canvas` | up to 20,000 cells the complex is an SVG with axes, one element for each cell. Above that it is a canvas, a flat picture seen from above with an x axis and a y axis: a drag pans it, the wheel zooms about the pointer, the numbers on the axes follow, and it takes about a seventh of the bytes and a hundredth of the elements. `canvas = true` or `false` chooses either way |
+| `canvas` | up to 20,000 cells the complex is an SVG with axes, one element for each cell. Above that it is a canvas, a flat picture seen from above with an x axis, a y axis and gridlines: a drag pans it, the wheel zooms about the pointer, the numbers and the gridlines follow, and it takes about a seventh of the bytes and a hundredth of the elements. `canvas = true` or `false` chooses either way |
 
 `Plot.filtration3D(points)` is the same with the complex in 3-D, a canvas to turn and zoom beside the diagram;
 `result.plotFiltration3D(max)` from a result, `--plot filtration-3d` on the command line. The balls grow with the slider.
@@ -1062,8 +1062,8 @@ From MATLAB it is `scene.withCamera(20, 10, 1.3)` and `scene.withSetting('camera
 `--plot input-3d --set camera.azimuth=20 --set camera.zoom=1.3`.
 
 A scene seen from above (`azimuth = 0, elevation = 90`) is a flat picture, and `withAxes` gives it an x axis and a y axis with
-numbers at round values of the plane's coordinates, clipping what lies beyond them. On a page the numbers follow the pan and the
-zoom; a scene with axes asks for the view from above and says so otherwise.
+numbers at round values of the plane's coordinates, gridlines at the numbers and what lies beyond the axes clipped. On a page the
+numbers and the gridlines follow the pan and the zoom; a scene with axes asks for the view from above and says so otherwise.
 
 ```scala
 import scala.language.experimental.modularity
@@ -1078,6 +1078,34 @@ val flat = Scene(
 ).withAxes
 flat.save("flat.svg")
 ```
+
+The axes take what a figure's take, as far as a picture that pans and zooms can honour it: `withXLabel` and `withYLabel` (or
+`Labels(x = ..., y = ...)`) write the names beside the numbers, `withXScale`, `withYScale` and `withXYScale` put an axis on a
+`Transform` (`Log10`, `Sqrt`, `SymLog(c)`; a log axis needs positive numbers, a symmetric log keeps zero and the negative ones),
+and `grid = false` or `Lines.grid(...)` turns the gridlines of an axis off or restyles them. The picture is then the data after
+the transforms, with one scale on both axes, and the page writes the same numbers as the file. The range and the position of an
+axis (`min`, `max`, `reverse`, `crossesAt`, ...) are what the view shows, so those options belong to a `Figure` and are refused
+here; so is a transform of your own, which has no ticks a page can draw. A control that moves an item (`Behavior.Follows`) needs
+linear axes, because its value is in the data's units.
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val birth = IndexedSeq.tabulate(12)(i => math.pow(10, -2.0 + 0.4 * i))
+val loglog = Scene(
+  Vector(Layer.Points(birth.map(b => (b, 3 * b, 0.0)), IndexedSeq(Paint.Ink), 4.0)),
+  azimuth = 0,
+  elevation = 90,
+  turns = false
+).withAxes
+  .withXYScale(Transform.Log10)
+  .withLabels(x = "birth", y = "death")
+loglog.save("loglog.svg")
+```
+
+From MATLAB, `scene.withXLabel('birth').withXScale('log')`.
 
 ### For a paper, and for a page of either color
 
