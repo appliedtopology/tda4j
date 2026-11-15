@@ -51,8 +51,11 @@ object Layer:
   *
   * `axes` draws an x axis along the foot of the picture and a y axis along its left edge, numbered with the coordinates
   * of the plane at round values as a plot's axes are, for a flat picture (seen from above: `azimuth = 0`,
-  * `elevation = 90`). The picture then keeps to the room inside the axes, and a canvas that pans and zooms numbers its
-  * axes again for what it shows.
+  * `elevation = 90`), with gridlines at the numbers. The picture then keeps to the room inside the axes, and a canvas
+  * that pans and zooms numbers its axes again for what it shows. `xAxis` and `yAxis` hold what the axes are given by
+  * [[Labels]] (`x`, `y`) and [[Scale]] (`transform`, `grid`): an axis can be linear, log, square-root or symmetric log
+  * (`Transform.Custom` has no ticks a page can draw), and the picture is then the data after the transforms, drawn at
+  * one scale on both axes: a straight segment between two places is a straight line between their positions.
   *
   * `region` is a rectangle drawn over the picture, a translucent fill with a dashed outline, in the units of the view
   * plane: the view from `azimuth` and `elevation` (at `zoom` 1), `x` to the right and `y` up, in the radius of the
@@ -75,7 +78,9 @@ final case class Scene(
   turns: Boolean = true,
   fitted: Option[(XYZ, Double)] = None,
   region: Option[Window] = None,
-  axes: Boolean = false
+  axes: Boolean = false,
+  xAxis: Axis = Axis(),
+  yAxis: Axis = Axis()
 ) extends Plot:
   def +(layer: Layer): Scene = copy(layers = layers :+ layer)
   def ++(more: IterableOnce[Layer]): Scene = copy(layers = layers ++ more)
@@ -87,9 +92,43 @@ final case class Scene(
 
   // The tweaks that apply to a scene, as methods to chain (as on [[Figure]]); the plain-argument ones are for MATLAB.
 
-  /** The title and subtitle: only what is given changes. A 3-D scene has no axes, legend or color bar to label. */
-  def withLabels(title: Optional[String] = Optional.empty, subtitle: Optional[String] = Optional.empty): Scene =
-    this + Labels(title = title, subtitle = subtitle)
+  /** The title and subtitle, and the labels of the axes of a flat picture (`withAxes`): only what is given changes. A
+    * scene has no legend or color bar to label.
+    */
+  def withLabels(
+    title: Optional[String] = Optional.empty,
+    subtitle: Optional[String] = Optional.empty,
+    x: Optional[String] = Optional.empty,
+    y: Optional[String] = Optional.empty
+  ): Scene =
+    this + Labels(title = title, subtitle = subtitle, x = x, y = y)
+
+  /** The x axis label of a flat picture with axes. */
+  def withXLabel(text: String): Scene = withLabels(x = text)
+
+  /** The y axis label of a flat picture with axes. */
+  def withYLabel(text: String): Scene = withLabels(y = text)
+
+  /** The x axis of a flat picture with axes: its `transform` (linear, log, square-root or symmetric log) and whether it
+    * has `grid`lines. The other options of [[Scale.x]] fix a range or move the axis, which a canvas that pans and zooms
+    * leaves to its view.
+    */
+  def withXScale(transform: Optional[Transform] = Optional.empty, grid: Optional[Boolean] = Optional.empty): Scene =
+    this + Scale.x(transform = transform, grid = grid)
+
+  /** The y axis of a flat picture with axes; as [[withXScale]]. */
+  def withYScale(transform: Optional[Transform] = Optional.empty, grid: Optional[Boolean] = Optional.empty): Scene =
+    this + Scale.y(transform = transform, grid = grid)
+
+  /** Both axes alike: a log-log picture is `withXYScale(Transform.Log10)`. */
+  def withXYScale(transform: Optional[Transform] = Optional.empty, grid: Optional[Boolean] = Optional.empty): Scene =
+    this + Scale.xy(transform = transform, grid = grid)
+
+  /** The x axis on the scale called `name`: `linear`, `log`, `sqrt` or `symlog`. */
+  def withXScale(name: String): Scene = withXScale(Transform.named(name))
+
+  /** The y axis on the scale called `name`: `linear`, `log`, `sqrt` or `symlog`. */
+  def withYScale(name: String): Scene = withYScale(Transform.named(name))
 
   /** The size in pixels; give one to keep the other. */
   def withSize(width: Optional[Int] = Optional.empty, height: Optional[Int] = Optional.empty): Scene =
@@ -194,14 +233,38 @@ final case class Scene(
   /** This scene's layers drawn over `under`'s. */
   def over(under: Scene): Scene = copy(layers = under.layers ++ layers)
 
+  // where a place of the data lies in the picture: its x and y through the transforms of the axes (a picture without
+  // axes has none); a transform with no position for a number (a log axis and a number that is not positive) is an error
+  // that says what to do, not a place that is left out
+  private def transformed: Boolean =
+    axes && (xAxis.transform != Transform.Identity || yAxis.transform != Transform.Identity)
+
+  private def place(p: XYZ): XYZ =
+    if !transformed then p else (onAxis("x", xAxis.transform, p._1), onAxis("y", yAxis.transform, p._2), p._3)
+
+  private def onAxis(which: String, t: Transform, v: Double): Double =
+    require(
+      !t.isInstanceOf[Transform.Custom],
+      s"Scene: the $which axis has a custom transform; a canvas's ticks are those of Transform.Identity, Log10, Sqrt and SymLog"
+    )
+    val u = t(v)
+    require(
+      !u.isNaN || v.isNaN,
+      s"Scene: the $which axis is on a ${t.label} scale, which has no place for ${Svg.number(v)} " +
+        "(a log axis needs positive numbers; Transform.SymLog keeps zero and negative ones)"
+    )
+    u
+
   // the centres of balls and halos count, their extent does not: a ball that grows leaves the picture where it was
-  private def allPoints: Seq[XYZ] = layers.flatMap {
-    case l: Layer.Points    => l.at
-    case l: Layer.Segments  => l.ends.flatMap((a, b) => Seq(a, b))
-    case l: Layer.Triangles => l.corners.flatMap((a, b, c) => Seq(a, b, c))
-    case l: Layer.Balls     => l.centers
-    case l: Layer.Halos     => l.at
-  }
+  private def allPoints: Seq[XYZ] = layers
+    .flatMap {
+      case l: Layer.Points    => l.at
+      case l: Layer.Segments  => l.ends.flatMap((a, b) => Seq(a, b))
+      case l: Layer.Triangles => l.corners.flatMap((a, b, c) => Seq(a, b, c))
+      case l: Layer.Balls     => l.centers
+      case l: Layer.Halos     => l.at
+    }
+    .map(place)
 
   /** The centre and radius that fit `ps` into a unit ball. */
   private def fit(ps: Seq[XYZ]): (XYZ, Double) =
@@ -216,7 +279,7 @@ final case class Scene(
   private[plot] def frame: (XYZ, Double) = fitted.getOrElse(fit(allPoints))
 
   /** This scene fitted to its points and `extra` ones: the places an item can be at when it moves. */
-  private[plot] def fitting(extra: Seq[XYZ]): Scene = copy(fitted = Some(fit(allPoints ++ extra)))
+  private[plot] def fitting(extra: Seq[XYZ]): Scene = copy(fitted = Some(fit(allPoints ++ extra.map(place))))
 
   /** A scene's point as it is drawn: round and filled, with a ring of 1.5 pixels in the surface color, then whatever
     * the scene's marker changes (its size, opacity and edge).
@@ -236,7 +299,8 @@ final case class Scene(
     val (c, r) = frame
     val az = math.toRadians(azimuth)
     val el = math.toRadians(elevation)
-    p =>
+    q =>
+      val p = place(q)
       val (x, y, z) = ((p._1 - c._1) / r, (p._2 - c._2) / r, (p._3 - c._3) / r)
       val x1 = x * math.cos(az) - y * math.sin(az)
       val y1 = x * math.sin(az) + y * math.cos(az)
@@ -277,7 +341,13 @@ final case class Scene(
       s"Scene: axes number the plane of a picture seen from above, so they need azimuth = 0 and elevation = 90 (this scene is seen from azimuth $azimuth, elevation $elevation)"
     )
     val ts = style.textScale
-    (48.0 * ts, 8.0, 8.0, 26.0 * ts)
+    val label = elements.face(TextRole.AxisLabel).size * ts + 6.0
+    (
+      48.0 * ts + (if yAxis.label.nonEmpty then label else 0.0),
+      8.0,
+      8.0,
+      26.0 * ts + (if xAxis.label.nonEmpty then label else 0.0)
+    )
 
   // ----- the static view (SVG)
 
@@ -359,26 +429,57 @@ final case class Scene(
         val face = elements.face(TextRole.TickLabel)
         val size = face.size * ts
         val ink2 = paint(face.paint)
+        val (tx, ty) = (xAxis.transform, yAxis.transform)
         def p2(v: Double) = f"$v%.2f"
-        val xs = Svg.niceTicks(c._1 + r * (boxL - cx) / scale, c._1 + r * (boxR - cx) / scale)
-        val ys = Svg.niceTicks(c._2 + r * (cy - boxB) / scale, c._2 + r * (cy - boxT) / scale)
+        // the numbers of an axis: round values of what the plot area shows, at their positions in the picture
+        val xs = tx.ticks(tx.inverse(c._1 + r * (boxL - cx) / scale), tx.inverse(c._1 + r * (boxR - cx) / scale))
+        val ys = ty.ticks(ty.inverse(c._2 + r * (cy - boxB) / scale), ty.inverse(c._2 + r * (cy - boxT) / scale))
         def line(x1: Double, y1: Double, x2: Double, y2: Double) =
           s"""<line x1="${p2(x1)}" y1="${p2(y1)}" x2="${p2(x2)}" y2="${p2(y2)}"/>"""
-        def label(x: Double, y: Double, anchor: String, v: Double) =
+        def label(x: Double, y: Double, anchor: String, text: String) =
           s"""<text x="${p2(x)}" y="${p2(y)}" text-anchor="$anchor" font-size="${Svg.number(
               size
-            )}" style="fill:$ink2;stroke:none">${Svg
-              .number(v)}</text>"""
-        val xTicks = xs.map { v =>
-          val px = cx + (v - c._1) / r * scale
-          line(px, boxB, px, boxB + 4) + label(px, boxB + 4 + size, "middle", v)
-        }
-        val yTicks = ys.map { v =>
-          val py = cy - (v - c._2) / r * scale
-          line(boxL - 4, py, boxL, py) + label(boxL - 6, py + 0.35 * size, "end", v)
-        }
+            )}" style="fill:$ink2;stroke:none">${Svg.escape(text)}</text>"""
+        def xAt(v: Double) = cx + (tx(v) - c._1) / r * scale
+        def yAt(v: Double) = cy - (ty(v) - c._2) / r * scale
+        val xTicks =
+          xs.map(v => line(xAt(v), boxB, xAt(v), boxB + 4) + label(xAt(v), boxB + 4 + size, "middle", tx.tickLabel(v)))
+        val yTicks = ys.map(v =>
+          line(boxL - 4, yAt(v), boxL, yAt(v)) + label(boxL - 6, yAt(v) + 0.35 * size, "end", ty.tickLabel(v))
+        )
+        // gridlines at the numbers, under the picture, as a figure's
+        val gs = elements.gridStroke
+        val grid =
+          if !(style.grid && gs.visible) then ""
+          else
+            val lines =
+              (if xAxis.grid then xs.map(v => line(xAt(v), boxT, xAt(v), boxB)) else Seq.empty) ++
+                (if yAxis.grid then ys.map(v => line(boxL, yAt(v), boxR, yAt(v))) else Seq.empty)
+            if lines.isEmpty then ""
+            else
+              s"""<g class="tda4j-grid" style="stroke:${paint(gs.paint)}${
+                  if gs.opacity == 1.0 then "" else s";stroke-opacity:${gs.opacity}"
+                }" stroke-width="${Svg.number(gs.width)}"${gs.dash.pattern.fold("")(d =>
+                  s""" stroke-dasharray="$d""""
+                )}>${lines.mkString}</g>"""
+        // the labels of the axes: under the numbers, and turned to read upwards beside them
+        val words = elements.face(TextRole.AxisLabel)
+        val wordSize = words.size * ts
+        def word(text: String, attrs: String, x: Double, y: Double) =
+          s"""<text class="tda4j-axis-label"$attrs x="${p2(x)}" y="${p2(y)}" text-anchor="middle" font-size="${Svg
+              .number(
+                wordSize
+              )}" style="fill:${paint(words.paint)};stroke:none">${Svg.escape(text)}</text>"""
+        val xWord = if xAxis.label.isEmpty then "" else word(xAxis.label, "", (boxL + boxR) / 2, height - 6.0)
+        val yWord =
+          if yAxis.label.isEmpty then ""
+          else
+            val (wx, wy) = (0.85 * wordSize + 2.0, (boxT + boxB) / 2)
+            word(yAxis.label, s""" transform="rotate(-90 ${p2(wx)} ${p2(wy)})"""", wx, wy)
         val clip = s"$id-clip"
-        s"""<defs><clipPath id="$clip"><rect x="${p2(boxL)}" y="${p2(boxT)}" width="${p2(boxR - boxL)}" height="${p2(
+        grid + s"""<defs><clipPath id="$clip"><rect x="${p2(boxL)}" y="${p2(boxT)}" width="${p2(
+            boxR - boxL
+          )}" height="${p2(
             boxB - boxT
           )}"/></clipPath></defs><g clip-path="url(#$clip)">$picture</g>""" +
           s"""<g class="tda4j-axes" style="stroke:$ink2" stroke-width="1">${line(boxL, boxB, boxR, boxB)}${line(
@@ -386,7 +487,7 @@ final case class Scene(
               boxT,
               boxL,
               boxB
-            )}${xTicks.mkString}${yTicks.mkString}</g>"""
+            )}${xTicks.mkString}${yTicks.mkString}$xWord$yWord</g>"""
     val body = drawn + region.fold("") { w =>
       val color = paint(Paint.Series(0))
       s"""<rect x="${f"${cx + w.x0 * scale}%.2f"}" y="${f"${cy - w.y1 * scale}%.2f"}" width="${f"${(w.x1 - w.x0) * scale}%.2f"}" height="${f"${(w.y1 - w.y0) * scale}%.2f"}" style="fill:$color;fill-opacity:.12;stroke:$color" stroke-width="${Svg
@@ -477,7 +578,7 @@ final case class Scene(
     // The positions are written once, as a flat list of x, y, z (in the unit ball); a layer's items are numbers into it.
     // A cell that two layers share, or a point that many cells share, costs a number, not three.
     val places = scala.collection.mutable.LinkedHashMap.empty[XYZ, Int]
-    def at(p: XYZ): Int = places.getOrElseUpdate(p, places.size)
+    def at(p: XYZ): Int = places.getOrElseUpdate(place(p), places.size)
     def short(v: Double): String =
       val t = f"$v%.5f".reverse.dropWhile(_ == '0').reverse
       if t.endsWith(".") then t.dropRight(1) else if t == "-0" then "0" else t
@@ -526,6 +627,11 @@ final case class Scene(
         val ball = radius.fold("")((ctl, factor) => s""","ra":["$ctl",${short(factor / r)}]""")
         // the items that move with a control: which coordinate (0, 1, 2), of which ends (1 first, 2 second, 3 all), between
         val follows = per.map(_.collect { case f: Behavior.Follows => f })
+        require(
+          !transformed || follows.forall(_.isEmpty),
+          "Scene: an item cannot follow a control on a picture whose axes are transformed (the control's value is in the data's " +
+            "units, the page's positions are after the transform); give the picture linear axes"
+        )
         val moves =
           if follows.forall(_.isEmpty) then ""
           else
@@ -635,6 +741,8 @@ final case class Scene(
          |let kb=null;
          |function paintCross(){g.save();g.strokeStyle=S0;g.lineWidth=1.5;g.beginPath();g.moveTo(kb.x-8,kb.y);g.lineTo(kb.x+8,kb.y);g.moveTo(kb.x,kb.y-8);g.lineTo(kb.x,kb.y+8);g.stroke();g.restore();}
          |const lightUp=pk=>{if(frame){cancelAnimationFrame(frame);frame=0;}if(link())choosers.forEach(n=>link().hover(n,keysFor(pk,n)));};
+         |// a change of the light or of the choice redraws the canvas by itself (the page tells it); draw only when nothing did
+         |const afterwards=f=>{const d=drawn;f();if(drawn===d)draw();};
          |// the middles of the items the rectangle can choose that the plot area shows, in the order the cross steps through them
          |function placesOf(){const out=[];
          |  for(const it of last){const L=layers[it[1]],k=it[2],pk=L.pk&&L.pk[k];if(!pk||!pk.some(q=>q[0]===BR))continue;let x,y;
@@ -651,8 +759,8 @@ final case class Scene(
          |  else q=ps.slice().reverse().find(u=>u[0]<kb.x-1e-6||(Math.abs(u[0]-kb.x)<=1e-6&&u[1]<kb.y-1e-6));
          |  if(!q)return;
          |  kb=kb||{x:q[0],y:q[1],from:null};kb.x=q[0];kb.y=q[1];if(kb.from)rect=[kb.from.x,kb.from.y,kb.x,kb.y];
-         |  lightUp(ps.filter(u=>Math.abs(u[0]-q[0])<=1e-6&&Math.abs(u[1]-q[1])<=1e-6).flatMap(u=>u[2]));draw();}
-         |function letGo(){if(!kb)return;kb=null;lightUp(null);draw();}
+         |  afterwards(()=>lightUp(ps.filter(u=>Math.abs(u[0]-q[0])<=1e-6&&Math.abs(u[1]-q[1])<=1e-6).flatMap(u=>u[2])));}
+         |function letGo(){if(!kb)return;kb=null;afterwards(()=>lightUp(null));}
          |cv.addEventListener('blur',letGo);
          |cv.addEventListener('keydown',e=>{if(e.ctrlKey||e.metaKey||e.altKey)return;
          |  const d={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];
@@ -663,8 +771,8 @@ final case class Scene(
          |  if(dir){e.preventDefault();stepTo(dir);return;}
          |  if((e.key==='Enter'||e.key===' ')&&kb){e.preventDefault();
          |    if(!kb.from){kb.from={x:kb.x,y:kb.y};rect=[kb.x,kb.y,kb.x,kb.y];draw();return;}
-         |    rect=[kb.from.x,kb.from.y,kb.x,kb.y];chooseBox(e.shiftKey);kb=null;lightUp(null);draw();return;}
-         |  if(e.key==='Escape'&&kb){e.preventDefault();kb=null;rect=null;lightUp(null);draw();}});"""
+         |    rect=[kb.from.x,kb.from.y,kb.x,kb.y];kb=null;afterwards(()=>{chooseBox(e.shiftKey);lightUp(null);});return;}
+         |  if(e.key==='Escape'&&kb){e.preventDefault();kb=null;rect=null;afterwards(()=>lightUp(null));}});"""
     }
     // the script of a panel of an interactive page also asks which items the controls and selections leave out
     val hook =
@@ -699,28 +807,64 @@ final case class Scene(
       if axes then
         s"const bx0=${px(axL)},bx1=W-${px(axR)},by0=${px(axT)},by1=H-${px(axB)};sc=0.46*Math.min(bx1-bx0,by1-by0)*zoom;box=[bx0,by0,bx1,by1];bc=[(bx0+bx1)/2,(by0+by1)/2];ox=bc[0]+pan[0];oy=bc[1]+pan[1];"
       else "sc=0.46*Math.min(W,H)*zoom;box=[0,0,W,H];bc=[W/2,H/2];ox=W/2+pan[0];oy=H/2+pan[1];"
-    val openClip = if axes then "g.save();g.beginPath();g.rect(bx0,by0,bx1-bx0,by1-by0);g.clip();" else ""
+    val gridStroke = elements.gridStroke
+    val gridOn = axes && style.grid && gridStroke.visible && (xAxis.grid || yAxis.grid)
+    val openClip =
+      if axes then
+        s"g.save();g.beginPath();g.rect(bx0,by0,bx1-bx0,by1-by0);g.clip();${if gridOn then "paintGrid();" else ""}"
+      else ""
     val closeClip = if axes then "g.restore();paintAxes();" else ""
     val fontJs = "\"" + s"${px(tickSize)}px ${style.font}".replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+    val wordFace = elements.face(TextRole.AxisLabel)
+    val wordSize = wordFace.size * ts
+    val wordFont = "\"" + s"${px(wordSize)}px ${style.font}".replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+    // the transform of an axis as the page names it: a letter and, for a symmetric log, the linear stretch
+    def code(a: Axis): String = a.transform match
+      case Transform.Identity  => "['i',1]"
+      case Transform.Log10     => "['l',1]"
+      case Transform.Sqrt      => "['s',1]"
+      case Transform.SymLog(k) => s"['m',${short(k)}]"
+      case _: Transform.Custom => "['i',1]" // refused by `place` before a page is written
     val axesScript =
       if !axes then ""
       else
         s"""
-           |// the axes: ticks at round values of the plane's coordinates over what the plot area shows now
+           |// the axes: ticks at round values of the plane's coordinates, after the transforms of the axes, over what the plot area shows now
            |${Scene.tickScript}
-           |const AX=[${short(c._1)},${short(c._2)},${short(r)}],AXC=color(${col(tickFace.paint)});
+           |const AX=[${short(c._1)},${short(c._2)},${short(r)}],AXC=color(${col(tickFace.paint)}),TX=${code(
+            xAxis
+          )},TY=${code(
+            yAxis
+          )},XL=${Scene.jsText(xAxis.label)},YL=${Scene.jsText(yAxis.label)};
+           |const xAt=v=>ox+(tr[TX[0]](v,TX[1])-AX[0])/AX[2]*sc,yAt=v=>oy-(tr[TY[0]](v,TY[1])-AX[1])/AX[2]*sc;
+           |const tickOf=(T,lo,hi)=>trTicks(T[0],T[1],inv[T[0]](lo,T[1]),inv[T[0]](hi,T[1]),5),wordOf=(T,v)=>T[0]==='l'?logLabel(v):numberText(v);
+           |const xTicks=()=>tickOf(TX,AX[0]+AX[2]*(box[0]-ox)/sc,AX[0]+AX[2]*(box[2]-ox)/sc),yTicks=()=>tickOf(TY,AX[1]+AX[2]*(oy-box[3])/sc,AX[1]+AX[2]*(oy-box[1])/sc);
+           |function paintGrid(){
+           |  g.save();g.font=$fontJs;g.strokeStyle=color(${col(gridStroke.paint)});g.lineWidth=${px(
+            gridStroke.width
+          )};g.globalAlpha=${gridStroke.opacity};g.setLineDash([${gridStroke.dash.pattern
+            .fold("")(_.split(' ').mkString(","))}]);
+           |  const line=(x1,y1,x2,y2)=>{g.beginPath();g.moveTo(x1,y1);g.lineTo(x2,y2);g.stroke();};
+           |  ${if xAxis.grid then "for(const v of xTicks()){const x=xAt(v);line(x,box[1],x,box[3]);}" else ""}
+           |  ${if yAxis.grid then "for(const v of yTicks()){const y=yAt(v);line(box[0],y,box[2],y);}" else ""}
+           |  g.restore();}
            |function paintAxes(){
            |  g.save();g.strokeStyle=AXC;g.fillStyle=AXC;g.lineWidth=1;g.globalAlpha=1;g.font=$fontJs;
            |  const line=(x1,y1,x2,y2)=>{g.beginPath();g.moveTo(x1,y1);g.lineTo(x2,y2);g.stroke();};
            |  line(box[0],box[3],box[2],box[3]);line(box[0],box[1],box[0],box[3]);
            |  g.textAlign='center';
-           |  for(const v of niceTicks(AX[0]+AX[2]*(box[0]-ox)/sc,AX[0]+AX[2]*(box[2]-ox)/sc,5)){const x=ox+(v-AX[0])/AX[2]*sc;line(x,box[3],x,box[3]+4);g.fillText(numberText(v),x,box[3]+4+${px(
+           |  for(const v of xTicks()){const x=xAt(v);line(x,box[3],x,box[3]+4);g.fillText(wordOf(TX,v),x,box[3]+4+${px(
             tickSize
           )});}
            |  g.textAlign='right';
-           |  for(const v of niceTicks(AX[1]+AX[2]*(oy-box[3])/sc,AX[1]+AX[2]*(oy-box[1])/sc,5)){const y=oy-(v-AX[1])/AX[2]*sc;line(box[0]-4,y,box[0],y);g.fillText(numberText(v),box[0]-6,y+0.35*${px(
+           |  for(const v of yTicks()){const y=yAt(v);line(box[0]-4,y,box[0],y);g.fillText(wordOf(TY,v),box[0]-6,y+0.35*${px(
             tickSize
           )});}
+           |  g.fillStyle=color(${col(wordFace.paint)});g.font=$wordFont;g.textAlign='center';
+           |  if(XL)g.fillText(XL,(box[0]+box[2])/2,box[3]+${px(axB - 6.0)});
+           |  if(YL){g.translate(${px(
+            0.85 * wordSize + 2.0
+          )},(box[1]+box[3])/2);g.rotate(-Math.PI/2);g.fillText(YL,0,0);}
            |  g.restore();}""".stripMargin
     val id = named.getOrElse(s"tda4j3d${Scene.counter.incrementAndGet()}")
     val vars = if theme == Theme.Auto then pal.cssVariables(s"#$id") else ""
@@ -776,7 +920,7 @@ final case class Scene(
        |      else d=Q[3*L.i[k]+2]+(L.k==='p'?-2e-6:L.k==='b'?1e-6:-3e-6);
        |      dep[o+k]=d;}});
        |  order=new Int32Array(total);for(let i=0;i<total;i++)order[i]=i;order.sort((u,v)=>dep[v]-dep[u]);}
-       |function draw(){const dpr=window.devicePixelRatio||1,W=cv.clientWidth,H=W*cv.height/cv.width;
+       |function draw(){drawn++;const dpr=window.devicePixelRatio||1,W=cv.clientWidth,H=W*cv.height/cv.width;
        |  if(cv.width!==Math.round(W*dpr)){cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);}
        |  g.setTransform(dpr,0,0,dpr,0,0);g.fillStyle=color(${col(Paint.Surface)});g.fillRect(0,0,W,H);
        |  if(!order)sortAll();$geometry last=[];$openClip
@@ -812,7 +956,7 @@ final case class Scene(
        |  return best;}
        |const keysFor=(pk,n)=>pk?pk.filter(q=>q[0]===n).map(q=>q[1]):[];
        |const link=()=>ia&&ia.tda4j;
-       |let frame=0,xy=null;
+       |let frame=0,xy=null,drawn=0;
        |function hoverAt(e){if(!choosers.size||!link())return;xy=[e.clientX,e.clientY];
        |  if(frame)return;
        |  frame=requestAnimationFrame(()=>{frame=0;const pk=pickAt(xy[0],xy[1]);
@@ -863,9 +1007,11 @@ object Scene:
   // Element ids for the fragments of one page; scratch, no meaning outside this file.
   private[plot] val counter = new java.util.concurrent.atomic.AtomicLong()
 
-  // `Svg.number` and `Svg.niceTicks` in JavaScript, for the axes the page draws itself: a zoomed figure's (the page's
-  // script) and a flat canvas's (the canvas's). One source for both; change it with the Scala ones: the check script
-  // compares the ticks of a page with those of the still picture of it.
+  // `Svg.number`, `Svg.niceTicks` and the transforms with their ticks (`Transform.ticks`, `tickLabel`) in JavaScript, for
+  // the axes the page draws itself: a zoomed figure's (the page's script) and a flat canvas's (the canvas's). The
+  // transforms are named by a letter: `i` identity, `l` log, `s` square root, `m` symmetric log (with its linear
+  // stretch `c`). One source for both; change it with the Scala ones: the check script compares the ticks of a page
+  // with those of the still picture of it.
   private[plot] val tickScript: String =
     """function numberText(v){const a=Math.abs(v);if(v===0)return '0';
   if(a>=1e5||a<1e-3){if(a<1e-3&&a>=1e-4)return v.toPrecision(3);
@@ -875,7 +1021,31 @@ function niceTicks(lo,hi,target){
   if(!(hi>lo)||!isFinite(hi)||!isFinite(lo))return [lo];
   const raw=(hi-lo)/target,mag=Math.pow(10,Math.floor(Math.log10(raw))),norm=raw/mag;
   const step=mag*(norm<1.5?1:norm<3?2:norm<7?5:10),first=Math.ceil(lo/step-1e-9),last=Math.floor(hi/step+1e-9),out=[];
-  for(let i=first;i<=last;i++){const t=i*step;out.push(t===0?0:t);}return out;}"""
+  for(let i=first;i<=last;i++){const t=i*step;out.push(t===0?0:t);}return out;}
+const tr={i:v=>v,l:v=>Math.log10(v),s:v=>Math.sign(v)*Math.sqrt(Math.abs(v)),m:(v,c)=>Math.sign(v)*Math.log10(1+Math.abs(v)/c)};
+const inv={i:u=>u,l:u=>Math.pow(10,u),s:u=>Math.sign(u)*u*u,m:(u,c)=>Math.sign(u)*c*(Math.pow(10,Math.abs(u))-1)};
+function logLabel(v){if(v>0&&(v<1e-3||v>=1e5)){const e=Math.floor(Math.log10(v)+1e-9),m=v/Math.pow(10,e);
+  if(Math.abs(m-Math.round(m))<1e-9)return Math.round(m)+'e'+e;}return numberText(v);}
+function logTicks(lo,hi,target){
+  if(!(lo>0&&hi>lo&&isFinite(hi)))return [];
+  const kLo=Math.floor(Math.log10(lo)),kHi=Math.ceil(Math.log10(hi)),decades=kHi-kLo,stride=Math.max(1,Math.ceil(decades/6)),multiples=decades>=4?[1]:[1,2,5],found=[];
+  for(let k=kLo;k<=kHi;k+=stride)for(const m of multiples){const t=m*Math.pow(10,k);if(t>=lo*(1-1e-9)&&t<=hi*(1+1e-9))found.push(t);}
+  return found.length>=2?found:niceTicks(lo,hi,target);}
+function trTicks(t,c,lo,hi,target){
+  if(t==='l')return logTicks(lo,hi,target);
+  if(t==='m'){const reach=Math.max(Math.abs(lo),Math.abs(hi));if(reach<=10*c)return niceTicks(lo,hi,target);
+    const mag=logTicks(c,reach,target);return mag.map(x=>-x).reverse().concat([0],mag).filter(x=>x>=lo&&x<=hi);}
+  return niceTicks(lo,hi,target);}"""
+
+  // a text as a JavaScript string literal, safe inside a script element
+  private[plot] def jsText(t: String): String =
+    "\"" + t.flatMap {
+      case '\\' => "\\\\"
+      case '"'  => "\\\""
+      case '<'  => "\\u003c"
+      case '\n' => "\\n"
+      case c    => c.toString
+    } + "\""
 
   // The geometry of choosing by rectangle, in the plane of the view; the page's script does the same sums on the pixels
   // (a place in the plane and its pixel are an affine map apart, so what meets what is the same).

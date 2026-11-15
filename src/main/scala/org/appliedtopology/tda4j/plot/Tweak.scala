@@ -104,9 +104,7 @@ final case class Labels(
   )
 
   override def onScene(s: Scene): Scene =
-    val axesWords = Seq(
-      "x" -> x,
-      "y" -> y,
+    val noWords = Seq(
       "legend" -> legend,
       "color" -> color,
       "caption" -> caption,
@@ -115,12 +113,22 @@ final case class Labels(
     ).collect {
       case (name, o) if !o.isEmpty => name
     }
-    if axesWords.nonEmpty then
+    if noWords.nonEmpty then
       throw UnsupportedOperationException(
-        s"a 3-D scene has no axes, legend or color bar to label (${axesWords.mkString(", ")}); " +
-          "Labels(title = ..., subtitle = ...) apply"
+        s"a scene has no legend or color bar to label (${noWords.mkString(", ")}); " +
+          "Labels(title = ..., subtitle = ..., x = ..., y = ...) apply"
       )
-    s.copy(title = title.getOrElse(s.title), subtitle = subtitle.getOrElse(s.subtitle))
+    if (!x.isEmpty || !y.isEmpty) && !s.axes then
+      throw UnsupportedOperationException(
+        "a 3-D scene has no axes to label; a flat picture seen from above has them after withAxes() " +
+          "(Labels(title = ..., subtitle = ...) apply to any scene)"
+      )
+    s.copy(
+      title = title.getOrElse(s.title),
+      subtitle = subtitle.getOrElse(s.subtitle),
+      xAxis = s.xAxis.copy(label = x.getOrElse(s.xAxis.label)),
+      yAxis = s.yAxis.copy(label = y.getOrElse(s.yAxis.label))
+    )
 
   // A board's title is its page title and is drawn above the panels; every panel keeps its own, and takes the other labels.
   override def onBoard(b: Board): Board =
@@ -395,6 +403,42 @@ object Scale:
       f.copy(x = if onX then update(f.x, "x") else f.x, y = if onY then update(f.y, "y") else f.y)
 
     override def toString: String = s"Scale.${if onX && onY then "xy" else if onX then "x" else "y"}(...)"
+
+    // a picture with axes takes the transform and the gridlines of an axis; the other options fix a range or move the axis,
+    // which what its page shows (pan and zoom) decides
+    override def onScene(s: Scene): Scene =
+      val beyond = Seq(
+        "min" -> min.isEmpty,
+        "max" -> max.isEmpty,
+        "breaks" -> breaks.isEmpty,
+        "format" -> format.isEmpty,
+        "visible" -> visible.isEmpty,
+        "minusInfinity" -> minusInfinity.isEmpty,
+        "position" -> position.isEmpty,
+        "reverse" -> reverse.isEmpty,
+        "padding" -> padding.isEmpty,
+        "crossesAt" -> crossesAt.isEmpty
+      ).collect { case (name, false) => name }
+      if beyond.nonEmpty then
+        throw UnsupportedOperationException(
+          s"$this: an axis of a picture seen from above takes only transform and grid; " +
+            s"${beyond.mkString(", ")} belong to a Figure (the view of a canvas is its range)"
+        )
+      if !s.axes then
+        throw UnsupportedOperationException(
+          s"$this: a 3-D scene has no axes; a flat picture seen from above has them after withAxes()"
+        )
+      transform.toOption.foreach {
+        case _: Transform.Custom =>
+          throw UnsupportedOperationException(
+            s"$this: a picture's axes take Transform.Identity, Log10, Sqrt or SymLog (a custom transform has no ticks the page can draw)"
+          )
+        case Transform.SymLog(c) =>
+          require(c > 0 && c.isFinite, s"Scale: a symmetric log axis needs a positive linear stretch, not $c")
+        case _ => ()
+      }
+      def one(a: Axis): Axis = a.copy(transform = transform.getOrElse(a.transform), grid = grid.getOrElse(a.grid))
+      s.copy(xAxis = if onX then one(s.xAxis) else s.xAxis, yAxis = if onY then one(s.yAxis) else s.yAxis)
 
     private def update(a: Axis, which: String): Axis =
       val tr = transform.getOrElse(a.transform)

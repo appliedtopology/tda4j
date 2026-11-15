@@ -536,6 +536,256 @@ class SpatialSpec extends Specification:
       val page = Interactive().withPanel(Panel(Figure()).zoomable()).fragment(Theme.Light)
       page must contain(Scene.tickScript)
     }
+
+    // ----- gridlines, labels and scales
+    val room =
+      Elements().face(TextRole.AxisLabel).size + 6.0 // what a label takes beside the plot area, at text scale 1
+    // the gridlines of a still, as (x1, y1, x2, y2)
+    def grid(svg: String): Seq[(Double, Double, Double, Double)] =
+      """(?s)<g class="tda4j-grid"[^>]*>(.*?)</g>""".r
+        .findFirstMatchIn(svg)
+        .toSeq
+        .flatMap(g =>
+          """<line x1="([^"]+)" y1="([^"]+)" x2="([^"]+)" y2="([^"]+)"/>""".r
+            .findAllMatchIn(g.group(1))
+            .map(l => (l.group(1).toDouble, l.group(2).toDouble, l.group(3).toDouble, l.group(4).toDouble))
+        )
+    def upright(svg: String): Seq[Double] = grid(svg).filter(l => l._1 == l._3).map(_._1).sorted
+    def level(svg: String): Seq[Double] = grid(svg).filter(l => l._2 == l._4).map(_._2).sorted
+    // the words and where the plot area is: the numbers are at the marks, so the gridlines must be too
+    def xMarks(svg: String): Seq[Double] = labels(svg).filter(_._4 == "middle").map(_._2).sorted
+    def yMarks(svg: String): Seq[Double] = labels(svg).filter(_._4 == "end").map(l => l._3 - 0.35 * 11).sorted
+    def sameAll(a: Seq[Double], b: Seq[Double]): Boolean =
+      a.size == b.size && a.zip(b).forall((u, v) => math.abs(u - v) < 0.02)
+    // the labels of the axes: (text, x, y, turned, size)
+    def words(svg: String): Seq[(String, Double, Double, Boolean, Double)] =
+      """<text class="tda4j-axis-label"( transform="rotate\(-90 [^ ]+ [^)]+\)")? x="([^"]+)" y="([^"]+)" text-anchor="middle" font-size="([^"]+)"[^>]*>([^<]*)</text>""".r
+        .findAllMatchIn(svg)
+        .map(m => (m.group(5), m.group(2).toDouble, m.group(3).toDouble, m.group(1) != null, m.group(4).toDouble))
+        .toSeq
+    def edges(svg: String): (Double, Double) =
+      val g = """<g class="tda4j-axes"[^>]*><line x1="[^"]+" y1="([^"]+)" x2="[^"]+" y2="[^"]+"/><line x1="([^"]+)"""".r
+      val m = g.findFirstMatchIn(svg).get
+      (m.group(2).toDouble, m.group(1).toDouble)
+    // a still is XML: every tag closes its quotes (a stray quote made the grid group unreadable)
+    def wellQuoted(svg: String): Boolean =
+      svg.split('<').drop(1).forall(t => t.takeWhile(_ != '>').count(_ == '"') % 2 == 0)
+
+    "draw a gridline at every number, across the plot area, under the picture" in {
+      val svg = flat().staticSvg(Theme.Light)
+      sameAll(upright(svg), xMarks(svg)) must beTrue
+      sameAll(level(svg), yMarks(svg)) must beTrue
+      upright(svg).size must beGreaterThan(1)
+      level(svg).size must beGreaterThan(1)
+      // 12 + 8 from the top (no title), 26 from the bottom; 48 from the left, 8 from the right
+      grid(svg).filter(l => l._1 == l._3).forall(l => l._2 == 20.0 && l._4 == 494.0) must beTrue
+      grid(svg).filter(l => l._2 == l._4).forall(l => l._1 == 48.0 && l._3 == 632.0) must beTrue
+      val gridAt = svg.indexOf("""<g class="tda4j-grid"""")
+      (gridAt >= 0 && gridAt < svg.indexOf("<g clip-path=")) must beTrue
+      wellQuoted(svg) must beTrue
+    }
+
+    "follow the same tweaks as a figure's gridlines: off for a style or an axis, styled by Lines.grid" in {
+      grid(flat(_.withStyle(Style(grid = false))).staticSvg(Theme.Light)) must beEmpty
+      val noX = flat(_.withXScale(grid = false)).staticSvg(Theme.Light)
+      upright(noX) must beEmpty
+      level(noX).size must beGreaterThan(1)
+      val noY = flat(_.withYScale(grid = false)).staticSvg(Theme.Light)
+      level(noY) must beEmpty
+      upright(noY).size must beGreaterThan(1)
+      grid(flat(_ + Lines.grid(visible = false)).staticSvg(Theme.Light)) must beEmpty
+      val red = flat(_ + Lines.grid(color = "#ff0000", width = 2.0, dash = Dash.Dotted)).staticSvg(Theme.Light)
+      red must contain("""<g class="tda4j-grid" style="stroke:#ff0000" stroke-width="2" stroke-dasharray="1.5 3">""")
+      wellQuoted(red) must beTrue
+      // the gridlines are not the axes: the picture's own lines are untouched
+      red must contain("""<g class="tda4j-axes" style="stroke:""")
+    }
+
+    "label the axes: under the numbers, and turned to read upwards beside them" in {
+      val svg = flat(_.withLabels(x = "birth", y = "death")).staticSvg(Theme.Light)
+      val ws = words(svg)
+      ws.map(_._1) === Seq("birth", "death")
+      val (left, bottom) = edges(svg)
+      // the x label is centred under the plot area and 6 px above the foot of the picture, the y label is turned about its own place
+      val (_, bx, by, bTurned, bSize) = ws(0)
+      val (_, dx, dy, dTurned, _) = ws(1)
+      bTurned must beFalse
+      dTurned must beTrue
+      bx must beCloseTo((left + 632.0) / 2, 0.01)
+      by must beCloseTo(514.0, 0.01)
+      bSize must beCloseTo(room - 6.0, 0.001)
+      dx must beCloseTo(0.85 * (room - 6.0) + 2.0, 0.01)
+      dy must beCloseTo((20.0 + bottom) / 2, 0.01)
+    }
+
+    "make room for a label only where there is one" in {
+      edges(flat().staticSvg(Theme.Light)) === (48.0, 494.0)
+      edges(flat(_.withXLabel("a")).staticSvg(Theme.Light)) === (48.0, 494.0 - room)
+      edges(flat(_.withYLabel("a")).staticSvg(Theme.Light)) === (48.0 + room, 494.0)
+      edges(flat(_.withLabels(x = "a", y = "b")).staticSvg(Theme.Light)) === (48.0 + room, 494.0 - room)
+      // the label grows with the text, and so does the room
+      val big = Elements().face(TextRole.AxisLabel).size * 2.0 + 6.0
+      edges(flat(_.withLabels(x = "a", y = "b").withTextScale(2.0)).staticSvg(Theme.Light)) === (
+        96.0 + big,
+        520.0 - 52.0 - big
+      )
+      // the picture stays inside what is left, and the gridlines span the smaller area
+      val svg = flat(_.withLabels(x = "a", y = "b")).staticSvg(Theme.Light)
+      dots(svg).map(_._1).min must beGreaterThan(48.0 + room)
+      dots(svg).map(_._2).max must beLessThan(494.0 - room)
+      grid(svg).filter(l => l._2 == l._4).forall(l => l._1 == 48.0 + room) must beTrue
+    }
+
+    "write a label as text, in the still and in the page's script" in {
+      val risky = flat(_.withLabels(x = "a<b & \"c\"", y = "</script><b>"))
+      val svg = risky.staticSvg(Theme.Light)
+      svg must contain("a&lt;b &amp; &quot;c&quot;")
+      svg must not(contain("a<b"))
+      val page = risky.fragment(Theme.Light)
+      // a label cannot end the script it is in
+      page.split("</script>", -1).length === 2
+      page must contain("XL=\"a\\u003cb & \\\"c\\\"\",YL=\"\\u003c/script>\\u003cb>\";")
+      flat().fragment(Theme.Light) must contain("XL=\"\",YL=\"\";")
+    }
+
+    "put points on a log axis where their logarithms are, and write the numbers as the figure does" in {
+      val decades: IndexedSeq[XYZ] =
+        IndexedSeq((1.0, 0.0, 0.0), (10.0, 1.0, 0.0), (100.0, 2.0, 0.0), (1000.0, 3.0, 0.0))
+      def logged(t: Scene => Scene) =
+        t(Scene(Vector(Layer.Points(decades, IndexedSeq(Paint.Ink), 3.0)), azimuth = 0, elevation = 90, axes = true))
+      val svg = logged(_.withXScale(Transform.Log10)).staticSvg(Theme.Light)
+      val d = dots(svg)
+      // equal steps in x for equal ratios; the y axis, linear, has equal steps for equal differences, whatever x does
+      val steps = d.map(_._1).sorted.sliding(2).map(p => p(1) - p(0)).toSeq
+      (steps.max - steps.min) must beLessThan(0.02)
+      steps.head must beGreaterThan(10.0)
+      // on a linear axis the same points are far from evenly spread
+      val flatSteps =
+        dots(logged(identity).staticSvg(Theme.Light)).map(_._1).sorted.sliding(2).map(p => p(1) - p(0)).toSeq
+      (flatSteps.max / flatSteps.min) must beGreaterThan(10.0)
+      // the words: the powers of ten that the points sit at (every other decade when the window is wide) are written at their places
+      val hits = labels(svg).filter(l => l._4 == "middle" && Seq("1", "10", "100", "1000").contains(l._1))
+      hits.size must beGreaterThan(1)
+      hits.forall(l => d.exists(p => math.abs(p._1 - l._2) < 0.02)) must beTrue
+      // far from 1, a decade is written as the figure writes it
+      val tiny: IndexedSeq[XYZ] = IndexedSeq((1e-6, 1e-6, 0.0), (1e-4, 1e4, 0.0))
+      val tinySvg =
+        Scene(Vector(Layer.Points(tiny, IndexedSeq(Paint.Ink), 3.0)), azimuth = 0, elevation = 90, axes = true)
+          .withXYScale(Transform.Log10)
+          .staticSvg(Theme.Light)
+      labels(tinySvg).filter(_._4 == "middle").map(_._1).exists(_.matches("""[0-9]e-[0-9]+""")) must beTrue
+      labels(tinySvg).filter(_._4 == "end").map(_._1).exists(_.matches("""[0-9]e-[0-9]+""")) must beTrue
+    }
+
+    "put points on a square-root axis and a symmetric log axis where those scales put them" in {
+      // 0, 1, 4, 9, 16, 25 are at equal steps of the square root; 2(10^k - 1) are at equal steps of a symmetric log of stretch 2
+      val squares: IndexedSeq[XYZ] = IndexedSeq(0.0, 1.0, 4.0, 9.0, 16.0, 25.0).map(v => (v, 0.0, 0.0))
+      val sqrt =
+        Scene(Vector(Layer.Points(squares, IndexedSeq(Paint.Ink), 3.0)), azimuth = 0, elevation = 90, axes = true)
+          .withXScale(Transform.Sqrt)
+          .staticSvg(Theme.Light)
+      val sq = dots(sqrt).map(_._1).sorted.sliding(2).map(p => p(1) - p(0)).toSeq
+      (sq.max - sq.min) must beLessThan(0.02)
+      val ladder = Seq(-1998.0, -198.0, -18.0, 0.0, 18.0, 198.0, 1998.0)
+      val symlog = Scene(
+        Vector(Layer.Points(ladder.map(v => (0.0, v, 0.0)).toIndexedSeq, IndexedSeq(Paint.Ink), 3.0)),
+        azimuth = 0,
+        elevation = 90,
+        axes = true
+      ).withYScale(Transform.SymLog(2.0)).staticSvg(Theme.Light)
+      val sl = dots(symlog).map(_._2).sorted.sliding(2).map(p => p(1) - p(0)).toSeq
+      (sl.max - sl.min) must beLessThan(0.02)
+      // zero is a place, and the numbers on both sides of it are written
+      val ys = labels(symlog).filter(_._4 == "end").map(_._1)
+      ys must contain("0")
+      ys.exists(_.startsWith("-")) must beTrue
+      // a zero on the log axis has no place: the picture says so, with the way out
+      flat(_.withXScale(Transform.Log10)).staticSvg(Theme.Light) must throwAn[IllegalArgumentException](
+        ".*log.*positive numbers.*SymLog.*"
+      )
+    }
+
+    "take the tweaks of a figure's axes that a canvas can honour, and refuse the rest with what to write instead" in {
+      // the grammar: a tweak and its chained method are the same, and tweaks of different parts commute
+      val a = flat(_ + Scale.xy(Transform.Sqrt) + Labels(x = "p", y = "q")).staticSvg(Theme.Light)
+      val b = flat(_ + Labels(x = "p", y = "q") + Scale.xy(Transform.Sqrt)).staticSvg(Theme.Light)
+      val c = flat(_.withXYScale(Transform.Sqrt).withXLabel("p").withYLabel("q")).staticSvg(Theme.Light)
+      def same(u: String, v: String) =
+        u.replaceAll("tda4j3d[0-9]+", "ID") == v.replaceAll("tda4j3d[0-9]+", "ID") // each still has its own id
+      same(a, b) must beTrue
+      same(a, c) must beTrue
+      (a != flat().staticSvg(Theme.Light)) must beTrue
+      flat(_.withXScale("log")).axes must beTrue
+      flat(_.withXScale("log")).xAxis.transform === Transform.Log10
+      flat(_.withYScale("symlog")).yAxis.transform must beAnInstanceOf[Transform.SymLog]
+      flat(_ + Scale.x(min = 0.0)) must throwAn[UnsupportedOperationException](".*takes only transform and grid.*min.*")
+      flat(_ + Scale.y(reverse = true)) must throwAn[UnsupportedOperationException](".*reverse.*")
+      flat(_ + Scale.x(transform = Transform.Custom("cube", v => v * v * v, v => math.cbrt(v)))) must
+        throwAn[UnsupportedOperationException](".*Identity, Log10, Sqrt or SymLog.*")
+      flat(_ + Scale.x(transform = Transform.SymLog(0.0))) must throwAn[IllegalArgumentException](
+        ".*positive linear stretch.*"
+      )
+      flat(_ + Labels(legend = "a")) must throwAn[UnsupportedOperationException](".*no legend or color bar.*")
+      flat(_ + Lines.minorGrid(visible = false)) must throwAn[UnsupportedOperationException](
+        ".*gridlines.*no styled axis lines.*"
+      )
+    }
+
+    "ask for withAxes first when a tweak needs axes, and say so" in {
+      Scene() + Labels(x = "a") must throwAn[UnsupportedOperationException](
+        ".*3-D scene has no axes to label.*withAxes.*"
+      )
+      Scene() + Scale.x(transform = Transform.Log10) must throwAn[UnsupportedOperationException](
+        ".*3-D scene has no axes.*withAxes.*"
+      )
+      Scene() + Lines.grid(visible = false) must throwAn[UnsupportedOperationException](
+        ".*3-D scene has no axes.*withAxes.*"
+      )
+      // the titles are the scene's own, with or without axes
+      (Scene() + Labels(title = "t")).title === "t"
+      Scene().withAxes.withXLabel("x").xAxis.label === "x"
+    }
+
+    "tell the page the scales, the labels and whether to draw gridlines" in {
+      val positive = Scene(
+        Vector(Layer.Points(IndexedSeq((1.0, -5.0, 0.0), (10.0, 5.0, 0.0)), IndexedSeq(Paint.Ink), 3.0)),
+        azimuth = 0,
+        elevation = 90,
+        axes = true
+      )
+      val log = positive
+        .withXScale(Transform.Log10)
+        .withYScale(Transform.SymLog(2.0))
+        .withLabels(x = "birth", y = "death")
+        .fragment(Theme.Light)
+      log must contain("TX=['l',1],TY=['m',2],XL=\"birth\",YL=\"death\";")
+      flat().fragment(Theme.Light) must contain("TX=['i',1],TY=['i',1]")
+      // the gridlines are painted inside the clip, under the items; none when none are asked for
+      flat().fragment(Theme.Light) must contain("g.clip();paintGrid();")
+      flat(_.withXYScale(grid = false)).fragment(Theme.Light) must not(contain("paintGrid();"))
+      flat(_.withStyle(Style(grid = false))).fragment(Theme.Light) must not(contain("paintGrid();"))
+      flat(_.withYScale(grid = false)).fragment(Theme.Light) must not(contain("const y=yAt(v);line(box[0],y,box[2],y)"))
+      flat(_.withXScale(grid = false)).fragment(Theme.Light) must not(contain("line(x,box[1],x,box[3])"))
+      flat().fragment(Theme.Light) must contain("line(x,box[1],x,box[3])")
+    }
+
+    "keep an item that follows a control off a picture whose axes are transformed, and say why" in {
+      val dot = Layer.Points(IndexedSeq((1.0, 1.0, 0.0), (2.0, 2.0, 0.0)), IndexedSeq(Paint.Ink), 3.0)
+      def page(scene: Scene) =
+        Interactive()
+          .withSlider("t", 0, 5)
+          .withPanel(
+            Panel
+              .Spatial(scene)
+              .reactEach(
+                dot,
+                IndexedSeq(Reaction(Vector(Behavior.Follows("t", Coordinate.X, Ends.Both, 0.0, 4.0))), Reaction.none)
+              )
+          )
+      page(flat(_.copy(layers = Vector.empty))).fragment(Theme.Light).length must beGreaterThan(0)
+      page(flat(_.copy(layers = Vector.empty).withXScale(Transform.Sqrt))).fragment(Theme.Light) must
+        throwAn[IllegalArgumentException](".*cannot follow a control.*transformed.*linear axes.*")
+    }
   }
 
   "a linked 3-D filtration" should {

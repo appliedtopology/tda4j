@@ -1516,7 +1516,7 @@ object Interactive:
       |const keysOf=n=>Array.from(sel[n].now).sort((a,b)=>a-b);
       |function refresh(it){it.el.style.display=Object.values(it.h).some(x=>x)?'none':'';}
       |const fmt=v=>String(Number(v.toPrecision(3)));
-      |const tr={i:v=>v,l:v=>Math.log10(v),s:v=>Math.sign(v)*Math.sqrt(Math.abs(v)),m:(v,c)=>Math.sign(v)*Math.log10(1+Math.abs(v)/c)};
+      |__TICKS__
       |function axesOf(svg){
       |  if(svg._ax)return svg._ax;const f=svg.getAttribute('data-fr');if(!f)return null;
       |  return svg._ax=f.split(';').map(s=>{const a=s.split(',');return{o:+a[0],n:+a[1],lo:+a[2],hi:+a[3],rev:a[4]==='1',t:a[5],c:+a[6]};});}
@@ -1684,8 +1684,6 @@ object Interactive:
       |  const box=svg.closest('.tda4j-panel');const bn=box&&box.getAttribute('data-brush');
       |  if(bn&&sel[bn]){svg.setAttribute('tabindex','0');brushing(svg,list,bn,Array.from(root.querySelectorAll('.tda4j-panel')).indexOf(box));}});
       |const MAXZ=200,zooms={};
-      |__TICKS__
-      |const inv={i:u=>u,l:u=>Math.pow(10,u),s:u=>Math.sign(u)*u*u,m:(u,c)=>Math.sign(u)*c*(Math.pow(10,Math.abs(u))-1)};
       |// numbers as the plot writes them: `String.format`'s %f and %e (rounding the shortest decimal half up, as Java does) and NumberStyle
       |function digitsOf(a){if(a===0)return {d:'0',e:0};
       |  const m=/^([0-9])(?:\.([0-9]+))?e([+-][0-9]+)$/.exec(a.toExponential());return {d:m[1]+(m[2]||''),e:+m[3]};}
@@ -1715,19 +1713,7 @@ object Interactive:
       |  return t.replace(/(-?)([0-9]+)(?:\.([0-9]+))?(?:e(-?[0-9]+))?/g,(m,sg,wh,fr,ex)=>{
       |    const rev=Array.from(wh).reverse().join(''),grouped=grp?Array.from(rev.match(/.{1,3}/g).join(Array.from(grp).reverse().join(''))).reverse().join(''):wh;
       |    return (sg?mi:'')+grouped+(fr!==undefined?dec+fr:'')+(ex!==undefined?'e'+ex.replace('-',mi):'');});}
-      |function logLabel(v){if(v>0&&(v<1e-3||v>=1e5)){const e=Math.floor(Math.log10(v)+1e-9),m=v/Math.pow(10,e);
-      |  if(Math.abs(m-Math.round(m))<1e-9)return Math.round(m)+'e'+e;}return numberText(v);}
       |const tickText=(s,t,v)=>s.f!==null&&s.f!==undefined?javaFormat(s.f,v):t==='l'?logLabel(v):numberText(v);
-      |function logTicks(lo,hi,target){
-      |  if(!(lo>0&&hi>lo&&isFinite(hi)))return [];
-      |  const kLo=Math.floor(Math.log10(lo)),kHi=Math.ceil(Math.log10(hi)),decades=kHi-kLo,stride=Math.max(1,Math.ceil(decades/6)),multiples=decades>=4?[1]:[1,2,5],found=[];
-      |  for(let k=kLo;k<=kHi;k+=stride)for(const m of multiples){const t=m*Math.pow(10,k);if(t>=lo*(1-1e-9)&&t<=hi*(1+1e-9))found.push(t);}
-      |  return found.length>=2?found:niceTicks(lo,hi,target);}
-      |function trTicks(t,c,lo,hi,target){
-      |  if(t==='l')return logTicks(lo,hi,target);
-      |  if(t==='m'){const reach=Math.max(Math.abs(lo),Math.abs(hi));if(reach<=10*c)return niceTicks(lo,hi,target);
-      |    const mag=logTicks(c,reach,target);return mag.map(x=>-x).reverse().concat([0],mag).filter(x=>x>=lo&&x<=hi);}
-      |  return niceTicks(lo,hi,target);}
       |// the minor ticks between `majors`: the whole numbers of each decade on a log axis, else the halves between ticks
       |function minorPositions(t,c,majors,lo,hi){
       |  const T=tr[t],U=inv[t],ms=Array.from(new Set(majors.filter(v=>isFinite(T(v,c))))).sort((a,b)=>a-b);

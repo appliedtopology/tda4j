@@ -404,6 +404,34 @@ object Gallery:
       )
       .withTitle("Choosing on a flat canvas with axes")
     axesPage.save(out("interactive-axes-pick.html"))
+    // flat canvases with labelled axes on other scales: a log-log picture of births and deaths, and a square-root x axis over a
+    // symmetric log y axis (negative numbers, gridlines on x only); a page's words, marks and gridlines are its still's, zoomed or not
+    def flat(layers: Vector[Layer]) = Scene(layers, azimuth = 0, elevation = 90, turns = false).withAxes
+    def pointsJson(ps: IndexedSeq[XYZ]) = ps.map(p => s"[${p._1},${p._2}]").mkString("[", ",", "]")
+    val logAt = IndexedSeq.tabulate(36) { i =>
+      val birth = math.pow(10, -4.0 + 8.0 * i / 35.0)
+      (birth, birth * (1.5 + (i % 7) * 1.3), 0.0)
+    }
+    val logScene = flat(
+      Vector(
+        Layer.Segments(logAt.indices.tail.map(i => (logAt(i - 1), logAt(i))), IndexedSeq(Paint.Series(2)), 1.0),
+        Layer.Points(logAt, IndexedSeq(Paint.Series(1)), 4.0)
+      )
+    ).withXYScale(Transform.Log10).withXLabel("birth").withYLabel("death").withTitle("Births and deaths on log axes")
+    logScene.save(out("interactive-axes-log.html"))
+    logScene.save(out("interactive-axes-log-still.svg"))
+    java.nio.file.Files
+      .writeString(java.nio.file.Path.of(out("interactive-axes-log.json")), s"""{"points":${pointsJson(logAt)}}""")
+    val mixedAt = IndexedSeq.tabulate(30)(i => (i * i / 10.0 - 20.0, ((i * 37) % 61 - 30) * 10.0, 0.0))
+    val mixedScene = flat(Vector(Layer.Points(mixedAt, IndexedSeq(Paint.Series(0)), 4.0)))
+      .withXScale(Transform.Sqrt)
+      .withYScale(Transform.SymLog(2.0), grid = false)
+      .withLabels(x = "size", y = "signed value")
+      .withTitle("Square-root and symmetric-log axes")
+    mixedScene.save(out("interactive-axes-scales.html"))
+    mixedScene.save(out("interactive-axes-scales-still.svg"))
+    java.nio.file.Files
+      .writeString(java.nio.file.Path.of(out("interactive-axes-scales.json")), s"""{"points":${pointsJson(mixedAt)}}""")
     // a complex with too many cells for an SVG: a flat canvas to pan and zoom, linked to the diagram and the barcode
     val ringLarge = noisyCircle(60, 0.1, 3)
     val largeBars = Persistence(ringLarge, maxDimension = 1, maxFiltrationValue = 2.5).bars

@@ -114,9 +114,11 @@ const describe = (svg, visibleOnly) => {
 const spy = `(() => {
   const P = CanvasRenderingContext2D.prototype, o = {};
   for (const m of ['beginPath', 'moveTo', 'lineTo', 'arc', 'rect', 'fill', 'stroke', 'fillRect', 'fillText']) o[m] = P[m];
-  let path = null; window.__shapes = []; window.__texts = [];
-  P.fillRect = function (...a) { window.__shapes = []; window.__texts = []; return o.fillRect.apply(this, a); };
-  P.fillText = function (t, x, y) { window.__texts.push({ text: t, x, y, align: this.textAlign }); return o.fillText.apply(this, arguments); };
+  let path = null; window.__shapes = []; window.__texts = []; window.__draws = 0;
+  // a full redraw starts by painting the surface: one fillRect, so __draws counts the redraws
+  P.fillRect = function (...a) { window.__shapes = []; window.__texts = []; window.__draws++; return o.fillRect.apply(this, a); };
+  // a text with its font and the turn of the context (the axis label beside a plot box is drawn turned: its place is the context's origin)
+  P.fillText = function (t, x, y) { const m = this.getTransform(), k = window.devicePixelRatio || 1; window.__texts.push({ text: t, x, y, align: this.textAlign, font: this.font, turn: [m.a / k, m.b / k, m.e / k, m.f / k] }); return o.fillText.apply(this, arguments); };
   P.rect = function (x, y, w, h) { if (path) path.push(['r', x, y, w, h]); return o.rect.call(this, x, y, w, h); };
   P.beginPath = function () { path = []; return o.beginPath.call(this); };
   P.moveTo = function (x, y) { if (path) path.push(['m', x, y]); return o.moveTo.call(this, x, y); };
@@ -124,7 +126,7 @@ const spy = `(() => {
   P.arc = function (x, y, r, a, b) { if (path) path.push(['a', x, y, r]); return o.arc.call(this, x, y, r, a, b); };
   // ink is the font in force: only the axes of a flat canvas set one, so their lines are told apart from the items by it
   P.fill = function () { if (path) window.__shapes.push({ op: 'fill', alpha: this.globalAlpha, path: path.slice(), ink: this.font }); return o.fill.apply(this, arguments); };
-  P.stroke = function () { if (path) window.__shapes.push({ op: 'stroke', alpha: this.globalAlpha, width: this.lineWidth, path: path.slice(), ink: this.font }); return o.stroke.apply(this, arguments); };
+  P.stroke = function () { if (path) window.__shapes.push({ op: 'stroke', alpha: this.globalAlpha, width: this.lineWidth, color: this.strokeStyle, path: path.slice(), ink: this.font }); return o.stroke.apply(this, arguments); };
 })()`;
 // the kind of a recorded shape: a triangle, a segment, a disc (point, ball or halo)
 const kindOf = s => s.path[0][0] === 'r' ? 'box' : s.path[0][0] === 'a' ? (s.op === 'fill' ? 'disc' : 'ring') : s.path.length === 3 ? 'triangle' : 'segment';
@@ -136,7 +138,7 @@ const kinds = shapes => { const n = { triangle: 0, segment: 0, disc: 0 }; shapes
 const reader = await browser.newPage();
 const inStill = (text, fn) => reader.evaluate(`(() => { const doc = new DOMParser().parseFromString(${JSON.stringify(text.replace(/^<\?xml[^>]*\?>\s*/, ''))}, 'image/svg+xml'); return (${fn.toString()})(doc); })()`);
 const stillKinds = text => inStill(text, doc => { const scenes = [...doc.querySelectorAll('svg[id^="tda4j3d"]')];
-  return (scenes.length ? scenes : [doc]).map(s => ({ triangle: s.querySelectorAll('polygon').length, segment: s.querySelectorAll('line:not(.tda4j-axes line)').length, disc: s.querySelectorAll('circle').length })); });
+  return (scenes.length ? scenes : [doc]).map(s => ({ triangle: s.querySelectorAll('polygon').length, segment: s.querySelectorAll('line:not(.tda4j-axes line):not(.tda4j-grid line)').length, disc: s.querySelectorAll('circle').length })); });
 const stillBalls = text => inStill(text, doc => [...doc.querySelectorAll('circle')].filter(c => /fill-opacity:0\.09(;|$)/.test(c.getAttribute('style') || ''))
   .map(c => ({ x: +c.getAttribute('cx'), y: +c.getAttribute('cy'), r: +c.getAttribute('r') })));
 const middle = s => { const pts = s.path.map(p => p.slice(1, 3)); return [pts.reduce((a, p) => a + p[0], 0) / pts.length, pts.reduce((a, p) => a + p[1], 0) / pts.length]; };
@@ -533,12 +535,20 @@ const marginHash = (page, box) => page.evaluate(([x0, y0, x1, y1]) => { const c 
   const sum = (xa, ya, xb, yb) => { const d = ctx.getImageData(Math.round(xa * k), Math.round(ya * k), Math.max(1, Math.round((xb - xa) * k)), Math.max(1, Math.round((yb - ya) * k))).data;
     let h = 0; for (let i = 0; i < d.length; i++) h = (h * 31 + d[i]) % 1000003; return h; };
   return [sum(x0, 0, x1, y0 - 1), sum(x1 + 1, 0, c.getBoundingClientRect().width, y1)]; }, box);
-// the axes of a flat canvas as the spy saw them (helpers of the next two blocks)
-// what the canvas painted last: the plot box (the first two lines), the tick marks, the tick words, and where the discs are
+// the axes of a flat canvas as the spy saw them (helpers of the next blocks)
+// what the canvas painted last. Lines drawn with a font in force are the axes' and the grid's, in the order of the script: the
+// grid first (inside the clip, under the items), then the plot box (bottom, left), the x marks and the y marks. The words come in
+// two runs: the tick words (x first, then y, which are right-aligned) and then the labels of the axes
 const paintedOf = page => page.evaluate(() => {
   const plain = s => s.ink === undefined || s.ink === '10px sans-serif';
-  const lines = window.__shapes.filter(s => !plain(s)).map(s => [s.path[0][1], s.path[0][2], s.path[1][1], s.path[1][2]]);
-  return { lines, texts: window.__texts, discs: window.__shapes.filter(s => plain(s) && s.path[0][0] === 'a' && s.op === 'fill').map(s => [s.path[0][1], s.path[0][2]]) };
+  const axis = window.__shapes.filter(s => !plain(s)).map(s => [s.path[0][1], s.path[0][2], s.path[1][1], s.path[1][2]]);
+  const last = window.__texts.map(t => t.align).lastIndexOf('right');
+  const words = window.__texts.slice(0, last + 1), labels = window.__texts.slice(last + 1);
+  const keep = 2 + words.length; // the box and one mark for each word
+  const drawn = window.__shapes.filter(s => !plain(s)), ink = s => ({ color: s.color, width: s.width, alpha: s.alpha });
+  return { lines: axis.slice(axis.length - keep), grid: axis.slice(0, axis.length - keep), texts: words, labels,
+    gridInk: axis.length > keep ? ink(drawn[0]) : null, axisInk: ink(drawn[drawn.length - 1]),
+    discs: window.__shapes.filter(s => plain(s) && s.path[0][0] === 'a' && s.op === 'fill').map(s => [s.path[0][1], s.path[0][2]]) };
 });
 // the axes as numbers: a tick is its value and the pixel it is drawn at
 const ticksOf = p => {
@@ -548,9 +558,41 @@ const ticksOf = p => {
   const xw = p.texts.filter(t => t.align === 'center'), yw = p.texts.filter(t => t.align === 'right');
   return { box: [left[0], left[1], bottom[2], bottom[3]], xm, ym, xw: xw.map(t => t.text), yw: yw.map(t => t.text), xwAt: xw.map(t => t.x) };
 };
-// the pixel of a data value according to the ticks: the line through the first and the last
-const place = (marks, words) => { const v = words.map(parseFloat), a = 0, b = words.length - 1; return x => marks[a] + (x - v[a]) / (v[b] - v[a]) * (marks[b] - marks[a]); };
-const fits = (marks, words) => { const f = place(marks, words), v = words.map(parseFloat); return words.length >= 3 && v.every((x, i) => Math.abs(f(x) - marks[i]) < 0.01); };
+// the transforms an axis may have, as the library defines them (Transform.apply): the identity, log10, the signed square root,
+// and the symmetric log with a linear stretch of 2
+const TR = { i: v => v, l: Math.log10, s: v => Math.sign(v) * Math.sqrt(Math.abs(v)), m2: v => Math.sign(v) * Math.log10(1 + Math.abs(v) / 2) };
+// the pixel of a data value according to the ticks: the line through the first and the last, in the units of the transform
+const place = (marks, words, T = TR.i) => { const v = words.map(parseFloat).map(T), a = 0, b = words.length - 1; return x => marks[a] + (T(x) - v[a]) / (v[b] - v[a]) * (marks[b] - marks[a]); };
+const fits = (marks, words, T = TR.i) => { const f = place(marks, words, T), v = words.map(parseFloat); return words.length >= 3 && v.every((x, i) => Math.abs(f(x) - marks[i]) < 0.01); };
+// the axes of a still, as fractions of its plot box (a canvas has another size): the marks and the words, the gridlines, the
+// labels (their text, where they stand and whether they are turned)
+const stillAxesOf = text => inStill(text, doc => {
+  const g = doc.querySelector('g.tda4j-axes'), four = l => ['x1', 'y1', 'x2', 'y2'].map(a => +l.getAttribute(a));
+  const ls = [...g.querySelectorAll('line')].map(four), grid = [...doc.querySelectorAll('g.tda4j-grid line')].map(four);
+  const [bottom, left] = ls, marks = ls.slice(2), box = [left[0], left[1], bottom[2], bottom[3]];
+  const fx = x => (x - box[0]) / (box[2] - box[0]), fy = y => (y - box[1]) / (box[3] - box[1]);
+  const upright = l => l[0] === l[2], level = l => l[1] === l[3];
+  return { box, xs: marks.filter(upright).map(l => fx(l[0])), ys: marks.filter(level).map(l => fy(l[1])),
+    xw: [...g.querySelectorAll('text[text-anchor=middle]:not(.tda4j-axis-label)')].map(t => t.textContent), yw: [...g.querySelectorAll('text[text-anchor=end]')].map(t => t.textContent),
+    gridX: grid.filter(upright).map(l => fx(l[0])), gridY: grid.filter(level).map(l => fy(l[1])),
+    gridInk: (() => { const e = doc.querySelector('g.tda4j-grid'); return e ? { color: /stroke:([^;]+)/.exec(e.getAttribute('style'))[1], width: +e.getAttribute('stroke-width'), alpha: +(/stroke-opacity:([^;]+)/.exec(e.getAttribute('style')) || [0, 1])[1] } : null; })(),
+    axisInk: { color: /stroke:([^;]+)/.exec(g.getAttribute('style'))[1], width: +g.getAttribute('stroke-width'), alpha: 1 },
+    gridSpan: grid.every(l => upright(l) ? Math.abs(l[1] - box[1]) < 0.01 && Math.abs(l[3] - box[3]) < 0.01 : Math.abs(l[0] - box[0]) < 0.01 && Math.abs(l[2] - box[2]) < 0.01),
+    labels: [...g.querySelectorAll('text.tda4j-axis-label')].map(t => ({ text: t.textContent, x: +t.getAttribute('x'), y: +t.getAttribute('y'), turned: /rotate\(-90/.test(t.getAttribute('transform') || ''),
+      size: +t.getAttribute('font-size'), fromBottom: +t.getAttribute('y') - box[3], fy: fy(+t.getAttribute('y')), fx: fx(+t.getAttribute('x')) })) };
+});
+// the pen of the gridlines and of the axes: color, width and opacity, the still's against the canvas's
+const sameInk = (a, b) => a !== null && b !== null && a.color.toLowerCase() === b.color.toLowerCase() && Math.abs(a.width - b.width) < 1e-9 && Math.abs(a.alpha - b.alpha) < 1e-9;
+const frac = (ms, lo, hi) => ms.map(m => (m - lo) / (hi - lo));
+const near = (a, b) => a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) < 0.003);
+// the gridlines of the canvas as fractions of its plot box
+const gridOf = (p, t) => ({ x: frac(p.grid.filter(l => l[0] === l[2]).map(l => l[0]), t.box[0], t.box[2]), y: frac(p.grid.filter(l => l[1] === l[3]).map(l => l[1]), t.box[1], t.box[3]),
+  span: p.grid.every(l => l[0] === l[2] ? Math.abs(l[1] - t.box[1]) < 0.01 && Math.abs(l[3] - t.box[3]) < 0.01 : Math.abs(l[0] - t.box[0]) < 0.01 && Math.abs(l[2] - t.box[2]) < 0.01) });
+// the labels of the canvas in the terms of stillAxesOf (a label turned to read upwards is drawn at the origin of a context turned by a quarter, counter-clockwise)
+const labelsOf = (p, t) => p.labels.map(l => { const turned = l.turn[1] < -0.5, x = turned ? l.turn[2] : l.x, y = turned ? l.turn[3] : l.y;
+  return { text: l.text, turned, size: parseFloat(l.font), x, y, fromBottom: y - t.box[3], fy: (y - t.box[1]) / (t.box[3] - t.box[1]), fx: (x - t.box[0]) / (t.box[2] - t.box[0]) }; });
+// a gridline on every mark (and none elsewhere), across the plot box
+const onMarks = (p, t, which = 'xy') => { const g = gridOf(p, t); return g.span && (!which.includes('x') || near(g.x, frac(t.xm, t.box[0], t.box[2]))) && (!which.includes('y') || near(g.y, frac(t.ym, t.box[1], t.box[3]))); };
 
 { // the axes of a flat canvas: the ticks it paints are the still's at the start, and after a zoom and a pan they still say what the picture shows
   const { points } = JSON.parse(read('interactive-large.json'));
@@ -571,17 +613,16 @@ const fits = (marks, words) => { const f = place(marks, words), v = words.map(pa
   check(t0.xwAt.every((x, i) => Math.abs(x - t0.xm[i]) < 1e-6), 'each word of the x axis stands at its mark');
   check(fits(t0.xm, t0.xw) && fits(t0.ym, t0.yw), 'the marks are evenly spaced as their words say');
   check(agree(p0, t0) === 0, `at the start every point is where its ticks put it (${agree(p0, t0)} of ${points.length} are not)`);
-  // the still of the same picture: the same words, at the same places in the plot box
-  const stillAxes = await inStill(read('interactive-large-still.svg'), doc => {
-    const g = doc.querySelector('g.tda4j-axes'), ls = [...g.querySelectorAll('line')].map(l => ['x1', 'y1', 'x2', 'y2'].map(a => +l.getAttribute(a)));
-    const [bottom, left] = ls, marks = ls.slice(2), box = [left[0], left[1], bottom[2], bottom[3]];
-    const xs = marks.filter(l => l[0] === l[2]).map(l => (l[0] - box[0]) / (box[2] - box[0])), ys = marks.filter(l => l[1] === l[3]).map(l => (l[1] - box[1]) / (box[3] - box[1]));
-    return { xs, ys, xw: [...g.querySelectorAll('text[text-anchor=middle]')].map(t => t.textContent), yw: [...g.querySelectorAll('text[text-anchor=end]')].map(t => t.textContent) };
-  });
-  const frac = (ms, lo, hi) => ms.map(m => (m - lo) / (hi - lo));
-  const near = (a, b) => a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) < 0.003);
+  // the still of the same picture: the same words, at the same places in the plot box, and gridlines at the marks
+  const stillAxes = await stillAxesOf(read('interactive-large-still.svg'));
   check(JSON.stringify(t0.xw) === JSON.stringify(stillAxes.xw) && JSON.stringify(t0.yw) === JSON.stringify(stillAxes.yw), `the canvas says ${t0.xw} / ${t0.yw}, the still ${stillAxes.xw} / ${stillAxes.yw}`);
   check(near(frac(t0.xm, t0.box[0], t0.box[2]), stillAxes.xs) && near(frac(t0.ym, t0.box[1], t0.box[3]), stillAxes.ys), 'the marks stand at the same fractions of the plot box as the still\'s');
+  const g0 = gridOf(p0, t0);
+  check(stillAxes.gridX.length === t0.xm.length && stillAxes.gridY.length === t0.ym.length, `the still has a gridline at each mark: ${stillAxes.gridX.length} and ${stillAxes.gridY.length}`);
+  check(near(g0.x, stillAxes.gridX) && near(g0.y, stillAxes.gridY) && g0.span && stillAxes.gridSpan, `the canvas's gridlines are the still's (${g0.x.length} + ${g0.y.length} lines, across the whole plot box)`);
+  check(near(g0.x, frac(t0.xm, t0.box[0], t0.box[2])) && near(g0.y, frac(t0.ym, t0.box[1], t0.box[3])), 'each gridline lies on a mark');
+  check(sameInk(p0.gridInk, stillAxes.gridInk) && sameInk(p0.axisInk, stillAxes.axisInk), `the pens are the still's: grid ${JSON.stringify(p0.gridInk)} / ${JSON.stringify(stillAxes.gridInk)}, axes ${JSON.stringify(p0.axisInk)} / ${JSON.stringify(stillAxes.axisInk)}`);
+  check(p0.labels.length === 0 && stillAxes.labels.length === 0, 'a picture with no label asked for draws none');
 
   const cv = await page.evaluate(() => { const r = document.querySelector('canvas').getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; });
   // the wheel zooms about a point of the picture: the words change, and they still say where things are
@@ -591,6 +632,7 @@ const fits = (marks, words) => { const f = place(marks, words), v = words.map(pa
   check(JSON.stringify(t1.xw) !== JSON.stringify(t0.xw), `zooming in changes the words: ${t0.xw} then ${t1.xw}`);
   check(t1.xw.length >= 3 && fits(t1.xm, t1.xw) && fits(t1.ym, t1.yw), 'the words are evenly spaced after the zoom');
   check(agree(p1, t1) === 0, `after the zoom every point is where its ticks put it (${agree(p1, t1)} of ${points.length} are not)`);
+  check(onMarks(p1, t1), 'the gridlines follow the marks after the zoom');
   check(JSON.stringify(t1.box) === JSON.stringify(t0.box), 'the plot box does not move with the picture');
   // a drag pans: the words follow
   await page.mouse.move(cv[0] + t0.box[0] + 100, cv[1] + t0.box[1] + 100); await page.mouse.down();
@@ -599,12 +641,63 @@ const fits = (marks, words) => { const f = place(marks, words), v = words.map(pa
   check(JSON.stringify(t2.xw) !== JSON.stringify(t1.xw) || JSON.stringify(t2.yw) !== JSON.stringify(t1.yw), `panning changes the words: ${t1.xw} / ${t1.yw} then ${t2.xw} / ${t2.yw}`);
   check(fits(t2.xm, t2.xw) && fits(t2.ym, t2.yw), 'the words are evenly spaced after the pan');
   check(agree(p2, t2) === 0, `after the pan every point is where its ticks put it (${agree(p2, t2)} of ${points.length} are not)`);
+  check(onMarks(p2, t2), 'the gridlines follow the marks after the pan');
   // the items are cut at the plot box: a disc centred beyond it leaves nothing in the margin above or to the right of it
   const beyond = p2.discs.filter(d => d[1] < t2.box[1] - 1 || d[0] > t2.box[2] + 1).length;
   const margin = await marginOf(page, t2.box);
   check(beyond > 0, `after zooming and panning ${beyond} discs are centred above or right of the plot box, so the clip has something to hide`);
   check(margin[0] === 0 && margin[1] === 0, `the margins above and right of the plot box hold nothing but the surface (${margin} pixels differ)`);
   check(errors.length === 0, `no errors on the canvas axes ${errors.join(' | ')}`);
+  await page.close();
+}
+
+// flat canvases on other scales, with labels and gridlines: a log-log picture and a square-root x axis over a symmetric log y axis
+// (gridlines on x only). The page's words, marks, gridlines and labels are its still's; they follow a zoom and a pan; every point
+// stands where the transformed ticks put it
+for (const [name, Tx, Ty, texts, gridded] of [['interactive-axes-log', TR.l, TR.l, ['birth', 'death'], 'xy'], ['interactive-axes-scales', TR.s, TR.m2, ['size', 'signed value'], 'x']]) {
+  const { points } = JSON.parse(read(`${name}.json`));
+  const page = await browser.newPage({ viewport: { width: 1000, height: 800 } });
+  const errors = [];
+  page.on('pageerror', e => errors.push(String(e)));
+  page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+  await page.addInitScript(spy);
+  await page.goto(`file://${dir}/${name}.html`);
+  const painted = () => paintedOf(page);
+  const agree = (p, t) => { const px = place(t.xm, t.xw, Tx), py = place(t.ym, t.yw, Ty);
+    return points.filter(([x, y]) => !p.discs.some(d => Math.abs(d[0] - px(x)) < 0.6 && Math.abs(d[1] - py(y)) < 0.6)).length; };
+  const sameLabel = (a, b) => a.text === b.text && a.turned === b.turned && Math.abs(a.size - b.size) < 0.01 &&
+    (a.turned ? Math.abs(a.x - b.x) < 0.02 && Math.abs(a.fy - b.fy) < 0.003 : Math.abs(a.fx - b.fx) < 0.003 && Math.abs(a.fromBottom - b.fromBottom) < 0.02);
+  const p0 = await painted(), t0 = ticksOf(p0);
+  const ref = await stillAxesOf(read(`${name}-still.svg`));
+  check(t0.xw.length >= 3 && t0.yw.length >= 3 && t0.xm.length === t0.xw.length && t0.ym.length === t0.yw.length, `${name}: a mark for each word: x ${t0.xw}, y ${t0.yw}`);
+  check(JSON.stringify(t0.xw) === JSON.stringify(ref.xw) && JSON.stringify(t0.yw) === JSON.stringify(ref.yw), `${name}: the canvas says ${t0.xw} / ${t0.yw}, the still ${ref.xw} / ${ref.yw}`);
+  check(near(frac(t0.xm, t0.box[0], t0.box[2]), ref.xs) && near(frac(t0.ym, t0.box[1], t0.box[3]), ref.ys), `${name}: the marks stand at the still's fractions of the plot box`);
+  check(fits(t0.xm, t0.xw, Tx) && fits(t0.ym, t0.yw, Ty), `${name}: the marks are spaced as their words say, after the transforms of the axes`);
+  check(agree(p0, t0) === 0, `${name}: every point is where its ticks put it (${agree(p0, t0)} of ${points.length} are not)`);
+  const g0 = gridOf(p0, t0);
+  check(near(g0.x, ref.gridX) && near(g0.y, ref.gridY) && g0.span && ref.gridSpan, `${name}: the gridlines are the still's (${g0.x.length} + ${g0.y.length} lines; the still has ${ref.gridX.length} + ${ref.gridY.length})`);
+  check((g0.x.length > 0) === gridded.includes('x') && (g0.y.length > 0) === gridded.includes('y') && onMarks(p0, t0, gridded), `${name}: gridlines on the ${gridded} axis marks only`);
+  check(sameInk(p0.gridInk, ref.gridInk) && sameInk(p0.axisInk, ref.axisInk), `${name}: the pens are the still's: grid ${JSON.stringify(p0.gridInk)} / ${JSON.stringify(ref.gridInk)}, axes ${JSON.stringify(p0.axisInk)} / ${JSON.stringify(ref.axisInk)}`);
+  const l0 = labelsOf(p0, t0);
+  check(JSON.stringify(l0.map(l => l.text)) === JSON.stringify(texts) && l0.length === ref.labels.length && l0.every((l, i) => sameLabel(l, ref.labels[i])), `${name}: the labels are the still's: ${JSON.stringify(l0.map(l => [l.text, l.turned, +l.x.toFixed(1), +l.y.toFixed(1)]))} against ${JSON.stringify(ref.labels.map(l => [l.text, l.turned, l.x, l.y]))}`);
+  check(l0.length === 2 && !l0[0].turned && l0[1].turned, `${name}: the y label is turned to read upwards, the x label is not`);
+  const cv = await page.evaluate(() => { const r = document.querySelector('canvas').getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; });
+  const [qx, qy] = [cv[0] + t0.box[0] + 0.3 * (t0.box[2] - t0.box[0]), cv[1] + t0.box[1] + 0.6 * (t0.box[3] - t0.box[1])];
+  let prev = t0;
+  for (const [what, act] of [['zoom in', async () => { await page.mouse.move(qx, qy); await page.mouse.wheel(0, -700); }],
+                             ['zoom in again', async () => { await page.mouse.wheel(0, -900); }],
+                             ['pan', async () => { await page.mouse.move(qx, qy); await page.mouse.down(); await page.mouse.move(qx + 120, qy - 60, { steps: 8 }); await page.mouse.up(); }]]) {
+    await act(); await page.waitForTimeout(250);
+    const p = await painted(), t = ticksOf(p);
+    check(JSON.stringify(t.xw) !== JSON.stringify(prev.xw) || JSON.stringify(t.yw) !== JSON.stringify(prev.yw), `${name} ${what}: the words change (${prev.xw} / ${prev.yw} then ${t.xw} / ${t.yw})`);
+    check(fits(t.xm, t.xw, Tx) && fits(t.ym, t.yw, Ty), `${name} ${what}: the marks are spaced as their words say (${t.xw} / ${t.yw})`);
+    check(agree(p, t) === 0, `${name} ${what}: every point is where its ticks put it (${agree(p, t)} of ${points.length} are not)`);
+    check(onMarks(p, t, gridded) && (gridOf(p, t).x.length > 0) === gridded.includes('x') && (gridOf(p, t).y.length > 0) === gridded.includes('y'), `${name} ${what}: the gridlines are on the marks`);
+    const l = labelsOf(p, t);
+    check(JSON.stringify(l) === JSON.stringify(l0) && JSON.stringify(t.box) === JSON.stringify(t0.box), `${name} ${what}: the labels and the plot box stay where they were`);
+    prev = t;
+  }
+  check(errors.length === 0, `${name}: no errors ${errors.join(' | ')}`);
   await page.close();
 }
 
@@ -650,6 +743,8 @@ const fits = (marks, words) => { const f = place(marks, words), v = words.map(pa
   await page.focus('canvas');
   const crossNow = () => page.evaluate(() => { const c = window.__shapes.find(s => s.op === 'stroke' && s.width === 1.5 && s.path.length === 4 && s.ink === '10px sans-serif'); return c ? [c.path[0][1] + 8, c.path[0][2]] : null; });
   const keyPress = async (k, n = 1) => { for (let i = 0; i < n; i++) await page.keyboard.press(k); await page.waitForTimeout(30); };
+  // the redraws a key costs: one (the spy counts the surface painted at the start of each)
+  const redraws = async k => { const a = await page.evaluate(() => window.__draws); await keyPress(k); await page.waitForTimeout(60); return (await page.evaluate(() => window.__draws)) - a; };
   // what is in the plot box now: the bottom row (keys 0 to 4) is in the margin; top to bottom is y descending
   const seen = [10, 5, 11, 6, 12, 7, 13, 8, 14, 9];
   const where = k => [v.px(grid[k][0]), v.py(grid[k][1])];
@@ -661,10 +756,11 @@ const fits = (marks, words) => { const f = place(marks, words), v = words.map(pa
     c.dispatchEvent(new PointerEvent('pointermove', { clientX: r.left + 2, clientY: r.top + 2, pointerId: 1, bubbles: true }));
     c.dispatchEvent(new KeyboardEvent('keydown', { key: ']', bubbles: true })); });
   await page.waitForTimeout(80); await onItem(0, '] with no cross, a pointer move waiting for its frame');
-  await keyPress(']'); await onItem(1, '] again');
+  const costs = [await redraws(']')]; await onItem(1, '] again');
   await keyPress(']', 2); await onItem(3, 'two more');
-  await keyPress('['); await onItem(2, '[');
-  await keyPress('End'); await onItem(9, 'End (the hidden row is skipped)');
+  costs.push(await redraws('[')); await onItem(2, '[');
+  costs.push(await redraws('End')); await onItem(9, 'End (the hidden row is skipped)');
+  check(costs.every(c => c === 1), `a key that steps to an item redraws the picture once: ${costs}`);
   await keyPress(']'); await onItem(9, '] at the last item stays');
   await keyPress('Home'); await onItem(0, 'Home');
   await keyPress('PageDown'); await onItem(1, 'Page Down');
@@ -672,8 +768,9 @@ const fits = (marks, words) => { const f = place(marks, words), v = words.map(pa
   await keyPress('PageUp'); await onItem(1, 'Page Up');
   await keyPress('Home');
   await keyPress('['); await onItem(0, '[ at the first item stays');
-  await keyPress('Escape');
+  const letGoCost = await redraws('Escape');
   check(await crossNow() === null && (await chosen()).length === 0, 'Escape takes the cross away and puts the light out');
+  check(letGoCost === 1, `Escape redraws the picture once: ${letGoCost}`);
   // the rectangle from item 6 (x -1, y 0) to item 11 (x 2, y 1): the items of the plot box inside it
   await keyPress('Home'); await keyPress(']', 3); await keyPress('Enter'); await keyPress(']', 5);
   const rubberband = await page.evaluate(() => window.__shapes.some(s => s.path[0][0] === 'r'));
