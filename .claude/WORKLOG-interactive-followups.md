@@ -315,6 +315,8 @@ words together, and y was right) and the same for y; the example now reads each 
 
 Not done, left open: #345 (the other `Scale` options on a canvas, `Follows` on transformed axes, a custom transform).
 
-Default output: the `Gallery` stills and pages are unchanged except the three that carry axes (`interactive-large*`,
-`interactive-axes-pick`), which gain gridlines, and the new pages.
+Default output: every `Gallery` file of the previous commit (`ba5099f7`, built in a worktree, ids normalised) is byte-identical
+(106 of 129 files) except `interactive-large-still.svg`, which gains gridlines, and 22 pages: a plain canvas page (`sphere.html`)
+differs by the redraw counter alone (`drawn`), and a page with the interactive runtime by the place of the tick rules, which
+`Scene.tickScript` now carries for the zoomable figures and the canvas alike. Six files are new (the two pages, their stills and data).
 
