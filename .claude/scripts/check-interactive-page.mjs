@@ -113,12 +113,14 @@ const describe = (svg, visibleOnly) => {
 // check can count the items, find where one is, and compare them with the still picture of the same state.
 const spy = `(() => {
   const P = CanvasRenderingContext2D.prototype, o = {};
-  for (const m of ['beginPath', 'moveTo', 'lineTo', 'arc', 'rect', 'fill', 'stroke', 'fillRect', 'fillText']) o[m] = P[m];
+  for (const m of ['beginPath', 'moveTo', 'lineTo', 'arc', 'rect', 'fill', 'stroke', 'fillRect', 'fillText', 'clip']) o[m] = P[m];
   let path = null; window.__shapes = []; window.__texts = []; window.__draws = 0;
   // a full redraw starts by painting the surface: one fillRect, so __draws counts the redraws
   P.fillRect = function (...a) { window.__shapes = []; window.__texts = []; window.__draws++; return o.fillRect.apply(this, a); };
   // a text with its font and the turn of the context (the axis label beside a plot box is drawn turned: its place is the context's origin)
   P.fillText = function (t, x, y) { const m = this.getTransform(), k = window.devicePixelRatio || 1; window.__texts.push({ text: t, x, y, align: this.textAlign, font: this.font, turn: [m.a / k, m.b / k, m.e / k, m.f / k] }); return o.fillText.apply(this, arguments); };
+  // the clip of a canvas with axes is its plot box (x, y, width, height), the same whichever axes are drawn
+  P.clip = function (...a) { if (path && path.length && path[0][0] === 'r') window.__clip = path[0].slice(1); return o.clip.apply(this, a); };
   P.rect = function (x, y, w, h) { if (path) path.push(['r', x, y, w, h]); return o.rect.call(this, x, y, w, h); };
   P.beginPath = function () { path = []; return o.beginPath.call(this); };
   P.moveTo = function (x, y) { if (path) path.push(['m', x, y]); return o.moveTo.call(this, x, y); };
@@ -698,6 +700,145 @@ for (const [name, Tx, Ty, texts, gridded] of [['interactive-axes-log', TR.l, TR.
     prev = t;
   }
   check(errors.length === 0, `${name}: no errors ${errors.join(' | ')}`);
+  await page.close();
+}
+
+// the options of an axis that a canvas takes beyond its scale: a range, breaks, a number format, a reversed axis, an axis left out.
+// The generic readers: the plot box is the clip, the axis lines are the shapes drawn with the axes' pen and run along an edge of it
+const flatPainted = page => page.evaluate(() => {
+  const plain = s => s.ink === undefined || s.ink === '10px sans-serif';
+  const four = s => [s.path[0][1], s.path[0][2], s.path[1][1], s.path[1][2]], ink = s => ({ color: s.color, width: s.width, alpha: s.alpha });
+  const drawn = window.__shapes.filter(s => !plain(s)), last = drawn[drawn.length - 1], pen = JSON.stringify(ink(last)), samePen = s => JSON.stringify(ink(s)) === pen;
+  const [cx, cy, cw, ch] = window.__clip;
+  return { box: [cx, cy, cx + cw, cy + ch], axis: drawn.filter(samePen).map(four), grid: drawn.filter(s => !samePen(s)).map(four),
+    texts: window.__texts.filter(t => t.font === last.ink), labels: window.__texts.filter(t => t.font !== last.ink),
+    gridInk: drawn.some(s => !samePen(s)) ? ink(drawn.find(s => !samePen(s))) : null, axisInk: ink(last),
+    discs: window.__shapes.filter(s => plain(s) && s.path[0][0] === 'a' && s.op === 'fill').map(s => [s.path[0][1], s.path[0][2]]) };
+});
+const edges = (l, b) => ({ bottom: l[1] === l[3] && Math.abs(l[1] - b[3]) < 0.01 && Math.abs(l[0] - b[0]) < 0.01 && Math.abs(l[2] - b[2]) < 0.01,
+  left: l[0] === l[2] && Math.abs(l[0] - b[0]) < 0.01 && Math.abs(l[1] - b[1]) < 0.01 && Math.abs(l[3] - b[3]) < 0.01 });
+const flatTicks = p => { const e = p.axis.map(l => edges(l, p.box)), marks = p.axis.filter((l, i) => !e[i].bottom && !e[i].left);
+  const xw = p.texts.filter(t => t.align === 'center'), yw = p.texts.filter(t => t.align === 'right');
+  return { box: p.box, hasX: e.some(x => x.bottom), hasY: e.some(x => x.left), xm: marks.filter(l => l[0] === l[2]).map(l => l[0]), ym: marks.filter(l => l[1] === l[3]).map(l => l[1]),
+    xw: xw.map(t => t.text), yw: yw.map(t => t.text), xwAt: xw.map(t => t.x) }; };
+// the same of a still: the plot box is its clip rectangle
+const stillFlatOf = text => inStill(text, doc => {
+  const r = doc.querySelector('clipPath rect'), box = [+r.getAttribute('x'), +r.getAttribute('y'), +r.getAttribute('x') + +r.getAttribute('width'), +r.getAttribute('y') + +r.getAttribute('height')];
+  const g = doc.querySelector('g.tda4j-axes'), four = l => ['x1', 'y1', 'x2', 'y2'].map(a => +l.getAttribute(a));
+  const ls = [...g.querySelectorAll('line')].map(four), grid = [...doc.querySelectorAll('g.tda4j-grid line')].map(four);
+  const bottom = l => l[1] === l[3] && Math.abs(l[1] - box[3]) < 0.01 && Math.abs(l[0] - box[0]) < 0.01 && Math.abs(l[2] - box[2]) < 0.01;
+  const left = l => l[0] === l[2] && Math.abs(l[0] - box[0]) < 0.01 && Math.abs(l[1] - box[1]) < 0.01 && Math.abs(l[3] - box[3]) < 0.01;
+  const marks = ls.filter(l => !bottom(l) && !left(l)), fx = x => (x - box[0]) / (box[2] - box[0]), fy = y => (y - box[1]) / (box[3] - box[1]);
+  return { box, hasX: ls.some(bottom), hasY: ls.some(left), xs: marks.filter(l => l[0] === l[2]).map(l => fx(l[0])), ys: marks.filter(l => l[1] === l[3]).map(l => fy(l[1])),
+    xw: [...g.querySelectorAll('text[text-anchor=middle]:not(.tda4j-axis-label)')].map(t => t.textContent), yw: [...g.querySelectorAll('text[text-anchor=end]')].map(t => t.textContent),
+    gridX: grid.filter(l => l[0] === l[2]).map(l => fx(l[0])), gridY: grid.filter(l => l[1] === l[3]).map(l => fy(l[1])),
+    gridInk: (() => { const e = doc.querySelector('g.tda4j-grid'); return e ? { color: /stroke:([^;]+)/.exec(e.getAttribute('style'))[1], width: +e.getAttribute('stroke-width'), alpha: +(/stroke-opacity:([^;]+)/.exec(e.getAttribute('style')) || [0, 1])[1] } : null; })(),
+    axisInk: { color: /stroke:([^;]+)/.exec(g.getAttribute('style'))[1], width: +g.getAttribute('stroke-width'), alpha: 1 },
+    labels: [...g.querySelectorAll('text.tda4j-axis-label')].map(t => ({ text: t.textContent, x: +t.getAttribute('x'), y: +t.getAttribute('y'), turned: /rotate\(-90/.test(t.getAttribute('transform') || ''), size: +t.getAttribute('font-size'),
+      fromBottom: +t.getAttribute('y') - box[3], fy: fy(+t.getAttribute('y')), fx: fx(+t.getAttribute('x')) })) };
+});
+// a place on the marks of an axis as the data say, needing two words at least (breaks may leave fewer): the line through the first and the last
+const fits2 = (marks, words, T = TR.i) => { if (words.length < 2) return false; const f = place(marks, words, T), v = words.map(parseFloat); return v.every((x, i) => Math.abs(f(x) - marks[i]) < 0.01); };
+
+for (const [name, texts, Tx, Ty, bx, expectX] of [
+  ['interactive-axes-window', ['position', 'weight'], TR.i, TR.l, ['0.0', '2.0', '4.0', '6.0', '8.0'], true],
+  ['interactive-axes-hidden', ['level'], null, TR.i, null, false]]) {
+  const { points } = JSON.parse(read(`${name}.json`));
+  const page = await browser.newPage({ viewport: { width: 1000, height: 800 } });
+  const errors = [];
+  page.on('pageerror', e => errors.push(String(e)));
+  page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+  await page.addInitScript(spy);
+  await page.goto(`file://${dir}/${name}.html`);
+  const ref = await stillFlatOf(read(`${name}-still.svg`));
+  const painted = () => flatPainted(page);
+  // every point is where the marks of its axes put it (an axis that is left out has no marks to say)
+  const agree = (p, t) => { const px = t.hasX && place(t.xm, t.xw, Tx), py = place(t.ym, t.yw, Ty);
+    return points.filter(([x, y]) => !p.discs.some(d => (!t.hasX || Math.abs(d[0] - px(x)) < 0.6) && Math.abs(d[1] - py(y)) < 0.6)).length; };
+  const sameLabel = (a, b) => a.text === b.text && a.turned === b.turned && Math.abs(a.size - b.size) < 0.01 &&
+    (a.turned ? Math.abs(a.x - b.x) < 0.02 && Math.abs(a.fy - b.fy) < 0.003 : Math.abs(a.fx - b.fx) < 0.003 && Math.abs(a.fromBottom - b.fromBottom) < 0.02);
+  const p0 = await painted(), t0 = flatTicks(p0);
+  check(t0.hasX === ref.hasX && t0.hasY === ref.hasY && t0.hasX === expectX && t0.hasY, `${name}: the axis lines are the still's (x ${t0.hasX}/${ref.hasX}, y ${t0.hasY}/${ref.hasY})`);
+  check(JSON.stringify(t0.xw) === JSON.stringify(ref.xw) && JSON.stringify(t0.yw) === JSON.stringify(ref.yw), `${name}: the canvas says ${t0.xw} / ${t0.yw}, the still ${ref.xw} / ${ref.yw}`);
+  check(t0.xm.length === t0.xw.length && t0.ym.length === t0.yw.length && t0.yw.length >= 3, `${name}: a mark for each word: x ${t0.xw}, y ${t0.yw}`);
+  check(near(frac(t0.xm, t0.box[0], t0.box[2]), ref.xs) && near(frac(t0.ym, t0.box[1], t0.box[3]), ref.ys), `${name}: the marks stand at the still's fractions of the plot box`);
+  check(fits(t0.ym, t0.yw, Ty), `${name}: the y marks are spaced as their words say`);
+  check(agree(p0, t0) === 0, `${name}: every point is where its marks put it (${agree(p0, t0)} of ${points.length} are not)`);
+  const g0 = gridOf({ grid: p0.grid }, t0);
+  check(near(g0.x, ref.gridX) && near(g0.y, ref.gridY) && g0.span, `${name}: the gridlines are the still's (${g0.x.length} + ${g0.y.length}; the still has ${ref.gridX.length} + ${ref.gridY.length})`);
+  check((g0.x.length > 0) === expectX && g0.y.length === t0.ym.length && near(g0.y, frac(t0.ym, t0.box[1], t0.box[3])), `${name}: gridlines only on the axes that are drawn, on their marks`);
+  check(sameInk(p0.gridInk, ref.gridInk) && sameInk(p0.axisInk, ref.axisInk), `${name}: the pens are the still's`);
+  const l0 = labelsOf(p0, t0);
+  check(JSON.stringify(l0.map(l => l.text)) === JSON.stringify(texts) && l0.length === ref.labels.length && l0.every((l, i) => sameLabel(l, ref.labels[i])), `${name}: the labels are the still's: ${JSON.stringify(l0.map(l => [l.text, l.turned]))} against ${JSON.stringify(ref.labels.map(l => [l.text, l.turned]))}`);
+  if (expectX) {
+    // a range, breaks and a format: the numbers are the breaks, in the format, and the range runs the width of the plot box
+    check(JSON.stringify(t0.xw) === JSON.stringify(bx), `${name}: the x numbers are the breaks, as %.1f writes them: ${t0.xw}`);
+    check(Math.abs(t0.xm[0] - t0.box[0]) < 0.01 && Math.abs(t0.xm[t0.xm.length - 1] - t0.box[2]) < 0.01, `${name}: 0 and 8 are at the two edges of the plot box (${t0.xm[0]} ${t0.xm[t0.xm.length - 1]} in ${t0.box})`);
+    check(fits(t0.xm, t0.xw), `${name}: the x marks are evenly spaced`);
+    // the points outside the range are drawn, beyond the plot box (the clip hides them)
+    check(p0.discs.some(d => d[0] < t0.box[0] - 1) && p0.discs.some(d => d[0] > t0.box[2] + 1), `${name}: points outside the range lie beyond the plot box`);
+    // the y axis runs the other way: the small numbers are at the top
+    check(t0.ym[0] < t0.ym[t0.ym.length - 1] && parseFloat(t0.yw[0]) < parseFloat(t0.yw[t0.yw.length - 1]), `${name}: a reversed axis has its small numbers at the top (${t0.yw} at ${t0.ym.map(v => v.toFixed(0))})`);
+  } else {
+    check(t0.xw.length === 0 && t0.xm.length === 0 && g0.x.length === 0 && ref.gridX.length === 0 && ref.xw.length === 0, `${name}: nothing is written, marked or ruled on the axis that is left out`);
+    // the margin of 8 pixels is all that is left where the numbers and the label were: at the foot of the canvas (480 tall) and of the still (520 tall)
+    check(Math.abs(t0.box[3] - 472) < 0.01 && Math.abs(ref.box[3] - 512) < 0.01 && t0.box[0] > 40 && Math.abs(t0.box[0] - ref.box[0]) < 0.01, `${name}: the room it took is given back (the canvas's box ${t0.box}, the still's ${ref.box})`);
+    // a lower end given alone is the foot of the plot box, though -25 is not a round number to write there
+    const foot = place(t0.ym, t0.yw, TR.i)(-25);
+    check(Math.abs(foot - t0.box[3]) < 0.6, `${name}: a lower end given alone is the foot of the plot box (-25 is at ${foot.toFixed(2)} for ${t0.box[3]})`);
+  }
+  const cv = await page.evaluate(() => { const r = document.querySelector('canvas').getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; });
+  const [qx, qy] = [cv[0] + t0.box[0] + 0.3 * (t0.box[2] - t0.box[0]), cv[1] + t0.box[1] + 0.6 * (t0.box[3] - t0.box[1])];
+  let prev = t0;
+  for (const [what, act] of [['zoom in', async () => { await page.mouse.move(qx, qy); await page.mouse.wheel(0, -250); }],
+                             ['zoom in again', async () => { await page.mouse.wheel(0, -250); }],
+                             ['pan', async () => { await page.mouse.move(qx, qy); await page.mouse.down(); await page.mouse.move(qx + 60, qy - 30, { steps: 8 }); await page.mouse.up(); }]]) {
+    await act(); await page.waitForTimeout(250);
+    const p = await painted(), t = flatTicks(p);
+    // the breaks may stay the same words while the picture moves under them: the marks move
+    check(JSON.stringify(t.ym) !== JSON.stringify(prev.ym) || JSON.stringify(t.xm) !== JSON.stringify(prev.xm), `${name} ${what}: the marks move (${prev.xw} / ${prev.yw} then ${t.xw} / ${t.yw})`);
+    check(fits2(t.ym, t.yw, Ty) && (!t.hasX || fits2(t.xm, t.xw, Tx)), `${name} ${what}: the marks are spaced as their words say (${t.xw} / ${t.yw})`);
+    check(agree(p, t) === 0, `${name} ${what}: every point is where its marks put it (${agree(p, t)} of ${points.length} are not)`);
+    if (expectX) check(t.xw.length >= 2 && t.xw.every(w => bx.includes(w)), `${name} ${what}: the x numbers are some of the breaks, those in view: ${t.xw}`);
+    const g = gridOf({ grid: p.grid }, t);
+    check(g.span && near(g.y, frac(t.ym, t.box[1], t.box[3])) && (!t.hasX || near(g.x, frac(t.xm, t.box[0], t.box[2]))) && (t.hasX || g.x.length === 0), `${name} ${what}: the gridlines are on the marks`);
+    check(JSON.stringify(labelsOf(p, t)) === JSON.stringify(l0) && JSON.stringify(t.box) === JSON.stringify(t0.box), `${name} ${what}: the labels and the plot box stay where they were`);
+    prev = t;
+  }
+  check(errors.length === 0, `${name}: no errors ${errors.join(' | ')}`);
+  await page.close();
+}
+
+{ // an item that follows a slider on a square-root axis: the page puts the value through the axis, and each value's page is its still
+  const page = await browser.newPage({ viewport: { width: 1000, height: 800 } });
+  const errors = [];
+  page.on('pageerror', e => errors.push(String(e)));
+  page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+  await page.addInitScript(spy);
+  await page.goto(`file://${dir}/interactive-axes-follow.html`);
+  const fractions = (box, ds) => ds.map(d => [(d[0] - box[0]) / (box[2] - box[0]), (d[1] - box[1]) / (box[3] - box[1])]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const pageAt = async t => { await page.evaluate(v => document.querySelector('.tda4j-ia').tda4j.set('t', v), t); await page.waitForTimeout(150);
+    const p = await flatPainted(page); return fractions(p.box, p.discs); };
+  const stillAt = t => stillFlatOf(read(`interactive-axes-follow-still-${t.toFixed(2)}.svg`)).then(async ref => {
+    const circles = await inStill(read(`interactive-axes-follow-still-${t.toFixed(2)}.svg`), doc => [...doc.querySelectorAll('circle')].map(c => [+c.getAttribute('cx'), +c.getAttribute('cy')]));
+    return fractions(ref.box, circles); });
+  const seen = {};
+  for (const t of [0, 1, 2.25, 4, 5, 2.25]) {
+    const live = await pageAt(t), ref = await stillAt(t);
+    const worst = live.length === ref.length ? Math.max(...live.map((a, i) => Math.hypot(a[0] - ref[i][0], a[1] - ref[i][1]))) : Infinity;
+    check(live.length === 3 && worst < 0.004, `t=${t}: the three items are at the still's places (worst ${worst.toFixed(4)})`);
+    seen[t] = live;
+  }
+  // the mover is held between 1 and 4 and goes through the root: at t = 2.25 it is at 1.5, between the roots of 1 and 4. The axis runs
+  // backwards, so it moves to the left. The two items that stay are the ones whose places do not change with t
+  const xs = t => seen[t].map(a => a[0]);
+  const stays = xs(0).filter(v => xs(2.25).some(w => Math.abs(v - w) < 1e-9) && xs(5).some(w => Math.abs(v - w) < 1e-9));
+  const mover = t => xs(t).find(v => !stays.some(f => Math.abs(f - v) < 1e-9));
+  check(stays.length === 2 && [0, 1, 2.25, 4, 5].every(t => mover(t) !== undefined), `two of the three items stay where they are: ${stays.map(v => v.toFixed(3))}`);
+  check(Math.abs(mover(0) - mover(1)) < 1e-6 && Math.abs(mover(4) - mover(5)) < 1e-6 && mover(1) > mover(2.25) && mover(2.25) > mover(4), `the mover is held between its ends and moves left between them: ${[0, 1, 2.25, 4, 5].map(t => mover(t).toFixed(3))}`);
+  const mid = (mover(2.25) - mover(1)) / (mover(4) - mover(1));
+  check(Math.abs(mid - 0.5) < 0.004, `on a square-root axis t = 2.25 is half way between the roots of 1 and 4 (${mid.toFixed(4)}; a linear axis would say ${((2.25 - 1) / 3).toFixed(4)})`);
+  check(errors.length === 0, `no errors on the following page ${errors.join(' | ')}`);
   await page.close();
 }
 

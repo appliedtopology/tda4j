@@ -16,8 +16,8 @@ Loads for the interactive pages of the `plot` subpackage (#102). The rest of the
 the derivation, traps and mutation checks are in `WORKLOG-interactive-plots.md` (addenda: reveal.js, the rest of #102) and
 `WORKLOG-interactive-followups.md` (#331, #333: touch, keyboard, zoom of every axis, 3-D, large complexes, frames, browsers;
 addendum: #342, `Follows` and a rectangle in 3-D, brush by touch, axes on the flat canvas, the keyboard's item stepping; addendum:
-#344, labels, gridlines and scales on the canvas's axes, one redraw per key).
-Open items: #330 (PowerPoint itself, the Web Viewer, MATLAB, Safari proper), #341 (touch on real devices, notebook display), #345 (a canvas's axes take only `transform` and `grid` of `Scale`, and refuse `Follows` on transformed axes).
+#344, labels, gridlines and scales on the canvas's axes, one redraw per key; addendum: #345, the other `Scale` options on the canvas's axes, `Follows` on transformed axes).
+Open items: #330 (PowerPoint itself, the Web Viewer, MATLAB, Safari proper), #341 (touch on real devices, notebook display).
 
 - **What a page is** (`Interactive.scala`): `Control`s and `Panel`s (a `Figure` or `Scene` with a `Reaction` per mark item;
   `Behavior` = `Shown | Follows | Radius | Custom | Selects | Selected`), chained like the tweaks. Inline JavaScript only, no
@@ -71,13 +71,16 @@ Open items: #330 (PowerPoint itself, the Web Viewer, MATLAB, Safari proper), #34
   (`Scene.turns = false`, `axes = true`: drag pans, wheel zooms, the axes are drawn by `Scene.tickScript`, the script's copy of
   `Svg.niceTicks`/`Svg.number`, which the check compares with the still's `g.tda4j-axes`; items are clipped to the plot box, and
   pointing and rectangles see only what it shows); `canvas = true | false` chooses, `maxCells` defaults to 200,000.
-  **The axes of a flat scene are the figure's grammar**: `Labels(x, y)`, `Scale.x/y/xy(transform, grid)` and `Lines.grid` apply
-  (`Scene.xAxis`/`yAxis`), gridlines are on by default as a figure's, and the other `Scale` options, a custom transform and a
-  `Follows` on transformed axes are refused. The data pass through the axis transforms in `Scene.place` only (`frame`, `viewer`,
-  the position table), so the picture is isotropic in transformed units; the page draws `paintGrid` inside the clip and
-  `paintAxes` after it from the shared `Scene.tickScript`, and the check tells a still's `g.tda4j-grid` and labels from the
-  items by the font in force. A still and its page agree box for box only when the scene has a title (the still holds the title
-  inside its height, the page above the canvas: 40 px). A key that changes the light or the cross redraws once (`afterwards`).
+  **The axes of a flat scene are the figure's grammar**: `Labels(x, y)`, `Scale.x/y/xy` (`transform`, `min`, `max`, `padding`,
+  `breaks`, `format`, `visible`, `reverse`, `grid`) and `Lines.grid` apply (`Scene.xAxis`/`yAxis`), gridlines are on by default as
+  a figure's; `position`, `crossesAt`, `minusInfinity`, a custom transform and a number format beyond `%f`/`%e` are refused. The
+  data pass through the axis transforms and the sign of `reverse` in `Scene.place` only (`frame`, `viewer`, the position table,
+  `Follows` through `placed`), so the picture is isotropic in transformed units; a `min`, `max` or `padding` makes the frame a
+  window (`Scene.window`, fitted to the page's plot box and the still's alike); the page draws `paintGrid` inside the clip and
+  `paintAxes` after it from the shared `Scene.tickScript` and `Scene.formatScript`, and the check tells a still's `g.tda4j-grid`
+  and labels from the items by the font in force. A still and its page agree box for box only when the scene has a title (the
+  still holds the title inside its height, the page above the canvas: 40 px). A key that changes the light or the cross redraws
+  once (`afterwards`).
 - **The facades hold cycles as arrays**: `Plot.exploreOn(.., cycles = ..)` and `Plot.filtrationOf(.., cycles = ..)` take the
   reported bars' cycles (`Plot.Cycles`), and a spec compares the chosen class's drawn cycle with `plotRepresentative(k)`
   for every reported bar, so a facade that draws another class's cycle fails.

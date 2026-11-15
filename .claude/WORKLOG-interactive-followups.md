@@ -320,3 +320,86 @@ Default output: every `Gallery` file of the previous commit (`ba5099f7`, built i
 differs by the redraw counter alone (`drawn`), and a page with the interactive runtime by the place of the tick rules, which
 `Scene.tickScript` now carries for the zoomable figures and the canvas alike. Six files are new (the two pages, their stills and data).
 
+
+## Addendum: #345, the other `Scale` options on a canvas's axes, and `Follows` on transformed axes
+
+Written 2026-11-15, on PR #343. Mikael's "Keep going on #345". Done means each option works on the still and the canvas (page
+check against the still, zoomed and panned), or a closed issue records that it stays on `Figure`.
+
+### What lifts, what stays refused
+
+| option | on a flat scene now | why |
+|---|---|---|
+| `min`, `max`, `padding` | works: the frame is a window (`Scene.window`) | the picture opens on the range; the `0` key returns to it; the radius holds the window in the page's plot box and the still's |
+| `breaks`, `format` | works | the page's `tickOf`/`wordOf` and the still's `ticksIn`/`tickText` choose the same numbers and write them the same way; `Scene.formatScript` is `javaFormat`, shared with the zoomable figures |
+| `visible` | works | no line, numbers, label or gridlines and only 8 px of room left |
+| `reverse` | works | the sign enters in `Scene.place` only; the page's `AX[3]`/`AX[4]` carry it |
+| `Behavior.Follows` on transformed axes | works | `placed` puts the value, held between its limits, through the axis's transform and sign, as `place` does for the still |
+| `position`, `crossesAt` | refused | a canvas's axes are the foot and left edge of its plot box; an axis through `y = 0` has to move and clip under pan and zoom, and the labels and numbers collide with the data. Not impossible; not asked for by anything yet |
+| `minusInfinity` | refused | no honest place for a `-∞` line under pan and zoom; `Transform.SymLog` keeps zero |
+| `Transform.Custom` | refused | the page has no ticks for an unknown function |
+
+The three refusals are recorded as final on a canvas in the comment that closes #345; they stay on `Figure`.
+
+### Decisions worth keeping
+
+- `Position.onScene` refuses by name only the three above and validates what it takes (`format` through
+  `Interactive.formatSupported`, `breaks` finite) when the axis is given, not at render.
+- Without any of `min`, `max`, `padding` the frame is `fit` and every default still is byte-identical; with one, `window` uses the
+  items' places for the ends an axis leaves free, padded by 0.04 unless `padding` says otherwise. Units stay equal on both axes,
+  so the window is widened to the shape of the plot area.
+- A window must hold in two boxes: the page's canvas (`height - 40`) and the still's (`height - headHeight`), which differ for an
+  untitled scene. The radius is the larger of the two radii. Which box is the larger radius depends on the aspect: on a
+  landscape picture driven by x it is the taller (still's) box, on a portrait one driven by y the shorter (page's) box; both
+  directions have a spec and a mutant.
+- The page's `AX` and `FR` are written with every digit (`exact`), not five (`short`): a range of a ten-thousandth keeps its
+  frame. This changes the generated text of every canvas page by digits, nothing drawn.
+- A tick at the edge of the window belongs to it, with a relative 1e-9 of room (`tickOf`, `ticksIn`): without it a break at `max`
+  is lost to the last digit of the division.
+
+### Checks
+
+`check-interactive-page.mjs` gains the pages `interactive-axes-window` (x from 0 to 8 with breaks at 0, 2, 4, 6, 8 written `%.1f`,
+a reversed log y axis with its own padding; points outside the range lie beyond the plot box), `interactive-axes-hidden` (x
+left out, y given a lower end alone: -25 is the foot of the plot box though not a round number to write) and
+`interactive-axes-follow` (a slider moves an item along a reversed square-root axis; the page against the still at five values
+and back). Each: words, marks, gridlines, labels and pens against the still's, each point where its marks put it, and the same
+after two zooms and a pan with the labels and the box unmoved. Chromium 475 checks, Firefox and WebKit 440, none failing.
+
+Default output against the previous head (the gallery of `ceeeff7e`, ids normalised): every `.svg` still of a scene that gives no range
+is byte-identical, the large still included (its `d` ids shift with the page counter). Nine pages differ in their script only: the
+`Follows` comment and hook (`placed`), and `AX`/`FR` written with every digit; no page differs in what it draws.
+
+### Mutation checks (the number is the checks that fail)
+
+Page runtime of the new pages: a tick at the edge dropped by a strict comparison (`tickstrict`) 5; the tolerance zero
+(`ticktol0`) **0 at first, 5 after the window page ran from 0 to 8** (with 0 to 10 the edge divides out exactly and no digit
+is lost); the sign left out of the axis (`signaxis`) 7, of the ticks (`signticks`) 3, the y ticks always positive (`ysign1`) 3;
+the format ignored (`noformat`) 5; the breaks ignored (`nobreaks`) 7, on x only (`xnobreaks`) 7; the hidden axis's label
+written (`hiddenlabel`) 1; `Follows` through no transform (`placednot`) 5, without the sign (`placedsign`) 7, not through `placed`
+at all (`placedplain`) 8.
+
+Scala side (`SpatialSpec`, 70 examples; the number is the examples that fail): the sign of `reverse` dropped (`signplus`) 3,
+padding 0.05 for 0.04 (`padding05`) 1, the window's width and height swapped (`windowflip`) 4, the page's box (`pagebox`) 1 or
+the still's box (`stillbox`) alone, no window at all (`nolimit`) 4, `padding` not making a window (`limitpad`) 1, a reversed
+window not mirrored (`windowrev`) 1, `breaks` ignored (`nobreak`) 1, `format` ignored (`noformat`) 2, a hidden y axis keeping its
+room (`roomhidden`) 1, its x line (`hiddenline`) 1 or numbers (`hiddennums`) 1 kept, `AX` written with five digits again
+(`exactshort`) 1, `Follows` placed linearly (`placedlinear`) 1, `position` let through (`positionok`) 1, a format beyond
+`%f`/`%e` let through (`formatcheck`) 1, breaks that are not finite (`breakscheck`) 1, reversed ticks unsigned (`revticks`) 1, x
+placed without the sign (`xatnosign`) 2. **Two survived at first**: `stillbox` (all the spec's windows were width-driven or
+titled, where the two boxes agree or the still's taller box gives the larger radius anyway), killed by a portrait picture with a
+tall range, untitled against titled; and `ticktol0` above.
+
+### Traps hit on the way
+
+- A spec's log-range example drew its y data wrong (y spans little only if the points say so): it passed for the wrong reason
+  until the data were fixed. Pan checks must compare marks, not words (the words stay while the picture moves under them).
+- A hidden-axis page: -25 is not a tick, so the foot of the plot box is checked through the line the y marks and words give,
+  not by looking for the word.
+- `(a must X).and(b must Y)` in a non-final statement checks only `a`: separate statements (`SpecHygieneSpec`).
+- The untitled still's window overflowed its box until both boxes were fitted; a still and a canvas share a plot box only when the
+  scene has a title.
+- Five significant digits (`short`) lose a ten-thousandth range outright.
+
+Not done: nothing is left open from #345; the three refusals above are decisions, and `position`/`crossesAt` can be taken up if a
+use for them turns up.

@@ -120,6 +120,8 @@ class PlotCustomizationFacadeSpec extends Specification:
         "withYLabel",
         "withXScale",
         "withYScale",
+        "withXRange",
+        "withYRange",
         "withSize",
         "withCamera",
         "withPalette",

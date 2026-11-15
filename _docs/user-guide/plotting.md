@@ -1079,14 +1079,23 @@ val flat = Scene(
 flat.save("flat.svg")
 ```
 
-The axes take what a figure's take, as far as a picture that pans and zooms can honour it: `withXLabel` and `withYLabel` (or
-`Labels(x = ..., y = ...)`) write the names beside the numbers, `withXScale`, `withYScale` and `withXYScale` put an axis on a
-`Transform` (`Log10`, `Sqrt`, `SymLog(c)`; a log axis needs positive numbers, a symmetric log keeps zero and the negative ones),
-and `grid = false` or `Lines.grid(...)` turns the gridlines of an axis off or restyles them. The picture is then the data after
-the transforms, with one scale on both axes, and the page writes the same numbers as the file. The range and the position of an
-axis (`min`, `max`, `reverse`, `crossesAt`, ...) are what the view shows, so those options belong to a `Figure` and are refused
-here; so is a transform of your own, which has no ticks a page can draw. A control that moves an item (`Behavior.Follows`) needs
-linear axes, because its value is in the data's units.
+The axes take what a figure's take, with three exceptions below. `withXLabel` and `withYLabel` (or `Labels(x = ..., y = ...)`)
+write the names beside the numbers. `withXScale`, `withYScale` and `withXYScale` (or `Scale.x/y/xy`) set an axis:
+
+| option | what it does on a flat picture |
+|---|---|
+| `transform` | `Log10`, `Sqrt` or `SymLog(c)`. A log axis needs positive numbers; a symmetric log keeps zero and the negative ones. The picture is the data after the transforms, with one scale on both axes |
+| `min`, `max`, `padding` | the range the picture opens on, in data units, and what the `0` key returns to. An end that is not given is the data's, padded by `padding` (default 0.04) of their extent. The picture keeps equal units on both axes, so the range is widened to the shape of the plot area, and the pan and the zoom move off it. Without any of the three, the picture is fitted to its points |
+| `breaks`, `format` | where the numbers stand (those that are in view) and a printf pattern for them: `%f` and `%e`, with the flags `-`, `+`, `0` and `,`, a width and a precision |
+| `reverse` | runs the axis the other way: the points, the numbers and the gridlines are mirrored together |
+| `visible` | `false` leaves out the axis: its line, numbers, label and gridlines, and the room they took |
+| `grid` | `false` removes the gridlines of an axis; `Lines.grid(...)` restyles them |
+
+The page writes the same numbers as the file, and they follow the pan and the zoom. Three things stay with a `Figure` and are
+refused here, with the way out: `position` and `crossesAt` (the axes of a canvas stay at the foot and the left edge of its plot
+area), and `minusInfinity` (a canvas that pans has no place for a `-∞` line: a point at zero on a log axis is refused, and
+`SymLog` keeps it); so is a transform of your own, which has no ticks a page can draw. A control that moves an item
+(`Behavior.Follows`) works on any axis: its value goes through the axis, so on a square-root axis the item is at the root.
 
 ```scala
 import scala.language.experimental.modularity
@@ -1105,7 +1114,27 @@ val loglog = Scene(
 loglog.save("loglog.svg")
 ```
 
-From MATLAB, `scene.withXLabel('birth').withXScale('log')`.
+A range, the breaks and a format, and an axis that runs backwards:
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val spread = IndexedSeq.tabulate(20)(i => (i - 4.0, 1.0 + 0.4 * i, 0.0))
+val window = Scene(
+  Vector(Layer.Points(spread, IndexedSeq(Paint.Ink), 4.0)),
+  azimuth = 0,
+  elevation = 90,
+  turns = false
+).withAxes
+  .withXScale(min = 0.0, max = 8.0, breaks = Seq(0.0, 2.0, 4.0, 6.0, 8.0), format = "%.1f")
+  .withYScale(reverse = true)
+  .withTitle("Opens on x from 0 to 8")
+window.save("window.svg")
+```
+
+From MATLAB, `scene.withXLabel('birth').withXScale('log')` and `scene.withXRange(0, 8)`.
 
 ### For a paper, and for a page of either color
 

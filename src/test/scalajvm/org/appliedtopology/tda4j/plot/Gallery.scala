@@ -432,6 +432,61 @@ object Gallery:
     mixedScene.save(out("interactive-axes-scales-still.svg"))
     java.nio.file.Files
       .writeString(java.nio.file.Path.of(out("interactive-axes-scales.json")), s"""{"points":${pointsJson(mixedAt)}}""")
+    // the options of an axis that a canvas takes besides its scale: the range the picture opens on (points outside it are
+    // clipped), the breaks and a printf format of the numbers, a log axis that runs the other way with its own padding
+    val windowAt = IndexedSeq.tabulate(31) { i =>
+      (-3.0 + 17.0 * i / 30.0, math.pow(10, -2.0 + 5.0 * i / 30.0) * (1 + (i % 3) * 0.3), 0.0)
+    }
+    val windowScene = flat(Vector(Layer.Points(windowAt, IndexedSeq(Paint.Series(0)), 4.0)))
+      .withXScale(min = 0.0, max = 8.0, breaks = Seq(0.0, 2.0, 4.0, 6.0, 8.0), format = "%.1f")
+      .withYScale(Transform.Log10, reverse = true, padding = 0.05)
+      .withLabels(x = "position", y = "weight")
+      .withTitle("A window, breaks, a format and a reversed log axis")
+    windowScene.save(out("interactive-axes-window.html"))
+    windowScene.save(out("interactive-axes-window-still.svg"))
+    java.nio.file.Files
+      .writeString(
+        java.nio.file.Path.of(out("interactive-axes-window.json")),
+        s"""{"points":${pointsJson(windowAt)}}"""
+      )
+    // an axis that is not visible (no line, numbers, label or gridlines, and its room given back) and a lower end alone
+    val hiddenAt = IndexedSeq.tabulate(30)(i => (i * 0.35, ((i * 17) % 41 - 20).toDouble, 0.0))
+    val hiddenScene = flat(Vector(Layer.Points(hiddenAt, IndexedSeq(Paint.Series(1)), 4.0)))
+      .withXScale(visible = false)
+      .withYScale(min = -25.0)
+      .withLabels(x = "never written", y = "level")
+      .withTitle("An axis left out and a lower end given")
+    hiddenScene.save(out("interactive-axes-hidden.html"))
+    hiddenScene.save(out("interactive-axes-hidden-still.svg"))
+    java.nio.file.Files
+      .writeString(
+        java.nio.file.Path.of(out("interactive-axes-hidden.json")),
+        s"""{"points":${pointsJson(hiddenAt)}}"""
+      )
+    // an item that follows a slider on a reversed square-root x axis: the value goes through the axis and its direction, as in
+    // the still of that value (the mover's roots, 1 to 2, stay clear of the others', 2.45 and 3)
+    val followAt = IndexedSeq[XYZ]((1.0, 1.0, 0.0), (9.0, 9.0, 0.0), (6.0, 5.0, 0.0))
+    val sqrtFollow = Interactive()
+      .withSlider("t", 0.0, 5.0)
+      .withPanel(
+        Panel
+          .Spatial(
+            Scene(Vector.empty, azimuth = 0, elevation = 90, turns = false).withAxes
+              .withXScale(Transform.Sqrt, reverse = true)
+              .withLabels(x = "size")
+              .withTitle("Following the slider on a reversed square-root axis")
+          )
+          .reactEach(
+            Layer.Points(followAt, IndexedSeq(Paint.Series(2)), 5.0),
+            IndexedSeq(
+              Reaction(Vector(Behavior.Follows("t", Coordinate.X, Ends.Both, 1.0, 4.0))),
+              Reaction.none,
+              Reaction.none
+            )
+          )
+      )
+    sqrtFollow.save(out("interactive-axes-follow.html"))
+    Seq(0.0, 1.0, 2.25, 4.0, 5.0).foreach(t => sqrtFollow.at(t).save(out(f"interactive-axes-follow-still-$t%.2f.svg")))
     // a complex with too many cells for an SVG: a flat canvas to pan and zoom, linked to the diagram and the barcode
     val ringLarge = noisyCircle(60, 0.1, 3)
     val largeBars = Persistence(ringLarge, maxDimension = 1, maxFiltrationValue = 2.5).bars

@@ -200,17 +200,30 @@ in the still and on the page alike. Axes the page cannot draw again are refused 
 (`Interactive.zoomProblem` says why), and `Interactive.zoomable()` skips them.
 
 **Axes on a flat canvas.** `Scene.withAxes` (a scene seen from above) numbers the plane, and the axes are an `Axis` each (`xAxis`,
-`yAxis`: `label`, `transform`, `grid`) that the grammar sets: `Labels(x, y)`, `Scale.x/y/xy(transform, grid)` and `Lines.grid`
-apply to a scene as to a `Figure`, and every other option of `Scale` is refused with a message, because a canvas's range is its
-view. The data pass through the transforms in one place, `Scene.place`, which `frame`, `viewer` and the canvas's position table
-share, so the picture is isotropic in transformed units and the marks, the gridlines and the points agree by construction; a
-value with no place on its scale (zero on a log axis) fails there, naming the axis and `SymLog`. The static SVG is the reference
+`yAxis`) that the grammar sets: `Labels(x, y)`, `Scale.x/y/xy` and `Lines.grid` apply to a scene as to a `Figure`, with `transform`,
+`min`, `max`, `padding`, `breaks`, `format`, `grid`, `visible` and `reverse`; `position`, `crossesAt` and `minusInfinity` are
+refused with a message (the axes stay at the foot and the left edge of the plot area, and a canvas that pans has no place for a
+`-∞` line), and so is `Transform.Custom` (no ticks a page can draw). The data pass through the transforms, and the sign of a
+reversed axis, in one place, `Scene.place`, which `frame`, `viewer` and the canvas's position table share, so the picture is
+isotropic in transformed units and the marks, the gridlines and the points agree by construction; a value with no place on its
+scale (zero on a log axis) fails there, naming the axis and `SymLog`. A `min`, `max` or `padding` on either axis makes the
+frame a window (`Scene.window`): the ends an axis leaves free come from the places of the items (padded as a figure's, 0.04),
+and the radius is the one that holds the window in the plot area of the page and of the still alike (they differ by the
+title's room, so an untitled still shows a little more than the window); `fitting` goes through the same `framed`, so an
+interactive page's frame holds the window and every place an item can reach. The numbers of an axis are `ticksIn` (round
+values, or the `breaks` that are in view, with a relative 1e-9 of room at the ends) written by `tickText` (the axis's printf
+`format`, else the transform's way); the page has the same in `tickOf`/`wordOf`, with `Scene.formatScript` (`javaFormat`, shared
+with the zoomable figures, only on a page whose axis has a format; a pattern beyond `%f` and `%e` is refused when the axis is
+given). An axis that is not `visible` has no numbers, line, label or gridlines and leaves its room (8 pixels). The frame is
+written to the page with every digit (`exact`), the data's scale not being the unit ball's. The static SVG is the reference
 (`g.tda4j-grid` under the clipped picture, `g.tda4j-axes` with the marks, the words and the two `text.tda4j-axis-label`s). The
 page's script draws the same with `Scene.tickScript`, the script the zoomable figures share (`tr`, `inv`, `logTicks`, `trTicks`,
-`numberText`): `paintGrid` inside the clip, `paintAxes` after it. `check-interactive-page.mjs` tells the lines of the grid and
-the axes from the items by the font in force (both set one) and compares words, marks, gridlines and labels with the still of
-`interactive-axes-log` and `interactive-axes-scales`, after a zoom and a pan too. An item that follows a control is refused on
-transformed axes (the control's value is in data units, the position table after the transform).
+`numberText`): `paintGrid` inside the clip, `paintAxes` after it. An item that follows a control moves through `placed`: the
+value, held between its limits, goes through the axis's transform and direction, as `Scene.place` does for the still.
+`check-interactive-page.mjs` reads a canvas's plot box from the clip, tells the lines of the grid and the axes from the items by
+the pen and the font in force, and compares words, marks, gridlines and labels with the still of `interactive-axes-log`,
+`interactive-axes-scales`, `interactive-axes-window` and `interactive-axes-hidden`, after a zoom and a pan too; `interactive-axes-follow`
+compares each value's page with its still.
 
 **Keys cost one redraw.** A key on a brushable canvas that moves the cross, steps to an item or lets go changes the light and the
 cross in one `afterwards(...)`, which redraws only if nothing in it did; a pointer move that is still waiting for its frame is

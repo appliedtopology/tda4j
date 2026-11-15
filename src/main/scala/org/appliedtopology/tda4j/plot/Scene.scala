@@ -53,9 +53,12 @@ object Layer:
   * of the plane at round values as a plot's axes are, for a flat picture (seen from above: `azimuth = 0`,
   * `elevation = 90`), with gridlines at the numbers. The picture then keeps to the room inside the axes, and a canvas
   * that pans and zooms numbers its axes again for what it shows. `xAxis` and `yAxis` hold what the axes are given by
-  * [[Labels]] (`x`, `y`) and [[Scale]] (`transform`, `grid`): an axis can be linear, log, square-root or symmetric log
-  * (`Transform.Custom` has no ticks a page can draw), and the picture is then the data after the transforms, drawn at
-  * one scale on both axes: a straight segment between two places is a straight line between their positions.
+  * [[Labels]] (`x`, `y`) and [[Scale]] (`transform`, `min`, `max`, `padding`, `breaks`, `format`, `grid`, `visible`,
+  * `reverse`): an axis can be linear, log, square-root or symmetric log (`Transform.Custom` has no ticks a page can
+  * draw) and can run the other way, and the picture is then the data after the transforms, drawn at one scale on both
+  * axes: a straight segment between two places is a straight line between their positions. `min`, `max` and `padding`
+  * give the range the picture opens on (and returns to), widened to the shape of the plot area; without them the
+  * picture is fitted to its points.
   *
   * `region` is a rectangle drawn over the picture, a translucent fill with a dashed outline, in the units of the view
   * plane: the view from `azimuth` and `elevation` (at `zoom` 1), `x` to the right and `y` up, in the radius of the
@@ -109,26 +112,97 @@ final case class Scene(
   /** The y axis label of a flat picture with axes. */
   def withYLabel(text: String): Scene = withLabels(y = text)
 
-  /** The x axis of a flat picture with axes: its `transform` (linear, log, square-root or symmetric log) and whether it
-    * has `grid`lines. The other options of [[Scale.x]] fix a range or move the axis, which a canvas that pans and zooms
-    * leaves to its view.
+  /** The x axis of a flat picture with axes, as [[Scale.x]] has it: its `transform` (linear, log, square-root or
+    * symmetric log), the `min` and `max` of the range the picture opens on (`padding`, the fraction of the data's
+    * extent left empty at each end where an end is not given, is 0.04 unless set), the `breaks` where the numbers
+    * stand, the printf `format` of the numbers (`%f` and `%e`), whether it has `grid`lines, whether it is `visible` at
+    * all, and whether it runs the other way (`reverse`). A canvas keeps equal units on both axes, so a range the
+    * picture is opened on is widened to the shape of the plot area, and its pan and zoom move off it. `position`,
+    * `crossesAt` and `minusInfinity` of [[Scale.x]] are not here: a canvas's axes stay at the foot and the left edge of
+    * its plot area, and a log axis has no `-∞` line (`Transform.SymLog` keeps zero and negative numbers).
     */
-  def withXScale(transform: Optional[Transform] = Optional.empty, grid: Optional[Boolean] = Optional.empty): Scene =
-    this + Scale.x(transform = transform, grid = grid)
+  def withXScale(
+    transform: Optional[Transform] = Optional.empty,
+    min: Optional[Double] = Optional.empty,
+    max: Optional[Double] = Optional.empty,
+    breaks: Optional[Seq[Double]] = Optional.empty,
+    format: Optional[String] = Optional.empty,
+    grid: Optional[Boolean] = Optional.empty,
+    visible: Optional[Boolean] = Optional.empty,
+    reverse: Optional[Boolean] = Optional.empty,
+    padding: Optional[Double] = Optional.empty
+  ): Scene =
+    this + Scale.x(
+      transform = transform,
+      min = min,
+      max = max,
+      breaks = breaks,
+      format = format,
+      grid = grid,
+      visible = visible,
+      reverse = reverse,
+      padding = padding
+    )
 
   /** The y axis of a flat picture with axes; as [[withXScale]]. */
-  def withYScale(transform: Optional[Transform] = Optional.empty, grid: Optional[Boolean] = Optional.empty): Scene =
-    this + Scale.y(transform = transform, grid = grid)
+  def withYScale(
+    transform: Optional[Transform] = Optional.empty,
+    min: Optional[Double] = Optional.empty,
+    max: Optional[Double] = Optional.empty,
+    breaks: Optional[Seq[Double]] = Optional.empty,
+    format: Optional[String] = Optional.empty,
+    grid: Optional[Boolean] = Optional.empty,
+    visible: Optional[Boolean] = Optional.empty,
+    reverse: Optional[Boolean] = Optional.empty,
+    padding: Optional[Double] = Optional.empty
+  ): Scene =
+    this + Scale.y(
+      transform = transform,
+      min = min,
+      max = max,
+      breaks = breaks,
+      format = format,
+      grid = grid,
+      visible = visible,
+      reverse = reverse,
+      padding = padding
+    )
 
   /** Both axes alike: a log-log picture is `withXYScale(Transform.Log10)`. */
-  def withXYScale(transform: Optional[Transform] = Optional.empty, grid: Optional[Boolean] = Optional.empty): Scene =
-    this + Scale.xy(transform = transform, grid = grid)
+  def withXYScale(
+    transform: Optional[Transform] = Optional.empty,
+    min: Optional[Double] = Optional.empty,
+    max: Optional[Double] = Optional.empty,
+    breaks: Optional[Seq[Double]] = Optional.empty,
+    format: Optional[String] = Optional.empty,
+    grid: Optional[Boolean] = Optional.empty,
+    visible: Optional[Boolean] = Optional.empty,
+    reverse: Optional[Boolean] = Optional.empty,
+    padding: Optional[Double] = Optional.empty
+  ): Scene =
+    this + Scale.xy(
+      transform = transform,
+      min = min,
+      max = max,
+      breaks = breaks,
+      format = format,
+      grid = grid,
+      visible = visible,
+      reverse = reverse,
+      padding = padding
+    )
 
   /** The x axis on the scale called `name`: `linear`, `log`, `sqrt` or `symlog`. */
   def withXScale(name: String): Scene = withXScale(Transform.named(name))
 
   /** The y axis on the scale called `name`: `linear`, `log`, `sqrt` or `symlog`. */
   def withYScale(name: String): Scene = withYScale(Transform.named(name))
+
+  /** The range of the x axis the picture opens on, in data units, for MATLAB and Java. */
+  def withXRange(min: Double, max: Double): Scene = withXScale(min = min, max = max)
+
+  /** The range of the y axis the picture opens on, in data units, for MATLAB and Java. */
+  def withYRange(min: Double, max: Double): Scene = withYScale(min = min, max = max)
 
   /** The size in pixels; give one to keep the other. */
   def withSize(width: Optional[Int] = Optional.empty, height: Optional[Int] = Optional.empty): Scene =
@@ -233,14 +307,18 @@ final case class Scene(
   /** This scene's layers drawn over `under`'s. */
   def over(under: Scene): Scene = copy(layers = under.layers ++ layers)
 
-  // where a place of the data lies in the picture: its x and y through the transforms of the axes (a picture without
-  // axes has none); a transform with no position for a number (a log axis and a number that is not positive) is an error
-  // that says what to do, not a place that is left out
+  // where a place of the data lies in the picture: its x and y through the transforms of the axes, and the other way round
+  // on an axis that runs backwards (a picture without axes has none); a transform with no position for a number (a log
+  // axis and a number that is not positive) is an error that says what to do, not a place that is left out
   private def transformed: Boolean =
-    axes && (xAxis.transform != Transform.Identity || yAxis.transform != Transform.Identity)
+    axes && Seq(xAxis, yAxis).exists(a => a.transform != Transform.Identity || a.reverse)
+
+  // the sign an axis gives the transformed numbers: -1 where it runs the other way
+  private def sign(a: Axis): Double = if a.reverse then -1.0 else 1.0
 
   private def place(p: XYZ): XYZ =
-    if !transformed then p else (onAxis("x", xAxis.transform, p._1), onAxis("y", yAxis.transform, p._2), p._3)
+    if !transformed then p
+    else (sign(xAxis) * onAxis("x", xAxis.transform, p._1), sign(yAxis) * onAxis("y", yAxis.transform, p._2), p._3)
 
   private def onAxis(which: String, t: Transform, v: Double): Double =
     require(
@@ -275,11 +353,59 @@ final case class Scene(
       val r = ps.map(p => math.sqrt(math.pow(p._1 - c._1, 2) + math.pow(p._2 - c._2, 2) + math.pow(p._3 - c._3, 2))).max
       (c, if r > 0 then r else 1.0)
 
-  /** The centre and radius that fit the scene into a unit ball: its own points, unless it is [[fitted]]. */
-  private[plot] def frame: (XYZ, Double) = fitted.getOrElse(fit(allPoints))
+  // the axes give the range the picture opens on (a `min`, a `max` or a `padding` on either): the frame is then that window
+  private def limited: Boolean =
+    axes && Seq(xAxis, yAxis).exists(a => a.min.isDefined || a.max.isDefined || a.padding.isDefined)
+
+  // the centre and radius of the window the axes ask for, over the places `ps` (which give the ends an axis leaves free).
+  // The picture keeps equal units on both axes, so the window is widened to the shape of the plot area: of the page's
+  // (the canvas is 40 pixels shorter than the picture, the title is above it) and of the still's (which holds the title
+  // inside its height, and so has the same area when there is one); a window fits in both
+  private def window(ps: Seq[XYZ]): (XYZ, Double) =
+    val (l, r_, t_, b) = axisRoom
+    val boxW = width - l - r_
+    val heights = Seq(height - 40.0 - t_ - b, height - headHeight - t_ - b)
+    def range(a: Axis, which: String, coordinate: XYZ => Double): (Double, Double) =
+      val s = sign(a)
+      val seen = Option.when(ps.nonEmpty)((ps.map(p => s * coordinate(p)).min, ps.map(p => s * coordinate(p)).max))
+      val (lo, hi) = seen.getOrElse((0.0, 1.0))
+      val fixedLo = a.min.map(onAxis(which, a.transform, _))
+      val fixedHi = a.max.map(onAxis(which, a.transform, _))
+      val (u0, u1) = (fixedLo, fixedHi) match
+        case (Some(f), Some(g)) => (f, g)
+        case _                  =>
+          val pad = a.padding.getOrElse(0.04)
+          val (pl, pu) = if hi > lo then (lo - (hi - lo) * pad, hi + (hi - lo) * pad) else (lo - 1, hi + 1)
+          (fixedLo.getOrElse(pl), fixedHi.getOrElse(pu))
+      require(
+        u1 > u0,
+        s"Scene: the $which axis would run from ${Svg.number(a.transform.inverse(u0))} to ${Svg.number(a.transform.inverse(u1))}: " +
+          s"its minimum must be less than its maximum (see Scale.$which)"
+      )
+      if s > 0 then (u0, u1) else (-u1, -u0)
+    val ((x0, x1), (y0, y1)) = (range(xAxis, "x", _._1), range(yAxis, "y", _._2))
+    val z = if ps.isEmpty then 0.0 else (ps.map(_._3).min + ps.map(_._3).max) / 2
+    // the unit of the frame is 0.46 of the shorter side of the plot area, in pixels (`staticSvg`, the page's `sc`)
+    val radius = heights.map { boxH =>
+      val unit = 0.92 * math.min(boxW, boxH)
+      math.max((x1 - x0) / 2 * unit / boxW, (y1 - y0) / 2 * unit / boxH)
+    }.max
+    (((x0 + x1) / 2, (y0 + y1) / 2, z), radius)
+
+  // the room above the plot area of a still: the title, or a margin
+  private def headHeight: Double =
+    if title.nonEmpty then 16.0 + 24.0 * style.textScale * (elements.face(TextRole.Title).size / 15.0) else 12.0
+
+  // the frame of the places `ps`: the window the axes ask for, or the ball that holds them
+  private def framed(ps: Seq[XYZ]): (XYZ, Double) = if limited then window(ps) else fit(ps)
+
+  /** The centre and radius that fit the scene into a unit ball: its own points, unless it is [[fitted]]; for a picture
+    * whose axes give a range (`min`, `max`, `padding`), the window of it.
+    */
+  private[plot] def frame: (XYZ, Double) = fitted.getOrElse(framed(allPoints))
 
   /** This scene fitted to its points and `extra` ones: the places an item can be at when it moves. */
-  private[plot] def fitting(extra: Seq[XYZ]): Scene = copy(fitted = Some(fit(allPoints ++ extra.map(place))))
+  private[plot] def fitting(extra: Seq[XYZ]): Scene = copy(fitted = Some(framed(allPoints ++ extra.map(place))))
 
   /** A scene's point as it is drawn: round and filled, with a ring of 1.5 pixels in the surface color, then whatever
     * the scene's marker changes (its size, opacity and edge).
@@ -342,12 +468,35 @@ final case class Scene(
     )
     val ts = style.textScale
     val label = elements.face(TextRole.AxisLabel).size * ts + 6.0
+    // an axis that is not visible takes no room, and has no label
     (
-      48.0 * ts + (if yAxis.label.nonEmpty then label else 0.0),
+      if yAxis.visible then 48.0 * ts + (if yAxis.label.nonEmpty then label else 0.0) else 8.0,
       8.0,
       8.0,
-      26.0 * ts + (if xAxis.label.nonEmpty then label else 0.0)
+      if xAxis.visible then 26.0 * ts + (if xAxis.label.nonEmpty then label else 0.0) else 8.0
     )
+
+  // the numbers an axis shows between the positions `u0` and `u1` of the picture (the ends of the plot area, in the places
+  // of `frame`, either way round): round values of the range, or the breaks the axis is given that lie in it (with a little
+  // room at the ends, so that a break at the end of a range is not lost to rounding)
+  private def ticksIn(a: Axis, u0: Double, u1: Double): IndexedSeq[Double] =
+    val s = sign(a)
+    val t = a.transform
+    val (lo, hi) = (math.min(s * u0, s * u1), math.max(s * u0, s * u1))
+    a.ticks match
+      case Ticks.At(breaks) =>
+        val room = 1e-9 * (hi - lo)
+        breaks.filter { v =>
+          val u = t(v)
+          u >= lo - room && u <= hi + room
+        }
+      case _ =>
+        val (v0, v1) = (t.inverse(s * u0), t.inverse(s * u1))
+        t.ticks(math.min(v0, v1), math.max(v0, v1))
+
+  // how an axis writes a number: by its printf format, or the way of its transform
+  private def tickText(a: Axis): Double => String =
+    a.format.fold(a.transform.tickLabel)(pattern => v => RootText.format(pattern, Double.box(v)))
 
   // ----- the static view (SVG)
 
@@ -363,7 +512,7 @@ final case class Scene(
     def paint(p: Paint) = if theme == Theme.Auto then pal.css(p) else pal.hex(p, theme)
     val (c, r) = frame
     val view = viewer
-    val top = if title.nonEmpty then 16.0 + 24.0 * ts * (elements.face(TextRole.Title).size / 15.0) else 12.0
+    val top = headHeight
     // the plot area: all of the picture, or what is left inside the axes
     val (boxL, boxR, boxT, boxB) =
       if axes then
@@ -431,22 +580,28 @@ final case class Scene(
         val ink2 = paint(face.paint)
         val (tx, ty) = (xAxis.transform, yAxis.transform)
         def p2(v: Double) = f"$v%.2f"
-        // the numbers of an axis: round values of what the plot area shows, at their positions in the picture
-        val xs = tx.ticks(tx.inverse(c._1 + r * (boxL - cx) / scale), tx.inverse(c._1 + r * (boxR - cx) / scale))
-        val ys = ty.ticks(ty.inverse(c._2 + r * (cy - boxB) / scale), ty.inverse(c._2 + r * (cy - boxT) / scale))
+        // the numbers of an axis: round values of what the plot area shows (or the breaks it is given, those in view), at
+        // their positions in the picture; an axis that is not visible has none
+        val xs =
+          if !xAxis.visible then IndexedSeq.empty
+          else ticksIn(xAxis, c._1 + r * (boxL - cx) / scale, c._1 + r * (boxR - cx) / scale)
+        val ys =
+          if !yAxis.visible then IndexedSeq.empty
+          else ticksIn(yAxis, c._2 + r * (cy - boxB) / scale, c._2 + r * (cy - boxT) / scale)
+        val (xText, yText) = (tickText(xAxis), tickText(yAxis))
+        val (sx, sy) = (sign(xAxis), sign(yAxis))
         def line(x1: Double, y1: Double, x2: Double, y2: Double) =
           s"""<line x1="${p2(x1)}" y1="${p2(y1)}" x2="${p2(x2)}" y2="${p2(y2)}"/>"""
         def label(x: Double, y: Double, anchor: String, text: String) =
           s"""<text x="${p2(x)}" y="${p2(y)}" text-anchor="$anchor" font-size="${Svg.number(
               size
             )}" style="fill:$ink2;stroke:none">${Svg.escape(text)}</text>"""
-        def xAt(v: Double) = cx + (tx(v) - c._1) / r * scale
-        def yAt(v: Double) = cy - (ty(v) - c._2) / r * scale
+        def xAt(v: Double) = cx + (sx * tx(v) - c._1) / r * scale
+        def yAt(v: Double) = cy - (sy * ty(v) - c._2) / r * scale
         val xTicks =
-          xs.map(v => line(xAt(v), boxB, xAt(v), boxB + 4) + label(xAt(v), boxB + 4 + size, "middle", tx.tickLabel(v)))
-        val yTicks = ys.map(v =>
-          line(boxL - 4, yAt(v), boxL, yAt(v)) + label(boxL - 6, yAt(v) + 0.35 * size, "end", ty.tickLabel(v))
-        )
+          xs.map(v => line(xAt(v), boxB, xAt(v), boxB + 4) + label(xAt(v), boxB + 4 + size, "middle", xText(v)))
+        val yTicks =
+          ys.map(v => line(boxL - 4, yAt(v), boxL, yAt(v)) + label(boxL - 6, yAt(v) + 0.35 * size, "end", yText(v)))
         // gridlines at the numbers, under the picture, as a figure's
         val gs = elements.gridStroke
         val grid =
@@ -470,9 +625,10 @@ final case class Scene(
               .number(
                 wordSize
               )}" style="fill:${paint(words.paint)};stroke:none">${Svg.escape(text)}</text>"""
-        val xWord = if xAxis.label.isEmpty then "" else word(xAxis.label, "", (boxL + boxR) / 2, height - 6.0)
+        val xWord =
+          if xAxis.label.isEmpty || !xAxis.visible then "" else word(xAxis.label, "", (boxL + boxR) / 2, height - 6.0)
         val yWord =
-          if yAxis.label.isEmpty then ""
+          if yAxis.label.isEmpty || !yAxis.visible then ""
           else
             val (wx, wy) = (0.85 * wordSize + 2.0, (boxT + boxB) / 2)
             word(yAxis.label, s""" transform="rotate(-90 ${p2(wx)} ${p2(wy)})"""", wx, wy)
@@ -482,12 +638,11 @@ final case class Scene(
           )}" height="${p2(
             boxB - boxT
           )}"/></clipPath></defs><g clip-path="url(#$clip)">$picture</g>""" +
-          s"""<g class="tda4j-axes" style="stroke:$ink2" stroke-width="1">${line(boxL, boxB, boxR, boxB)}${line(
-              boxL,
-              boxT,
-              boxL,
-              boxB
-            )}${xTicks.mkString}${yTicks.mkString}$xWord$yWord</g>"""
+          s"""<g class="tda4j-axes" style="stroke:$ink2" stroke-width="1">${
+              if xAxis.visible then line(boxL, boxB, boxR, boxB) else ""
+            }${
+              if yAxis.visible then line(boxL, boxT, boxL, boxB) else ""
+            }${xTicks.mkString}${yTicks.mkString}$xWord$yWord</g>"""
     val body = drawn + region.fold("") { w =>
       val color = paint(Paint.Series(0))
       s"""<rect x="${f"${cx + w.x0 * scale}%.2f"}" y="${f"${cy - w.y1 * scale}%.2f"}" width="${f"${(w.x1 - w.x0) * scale}%.2f"}" height="${f"${(w.y1 - w.y0) * scale}%.2f"}" style="fill:$color;fill-opacity:.12;stroke:$color" stroke-width="${Svg
@@ -582,6 +737,8 @@ final case class Scene(
     def short(v: Double): String =
       val t = f"$v%.5f".reverse.dropWhile(_ == '0').reverse
       if t.endsWith(".") then t.dropRight(1) else if t == "-0" then "0" else t
+    // the frame is in the units of the data, whose scale is not the unit ball's: every digit (a range of 1e-4 has none to spare)
+    def exact(v: Double): String = v.toString
     // the paints of a layer: a table of CSS colors and which entry each item takes (one number when all do)
     def paintsOf(l: Layer, n: Int): String =
       val table = (0 until n).map(i => col(l.paintAt(i))).distinct
@@ -627,11 +784,6 @@ final case class Scene(
         val ball = radius.fold("")((ctl, factor) => s""","ra":["$ctl",${short(factor / r)}]""")
         // the items that move with a control: which coordinate (0, 1, 2), of which ends (1 first, 2 second, 3 all), between
         val follows = per.map(_.collect { case f: Behavior.Follows => f })
-        require(
-          !transformed || follows.forall(_.isEmpty),
-          "Scene: an item cannot follow a control on a picture whose axes are transformed (the control's value is in the data's " +
-            "units, the page's positions are after the transform); give the picture linear axes"
-        )
         val moves =
           if follows.forall(_.isEmpty) then ""
           else
@@ -788,15 +940,20 @@ final case class Scene(
            |    else if(!v||v.indexOf(e[2])<0)return true;}
            |  return false;}
            |// an item that follows a control has a position of its own (a slot after the shared ones) for each end that moves
-           |const FR=[${short(c._1)},${short(c._2)},${short(c._3)},${short(r)}],movers=[],follow=new Set();
+           |const FR=[${exact(c._1)},${exact(c._2)},${exact(c._3)},${exact(r)}],movers=[],follow=new Set();
            |layers.forEach(L=>{if(!L.fo)return;const m=L.k==='s'?2:L.k==='t'?3:1;
            |  L.fo.forEach((fs,k)=>{if(!fs)return;
            |    for(let j=0;j<m;j++){const sp=fs.filter(s=>s[2]===3||s[2]===j+1);if(!sp.length)continue;
            |      const at=L.i[m*k+j],slot=P.length/3;P.push(P[3*at],P[3*at+1],P[3*at+2]);L.i[m*k+j]=slot;
            |      movers.push({s:slot,b:[P[3*at],P[3*at+1],P[3*at+2]],sp:sp});sp.forEach(s=>follow.add(s[0]));}});});
+           |// where a value of a coordinate (data units) lies in the picture: through the transform and the direction of its axis
+           |const placed=${
+            if transformed then "(k,v)=>k===0?AX[3]*tr[TX[0]](v,TX[1]):k===1?AX[4]*tr[TY[0]](v,TY[1]):v"
+            else "(k,v)=>v"
+          };
            |// the unit-ball position of a coordinate that is the control's value held between lo and hi (data units)
            |function moveAll(){for(const q of movers){const p=q.b.slice();
-           |  for(const s of q.sp){const v=vals[s[0]];if(v!==undefined)p[s[1]]=(Math.min(Math.max(v,s[3]),s[4])-FR[s[1]])/FR[3];}
+           |  for(const s of q.sp){const v=vals[s[0]];if(v!==undefined)p[s[1]]=(placed(s[1],Math.min(Math.max(v,s[3]),s[4]))-FR[s[1]])/FR[3];}
            |  P[3*q.s]=p[0];P[3*q.s+1]=p[1];P[3*q.s+2]=p[2];}}
            |if(ia)ia.addEventListener('tda4j:change',e=>{vals[e.detail.name]=e.detail.value;if(follow.has(e.detail.name)){moveAll();order=null;}draw();});""".stripMargin
     // the axes of a flat picture: the plot area they leave, the clip to it, and the ticks, drawn from the same rules as the still's
@@ -808,7 +965,9 @@ final case class Scene(
         s"const bx0=${px(axL)},bx1=W-${px(axR)},by0=${px(axT)},by1=H-${px(axB)};sc=0.46*Math.min(bx1-bx0,by1-by0)*zoom;box=[bx0,by0,bx1,by1];bc=[(bx0+bx1)/2,(by0+by1)/2];ox=bc[0]+pan[0];oy=bc[1]+pan[1];"
       else "sc=0.46*Math.min(W,H)*zoom;box=[0,0,W,H];bc=[W/2,H/2];ox=W/2+pan[0];oy=H/2+pan[1];"
     val gridStroke = elements.gridStroke
-    val gridOn = axes && style.grid && gridStroke.visible && (xAxis.grid || yAxis.grid)
+    // a gridline belongs to a numbered axis: one that is not visible has none
+    val (gridX, gridY) = (xAxis.grid && xAxis.visible, yAxis.grid && yAxis.visible)
+    val gridOn = axes && style.grid && gridStroke.visible && (gridX || gridY)
     val openClip =
       if axes then
         s"g.save();g.beginPath();g.rect(bx0,by0,bx1-bx0,by1-by0);g.clip();${if gridOn then "paintGrid();" else ""}"
@@ -825,41 +984,64 @@ final case class Scene(
       case Transform.Sqrt      => "['s',1]"
       case Transform.SymLog(k) => s"['m',${short(k)}]"
       case _: Transform.Custom => "['i',1]" // refused by `place` before a page is written
+    // the breaks and the number format of an axis as the page has them: a list and a pattern, or null
+    def breaksJs(a: Axis): String = a.ticks match
+      case Ticks.At(breaks) => breaks.map(_.toString).mkString("[", ",", "]")
+      case _                => "null"
+    def formatJs(a: Axis): String = a.format.fold("null")(Scene.jsText)
     val axesScript =
       if !axes then ""
       else
         s"""
            |// the axes: ticks at round values of the plane's coordinates, after the transforms of the axes, over what the plot area shows now
            |${Scene.tickScript}
-           |const AX=[${short(c._1)},${short(c._2)},${short(r)}],AXC=color(${col(tickFace.paint)}),TX=${code(
+           |${if xAxis.format.isDefined || yAxis.format.isDefined then Scene.formatScript else ""}
+           |const AX=[${exact(c._1)},${exact(c._2)},${exact(r)},${short(sign(xAxis))},${short(
+            sign(yAxis)
+          )}],AXC=color(${col(
+            tickFace.paint
+          )}),TX=${code(
             xAxis
           )},TY=${code(
             yAxis
-          )},XL=${Scene.jsText(xAxis.label)},YL=${Scene.jsText(yAxis.label)};
-           |const xAt=v=>ox+(tr[TX[0]](v,TX[1])-AX[0])/AX[2]*sc,yAt=v=>oy-(tr[TY[0]](v,TY[1])-AX[1])/AX[2]*sc;
-           |const tickOf=(T,lo,hi)=>trTicks(T[0],T[1],inv[T[0]](lo,T[1]),inv[T[0]](hi,T[1]),5),wordOf=(T,v)=>T[0]==='l'?logLabel(v):numberText(v);
-           |const xTicks=()=>tickOf(TX,AX[0]+AX[2]*(box[0]-ox)/sc,AX[0]+AX[2]*(box[2]-ox)/sc),yTicks=()=>tickOf(TY,AX[1]+AX[2]*(oy-box[3])/sc,AX[1]+AX[2]*(oy-box[1])/sc);
+          )},BX=${breaksJs(xAxis)},BY=${breaksJs(yAxis)},FX=${formatJs(xAxis)},FY=${formatJs(yAxis)},XL=${Scene.jsText(
+            if xAxis.visible then xAxis.label else ""
+          )},YL=${Scene.jsText(if yAxis.visible then yAxis.label else "")};
+           |const xAt=v=>ox+(AX[3]*tr[TX[0]](v,TX[1])-AX[0])/AX[2]*sc,yAt=v=>oy-(AX[4]*tr[TY[0]](v,TY[1])-AX[1])/AX[2]*sc;
+           |// the numbers an axis shows between the places pl and pr of the picture (the ends of the plot area): round values, or the breaks in view
+           |const tickOf=(T,s,B,pl,pr)=>{const a=s*pl,b=s*pr,u0=Math.min(a,b),u1=Math.max(a,b);
+           |  if(B){const e=1e-9*(u1-u0);return B.filter(v=>{const u=tr[T[0]](v,T[1]);return u>=u0-e&&u<=u1+e;});}
+           |  const v0=inv[T[0]](a,T[1]),v1=inv[T[0]](b,T[1]);return trTicks(T[0],T[1],Math.min(v0,v1),Math.max(v0,v1),5);};
+           |const wordOf=(T,F,v)=>F!==null?javaFormat(F,v):T[0]==='l'?logLabel(v):numberText(v);
+           |const xTicks=()=>tickOf(TX,AX[3],BX,AX[0]+AX[2]*(box[0]-ox)/sc,AX[0]+AX[2]*(box[2]-ox)/sc),yTicks=()=>tickOf(TY,AX[4],BY,AX[1]+AX[2]*(oy-box[3])/sc,AX[1]+AX[2]*(oy-box[1])/sc);
            |function paintGrid(){
            |  g.save();g.font=$fontJs;g.strokeStyle=color(${col(gridStroke.paint)});g.lineWidth=${px(
             gridStroke.width
           )};g.globalAlpha=${gridStroke.opacity};g.setLineDash([${gridStroke.dash.pattern
             .fold("")(_.split(' ').mkString(","))}]);
            |  const line=(x1,y1,x2,y2)=>{g.beginPath();g.moveTo(x1,y1);g.lineTo(x2,y2);g.stroke();};
-           |  ${if xAxis.grid then "for(const v of xTicks()){const x=xAt(v);line(x,box[1],x,box[3]);}" else ""}
-           |  ${if yAxis.grid then "for(const v of yTicks()){const y=yAt(v);line(box[0],y,box[2],y);}" else ""}
+           |  ${if gridX then "for(const v of xTicks()){const x=xAt(v);line(x,box[1],x,box[3]);}" else ""}
+           |  ${if gridY then "for(const v of yTicks()){const y=yAt(v);line(box[0],y,box[2],y);}" else ""}
            |  g.restore();}
            |function paintAxes(){
            |  g.save();g.strokeStyle=AXC;g.fillStyle=AXC;g.lineWidth=1;g.globalAlpha=1;g.font=$fontJs;
            |  const line=(x1,y1,x2,y2)=>{g.beginPath();g.moveTo(x1,y1);g.lineTo(x2,y2);g.stroke();};
-           |  line(box[0],box[3],box[2],box[3]);line(box[0],box[1],box[0],box[3]);
+           |  ${if xAxis.visible then "line(box[0],box[3],box[2],box[3]);" else ""}${
+            if yAxis.visible then "line(box[0],box[1],box[0],box[3]);"
+            else ""
+          }
            |  g.textAlign='center';
-           |  for(const v of xTicks()){const x=xAt(v);line(x,box[3],x,box[3]+4);g.fillText(wordOf(TX,v),x,box[3]+4+${px(
-            tickSize
-          )});}
+           |  ${
+            if xAxis.visible then
+              s"for(const v of xTicks()){const x=xAt(v);line(x,box[3],x,box[3]+4);g.fillText(wordOf(TX,FX,v),x,box[3]+4+${px(tickSize)});}"
+            else ""
+          }
            |  g.textAlign='right';
-           |  for(const v of yTicks()){const y=yAt(v);line(box[0]-4,y,box[0],y);g.fillText(wordOf(TY,v),box[0]-6,y+0.35*${px(
-            tickSize
-          )});}
+           |  ${
+            if yAxis.visible then
+              s"for(const v of yTicks()){const y=yAt(v);line(box[0]-4,y,box[0],y);g.fillText(wordOf(TY,FY,v),box[0]-6,y+0.35*${px(tickSize)});}"
+            else ""
+          }
            |  g.fillStyle=color(${col(wordFace.paint)});g.font=$wordFont;g.textAlign='center';
            |  if(XL)g.fillText(XL,(box[0]+box[2])/2,box[3]+${px(axB - 6.0)});
            |  if(YL){g.translate(${px(
@@ -1036,6 +1218,34 @@ function trTicks(t,c,lo,hi,target){
   if(t==='m'){const reach=Math.max(Math.abs(lo),Math.abs(hi));if(reach<=10*c)return niceTicks(lo,hi,target);
     const mag=logTicks(c,reach,target);return mag.map(x=>-x).reverse().concat([0],mag).filter(x=>x>=lo&&x<=hi);}
   return niceTicks(lo,hi,target);}"""
+
+  // `String.format`'s %f and %e in JavaScript (rounding the shortest decimal half up, as Java does), for the axes with a number
+  // format: a zoomed figure's (the page's script) and a flat canvas's. The page writes these two conversions with the flags
+  // - + 0 and , (for f), a width and a precision, between any text and %%: `Interactive.formatSupported` says which patterns.
+  private[plot] val formatScript: String =
+    """function digitsOf(a){if(a===0)return {d:'0',e:0};
+  const m=/^([0-9])(?:\.([0-9]+))?e([+-][0-9]+)$/.exec(a.toExponential());return {d:m[1]+(m[2]||''),e:+m[3]};}
+function scaled(a,frac){const g=digitsOf(a),keep=g.e+1+frac;if(keep<0)return 0n;
+  let n=keep===0?0n:BigInt(g.d.slice(0,keep).padEnd(keep,'0'));if(g.d.charAt(keep)>='5')n+=1n;return n;}
+function expo(a,prec){if(a===0)return [prec>0?'0.'+'0'.repeat(prec):'0',0];
+  const g=digitsOf(a),keep=prec+1;let n=BigInt(g.d.slice(0,keep).padEnd(keep,'0'));if(g.d.charAt(keep)>='5')n+=1n;
+  let t=n.toString(),e=g.e;if(t.length>keep){t=t.slice(0,keep);e+=1;}
+  return [t.charAt(0)+(prec>0?'.'+t.slice(1):''),e];}
+function javaFormat(pattern,v){
+  return pattern.replace(/%(?:(%)|([-+0]*,?[-+0]*)([0-9]*)(?:\.([0-9]+))?([feE]))/g,(all,pct,flags,width,prec,conv)=>{
+    if(pct)return '%';
+    const w=width?+width:0;
+    // NaN and the infinities are words: padded with spaces (never zeros), a sign only on an infinity
+    if(!isFinite(v)){let word=isNaN(v)?'NaN':(v<0?'-':flags.includes('+')?'+':'')+'Infinity';if(conv==='E')word=word.toUpperCase();
+      return word.length>=w?word:flags.includes('-')?word.padEnd(w):word.padStart(w);}
+    const neg=v<0||Object.is(v,-0),a=Math.abs(v),sign=neg?'-':flags.includes('+')?'+':'',p=prec===undefined?6:+prec;
+    let text;
+    if(conv==='f'){const n=scaled(a,p).toString().padStart(p+1,'0'),whole=n.slice(0,n.length-p),part=n.slice(n.length-p);
+      text=(flags.includes(',')?whole.replace(/\B(?=([0-9]{3})+(?![0-9]))/g,','):whole)+(p>0?'.'+part:'');}
+    else{const x=expo(a,p),ae=Math.abs(x[1]);text=x[0]+'e'+(x[1]<0?'-':'+')+(ae<10?'0'+ae:String(ae));if(conv==='E')text=text.toUpperCase();}
+    let out=sign+text;
+    if(out.length<w){if(flags.includes('-'))out=out.padEnd(w);else if(flags.includes('0'))out=sign+text.padStart(w-sign.length,'0');else out=out.padStart(w);}
+    return out;});}"""
 
   // a text as a JavaScript string literal, safe inside a script element
   private[plot] def jsText(t: String): String =

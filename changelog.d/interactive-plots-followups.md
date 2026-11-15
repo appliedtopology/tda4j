@@ -23,12 +23,14 @@
   complex has them. In a picture where a drag chooses, `]` and `[` (or `Page Down` and `Page Up`) put the keyboard's cross on
   the next and the previous item and `Home` and `End` on the first and the last, so two `Enter`s around two items take the
   rectangle between them; a brushable 3-D canvas takes the same keys.
-- The axes of a flat scene take what a figure's take (#344). `Scene.withXLabel`/`withYLabel` (and `Labels(x, y)`) name them,
-  `withXScale`/`withYScale`/`withXYScale` (and `Scale.x/y/xy(transform, grid)`) put an axis on a log, square-root or symmetric
-  log scale, and `Lines.grid` and `grid = false` style or remove the gridlines, in the still and on the canvas alike; the
-  canvas's numbers, gridlines and labels follow the pan and the zoom. A value with no place on its scale (zero on a log axis) is
-  refused with the way out, and so are the options that fix a range (`min`, `max`, `reverse`, ...), a transform of your own, and an
-  item that follows a control on transformed axes.
+- The axes of a flat scene take what a figure's take (#344, #345). `Scene.withXLabel`/`withYLabel` (and `Labels(x, y)`) name them,
+  and `withXScale`/`withYScale`/`withXYScale` (and `Scale.x/y/xy`) set a `transform` (log, square-root or symmetric log), the
+  range the picture opens on (`min`, `max`, `padding`), the `breaks` and the printf `format` of the numbers, `visible`,
+  `reverse` and the `grid`lines (`Lines.grid` styles them), in the still and on the canvas alike; the canvas's numbers,
+  gridlines and labels follow the pan and the zoom. A control that moves an item (`Behavior.Follows`) works on transformed and
+  reversed axes: the value goes through the axis. `Scene.withXRange`/`withYRange` are the plain-argument forms for MATLAB.
+  A value with no place on its scale (zero on a log axis) is refused with the way out, and so are `position`, `crossesAt` and
+  `minusInfinity` (a canvas's axes stay at the foot and the left edge of the plot area) and a transform of your own.
 - `PageState.brush(panel, window)` and `Mark.Region`: the still of a rectangle a viewer has dragged out (a dashed box in the
   plot's units, with `select` for what it touches). On the page, `tda4j.brush(panel, [x0, x1, y0, y1])` draws or clears the
   rectangle and `tda4j.pointAt(panel, clientX, clientY)` gives the data under a point.

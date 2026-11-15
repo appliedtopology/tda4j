@@ -718,8 +718,17 @@ class SpatialSpec extends Specification:
       flat(_.withXScale("log")).axes must beTrue
       flat(_.withXScale("log")).xAxis.transform === Transform.Log10
       flat(_.withYScale("symlog")).yAxis.transform must beAnInstanceOf[Transform.SymLog]
-      flat(_ + Scale.x(min = 0.0)) must throwAn[UnsupportedOperationException](".*takes only transform and grid.*min.*")
-      flat(_ + Scale.y(reverse = true)) must throwAn[UnsupportedOperationException](".*reverse.*")
+      flat(_ + Scale.x(position = Side.Top)) must
+        throwAn[UnsupportedOperationException](".*position belong to a Figure.*foot and the left edge.*")
+      flat(_ + Scale.y(crossesAt = 0.0)) must throwAn[UnsupportedOperationException](".*crossesAt belong to a Figure.*")
+      flat(_ + Scale.x(minusInfinity = true)) must
+        throwAn[UnsupportedOperationException](".*minusInfinity belong to a Figure.*SymLog keeps zero.*")
+      // what an axis is given is checked when it is given, as a figure's is
+      flat(_ + Scale.x(min = 5.0, max = 1.0)) must throwAn[IllegalArgumentException](".*min .* must be less than max.*")
+      flat(_ + Scale.y(padding = 9.0)) must throwAn[IllegalArgumentException](".*padding.*0 to 5.*")
+      flat(_ + Scale.x(breaks = Seq(1.0, Double.NaN))) must throwAn[IllegalArgumentException](".*breaks are numbers.*")
+      flat(_ + Scale.x(format = "%s")) must throwAn[IllegalArgumentException](".*beyond what a picture's page writes.*")
+      flat(_ + Scale.x(format = "%d")) must throwAn[IllegalArgumentException](".*beyond what a picture's page writes.*")
       flat(_ + Scale.x(transform = Transform.Custom("cube", v => v * v * v, v => math.cbrt(v)))) must
         throwAn[UnsupportedOperationException](".*Identity, Log10, Sqrt or SymLog.*")
       flat(_ + Scale.x(transform = Transform.SymLog(0.0))) must throwAn[IllegalArgumentException](
@@ -729,6 +738,227 @@ class SpatialSpec extends Specification:
       flat(_ + Lines.minorGrid(visible = false)) must throwAn[UnsupportedOperationException](
         ".*gridlines.*no styled axis lines.*"
       )
+    }
+
+    // the plot area of a still: its clip rectangle (left, top, right, bottom)
+    def plotBox(svg: String): (Double, Double, Double, Double) =
+      val m =
+        """<clipPath id="[^"]+"><rect x="([^"]+)" y="([^"]+)" width="([^"]+)" height="([^"]+)"/>""".r
+          .findFirstMatchIn(svg)
+          .get
+      val (x, y, w, h) = (m.group(1).toDouble, m.group(2).toDouble, m.group(3).toDouble, m.group(4).toDouble)
+      (x, y, x + w, y + h)
+    // where the number `text` stands on the x axis, and on the y axis (the place of its mark)
+    def xWord(svg: String, text: String): Option[Double] = labels(svg).collectFirst { case (`text`, x, _, "middle") =>
+      x
+    }
+    def yWord(svg: String, text: String): Option[Double] =
+      labels(svg).collectFirst { case (`text`, _, y, "end") => y - 0.35 * 11 }
+    def sits(at: Option[Double], where: Double): Boolean = at.exists(v => math.abs(v - where) < 0.02)
+    // a titled picture has the same plot area as its page: the range asked for runs the whole of it
+    def titled(more: Scene => Scene): String = flat(s => more(s.withTitle("t"))).staticSvg(Theme.Light)
+
+    "open on the range that min, max and padding give, widened to the shape of the plot area" in {
+      val wide = titled(_.withXScale(min = -10.0, max = 20.0))
+      val (l, t, r, b) = plotBox(wide)
+      // the range runs the width of the plot area, and the data sit where the numbers put them: x = 0 a third along, 10 two thirds
+      sits(xWord(wide, "-10"), l) must beTrue
+      sits(xWord(wide, "20"), r) must beTrue
+      val xs = dots(wide).map(_._1)
+      (math.abs((xs.min - l) / (r - l) - 1.0 / 3) < 1e-3) must beTrue
+      (math.abs((xs.max - l) / (r - l) - 2.0 / 3) < 1e-3) must beTrue
+      // one end given: the other is the data's, padded by 0.04 of their extent (10 to 10.4)
+      val low = titled(_.withXScale(min = -2.0))
+      sits(xWord(low, "-2"), l) must beTrue
+      (math.abs((dots(low).map(_._1).max - l) / (r - l) - 12.0 / 12.4) < 1e-3) must beTrue
+      // the padding is a fraction of the extent at each end: half of 10 is 5 either side
+      val padded = titled(_.withXScale(padding = 0.5))
+      sits(xWord(padded, "-5"), l) must beTrue
+      sits(xWord(padded, "15"), r) must beTrue
+      // a tall range runs the height
+      val tall = titled(_.withYScale(min = -100.0, max = 100.0))
+      sits(yWord(tall, "-100"), b) must beTrue
+      sits(yWord(tall, "100"), t) must beTrue
+      // an untitled still has a taller plot area than its page, and keeps the whole range in view all the same
+      val bare = flat(_.withXScale(min = -10.0, max = 20.0)).staticSvg(Theme.Light)
+      val (bl, _, br, _) = plotBox(bare)
+      (xWord(bare, "-10").exists(_ >= bl - 0.02) && xWord(bare, "20").exists(_ <= br + 0.02)) must beTrue
+      // on a tall picture a tall range is what the height of the plot area holds, and the page's canvas is the shorter of the two:
+      // the frame is the titled picture's (whose still is as tall as the canvas), not the smaller one that the untitled still's
+      // room alone would give, which the canvas would not hold
+      def portrait(s: Scene) = s.withSize(400, 700).withYScale(min = -100.0, max = 100.0).frame._2
+      val tallBare = portrait(flat())
+      val tallTitled = portrait(flat(_.withTitle("t")))
+      (math.abs(tallBare - tallTitled) < 1e-9 * tallTitled) must beTrue
+    }
+
+    "open where the fit is when no range is asked for, and where the range is for an axis it is not asked on" in {
+      val fitted = flat().staticSvg(Theme.Light)
+      // nothing about a range: the points' own fit (the dots are where they were)
+      dots(flat(_.withXScale(grid = true)).staticSvg(Theme.Light)) === dots(fitted)
+      // a range on x alone leaves y to the data: the dots keep their y spacing relative to their x spacing (equal units)
+      val xs = dots(titled(_.withXScale(min = -10.0, max = 20.0)))
+      val (spanX, spanY) = (xs.map(_._1).max - xs.map(_._1).min, xs.map(_._2).max - xs.map(_._2).min)
+      (math.abs(spanY / spanX - 4.0 / 10.0) < 1e-3) must beTrue
+    }
+
+    "refuse a range that no place of the axis can be at, or that is empty" in {
+      // y spans little, so that the width of the plot area is what the range fills
+      val decades: IndexedSeq[XYZ] = IndexedSeq((1.0, 1.0, 0.0), (100.0, 2.0, 0.0))
+      def logged(t: Scene => Scene) =
+        t(Scene(Vector(Layer.Points(decades, IndexedSeq(Paint.Ink), 3.0)), azimuth = 0, elevation = 90, axes = true))
+      logged(_.withXScale(Transform.Log10, min = 0.0)).staticSvg(Theme.Light) must
+        throwAn[IllegalArgumentException](".*log.*no place for 0.*")
+      logged(_.withXScale(min = 3.0, max = 3.0)).staticSvg(Theme.Light) must
+        throwAn[IllegalArgumentException](".*min.*less than max.*")
+      // a range on a log axis is in the units of the data: 1 to 1000 is three decades
+      val svg = logged(_.withXScale(Transform.Log10, min = 1.0, max = 1000.0).withTitle("t")).staticSvg(Theme.Light)
+      val (l, _, r, _) = plotBox(svg)
+      sits(xWord(svg, "1"), l) must beTrue
+      sits(xWord(svg, "1000"), r) must beTrue
+      val d = dots(svg).map(_._1)
+      (math.abs((d.max - l) / (r - l) - 2.0 / 3) < 1e-3) must beTrue // 100 is two decades of three
+    }
+
+    "run an axis the other way: the marks, the numbers and the gridlines are mirrored together" in {
+      val plain = titled(identity)
+      val back = titled(_.withXScale(reverse = true).withYScale(reverse = true))
+      val (l, t, r, b) = plotBox(plain)
+      val (cx, cy) = ((l + r) / 2, (t + b) / 2)
+      // the large numbers are on the left and at the bottom; each number is where its dot is
+      xWord(back, "10").get must beLessThan(xWord(back, "0").get)
+      yWord(back, "4").get must beGreaterThan(yWord(back, "0").get)
+      val (dx, dy) = (dots(back).map(_._1), dots(back).map(_._2))
+      sits(xWord(back, "10"), dx.min) must beTrue
+      sits(xWord(back, "0"), dx.max) must beTrue
+      sits(yWord(back, "4"), dy.max) must beTrue
+      sits(yWord(back, "0"), dy.min) must beTrue
+      // the picture is the plain one turned about the middle of the plot area, numbers and gridlines with it
+      def mirrored(a: Seq[Double], c: Double) = a.map(2 * c - _).sorted
+      sameAll(dots(back).map(_._1).sorted, mirrored(dots(plain).map(_._1), cx)) must beTrue
+      sameAll(dots(back).map(_._2).sorted, mirrored(dots(plain).map(_._2), cy)) must beTrue
+      sameAll(upright(back), mirrored(upright(plain), cx)) must beTrue
+      sameAll(level(back), mirrored(level(plain), cy)) must beTrue
+      labels(plain).filter(_._4 == "middle").forall(w => sits(xWord(back, w._1), 2 * cx - w._2)) must beTrue
+      labels(plain).filter(_._4 == "end").forall(w => sits(yWord(back, w._1), 2 * cy - (w._3 - 0.35 * 11))) must beTrue
+      // a range given on a reversed axis runs the other way too: its least number is at the right, its greatest at the left
+      val ranged = titled(_.withXScale(reverse = true, min = -10.0, max = 20.0))
+      val (rl, _, rr, _) = plotBox(ranged)
+      sits(xWord(ranged, "20"), rl) must beTrue
+      sits(xWord(ranged, "-10"), rr) must beTrue
+      // on a log axis too: the decades run backwards and are still evenly spaced
+      val decades: IndexedSeq[XYZ] =
+        IndexedSeq((1.0, 1.0, 0.0), (10.0, 1.0, 0.0), (100.0, 1.0, 0.0), (1000.0, 1.0, 0.0))
+      val log =
+        Scene(Vector(Layer.Points(decades, IndexedSeq(Paint.Ink), 3.0)), azimuth = 0, elevation = 90, axes = true)
+          .withXScale(Transform.Log10, reverse = true)
+          .staticSvg(Theme.Light)
+      val ones = Seq("1", "10", "100", "1000").flatMap(xWord(log, _))
+      ones.size must beGreaterThan(1)
+      ones === ones.sorted.reverse
+      val steps = dots(log).map(_._1).sorted.sliding(2).map(p => p(1) - p(0)).toSeq
+      (steps.max - steps.min) must beLessThan(0.02)
+    }
+
+    "put the numbers at the breaks it is given, those in view, written by the format it is given" in {
+      val svg = titled(_.withXScale(breaks = Seq(0.0, 2.5, 10.0, 50.0), format = "%.1f"))
+      // 50 is beyond what the picture shows
+      labels(svg).filter(_._4 == "middle").map(_._1) === Seq("0.0", "2.5", "10.0")
+      upright(svg).size === 3
+      // the y axis is as it was
+      yMarks(svg) must not(beEmpty)
+      yMarks(svg) === yMarks(titled(identity))
+      // a break at the end of the range is in the range
+      val edge = titled(_.withXScale(min = 0.0, max = 10.0, breaks = Seq(0.0, 10.0)))
+      val (l, _, r, _) = plotBox(edge)
+      sits(xWord(edge, "0"), l) must beTrue
+      sits(xWord(edge, "10"), r) must beTrue
+      // on a reversed axis the same breaks are in view, at the mirrored places
+      val forward = titled(_.withXScale(breaks = Seq(0.0, 2.5, 10.0, 50.0)))
+      val backward = titled(_.withXScale(breaks = Seq(0.0, 2.5, 10.0, 50.0), reverse = true))
+      labels(backward).filter(_._4 == "middle").map(_._1) === Seq("0", "2.5", "10")
+      val (fl, _, fr, _) = plotBox(forward)
+      Seq("0", "2.5", "10").forall(w => sits(xWord(backward, w), fl + fr - xWord(forward, w).get)) must beTrue
+      // a break out of the range on a log axis (a number with no place) is not in view
+      val decades: IndexedSeq[XYZ] = IndexedSeq((1.0, 1.0, 0.0), (100.0, 10.0, 0.0))
+      val log =
+        Scene(Vector(Layer.Points(decades, IndexedSeq(Paint.Ink), 3.0)), azimuth = 0, elevation = 90, axes = true)
+          .withXScale(Transform.Log10, breaks = Seq(-5.0, 0.0, 10.0))
+          .staticSvg(Theme.Light)
+      labels(log).filter(_._4 == "middle").map(_._1) === Seq("10")
+    }
+
+    "write the numbers as a printf pattern says" in {
+      val fixed = titled(_.withXScale(format = "%.2f"))
+      val words = labels(fixed).filter(_._4 == "middle").map(_._1)
+      words must not(beEmpty)
+      words.forall(_.matches("""-?[0-9]+\.[0-9]{2}""")) must beTrue
+      // the other axis keeps the way of its scale
+      labels(fixed).filter(_._4 == "end").map(_._1) === labels(titled(identity)).filter(_._4 == "end").map(_._1)
+      val sci = titled(_.withYScale(format = "%.1e"))
+      labels(sci).filter(_._4 == "end").forall(_._1.matches("""-?[0-9]\.[0-9]e[+-][0-9]{2}""")) must beTrue
+      // the page carries the pattern and the code that writes it, only where there is one
+      val page = flat(_.withXScale(format = "%.2f")).fragment(Theme.Light)
+      page must contain("""FX="%.2f"""")
+      page must contain("function javaFormat(pattern,v)")
+      flat().fragment(Theme.Light) must not(contain("function javaFormat"))
+      flat().fragment(Theme.Light) must contain("FX=null,FY=null")
+    }
+
+    "leave out an axis that is not visible: its line, numbers, label and gridlines, and the room they took" in {
+      def withWords(more: Scene => Scene) = titled(s => more(s.withLabels(x = "xx", y = "yy")))
+      val both = withWords(identity)
+      val noX = withWords(_.withXScale(visible = false))
+      val noY = withWords(_.withYScale(visible = false))
+      def axesLines(svg: String): Int =
+        """(?s)<g class="tda4j-axes"[^>]*>(.*?)</g>""".r
+          .findFirstMatchIn(svg)
+          .map(g => "<line".r.findAllIn(g.group(1)).size)
+          .get
+      labels(noX).filter(_._4 == "middle") must beEmpty
+      words(noX).map(_._1) === Seq("yy")
+      upright(noX) must beEmpty
+      level(noX) must not(beEmpty)
+      axesLines(noX) === 1 + yMarks(noX).size
+      labels(noY).filter(_._4 == "end") must beEmpty
+      words(noY).map(_._1) === Seq("xx")
+      level(noY) must beEmpty
+      upright(noY) must not(beEmpty)
+      axesLines(noY) === 1 + xMarks(noY).size
+      // the room: the plot area takes it back
+      plotBox(noX)._4 must beGreaterThan(plotBox(both)._4)
+      plotBox(noY)._1 must beLessThan(plotBox(both)._1)
+      plotBox(noX)._4 === 520.0 - 8.0
+      plotBox(noY)._1 === 8.0
+      // the page draws neither the line nor the numbers nor the gridlines
+      val page = flat(_.withXScale(visible = false)).fragment(Theme.Light)
+      page must not(contain("for(const v of xTicks()){const x=xAt(v);line(x,box[3]"))
+      page must not(contain("line(x,box[1],x,box[3])"))
+      page must contain("for(const v of yTicks()){const y=yAt(v);line(box[0]-4,y,box[0],y)")
+      page must contain("""XL="",""")
+      flat(_.withXScale(visible = false).withYScale(visible = false)).fragment(Theme.Light) must not(
+        contain("paintGrid();")
+      )
+      flat().fragment(Theme.Light) must contain("for(const v of xTicks()){const x=xAt(v);line(x,box[3]")
+    }
+
+    "tell the page the range it opens on, the breaks, the format and the direction of each axis" in {
+      val page =
+        flat(_.withXScale(breaks = Seq(0.0, 2.5), reverse = true, format = "%.1f").withYScale(min = -1.0, max = 5.0))
+          .fragment(Theme.Light)
+      page must contain("BX=[0.0,2.5],BY=null,FX=\"%.1f\",FY=null")
+      page must contain(",-1,1],") // the sign of the x axis is -1 and of the y axis 1: the end of AX
+      // the frame is the window: centre of -1..5 on y, the radius that holds it
+      val s = flat(_.withYScale(min = -1.0, max = 5.0))
+      s.frame._1._2 === 2.0
+      // the frame is written with every digit: a range of a ten-thousandth keeps them
+      val tiny: IndexedSeq[XYZ] = IndexedSeq((0.0, 0.0, 0.0), (1e-4, 3e-4, 0.0))
+      val small =
+        Scene(Vector(Layer.Points(tiny, IndexedSeq(Paint.Ink), 3.0)), azimuth = 0, elevation = 90, axes = true)
+      val text = small.fragment(Theme.Light)
+      val m = """AX=\[([^,]+),([^,]+),([^,]+),1,1\]""".r.findFirstMatchIn(text).get
+      (math.abs(m.group(3).toDouble - small.frame._2) < 1e-15) must beTrue
+      (small.frame._2 < 1e-3) must beTrue
     }
 
     "ask for withAxes first when a tweak needs axes, and say so" in {
@@ -758,7 +988,7 @@ class SpatialSpec extends Specification:
         .withYScale(Transform.SymLog(2.0))
         .withLabels(x = "birth", y = "death")
         .fragment(Theme.Light)
-      log must contain("TX=['l',1],TY=['m',2],XL=\"birth\",YL=\"death\";")
+      log must contain("TX=['l',1],TY=['m',2],BX=null,BY=null,FX=null,FY=null,XL=\"birth\",YL=\"death\";")
       flat().fragment(Theme.Light) must contain("TX=['i',1],TY=['i',1]")
       // the gridlines are painted inside the clip, under the items; none when none are asked for
       flat().fragment(Theme.Light) must contain("g.clip();paintGrid();")
@@ -769,22 +999,50 @@ class SpatialSpec extends Specification:
       flat().fragment(Theme.Light) must contain("line(x,box[1],x,box[3])")
     }
 
-    "keep an item that follows a control off a picture whose axes are transformed, and say why" in {
-      val dot = Layer.Points(IndexedSeq((1.0, 1.0, 0.0), (2.0, 2.0, 0.0)), IndexedSeq(Paint.Ink), 3.0)
+    "let an item follow a control on a picture whose axes are transformed: the value goes through the axis, in the still and in the page" in {
+      // the item at x = 1 follows t on x, held between 1 and 4; the item at x = 9 stays
+      val dots = Layer.Points(IndexedSeq((1.0, 1.0, 0.0), (9.0, 9.0, 0.0)), IndexedSeq(Paint.Ink), 3.0)
+      val follow = IndexedSeq(Reaction(Vector(Behavior.Follows("t", Coordinate.X, Ends.Both, 1.0, 4.0))), Reaction.none)
       def page(scene: Scene) =
-        Interactive()
-          .withSlider("t", 0, 5)
-          .withPanel(
-            Panel
-              .Spatial(scene)
-              .reactEach(
-                dot,
-                IndexedSeq(Reaction(Vector(Behavior.Follows("t", Coordinate.X, Ends.Both, 0.0, 4.0))), Reaction.none)
-              )
-          )
-      page(flat(_.copy(layers = Vector.empty))).fragment(Theme.Light).length must beGreaterThan(0)
-      page(flat(_.copy(layers = Vector.empty).withXScale(Transform.Sqrt))).fragment(Theme.Light) must
-        throwAn[IllegalArgumentException](".*cannot follow a control.*transformed.*linear axes.*")
+        Interactive().withSlider("t", 0, 5).withPanel(Panel.Spatial(scene).reactEach(dots, follow))
+      val empty = flat(_.copy(layers = Vector.empty).withTitle("t"))
+      def drawn(p: Interactive, t: Double): Seq[Double] =
+        """<circle cx="([^"]+)" cy="[^"]+" r="3\.0"""".r
+          .findAllMatchIn(sceneOf(p.at(t)).staticSvg(Theme.Light))
+          .map(_.group(1).toDouble)
+          .toSeq
+      // on a square-root axis the mover is at the root of the value: 1 then 2, against the other at 3. The gap is 2 and then 1
+      val root = page(empty.withXScale(Transform.Sqrt))
+      val (near, far) = (drawn(root, 4.0), drawn(root, 1.0))
+      val (gapNear, gapFar) = (near.max - near.min, far.max - far.min)
+      (math.abs(gapFar / gapNear - 2.0) < 0.01) must beTrue
+      // on a linear axis the gaps are 5 and 8
+      val straight = page(empty)
+      val (n2, f2) = (drawn(straight, 4.0), drawn(straight, 1.0))
+      (math.abs((f2.max - f2.min) / (n2.max - n2.min) - 1.6) < 0.01) must beTrue
+      // the item that does not follow stays where it is: the frame holds every place the other can reach
+      Seq(0.0, 1.0, 2.5, 5.0).map(t => drawn(root, t).max).distinct.size === 1
+      // and on a reversed axis the mover goes the other way
+      val back = drawn(page(empty.withXScale(reverse = true)), 4.0)
+      (back.max - back.min) must beGreaterThan(0.0)
+      // the page puts the value through the axis and its direction; a linear picture's page does not
+      page(empty.withXScale(Transform.Sqrt)).fragment(Theme.Light) must
+        contain("const placed=(k,v)=>k===0?AX[3]*tr[TX[0]](v,TX[1]):k===1?AX[4]*tr[TY[0]](v,TY[1]):v;")
+      page(empty).fragment(Theme.Light) must contain("const placed=(k,v)=>v;")
+      page(empty.withXScale(reverse = true)).fragment(Theme.Light) must contain("k===0?AX[3]*tr[TX[0]]")
+      // a limit with no place on the axis is refused when the page is made
+      val zero = Layer.Points(IndexedSeq((1.0, 1.0, 0.0)), IndexedSeq(Paint.Ink), 3.0)
+      Interactive()
+        .withSlider("t", 0, 5)
+        .withPanel(
+          Panel
+            .Spatial(empty.withXScale(Transform.Log10))
+            .reactEach(
+              zero,
+              IndexedSeq(Reaction(Vector(Behavior.Follows("t", Coordinate.X, Ends.Both, 0.0, 4.0))))
+            )
+        )
+        .fragment(Theme.Light) must throwAn[IllegalArgumentException](".*log.*no place for 0.*")
     }
   }
 

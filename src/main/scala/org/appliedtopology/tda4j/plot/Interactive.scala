@@ -783,6 +783,7 @@ final case class Interactive(
       .replace("__CONTROLS__", spec)
       .replace("__SELECTIONS__", choices)
       .replace("__TICKS__", Scene.tickScript)
+      .replace("__FORMAT__", Scene.formatScript)
       .replace("__SCRIPTS__", mine)
     s"""<div id="$id" class="tda4j-ia">
        |<style>${Interactive.styles(
@@ -1685,29 +1686,7 @@ object Interactive:
       |  if(bn&&sel[bn]){svg.setAttribute('tabindex','0');brushing(svg,list,bn,Array.from(root.querySelectorAll('.tda4j-panel')).indexOf(box));}});
       |const MAXZ=200,zooms={};
       |// numbers as the plot writes them: `String.format`'s %f and %e (rounding the shortest decimal half up, as Java does) and NumberStyle
-      |function digitsOf(a){if(a===0)return {d:'0',e:0};
-      |  const m=/^([0-9])(?:\.([0-9]+))?e([+-][0-9]+)$/.exec(a.toExponential());return {d:m[1]+(m[2]||''),e:+m[3]};}
-      |function scaled(a,frac){const g=digitsOf(a),keep=g.e+1+frac;if(keep<0)return 0n;
-      |  let n=keep===0?0n:BigInt(g.d.slice(0,keep).padEnd(keep,'0'));if(g.d.charAt(keep)>='5')n+=1n;return n;}
-      |function expo(a,prec){if(a===0)return [prec>0?'0.'+'0'.repeat(prec):'0',0];
-      |  const g=digitsOf(a),keep=prec+1;let n=BigInt(g.d.slice(0,keep).padEnd(keep,'0'));if(g.d.charAt(keep)>='5')n+=1n;
-      |  let t=n.toString(),e=g.e;if(t.length>keep){t=t.slice(0,keep);e+=1;}
-      |  return [t.charAt(0)+(prec>0?'.'+t.slice(1):''),e];}
-      |function javaFormat(pattern,v){
-      |  return pattern.replace(/%(?:(%)|([-+0]*,?[-+0]*)([0-9]*)(?:\.([0-9]+))?([feE]))/g,(all,pct,flags,width,prec,conv)=>{
-      |    if(pct)return '%';
-      |    const w=width?+width:0;
-      |    // NaN and the infinities are words: padded with spaces (never zeros), a sign only on an infinity
-      |    if(!isFinite(v)){let word=isNaN(v)?'NaN':(v<0?'-':flags.includes('+')?'+':'')+'Infinity';if(conv==='E')word=word.toUpperCase();
-      |      return word.length>=w?word:flags.includes('-')?word.padEnd(w):word.padStart(w);}
-      |    const neg=v<0||Object.is(v,-0),a=Math.abs(v),sign=neg?'-':flags.includes('+')?'+':'',p=prec===undefined?6:+prec;
-      |    let text;
-      |    if(conv==='f'){const n=scaled(a,p).toString().padStart(p+1,'0'),whole=n.slice(0,n.length-p),part=n.slice(n.length-p);
-      |      text=(flags.includes(',')?whole.replace(/\B(?=([0-9]{3})+(?![0-9]))/g,','):whole)+(p>0?'.'+part:'');}
-      |    else{const x=expo(a,p),ae=Math.abs(x[1]);text=x[0]+'e'+(x[1]<0?'-':'+')+(ae<10?'0'+ae:String(ae));if(conv==='E')text=text.toUpperCase();}
-      |    let out=sign+text;
-      |    if(out.length<w){if(flags.includes('-'))out=out.padEnd(w);else if(flags.includes('0'))out=sign+text.padStart(w-sign.length,'0');else out=out.padStart(w);}
-      |    return out;});}
+      |__FORMAT__
       |function localize(t,ns){if(!ns)return t;const dec=ns[0]||'.',grp=ns[1],mi=ns[2]||'-';
       |  if(t.startsWith('-∞'))return mi+t.slice(1);
       |  return t.replace(/(-?)([0-9]+)(?:\.([0-9]+))?(?:e(-?[0-9]+))?/g,(m,sg,wh,fr,ex)=>{

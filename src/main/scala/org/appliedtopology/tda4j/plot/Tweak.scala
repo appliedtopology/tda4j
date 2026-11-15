@@ -404,25 +404,18 @@ object Scale:
 
     override def toString: String = s"Scale.${if onX && onY then "xy" else if onX then "x" else "y"}(...)"
 
-    // a picture with axes takes the transform and the gridlines of an axis; the other options fix a range or move the axis,
-    // which what its page shows (pan and zoom) decides
+    // a picture with axes takes every option of an axis but the three that move the axis or add a line to it: its axes stay
+    // at the foot and the left edge of the plot area, and a canvas that pans and zooms has no place for a `-∞` line
     override def onScene(s: Scene): Scene =
       val beyond = Seq(
-        "min" -> min.isEmpty,
-        "max" -> max.isEmpty,
-        "breaks" -> breaks.isEmpty,
-        "format" -> format.isEmpty,
-        "visible" -> visible.isEmpty,
         "minusInfinity" -> minusInfinity.isEmpty,
         "position" -> position.isEmpty,
-        "reverse" -> reverse.isEmpty,
-        "padding" -> padding.isEmpty,
         "crossesAt" -> crossesAt.isEmpty
       ).collect { case (name, false) => name }
       if beyond.nonEmpty then
         throw UnsupportedOperationException(
-          s"$this: an axis of a picture seen from above takes only transform and grid; " +
-            s"${beyond.mkString(", ")} belong to a Figure (the view of a canvas is its range)"
+          s"$this: ${beyond.mkString(", ")} belong to a Figure: the axes of a picture seen from above stay at the foot and " +
+            "the left edge of its plot area, and a log axis there has no -∞ line (Transform.SymLog keeps zero and negative numbers)"
         )
       if !s.axes then
         throw UnsupportedOperationException(
@@ -437,8 +430,33 @@ object Scale:
           require(c > 0 && c.isFinite, s"Scale: a symmetric log axis needs a positive linear stretch, not $c")
         case _ => ()
       }
-      def one(a: Axis): Axis = a.copy(transform = transform.getOrElse(a.transform), grid = grid.getOrElse(a.grid))
-      s.copy(xAxis = if onX then one(s.xAxis) else s.xAxis, yAxis = if onY then one(s.yAxis) else s.yAxis)
+      format.toOption.foreach(pattern =>
+        require(
+          Interactive.formatSupported(pattern),
+          s"$this: the number format \"$pattern\" is beyond what a picture's page writes; it writes %f and %e " +
+            "with the flags - + 0 and , (for f), a width and a precision"
+        )
+      )
+      breaks.toOption.foreach(bs =>
+        require(bs.forall(_.isFinite), s"$this: breaks are numbers, not ${bs.filterNot(_.isFinite).mkString(", ")}")
+      )
+      def one(a: Axis, which: String): Axis =
+        val updated = update(a, which)
+        a.copy(
+          transform = updated.transform,
+          min = updated.min,
+          max = updated.max,
+          ticks = updated.ticks,
+          format = updated.format,
+          grid = updated.grid,
+          visible = updated.visible,
+          reverse = updated.reverse,
+          padding = updated.padding
+        )
+      s.copy(
+        xAxis = if onX then one(s.xAxis, "x") else s.xAxis,
+        yAxis = if onY then one(s.yAxis, "y") else s.yAxis
+      )
 
     private def update(a: Axis, which: String): Axis =
       val tr = transform.getOrElse(a.transform)
