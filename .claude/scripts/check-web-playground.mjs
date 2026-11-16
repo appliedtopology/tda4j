@@ -4,17 +4,22 @@
 //
 //   (cd demo && sbt webSite)                                  # demo/target/web: the page, three jars
 //   node .claude/scripts/check-web-playground.mjs [site]      # default site: demo/target/web
+//   node .claude/scripts/check-web-playground.mjs https://tda4j.appliedtopology.org/playground/
+//
+// The site is a folder, which is served from this machine for the check, or the address of a published page, which is
+// used where it is: the published page is the one participants get, and a site can lack what the folder has.
 //
 // Needs Playwright with its Chromium, and the network: the page loads its Java runtime (CheerpJ) from the vendor's
 // CDN. Behind a proxy that HTTPS_PROXY names, the browser is told to use it. Prints the time of every input: those
-// numbers are this machine's, with the jars on localhost.
+// numbers are this machine's, with the jars on localhost unless the site is a published one.
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { serve } from "../../demo/web/serve.mjs";
 
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const site = path.resolve(process.argv[2] || path.join(repository, "demo/target/web"));
+const site = process.argv[2] || path.join(repository, "demo/target/web");
+const published = /^https?:\/\//.test(site);
 
 let chromium;
 try {
@@ -23,8 +28,8 @@ try {
   ({ chromium } = createRequire(import.meta.url)("playwright"));
 }
 
-const server = await serve(site, 0);
-const address = `http://127.0.0.1:${server.address().port}/`;
+const server = published ? null : await serve(path.resolve(site), 0);
+const address = published ? site.replace(/\/?$/, "/") : `http://127.0.0.1:${server.address().port}/`;
 const proxy = process.env.HTTPS_PROXY ? { server: process.env.HTTPS_PROXY, bypass: "127.0.0.1,localhost" } : undefined;
 const browser = await chromium.launch({ proxy });
 const page = await browser.newPage({ viewport: { width: 1100, height: 900 } });
@@ -49,6 +54,16 @@ function check(what, holds, shown) {
 const input = page.locator("#input");
 async function ready(timeout) {
   await page.waitForFunction(() => !document.getElementById("input").disabled, null, { timeout });
+}
+
+/** The first prompt. A page that says it cannot start fails here at once, in the page's own words. */
+async function firstPrompt(timeout) {
+  await page.waitForFunction(
+    () => !document.getElementById("input").disabled || document.getElementById("status").classList.contains("failed"),
+    null,
+    { timeout }
+  );
+  if (await input.isDisabled()) throw new Error("the page says: " + (await page.locator("#status").textContent()));
 }
 
 /** Types `text` and presses Enter; the page either runs it or, while it is unfinished, opens a new line. */
@@ -85,7 +100,7 @@ async function run(text) {
 const started = Date.now();
 try {
   await page.goto(address);
-  await ready(300_000);
+  await firstPrompt(300_000);
   console.log(`      ${((Date.now() - started) / 1000).toFixed(1)} s  to the first prompt: ${await page.locator("#status").textContent()}`);
   check("the heading shows the library's version", /\d+\.\d+/.test(await page.locator("#version").textContent()), await page.locator("#version").textContent());
   check("the imports ran without a message", (await page.locator("#transcript .entry").count()) === 0, await page.locator("#transcript").textContent());
@@ -153,7 +168,7 @@ try {
 } finally {
   if (process.env.SCREENSHOT) await page.screenshot({ path: process.env.SCREENSHOT, fullPage: true }).catch(() => {});
   await browser.close();
-  server.close();
+  server?.close();
 }
 console.log(`${failures.length === 0 ? "all checks passed" : failures.length + " check(s) FAILED"} in ${((Date.now() - started) / 1000).toFixed(0)} s`);
 process.exit(failures.length === 0 ? 0 : 1);

@@ -5,8 +5,9 @@ name: Demo
 #   - the page that runs the REPL in a browser, published on the docs site under /playground/;
 #   - the container image that serves the REPL as a terminal page, published as ghcr.io/<owner>/tda4j-demo.
 #
-# Both are used in a headless browser before anything is published, and both replace what was published before: the
-# page and the image's `latest` tag are always the last ones this workflow built.
+# Both are used in a headless browser before anything is published, and the page a second time where it is published.
+# Both replace what was published before: the page and the image's `latest` tag are always the last ones this workflow
+# built.
 #
 # Run it by hand for a branch (a tutorial that needs what is on `scala` today gets the snapshot); release.yml calls it
 # for every release tag, after the release itself.
@@ -122,6 +123,7 @@ jobs:
           docker build -f demo/container/Dockerfile --build-arg "JAR=${{ steps.demo.outputs.jar }}" -t tda4j-demo:check demo
           node .claude/scripts/check-demo-container.mjs tda4j-demo:check
       - name: Publish the page
+        id: page
         if: steps.demo.outputs.found == 'true'
         env:
           VERSION: ${{ steps.demo.outputs.version }}
@@ -138,6 +140,14 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git fetch origin gh-pages
           git worktree add -B gh-pages-demo /tmp/gh-pages origin/gh-pages
+          # Where the branch is served, for the check of the published page below: the domain the branch names, or the
+          # repository's own address.
+          if [ -s /tmp/gh-pages/CNAME ]; then
+            host=$(tr -d '[:space:]' < /tmp/gh-pages/CNAME)
+          else
+            host="${GITHUB_REPOSITORY_OWNER,,}.github.io/${GITHUB_REPOSITORY#*/}"
+          fi
+          echo "url=https://$host/playground/" >> "$GITHUB_OUTPUT"
           # The page and its three jars, which must come from the page's own site; nothing else of the site is touched.
           # docs.yml keeps this folder when it replaces the site's root.
           #
@@ -153,7 +163,14 @@ jobs:
           mkdir /tmp/gh-pages/playground
           cp "$site/index.html" "$site/tda4j-demo-project.jar" "$site/tda4j-demo-libs.jar" "$site/tda4j-demo-web-patch.jar" /tmp/gh-pages/playground/
           cd /tmp/gh-pages
-          git add -A playground
+          # -f: the branch has the .gitignore of a Java source tree, which names `*.jar`, and without it `git add`
+          # leaves the three jars out without a word: the page is then published alone and cannot start.
+          git add -A -f playground
+          for file in index.html tda4j-demo-project.jar tda4j-demo-libs.jar tda4j-demo-web-patch.jar; do
+            if ! git ls-files --error-unmatch "playground/$file" > /dev/null 2>&1; then
+              echo "::error::playground/$file is not in what would be pushed to gh-pages"; exit 1
+            fi
+          done
           if git diff --cached --quiet; then
             echo "No changes to publish."
             exit 0
@@ -174,14 +191,46 @@ jobs:
           IMAGE: ${{ steps.demo.outputs.image }}
         run: |
           # For Intel and ARM machines (an Apple Silicon laptop pulls the ARM one). The jar is the same in both; the ARM
-          # image's packages are installed under emulation, and that image is never run here.
+          # image's packages are installed under emulation, and that image is never run here. The title and the time are
+          # set because the base image's own (`ubuntu`, and the day it was built) would be inherited otherwise.
           echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           docker run --privileged --rm tonistiigi/binfmt --install arm64
           docker buildx create --use --name demo
           docker buildx build --platform linux/amd64,linux/arm64 --push \
             -f demo/container/Dockerfile --build-arg "JAR=${{ steps.demo.outputs.jar }}" \
+            --label "org.opencontainers.image.title=tda4j-demo" \
+            --label "org.opencontainers.image.created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
             --label "org.opencontainers.image.description=The TDA4j demo REPL as a terminal in a web page" \
             --label "org.opencontainers.image.version=$VERSION" \
             -t "$IMAGE:$VERSION" -t "$IMAGE:latest" demo
           echo "::notice::published $IMAGE:$VERSION and $IMAGE:latest"
+      - name: Use the published page in the browser
+        # Also when the image's push failed: the page is published by then.
+        if: ${{ !cancelled() && steps.page.outcome == 'success' }}
+        env:
+          PAGE: ${{ steps.page.outputs.url }}
+        run: |
+          # The push to gh-pages is not yet the page. GitHub Pages deploys the branch a minute or two later, and a file
+          # that the push left out is missing only there, after every step above has passed. So wait until the site
+          # serves the four files of this build, byte for byte, then use the page where participants will.
+          site=demo/target/web
+          served() {
+            for file in index.html tda4j-demo-web-patch.jar tda4j-demo-project.jar tda4j-demo-libs.jar; do
+              if ! curl -fsSL --max-time 300 -o "$RUNNER_TEMP/served" "$PAGE$file"; then
+                echo "$PAGE$file is not served"; return 1
+              fi
+              if ! cmp -s "$RUNNER_TEMP/served" "$site/$file"; then
+                echo "$PAGE$file is not this build's yet"; return 1
+              fi
+            done
+          }
+          for attempt in $(seq 1 60); do
+            if served; then
+              node .claude/scripts/check-web-playground.mjs "$PAGE"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::error::$PAGE does not serve this build 15 minutes after the push to gh-pages: see the repository's Pages deployments"
+          exit 1

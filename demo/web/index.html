@@ -112,8 +112,8 @@
   // The class path, for the runtime and for the Scala compiler in it. The patch jar goes first: its classes replace
   // the ones of the same name in the other two, which this runtime cannot run as they are. The demo jar is those two
   // together, cut where it changes (`build.sbt`, `webSite`): the library and the demo's own classes, and the rest.
-  const classPath = ["tda4j-demo-web-patch.jar", "tda4j-demo-project.jar", "tda4j-demo-libs.jar"]
-    .map(jar => here + jar).join(":");
+  const jars = ["tda4j-demo-web-patch.jar", "tda4j-demo-project.jar", "tda4j-demo-libs.jar"];
+  const classPath = jars.map(jar => here + jar).join(":");
 
   const transcript = document.getElementById("transcript");
   const form = document.getElementById("prompt");
@@ -130,6 +130,17 @@
   function say(text, failed) {
     status.textContent = text;
     status.classList.toggle("failed", Boolean(failed));
+  }
+
+  // A failure in words. One that comes out of the Java runtime is a Java exception, not an Error: joining it to a
+  // string throws, reading a field of it starts Java code, and its own words are what its toString() answers, later.
+  async function describe(failure) {
+    if (failure instanceof Error) return failure.message || String(failure);
+    try {
+      return String(await failure.toString());
+    } catch (unprintable) {
+      return "a failure that gave no description";
+    }
   }
 
   function setBusy(now) {
@@ -206,7 +217,7 @@
       }
       say("Ready. The last input took " + seconds(performance.now() - started) + ".");
     } catch (failure) {
-      addOutput(entry, "The Java runtime failed on this input: " + (failure && failure.message ? failure.message : failure), true);
+      addOutput(entry, "The Java runtime failed on this input: " + await describe(failure), true);
       say("The Java runtime reported a failure. If the prompt stops answering, reload the page.", true);
     } finally {
       clearInterval(ticking);
@@ -282,6 +293,21 @@
     });
   }
 
+  // The jars that this page's site does not have, each with the site's answer. Asked before the runtime is fetched,
+  // so that a copy of the page that was published without its jars says so at once, and names them.
+  async function missingJars() {
+    const missing = [];
+    for (const jar of jars) {
+      try {
+        const answer = await fetch(jar, { method: "HEAD", cache: "no-store" });
+        if (!answer.ok) missing.push(jar + " (HTTP " + answer.status + ")");
+      } catch (noAnswer) {
+        // The site did not answer at all. The runtime asks again below, and its failure is reported there.
+      }
+    }
+    return missing;
+  }
+
   async function start() {
     if (location.protocol === "file:") {
       say("This page has to come from a web server, because the Java runtime fetches the jars beside it piece by " +
@@ -290,6 +316,12 @@
     }
     const started = performance.now();
     try {
+      const missing = await missingJars();
+      if (missing.length) {
+        say("This copy of the page cannot start. Its site does not have " + missing.join(", ") + ", which belong " +
+            "beside the page: whoever published it has to publish them too.", true);
+        return;
+      }
       say("Starting the Java runtime…");
       await loadRuntime();
       await cheerpjInit({ version: 17, status: "none" });
@@ -303,9 +335,9 @@
       say("Ready after " + seconds(performance.now() - started) + ". The first inputs are the slowest.");
       setBusy(false);
     } catch (failure) {
-      say("The session could not start: " + (failure && failure.message ? failure.message : failure) +
-          ". This page needs a network connection (the Java runtime comes from cjrtnc.leaningtech.com); " +
-          "the demo jar itself works without one.", true);
+      say("The session could not start: " + await describe(failure) +
+          ". If this machine is offline: the page needs a network connection (the Java runtime comes from " +
+          "cjrtnc.leaningtech.com); the demo jar itself works without one.", true);
     }
   }
 

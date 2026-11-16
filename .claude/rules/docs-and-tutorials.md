@@ -7,6 +7,7 @@ paths:
   - "src/test/scala/org/appliedtopology/tda4j/tutorial/**"
   - ".github/workflows/docs.yml"
   - ".github/workflows/release.yml"
+  - ".github/workflows/demo.yml"
 ---
 
 # The docs site, tutorial pages and language tabs
@@ -71,6 +72,14 @@ with the same options, asserting the numbers the tab quotes; the facade hides ba
 tab's calls as `tda4j.*` (snake_case options, bars counted from 0) and IS run: `python/tests/test_docs.py` executes every
 ```` ```python ```` fence in `_docs` and the READMEs and checks what the page quotes, one `ORACLES` entry per fence (a new fence
 without one fails). Tutorials that use the typed API only (Truchet, cup products, group cohomology) get no Python tab.
+
+**Publishing to `gh-pages`** (`docs.yml`, `release.yml`, `demo.yml`): the branch has a Java source tree's `.gitignore`
+(`*.jar`, `*.zip`, `*.class`, `*.log`, `target/`, `out/`), so `git add` leaves such a file out without a word and the
+push is still green. A step that publishes one adds it with `-f` and checks `git ls-files --error-unmatch` before the
+push (`demo.yml`'s jars; the docs output has no such file). The pushed branch is not yet the served site: `demo.yml`
+waits until the site serves the build's files, then runs `check-web-playground.mjs <address>` there. Try a publish step
+against a copy of the REAL branch (`git push <scratch>.git origin/gh-pages:refs/heads/gh-pages`), never an empty
+repository. `WORKLOG-demo-first-publish.md`.
 
 **The Playground link and the doc snippets' Scastie configuration are generated** in `build.sbt` (`scastieLink`,
 `scastieSettings`) from the last plain `v*` tag, so a release edits nothing; the docs workflows must check out with tags
