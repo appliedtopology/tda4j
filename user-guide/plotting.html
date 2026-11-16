@@ -513,15 +513,25 @@
     </tr>
     <tr>
      <td><code>maxCells</code></td>
-     <td>the page holds every edge and triangle up to <code>max</code>; asked for more than this (20,000 by default), it refuses and says to lower <code>max</code></td>
+     <td>the page holds every edge and triangle up to <code>max</code>; asked for more than this (200,000 by default), it refuses and says to lower <code>max</code></td>
+    </tr>
+    <tr>
+     <td><code>canvas</code></td>
+     <td>up to 20,000 cells the complex is an SVG with axes, one element for each cell. Above that it is a canvas, a flat picture seen from above with an x axis, a y axis and gridlines: a drag pans it, the wheel zooms about the pointer, the numbers and the gridlines follow, and it takes about a seventh of the bytes and a hundredth of the elements. <code>canvas = true</code> or <code>false</code> chooses either way</td>
     </tr>
    </tbody>
   </table>
-  <p><code>Plot.filtration3D(points)</code> is the same with the complex in 3-D, a canvas to turn and zoom beside the diagram; <code>result.plotFiltration3D(max)</code> from a result, <code>--plot filtration-3d</code> on the command line. <code>Plot.filtrationOf(points, stream, bars)</code> takes a complex and a diagram of your own, for instance a witness complex or one whose diagram you computed with another engine.</p>
+  <p><code>Plot.filtration3D(points)</code> is the same with the complex in 3-D, a canvas to turn and zoom beside the diagram; <code>result.plotFiltration3D(max)</code> from a result, <code>--plot filtration-3d</code> on the command line. The balls grow with the slider. The frame is fitted to the points, so a ball larger than the picture is cut at its edge. With <code>link = true</code> the canvas is linked like the flat page: a class chosen in the diagram or the barcode draws its cycle in the canvas, pointing at an item of the canvas chooses it, and the items that are chosen get a halo. On a touch screen one finger turns the canvas (it does not scroll the page: scroll from outside it) and two fingers pinch to zoom. <code>Plot.filtrationOf(points, stream, bars)</code> takes a complex and a diagram of your own, for instance a witness complex or one whose diagram you computed with another engine.</p>
  </section>
  <section id="frames-a-video-and-a-slide">
   <h3 class="h400"><a href="#frames-a-video-and-a-slide" class="anchor"></a>Frames, a video and a slide</h3>
   <p>An interactive page works in a browser and nowhere else, so the same plot also gives still pictures. <code>page.at(0.6)</code> is the picture with the slider at 0.6, <code>page.frames(60)</code> sixty of them from the smallest scale to the largest, and <code>page.saveFrames("frames", 60)</code> writes them as <code>frame-0000.svg</code> and on. The axes are fixed across frames, so nothing jumps when they are played. Each frame is built from the same rules as the page (a cell is shown from the value at which it enters, a class from its birth), so a frame at a scale shows the cells that <code>Plot.complex</code> shows at that scale.</p>
+  <p>The other languages write the same frames. Python: <code>page.save_frames("frames", 60)</code>. JavaScript: <code>chart.saveFrames("frames", 60)</code> on Node.js writes the files, and <code>chart.frames(60)</code> returns the 60 SVG documents as strings, in a browser too. On the command line <code>--frames 60</code> with <code>--plot filtration --at 1.0</code> writes them into the folder that <code>--output</code> names (a folder, not a file):</p>
+  <div class="snippet mono-small-block">
+   <pre><code class="language-bash"><span line-number="1" class=""><span class="tooltip-container"></span>tda4j --max-dimension 1 --plot filtration --at 1.0 --frames 60 --output frames points.csv
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
   <p>The frames are SVG. A video needs pictures: convert them and let <code>ffmpeg</code> join them. A paper-white background (<code>withPalette("print")</code> and <code>withStyle("print")</code>) keeps the video from showing a transparent background as black:</p>
   <div class="snippet mono-small-block" scala-snippet="" runnable="">
    <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import scala.language.experimental.modularity
@@ -597,8 +607,8 @@
      <td>is there while the value of control <code>c</code> is at least <code>v</code>, below <code>v</code>, or from <code>a</code> up to but not including <code>b</code></td>
     </tr>
     <tr>
-     <td><code>Behavior.followsX(c)</code>, <code>followsY(c, lo, hi, ends)</code></td>
-     <td>has this coordinate equal to the value of <code>c</code>, held between <code>lo</code> and <code>hi</code>: a movable line, a bar that grows</td>
+     <td><code>Behavior.followsX(c)</code>, <code>followsY(c, lo, hi, ends)</code>, <code>followsZ(c, lo, hi, ends)</code></td>
+     <td>has this coordinate equal to the value of <code>c</code>, held between <code>lo</code> and <code>hi</code>: a movable line, a bar that grows, and in a 3-D scene a plane that rises (<code>followsZ</code>)</td>
     </tr>
     <tr>
      <td><code>Behavior.radius(c, factor)</code></td>
@@ -630,7 +640,7 @@
 </span></code></pre>
    <div class="buttons"></div>
   </div>
-  <p>Behaviors that the library cannot know are written in JavaScript: <code>withScript(js)</code> runs your script on the page, where <code>tda4j</code> is the page's controller with <code>get(name)</code>, <code>set(name, value)</code>, <code>onChange(name, f)</code> and <code>reactor(kind, f)</code>, which says what a <code>Behavior.custom(kind, ...)</code> does to its item (<code>f(item, behavior, value)</code>, <code>item.el</code> the SVG element). Each change of a control is also announced as a <code>tda4j:change</code> event on the page's element, for anything else on the page. A frame shows the item as it was drawn, without the effect of a custom behavior. A behavior the page cannot carry out (a <code>radius</code> on a logarithmic axis, a 3-D layer that follows a value) is refused when the panel is built, with the reason.</p>
+  <p>Behaviors that the library cannot know are written in JavaScript: <code>withScript(js)</code> runs your script on the page, where <code>tda4j</code> is the page's controller with <code>get(name)</code>, <code>set(name, value)</code>, <code>onChange(name, f)</code> and <code>reactor(kind, f)</code>, which says what a <code>Behavior.custom(kind, ...)</code> does to its item (<code>f(item, behavior, value)</code>, <code>item.el</code> the SVG element). Each change of a control is also announced as a <code>tda4j:change</code> event on the page's element, for anything else on the page. A frame shows the item as it was drawn, without the effect of a custom behavior. A behavior the page cannot carry out (a <code>radius</code> on a logarithmic axis) is refused when the panel is built, with the reason.</p>
   <div class="snippet mono-small-block" scala-snippet="" runnable="">
    <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import scala.language.experimental.modularity
 </span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.*
@@ -696,7 +706,7 @@
    </div>
   </div>
   <p>On the command line, <code>tda4j --max-dimension 1 --plot explore --output explore.html points.csv</code> writes the same page. <code>Plot.explore(bars)</code> is the diagram and the barcode without the points, and <code>Plot.filtration(points, link = true)</code> is the slider page above with the same links, so that a class chosen in the diagram draws its cycle on the complex at the scale the slider shows. The cycles are the bars' representatives (<code>Persistence</code> records cycles by default; a cocycle is drawn as it is). A page holds every cell of every cycle, so <code>maxCycleCells</code> (20,000) keeps the most persistent bars' cycles and leaves the rest of the classes lit up in the diagram and the barcode without a cycle; the cloud's subtitle says so.</p>
-  <p><strong>Zoom and pan.</strong> Each picture has buttons in its corner: <code>+</code> and <code>−</code> zoom about the middle, <code>1:1</code> shows everything, and <code>Ctrl</code> (<code>Cmd</code> on a Mac) with the mouse wheel zooms about the pointer, which keeps the point under it where it was. Dragging pans; in a picture where dragging also chooses classes, the button <code>pan</code> switches what a drag does. The axes follow: new gridlines and numbers for the range shown, written as the plot writes them, while lines keep their width and points their size. Zooming stops at 1/200 of the picture, and the picture of an equal-aspect plot keeps its aspect (the barcode zooms along the filtration only, and keeps all its rows). What the window cuts away cannot be pointed at or chosen. A page that only zooms needs no slider: <code>Interactive().withPanel(Panel(figure).zoomable())</code>, or <code>page.zoomable()</code> on any page, which makes zoomable every flat panel whose axes the page can draw again. A logarithmic or reversed axis, an axis with a number format (<code>Axis.format</code>) and slanted tick labels cannot be: <code>Panel.zoomable</code> refuses them with the reason, and <code>zoomable()</code> leaves those panels as they are. The 3-D canvases have a zoom of their own.</p>
+  <p><strong>Zoom and pan.</strong> Each picture has buttons in its corner: <code>+</code> and <code>−</code> zoom about the middle, <code>1:1</code> shows everything, and <code>Ctrl</code> (<code>Cmd</code> on a Mac) with the mouse wheel zooms about the pointer, which keeps the point under it where it was. Dragging pans; in a picture where dragging also chooses classes, the button <code>pan</code> switches what a drag does. On a touch screen two fingers pinch and drag the picture (the distance between them zooms, their midpoint pans), one finger scrolls the page as it does everywhere, and a tap chooses. A picture where a drag chooses has a <code>touch</code> button: while it is on, one finger draws the rectangle (and a second finger landing is a pinch, which drops it). From the keyboard, <code>Tab</code> reaches a picture; <code>+</code> and <code>-</code> zoom about the middle, <code>0</code> shows everything, and the arrow keys pan where a drag pans (<code>Shift</code> goes further). In a picture where a drag chooses, the arrow keys move a cross over it instead, <code>]</code> and <code>[</code> (or <code>Page Down</code> and <code>Page Up</code>) put the cross on the next and the previous item the rectangle can choose, left to right and top to bottom, <code>Home</code> and <code>End</code> on the first and the last, <code>Enter</code> sets one corner of the rectangle and a second <code>Enter</code> chooses what it touches (<code>Shift</code> adds to what is chosen), and <code>Escape</code> lets go. Two items make a rectangle, however far apart they are: step to one, <code>Enter</code>, step to the other, <code>Enter</code>. The axes follow: new gridlines and numbers for the range shown, written as the plot writes them, while lines keep their width and points their size. Zooming stops at 1/200 of the picture, and the picture of an equal-aspect plot keeps its aspect (the barcode zooms along the filtration only, and keeps all its rows). What the window cuts away cannot be pointed at or chosen. A page that only zooms needs no slider: <code>Interactive().withPanel(Panel(figure).zoomable())</code>, or <code>page.zoomable()</code> on any page, which makes zoomable every flat panel whose axes the page can draw again: linear, logarithmic, square-root, symmetric-log and reversed axes, with their number formats, number style, slanted labels and minor ticks. Three things it cannot draw again: a transform of your own, a logarithmic axis with a <code>-∞</code> line for what is at 0, and a number format other than <code>%f</code> and <code>%e</code> (with the flags <code>-</code>, <code>+</code>, <code>0</code> and <code>,</code>, a width and a precision). <code>Panel.zoomable</code> refuses them with the reason, and <code>zoomable()</code> leaves those panels as they are. The 3-D canvases have a zoom of their own.</p>
   <p><strong>Stills.</strong> A viewer's choice is a value like a slider's: <code>page.at(PageState().select("class", 3).zoom(1, Window(-0.1, 0.6, 0.1, 0.8)))</code> is the picture with class 3 chosen (the key is the position of the bar in the list given) and the second picture, the diagram, showing that range (an equal-aspect picture widens one range of a window to keep its aspect, as the page does).</p>
   <div class="snippet mono-small-block" scala-snippet="" runnable="">
    <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import scala.language.experimental.modularity
@@ -711,11 +721,12 @@
 </span></code></pre>
    <div class="buttons"></div>
   </div>
+  <p>A rectangle that a viewer has dragged out is part of the state too: <code>PageState().brush(panel, Window(x0, x1, y0, y1))</code> draws it in a brushable panel, a dashed box in the picture's own units, and <code>select</code> gives what it touches, as the page does. Both are needed to show what a viewer who dragged a rectangle sees.</p>
  </section>
  <section id="selections-of-your-own">
   <h3 class="h400"><a href="#selections-of-your-own" class="anchor"></a>Selections of your own</h3>
-  <p>A <strong>selection</strong> is to a viewer's pointer what a slider is to a slider's value: a named set of whole-number keys that panels choose from and react to. <code>Panel.selecting(mark, name, keys)</code> makes the items of a mark choose the key <code>keys(i)</code> while the pointer is on them and lights a translucent halo round them while their key is chosen by anyone, <code>brushable(name)</code> lets a drag choose, and <code>Behavior.selected(name, key)</code> shows an item (a cycle, a label) only while a key is chosen, together with <code>shownFrom</code> and <code>followsY</code>, so a page can have both a slider and a selection. <code>Interactive.withSelection(Selection(name))</code> declares the selection (<code>withList</code>, <code>withLabels(...)</code>, <code>clickOnly</code>, <code>hoverOnly</code> change how it behaves and what the page writes under the pictures). On the page, <code>tda4j.selection(name)</code> gives the chosen keys to a script of your own, <code>tda4j.onChange(name, f)</code> calls <code>f</code> with the keys at every change, and the change is also announced as a <code>tda4j:change</code> event whose <code>value</code> is the array of keys. The zoom has <code>tda4j.zoom(panel, [x0, x1, y0, y1])</code>, <code>tda4j.window(panel)</code> and <code>tda4j.resetZoom(panel)</code> (panels counted from 0), and each new window is announced as a <code>tda4j:zoom</code> event. <code>Plot.explore</code> is built from exactly these pieces, so it is the example to read.</p>
-  <p>Chromium is the browser these pages were checked in; hovering, dragging and the wheel were not tried on a touch screen, where a drag scrolls the page as it always did and a tap chooses.</p>
+  <p>A <strong>selection</strong> is to a viewer's pointer what a slider is to a slider's value: a named set of whole-number keys that panels choose from and react to. <code>Panel.selecting(mark, name, keys)</code> makes the items of a mark choose the key <code>keys(i)</code> while the pointer is on them and lights a translucent halo round them while their key is chosen by anyone, <code>brushable(name)</code> lets a drag choose (on a 3-D canvas the <code>box</code> button makes a drag draw the rectangle, in the plane of the view, instead of turning the picture), and <code>Behavior.selected(name, key)</code> shows an item (a cycle, a label) only while a key is chosen, together with <code>shownFrom</code> and <code>followsY</code>, so a page can have both a slider and a selection. <code>Interactive.withSelection(Selection(name))</code> declares the selection (<code>withList</code>, <code>withLabels(...)</code>, <code>clickOnly</code>, <code>hoverOnly</code> change how it behaves and what the page writes under the pictures). On the page, <code>tda4j.selection(name)</code> gives the chosen keys to a script of your own, <code>tda4j.onChange(name, f)</code> calls <code>f</code> with the keys at every change, and the change is also announced as a <code>tda4j:change</code> event whose <code>value</code> is the array of keys. The zoom has <code>tda4j.zoom(panel, [x0, x1, y0, y1])</code>, <code>tda4j.window(panel)</code> and <code>tda4j.resetZoom(panel)</code> (panels counted from 0), and each new window is announced as a <code>tda4j:zoom</code> event. The rectangle of a brushable panel is <code>tda4j.brush(panel, [x0, x1, y0, y1])</code> (no argument clears it), and <code>tda4j.pointAt(panel, clientX, clientY)</code> is the data under a point of the window. <code>Plot.explore</code> is built from exactly these pieces, so it is the example to read.</p>
+  <p>These pages are checked in Chromium, Firefox and WebKit (Safari's engine) on every change: the page's picture at each state is compared with the still the library draws for the same state. Touch gestures are checked in Chromium with touch events that a script sends, not on a phone, and not in Firefox or WebKit; Safari on an iPhone was not tried. What these pages do not have: a rectangle on a 3-D canvas lies in the plane of the view, so it is dropped when the picture turns, zooms or pans, and a touch screen draws a rectangle only after the <code>touch</code> or <code>box</code> button (one finger scrolls the page or turns the picture otherwise).</p>
  </section>
  <section id="customizing-a-plot">
   <h2 class="h500"><a href="#customizing-a-plot" class="anchor"></a>Customizing a plot</h2>
@@ -1153,6 +1164,97 @@
    <div class="buttons"></div>
   </div>
   <p>From MATLAB it is <code>scene.withCamera(20, 10, 1.3)</code> and <code>scene.withSetting('camera.zoom=1.3')</code>; on the command line, <code>--plot input-3d --set camera.azimuth=20 --set camera.zoom=1.3</code>.</p>
+  <p>A scene seen from above (<code>azimuth = 0, elevation = 90</code>) is a flat picture, and <code>withAxes</code> gives it an x axis and a y axis with numbers at round values of the plane's coordinates, gridlines at the numbers and what lies beyond the axes clipped. On a page the numbers and the gridlines follow the pan and the zoom; a scene with axes asks for the view from above and says so otherwise.</p>
+  <div class="snippet mono-small-block" scala-snippet="" runnable="">
+   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import scala.language.experimental.modularity
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.*
+</span><span line-number="3" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.plot.*
+</span><span line-number="4" class=""><span class="tooltip-container"></span>
+</span><span line-number="5" class=""><span class="tooltip-container"></span>val flat = Scene(
+</span><span line-number="6" class=""><span class="tooltip-container"></span>  Vector(Layer.Points(IndexedSeq((-2.0, -1.0, 0.0), (0.0, 1.0, 0.0), (2.0, 0.0, 0.0)), IndexedSeq(Paint.Ink), 4.0)),
+</span><span line-number="7" class=""><span class="tooltip-container"></span>  azimuth = 0,
+</span><span line-number="8" class=""><span class="tooltip-container"></span>  elevation = 90,
+</span><span line-number="9" class=""><span class="tooltip-container"></span>  turns = false
+</span><span line-number="10" class=""><span class="tooltip-container"></span>).withAxes
+</span><span line-number="11" class=""><span class="tooltip-container"></span>flat.save("flat.svg")
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+  <p>The axes take what a figure's take, with three exceptions below. <code>withXLabel</code> and <code>withYLabel</code> (or <code>Labels(x = ..., y = ...)</code>) write the names beside the numbers. <code>withXScale</code>, <code>withYScale</code> and <code>withXYScale</code> (or <code>Scale.x/y/xy</code>) set an axis:</p>
+  <table>
+   <thead>
+    <tr>
+     <th>option</th>
+     <th>what it does on a flat picture</th>
+    </tr>
+   </thead>
+   <tbody>
+    <tr>
+     <td><code>transform</code></td>
+     <td><code>Log10</code>, <code>Sqrt</code> or <code>SymLog(c)</code>. A log axis needs positive numbers; a symmetric log keeps zero and the negative ones. The picture is the data after the transforms, with one scale on both axes</td>
+    </tr>
+    <tr>
+     <td><code>min</code>, <code>max</code>, <code>padding</code></td>
+     <td>the range the picture opens on, in data units, and what the <code>0</code> key returns to. An end that is not given is the data's, padded by <code>padding</code> (default 0.04) of their extent. The picture keeps equal units on both axes, so the range is widened to the shape of the plot area, and the pan and the zoom move off it. Without any of the three, the picture is fitted to its points</td>
+    </tr>
+    <tr>
+     <td><code>breaks</code>, <code>format</code></td>
+     <td>where the numbers stand (those that are in view) and a printf pattern for them: <code>%f</code> and <code>%e</code>, with the flags <code>-</code>, <code>+</code>, <code>0</code> and <code>,</code>, a width and a precision</td>
+    </tr>
+    <tr>
+     <td><code>reverse</code></td>
+     <td>runs the axis the other way: the points, the numbers and the gridlines are mirrored together</td>
+    </tr>
+    <tr>
+     <td><code>visible</code></td>
+     <td><code>false</code> leaves out the axis: its line, numbers, label and gridlines, and the room they took</td>
+    </tr>
+    <tr>
+     <td><code>grid</code></td>
+     <td><code>false</code> removes the gridlines of an axis; <code>Lines.grid(...)</code> restyles them</td>
+    </tr>
+   </tbody>
+  </table>
+  <p>The page writes the same numbers as the file, and they follow the pan and the zoom. Three things stay with a <code>Figure</code> and are refused here, with the way out: <code>position</code> and <code>crossesAt</code> (the axes of a canvas stay at the foot and the left edge of its plot area), and <code>minusInfinity</code> (a canvas that pans has no place for a <code>-∞</code> line: a point at zero on a log axis is refused, and <code>SymLog</code> keeps it); so is a transform of your own, which has no ticks a page can draw. A control that moves an item (<code>Behavior.Follows</code>) works on any axis: its value goes through the axis, so on a square-root axis the item is at the root.</p>
+  <div class="snippet mono-small-block" scala-snippet="" runnable="">
+   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import scala.language.experimental.modularity
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.*
+</span><span line-number="3" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.plot.*
+</span><span line-number="4" class=""><span class="tooltip-container"></span>
+</span><span line-number="5" class=""><span class="tooltip-container"></span>val birth = IndexedSeq.tabulate(12)(i =&gt; math.pow(10, -2.0 + 0.4 * i))
+</span><span line-number="6" class=""><span class="tooltip-container"></span>val loglog = Scene(
+</span><span line-number="7" class=""><span class="tooltip-container"></span>  Vector(Layer.Points(birth.map(b =&gt; (b, 3 * b, 0.0)), IndexedSeq(Paint.Ink), 4.0)),
+</span><span line-number="8" class=""><span class="tooltip-container"></span>  azimuth = 0,
+</span><span line-number="9" class=""><span class="tooltip-container"></span>  elevation = 90,
+</span><span line-number="10" class=""><span class="tooltip-container"></span>  turns = false
+</span><span line-number="11" class=""><span class="tooltip-container"></span>).withAxes
+</span><span line-number="12" class=""><span class="tooltip-container"></span>  .withXYScale(Transform.Log10)
+</span><span line-number="13" class=""><span class="tooltip-container"></span>  .withLabels(x = "birth", y = "death")
+</span><span line-number="14" class=""><span class="tooltip-container"></span>loglog.save("loglog.svg")
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+  <p>A range, the breaks and a format, and an axis that runs backwards:</p>
+  <div class="snippet mono-small-block" scala-snippet="" runnable="">
+   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import scala.language.experimental.modularity
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.*
+</span><span line-number="3" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.plot.*
+</span><span line-number="4" class=""><span class="tooltip-container"></span>
+</span><span line-number="5" class=""><span class="tooltip-container"></span>val spread = IndexedSeq.tabulate(20)(i =&gt; (i - 4.0, 1.0 + 0.4 * i, 0.0))
+</span><span line-number="6" class=""><span class="tooltip-container"></span>val window = Scene(
+</span><span line-number="7" class=""><span class="tooltip-container"></span>  Vector(Layer.Points(spread, IndexedSeq(Paint.Ink), 4.0)),
+</span><span line-number="8" class=""><span class="tooltip-container"></span>  azimuth = 0,
+</span><span line-number="9" class=""><span class="tooltip-container"></span>  elevation = 90,
+</span><span line-number="10" class=""><span class="tooltip-container"></span>  turns = false
+</span><span line-number="11" class=""><span class="tooltip-container"></span>).withAxes
+</span><span line-number="12" class=""><span class="tooltip-container"></span>  .withXScale(min = 0.0, max = 8.0, breaks = Seq(0.0, 2.0, 4.0, 6.0, 8.0), format = "%.1f")
+</span><span line-number="13" class=""><span class="tooltip-container"></span>  .withYScale(reverse = true)
+</span><span line-number="14" class=""><span class="tooltip-container"></span>  .withTitle("Opens on x from 0 to 8")
+</span><span line-number="15" class=""><span class="tooltip-container"></span>window.save("window.svg")
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+  <p>From MATLAB, <code>scene.withXLabel('birth').withXScale('log')</code> and <code>scene.withXRange(0, 8)</code>.</p>
  </section>
  <section id="for-a-paper-and-for-a-page-of-either-color">
   <h3 class="h400"><a href="#for-a-paper-and-for-a-page-of-either-color" class="anchor"></a>For a paper, and for a page of either color</h3>
