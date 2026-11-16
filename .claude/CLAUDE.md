@@ -10,7 +10,7 @@ Last condensed 2026-10-27; earlier, longer versions: `git show e5e86ec:.claude/C
 ## What this is
 
 TDA4j is a Scala 3 library for persistent homology and topological data analysis (a spiritual successor to
-JavaPlex/Ripser, from the Stanford Computational Topology workgroup lineage). One library for the JVM and Scala.js
+JavaPlex/Ripser). One library for the JVM and Scala.js
 (an sbt project matrix), root package `org.appliedtopology.tda4j`, pre-1.0 (version in `version.sbt`), actively evolving API. **A 0.Y series does not keep binary
 compatibility with the one before** (0.7.0 starts a fresh MiMa baseline; `build.sbt` `mimaBaselineVersions`) — no compat shims for
 renames/signature changes; a break inside a series is a commented `mimaBinaryIssueFilters` entry plus a Breaking line.
@@ -40,14 +40,13 @@ renames/signature changes; a break inside a series is a commented `mimaBinaryIss
 - A defect or overage you notice on the way (a file over its budget, a stale doc, an unfiled limitation) is fixed in
   the same change or filed as an issue before you finish, not reported as pre-existing.
 - Assume local modifications are intentional parts of the branch and summarize them as your own work. If unsure about
-  one after a /compact or a /clear, review it with `git diff` and the relevant worklog instead of apologizing or
-  disclaiming it.
+  one after a /compact or a /clear, review it with `git diff` and the worklog instead of disclaiming it.
 
 ## Package layout
 
-**One flat core package plus one add-on** (`DESIGN-package-structure.md`, derivation `WORKLOG-package-flatten.md`). Everything a persistent-homology user needs is
-in `org.appliedtopology.tda4j` itself, so users write `import org.appliedtopology.tda4j.*` (no `given` selector
-needed, see "Givens"). The core's source directories are **file organization only, not packages**:
+**One flat core package plus one add-on** (`DESIGN-package-structure.md`, `WORKLOG-package-flatten.md`). Everything a
+persistent-homology user needs is in `org.appliedtopology.tda4j` itself, so users write `import org.appliedtopology.tda4j.*`
+(no `given` selector needed, see "Givens"). The core's source directories are **file organization only, not packages**:
 
 - `algebra/` — `RingModule`, `Field`, `FiniteField`, `Chain`, `Cell`/`OrderedCell`/`OrderedBasis`, `LinearAlgebra`.
 - `cells/` — `Simplex`, `Cube` and their `OrderedCell` instances.
@@ -68,7 +67,8 @@ needed, see "Givens"). The core's source directories are **file organization onl
 - `python/` (the `tda4j` wheel, not a package): JPype over the `matlab` facade.
 - `demo/` (not a package): a SEPARATE sbt build for a talk's REPL jar, its web page and container image
   (`demo/README.md`, `WORKLOG-demo-jar.md`, `WORKLOG-demo-release.md`, `WORKLOG-web-playground-build.md`); the root build
-  neither builds nor sees it, `release.yml` attaches the jar, `demo.yml` publishes the other two.
+  neither builds nor sees it, `release.yml` attaches the jar, `demo.yml` publishes the other two (the page's jar is cut in
+  two: `WORKLOG-demo-page-jars.md`).
 - Tests mirror this. `src/test/scala/tda4juser/` is deliberately OUTSIDE the package: it checks what a user's code
   sees (`UserImportsSpec`, `TDAlabAloneSpec`); the `tutorial` specs and generated page scripts are INSIDE it, so only
   `sbt doc` checks that doc fences resolve from outside.
@@ -97,7 +97,7 @@ has one in its companion; cats' `Show` is invariant, so a hierarchy's instance i
 ## Commands
 
 Java 21, Scala 3.9.0 LTS (`WORKLOG-scala-3.9-lts-upgrade.md`). `.jvmopts` sets `-Xmx2G` (the 1024MB default caused test-suite OOMs:
-`WORKLOG-test-suite-memory-and-benchmark-gating.md`). Node >= 20.16 for the Scala.js tests.
+`WORKLOG-test-suite-memory-and-benchmark-gating.md`).
 
 ```
 sbt tda4j/testFull              # JVM specs (plain `test` is disk-cached in sbt 2 and can run 0 specs)
@@ -174,7 +174,7 @@ one page FILE per type and `sbt doc` dies under a POSIX locale (`∆` is `val �
 `tda4j` (lowercase) for package, artifact, executable, repo, prose; `TDA4j` for Scala identifiers and headings
 (`TDA4j`, `TDA4jConf`, `TDA4jCLI`). `Tda4j` is never correct — a real, repeated drift; watch for it on any new class.
 Same rule for every acronym identifier: `CSV`, `CLI` (not `Csv`, `Cli`). `Gudhi`/`Dipha`/`Ripser`/`Perseus` are
-proper nouns (external projects' own spellings), correctly titlecased.
+proper nouns, titlecased.
 
 ## Architecture
 
@@ -248,7 +248,7 @@ file before changing that subsystem; this table is the index, in case a rule did
 | `rules/scalajs.md` | the Scala.js build: platform seams, shared-code limits, JS API, npm package | `scalajs/`, `scalajvm/`, `build.sbt`, `npm/` |
 | `rules/docs-and-tutorials.md` | docs site, tutorial pages (the docs are the tests), language tabs | `_docs/`, tutorial specs, `build.sbt` |
 | `rules/plotting.md` | the `plot` subpackage: scene model, tweaks, looks, live viewer, gallery | `plot/` (main and test) |
-| `rules/interactive-plots.md` | interactive pages: behaviors, stills as reference semantics, selections, brushing, zoom | `Interactive`, `Selection`, `Zoom` |
+| `rules/interactive-plots.md` | interactive pages: stills, selections, zoom, touch, keyboard | `Interactive`, `Selection`, `Zoom` |
 | `rules/algebra.md` | fields, chains and cells: `RingModule`, `Field`, `Chain`, `Cell` | `algebra/`, `cells/` |
 | `rules/testing.md` | writing specs: shared generators, specs2 traps | `src/test/**` |
 | `rules/scala-style.md` | the Scala 3 idioms used throughout, opaque-type and extension-method hazards | `src/**/*.scala` |
@@ -281,9 +281,9 @@ file before changing that subsystem; this table is the index, in case a rule did
   limitation or unverified claim a session leaves gets an issue, linked from its worklog and PR; a user-visible change
   gets a `changelog.d/<topic>.md` fragment, never a `CHANGELOG.md` line (PRs that add to it conflict and drop out of the
   merge queue; `changelog.d/README.md`, `WORKLOG-changelog-fragments.md`).
-- A cloud session (working on its own `claude/...` branch) may commit and push its own work to that branch at
-  will, without asking first — the branch is disposable/session-scoped, not shared history. A local/interactive
-  session working directly on a shared branch still waits to be asked; the project lead commits that work.
+- A cloud session may commit and push its own work to its `claude/...` branch at will, without asking: the branch is
+  session-scoped, not shared history. A local/interactive session on a shared branch still waits to be asked; the project
+  lead commits that work.
 - **Driving a PR to green** (CI jobs and their local equivalents, how proactive to be): `.claude/skills/steward/SKILL.md`.
 - **A bug found in a paper or reference implementation** goes in `.claude/BUGS-IN-REFERENCES.md` (flat, never condensed
   away): state exactly what was verified, and claim nothing end-to-end without a repro that shows it.

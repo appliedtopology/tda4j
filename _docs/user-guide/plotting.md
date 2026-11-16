@@ -320,10 +320,15 @@ call takes the largest scale as `max`, the facades as their argument. Options of
 | `stops = true` | the slider steps through the values at which the complex changes, one step for each change of the picture |
 | `start` | where the slider begins |
 | `link = true` | the diagram (and the barcode) are [linked](#exploring-a-barcode) to each other and to the complex, where a chosen class draws its cycle; the pictures zoom |
-| `maxCells` | the page holds every edge and triangle up to `max`; asked for more than this (20,000 by default), it refuses and says to lower `max` |
+| `maxCells` | the page holds every edge and triangle up to `max`; asked for more than this (200,000 by default), it refuses and says to lower `max` |
+| `canvas` | up to 20,000 cells the complex is an SVG with axes, one element for each cell. Above that it is a canvas, a flat picture seen from above with an x axis, a y axis and gridlines: a drag pans it, the wheel zooms about the pointer, the numbers and the gridlines follow, and it takes about a seventh of the bytes and a hundredth of the elements. `canvas = true` or `false` chooses either way |
 
 `Plot.filtration3D(points)` is the same with the complex in 3-D, a canvas to turn and zoom beside the diagram;
-`result.plotFiltration3D(max)` from a result, `--plot filtration-3d` on the command line. `Plot.filtrationOf(points, stream,
+`result.plotFiltration3D(max)` from a result, `--plot filtration-3d` on the command line. The balls grow with the slider.
+The frame is fitted to the points, so a ball larger than the picture is cut at its edge. With `link = true` the canvas is
+linked like the flat page: a class chosen in the diagram or the barcode draws its cycle in the canvas, pointing at an item
+of the canvas chooses it, and the items that are chosen get a halo. On a touch screen one finger turns the canvas (it does
+not scroll the page: scroll from outside it) and two fingers pinch to zoom. `Plot.filtrationOf(points, stream,
 bars)` takes a complex and a diagram of your own, for instance a witness complex or one whose diagram you computed with
 another engine.
 
@@ -334,6 +339,15 @@ picture with the slider at 0.6, `page.frames(60)` sixty of them from the smalles
 `page.saveFrames("frames", 60)` writes them as `frame-0000.svg` and on. The axes are fixed across frames, so nothing jumps
 when they are played. Each frame is built from the same rules as the page (a cell is shown from the value at which it
 enters, a class from its birth), so a frame at a scale shows the cells that `Plot.complex` shows at that scale.
+
+The other languages write the same frames. Python: `page.save_frames("frames", 60)`. JavaScript: `chart.saveFrames("frames", 60)`
+on Node.js writes the files, and `chart.frames(60)` returns the 60 SVG documents as strings, in a browser too. On the
+command line `--frames 60` with `--plot filtration --at 1.0` writes them into the folder that `--output` names (a folder,
+not a file):
+
+```bash
+tda4j --max-dimension 1 --plot filtration --at 1.0 --frames 60 --output frames points.csv
+```
 
 The frames are SVG. A video needs pictures: convert them and let `ffmpeg` join them. A paper-white background (`withPalette("print")`
 and `withStyle("print")`) keeps the video from showing a transparent background as black:
@@ -425,7 +439,7 @@ behaviors attached to the items of its marks, either one for all items or one fo
 | behavior | the item |
 |---|---|
 | `Behavior.shownFrom(c, v)`, `shownUntil(c, v)`, `shownBetween(c, a, b)` | is there while the value of control `c` is at least `v`, below `v`, or from `a` up to but not including `b` |
-| `Behavior.followsX(c)`, `followsY(c, lo, hi, ends)` | has this coordinate equal to the value of `c`, held between `lo` and `hi`: a movable line, a bar that grows |
+| `Behavior.followsX(c)`, `followsY(c, lo, hi, ends)`, `followsZ(c, lo, hi, ends)` | has this coordinate equal to the value of `c`, held between `lo` and `hi`: a movable line, a bar that grows, and in a 3-D scene a plane that rises (`followsZ`) |
 | `Behavior.radius(c, factor)` | for the discs of a mark: radius is `factor` times the value (data units; linear axes only) |
 | `Behavior.custom(kind, c, args*)` | whatever your script says (below) |
 
@@ -455,7 +469,7 @@ Behaviors that the library cannot know are written in JavaScript: `withScript(js
 says what a `Behavior.custom(kind, ...)` does to its item (`f(item, behavior, value)`, `item.el` the SVG element). Each change
 of a control is also announced as a `tda4j:change` event on the page's element, for anything else on the page. A
 frame shows the item as it was drawn, without the effect of a custom behavior. A behavior the page cannot carry out
-(a `radius` on a logarithmic axis, a 3-D layer that follows a value) is refused when the panel is built, with the reason.
+(a `radius` on a logarithmic axis) is refused when the panel is built, with the reason.
 
 ```scala
 import scala.language.experimental.modularity
@@ -537,13 +551,23 @@ and leaves the rest of the classes lit up in the diagram and the barcode without
 
 **Zoom and pan.** Each picture has buttons in its corner: `+` and `−` zoom about the middle, `1:1` shows everything, and
 `Ctrl` (`Cmd` on a Mac) with the mouse wheel zooms about the pointer, which keeps the point under it where it was. Dragging
-pans; in a picture where dragging also chooses classes, the button `pan` switches what a drag does. The axes follow: new
+pans; in a picture where dragging also chooses classes, the button `pan` switches what a drag does. On a touch screen two
+fingers pinch and drag the picture (the distance between them zooms, their midpoint pans), one finger scrolls the page as it
+does everywhere, and a tap chooses. A picture where a drag chooses has a `touch` button: while it is on, one finger draws the
+rectangle (and a second finger landing is a pinch, which drops it). From the keyboard, `Tab` reaches a picture; `+` and `-` zoom about the middle, `0` shows
+everything, and the arrow keys pan where a drag pans (`Shift` goes further). In a picture where a drag chooses, the arrow keys
+move a cross over it instead, `]` and `[` (or `Page Down` and `Page Up`) put the cross on the next and the previous item the
+rectangle can choose, left to right and top to bottom, `Home` and `End` on the first and the last, `Enter` sets one corner of
+the rectangle and a second `Enter` chooses what it touches (`Shift` adds to what is chosen), and `Escape` lets go. Two items
+make a rectangle, however far apart they are: step to one, `Enter`, step to the other, `Enter`. The axes follow: new
 gridlines and numbers for the range shown, written as the plot writes them, while lines keep their width and points their
 size. Zooming stops at 1/200 of the picture, and the picture of an equal-aspect plot keeps its aspect (the barcode zooms
 along the filtration only, and keeps all its rows). What the window cuts away cannot be pointed at or chosen. A page that
 only zooms needs no slider: `Interactive().withPanel(Panel(figure).zoomable())`, or `page.zoomable()` on any page, which
-makes zoomable every flat panel whose axes the page can draw again. A logarithmic or reversed axis, an axis with a number
-format (`Axis.format`) and slanted tick labels cannot be: `Panel.zoomable` refuses them with the reason, and `zoomable()`
+makes zoomable every flat panel whose axes the page can draw again: linear, logarithmic, square-root, symmetric-log and
+reversed axes, with their number formats, number style, slanted labels and minor ticks. Three things it cannot draw again: a
+transform of your own, a logarithmic axis with a `-∞` line for what is at 0, and a number format other than `%f` and `%e` (with
+the flags `-`, `+`, `0` and `,`, a width and a precision). `Panel.zoomable` refuses them with the reason, and `zoomable()`
 leaves those panels as they are. The 3-D canvases have a zoom of their own.
 
 **Stills.** A viewer's choice is a value like a slider's: `page.at(PageState().select("class", 3).zoom(1, Window(-0.1, 0.6,
@@ -563,22 +587,32 @@ val chosen = d.bars.indices.maxBy(k => d.bars(k).persistence)
 page.at(PageState().select("class", chosen).zoom(1, Window(-0.1, 0.6, 0.1, 0.8))).save("explore-still.svg")
 ```
 
+A rectangle that a viewer has dragged out is part of the state too: `PageState().brush(panel, Window(x0, x1, y0, y1))` draws it
+in a brushable panel, a dashed box in the picture's own units, and `select` gives what it touches, as the page does. Both are
+needed to show what a viewer who dragged a rectangle sees.
+
 ### Selections of your own
 
 A **selection** is to a viewer's pointer what a slider is to a slider's value: a named set of whole-number keys that panels
 choose from and react to. `Panel.selecting(mark, name, keys)` makes the items of a mark choose the key `keys(i)` while the
 pointer is on them and lights a translucent halo round them while their key is chosen by anyone, `brushable(name)` lets a
-drag choose, and `Behavior.selected(name, key)` shows an item (a cycle, a label) only while a key is chosen, together with
+drag choose (on a 3-D canvas the `box` button makes a drag draw the rectangle, in the plane of the view, instead of turning the
+picture), and `Behavior.selected(name, key)` shows an item (a cycle, a label) only while a key is chosen, together with
 `shownFrom` and `followsY`, so a page can have both a slider and a selection. `Interactive.withSelection(Selection(name))`
 declares the selection (`withList`, `withLabels(...)`, `clickOnly`, `hoverOnly` change how it behaves and what the page
 writes under the pictures). On the page, `tda4j.selection(name)` gives the chosen keys to a script of your own, `tda4j.onChange(name, f)` calls `f` with
 the keys at every change, and the change is also announced as a `tda4j:change` event whose `value` is the array of keys. The
 zoom has `tda4j.zoom(panel, [x0, x1, y0, y1])`, `tda4j.window(panel)` and `tda4j.resetZoom(panel)` (panels counted from 0), and
-each new window is announced as a `tda4j:zoom` event. `Plot.explore` is built from exactly these pieces, so it is the example to
-read.
+each new window is announced as a `tda4j:zoom` event. The rectangle of a brushable panel is `tda4j.brush(panel, [x0, x1, y0,
+y1])` (no argument clears it), and `tda4j.pointAt(panel, clientX, clientY)` is the data under a point of the window. `Plot.explore`
+is built from exactly these pieces, so it is the example to read.
 
-Chromium is the browser these pages were checked in; hovering, dragging and the wheel were not tried on a touch screen, where
-a drag scrolls the page as it always did and a tap chooses.
+These pages are checked in Chromium, Firefox and WebKit (Safari's engine) on every change: the page's picture at each state
+is compared with the still the library draws for the same state. Touch gestures are checked in Chromium with touch events
+that a script sends, not on a phone, and not in Firefox or WebKit; Safari on an iPhone was not tried. What these pages do not
+have: a rectangle on a 3-D canvas lies in the plane of the view, so it is dropped when the picture turns, zooms or pans, and a
+touch screen draws a rectangle only after the `touch` or `box` button (one finger scrolls the page or turns the picture
+otherwise).
 
 ## Customizing a plot
 
@@ -1026,6 +1060,81 @@ scene.save("helix.svg")
 
 From MATLAB it is `scene.withCamera(20, 10, 1.3)` and `scene.withSetting('camera.zoom=1.3')`; on the command line,
 `--plot input-3d --set camera.azimuth=20 --set camera.zoom=1.3`.
+
+A scene seen from above (`azimuth = 0, elevation = 90`) is a flat picture, and `withAxes` gives it an x axis and a y axis with
+numbers at round values of the plane's coordinates, gridlines at the numbers and what lies beyond the axes clipped. On a page the
+numbers and the gridlines follow the pan and the zoom; a scene with axes asks for the view from above and says so otherwise.
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val flat = Scene(
+  Vector(Layer.Points(IndexedSeq((-2.0, -1.0, 0.0), (0.0, 1.0, 0.0), (2.0, 0.0, 0.0)), IndexedSeq(Paint.Ink), 4.0)),
+  azimuth = 0,
+  elevation = 90,
+  turns = false
+).withAxes
+flat.save("flat.svg")
+```
+
+The axes take what a figure's take, with three exceptions below. `withXLabel` and `withYLabel` (or `Labels(x = ..., y = ...)`)
+write the names beside the numbers. `withXScale`, `withYScale` and `withXYScale` (or `Scale.x/y/xy`) set an axis:
+
+| option | what it does on a flat picture |
+|---|---|
+| `transform` | `Log10`, `Sqrt` or `SymLog(c)`. A log axis needs positive numbers; a symmetric log keeps zero and the negative ones. The picture is the data after the transforms, with one scale on both axes |
+| `min`, `max`, `padding` | the range the picture opens on, in data units, and what the `0` key returns to. An end that is not given is the data's, padded by `padding` (default 0.04) of their extent. The picture keeps equal units on both axes, so the range is widened to the shape of the plot area, and the pan and the zoom move off it. Without any of the three, the picture is fitted to its points |
+| `breaks`, `format` | where the numbers stand (those that are in view) and a printf pattern for them: `%f` and `%e`, with the flags `-`, `+`, `0` and `,`, a width and a precision |
+| `reverse` | runs the axis the other way: the points, the numbers and the gridlines are mirrored together |
+| `visible` | `false` leaves out the axis: its line, numbers, label and gridlines, and the room they took |
+| `grid` | `false` removes the gridlines of an axis; `Lines.grid(...)` restyles them |
+
+The page writes the same numbers as the file, and they follow the pan and the zoom. Three things stay with a `Figure` and are
+refused here, with the way out: `position` and `crossesAt` (the axes of a canvas stay at the foot and the left edge of its plot
+area), and `minusInfinity` (a canvas that pans has no place for a `-∞` line: a point at zero on a log axis is refused, and
+`SymLog` keeps it); so is a transform of your own, which has no ticks a page can draw. A control that moves an item
+(`Behavior.Follows`) works on any axis: its value goes through the axis, so on a square-root axis the item is at the root.
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val birth = IndexedSeq.tabulate(12)(i => math.pow(10, -2.0 + 0.4 * i))
+val loglog = Scene(
+  Vector(Layer.Points(birth.map(b => (b, 3 * b, 0.0)), IndexedSeq(Paint.Ink), 4.0)),
+  azimuth = 0,
+  elevation = 90,
+  turns = false
+).withAxes
+  .withXYScale(Transform.Log10)
+  .withLabels(x = "birth", y = "death")
+loglog.save("loglog.svg")
+```
+
+A range, the breaks and a format, and an axis that runs backwards:
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val spread = IndexedSeq.tabulate(20)(i => (i - 4.0, 1.0 + 0.4 * i, 0.0))
+val window = Scene(
+  Vector(Layer.Points(spread, IndexedSeq(Paint.Ink), 4.0)),
+  azimuth = 0,
+  elevation = 90,
+  turns = false
+).withAxes
+  .withXScale(min = 0.0, max = 8.0, breaks = Seq(0.0, 2.0, 4.0, 6.0, 8.0), format = "%.1f")
+  .withYScale(reverse = true)
+  .withTitle("Opens on x from 0 to 8")
+window.save("window.svg")
+```
+
+From MATLAB, `scene.withXLabel('birth').withXScale('log')` and `scene.withXRange(0, 8)`.
 
 ### For a paper, and for a page of either color
 

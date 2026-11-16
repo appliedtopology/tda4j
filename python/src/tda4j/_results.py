@@ -100,6 +100,13 @@ class Plot:
     def _repr_svg_(self) -> str:
         return self.svg()
 
+    def _repr_html_(self) -> str | None:
+        """A notebook shows a plot with a slider or linked views (``plot_filtration``, ``plot_explore``) as the live page,
+        scripts and all (a notebook has to be trusted to run them); any other plot is shown as its SVG."""
+        if not hasattr(self._j, "saveFrames"):
+            return None
+        return str(self._j.fragment("auto"))
+
     def __getattr__(self, name: str):
         """The tweaks of the plotting page that take plain arguments, in snake_case: ``plot.with_title("A circle")``,
         ``with_x_label``, ``with_size(800, 600)``, ``with_x_scale("sqrt")``, ``with_text_scale(1.3)``. Each returns a new plot."""

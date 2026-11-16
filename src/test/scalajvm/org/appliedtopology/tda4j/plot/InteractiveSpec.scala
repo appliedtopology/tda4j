@@ -381,7 +381,7 @@ class InteractiveSpec extends Specification:
 
     "tell the canvas which values each item is shown for, and listen for the page's changes" in {
       val html = sweep3.fragment(Theme.Light)
-      html must contain(""""ia":[[""")
+      html must contain(""""sh":{"c":"t"""")
       html must contain("closest('.tda4j-ia')")
       html must contain("tda4j:change")
     }
@@ -396,12 +396,22 @@ class InteractiveSpec extends Specification:
     "leave a 3-D scene that is not on an interactive page exactly as it was" in {
       val plain = Plot.points3D(circle3).fragment(Theme.Light)
       plain must not(contain("tda4j:change"))
-      plain must contain("for(const it of L.items){")
+      plain must not(contain("hid(L,k)"))
     }
 
     "refuse a behavior a canvas cannot carry out" in {
       val scene = Plot.points3D(circle3)
-      Panel(scene).react(Layer.Points(IndexedSeq((0.0, 0.0, 0.0)), IndexedSeq(Paint.Ink)), Behavior.followsY("t")) must
+      val point = Layer.Points(IndexedSeq((0.0, 0.0, 0.0)), IndexedSeq(Paint.Ink))
+      Panel(scene).react(point, Behavior.radius("t")) must throwAn[IllegalArgumentException](".*cannot be attached.*")
+      // a point has one place: it follows with both ends or not at all
+      Panel(scene).react(point, Behavior.followsY("t", ends = Ends.First)) must
         throwAn[IllegalArgumentException](".*cannot be attached.*")
+    }
+
+    "let a layer follow a control in any of the three coordinates" in {
+      val scene = Plot.points3D(circle3)
+      val point = Layer.Points(IndexedSeq((0.0, 0.0, 0.0)), IndexedSeq(Paint.Ink))
+      val moving = Panel(scene).react(point, Behavior.followsZ("t", 0.0, 1.0))
+      moving.reactions.size must beEqualTo(1)
     }
   }

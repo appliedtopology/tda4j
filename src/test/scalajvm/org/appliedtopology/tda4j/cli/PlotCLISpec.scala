@@ -146,6 +146,41 @@ class PlotCLISpec extends Specification:
           beEqualTo(0)) and
         (read(page).contains("<canvas") must beTrue)
     }
+    "write --frames still pictures of --plot filtration into the directory --output names, the ones the facade writes" >> {
+      val made = Files.createTempDirectory("plot-cli-frames").resolve("not-yet").toString
+      val args = Seq("--max-dimension", "1", "--plot", "filtration", "--at", "0.8", "--frames", "3")
+      val written = direct.plotFiltration(0.8).saveFrames(Files.createTempDirectory("plot-cli-direct").toString, 3)
+      val err = stderrOf(run(args ++ Seq("--output", made, circleFile)*)._1 must beEqualTo(0))
+      val names =
+        Files.list(Paths.get(made)).toArray.map(_.asInstanceOf[java.nio.file.Path].getFileName.toString).sorted.toSeq
+      (names must beEqualTo(Seq("frame-0000.svg", "frame-0001.svg", "frame-0002.svg"))) and
+        (err must contain("wrote 3 frames")) and
+        (firstDifference(
+          numbered(read(s"$made/frame-0002.svg")),
+          numbered(read(written(2)))
+        ) must beNone) and
+        // the complex grows with the slider: the last frame has more lines than the first, not the same picture three times
+        (("<line".r.findAllIn(read(s"$made/frame-0000.svg")).size) must
+          beLessThan("<line".r.findAllIn(read(s"$made/frame-0002.svg")).size)) and
+        (run(args.dropRight(2) ++ Seq("--frames", "2", "--theme", "dark", "--output", made, circleFile)*)._1 must
+          beEqualTo(0)) and
+        (firstDifference(
+          numbered(read(s"$made/frame-0001.svg")),
+          numbered(
+            read(
+              direct.plotFiltration(0.8).saveFrames(Files.createTempDirectory("plot-cli-dark").toString, 2, "dark")(1)
+            )
+          )
+        ) must beNone) and
+        (numbered(read(s"$made/frame-0001.svg")) must
+          not(
+            beEqualTo(
+              numbered(
+                read(direct.plotFiltration(0.8).saveFrames(Files.createTempDirectory("plot-cli-light").toString, 2)(1))
+              )
+            )
+          ))
+    }
     "write the linked views for --plot explore and --plot linked-filtration, the same pages the facade builds" >> {
       val (page, linked) = (tempPath(".html"), tempPath(".html"))
       val bases = Seq("--max-dimension", "1")
@@ -242,6 +277,13 @@ class PlotCLISpec extends Specification:
         (fails("--plot", "explore", "--at", "1") must beEqualTo(1)) and
         (fails("--plot", "explore,diagram") must beEqualTo(1)) and
         (fails("--plot", "bars") must beEqualTo(1)) and
+        (fails("--frames", "3", "--output", tempPath("")) must beEqualTo(1)) and
+        (fails("--plot", "diagram", "--frames", "3", "--output", tempPath("")) must beEqualTo(1)) and
+        (fails("--plot", "filtration", "--at", "1", "--frames", "3") must beEqualTo(1)) and
+        (fails("--plot", "filtration", "--at", "1", "--frames", "1", "--output", tempPath("")) must beEqualTo(1)) and
+        (fails("--plot", "filtration", "--at", "1", "--frames", "3", "--output", tempPath(".svg")) must beEqualTo(
+          1
+        )) and
         (fails("--plot", "diagram", "--output", tempPath(".png")) must beEqualTo(1)) and
         (fails("--plot", "diagram", "--output-format", "csv") must beEqualTo(1)) and
         (fails("--plot", "diagram", "--representatives") must beEqualTo(1)) and

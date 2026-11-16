@@ -60,18 +60,25 @@ downloads the jar and runs it in [CheerpJ](https://cheerpj.com/), a Java runtime
 
 ```
 (cd .. && sbt publishLocal)
-sbt webSite                           # target/web: index.html, tda4j-demo.jar, tda4j-demo-web-patch.jar
+sbt webSite                           # target/web: index.html and three jars
 node target/web/serve.mjs             # http://127.0.0.1:8338/
 ```
 
-The runtime reads the jar in pieces, with HTTP Range requests, and only from the site the page itself is on. GitHub
+The runtime reads the jars in pieces, with HTTP Range requests, and only from the site the page itself is on. GitHub
 Pages, nginx and S3 answer Range requests; Python's `http.server` does not, which is why `serve.mjs` is there for a
 try on your own machine. Opening `index.html` as a file does not work either.
 
-`tda4j-demo-web-patch.jar` holds the few classes of the jar that the runtime cannot run as they are: CheerpJ 5.0 stops
+The page's jars are the demo jar cut in two where it changes, so that a site kept in git (the docs site is) grows by the
+changing part only when the page is published again. `tda4j-demo-project.jar` is the library and the demo's own classes,
+about 6 MB, new with every publish. `tda4j-demo-libs.jar` is everything else (the Scala compiler, cats, the viewer's web
+server, about 66 MB). It is written the same bytes on every build, whatever the machine's clock and time zone, until a
+dependency changes, so git stores it once. `sbt webSite` checks that the two together hold exactly the files of the demo
+jar.
+
+`tda4j-demo-web-patch.jar` holds the few classes of the demo jar that the runtime cannot run as they are: CheerpJ 5.0 stops
 on a method that keeps a `long`, `float` or `double` in a local variable beyond the 255th. `WebPatch` finds those
 methods in the jar (the compiler's flag table and the plots' SVG writer among them), renumbers their variables, and
-writes the rewritten classes to the second jar, which the page puts ahead of the first on the class path. It also
+writes the rewritten classes to a small jar, which the page puts ahead of the other two on the class path. It also
 makes the REPL's error printer accept a stack frame with no file name, which is every frame in this runtime. `WebRepl`
 is what the page calls: it drives the compiler one input at a time, each on one thread.
 

@@ -115,6 +115,13 @@ class PlotCustomizationFacadeSpec extends Specification:
       val sceneNames = Seq(
         "withTitle",
         "withSubtitle",
+        "withAxes",
+        "withXLabel",
+        "withYLabel",
+        "withXScale",
+        "withYScale",
+        "withXRange",
+        "withYRange",
         "withSize",
         "withCamera",
         "withPalette",

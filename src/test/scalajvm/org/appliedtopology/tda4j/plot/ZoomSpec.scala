@@ -93,22 +93,52 @@ class ZoomSpec extends Specification:
     }
 
     "be refused for an axis the page cannot draw the ticks of, saying which and why" in {
+      // 0 on a log axis sits on a `-inf` line the window could not move; a transform of one's own has ticks the page cannot make
       val log = Figure(marks = Vector(dots), x = Axis(transform = Transform.Log10))
-      val back = Figure(marks = Vector(dots), y = Axis(reverse = true))
-      val text = Figure(marks = Vector(dots), x = Axis(format = Some("%.1f")))
+      val cube = Transform.Custom("cube root", math.cbrt, v => v * v * v)
+      val own = Figure(marks = Vector(dots), y = Axis(transform = cube))
+      val text = Figure(marks = Vector(dots), x = Axis(format = Some("%s items")))
       (one(Panel(log).zoomable()).fragment() must throwAn[IllegalArgumentException](
-        ".*panel 0 is zoomable, but its x axis is Log10.*linear axes.*"
+        ".*panel 0 is zoomable, but its x axis is logarithmic with a .*line for what is at 0.*"
       ))
         .and(
-          one(Panel(back).zoomable()).fragment() must throwAn[IllegalArgumentException](
-            ".*panel 0 is zoomable, but an axis runs backwards.*"
+          one(Panel(own).zoomable()).fragment() must throwAn[IllegalArgumentException](
+            ".*panel 0 is zoomable, but its y axis uses a transform of your own .cube root. that the page cannot.*"
           )
         )
         .and(
           one(Panel(text).zoomable()).fragment() must throwAn[IllegalArgumentException](
-            ".*zoomable, but an axis has a number format.*"
+            ".*zoomable, but its x axis has the number format %s items.*"
           )
         )
+    }
+
+    "be accepted for the axes the page can draw again: log, square-root, symmetric log, reversed, formatted, slanted" in {
+      val positive = Mark.Points(IndexedSeq((1.0, 10.0), (10.0, 100.0), (100.0, 1000.0)), IndexedSeq(Paint.Ink))
+      val mixed = Mark.Points(IndexedSeq((-5.0, -3.0), (0.0, 0.0), (50.0, 80.0)), IndexedSeq(Paint.Ink))
+      val figures = Seq(
+        Figure(marks = Vector(positive), x = Axis(transform = Transform.Log10), y = Axis(transform = Transform.Log10)),
+        Figure(marks = Vector(dots), x = Axis(transform = Transform.Sqrt)),
+        Figure(marks = Vector(mixed), x = Axis(transform = Transform.Log10)),
+        Figure(marks = Vector(dots), y = Axis(reverse = true), x = Axis(reverse = true)),
+        Figure(marks = Vector(dots), x = Axis(format = Some("%,.1f")), y = Axis(format = Some("%08.2e"))),
+        Figure(marks = Vector(dots)) + Text(TextRole.TickLabel, angle = 30)
+      )
+      figures.flatMap(f => Interactive.zoomProblem(f)) must beEmpty
+    }
+
+    "tell the page how to write the numbers: the format, the separators, the slant" in {
+      val styled = Figure(marks = Vector(dots), x = Axis(format = Some("%.1f"))) +
+        Text(TextRole.TickLabel, angle = 30) + Numbers(decimal = ",", minus = "\u2212")
+      val spec = """data-zm="([^"]*)"""".r
+        .findFirstMatchIn(
+          Svg.renderTagged(styled, Theme.Light, false, tags(Some("b")))
+        )
+        .get
+        .group(1)
+      (spec must contain("&quot;f&quot;:&quot;%.1f&quot;"))
+        .and(spec must contain("&quot;a&quot;:30.0"))
+        .and(spec must contain("&quot;n&quot;:[&quot;,&quot;,null,&quot;\u2212&quot;]"))
     }
   }
 

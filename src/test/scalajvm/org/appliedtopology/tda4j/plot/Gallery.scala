@@ -241,7 +241,264 @@ object Gallery:
     val sweep = Plot.filtration(circle, barcode = true).withTitle("Noisy circle").withPlay(8)
     sweep.save(out("interactive-filtration.html"))
     Seq(0.15, 0.3, 0.5).foreach(t => sweep.at(t).save(out(f"interactive-still-$t%.2f.svg")))
-    Plot.filtration3D(sphere, max = 0.8, title = "Sphere").withPlay(8).save(out("interactive-sphere.html"))
+    // four times the unit sphere: a ball's radius in the picture's units is not its radius in the data's
+    val bigSphere = sphere.map(_.map(_ * 4))
+    val sphere3 = Plot.filtration3D(bigSphere, max = 3.2, title = "Sphere").withPlay(8)
+    sphere3.save(out("interactive-sphere.html"))
+    Seq(1.2, 2.4).foreach(t => sphere3.at(t).save(out(f"interactive-sphere-still-$t%.2f.svg")))
+    // a canvas whose items choose keys: a triangle, two segments and three points, far enough apart to point at
+    val pickScene = Scene(
+      Vector(
+        Layer.Triangles(
+          IndexedSeq(((-2.0, 0.0, 0.0), (-1.0, 0.0, 0.0), (-1.5, 1.0, 0.0))),
+          IndexedSeq(Paint.Series(0)),
+          0.35
+        ),
+        Layer.Segments(
+          IndexedSeq(((0.0, -1.0, 0.0), (0.0, 1.0, 0.0)), ((0.8, 0.0, -1.0), (0.8, 0.0, 1.0))),
+          IndexedSeq(Paint.Secondary),
+          2.0
+        ),
+        Layer.Points(IndexedSeq((2.0, -0.5, 0.0), (2.2, 0.5, 0.0), (2.2, -1.0, 0.5)), IndexedSeq(Paint.Ink), 4.0)
+      ),
+      title = "Pointing in 3-D"
+    )
+    val picking = Interactive()
+      .withSelection(Selection.listing("item", Seq.tabulate(21)(i => s"item $i")))
+      .withPanel(
+        Panel(pickScene)
+          .selecting(2, "item", IndexedSeq(0, 1, 2))
+          .selecting(1, "item", IndexedSeq(10, 11))
+          .selecting(0, "item", IndexedSeq(20))
+      )
+      .withTitle("Pointing in 3-D")
+    picking.save(out("interactive-pick-3d.html"))
+    picking.at(PageState().select("item", 10)).save(out("interactive-pick-3d-still.svg"))
+    // a canvas that chooses by rectangle: a point that comes with the slider, one that rises with it, a segment and half a square,
+    // seen from the side, so that a rectangle on the picture is a rectangle in x and z; the cases are what the library says each
+    // rectangle chooses (`Interactive.touched`), which the page must choose too
+    val boxAnchors: IndexedSeq[XYZ] =
+      IndexedSeq(
+        (1.0, 0.0, 0.0),
+        (-1.0, 0.0, 0.0),
+        (0.0, 1.0, 0.0),
+        (0.0, -1.0, 0.0),
+        (0.0, 0.0, 1.0),
+        (0.0, 0.0, -1.0)
+      )
+    val boxScene = Scene(
+      Vector(Layer.Points(boxAnchors, IndexedSeq(Paint.Muted), 1.5)),
+      title = "Choosing by rectangle in 3-D",
+      azimuth = 0,
+      elevation = 0
+    )
+    val boxing = Interactive()
+      .withSlider("t", 0.0, 1.0)
+      .withSelection(Selection.listing("item", Seq.tabulate(21)(i => s"item $i")))
+      .withSelection("other")
+      .withPanel(
+        Panel(boxScene)
+          .reactEach(
+            Layer.Points(IndexedSeq((0.0, 0.0, 0.0), (0.4, 0.0, 0.4), (0.0, 0.0, 0.0)), IndexedSeq(Paint.Ink), 4.0),
+            IndexedSeq(
+              Reaction.none,
+              Reaction(Vector(Behavior.shownFrom("t", 0.5))),
+              Reaction(Vector(Behavior.followsZ("t", 0.0, 0.7)))
+            )
+          )
+          .react(
+            Layer.Segments(IndexedSeq(((-0.7, 0.0, 0.45), (0.7, 0.0, 0.45))), IndexedSeq(Paint.Secondary), 2.0),
+            Reaction.none
+          )
+          .react(
+            Layer.Triangles(
+              IndexedSeq(((-0.7, 0.0, -0.7), (0.7, 0.0, -0.7), (-0.7, 0.0, 0.7))),
+              IndexedSeq(Paint.Series(0)),
+              0.35
+            ),
+            Reaction.none
+          )
+          .selecting(1, "item", IndexedSeq(0, 1, 2))
+          .selecting(2, "item", IndexedSeq(10))
+          .selecting(3, "item", IndexedSeq(20))
+          // the same points choose in a second selection too, which a rectangle that chooses in "item" must leave alone
+          .selecting(1, "other", IndexedSeq(5, 6, 7), halo = false)
+          .brushable("item")
+      )
+      .withTitle("Choosing by rectangle in 3-D")
+    boxing.save(out("interactive-box-3d.html"))
+    val boxCases = Seq(
+      (0.0, Window(-0.15, 0.15, 0.35, 0.55)),
+      (0.5, Window(0.3, 0.5, 0.3, 0.42)),
+      (0.0, Window(0.3, 0.5, 0.3, 0.42)),
+      (0.0, Window(-0.6, -0.4, -0.6, -0.4)),
+      (0.9, Window(-0.1, 0.1, 0.55, 0.75)),
+      (0.9, Window(-0.9, 0.9, -0.9, 0.9)),
+      (0.5, Window(0.41, 0.5, 0.3, 0.39))
+    )
+    java.nio.file.Files.writeString(
+      java.nio.file.Path.of(out("interactive-box-3d.json")),
+      boxCases
+        .map { (t, w) =>
+          val keys = boxing.touched(0, w, "item", PageState().value("t", t)).toSeq.sorted.mkString("[", ",", "]")
+          s"""{"t":$t,"window":[${w.x0},${w.x1},${w.y0},${w.y1}],"keys":$keys}"""
+        }
+        .mkString("[", ",", "]")
+    )
+    boxing
+      .at(PageState().value("t", 0.9).select("item", 10).brush(0, Window(-0.15, 0.15, 0.35, 0.55)))
+      .save(out("interactive-box-3d-still.svg"))
+    // a plane rises through a helix of points: the plane (held between 0.1 and 0.8) and the free end of a pole follow the
+    // slider in z, the points appear as the plane reaches them, and the order the items are drawn in changes as the plane passes them
+    val helix: IndexedSeq[XYZ] = IndexedSeq.tabulate(14)(i => (math.cos(i * 0.9), math.sin(i * 0.9), i / 13.0))
+    val corner = IndexedSeq((-1.3, -1.3, 0.0), (1.3, -1.3, 0.0), (1.3, 1.3, 0.0), (-1.3, 1.3, 0.0))
+    val rising = Interactive()
+      .withSlider("t", 0.0, 1.0)
+      .withPanel(
+        Panel(Scene(title = "A plane through a helix"))
+          .react(
+            Layer.Triangles(
+              IndexedSeq((corner(0), corner(1), corner(2)), (corner(0), corner(2), corner(3))),
+              IndexedSeq(Paint.Series(1)),
+              0.25
+            ),
+            Behavior.followsZ("t", 0.1, 0.8)
+          )
+          .react(
+            Layer.Segments(IndexedSeq(((0.0, 0.0, 0.0), (0.0, 0.0, 1.0))), IndexedSeq(Paint.Secondary), 2.0),
+            Behavior.followsZ("t", 0.0, 1.0, Ends.Second)
+          )
+          .reactEach(
+            Layer.Points(helix, IndexedSeq(Paint.Ink), 3.5),
+            helix.map(p => Reaction(Vector(Behavior.shownFrom("t", p._3))))
+          )
+      )
+      .withTitle("A plane through a helix")
+    rising.save(out("interactive-rising.html"))
+    Seq(0.05, 0.2, 0.5, 0.9).foreach(t => rising.at(t).save(out(f"interactive-rising-still-$t%.2f.svg")))
+    // a linked 3-D filtration: the diagram, the barcode and a canvas that draws the chosen class's cycle
+    val ring3 = circle.map(p => Array(p(0), p(1), 0.3 * p(0) * p(1)))
+    val ringBars = Persistence(ring3, maxDimension = 1, maxFiltrationValue = 1.0).bars
+    val ringKey = ringBars.indices.filter(ringBars(_).dim == 1).maxBy(ringBars(_).persistence)
+    val ringT = (ringBars(ringKey).birth + math.min(ringBars(ringKey).death, 1.0)) / 2
+    val linked3 = Plot.filtration3D(ring3, max = 1.0, link = true, barcode = true, title = "Noisy circle in space")
+    linked3.save(out("interactive-linked-3d.html"))
+    linked3.at(PageState().value("t", ringT).select("class", ringKey)).save(out("interactive-linked-3d-still.svg"))
+    java.nio.file.Files
+      .writeString(java.nio.file.Path.of(out("interactive-linked-3d.json")), s"""{"key":$ringKey,"t":$ringT}""")
+    // a flat canvas with axes whose points choose and that takes a rectangle: pointing and the rectangle see only what the plot area shows
+    val gridAt = for y <- Seq(-1.0, 0.0, 1.0); x <- Seq(-2.0, -1.0, 0.0, 1.0, 2.0) yield (x, y, 0.0)
+    val axesPage = Interactive()
+      .withSelection(Selection.listing("item", Seq.tabulate(gridAt.size)(i => s"item $i")))
+      .withPanel(
+        Panel(
+          Scene(
+            Vector(Layer.Points(gridAt.toIndexedSeq, IndexedSeq(Paint.Ink), 4.0)),
+            azimuth = 0,
+            elevation = 90,
+            turns = false
+          ).withAxes
+        )
+          .selecting(0, "item", gridAt.indices)
+          .brushable("item")
+      )
+      .withTitle("Choosing on a flat canvas with axes")
+    axesPage.save(out("interactive-axes-pick.html"))
+    // flat canvases with labelled axes on other scales: a log-log picture of births and deaths, and a square-root x axis over a
+    // symmetric log y axis (negative numbers, gridlines on x only); a page's words, marks and gridlines are its still's, zoomed or not
+    def flat(layers: Vector[Layer]) = Scene(layers, azimuth = 0, elevation = 90, turns = false).withAxes
+    def pointsJson(ps: IndexedSeq[XYZ]) = ps.map(p => s"[${p._1},${p._2}]").mkString("[", ",", "]")
+    val logAt = IndexedSeq.tabulate(36) { i =>
+      val birth = math.pow(10, -4.0 + 8.0 * i / 35.0)
+      (birth, birth * (1.5 + (i % 7) * 1.3), 0.0)
+    }
+    val logScene = flat(
+      Vector(
+        Layer.Segments(logAt.indices.tail.map(i => (logAt(i - 1), logAt(i))), IndexedSeq(Paint.Series(2)), 1.0),
+        Layer.Points(logAt, IndexedSeq(Paint.Series(1)), 4.0)
+      )
+    ).withXYScale(Transform.Log10).withXLabel("birth").withYLabel("death").withTitle("Births and deaths on log axes")
+    logScene.save(out("interactive-axes-log.html"))
+    logScene.save(out("interactive-axes-log-still.svg"))
+    java.nio.file.Files
+      .writeString(java.nio.file.Path.of(out("interactive-axes-log.json")), s"""{"points":${pointsJson(logAt)}}""")
+    val mixedAt = IndexedSeq.tabulate(30)(i => (i * i / 10.0 - 20.0, ((i * 37) % 61 - 30) * 10.0, 0.0))
+    val mixedScene = flat(Vector(Layer.Points(mixedAt, IndexedSeq(Paint.Series(0)), 4.0)))
+      .withXScale(Transform.Sqrt)
+      .withYScale(Transform.SymLog(2.0), grid = false)
+      .withLabels(x = "size", y = "signed value")
+      .withTitle("Square-root and symmetric-log axes")
+    mixedScene.save(out("interactive-axes-scales.html"))
+    mixedScene.save(out("interactive-axes-scales-still.svg"))
+    java.nio.file.Files
+      .writeString(java.nio.file.Path.of(out("interactive-axes-scales.json")), s"""{"points":${pointsJson(mixedAt)}}""")
+    // the options of an axis that a canvas takes besides its scale: the range the picture opens on (points outside it are
+    // clipped), the breaks and a printf format of the numbers, a log axis that runs the other way with its own padding
+    val windowAt = IndexedSeq.tabulate(31) { i =>
+      (-3.0 + 17.0 * i / 30.0, math.pow(10, -2.0 + 5.0 * i / 30.0) * (1 + (i % 3) * 0.3), 0.0)
+    }
+    val windowScene = flat(Vector(Layer.Points(windowAt, IndexedSeq(Paint.Series(0)), 4.0)))
+      .withXScale(min = 0.0, max = 8.0, breaks = Seq(0.0, 2.0, 4.0, 6.0, 8.0), format = "%.1f")
+      .withYScale(Transform.Log10, reverse = true, padding = 0.05)
+      .withLabels(x = "position", y = "weight")
+      .withTitle("A window, breaks, a format and a reversed log axis")
+    windowScene.save(out("interactive-axes-window.html"))
+    windowScene.save(out("interactive-axes-window-still.svg"))
+    java.nio.file.Files
+      .writeString(
+        java.nio.file.Path.of(out("interactive-axes-window.json")),
+        s"""{"points":${pointsJson(windowAt)}}"""
+      )
+    // an axis that is not visible (no line, numbers, label or gridlines, and its room given back) and a lower end alone
+    val hiddenAt = IndexedSeq.tabulate(30)(i => (i * 0.35, ((i * 17) % 41 - 20).toDouble, 0.0))
+    val hiddenScene = flat(Vector(Layer.Points(hiddenAt, IndexedSeq(Paint.Series(1)), 4.0)))
+      .withXScale(visible = false)
+      .withYScale(min = -25.0)
+      .withLabels(x = "never written", y = "level")
+      .withTitle("An axis left out and a lower end given")
+    hiddenScene.save(out("interactive-axes-hidden.html"))
+    hiddenScene.save(out("interactive-axes-hidden-still.svg"))
+    java.nio.file.Files
+      .writeString(
+        java.nio.file.Path.of(out("interactive-axes-hidden.json")),
+        s"""{"points":${pointsJson(hiddenAt)}}"""
+      )
+    // an item that follows a slider on a reversed square-root x axis: the value goes through the axis and its direction, as in
+    // the still of that value (the mover's roots, 1 to 2, stay clear of the others', 2.45 and 3)
+    val followAt = IndexedSeq[XYZ]((1.0, 1.0, 0.0), (9.0, 9.0, 0.0), (6.0, 5.0, 0.0))
+    val sqrtFollow = Interactive()
+      .withSlider("t", 0.0, 5.0)
+      .withPanel(
+        Panel
+          .Spatial(
+            Scene(Vector.empty, azimuth = 0, elevation = 90, turns = false).withAxes
+              .withXScale(Transform.Sqrt, reverse = true)
+              .withLabels(x = "size")
+              .withTitle("Following the slider on a reversed square-root axis")
+          )
+          .reactEach(
+            Layer.Points(followAt, IndexedSeq(Paint.Series(2)), 5.0),
+            IndexedSeq(
+              Reaction(Vector(Behavior.Follows("t", Coordinate.X, Ends.Both, 1.0, 4.0))),
+              Reaction.none,
+              Reaction.none
+            )
+          )
+      )
+    sqrtFollow.save(out("interactive-axes-follow.html"))
+    Seq(0.0, 1.0, 2.25, 4.0, 5.0).foreach(t => sqrtFollow.at(t).save(out(f"interactive-axes-follow-still-$t%.2f.svg")))
+    // a complex with too many cells for an SVG: a flat canvas to pan and zoom, linked to the diagram and the barcode
+    val ringLarge = noisyCircle(60, 0.1, 3)
+    val largeBars = Persistence(ringLarge, maxDimension = 1, maxFiltrationValue = 2.5).bars
+    val largeKey = largeBars.indices.filter(largeBars(_).dim == 1).maxBy(largeBars(_).persistence)
+    val largeT = (largeBars(largeKey).birth + math.min(largeBars(largeKey).death, 2.5)) / 2
+    val manyCells = Plot.filtration(ringLarge, max = 2.5, barcode = true, link = true, title = "Sixty points")
+    manyCells.save(out("interactive-large.html"))
+    manyCells.at(PageState().value("t", largeT).select("class", largeKey)).save(out("interactive-large-still.svg"))
+    java.nio.file.Files.writeString(
+      java.nio.file.Path.of(out("interactive-large.json")),
+      s"""{"key":$largeKey,"t":$largeT,"points":${ringLarge.map(p => s"[${p(0)},${p(1)}]").mkString("[", ",", "]")}}"""
+    )
     // linked views: pointing at a class in one picture lights it up in the others, with its cycle on the input
     val exploreBars = Persistence(circle, maxDimension = 1).bars
     val exploreKey = exploreBars.indices.filter(exploreBars(_).dim == 1).maxBy(exploreBars(_).persistence)
@@ -282,6 +539,12 @@ object Gallery:
       zoomPage.at(PageState().zoom(0, w)).save(out(s"interactive-zoom-$i.svg"))
     }
     def listed(w: Window) = s"[${w.x0},${w.x1},${w.y0},${w.y1}]"
+    def json2(t: String) = "\"" + t.flatMap {
+      case '"'  => "\\\""
+      case '\\' => "\\\\"
+      case '\n' => "\\n"
+      case c    => c.toString
+    } + "\""
     // sixty windows of every size and place, with the words the still writes on them: the page must write the same
     val random = scala.util.Random(7)
     def inside(lo: Double, hi: Double): (Double, Double) =
@@ -306,4 +569,261 @@ object Gallery:
       java.nio.file.Path.of(out("interactive-zoom.json")),
       s"""{"windows":${zoomWindows.map(listed).mkString("[", ",", "]")},"diagram":${listed(diagramWindow)}}"""
     )
+    // zoom on every kind of axis: log, square-root, symmetric log, reversed, and one with a number format, separators and
+    // slanted labels, each with minor ticks. For thirty windows of every size and place the still of the window is saved
+    // with the page; the check script brings the page to the same windows and compares the axes element for element
+    val axisRandom = scala.util.Random(11)
+    def axisWindows(fig: Figure, n: Int): Seq[Window] =
+      val (xt, yt) = Svg.resolved(fig)
+      val ((xl, xh), (yl, yh)) = Svg.ranges(fig)
+      def pick(t: Transform, lo: Double, hi: Double): (Double, Double) =
+        val (a, b) = (t(lo), t(hi))
+        val width = (b - a) * math.pow(10, -2.1 * axisRandom.nextDouble())
+        val start = a + axisRandom.nextDouble() * (b - a - width)
+        (t.inverse(start), t.inverse(start + width))
+      Seq.fill(n) {
+        val ((x0, x1), (y0, y1)) = (pick(xt, xl, xh), pick(yt, yl, yh))
+        Window(x0, x1, y0, y1)
+      }
+    def zoomAxes(name: String, fig: Figure): Unit =
+      val styled = fig + Lines.minorGrid() + Lines.minorTicks(length = 3)
+      val page = Interactive().withPanel(Panel(styled).zoomable()).withTitle(name)
+      page.save(out(s"zoomaxes-$name.html"))
+      val windows = axisWindows(styled, 30)
+      val stills = windows.map(w => page.at(PageState().zoom(0, w)).svgFile(Theme.Light))
+      def quoted(t: String) = "\"" + t.flatMap {
+        case '"'  => "\\\""
+        case '\\' => "\\\\"
+        case '\n' => "\\n"
+        case c    => c.toString
+      } + "\""
+      java.nio.file.Files.writeString(
+        java.nio.file.Path.of(out(s"zoomaxes-$name.json")),
+        s"""{"windows":${windows.map(listed).mkString("[", ",", "]")},"stills":${stills
+            .map(quoted)
+            .mkString("[", ",", "]")}}"""
+      )
+    val axisRng = scala.util.Random(5)
+    val decades = Seq.fill(14)(math.pow(10, -2 + 5 * axisRng.nextDouble()))
+    zoomAxes(
+      "log",
+      Figure(
+        marks =
+          Vector(Mark.Points(decades.map(x => (x, 3 * math.pow(x, 0.7) + 0.2)).toIndexedSeq, IndexedSeq(Paint.Ink))),
+        x = Axis(label = "x", transform = Transform.Log10),
+        y = Axis(label = "y", transform = Transform.Log10)
+      )
+    )
+    zoomAxes(
+      "sqrt",
+      Figure(
+        marks = Vector(
+          Mark.Points(IndexedSeq.tabulate(25)(i => (i * i * 0.16, i * 0.2 + (i % 3))), IndexedSeq(Paint.Ink))
+        ),
+        x = Axis(label = "area", transform = Transform.Sqrt),
+        y = Axis(label = "y")
+      )
+    )
+    zoomAxes(
+      "symlog",
+      Figure(
+        marks = Vector(
+          Mark.Points(
+            IndexedSeq((-40.0, 1.0), (-3.0, 2.0), (0.0, 3.0), (0.2, 4.0), (5.0, 5.0), (90.0, 6.0), (800.0, 7.0)),
+            IndexedSeq(Paint.Ink)
+          )
+        ),
+        x = Axis(label = "signed", transform = Transform.Log10),
+        y = Axis(label = "y")
+      )
+    )
+    zoomAxes(
+      "reversed",
+      Figure(
+        marks = Vector(
+          Mark.Points(IndexedSeq.tabulate(20)(i => (i * 13.0, 1000.0 - i * i * 2.5)), IndexedSeq(Paint.Ink))
+        ),
+        x = Axis(label = "depth", reverse = true),
+        y = Axis(label = "height", reverse = true)
+      )
+    )
+    zoomAxes(
+      "format",
+      Figure(
+        marks = Vector(
+          Mark.Points(IndexedSeq.tabulate(12)(i => (i * 11000.0, (i % 5) * 6e-4)), IndexedSeq(Paint.Ink))
+        ),
+        x = Axis(label = "count", format = Some("%,.1f")),
+        y = Axis(label = "rate", format = Some("%+.2e"))
+      ) + Numbers(decimal = ",", grouping = " ", minus = "\u2212") + Text(TextRole.TickLabel, angle = 40)
+    )
+    val farRng = scala.util.Random(11)
+    zoomAxes(
+      "logfar",
+      Figure(
+        marks = Vector(
+          Mark.Points(
+            IndexedSeq.fill(16)(
+              (math.pow(10, -7 + 4 * farRng.nextDouble()), math.pow(10, 5 + 4 * farRng.nextDouble()))
+            ),
+            IndexedSeq(Paint.Ink)
+          )
+        ),
+        x = Axis(label = "tiny", transform = Transform.Log10),
+        y = Axis(label = "huge", transform = Transform.Log10)
+      )
+    )
+    zoomAxes(
+      "extras",
+      Figure(
+        marks = Vector(Mark.Points(IndexedSeq.tabulate(14)(i => (i * 0.7, (i * 5 % 8) * 1.0)), IndexedSeq(Paint.Ink))),
+        x = Axis(label = "birth", extra = IndexedSeq((10.0, "\u221e"))),
+        y = Axis(label = "death", ticks = Ticks.At(IndexedSeq(0.0, 2.5, 5.0, 7.5)))
+      )
+    )
+    // brushing: a page of forty points, and stills of rectangles (unzoomed and zoomed) for the check script to compare the
+    // page's rectangle with, drawn by a drag and by the keyboard; `keys` are what a rectangle touches, as the page chooses them
+    {
+      val brushRng = scala.util.Random(13)
+      val cloud = IndexedSeq.fill(40)((10 * brushRng.nextDouble(), 10 * brushRng.nextDouble()))
+      val brushPage = Interactive()
+        .withSelection("c")
+        .withPanel(
+          Panel(
+            Figure(
+              marks = Vector(Mark.Points(cloud, IndexedSeq(Paint.Ink))),
+              x = Axis(label = "x"),
+              y = Axis(label = "y")
+            )
+          )
+            .selecting(0, "c", IndexedSeq.range(0, 40))
+            .brushable("c")
+            .zoomable()
+        )
+        .withTitle("Brush")
+      brushPage.save(out("interactive-brush.html"))
+      // the same page without a zoom, whose only button is the one that lets a finger choose
+      Interactive()
+        .withSelection("c")
+        .withPanel(
+          Panel(
+            Figure(
+              marks = Vector(Mark.Points(cloud, IndexedSeq(Paint.Ink))),
+              x = Axis(label = "x"),
+              y = Axis(label = "y")
+            )
+          )
+            .selecting(0, "c", IndexedSeq.range(0, 40))
+            .brushable("c")
+        )
+        .withTitle("Brush, no zoom")
+        .save(out("interactive-brush-plain.html"))
+      // two of the points drawn a second time by a mark of their own, which chooses its own keys: the cross steps to a place, and
+      // every item at that place lights up
+      Interactive()
+        .withSelection("c")
+        .withPanel(
+          Panel(
+            Figure(
+              marks = Vector(
+                Mark.Points(cloud, IndexedSeq(Paint.Ink)),
+                Mark.Points(IndexedSeq(cloud(0), cloud(5)), IndexedSeq(Paint.Series(1)))
+              ),
+              x = Axis(label = "x"),
+              y = Axis(label = "y")
+            )
+          )
+            .selecting(0, "c", IndexedSeq.range(0, 40))
+            .selecting(1, "c", IndexedSeq(40, 41))
+            .brushable("c")
+        )
+        .withTitle("Brush, twins")
+        .save(out("interactive-brush-twins.html"))
+      def box(r: scala.util.Random, lo: Double, hi: Double) =
+        val (a, b) = (lo + (hi - lo) * r.nextDouble(), lo + (hi - lo) * r.nextDouble())
+        (math.min(a, b), math.max(a, b) + 0.05)
+      val brushCases = Seq.fill(12) {
+        val zoomed = brushRng.nextBoolean()
+        val zoom = Option.when(zoomed) {
+          val (x0, x1) = (1 + 3 * brushRng.nextDouble(), 6 + 3 * brushRng.nextDouble())
+          Window(x0, x1, 1 + 3 * brushRng.nextDouble(), 6 + 3 * brushRng.nextDouble())
+        }
+        val (bx0, bx1) = zoom.fold(box(brushRng, 0, 10))(w => box(brushRng, w.x0, w.x1))
+        val (by0, by1) = zoom.fold(box(brushRng, 0, 10))(w => box(brushRng, w.y0, w.y1))
+        val brush = Window(bx0, bx1, by0, by1)
+        val state = zoom.fold(PageState())(PageState().zoom(0, _)).brush(0, brush)
+        s"""{"zoom":${zoom.fold("null")(listed)},"brush":${listed(brush)},"still":${json2(
+            brushPage.at(state).svgFile(Theme.Light)
+          )}}"""
+      }
+      java.nio.file.Files.writeString(
+        java.nio.file.Path.of(out("interactive-brush.json")),
+        s"""{"cloud":${cloud.map((x, y) => s"[$x,$y]").mkString("[", ",", "]")},"cases":${brushCases
+            .mkString("[", ",", "]")}}"""
+      )
+    }
+    // the page writes the numbers of a `%f`/`%e` axis itself: the cases below are what `String.format` says, for the page's
+    // `javaFormat` to match (`check-interactive-page.mjs`)
+    {
+      val patterns = Seq(
+        "%f",
+        "%.0f",
+        "%.1f",
+        "%.3f",
+        "%,.2f",
+        "%+.1f",
+        "%08.2f",
+        "%10.3f",
+        "%-10.1f|",
+        "%,.0f",
+        "%05.1f%%",
+        "x=%.2f units",
+        "%e",
+        "%.2e",
+        "%+.3E",
+        "%12.4e",
+        "%.0e",
+        "%-12.2e|",
+        "%+,.1f"
+      )
+      val values = Seq(
+        0.0,
+        -0.0,
+        1.0,
+        -1.0,
+        0.5,
+        1.5,
+        2.5,
+        0.125,
+        0.135,
+        1.005,
+        2.675,
+        9.9995,
+        999.9996,
+        123456.789,
+        1234567.891,
+        -1234.5678,
+        0.30000000000000004,
+        1e-5,
+        0.00001234,
+        1e-10,
+        1e10,
+        123456789012345.0,
+        2.2250738585072014e-308,
+        Double.MaxValue,
+        Double.NaN,
+        Double.PositiveInfinity,
+        Double.NegativeInfinity
+      )
+      def json(t: String) = "\"" + t.flatMap {
+        case '"'  => "\\\""
+        case '\\' => "\\\\"
+        case c    => c.toString
+      } + "\""
+      val cases = for p <- patterns; v <- values yield
+        val text = RootText.format(p, java.lang.Double.valueOf(v))
+        s"""{"p":${json(p)},"v":${json(v.toString)},"out":${json(text)}}"""
+      java.nio.file.Files
+        .writeString(java.nio.file.Path.of(out("formats.json")), cases.mkString("{\"cases\":[", ",", "]}"))
+    }
     println(s"wrote the gallery to $dir")
