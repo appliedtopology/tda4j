@@ -49,7 +49,9 @@ downloads the jar and runs it in [CheerpJ](https://cheerpj.com/), a Java runtime
   empty line, as in the terminal. The Run button runs what is there. The up and down arrows walk through earlier
   inputs. There is no Tab completion and no Ctrl-C: reloading the page is the way out of a computation that takes too
   long, and it starts a new session.
-- **Speed.** The page needs 20 to 30 seconds to reach its first prompt and downloads about 50 MB on a first visit.
+- **Speed.** The page needs 20 to 30 seconds to reach its first prompt, and longer on a first visit over a slow
+  connection: it downloads about 50 MB then. The browser keeps them, and a later visit fetches almost nothing again,
+  so where the network is slow, open the page once before the session.
   A line then takes from half a second to a few seconds, and the first compile error of a session about half a
   minute. A computation runs roughly ten times slower than on a Java runtime, on one thread, in at most 2 GB: right
   for point clouds of tens to a few hundred points, wrong for the patches example.
@@ -159,7 +161,8 @@ clean exit on `:quit` with the server running.
 - **Java 17.** The class-file versions say it should start; it was not run.
 - **Windows consoles that are not UTF-8** may print `?` for `∞`, `⊠` and `∆`; Windows Terminal and any Mac or Linux
   terminal in a UTF-8 locale print them. Where it matters, `java -Dstdout.encoding=UTF-8 -jar ...`.
-- **The web page** was run in headless Chromium only, with the jar on the same machine: a session of expressions,
+- **The web page** was run in headless Chromium only, from a folder on the same machine and from the docs site: a
+  session of expressions,
   `Persistence`, plots, a multi-line definition, an exception, a library error and a type error. Firefox, Safari,
   phones, a slow network and a room of thirty laptops loading it at once are untested, and so is a session of an hour.
 - **The container** was built and run on Linux on an Intel machine, and used through headless Chromium: the prompt,
