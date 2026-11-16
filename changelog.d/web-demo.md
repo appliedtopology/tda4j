@@ -15,5 +15,5 @@
 
 ### Build, CI and Documentation
 
-- A workflow, `demo.yml`, builds the demo's web page and container image, uses both in a headless browser, and
-  publishes them; a release runs it, and it can be run by hand for a branch.
+- A workflow, `demo.yml`, builds the demo's web page and container image, uses both in a headless browser, publishes
+  them, and uses the page once more where it is published; a release runs it, and it can be run by hand for a branch.

@@ -33,7 +33,7 @@ the docs steps set `TDA4J_SCALA_VERSION=3.8.4` (read by `scalaVersion` in `build
 | Scaladoc jar | sbt's default `Compile / packageDoc` | Maven Central + GitHub Release |
 | Fat jar (CLI/MATLAB) | `sbt tda4j/assembly` → `target/out/jvm/scala-3.9.0/tda4j/tda4j-<version>-assembly.jar` (name from `assembly / assemblyJarName` in `build.sbt`); CI's `test` job builds it and runs it on a sample for every pull request | GitHub Release only (not published to Maven — fat jars with bundled deps are a poor Maven citizen) |
 | Demo REPL jar | `demo/` is a separate sbt build (`demo/README.md`) that bundles a *version* of the library with the Scala REPL: `TDA4J_VERSION=<version> sbt assembly` in `demo/` → `demo/target/out/jvm/scala-3.9.0/tda4j-demo/tda4j-demo-<version>.jar` (about 74 MB). `release.yml` builds it against the tag's own sources and smoke-runs it | GitHub Release only |
-| Demo web page | `sbt webSite` in `demo/` → `demo/target/web`: the page that runs the demo jar in a browser, the jar, and a second jar of classes rewritten for the page's Java runtime (`demo/README.md`, "In a web page"). `demo.yml` builds it and uses it in a headless browser | GitHub Pages, under `/playground/` (replaced by every run of `demo.yml`) |
+| Demo web page | `sbt webSite` in `demo/` → `demo/target/web`: the page that runs the demo jar in a browser, the jar cut in two where it changes, and a third jar of classes rewritten for the page's Java runtime (`demo/README.md`, "In a web page"). `demo.yml` builds it, uses it in a headless browser, and uses it again where it is published | GitHub Pages, under `/playground/` (replaced by every run of `demo.yml`) |
 | Demo container image | `demo/container/Dockerfile`: a Java runtime, the demo jar, and a terminal served as a web page. `demo.yml` builds it, uses it in a headless browser, and pushes it for Intel and ARM machines | `ghcr.io/appliedtopology/tda4j-demo:<version>` and `:latest` |
 | Docs site | `sbt tda4j/doc` → `target/out/jvm/scala-<docs scala version>/tda4j/api` (scaladoc static site built from `_docs/`) | GitHub Pages, under a per-version path (`/X.Y.Z/`, `/dev/` for in-progress docs) + a zipped copy on the GitHub Release |
 
@@ -229,7 +229,9 @@ The tag push from step 3 triggers `.github/workflows/release.yml`, which:
 8. In a second job, runs `demo.yml` for the tag: the demo's web page goes to `/playground/` on the docs site and its
    container image to `ghcr.io/appliedtopology/tda4j-demo`. The job comes after the release and cannot undo it: when it
    fails, the release is complete and the page and the image are the ones published before. Run "Demo" again from the
-   Actions tab with the tag as its ref.
+   Actions tab with the tag as its ref. Its last step, "Use the published page in the browser", is the exception: it
+   runs after the page is pushed, so when it fails the page on the docs site is the new one and does not work, and the
+   step's log says what the page showed.
 
 `demo.yml` also runs by hand for a branch (Actions, "Demo", "Run workflow", ref `scala`), which publishes the page and
 the image of the snapshot, for a tutorial that needs what is on the branch. The page and `latest` are always the last
@@ -237,10 +239,13 @@ ones built, so run it for the release tag again afterwards if the release should
 
 Two things are done once, by an owner of the organization:
 
-- **Make the image public.** The first push creates the package `tda4j-demo` as private. On the organization's
-  Packages page, open it, "Package settings", "Change visibility", "Public"; until then `docker run` asks for a login.
-- **Watch the size of `gh-pages`.** Every publish of the page adds a new copy of the demo jar (about 73 MB) to that
-  branch's history (#335). GitHub refuses a file of 100 MB, and `demo.yml` stops before pushing one.
+- **Make the image public** (done for `tda4j-demo`). The first push creates a package as private. On the
+  organization's Packages page, open it, "Package settings", "Change visibility", "Public"; until then `docker run` asks
+  for a login. Where "Public" cannot be chosen, the organization's own settings do not allow public packages yet:
+  change that first.
+- **Watch the size of `gh-pages`.** A publish of the page adds the two jars that change (about 6.5 MB) to that
+  branch's history, and the libraries jar (about 66 MB) once more only when a dependency changed, which the run says
+  in a notice. GitHub refuses a file of 100 MB, and `demo.yml` stops before pushing one.
 
 If it fails partway (e.g. a transient GitHub API error), it's safe to just re-run the workflow from the
 Actions tab — nothing it does touches Maven, and `gh release create`/the docs `git push` are both safe to

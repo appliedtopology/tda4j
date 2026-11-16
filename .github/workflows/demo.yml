@@ -191,12 +191,15 @@ jobs:
           IMAGE: ${{ steps.demo.outputs.image }}
         run: |
           # For Intel and ARM machines (an Apple Silicon laptop pulls the ARM one). The jar is the same in both; the ARM
-          # image's packages are installed under emulation, and that image is never run here.
+          # image's packages are installed under emulation, and that image is never run here. The title and the time are
+          # set because the base image's own (`ubuntu`, and the day it was built) would be inherited otherwise.
           echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           docker run --privileged --rm tonistiigi/binfmt --install arm64
           docker buildx create --use --name demo
           docker buildx build --platform linux/amd64,linux/arm64 --push \
             -f demo/container/Dockerfile --build-arg "JAR=${{ steps.demo.outputs.jar }}" \
+            --label "org.opencontainers.image.title=tda4j-demo" \
+            --label "org.opencontainers.image.created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
             --label "org.opencontainers.image.description=The TDA4j demo REPL as a terminal in a web page" \
             --label "org.opencontainers.image.version=$VERSION" \

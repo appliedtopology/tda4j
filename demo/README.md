@@ -141,7 +141,12 @@ The web page and the container image are built and published by the workflow `de
 hand for a branch (Actions, "Demo", "Run workflow"), which is how a tutorial gets what is on `scala` today. It builds
 the jar, runs the page and the image in a headless browser (`.claude/scripts/check-web-playground.mjs`,
 `check-demo-container.mjs`; both run on your machine too), then replaces `/playground/` on the docs site and pushes
-the image as `ghcr.io/appliedtopology/tda4j-demo:<version>` and `:latest`.
+the image as `ghcr.io/appliedtopology/tda4j-demo:<version>` and `:latest`. Its last step waits until the docs site
+serves the page and the three jars of that build, and runs the page's check again on the published address: a run that
+fails there has published a page that does not work. The same check runs from any machine,
+`node .claude/scripts/check-web-playground.mjs https://tda4j.appliedtopology.org/playground/`.
+
+A page that is published without its jars says so when it is opened, and names them.
 
 ## Not verified
 
@@ -159,7 +164,5 @@ clean exit on `:quit` with the server running.
   phones, a slow network and a room of thirty laptops loading it at once are untested, and so is a session of an hour.
 - **The container** was built and run on Linux on an Intel machine, and used through headless Chromium: the prompt,
   Tab completion, a pasted block, non-ASCII text, a plot on the second port, a reload, `:quit`, another user id with a
-  mounted folder. Docker Desktop on macOS and Windows is untested, and the ARM image has never been run.
-- **`demo.yml`** has not run: its steps were run by hand where a laptop can (the session check, both browser checks,
-  the image build, the push to `gh-pages` against a scratch repository), and the pushes to the real `gh-pages` and to
-  ghcr.io were not.
+  mounted folder. The published image, pulled without a login, passes the same check there. Docker Desktop on macOS
+  and Windows is untested, and the ARM image has never been run.
