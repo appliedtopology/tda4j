@@ -95,3 +95,35 @@ page error in either.
 
 The Demo workflow has to run once more after this change is merged: until then the page on the docs site is the one
 without jars.
+
+## Addendum, 2026-11-16: the second run
+
+The project lead merged the fix (#346) and ran "Demo" on `scala` again (run 43869508068, at 9948c9d5). Every step is
+green, and the page on the docs site works.
+
+- **The publish.** The commit on `gh-pages` (d8119608) holds `index.html` and the three jars. The libraries jar there
+  is the same git blob as the one built in this container two hours earlier (34a49dc6): the "same bytes on every
+  build" of `WORKLOG-demo-page-jars.md` holds from one machine to another, so a later publish with the same
+  dependencies adds no second copy.
+- **GitHub Pages.** The site served the new files within 63 s of the push (the image push, which runs in between, took
+  that long, and the files matched at the first attempt). It serves the jars as `application/java-archive`, not
+  compressed even when the request accepts gzip, and answers ranges with 206.
+- **The workflow's last step** on the published address: 21 checks in 52 s, 14.9 s to the first prompt, 52.1 MB
+  fetched.
+- **From this container** (through its proxy): 21 checks in 99 s, 38 s to the first prompt.
+- **The image.** A new digest for `latest` and `0.7.0-SNAPSHOT`, both platforms, `title=tda4j-demo`, `created` the
+  time of the build; 13 container checks pass (22 s).
+
+**A later visit** (one browser profile, headless Chromium, from this container, three visits within five minutes):
+
+| visit | to the first prompt | over the network from the site |
+|---|---|---|
+| first | 54.8 s | 38.9 MB |
+| second, same browser | 26.2 s | 0.3 MB |
+| third, browser restarted | 22.4 s | 0.0 MB |
+
+So the browser's cache holds the pieces of the jars, across a restart too. The site sends `cache-control: max-age=600`;
+a visit more than ten minutes later has to ask the site whether each piece is still current, and that was not timed.
+
+Still not run: everything else on #334's list (other browsers, a phone, a room of laptops, Docker Desktop, the ARM
+image, the call from `release.yml`).
