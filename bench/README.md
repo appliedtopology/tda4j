@@ -372,19 +372,28 @@ case, field and sweep that runs the stock tool runs the fork on the same input. 
 
 ```sh
 export RIPSER_PATCHED_REPO=https://github.com/ubauer/ripser-dev      # a URL or a local path
-export RIPSER_PATCHED_REF=study/redzed-transfer                      # a branch, tag or commit; default: the repository's HEAD
-export REDZED_PATCHED_REPO=...  REDZED_PATCHED_REF=...               # the same for RedZeD
+export RIPSER_PATCHED_REF=optimize/hybrid-cohomology                 # a branch, tag or commit; default: the repository's HEAD
+export RIPSER_PATCHED_SRC=ripser-forest/ripser-forest.cpp            # source file to compile, relative to the repository
+export RIPSER_PATCHED_FLAGS=""                                       # extra compiler flags (paths relative to the repository)
+export RIPSER_PATCHED_INPUT=binary                                   # text (default) or binary: see below
+export RIPSER_PATCHED_COEFF=0                                        # 0: Z/2 only, no coefficient build
+export REDZED_PATCHED_REPO=...  REDZED_PATCHED_REF=...  REDZED_PATCHED_SRC=...  REDZED_PATCHED_FLAGS=...
 bench/run.sh setup ripser redzed
 bench/run.sh run --tools 'ripser.cpp*,redzed*' ...                   # or no --tools: every available row
 ```
 
 `setup` clones the repository into `$WORKDIR/tools/ripser-patched` (`redzed-patched`) and fetches the ref again at every setup, so
-a branch that has moved is rebuilt; `bench.py` reads the built binaries from there with no further variables. The build is the
-stock one: `make -B ripser ripser-coeff` (a fork without the `ripser-coeff` target runs over Z/2 only), and RedZeD is compiled with
-`g++ -O3 -std=c++17 -DNDEBUG` from `python/cpp/redzed.cpp` (`REDZED_PATCHED_SRC` names another source file). The ripser fork also has to
-pass stock ripser.cpp's command line on `smoke-points.txt`; a fork that fails to fetch, build or run is reported as `missing` and
-the stock rows are unaffected. A fork cannot be a stale binary: a failed fetch removes it. The commit each fork was built from is
+a branch that has moved is rebuilt; `bench.py` reads the built binaries from there with no further variables. The compile is the stock
+one with the fork's source file and flags: `c++ -std=c++11 -Wall -O3 -D NDEBUG FLAGS SRC` (`CXX` chooses the compiler; the fork's own
+Makefile is not used), once more with `-D USE_COEFFICIENTS` for the coefficient build unless `RIPSER_PATCHED_COEFF=0`, and for
+RedZeD `g++ -O3 -std=c++17 -DNDEBUG FLAGS SRC` (default source `python/cpp/redzed.cpp`; a `-std` in the flags comes later and wins).
+`RIPSER_PATCHED_INPUT=binary` is for a code that reads only the binary lower triangle with `--format binary`: it gets the file the
+RedZeD rows get (float32, made once from the float64 distances and not timed), where a text input has its parse inside its time. A fork
+that fails to fetch, build, or pass stock ripser.cpp's command line on `smoke-points.txt` is reported as `missing` and the stock rows
+are unaffected; a failed fetch or build removes the old binary, so a stale build never runs under the new label. The commit each fork was built from is
 `ripser_patched_git` / `redzed_patched_git` in `env.json`. With the variables unset there are no such rows and nothing else changes.
+
+One slot per tool: a second variant of the same code needs its own run, merged with `run.sh merge`.
 
 ## The tools
 

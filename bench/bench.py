@@ -215,7 +215,8 @@ TOOLS = [
     # A fork or patched branch of ripser.cpp, built by `run.sh setup ripser` from RIPSER_PATCHED_REPO / RIPSER_PATCHED_REF
     # (README, "Forked builds"): a row of its own beside the stock one, left out ("missing") when the variable is unset. It
     # is never the reference, so its agreement column is its barcode against stock ripser.cpp's.
-    ("ripser.cpp-patched", "ripser", "vr", {"binary": "RIPSER_PATCHED_BIN", "coeff_binary": "RIPSER_PATCHED_COEFF_BIN"}),
+    ("ripser.cpp-patched", "ripser", "vr",
+     {"binary": "RIPSER_PATCHED_BIN", "coeff_binary": "RIPSER_PATCHED_COEFF_BIN", "input_env": "RIPSER_PATCHED_INPUT"}),
     # RedZeD (Kapulkin and Kershaw, arXiv:2606.06310; C++17, one thread): Z/2 only, Vietoris-Rips only, homology; the output is
     # the bars, with no representatives. Its input is the binary lower triangle of the distance matrix, made before the run
     # and not timed (redzed_io.py), as DIPHA's is; it caps the threshold at the enclosing radius itself.
@@ -764,8 +765,13 @@ def command(kind, name, opts, case, data, p, threshold, warmup, trials, out, arg
                   else os.environ.get(opts.get("coeff_binary", "RIPSER_COEFF_BIN"), ""))
         if not binary:
             return None
-        cmd = [binary, str(data / fname), "--dim", str(dim),
-               "--format", "point-cloud" if fmt == "points" else "distance"]
+        if os.environ.get(opts.get("input_env", "")) == "binary":
+            # a code that reads only the binary lower triangle (ripser-forest): the file RedZeD gets, made once and not timed
+            source = redzed_io.prepare_input(lambda: np.loadtxt(data / fname, ndmin=2), fmt, data / "redzed" / f"{case.name}.lower")
+            cmd = [binary, str(source), "--dim", str(dim), "--format", "binary"]
+        else:
+            cmd = [binary, str(data / fname), "--dim", str(dim),
+                   "--format", "point-cloud" if fmt == "points" else "distance"]
         if threshold is not None:
             cmd += ["--threshold", repr(threshold)]
         if p != 2:

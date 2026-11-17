@@ -1910,9 +1910,25 @@ class ForkedBuildTests(unittest.TestCase):
         self.assertEqual(cmd[0], "/fork/redzed")
         self.assertEqual(self.row("redzed-patched")["only_p"], 2)
 
+    def test_a_binary_input_fork_gets_the_lower_triangle_the_redzed_rows_get(self):
+        env = {"RIPSER_PATCHED_BIN": "/fork/ripser", "RIPSER_PATCHED_INPUT": "binary"}
+        cmd = self.command("ripser.cpp-patched", "ripser", 2, **env)
+        lower = self.data / "redzed" / "forked.lower"
+        self.assertEqual(cmd, ["/fork/ripser", str(lower), "--dim", "2", "--format", "binary", "--threshold", "0.75"])
+        self.assertEqual(lower.stat().st_size, 4 * 6 * 5 // 2, "float32 entries below the diagonal of 6 points")
+        text = self.command("ripser.cpp-patched", "ripser", 2, RIPSER_PATCHED_BIN="/fork/ripser", RIPSER_PATCHED_INPUT="text")
+        self.assertEqual(text[1:4], [str(self.data / "p.txt"), "--dim", "2"])
+        self.assertIn("point-cloud", text)
+
+    def test_the_stock_row_never_reads_the_forks_input_variable(self):
+        cmd = self.command("ripser.cpp", "ripser", 2, RIPSER_BIN="/stock/ripser", RIPSER_PATCHED_INPUT="binary")
+        self.assertNotIn("binary", cmd)
+
     def test_setup_builds_the_forks_and_the_environment_names_them(self):
         script = (HERE_BENCH / "run.sh").read_text()
-        for needle in ("RIPSER_PATCHED_REPO", "RIPSER_PATCHED_REF", "REDZED_PATCHED_REPO", "REDZED_PATCHED_REF",
+        for needle in ("RIPSER_PATCHED_REPO", "RIPSER_PATCHED_REF", "RIPSER_PATCHED_SRC", "RIPSER_PATCHED_FLAGS",
+                       "RIPSER_PATCHED_INPUT", "RIPSER_PATCHED_COEFF", "REDZED_PATCHED_REPO", "REDZED_PATCHED_REF",
+                       "REDZED_PATCHED_SRC", "REDZED_PATCHED_FLAGS",
                        'export RIPSER_PATCHED_BIN="$TOOLS/ripser-patched/ripser"',
                        'export REDZED_PATCHED_BIN="$TOOLS/redzed-patched/redzed"'):
             self.assertIn(needle, script)

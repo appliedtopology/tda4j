@@ -35,7 +35,8 @@
 #   NODE           node binary for the Scala.js build of TDA4j (20.16 or newer; default: node on PATH); tda4j-js is
 #                  skipped if there is none
 #   SKIP_TDA4J_BUILD=1   reuse the classpath file from a previous setup
-#   RIPSER_PATCHED_REPO, RIPSER_PATCHED_REF, REDZED_PATCHED_REPO, REDZED_PATCHED_REF, REDZED_PATCHED_SRC
+#   RIPSER_PATCHED_REPO, RIPSER_PATCHED_REF, RIPSER_PATCHED_SRC, RIPSER_PATCHED_FLAGS, RIPSER_PATCHED_INPUT, RIPSER_PATCHED_COEFF,
+#   REDZED_PATCHED_REPO, REDZED_PATCHED_REF, REDZED_PATCHED_SRC, REDZED_PATCHED_FLAGS
 #                  a fork or patched branch of ripser.cpp or RedZeD (a URL or local path; a branch, tag or commit): `setup
 #                  ripser redzed` builds it too, and the rows `ripser.cpp-patched` and `redzed-patched` run beside the stock
 #                  ones (README, "Forked builds"). Unset: no such rows.
@@ -106,24 +107,47 @@ setup_forked() {
   echo "$name: built from $(git -C "$dir" rev-parse HEAD)"
   case "$name" in
     ripser-patched)
-      rm -f "$dir/ripser" "$dir/ripser-coeff"
-      # -B: the checkout may have moved to older files than the objects. The coefficient build is optional in a fork.
-      (cd "$dir" && make -B ripser) \
+      rm -f "$dir/ripser" "$dir/ripser-coeff" "$dir/.bench-input"
+      # Compiled as the stock Makefile does (c++ -std=c++11 -Wall -O3 -D NDEBUG), whatever the fork's own Makefile says: the fork
+      # names its source file and flags, relative to the repository. RIPSER_PATCHED_INPUT=binary is for a code that reads only the
+      # binary lower triangle (--format binary, as ripser-forest does); RIPSER_PATCHED_COEFF=0 for one that is Z/2 only.
+      local cxx="${CXX:-c++}" src="${RIPSER_PATCHED_SRC:-ripser.cpp}" flags="${RIPSER_PATCHED_FLAGS:-}"
+      local input="${RIPSER_PATCHED_INPUT:-text}"
+      (cd "$dir" && $cxx -std=c++11 -Wall -O3 -D NDEBUG $flags "$src" -o ripser) \
         || { echo "WARNING: $name did not build; it will be reported as missing"; return; }
-      (cd "$dir" && make -B ripser-coeff) \
-        || echo "WARNING: $name has no ripser-coeff target: its row runs over Z/2 only"
-      if ! "$dir/ripser" "$BENCH/smoke-points.txt" --dim 1 --format point-cloud >/dev/null; then
-        echo "WARNING: $name failed its smoke test (stock ripser.cpp's command line); it will be reported as missing"
+      if [ "${RIPSER_PATCHED_COEFF:-1}" != 0 ]; then
+        (cd "$dir" && $cxx -std=c++11 -Wall -O3 -D NDEBUG -D USE_COEFFICIENTS $flags "$src" -o ripser-coeff) \
+          || echo "WARNING: $name has no coefficient build: its row runs over Z/2 only"
+      fi
+      local smoke=(--dim 1 --format point-cloud) smoke_input="$BENCH/smoke-points.txt"
+      if [ "$input" = binary ]; then
+        smoke_input="$(mktemp)"
+        python3 -I - "$BENCH/smoke-points.txt" "$smoke_input" <<'PY'
+import math, struct, sys
+pts = [[float(x) for x in line.split()] for line in open(sys.argv[1]) if line.strip() and not line.startswith("#")]
+with open(sys.argv[2], "wb") as out:
+    for i in range(len(pts)):
+        for j in range(i):
+            out.write(struct.pack("<f", math.dist(pts[i], pts[j])))
+PY
+        smoke=(--dim 1 --format binary)
+      fi
+      if "$dir/ripser" "$smoke_input" "${smoke[@]}" >/dev/null; then
+        echo "$input" > "$dir/.bench-input"
+      else
+        echo "WARNING: $name failed its smoke test (input $input); it will be reported as missing"
         rm -f "$dir/ripser" "$dir/ripser-coeff"
       fi
+      if [ "$input" = binary ]; then rm -f "$smoke_input"; fi
       ;;
     redzed-patched)
       rm -f "$dir/redzed"
-      # REDZED_PATCHED_SRC: the source file to compile, relative to the repository (default: the stock one's)
-      g++ -O3 -std=c++17 -DNDEBUG -o "$dir/redzed" "$dir/${REDZED_PATCHED_SRC:-python/cpp/redzed.cpp}" \
+      # as the stock one is built; the source file and extra flags (a later -std wins) are the fork's, relative to the repository
+      (cd "$dir" && g++ -O3 -std=c++17 -DNDEBUG ${REDZED_PATCHED_FLAGS:-} -o redzed "${REDZED_PATCHED_SRC:-python/cpp/redzed.cpp}") \
         || echo "WARNING: $name did not build; it will be reported as missing"
       ;;
   esac
+  return 0  # a fork that failed is reported as missing; it never stops the setup of the others
 }
 
 setup_redzed() {
@@ -346,6 +370,7 @@ export_env() {
   export RIPSER_PATCHED_COEFF_BIN="$TOOLS/ripser-patched/ripser-coeff"
   [ -x "$RIPSER_PATCHED_BIN" ] || unset RIPSER_PATCHED_BIN
   [ -x "$RIPSER_PATCHED_COEFF_BIN" ] || unset RIPSER_PATCHED_COEFF_BIN
+  if [ -s "$TOOLS/ripser-patched/.bench-input" ]; then export RIPSER_PATCHED_INPUT="$(cat "$TOOLS/ripser-patched/.bench-input")"; fi
   export REDZED_BIN="$TOOLS/redzed/redzed"
   [ -x "$REDZED_BIN" ] || unset REDZED_BIN
   export REDZED_PATCHED_BIN="$TOOLS/redzed-patched/redzed"
