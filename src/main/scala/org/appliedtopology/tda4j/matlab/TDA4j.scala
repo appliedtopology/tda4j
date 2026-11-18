@@ -85,9 +85,9 @@ private object CoefficientKind:
   * defaults are listed in the user guide's "Calling from MATLAB or Java" page: `complex`, `engine`, `maxDimension`,
   * `maxFiltrationValue`, `field`, `prime`, `epsilon`, `minPersistence`, `minPersistenceFraction`, `includeZeroLength`,
   * `alphaBackend`, `requireValidTriangulation`, `dtmK`, `dtmQ`, `dtmP`, `sparseEpsilon`, `numLandmarks`,
-  * `witnessVariant`, `landmarkSelector`, `landmarkSeed`, `nu`, `edgeCollapse`, `sublevel`, `nanMask`, `dual`,
-  * `representativesOn`. An unknown option, an unknown value, or a combination that does not apply (an engine for a
-  * complex it cannot read) throws `IllegalArgumentException` naming it, before anything is computed.
+  * `witnessVariant`, `landmarkSelector`, `landmarkSeed`, `nu`, `edgeCollapse`, `edgeTies`, `sublevel`, `nanMask`,
+  * `dual`, `representativesOn`. An unknown option, an unknown value, or a combination that does not apply (an engine
+  * for a complex it cannot read) throws `IllegalArgumentException` naming it, before anything is computed.
   *
   * By default a result reports the essential bars and the bars longer than 1% of the input's scale (its minimum
   * enclosing radius, or the value range of an image or relation); zero-length bars are left out unless
@@ -1287,12 +1287,52 @@ object TDA4j:
     "dtmp",
     "sparseepsilon",
     "edgecollapse",
+    "edgeties",
     "requirevalidtriangulation",
     "minpersistence",
     "minpersistencefraction",
     "includezerolength",
     "threads"
   )
+
+  /** Option `edgeTies` (the order of equal-length edges, `Persistence`'s parameter of that name), parsed: its error
+    * names the accepted values.
+    */
+  private def parseEdgeTies(opts: Map[String, String]): Option[ParallelPackedCohomology.EdgeTies] =
+    opts.get("edgeties").map { raw =>
+      try ParallelPackedCohomology.EdgeTies.parse(raw.toLowerCase)
+      catch
+        case e: IllegalArgumentException =>
+          throw new IllegalArgumentException(s"option 'edgeTies': ${e.getMessage}")
+    }
+
+  /** The edges of `metricSpace` within the threshold the Ripser engine would use, ranked in the `ties` order: the
+    * engine run on this reads edge ranks in place of lengths, and its bars come back in lengths through [[inLengths]].
+    */
+  private def edgeRanked(
+    metricSpace: FiniteMetricSpace[Int],
+    maxFiltrationValue: Option[Double],
+    ties: ParallelPackedCohomology.EdgeTies
+  ): ParallelPackedCohomology.EdgeRankedMetricSpace =
+    ParallelPackedCohomology.EdgeRankedMetricSpace(
+      metricSpace,
+      maxFiltrationValue.getOrElse(metricSpace.minimumEnclosingRadius),
+      ties
+    )
+
+  /** `bars` of an engine run on `ranked` (edge ranks), in the lengths of those edges. Two ranks can be one length: a
+    * bar that is then zero-length is left out unless `includeZeroLength`.
+    */
+  private def inLengths[CellT, C](
+    ranked: ParallelPackedCohomology.EdgeRankedMetricSpace,
+    bars: List[PersistenceBar[Double, Chain[CellT, C]]],
+    includeZeroLength: Boolean
+  ): List[PersistenceBar[Double, Chain[CellT, C]]] =
+    def length(endpoint: BarcodeEndpoint[Double]): BarcodeEndpoint[Double] = endpoint match
+      case ClosedEndpoint(v) => ClosedEndpoint(ranked.lengthOf(v))
+      case OpenEndpoint(v)   => OpenEndpoint(ranked.lengthOf(v))
+      case other             => other
+    bars.map(b => b.copy(lower = length(b.lower), upper = length(b.upper))).filter(includeZeroLength || !_.isZeroLength)
 
   /** The options of landmark selection (step 1 of the two-step witness complex), and no others: a landmark option
     * passed in step 2 (whose landmarks are given) is an error rather than silently ignored.
@@ -1704,6 +1744,16 @@ object TDA4j:
           s"own 1-skeleton) -- got complex=${opts.getOrElse("complex", "vr")}"
       )
 
+    // Which of equal-length edges is the later one: read by the two Ripser engines only, and only on a Vietoris-Rips
+    // complex, so a request for it anywhere else is refused rather than ignored.
+    val edgeTies = parseEdgeTies(opts)
+    if edgeTies.nonEmpty && (complex != ComplexKind.VR || engine != EngineKind.Ripser) then
+      throw new IllegalArgumentException(
+        "option 'edgeTies' orders equal-length edges for the Ripser engines: it needs complex=vr and engine=ripser " +
+          s"(or parallel-ripser) -- got complex=${opts.getOrElse("complex", "vr")}, " +
+          s"engine=${userOpts.getOrElse("engine", "(default)")}"
+      )
+
     val witnessLandmarks: IndexedSeq[Int] =
       if complex == ComplexKind.Witness then resolveLandmarkSelection(opts, metricSpace).landmarks
       else IndexedSeq.empty // unused for any other complex
@@ -1747,7 +1797,7 @@ object TDA4j:
           s"maxDimension $maxDimension, prime $prime); use engine=ripser"
       )
     if parallelFits && (parallelRequested || (!userOpts.contains("engine") && Parallel.threads > 1)) then
-      parallelVR(metricSpace, maxDimension, maxFiltrationValue, prime, cycles)
+      parallelVR(metricSpace, maxDimension, maxFiltrationValue, prime, cycles, edgeTies)
     else
       dispatchByField(opts) { [C] => (toDouble: C => Double) =>
         computeGeneric[C](
@@ -1769,7 +1819,8 @@ object TDA4j:
           sparseEpsilon,
           edgeCollapse,
           includeZeroLength,
-          toDouble
+          toDouble,
+          edgeTies
         )
       }
 
@@ -1864,7 +1915,8 @@ object TDA4j:
     maxDimension: Int,
     maxFiltrationValue: Option[Double],
     prime: Int,
-    cycles: Boolean
+    cycles: Boolean,
+    edgeTies: Option[ParallelPackedCohomology.EdgeTies]
   ): PersistenceResult =
     val diagram = Persistence(
       metricSpace,
@@ -1873,7 +1925,8 @@ object TDA4j:
       characteristic = prime,
       engine = Persistence.Engine.ParallelRipser,
       representatives = if cycles then Representatives.Cycles else Representatives.Cocycles,
-      computeAllRepresentatives = false
+      computeAllRepresentatives = false,
+      edgeTies = edgeTies
     )
     import diagram.given
     val toDouble: diagram.Coefficient => Double = summon[diagram.Coefficient is Field].toDouble(_)
@@ -1956,7 +2009,8 @@ object TDA4j:
     sparseEpsilon: Double,
     edgeCollapse: Boolean,
     includeZeroLength: Boolean,
-    toDouble: C => Double
+    toDouble: C => Double,
+    edgeTies: Option[ParallelPackedCohomology.EdgeTies]
   )(using C is Field): PersistenceResult =
     complex match
       case ComplexKind.VR =>
@@ -2000,19 +2054,24 @@ object TDA4j:
             // stays in the codebase only as PackedRipserCohomologyEngine's cross-validation test oracle, not as
             // a second production option. Doesn't go through `PersistenceEngine`: it consumes a metric space
             // directly, not a stream -- see that trait's own doc for why this is an honest asymmetry.
+            // `edgeTies`: the engine reads each edge's rank in that order in place of its length (so a simplex is
+            // ordered by its last edge), and its bars are read back in lengths.
+            val ranked = edgeTies.map(edgeRanked(collapsedMetricSpace, maxFiltrationValue, _))
             val ctx = PackedRipserCohomologyEngine[C](
-              collapsedMetricSpace,
+              ranked.getOrElse(collapsedMetricSpace),
               requestedMaxDimension,
-              maxFiltrationValue = maxFiltrationValue
+              maxFiltrationValue = ranked.map(_.limit).orElse(maxFiltrationValue)
             )
             // A packed bar's annotation is keyed by DiameterIndex, which carries a combinatorial index but not its
             // own vertex count -- unlike Simplex[Int]'s `.underlying`, decoding needs `size` from outside. Every
             // cell in one bar's cocycle is a simplex of the SAME dimension as the bar itself (`bar.dim`), so
             // `dim + 1` (vertex count) is exactly the `size` `vertices` needs -- known from the bar, not
             // guessed.
-            fromBars[ctx.DiameterIndex, C](
+            val packedBars =
               if cycles then ctx.persistentHomology(includeZeroLength = includeZeroLength)
-              else ctx.persistentCohomology(includeZeroLength = includeZeroLength),
+              else ctx.persistentCohomology(includeZeroLength = includeZeroLength)
+            fromBars[ctx.DiameterIndex, C](
+              ranked.fold(packedBars)(inLengths(_, packedBars, includeZeroLength)),
               (dim, cell) => ctx.vertices(cell, dim + 1),
               toDouble,
               requestedMaxDimension,

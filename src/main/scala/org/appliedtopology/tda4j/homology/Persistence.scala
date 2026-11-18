@@ -76,6 +76,12 @@ object Image:
   *   read only by `Engine.ParallelRipser`: `true` (default) builds every bar's representative before returning, as the
   *   other engines do; `false` builds each cocycle when it is first read (`bar.representative.terms`), which costs
   *   nothing for the bars you never look at. Cycles are assembled together on the first cycle read.
+  * @param edgeTies
+  *   read only by `Engine.Ripser` and `Engine.ParallelRipser`: how edges of one length are ranked, which decides how
+  *   many columns have to be reduced on inputs with many equal distances (lattices, integer-valued data); see
+  *   [[Persistence.EdgeTies]]. The bars do not depend on it. Unset (default), `ParallelRipser` ranks them
+  *   `Lexicographic` and `Ripser` orders simplices as Ripser does, by diameter and then index (no edge order); set,
+  *   both order a simplex by its last edge in the order chosen.
   * @param threads
   *   how many threads the computation may use, the representatives built later included (default: all the processors).
   *   `1` is the sequential computation, and makes `Engine.Auto` choose `Engine.Ripser`. The bars do not depend on it.
@@ -107,13 +113,24 @@ object Persistence:
     *     unless `computeAllRepresentatives` is true (the default). On JavaScript it runs on its one thread. It ranks
     *     the edges within the threshold, so its memory grows with their number (and its construction with the square of
     *     the number of points). Ties between simplices of equal diameter are broken differently from `Ripser`'s, so the
-    *     bars are the same and the representatives need not be.
+    *     bars are the same and the representatives need not be; `edgeTies` chooses the order of equal edges it breaks
+    *     them by.
     *
     * Each engine computes one kind natively and derives the other from its pairing ([[Involution]]), which costs one
     * more reduction: cocycles are native to `Ripser` and `Cohomology`, cycles to the others.
     */
   enum Engine:
     case Auto, Chunks, Naive, Cohomology, Ripser, FastCubical, ParallelRipser
+
+  /** How `Engine.ParallelRipser` and (when given) `Engine.Ripser` rank edges of one length: each simplex is filed under
+    * the last, in this order, of its longest edges. `Lexicographic` (default), `ReverseLexicographic`,
+    * `Colexicographic` (increasing combinatorial index, the order of Bauer's hybrid), `ReverseColexicographic`
+    * (decreasing index, Ripser's own order of equal edges) and `Shuffled` (a hash, as a control). Every order gives the
+    * same bars; they differ in how many pairs are apparent, so in the work on inputs with many equal distances. Detail:
+    * [[ParallelPackedCohomology.EdgeTies]].
+    */
+  type EdgeTies = ParallelPackedCohomology.EdgeTies
+  val EdgeTies: ParallelPackedCohomology.EdgeTies.type = ParallelPackedCohomology.EdgeTies
 
   /** What `Persistence` can take. Points, metric spaces, images and streams convert to one where it's expected; to
     * teach `Persistence` a new kind of input, give a `Conversion[YourInput, Persistence.Input[CellT]]` that implements
@@ -150,7 +167,8 @@ object Persistence:
       complex: PointCloudComplex,
       coefficients: Coefficients,
       includeZeroLength: Boolean,
-      cycles: Boolean
+      cycles: Boolean,
+      edgeTies: Option[EdgeTies]
     ): PersistenceDiagram[CellT] =
       throw new IllegalArgumentException(
         "Persistence: engine = Ripser computes the Vietoris-Rips complex of points or a metric space; " +
@@ -176,7 +194,8 @@ object Persistence:
       characteristic: Int,
       includeZeroLength: Boolean,
       cycles: Boolean,
-      computeAllRepresentatives: Boolean
+      computeAllRepresentatives: Boolean,
+      edgeTies: EdgeTies
     ): PersistenceDiagram[CellT] =
       throw new IllegalArgumentException(
         "Persistence: engine = ParallelRipser computes the Vietoris-Rips complex of points or a metric space; " +
@@ -211,13 +230,24 @@ object Persistence:
           complex: PointCloudComplex,
           coefficients: Coefficients,
           includeZeroLength: Boolean,
-          cycles: Boolean
+          cycles: Boolean,
+          edgeTies: Option[EdgeTies]
         ) =
           require(complex eq VietorisRips, "Persistence: engine = Ripser needs complex = VietorisRips")
           import coefficients.given
-          val engine =
-            PackedRipserCohomologyEngine[coefficients.C](ms, maxDimension, maxFiltrationValue = maxFiltrationValue)
           val threshold = maxFiltrationValue.getOrElse(ms.minimumEnclosingRadius)
+          // With `edgeTies` the engine reads the rank of each edge in place of its length, so a simplex is ordered by
+          // its last edge (the order ripser.cpp's `EDGE_LEXICOGRAPHIC` computes in), and its bars come back in lengths.
+          val ranked = edgeTies.map(ParallelPackedCohomology.EdgeRankedMetricSpace(ms, threshold, _))
+          val engine = PackedRipserCohomologyEngine[coefficients.C](
+            ranked.getOrElse(ms),
+            maxDimension,
+            maxFiltrationValue = ranked.map(_.limit).orElse(maxFiltrationValue)
+          )
+          def inLengths(endpoint: BarcodeEndpoint[Double]): BarcodeEndpoint[Double] = (ranked, endpoint) match
+            case (Some(r), ClosedEndpoint(v)) => ClosedEndpoint(r.lengthOf(v))
+            case (Some(r), OpenEndpoint(v))   => OpenEndpoint(r.lengthOf(v))
+            case _                            => endpoint
           // Cells come back packed (diameter, combinatorial index): decode them to simplices.
           def decode(bar: PersistenceBar[Double, Chain[engine.DiameterIndex, coefficients.C]]) =
             val chain = Chain.from(bar.representative.terms.map { (cell, c) =>
@@ -231,11 +261,13 @@ object Persistence:
                 packed.death.map(death => Simplex(engine.vertices(death, packed.dim + 2)*))
               )
             }
-            new PersistenceBar(bar.dim, bar.lower, bar.upper, Some(chain), pair)
+            new PersistenceBar(bar.dim, inLengths(bar.lower), inLengths(bar.upper), Some(chain), pair)
           val longestEdge = ms.longestDistanceWithin(threshold)
+          // Two ranks can be one length: such a pair is zero-length now.
+          def keep(bar: PersistenceBar[Double, ?]) = includeZeroLength || ranked.isEmpty || !bar.isZeroLength
           PersistenceDiagram[Simplex[Int], coefficients.C](
             (if cycles then engine.persistentHomology(includeZeroLength)
-             else engine.persistentCohomology(includeZeroLength)).map(decode),
+             else engine.persistentCohomology(includeZeroLength)).map(decode).filter(keep),
             maxDimension,
             longestEdge,
             scale,
@@ -258,7 +290,8 @@ object Persistence:
           characteristic: Int,
           includeZeroLength: Boolean,
           cycles: Boolean,
-          computeAllRepresentatives: Boolean
+          computeAllRepresentatives: Boolean,
+          edgeTies: EdgeTies
         ) =
           require(complex eq VietorisRips, "Persistence: engine = ParallelRipser needs complex = VietorisRips")
           require(
@@ -279,7 +312,8 @@ object Persistence:
           )
           import coefficients.given
           val threshold = maxFiltrationValue.getOrElse(ms.minimumEnclosingRadius)
-          val run = ParallelRipser.run(ms, maxDimension, threshold, characteristic, withPairs = cycles)
+          val run =
+            ParallelRipser.run(ms, maxDimension, threshold, characteristic, withPairs = cycles, edgeTies = edgeTies)
           // The cycles of every bar come out of one pass over the pairing (Involution); the cocycles one by one.
           val threads = Parallel.limit // the representatives built later keep the caller's `threads`
           lazy val allCycles = Parallel.limited(threads)(
@@ -364,7 +398,8 @@ object Persistence:
     representatives: Representatives = Representatives.Cycles,
     computeAllRepresentatives: Boolean = true,
     threads: Optional[Int] = Optional.empty,
-    coefficients: Optional[Coefficients] = Optional.empty
+    coefficients: Optional[Coefficients] = Optional.empty,
+    edgeTies: Optional[EdgeTies] = Optional.empty
   ): PersistenceDiagram[CellT] =
     val field = coefficients.toOption match
       case Some(chosen) =>
@@ -387,7 +422,8 @@ object Persistence:
             engine,
             includeZeroLength,
             representatives,
-            computeAllRepresentatives
+            computeAllRepresentatives,
+            edgeTies.toOption
           )
         )
       case None =>
@@ -400,7 +436,8 @@ object Persistence:
           engine,
           includeZeroLength,
           representatives,
-          computeAllRepresentatives
+          computeAllRepresentatives,
+          edgeTies.toOption
         )
 
   private def solve[CellT](
@@ -412,7 +449,8 @@ object Persistence:
     engine: Engine,
     includeZeroLength: Boolean,
     representatives: Representatives,
-    computeAllRepresentatives: Boolean
+    computeAllRepresentatives: Boolean,
+    edgeTies: Option[EdgeTies]
   ): PersistenceDiagram[CellT] =
     val cycles = representatives == Representatives.Cycles
     val requested = maxDimension.toOption
@@ -446,7 +484,8 @@ object Persistence:
         coefficients.characteristic,
         includeZeroLength,
         cycles,
-        computeAllRepresentatives
+        computeAllRepresentatives,
+        edgeTies.getOrElse(EdgeTies.Lexicographic)
       )
     else if chosen == Engine.Ripser then
       input.ripser(
@@ -455,7 +494,8 @@ object Persistence:
         complex,
         coefficients,
         includeZeroLength,
-        cycles
+        cycles,
+        edgeTies
       )
     else if chosen == Engine.FastCubical then
       val grid = input.cubicalGrid.getOrElse(

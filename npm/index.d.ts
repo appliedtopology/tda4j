@@ -43,6 +43,17 @@ export interface Options {
   dtmP?: number;
   sparseEpsilon?: number;
   edgeCollapse?: boolean;
+  /**
+   * For complex "vr" with engine "ripser" or "parallel-ripser": how edges of equal length are ordered, so which of
+   * them a simplex's last edge is. The bars do not depend on it; how many pairs are apparent can, on inputs with many
+   * equal distances. Unset: "parallel-ripser" uses "lexicographic", "ripser" no edge order.
+   */
+  edgeTies?:
+    | "lexicographic"
+    | "reverse-lexicographic"
+    | "colexicographic"
+    | "reverse-colexicographic"
+    | "shuffled";
   requireValidTriangulation?: boolean;
   /** Hide bars that persist for less than this. */
   minPersistence?: number;

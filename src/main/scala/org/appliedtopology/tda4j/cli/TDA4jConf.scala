@@ -181,6 +181,15 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     descr = "true or false (default), for --complex=vr: collapse edges first (Boissonnat-Pritam, " +
       "Glisse-Pritam). Same diagram, often a much smaller complex"
   )
+  val edgeTies: ScallopOption[String] = opt[String](
+    name = "edge-ties",
+    noshort = true,
+    descr = "lexicographic, reverse-lexicographic, colexicographic, reverse-colexicographic or shuffled, for " +
+      "--complex=vr with --engine=ripser or parallel-ripser: how edges of equal length are ordered, so which of " +
+      "them a simplex's last edge is. The bars do not depend on it; how many pairs are apparent (cleared without " +
+      "reduction) and so the running time can, on inputs with many equal distances. Default: parallel-ripser " +
+      "lexicographic, ripser no edge order"
+  )
   val dual: ScallopOption[String] = opt[String](
     name = "dual",
     descr = "true or false (default), for --input-format=csv-relation: the Dowker complex on the columns " +

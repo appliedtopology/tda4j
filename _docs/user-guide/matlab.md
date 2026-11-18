@@ -105,6 +105,7 @@ for data where a `NaN` can only be a bug.
 | `landmarkSeed` | integer | `0` |
 | `nu` | `0`, `1`, `2` | `2` (lazy witness) |
 | `edgeCollapse` | `true`, `false` | `false` (`vr` only; the same result from a smaller complex) |
+| `edgeTies` | `lexicographic`, `reverse-lexicographic`, `colexicographic`, `reverse-colexicographic`, `shuffled` | unset (`vr` with `ripser` or `parallel-ripser`; how edges of one length are ordered, the same bars and a different number of apparent pairs, see [choosing an engine](homology-computation/choosing-engine.md)) |
 
 Which engine goes with which complex: `ripser` needs `vr` or the lazy witness complex; `parallel-ripser` needs `vr`; `chunks` works with every
 complex except `alpha`, `dtm-alpha`, the general witness complex and relations; `naive` and `cohomology` work with all;

@@ -63,3 +63,25 @@ the command line `--threads` and `--engine parallel-ripser`, and an unset engine
   threshold, not the square of the number of points. The distance of every pair is still computed once to find those
   edges, so a very large cloud wants a small `maxFiltrationValue`. `Auto` uses `Ripser` where it does not apply.
 * JavaScript has one thread: `Auto` never chooses it there, and the engine by name runs on that one thread with the same bars.
+
+### Equal edge lengths: `edgeTies`
+
+When many distances are equal (points on a grid, a graph metric, integer distances), the order of equal edges decides
+how many pairs Ripser finds as apparent pairs, which are paired without any reduction. Both Ripser engines take
+`edgeTies` (`Persistence.EdgeTies`; MATLAB and Java `edgeTies`, the command line `--edge-ties`, spelled
+`reverse-colexicographic` there) to order simplices by their last edge, the last in this order of its longest edges. An
+edge is `{a, b}` with `a < b`, and its index is `C(b, 2) + a`:
+
+| `edgeTies` | the order of the edges of one length | also known as |
+|---|---|---|
+| `Lexicographic` | by `a`, then by `b` | the default of `ParallelRipser` |
+| `ReverseLexicographic` | by `a`, then by `b`, descending | |
+| `Colexicographic` | by index, ascending | Bauer's `ripser-forest` and hybrid default, `--ties increasing` |
+| `ReverseColexicographic` | by index, descending | `ripser.cpp` built with `EDGE_LEXICOGRAPHIC`, `--ties decreasing` |
+| `Shuffled` | by a fixed hash of the index | a control with no structure, `--ties random` |
+
+The bars never depend on it; the representatives can, and are valid either way. Unset, `ParallelRipser` uses
+`Lexicographic` and `Ripser` orders simplices by diameter alone (the same as asking for no edge order at all). On inputs
+without equal distances (random points) no setting changes anything. On a lattice the reverse orders leave fewer columns to reduce, and the sequential engine runs faster with them;
+whether a different order is worth the change on your input is a question for a trial run, since the bars are the same.
+The [developer's guide](../../developers-guide/persistence-engines.md) says what each order does.

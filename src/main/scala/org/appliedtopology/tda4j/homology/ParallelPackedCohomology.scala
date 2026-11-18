@@ -9,12 +9,13 @@ import scala.collection.mutable
   * while their pivots are owned by the units' pairs (phase 2a), then one by one in the sequential order (phase 2b). The
   * pairs, and the reduction log of every column, are those of one sequential reduction in the same order.
   *
-  * A simplex is one `Long` key: its block (1 + the rank of its first longest edge, edges ranked by (length, smaller
-  * end, larger end); 0 for a vertex) above `mask - index` (`index` its combinatorial index; a larger index is older, as
-  * in the packed engine). Within one dimension, ascending keys are the filtration order, oldest first. When the block
-  * and the index do not fit in one `Long` together (`Space.wide`), a key is two words: `mask - index`, which still
-  * names the simplex within its dimension, and the block beside it in every array, heap and column that orders keys;
-  * the order is then by block, then key. Coefficients are `Int`s mod `p`.
+  * A simplex is one `Long` key: its block (1 + the rank of its first longest edge, edges ranked by length and then by
+  * an [[EdgeTies]] order, the lexicographic one unless asked otherwise; 0 for a vertex) above `mask - index` (`index`
+  * its combinatorial index; a larger index is older, as in the packed engine). Within one dimension, ascending keys are
+  * the filtration order, oldest first. When the block and the index do not fit in one `Long` together (`Space.wide`), a
+  * key is two words: `mask - index`, which still names the simplex within its dimension, and the block beside it in
+  * every array, heap and column that orders keys; the order is then by block, then key. Coefficients are `Int`s mod
+  * `p`.
   *
   * `persistence(space, threads, unitsPerThread, ...)` cuts each degree into `threads * unitsPerThread` units; they run
   * on the threads `Parallel` has where the call is (`Parallel.withThreads(n)`, else the common pool), one after the
@@ -35,17 +36,76 @@ object ParallelPackedCohomology:
   /** The most edges a `Space` takes: they are indexed by `Int` ranks in arrays. */
   val MaxEdges: Int = Int.MaxValue - 16
 
-  /** The edges within the threshold ranked, and the key encoding. */
-  open class Space(
+  /** How edges of one length are ranked, which decides the edge a simplex is filed under: its block is that of the
+    * last, in this order, of its longest edges. Every order gives the same barcode; they differ in which zero-length
+    * pairs form and so in how many columns need reducing. An edge is `{a, b}` with `a < b`; its combinatorial index is
+    * `C(b, 2) + a`.
+    *
+    *   - `Lexicographic` (default): by `a`, then by `b`, ascending. The simplex's block is the lexicographically
+    *     largest of its longest edges. This is Bauer's `--ties lexicographic` (`ripser-dev`, `hybrid/pruned.cpp`).
+    *   - `ReverseLexicographic`: by `a`, then by `b`, descending.
+    *   - `Colexicographic`: by `b`, then by `a`, ascending: increasing combinatorial index. The block is that of the
+    *     largest-index longest edge: the order of Bauer's hybrid and `ripser-forest` (`--ties increasing`, their
+    *     default).
+    *   - `ReverseColexicographic`: decreasing combinatorial index. The block is that of the smallest-index longest
+    *     edge: Ripser's own order of equal edges, as in `ripser.cpp` built with `EDGE_LEXICOGRAPHIC` (`--ties
+    *     decreasing`).
+    *   - `Shuffled`: by a fixed hash of the combinatorial index (Bauer's `--ties random`): a control that has no
+    *     structure to exploit.
+    */
+  enum EdgeTies:
+    case Lexicographic, ReverseLexicographic, Colexicographic, ReverseColexicographic, Shuffled
+
+  object EdgeTies:
+    /** The option's name as the facades spell it: `lexicographic`, `reverse-lexicographic`, `colexicographic`,
+      * `reverse-colexicographic`, `shuffled`.
+      */
+    def parse(name: String): EdgeTies =
+      values
+        .find(_.name == name)
+        .getOrElse(
+          throw new IllegalArgumentException(
+            s"unknown edge tie order '$name': ${values.map(_.name).mkString(", ")}"
+          )
+        )
+
+    extension (ties: EdgeTies)
+      def name: String = ties match
+        case Lexicographic          => "lexicographic"
+        case ReverseLexicographic   => "reverse-lexicographic"
+        case Colexicographic        => "colexicographic"
+        case ReverseColexicographic => "reverse-colexicographic"
+        case Shuffled               => "shuffled"
+
+    // splitmix64's finalizer on the combinatorial index of the edge {a < b}, compared as a signed Long.
+    private def shuffle(a: Int, b: Int): Long =
+      var z = (b.toLong * (b - 1) / 2 + a) + 0x9e3779b97f4a7c15L
+      z = (z ^ (z >>> 30)) * 0xbf58476d1ce4e5b9L
+      z = (z ^ (z >>> 27)) * 0x94d049bb133111ebL
+      z ^ (z >>> 31)
+
+    /** Whether the edge `{as(x), bs(x)}` comes before `{as(y), bs(y)}` among edges of one length. */
+    private[tda4j] def before(ties: EdgeTies, as: Array[Int], bs: Array[Int]): (Int, Int) => Boolean = ties match
+      case Lexicographic          => (x, y) => as(x) < as(y) || as(x) == as(y) && bs(x) < bs(y)
+      case ReverseLexicographic   => (x, y) => as(y) < as(x) || as(x) == as(y) && bs(y) < bs(x)
+      case Colexicographic        => (x, y) => bs(x) < bs(y) || bs(x) == bs(y) && as(x) < as(y)
+      case ReverseColexicographic => (x, y) => bs(y) < bs(x) || bs(x) == bs(y) && as(y) < as(x)
+      case Shuffled               =>
+        (x, y) =>
+          val (hx, hy) = (shuffle(as(x), bs(x)), shuffle(as(y), bs(y)))
+          hx < hy
+
+  /** The edges of a metric within a threshold, ranked by length and then by an [[EdgeTies]] order, with each edge's
+    * rank looked up in a dense `n x n` table (up to [[DenseRankLimit]] points) or in sorted neighbour lists. A rank is
+    * a position in the filtration order of the edges: it is what `Space` files a simplex under, and what
+    * [[EdgeRankedMetricSpace]] hands an engine in place of the length.
+    */
+  open class EdgeRanking(
     val n: Int,
     distance: (Int, Int) => Double,
     val threshold: Double,
-    val maxDim: Int,
-    val p: Int,
-    // Find apparent pairs Ripser's way (every facet's block from its pairs) instead of from the block's edge.
-    val ripserApparent: Boolean = false,
-    // Two-word keys even where one Long would do: for tests of the wide layout.
-    forceWide: Boolean = false,
+    // How edges of one length are ranked.
+    val edgeTies: EdgeTies = EdgeTies.Lexicographic,
     // Neighbour lists even where the dense table would do: for tests of the large-n layout.
     forceSparseRanks: Boolean = false
   ):
@@ -65,11 +125,12 @@ object ParallelPackedCohomology:
           )
           as += a; bs += b; ls += l
       val (a0, b0, l0) = (as.result(), bs.result(), ls.result())
+      val tieBefore = EdgeTies.before(edgeTies, a0, b0)
       val order = SortIndices.sort(
         a0.length,
         (x, y) =>
           val c = java.lang.Double.compare(l0(x), l0(y))
-          c < 0 || c == 0 && (a0(x) < a0(y) || a0(x) == a0(y) && b0(x) < b0(y))
+          c < 0 || c == 0 && tieBefore(x, y)
       )
       (order.map(a0), order.map(b0), order.map(l0))
     val edgeA: Array[Int] = ea
@@ -145,6 +206,49 @@ object ParallelPackedCohomology:
             result = neighbourRank(a)(mid); lo = hi + 1
         result
 
+  /** `base` with the length of every edge within `threshold` replaced by its rank, 1, 2, ... in the order of an
+    * [[EdgeRanking]] (0 on the diagonal, infinity past the threshold). An engine that orders simplices by diameter and
+    * then by index, run on this, orders them by their last edge in that ranking: ripser.cpp's edge-lexicographic order
+    * for `EdgeTies.ReverseColexicographic` (`EDGE_LEXICOGRAPHIC`), and the order of the other `EdgeTies` as they are
+    * named. Give the engine `limit` as its `maxFiltrationValue`, and read what comes back in lengths with `lengthOf`.
+    * Memory: the ranking, a dense table of `n^2` `Int`s up to [[DenseRankLimit]] points, sorted neighbour lists above.
+    */
+  open class EdgeRankedMetricSpace(base: FiniteMetricSpace[Int], threshold: Double, ties: EdgeTies)
+      extends FiniteMetricSpace[Int]:
+    val ranking: EdgeRanking = EdgeRanking(base.size, base.distance(_, _), threshold, ties)
+
+    /** The largest rank: every edge within the threshold is at most this. */
+    def limit: Double = ranking.edgeA.length.toDouble
+
+    /** The length of the edge whose rank `value` is (0 and infinity stay as they are). */
+    def lengthOf(value: Double): Double =
+      if value <= 0.0 || value.isInfinite then value else ranking.edgeLength(value.toInt - 1)
+
+    def distance(x: Int, y: Int): Double =
+      if x == y then 0.0
+      else
+        val r = ranking.rankOf(x min y, x max y)
+        if r < 0 then Double.PositiveInfinity else r + 1.0
+    def size: Int = base.size
+    def elements: Iterable[Int] = Range(0, size)
+    def contains(x: Int): Boolean = 0 <= x && x < size
+
+  /** The edges within the threshold ranked, and the key encoding. */
+  open class Space(
+    nPoints: Int,
+    distance: (Int, Int) => Double,
+    threshold0: Double,
+    val maxDim: Int,
+    val p: Int,
+    // Find apparent pairs Ripser's way (every facet's block from its pairs) instead of from the block's edge.
+    val ripserApparent: Boolean = false,
+    // Two-word keys even where one Long would do: for tests of the wide layout.
+    forceWide: Boolean = false,
+    // Neighbour lists even where the dense table would do: for tests of the large-n layout.
+    forceSparseRanks: Boolean = false,
+    // How edges of one length are ranked.
+    edgeTies: EdgeTies = EdgeTies.Lexicographic
+  ) extends EdgeRanking(nPoints, distance, threshold0, edgeTies, forceSparseRanks):
     /** `binom(q)(v)` = C(v, q), for simplices of up to `maxDim + 2` vertices. */
     val binom: Array[Array[Long]] = Array.tabulate(maxDim + 3, n + 1)((q, v) => SimplexIndexing.binomial(v, q))
     // C(n, q) is not monotone in q: the largest index over every size used.

@@ -180,6 +180,31 @@ They explain a speed difference between two inputs of the same size: a high
 apparent-pair rate means little reduction work. They are diagnostics, not
 part of any result.
 
+**Equal edge lengths (`edgeTies`).** Ripser orders simplices by diameter and then by combinatorial index, so on a
+lattice or any input with many equal distances, which of two equal edges is the later one decides how many pairs are
+apparent. `ParallelPackedCohomology.EdgeTies` names five orders of the edges of one length (`Lexicographic`,
+`ReverseLexicographic`, `Colexicographic`, `ReverseColexicographic`, `Shuffled`), and a simplex is then filed under its
+last longest edge in that order (the "block" of the parallel engine). Every order gives the same bars; they differ in
+which pairs are apparent and in which zero-length pairs form.
+
+- `ParallelRipser` always has an edge order, since it ranks the edges within the threshold once (length, then the order
+  chosen); `Lexicographic` is its default, and `Persistence`'s `edgeTies` picks another.
+- `PackedRipserCohomologyEngine` has none unless asked. `Persistence(..., engine = Ripser, edgeTies = ...)` and the
+  facades' `edgeTies` run it on an `EdgeRankedMetricSpace`: the metric space whose distance is the rank of the edge.
+  The engine's tests for "the same diameter" then see edge blocks, and its bars are read back in lengths with
+  `lengthOf`. Two ranks of one length give a zero-length bar, which is left out unless `includeZeroLength`.
+- The order inside a block is the engine's own, a larger combinatorial index being older. `ReverseColexicographic` with
+  it is ripser.cpp's `EDGE_LEXICOGRAPHIC`: `ParallelEdgeTiesSpec` pins its apparent and left-to-reduce counts against
+  numbers taken from a ripser.cpp build. Bauer's hybrid (`ripser-dev`, `hybrid/pruned.cpp`) takes the largest-index edge
+  and reads the older simplex as the one of smaller index; `Colexicographic` has that edge choice, not that direction
+  within a block.
+- Counts are not comparable across tools without care: ripser.cpp's `COUNT_WORK` counts a simplex in an apparent pair as
+  apparent whether it is the column or the row, `ParallelRipser`'s `apparent` counts columns only, and its `cleared`
+  counts every pivot of the degree below. The sequential engine's `apparentPairCount` equals the sum of
+  `ParallelRipser`'s `apparent` over degrees 1 and up in the same order.
+- `ParallelPackedCohomologyDriver` takes `ties=<name>` and prints each degree's columns, apparent pairs, cleared pivots,
+  columns left to reduce and additions; `EdgeRankMetricDriver` runs the sequential engine on lengths or on ranks of an order.
+
 ## 5. `CellularCohomologyEngine` — generic cohomology, for every cell type
 
 Persistent *co*homology, generic over `CellT: OrderedCell`: the cohomology counterpart to engine 1. It serves every

@@ -70,6 +70,12 @@ class CLISpec extends mutable.Specification:
         .toSeq must beEqualTo(Seq("engine", "parallel-ripser", "threads", "3"))
     }
 
+    "pass --edge-ties through as edgeTies" >> {
+      TDA4jCLI
+        .buildOptions(new TDA4jConf(Seq("--edge-ties", "reverse-colexicographic", "some-input-file")))
+        .toSeq must beEqualTo(Seq("edgeTies", "reverse-colexicographic"))
+    }
+
     "pass --nan-mask through as nanMask" >> {
       TDA4jCLI.buildOptions(new TDA4jConf(Seq("--nan-mask", "false", "some-input-file"))).toSeq must beEqualTo(
         Seq("nanMask", "false")

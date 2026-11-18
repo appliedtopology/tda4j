@@ -103,6 +103,45 @@ class ParallelRipserEngineSpec extends Specification:
       agreesWithRipser(integerMetric(14, 3L), 17, 2)
       agreesWithRipser(integerMetric(14, 4L), 3, 3)
     }
+    // Both Ripser engines take `edgeTies`: it changes which simplices are paired in zero length and how many columns are
+    // reduced, never a bar, and the representatives stay what they claim to be.
+    "give Ripser's bars and valid representatives in every edge tie order, on both Ripser engines" >> {
+      val lattice =
+        (for x <- 0 to 2; y <- 0 to 2; z <- 0 to 1 yield Array(x.toDouble, y.toDouble, z.toDouble)).toArray
+      val expected = sortedTriples(Persistence(lattice, maxDimension = 2, engine = Engine.Ripser))
+      for engine <- List(Engine.Ripser, parallel); ties <- Persistence.EdgeTies.values do
+        val label = s"$engine, ${ties.name}"
+        val cocycles = Persistence(
+          lattice,
+          maxDimension = 2,
+          engine = engine,
+          edgeTies = ties,
+          representatives = Representatives.Cocycles
+        )
+        sortedTriples(cocycles).aka(label) must beEqualTo(expected)
+        isCocycleBefore(cocycles, lattice, 17).aka(s"cocycles, $label") must beTrue
+        val cycles = Persistence(lattice, maxDimension = 2, engine = engine, edgeTies = ties)
+        sortedTriples(cycles).aka(label) must beEqualTo(expected)
+        isCycleAtBirth(cycles, lattice, 17).aka(s"cycles, $label") must beTrue
+      for engine <- List(Engine.Ripser, parallel); ties <- Persistence.EdgeTies.values do
+        val ranked = Persistence(integerMetric(14, 3L), engine = engine, edgeTies = ties, characteristic = 3)
+        sortedTriples(ranked).aka(s"integer distances, $engine, ${ties.name}") must
+          beEqualTo(sortedTriples(Persistence(integerMetric(14, 3L), engine = Engine.Ripser, characteristic = 3)))
+    }
+    // Zero-length pairs of the rank order: two ranks of one length pair up, and `Ripser` must not report that as a bar.
+    "report no zero-length bar for edges of equal length that rank apart, and all of them on request" >> {
+      val metric = integerMetric(10, 5L)
+      val ranked = Persistence(metric, engine = Engine.Ripser, edgeTies = Persistence.EdgeTies.Colexicographic)
+      val withZero = Persistence(
+        metric,
+        engine = Engine.Ripser,
+        edgeTies = Persistence.EdgeTies.Colexicographic,
+        includeZeroLength = true
+      )
+      (ranked.triples.forall((_, b, d) => b != d) must beTrue)
+        .and(withZero.triples.count((_, b, d) => b == d) must beGreaterThan(0))
+        .and(sortedTriples(ranked) must beEqualTo(withZero.triples.filter((_, b, d) => b != d).sorted))
+    }
     "give the same bars and the same representatives on one thread and on every processor" >> {
       val points = circle(70, 5L)
       val threads = Persistence(points, engine = parallel)
