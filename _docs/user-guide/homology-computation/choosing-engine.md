@@ -85,3 +85,15 @@ The bars never depend on it; the representatives can, and are valid either way. 
 without equal distances (random points) no setting changes anything. On a lattice the reverse orders leave fewer columns to reduce, and the sequential engine runs faster with them;
 whether a different order is worth the change on your input is a question for a trial run, since the bars are the same.
 The [developer's guide](../../developers-guide/persistence-engines.md) says what each order does.
+
+### Which simplex of a block is older: `blockOrder`
+
+The simplices filed under one edge (a block) are ordered by combinatorial index, and `blockOrder`
+(`Persistence.BlockOrder`; MATLAB and Java `blockOrder`, the command line `--block-order`) says which way. With
+`LargerIndexFirst`, the default and Ripser's own convention, the simplex of larger index is the older; with
+`SmallerIndexFirst` the one of smaller index is. The two are different orders of the same simplices: the bars are the
+same, the apparent pairs and the representatives can differ, and so can the number of columns left to reduce. It is
+read by `ParallelRipser` only; `Auto` goes there when you ask for `SmallerIndexFirst` and the input allows it, and
+`Ripser` by name refuses it. Together with `edgeTies` it reaches every order of the Ripser family that Ripser's
+`EDGE_LEXICOGRAPHIC` build and Bauer's `ripser-forest` and hybrid code use (see the developer's guide for which pair is
+which); like `edgeTies` it does nothing on inputs without equal distances.

@@ -76,6 +76,12 @@ class CLISpec extends mutable.Specification:
         .toSeq must beEqualTo(Seq("edgeTies", "reverse-colexicographic"))
     }
 
+    "pass --block-order through as blockOrder" >> {
+      TDA4jCLI
+        .buildOptions(new TDA4jConf(Seq("--block-order", "smaller-index-first", "some-input-file")))
+        .toSeq must beEqualTo(Seq("blockOrder", "smaller-index-first"))
+    }
+
     "pass --nan-mask through as nanMask" >> {
       TDA4jCLI.buildOptions(new TDA4jConf(Seq("--nan-mask", "false", "some-input-file"))).toSeq must beEqualTo(
         Seq("nanMask", "false")

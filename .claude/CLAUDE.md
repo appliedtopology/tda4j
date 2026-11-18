@@ -233,7 +233,7 @@ file before changing that subsystem; this table is the index, in case a rule did
 |---|---|---|
 | `rules/streams.md` | the ordering contract every stream must satisfy (the #1 bug source), VR constructions, `ExplicitStreamBuilder` | `streams/` |
 | `rules/engines.md` | the persistence engines, `Involution`, benchmark specs | `homology/` |
-| `rules/edge-ties.md` | `edgeTies`, the order of equal edges in Ripser | `ParallelRipser`, `ParallelPackedCohomology` |
+| `rules/edge-ties.md` | `edgeTies`, `blockOrder`, bench work counts | `ParallelRipser`, `ParallelPackedCohomology` |
 | `rules/harmonic-chains.md` | harmonic chains: barcode, representatives | `Harmonic*` |
 | `rules/barcode.md` | `BarcodeDistance`, `Vectorization`, `BootstrapBand`, `ToMATo` | `barcode/` |
 | `rules/module-maps.md` | maps of barcodes: `MapAlgebra`, `PersistenceMap`, their oracle | `MapAlgebra`, `PersistenceMap` |

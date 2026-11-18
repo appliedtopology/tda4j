@@ -190,6 +190,14 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
       "reduction) and so the running time can, on inputs with many equal distances. Default: parallel-ripser " +
       "lexicographic, ripser no edge order"
   )
+  val blockOrder: ScallopOption[String] = opt[String](
+    name = "block-order",
+    noshort = true,
+    descr = "larger-index-first (default, Ripser's order) or smaller-index-first (the order of Bauer's hybrid), " +
+      "for --complex=vr with --engine=parallel-ripser: which of two simplices under the same last longest edge " +
+      "is older, by combinatorial index. The bars do not depend on it; how many pairs are apparent can. " +
+      "smaller-index-first without --engine runs parallel-ripser, on one thread if need be"
+  )
   val dual: ScallopOption[String] = opt[String](
     name = "dual",
     descr = "true or false (default), for --input-format=csv-relation: the Dowker complex on the columns " +

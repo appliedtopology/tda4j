@@ -93,6 +93,7 @@ class Case(NamedTuple):
     radius_k: Optional[int] = None  # alpha: a radius at which a point has about this many neighbours within 2r
     degenerate: bool = False  # not in general position: the reference is not ground truth for the barcode
     params: tuple = ()  # (key, value) pairs every tool is given as key=value: eps, k, L, nu, ...
+    experiment: bool = False  # run only when --cases names it (the paper's tables do not have it); count_work.py's default
 
 
 CASES = [
@@ -168,6 +169,13 @@ CASES = [
     # dowker: a relation matrix, rows are the vertices of the complex and columns the witnesses (made by `prepare`).
     Case("dowker_300x100", "dowker", "relation_300x100.txt", "distance", 1, threshold=0.35),
     Case("dowker_60x200", "dowker", "relation_60x200.txt", "distance", 2, threshold=0.5),
+
+    # --- tie-heavy inputs for the order of equal-length edges (`experiment`) -----------------------------------------------
+    # A 32 x 32 lattice has a handful of distances in thousands of copies (Bauer's `grid32 H3 t5.1`); 60 equidistant points
+    # are all one length. On random points the order of equal edges changes nothing, so the paper's cases cannot show it;
+    # `count_work.py` runs these by default, and `bench.py run --cases lattice32,equilateral60` times them.
+    Case("lattice32", "vr", "lattice32.txt", "points", 3, threshold=5.1, experiment=True),
+    Case("equilateral60", "vr", "equilateral60.txt", "distance", 3, experiment=True),
 ]
 CASES = [c if isinstance(c, Case) else Case(*c) for c in CASES]
 # The V-construction twin (`_v`) of every cubical case, right after the cubical cases: the same array read as the values of
@@ -205,6 +213,19 @@ TOOLS = [
     ("tda4j-parallelverb-1t", "tda4j", "vr", {"engine": "parallelverb", "reps": "cocycles"}),
     ("tda4j-parallelverb-mt", "tda4j", "vr",
      {"engine": "parallelverb", "reps": "cocycles", "threads": "ALL", "multithreaded": True}),
+    # The same engine under the other orders of its blocks (`edgeTies`, `blockOrder`), one thread, the one-thread row's cocycles:
+    # `experiment` rows, run only when --tools names them, to be set against `tda4j-parallelverb-1t` (edge order lexicographic,
+    # the larger index older). `-ripser-edge` is ripser.cpp's EDGE_LEXICOGRAPHIC; `-hybrid` is Bauer's hybrid (ripser-dev's
+    # `optimize/hybrid-cohomology`, `--ties increasing`: the same columns reduced as ripser-forest on the lattices checked).
+    ("tda4j-parallelverb-1t-ripser-edge", "tda4j", "vr",
+     {"engine": "parallelverb", "reps": "cocycles", "ties": "reverse-colexicographic", "order": "larger-index-first",
+      "experiment": True}),
+    ("tda4j-parallelverb-1t-hybrid", "tda4j", "vr",
+     {"engine": "parallelverb", "reps": "cocycles", "ties": "colexicographic", "order": "smaller-index-first",
+      "experiment": True}),
+    ("tda4j-parallelverb-1t-lex-smaller", "tda4j", "vr",
+     {"engine": "parallelverb", "reps": "cocycles", "ties": "lexicographic", "order": "smaller-index-first",
+      "experiment": True}),
     # The block-parallel experiment (#194): bars only, no representatives, implicit coboundaries. An `experiment` row is
     # left out of `run` unless --tools names it; bench/sweep_threads.py runs its `multithreaded` row as the bars-only
     # reference for the tools that report bars only.
@@ -503,6 +524,9 @@ def prepare(data: Path):
     np.savetxt(data / "sphere_3_192.gp.txt", jitter(np.loadtxt(data / "sphere_3_192_points.dat"), rng), fmt="%.17g")
     np.savetxt(data / "dragon_2000.gp.txt", jitter(np.loadtxt(data / "dragon_2000.txt"), rng), fmt="%.17g")
     prepare_rare(data)
+    # The tie-heavy `experiment` cases: integer coordinates and unit distances, no random numbers.
+    np.savetxt(data / "lattice32.txt", [(i, j) for i in range(32) for j in range(32)], fmt="%d")
+    np.savetxt(data / "equilateral60.txt", 1 - np.eye(60), fmt="%d")
     with open(data / "MANIFEST.json", "w") as f:
         json.dump({p.name: p.stat().st_size for p in sorted(data.iterdir()) if p.is_file()}, f, indent=1)
     print(f"data ready in {data}")
@@ -735,7 +759,7 @@ def command(kind, name, opts, case, data, p, threshold, warmup, trials, out, arg
                  f"engine={opts['engine']}", f"reps={opts['reps']}"] +
                 ([f"backend={opts['backend']}"] if "backend" in opts else []) +
                 [f"threads={t}" for t in threads] + sequential +
-                [f"{k}={opts[k]}" for k in ("collapse", "wvariant", "dual", "nu") if k in opts] +
+                [f"{k}={opts[k]}" for k in ("collapse", "wvariant", "dual", "nu", "ties", "order") if k in opts] +
                 (["facade=true"] if opts.get("facade") else []) + common)
     if kind == "tda4j-js":
         heap = args.node_heap or args.jvm_heap
@@ -913,6 +937,11 @@ def experiment_wanted(name, spec):
     return name in {t.strip() for t in str(spec or "").split(",") if t.strip() and not t.startswith("!")}
 
 
+def cases_wanted(spec):
+    """The cases `--cases` selects (names and patterns, as for tools); an `experiment` case only by its own name."""
+    return [c for c in CASES if tool_selected(c.name, spec) and (not c.experiment or experiment_wanted(c.name, spec))]
+
+
 def default_alpha_radius(case, data):
     """The radius an alpha case without its own gets for every tool that takes one: the enclosing radius, as for
     Vietoris-Rips. TDA4j's alpha complex stops there by default and GUDHI's does not, and the barcode no longer changes
@@ -1075,7 +1104,7 @@ def run(args):
     (out / "bars").mkdir(parents=True, exist_ok=True)
     (out / "logs").mkdir(parents=True, exist_ok=True)
     write_env(out, args)
-    cases = [c for c in CASES if tool_selected(c.name, args.cases)]
+    cases = cases_wanted(args.cases)
     tasks = set(args.tasks.split(",")) if args.tasks else None
     fields = [int(p) for p in args.fields.split(",")]
     runs_csv = out / "runs.csv"

@@ -5,11 +5,12 @@ import scala.util.Random
 
 /** Command line for the block-parallel experiment:
   * {{{
-  * java -cp $CP org.appliedtopology.tda4j.ParallelPackedCohomologyDriver <dataset> <n> <maxDim> <threshold|mer> <threads> [units per thread] [trials] [seed] [p] [check] [ripser-apparent] [ties=<order>]
+  * java -cp $CP org.appliedtopology.tda4j.ParallelPackedCohomologyDriver <dataset> <n> <maxDim> <threshold|mer> <threads> [units per thread] [trials] [seed] [p] [check] [ripser-apparent] [ties=<order>] [order=<direction>]
   * }}}
   * It runs on `threads` threads (`Parallel.withThreads`). `ties` is an `EdgeTies` name (`lexicographic`, the default,
-  * `reverse-lexicographic`, `colexicographic`, `reverse-colexicographic`, `shuffled`). Besides the bars it prints each
-  * degree's apparent pairs, pivots cleared by the degree below and columns left to reduce, and a digest of the bars.
+  * `reverse-lexicographic`, `colexicographic`, `reverse-colexicographic`, `shuffled`); `order` a `BlockOrder` name
+  * (`larger-index-first`, the default, `smaller-index-first`). Besides the bars it prints each degree's apparent pairs,
+  * pivots cleared by the degree below and columns left to reduce, and a digest of the bars.
   */
 object ParallelPackedCohomologyDriver:
   def main(arguments: Array[String]): Unit =
@@ -19,7 +20,13 @@ object ParallelPackedCohomologyDriver:
       .find(_.startsWith("ties="))
       .map(a => EdgeTies.parse(a.stripPrefix("ties=")))
       .getOrElse(EdgeTies.Lexicographic)
-    val args = arguments.filterNot(a => a == "check" || a == "ripser-apparent" || a.startsWith("ties="))
+    val blockOrder = arguments
+      .find(_.startsWith("order="))
+      .map(a => BlockOrder.parse(a.stripPrefix("order=")))
+      .getOrElse(BlockOrder.LargerIndexFirst)
+    val args = arguments.filterNot(a =>
+      a == "check" || a == "ripser-apparent" || a.startsWith("ties=") || a.startsWith("order=")
+    )
     val dataset = args(0)
     val size = args(1).toInt // the number of points, or the side of a lattice
     val maxDim = args(2).toInt
@@ -36,13 +43,22 @@ object ParallelPackedCohomologyDriver:
     println(
       s"$dataset n=$n maxDim=$maxDim threshold=$threshold p=$p threads=$threads units/thread=$unitsPerThread " +
         s"(common pool parallelism $common)${if ripserApparent then ", apparent pairs Ripser's way" else ""}, " +
-        s"edge ties ${ties.name}"
+        s"edge ties ${ties.name}, block order ${blockOrder.name}"
     )
     def once(): (Long, Result) =
       val t0 = System.nanoTime()
       val dist = new Array[Double](n * n)
       for i <- 0 until n; j <- 0 until n do dist(i * n + j) = metricSpace.distance(i, j)
-      val space = Space(n, (i, j) => dist(i * n + j), threshold, maxDim, p, ripserApparent, edgeTies = ties)
+      val space = Space(
+        n,
+        (i, j) => dist(i * n + j),
+        threshold,
+        maxDim,
+        p,
+        ripserApparent,
+        edgeTies = ties,
+        blockOrder = blockOrder
+      )
       val r = Parallel.withThreads(threads)(persistence(space, threads, unitsPerThread, cocycles = true))
       (System.nanoTime() - t0, r)
     val runs = (1 to trials).map(_ => once())

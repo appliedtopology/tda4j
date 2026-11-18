@@ -128,6 +128,58 @@ class ParallelRipserEngineSpec extends Specification:
         sortedTriples(ranked).aka(s"integer distances, $engine, ${ties.name}") must
           beEqualTo(sortedTriples(Persistence(integerMetric(14, 3L), engine = Engine.Ripser, characteristic = 3)))
     }
+    // `blockOrder` is read by the block-parallel engine only: it changes which simplices pair apparently, never a bar,
+    // and the representatives stay what they claim to be; `Engine.Auto` goes to that engine for the smaller index first.
+    "give Ripser's bars and valid representatives with the smaller index older, and send Auto and Ripser as they should" >> {
+      val lattice =
+        (for x <- 0 to 2; y <- 0 to 2; z <- 0 to 1 yield Array(x.toDouble, y.toDouble, z.toDouble)).toArray
+      val expected = sortedTriples(Persistence(lattice, maxDimension = 2, engine = Engine.Ripser))
+      for ties <- Persistence.EdgeTies.values do
+        val label = s"smaller index first, ${ties.name}"
+        val smaller = Persistence.BlockOrder.SmallerIndexFirst
+        val cocycles = Persistence(
+          lattice,
+          maxDimension = 2,
+          engine = parallel,
+          edgeTies = ties,
+          blockOrder = smaller,
+          representatives = Representatives.Cocycles
+        )
+        sortedTriples(cocycles).aka(label) must beEqualTo(expected)
+        isCocycleBefore(cocycles, lattice, 17).aka(s"cocycles, $label") must beTrue
+        val cycles = Persistence(lattice, maxDimension = 2, engine = parallel, edgeTies = ties, blockOrder = smaller)
+        sortedTriples(cycles).aka(label) must beEqualTo(expected)
+        isCycleAtBirth(cycles, lattice, 17).aka(s"cycles, $label") must beTrue
+      // Auto on one thread is Ripser's engine unless the order asks for the other: then it is the block-parallel one.
+      val auto = Parallel.sequentially(
+        Persistence(lattice, maxDimension = 2, blockOrder = Persistence.BlockOrder.SmallerIndexFirst)
+      )
+      val named = Parallel.sequentially(
+        Persistence(
+          lattice,
+          maxDimension = 2,
+          engine = parallel,
+          blockOrder = Persistence.BlockOrder.SmallerIndexFirst
+        )
+      )
+      (auto.bars.map(_.representative) == named.bars.map(_.representative)).aka("Auto chose the parallel engine") must
+        beTrue
+      Persistence(
+        lattice,
+        maxDimension = 2,
+        engine = Engine.Ripser,
+        blockOrder = Persistence.BlockOrder.SmallerIndexFirst
+      ) must
+        throwA[IllegalArgumentException](".*Engine.ParallelRipser.*")
+      sortedTriples(
+        Persistence(
+          lattice,
+          maxDimension = 2,
+          engine = Engine.Ripser,
+          blockOrder = Persistence.BlockOrder.LargerIndexFirst
+        )
+      ) must beEqualTo(expected)
+    }
     // Zero-length pairs of the rank order: two ranks of one length pair up, and `Ripser` must not report that as a bar.
     "report no zero-length bar for edges of equal length that rank apart, and all of them on request" >> {
       val metric = integerMetric(10, 5L)

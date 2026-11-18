@@ -85,9 +85,9 @@ private object CoefficientKind:
   * defaults are listed in the user guide's "Calling from MATLAB or Java" page: `complex`, `engine`, `maxDimension`,
   * `maxFiltrationValue`, `field`, `prime`, `epsilon`, `minPersistence`, `minPersistenceFraction`, `includeZeroLength`,
   * `alphaBackend`, `requireValidTriangulation`, `dtmK`, `dtmQ`, `dtmP`, `sparseEpsilon`, `numLandmarks`,
-  * `witnessVariant`, `landmarkSelector`, `landmarkSeed`, `nu`, `edgeCollapse`, `edgeTies`, `sublevel`, `nanMask`,
-  * `dual`, `representativesOn`. An unknown option, an unknown value, or a combination that does not apply (an engine
-  * for a complex it cannot read) throws `IllegalArgumentException` naming it, before anything is computed.
+  * `witnessVariant`, `landmarkSelector`, `landmarkSeed`, `nu`, `edgeCollapse`, `edgeTies`, `blockOrder`, `sublevel`,
+  * `nanMask`, `dual`, `representativesOn`. An unknown option, an unknown value, or a combination that does not apply
+  * (an engine for a complex it cannot read) throws `IllegalArgumentException` naming it, before anything is computed.
   *
   * By default a result reports the essential bars and the bars longer than 1% of the input's scale (its minimum
   * enclosing radius, or the value range of an image or relation); zero-length bars are left out unless
@@ -1288,6 +1288,7 @@ object TDA4j:
     "sparseepsilon",
     "edgecollapse",
     "edgeties",
+    "blockorder",
     "requirevalidtriangulation",
     "minpersistence",
     "minpersistencefraction",
@@ -1304,6 +1305,17 @@ object TDA4j:
       catch
         case e: IllegalArgumentException =>
           throw new IllegalArgumentException(s"option 'edgeTies': ${e.getMessage}")
+    }
+
+  /** Option `blockOrder` (which of two simplices filed under one edge is older, `Persistence`'s parameter of that
+    * name), parsed: its error names the accepted values.
+    */
+  private def parseBlockOrder(opts: Map[String, String]): Option[ParallelPackedCohomology.BlockOrder] =
+    opts.get("blockorder").map { raw =>
+      try ParallelPackedCohomology.BlockOrder.parse(raw.toLowerCase)
+      catch
+        case e: IllegalArgumentException =>
+          throw new IllegalArgumentException(s"option 'blockOrder': ${e.getMessage}")
     }
 
   /** The edges of `metricSpace` within the threshold the Ripser engine would use, ranked in the `ties` order: the
@@ -1754,6 +1766,22 @@ object TDA4j:
           s"engine=${userOpts.getOrElse("engine", "(default)")}"
       )
 
+    // Which of two simplices under one edge is older: read by the block-parallel engine only, which is therefore the
+    // engine of a request for the smaller index first (`engine` unset takes it on any number of threads).
+    val blockOrder = parseBlockOrder(opts)
+    if blockOrder.nonEmpty && (complex != ComplexKind.VR || engine != EngineKind.Ripser) then
+      throw new IllegalArgumentException(
+        "option 'blockOrder' orders simplices of one block for the block-parallel Ripser engine: it needs complex=vr " +
+          s"and engine=parallel-ripser -- got complex=${opts.getOrElse("complex", "vr")}, " +
+          s"engine=${userOpts.getOrElse("engine", "(default)")}"
+      )
+    val smallerFirst = blockOrder.contains(ParallelPackedCohomology.BlockOrder.SmallerIndexFirst)
+    if smallerFirst && userOpts.get("engine").exists(_.equalsIgnoreCase("ripser")) then
+      throw new IllegalArgumentException(
+        "option 'blockOrder' = smaller-index-first needs the block-parallel engine: engine=ripser orders simplices of " +
+          "one block as Ripser does; use engine=parallel-ripser (or leave engine unset)"
+      )
+
     val witnessLandmarks: IndexedSeq[Int] =
       if complex == ComplexKind.Witness then resolveLandmarkSelection(opts, metricSpace).landmarks
       else IndexedSeq.empty // unused for any other complex
@@ -1790,14 +1818,20 @@ object TDA4j:
     // when there are several threads, `engine=ripser` never does (as `Persistence`'s `Engine.Auto` and `Ripser`).
     val parallelFits = complex == ComplexKind.VR && engine == EngineKind.Ripser && overZ && !includeZeroLength &&
       !edgeCollapse && ParallelRipser.supports(metricSpace.size, maxDimension, prime, cycles)
+    if smallerFirst && !parallelFits then
+      throw new IllegalArgumentException(
+        "option 'blockOrder' = smaller-index-first runs on the block-parallel engine, which needs complex=vr, field=Z, " +
+          "includeZeroLength=false, edgeCollapse=false, a prime up to 46000 and fewer than 46341 points whose simplex " +
+          s"indices fit 63 bits (got ${metricSpace.size} points, maxDimension $maxDimension, prime $prime)"
+      )
     if parallelRequested && !parallelFits then
       throw new IllegalArgumentException(
         "engine=parallel-ripser needs complex=vr, field=Z, includeZeroLength=false, edgeCollapse=false, a prime up " +
           s"to 46000 and fewer than 46341 points whose simplex indices fit 63 bits (got ${metricSpace.size} points, " +
           s"maxDimension $maxDimension, prime $prime); use engine=ripser"
       )
-    if parallelFits && (parallelRequested || (!userOpts.contains("engine") && Parallel.threads > 1)) then
-      parallelVR(metricSpace, maxDimension, maxFiltrationValue, prime, cycles, edgeTies)
+    if parallelFits && (parallelRequested || (!userOpts.contains("engine") && (Parallel.threads > 1 || smallerFirst)))
+    then parallelVR(metricSpace, maxDimension, maxFiltrationValue, prime, cycles, edgeTies, blockOrder)
     else
       dispatchByField(opts) { [C] => (toDouble: C => Double) =>
         computeGeneric[C](
@@ -1916,7 +1950,8 @@ object TDA4j:
     maxFiltrationValue: Option[Double],
     prime: Int,
     cycles: Boolean,
-    edgeTies: Option[ParallelPackedCohomology.EdgeTies]
+    edgeTies: Option[ParallelPackedCohomology.EdgeTies],
+    blockOrder: Option[ParallelPackedCohomology.BlockOrder]
   ): PersistenceResult =
     val diagram = Persistence(
       metricSpace,
@@ -1926,7 +1961,8 @@ object TDA4j:
       engine = Persistence.Engine.ParallelRipser,
       representatives = if cycles then Representatives.Cycles else Representatives.Cocycles,
       computeAllRepresentatives = false,
-      edgeTies = edgeTies
+      edgeTies = edgeTies,
+      blockOrder = blockOrder
     )
     import diagram.given
     val toDouble: diagram.Coefficient => Double = summon[diagram.Coefficient is Field].toDouble(_)

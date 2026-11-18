@@ -361,7 +361,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--data", required=True, help="the directory `bench.py prepare` filled")
     ap.add_argument("--out", required=True, help="where cells.md, cells.csv and cells_sources.csv go")
-    ap.add_argument("--cases", default="", help="comma-separated case names (default: all)")
+    ap.add_argument("--cases", default="", help="comma-separated case names (default: all but the `experiment` cases)")
     ap.add_argument("--tasks", default="", help="comma-separated: vr,cubical,alpha (default: all)")
     ap.add_argument("--timeout", type=float, default=3600, help="seconds per count")
     ap.add_argument("--threads", type=int, default=0, help="threads of the clique counter (default: all cores)")
@@ -402,7 +402,7 @@ def main():
     args.gudhi_python_ok = (not args.no_gudhi and subprocess.run([args.python, "-c", "import gudhi"], capture_output=True).returncode == 0)
     wanted = {c for c in args.cases.split(",") if c}
     tasks = {t for t in args.tasks.split(",") if t}
-    cases = [c for c in bench.CASES if (not wanted or c.name in wanted) and (not tasks or c.task in tasks)]
+    cases = [c for c in bench.CASES if (c.name in wanted if wanted else not c.experiment) and (not tasks or c.task in tasks)]
     counter = build_counter(out) if any(c.task == "vr" for c in cases) else None
     cases_rows = []
     for case in cases:

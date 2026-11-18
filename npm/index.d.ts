@@ -54,6 +54,13 @@ export interface Options {
     | "colexicographic"
     | "reverse-colexicographic"
     | "shuffled";
+  /**
+   * For complex "vr" with engine "parallel-ripser": which of two simplices filed under the same last longest edge is
+   * older, by combinatorial index: "larger-index-first" (default, Ripser's order) or "smaller-index-first" (the order
+   * of Bauer's hybrid). The bars do not depend on it; how many pairs are apparent can. "smaller-index-first" with no
+   * engine runs "parallel-ripser", on one thread if need be.
+   */
+  blockOrder?: "larger-index-first" | "smaller-index-first";
   requireValidTriangulation?: boolean;
   /** Hide bars that persist for less than this. */
   minPersistence?: number;

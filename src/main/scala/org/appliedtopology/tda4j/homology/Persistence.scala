@@ -82,6 +82,12 @@ object Image:
   *   [[Persistence.EdgeTies]]. The bars do not depend on it. Unset (default), `ParallelRipser` ranks them
   *   `Lexicographic` and `Ripser` orders simplices as Ripser does, by diameter and then index (no edge order); set,
   *   both order a simplex by its last edge in the order chosen.
+  * @param blockOrder
+  *   read only by `Engine.ParallelRipser`: which of two simplices filed under the same edge (same dimension, same last
+  *   longest edge) is older, the one with the larger combinatorial index (`LargerIndexFirst`, default, Ripser's order)
+  *   or the smaller (`SmallerIndexFirst`, the order of Bauer's hybrid); see [[Persistence.BlockOrder]]. The bars do not
+  *   depend on it. Setting `SmallerIndexFirst` makes `Engine.Auto` choose `ParallelRipser`, on one thread if need be;
+  *   `Engine.Ripser` refuses it.
   * @param threads
   *   how many threads the computation may use, the representatives built later included (default: all the processors).
   *   `1` is the sequential computation, and makes `Engine.Auto` choose `Engine.Ripser`. The bars do not depend on it.
@@ -131,6 +137,14 @@ object Persistence:
     */
   type EdgeTies = ParallelPackedCohomology.EdgeTies
   val EdgeTies: ParallelPackedCohomology.EdgeTies.type = ParallelPackedCohomology.EdgeTies
+
+  /** How `Engine.ParallelRipser` orders two simplices of one dimension filed under the same edge: `LargerIndexFirst`
+    * (default; the larger combinatorial index is older, as in Ripser) or `SmallerIndexFirst` (the order of Bauer's
+    * hybrid, together with `EdgeTies.Colexicographic`). Every order gives the same bars; they differ in which pairs are
+    * apparent. Detail: [[ParallelPackedCohomology.BlockOrder]].
+    */
+  type BlockOrder = ParallelPackedCohomology.BlockOrder
+  val BlockOrder: ParallelPackedCohomology.BlockOrder.type = ParallelPackedCohomology.BlockOrder
 
   /** What `Persistence` can take. Points, metric spaces, images and streams convert to one where it's expected; to
     * teach `Persistence` a new kind of input, give a `Conversion[YourInput, Persistence.Input[CellT]]` that implements
@@ -195,7 +209,8 @@ object Persistence:
       includeZeroLength: Boolean,
       cycles: Boolean,
       computeAllRepresentatives: Boolean,
-      edgeTies: EdgeTies
+      edgeTies: EdgeTies,
+      blockOrder: BlockOrder
     ): PersistenceDiagram[CellT] =
       throw new IllegalArgumentException(
         "Persistence: engine = ParallelRipser computes the Vietoris-Rips complex of points or a metric space; " +
@@ -291,7 +306,8 @@ object Persistence:
           includeZeroLength: Boolean,
           cycles: Boolean,
           computeAllRepresentatives: Boolean,
-          edgeTies: EdgeTies
+          edgeTies: EdgeTies,
+          blockOrder: BlockOrder
         ) =
           require(complex eq VietorisRips, "Persistence: engine = ParallelRipser needs complex = VietorisRips")
           require(
@@ -313,7 +329,15 @@ object Persistence:
           import coefficients.given
           val threshold = maxFiltrationValue.getOrElse(ms.minimumEnclosingRadius)
           val run =
-            ParallelRipser.run(ms, maxDimension, threshold, characteristic, withPairs = cycles, edgeTies = edgeTies)
+            ParallelRipser.run(
+              ms,
+              maxDimension,
+              threshold,
+              characteristic,
+              withPairs = cycles,
+              edgeTies = edgeTies,
+              blockOrder = blockOrder
+            )
           // The cycles of every bar come out of one pass over the pairing (Involution); the cocycles one by one.
           val threads = Parallel.limit // the representatives built later keep the caller's `threads`
           lazy val allCycles = Parallel.limited(threads)(
@@ -399,7 +423,8 @@ object Persistence:
     computeAllRepresentatives: Boolean = true,
     threads: Optional[Int] = Optional.empty,
     coefficients: Optional[Coefficients] = Optional.empty,
-    edgeTies: Optional[EdgeTies] = Optional.empty
+    edgeTies: Optional[EdgeTies] = Optional.empty,
+    blockOrder: Optional[BlockOrder] = Optional.empty
   ): PersistenceDiagram[CellT] =
     val field = coefficients.toOption match
       case Some(chosen) =>
@@ -423,7 +448,8 @@ object Persistence:
             includeZeroLength,
             representatives,
             computeAllRepresentatives,
-            edgeTies.toOption
+            edgeTies.toOption,
+            blockOrder.toOption
           )
         )
       case None =>
@@ -437,7 +463,8 @@ object Persistence:
           includeZeroLength,
           representatives,
           computeAllRepresentatives,
-          edgeTies.toOption
+          edgeTies.toOption,
+          blockOrder.toOption
         )
 
   private def solve[CellT](
@@ -450,7 +477,8 @@ object Persistence:
     includeZeroLength: Boolean,
     representatives: Representatives,
     computeAllRepresentatives: Boolean,
-    edgeTies: Option[EdgeTies]
+    edgeTies: Option[EdgeTies],
+    blockOrder: Option[BlockOrder]
   ): PersistenceDiagram[CellT] =
     val cycles = representatives == Representatives.Cycles
     val requested = maxDimension.toOption
@@ -458,7 +486,8 @@ object Persistence:
     val chosen = engine match
       case Engine.Auto =>
         if input.ripserApplies(complex) then
-          if Parallel.threads > 1 && input.parallelRipserApplies(
+          // The sequential engine has Ripser's order inside a block only: another asks for the block-parallel one.
+          if (Parallel.threads > 1 || blockOrder.contains(BlockOrder.SmallerIndexFirst)) && input.parallelRipserApplies(
               complex,
               requested.getOrElse(DefaultMaxDimension),
               coefficients.characteristic,
@@ -485,9 +514,15 @@ object Persistence:
         includeZeroLength,
         cycles,
         computeAllRepresentatives,
-        edgeTies.getOrElse(EdgeTies.Lexicographic)
+        edgeTies.getOrElse(EdgeTies.Lexicographic),
+        blockOrder.getOrElse(BlockOrder.LargerIndexFirst)
       )
     else if chosen == Engine.Ripser then
+      require(
+        !blockOrder.contains(BlockOrder.SmallerIndexFirst),
+        "Persistence: blockOrder = SmallerIndexFirst is read by Engine.ParallelRipser only (Engine.Ripser orders " +
+          "simplices of one diameter as Ripser does); use Engine.ParallelRipser"
+      )
       input.ripser(
         requested.getOrElse(DefaultMaxDimension),
         maxFiltrationValue.toOption,

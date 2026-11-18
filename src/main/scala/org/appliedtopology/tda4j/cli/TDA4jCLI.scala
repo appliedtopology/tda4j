@@ -361,6 +361,7 @@ object TDA4jCLI:
     add("sparseEpsilon", conf.sparseEpsilon)
     add("edgeCollapse", conf.edgeCollapse)
     add("edgeTies", conf.edgeTies)
+    add("blockOrder", conf.blockOrder)
     add("maxDimension", conf.maxDimension)
     add("maxFiltrationValue", conf.maxFiltrationValue)
     add("minPersistence", conf.minPersistence)

@@ -33,7 +33,8 @@ private[tda4j] object ParallelRipser:
     threshold: Double,
     characteristic: Int,
     withPairs: Boolean,
-    edgeTies: ParallelPackedCohomology.EdgeTies = ParallelPackedCohomology.EdgeTies.Lexicographic
+    edgeTies: ParallelPackedCohomology.EdgeTies = ParallelPackedCohomology.EdgeTies.Lexicographic,
+    blockOrder: ParallelPackedCohomology.BlockOrder = ParallelPackedCohomology.BlockOrder.LargerIndexFirst
   ): ParallelRipserRun =
     val n = metricSpace.size
     val space = ParallelPackedCohomology.Space(
@@ -42,7 +43,8 @@ private[tda4j] object ParallelRipser:
       threshold,
       maxDimension,
       characteristic,
-      edgeTies = edgeTies
+      edgeTies = edgeTies,
+      blockOrder = blockOrder
     )
     val threads = Parallel.threads
     val result =
