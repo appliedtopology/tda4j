@@ -15,6 +15,13 @@ export interface Options {
   engine?: Engine;
   /** Whether each bar's representative is a cycle (default) or a cocycle. */
   representativeType?: "cycles" | "cocycles";
+  /**
+   * For the harmonic chains: how the chain a positive cell creates is made orthogonal to the older cycles.
+   * `"gram-schmidt"` (default) keeps an orthogonal basis of all the cycles of a degree; `"laplacian-solve"` keeps only
+   * the boundaries, which takes a fraction of the memory on a large complex. Over `field: "R"` the two can pair a few
+   * bars differently when many values nearly tie; `"Q"` settles it.
+   */
+  orthogonalization?: "gram-schmidt" | "laplacian-solve";
   /** For `complex: "alpha"`: `"default"`, `"helix"`, `"dqp"` or `"bowyer-watson"`. */
   alphaBackend?: string;
   /** The top homological degree to compute. Default 2. */
@@ -197,7 +204,7 @@ export function relativePersistenceFromDistances(distances: number[][], subcompl
 export function harmonicChainBarcode(points: number[][], options?: Options): Result;
 /** `harmonicChainBarcode` for a finite metric space given as its full matrix of distances. */
 export function harmonicChainBarcodeFromDistances(distances: number[][], options?: Options): Result;
-/** The ordinary barcode of the Vietoris-Rips complex of a point cloud, each bar's representative the harmonic cycle at its birth. Same options as `harmonicChainBarcode` except `includeZeroLength`. */
+/** The ordinary barcode of the Vietoris-Rips complex of a point cloud, each bar's representative the harmonic cycle at its birth. Same options as `harmonicChainBarcode` except `includeZeroLength`, and with `representativeType: "cocycles"` for the harmonic cocycle of each bar instead. */
 export function harmonicRepresentatives(points: number[][], options?: Options): Result;
 /** `harmonicRepresentatives` for a finite metric space given as its full matrix of distances. */
 export function harmonicRepresentativesFromDistances(distances: number[][], options?: Options): Result;
@@ -365,7 +372,7 @@ export function tomatoDiagram(points: number[][], k: number): number[][];
 export function takensEmbedding(series: number[], dimension: number, delay?: number, stride?: number): number[][];
 /** `takensEmbedding` for a series of vectors, one array per time step: a point is the `dimension` arrays of a window, one after the other. */
 export function takensEmbeddingOfVectors(series: number[][], dimension: number, delay?: number, stride?: number): number[][];
-/** The persistent Laplacian of one dimension and one pair of filtration values: a symmetric matrix on the simplices that have entered by `from`, whose kernel has the dimension of the persistent Betti number from `from` to `to`. */
+/** The persistent Laplacian of one dimension and one pair of filtration values: a symmetric matrix on the simplices that have entered by `from`, whose kernel has the dimension of the persistent Betti number from `from` to `to`; for `persistentLaplacianOfMap`, a matrix on the simplices of the target that the map hits, whose kernel has the dimension of the rank of the map on homology. */
 export class PersistentLaplacian {
   /** The dimension of the simplices the matrix is on. */
   readonly dimension: number;
@@ -376,6 +383,10 @@ export class PersistentLaplacian {
   readonly matrix: number[][];
   /** The eigenvalues, smallest first. */
   readonly eigenvalues: number[];
+  /** An orthonormal basis of the kernel (the persistent harmonic chains): `bettiNumber` arrays, each with an entry for every simplex of `cells`. */
+  readonly kernel: number[][];
+  /** The weight of each simplex of `cells`: 1, but for a simplicial map that sends several simplices onto one, their number. `matrix` is on the simplices scaled to length one; `kernel` is in chain coefficients. */
+  readonly weights: number[];
   /** The dimension of the kernel: the persistent Betti number from `from` to `to`. */
   readonly bettiNumber: number;
   /** The smallest eigenvalue that is not zero; `undefined` if there is none. */
@@ -386,6 +397,10 @@ export class PersistentLaplacian {
 export function persistentLaplacian(points: number[][], dimension: number, from: number, to: number): PersistentLaplacian;
 /** `persistentLaplacian` for a finite metric space given as its full matrix of distances. */
 export function persistentLaplacianFromDistances(distances: number[][], dimension: number, from: number, to: number): PersistentLaplacian;
+/** The persistent Laplacian of the simplicial map from the Vietoris-Rips complex of `sourcePoints` at `from` to that of `targetPoints` at `to`, `vertexMap[i]` being the index of the target point that source point `i` goes to: a matrix on the simplices of dimension `dimension` of the target that the map hits, whose kernel has the dimension of the rank of the map on homology. */
+export function persistentLaplacianOfMap(sourcePoints: number[][], targetPoints: number[][], vertexMap: number[], dimension: number, from: number, to: number): PersistentLaplacian;
+/** `persistentLaplacianOfMap` for two finite metric spaces given as their full matrices of distances. */
+export function persistentLaplacianOfMapFromDistances(sourceDistances: number[][], targetDistances: number[][], vertexMap: number[], dimension: number, from: number, to: number): PersistentLaplacian;
 /** The barcode of the homology of the product of two filtered complexes from the barcodes of the factors, rows `[dimension, birth, death]` (every dimension of each): a cell of the product enters at the larger (`"max"`, the default) or the sum (`"sum"`) of the values of its two factors. */
 export function productBars(first: number[][], second: number[][], filtration?: "max" | "sum"): number[][];
 /** The internal Hom of two barcodes, rows `[dimension, birth, death]`: the module of maps from the first to the second shifted by `t`; a bar of dimension `p` and one of dimension `q` give a bar of dimension `q - p`. */

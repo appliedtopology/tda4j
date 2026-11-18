@@ -112,17 +112,27 @@ open class PackedRipserCohomologyEngine[CoefficientT: Field](
   // Each vertex's neighbours within the threshold, when they are few enough to pay: at most a quarter of all ordered
   // pairs (and at most 2^28 entries, 3 GB), so a dense threshold keeps the cheaper all-vertex scan. Every distance is
   // the one `distance` above returns, so cofacet diameters are bit-identical to the scan's.
+  // The space may find them faster than the pass over all pairs (`neighbourListsWithin`: a Euclidean cloud above the
+  // distance cache answers by one tree query per point on all threads, #313); the lists are the same either way.
   private val lists: Option[NeighbourLists] =
     val n = metricSpace.size
     val dense = n.toLong * (n - 1)
+    def build(maxEntries: Long): Option[NeighbourLists] =
+      metricSpace
+        .neighbourListsWithin(resolvedMaxFiltrationValue, maxEntries)
+        .orElse(NeighbourLists.within(n, resolvedMaxFiltrationValue, maxEntries)(distance(_, _)))
     neighbourLists match
       case Some(false) => None
-      case Some(true)  => NeighbourLists.within(n, resolvedMaxFiltrationValue, Long.MaxValue)(distance(_, _))
-      case None        =>
-        NeighbourLists.within(n, resolvedMaxFiltrationValue, math.min(dense / 4, 1L << 28))(distance(_, _))
+      case Some(true)  => build(Long.MaxValue)
+      case None        => build(math.min(dense / 4, 1L << 28))
 
   /** Whether cofacets come from neighbour lists (diagnostics and tests). */
   def usesNeighbourLists: Boolean = lists.isDefined
+
+  /** The longest edge within the threshold, read off the neighbour lists when the engine has them (`0.0` when there is
+    * none), else `None`: the number `FiniteMetricSpace.longestDistanceWithin` finds with a pass of its own.
+    */
+  def longestListedEdge: Option[Double] = lists.map(_.distances.foldLeft(0.0)(math.max))
 
   // Every cofacet of `sigma` (whose vertices the caller has decoded: `sigmaVertices`, ascending, read and not changed)
   // within the threshold, vertex and index strictly decreasing, as (diameter, index, high word of the index, number of

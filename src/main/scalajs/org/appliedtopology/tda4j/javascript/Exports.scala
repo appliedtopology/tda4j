@@ -115,7 +115,8 @@ object Exports:
     guarded(Result(TDA4j.harmonicChainBarcodeFromDistanceMatrix(matrix(distances), optionArray(options))))
 
   /** The ordinary barcode of the Vietoris-Rips complex of a point cloud, each bar's `representative` the harmonic cycle
-    * at its birth (Basu and Cox). See `harmonicRepresentatives` in the user guide.
+    * at its birth (Basu and Cox), or its harmonic cocycle with the option `representativeType: "cocycles"`. See
+    * `harmonicRepresentatives` in the user guide.
     */
   @JSExportTopLevel("harmonicRepresentatives")
   def harmonicRepresentatives(
@@ -437,6 +438,56 @@ object Exports:
       PersistentLaplacian(TDA4j.persistentLaplacianFromDistanceMatrix(matrix(distances), dimension, from, to))
     )
 
+  /** The persistent Laplacian of the simplicial map from the Vietoris-Rips complex of `sourcePoints` at `from` to that
+    * of `targetPoints` at `to`, `vertexMap[i]` being the index of the target point that the source point `i` goes to: a
+    * matrix on the simplices of dimension `dimension` of the target that the map hits, whose kernel has the dimension
+    * of the rank of the map on homology.
+    */
+  @JSExportTopLevel("persistentLaplacianOfMap")
+  def persistentLaplacianOfMap(
+    sourcePoints: js.Array[js.Array[Double]],
+    targetPoints: js.Array[js.Array[Double]],
+    vertexMap: js.Array[Int],
+    dimension: Int,
+    from: Double,
+    to: Double
+  ): PersistentLaplacian =
+    guarded(
+      PersistentLaplacian(
+        TDA4j.persistentLaplacianOfMapFromPoints(
+          matrix(sourcePoints),
+          matrix(targetPoints),
+          vertexMap.toArray,
+          dimension,
+          from,
+          to
+        )
+      )
+    )
+
+  /** [[persistentLaplacianOfMap]] for two finite metric spaces given as their full matrices of distances. */
+  @JSExportTopLevel("persistentLaplacianOfMapFromDistances")
+  def persistentLaplacianOfMapFromDistances(
+    sourceDistances: js.Array[js.Array[Double]],
+    targetDistances: js.Array[js.Array[Double]],
+    vertexMap: js.Array[Int],
+    dimension: Int,
+    from: Double,
+    to: Double
+  ): PersistentLaplacian =
+    guarded(
+      PersistentLaplacian(
+        TDA4j.persistentLaplacianOfMapFromDistanceMatrices(
+          matrix(sourceDistances),
+          matrix(targetDistances),
+          vertexMap.toArray,
+          dimension,
+          from,
+          to
+        )
+      )
+    )
+
   /** The barcode of the homology of the product of two filtered complexes from the barcodes of the factors (rows
     * `[dimension, birth, death]`): a cell of the product enters at the larger (`filtration: "max"`, the default) or the
     * sum (`"sum"`) of the values of its two factors.
@@ -697,7 +748,9 @@ object EulerCurve:
   private[javascript] def apply(underlying: matlab.EulerCurveResult): EulerCurve = new EulerCurve(underlying)
 
 /** The persistent Laplacian of one dimension and one pair of filtration values: a symmetric matrix on the simplices
-  * that have entered by `from`, whose kernel has the dimension of the persistent Betti number from `from` to `to`.
+  * that have entered by `from`, whose kernel has the dimension of the persistent Betti number from `from` to `to`; or,
+  * for [[Exports.persistentLaplacianOfMap]], of a simplicial map, with the kernel of the dimension of its rank on
+  * homology.
   */
 final class PersistentLaplacian private[javascript] (underlying: matlab.PersistentLaplacianResult):
 
@@ -724,6 +777,17 @@ final class PersistentLaplacian private[javascript] (underlying: matlab.Persiste
   /** The eigenvalues, smallest first. */
   @JSExport
   def eigenvalues: js.Array[Double] = js.Array(underlying.eigenvalues()*)
+
+  /** An orthonormal basis of the kernel, one array for each persistent Betti number, with an entry for each of `cells`.
+    */
+  @JSExport
+  def kernel: js.Array[js.Array[Double]] = js.Array(underlying.kernel().map(row => js.Array(row*))*)
+
+  /** The weight of each simplex of `cells`: 1, but for a simplicial map that sends several simplices onto one, their
+    * number. `matrix` is on the simplices scaled to length one; `kernel` is in chain coefficients.
+    */
+  @JSExport
+  def weights: js.Array[Double] = js.Array(underlying.weights()*)
 
   /** The dimension of the kernel: the persistent Betti number from `from` to `to`. */
   @JSExport

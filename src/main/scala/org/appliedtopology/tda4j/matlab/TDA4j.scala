@@ -636,7 +636,81 @@ object TDA4j:
     require(dimension >= 0, s"persistentLaplacian: dimension must be 0 or more, got $dimension")
     // The complex needs no simplex that enters after `to`.
     val complex = VietorisRips(metricSpace, maxDimension = dimension, maxFiltrationValue = to)
-    new PersistentLaplacianResult(PersistentLaplacian(complex, dimension, from, to))
+    new PersistentLaplacianResult(PersistentLaplacian(complex, dimension, from, to), from, to)
+
+  /** The persistent Laplacian of a simplicial map between two Vietoris-Rips complexes: `vertexMap(i)` is the point of
+    * `targetPoints` that the point `i` of `sourcePoints` goes to. The simplices are those of dimension `dimension` of
+    * the target at `to` that the map hits, from the source at `from`; the kernel has the dimension of the rank of the
+    * map on homology. The map has to be simplicial (it sends every simplex of the source at `from` to a simplex of the
+    * target at `to`: for the identity on a point cloud, `from <= to`), else this says which simplex has no image. See
+    * `PersistentLaplacian.ofMap`.
+    */
+  def persistentLaplacianOfMapFromPoints(
+    sourcePoints: Array[Array[Double]],
+    targetPoints: Array[Array[Double]],
+    vertexMap: Array[Int],
+    dimension: Int,
+    from: Double,
+    to: Double
+  ): PersistentLaplacianResult =
+    validatePoints(sourcePoints)
+    validatePoints(targetPoints)
+    persistentLaplacianOfMap(
+      EuclideanMetricSpace(sourcePoints),
+      EuclideanMetricSpace(targetPoints),
+      vertexMap,
+      dimension,
+      from,
+      to
+    )
+
+  /** [[persistentLaplacianOfMapFromPoints]] for two finite metric spaces given as their full matrices of distances. */
+  def persistentLaplacianOfMapFromDistanceMatrices(
+    sourceDistances: Array[Array[Double]],
+    targetDistances: Array[Array[Double]],
+    vertexMap: Array[Int],
+    dimension: Int,
+    from: Double,
+    to: Double
+  ): PersistentLaplacianResult =
+    validateSquare(sourceDistances)
+    validateSquare(targetDistances)
+    persistentLaplacianOfMap(
+      explicitMetricSpace(sourceDistances),
+      explicitMetricSpace(targetDistances),
+      vertexMap,
+      dimension,
+      from,
+      to
+    )
+
+  private def persistentLaplacianOfMap(
+    source: FiniteMetricSpace[Int],
+    target: FiniteMetricSpace[Int],
+    vertexMap: Array[Int],
+    dimension: Int,
+    from: Double,
+    to: Double
+  ): PersistentLaplacianResult =
+    require(dimension >= 0, s"persistentLaplacianOfMap: dimension must be 0 or more, got $dimension")
+    require(
+      vertexMap.length == source.size,
+      s"persistentLaplacianOfMap: vertexMap has ${vertexMap.length} entries but the source has ${source.size} points; " +
+        "give the index of the target point that each source point goes to"
+    )
+    vertexMap.zipWithIndex.foreach((image, vertex) =>
+      require(
+        image >= 0 && image < target.size,
+        s"persistentLaplacianOfMap: vertexMap sends point $vertex to $image, but the target has the points 0 to ${target.size - 1}"
+      )
+    )
+    val sourceComplex = VietorisRips(source, maxDimension = dimension, maxFiltrationValue = from)
+    val targetComplex = VietorisRips(target, maxDimension = dimension, maxFiltrationValue = to)
+    new PersistentLaplacianResult(
+      PersistentLaplacian.ofMap(sourceComplex, from, targetComplex, to, dimension)(vertexMap(_)),
+      from,
+      to
+    )
 
   private val zigzagStepKeys = Set("maxdimension", "prime")
   private val zigzagComplexKeys = Set("maxdimension", "prime", "link")
@@ -1162,11 +1236,13 @@ object TDA4j:
     "includezerolength",
     "minpersistence",
     "minpersistencefraction",
-    "threads"
+    "threads",
+    "orthogonalization"
   )
   // A bar of zero length has no Basu-Cox chain: the chain belongs to a class of the persistence module, which a bar that
   // begins and ends at one value is not.
-  private val harmonicRepresentativeKeys = harmonicBarcodeKeys - "includezerolength"
+  // The Basu-Cox representatives also come as cocycles; the harmonic chain barcode is a barcode of cycles only.
+  private val harmonicRepresentativeKeys = harmonicBarcodeKeys - "includezerolength" + "representativetype"
 
   /** The harmonic chain barcode (Hou, Parsa and Wang) of the Vietoris-Rips complex of a point cloud: each bar is a
     * harmonic cycle, orthogonal to all boundaries, that stays harmonic for the bar's whole life, and `cycleVertices`
@@ -1197,7 +1273,9 @@ object TDA4j:
   /** The ordinary barcode of the Vietoris-Rips complex of a point cloud with the Basu-Cox harmonic representatives: the
     * chain of a bar is the harmonic cycle at its birth value, picked out by the persistence module alone (so it does
     * not depend on how cells of equal value are ordered). The same options as [[harmonicChainBarcodeFromPoints]] except
-    * `includeZeroLength`, which a Basu-Cox chain does not exist for. See `HarmonicRepresentatives`.
+    * `includeZeroLength`, which a Basu-Cox chain does not exist for, and with `representativeType` (`cycles`, the
+    * default, or `cocycles`: the harmonic cocycle of the bar, at the last value of its life). See
+    * `HarmonicRepresentatives`.
     */
   def harmonicRepresentativesFromPoints(points: Array[Array[Double]], options: Array[String]): PersistenceResult =
     validatePoints(points)
@@ -1238,12 +1316,24 @@ object TDA4j:
           "harmonic chains need an inner product on the chains, so option 'field' must be 'R' (the default) or 'Q', " +
             "not 'Z'"
         )
+    val kind = opts.get("representativetype").map(_.toLowerCase) match
+      case None | Some("cycles") => Representatives.Cycles
+      case Some("cocycles")      => Representatives.Cocycles
+      case Some(other)           =>
+        throw new IllegalArgumentException(s"option 'representativeType' must be cycles or cocycles, got '$other'")
+    val orthogonalization = opts.get("orthogonalization").map(_.toLowerCase) match
+      case None | Some("gram-schmidt") | Some("gramschmidt") => HarmonicChainBarcode.Orthogonalization.GramSchmidt
+      case Some("laplacian-solve") | Some("laplaciansolve")  => HarmonicChainBarcode.Orthogonalization.LaplacianSolve
+      case Some(other)                                       =>
+        throw new IllegalArgumentException(
+          s"option 'orthogonalization' must be gram-schmidt or laplacian-solve, got '$other'"
+        )
     val threshold = parseThresholdSpec(opts)
     withThreads(opts) {
       val complex = VietorisRips(metricSpace, maxDimension = maxDimension, maxFiltrationValue = maxFiltrationValue)
       val diagram =
-        if representatives then HarmonicRepresentatives(complex, maxDimension, coefficients)
-        else HarmonicChainBarcode(complex, maxDimension, coefficients, wantsZeroLength(opts))
+        if representatives then HarmonicRepresentatives(complex, maxDimension, coefficients, kind, orthogonalization)
+        else HarmonicChainBarcode(complex, maxDimension, coefficients, wantsZeroLength(opts), orthogonalization)
       import diagram.given
       val toDouble: diagram.Coefficient => Double = summon[diagram.Coefficient is Field].toDouble(_)
       val cellVertices: (Int, Simplex[Int]) => Array[Int] = (_, cell) => cell.underlying.toArray

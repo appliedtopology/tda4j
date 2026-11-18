@@ -209,3 +209,15 @@ against a newer compiler.
 What tda4j does: `WebPatch` inserts, after each `getFileName` call in `StackTraceOps$`, a replacement of `null` by
 `"Unknown Source"` (what `StackTraceElement.toString` prints for such a frame), and fails the build when it finds no
 such call to rewrite. The terminal demo jar is not patched. Not reported upstream (#336).
+
+## Persistent Laplacian of a simplicial map (Gülen-Mémoli-Wan-Wang, arXiv:2302.03771v2): a vertex in the example, two lines of Algorithm 1
+
+2026-11-18, building `PersistentLaplacian.ofMap` (`.claude/WORKLOG-persistent-laplacian-map.md`). **Verified by
+computation:** the running example (Figure 2, Examples 13, 15, 16) says `d` goes to `b`, but the target has the vertices
+`x, y, z` and the edge `ad` would leave it; only `a, b, c, d -> x, y, z, y` reproduces the printed matrices
+(`PersistentLaplacianMapSpec`: the down and up parts, the weights, the determinant 25, and the kernel of Example 17).
+**Read, not run:** the matrix algorithm of Section 4 as read from the arXiv text by a subagent (not by us) has step 8
+using the down Laplacian of `L` where Proposition 14 and the algorithm's own data line say the up one, and step 12
+conjugating by `R^-1 ... R` where Proposition 14 writes `R ... R^-1`. We did not run Algorithm 1 as printed, so we claim
+only that the two lines disagree with Proposition 14 as read; `ofMap` follows the definitions of Sections 2.1 and 2.2 and
+Proposition 14 instead, and the example's matrices confirm those.

@@ -121,6 +121,20 @@ def test_the_harmonic_barcodes_from_distances_are_those_of_the_points_and_the_ra
         )
 
 
+def test_the_laplacian_solve_gives_the_bars_and_chains_of_gram_schmidt_over_the_rationals(circle):
+    points = circle(8)
+    for compute in (tda4j.harmonic_chain_barcode, tda4j.harmonic_representatives):
+        default = compute(points, max_dimension=1, field="Q")
+        solved = compute(points, max_dimension=1, field="Q", orthogonalization="laplacian-solve")
+        assert len(default) > 0
+        assert sorted(map(tuple, default.bars.tolist())) == sorted(map(tuple, solved.bars.tolist()))
+        for i in range(len(default)):
+            assert default.representative(i).cells == solved.representative(i).cells
+            assert np.allclose(default.representative(i).coefficients, solved.representative(i).coefficients)
+    with pytest.raises(ValueError, match="laplacian-solve"):
+        tda4j.harmonic_representatives(points, orthogonalization="fast")
+
+
 def test_a_finite_field_is_a_value_error_for_harmonic_chains(circle):
     with pytest.raises(ValueError, match="inner product"):
         tda4j.harmonic_chain_barcode(circle(6), field="Z")

@@ -161,10 +161,46 @@ class HarmonicFacadeSpec extends Specification:
         beEqualTo(facadeRows(TDA4j.harmonicRepresentativesFromPoints(points, all())))
     }
 
+    "give the harmonic cocycles of the typed diagram with representativeType cocycles, and the cycles with cycles" in {
+      val points = cloud(8, 17L)
+      val cocycles =
+        TDA4j.harmonicRepresentativesFromPoints(points, all("maxDimension", "2", "representativeType", "cocycles"))
+      val typed = HarmonicRepresentatives(
+        rips(points, 2, 1.5),
+        maxDimension = 2,
+        representatives = Representatives.Cocycles
+      )
+      val cycles =
+        TDA4j.harmonicRepresentativesFromPoints(points, all("maxDimension", "2", "representativeType", "cycles"))
+      (facadeRows(cocycles) must not(beEmpty)) and
+        (facadeRows(cocycles) must beEqualTo(typedRows(typed))) and
+        (facadeRows(cycles) must beEqualTo(
+          facadeRows(TDA4j.harmonicRepresentativesFromPoints(points, all("maxDimension", "2")))
+        )) and
+        (facadeRows(cocycles) must not(beEqualTo(facadeRows(cycles))))
+    }
+
+    "give the same bars and chains with orthogonalization laplacian-solve as with gram-schmidt, over the rationals" in {
+      val points = cloud(9, 17L)
+      def barcode(extra: String*) =
+        facadeRows(TDA4j.harmonicChainBarcodeFromPoints(points, Array("maxDimension", "1", "field", "Q") ++ extra))
+      def representatives(extra: String*) =
+        facadeRows(TDA4j.harmonicRepresentativesFromPoints(points, Array("maxDimension", "1", "field", "Q") ++ extra))
+      (barcode("orthogonalization", "laplacian-solve") must beEqualTo(barcode("orthogonalization", "gram-schmidt"))) and
+        (barcode("orthogonalization", "laplacian-solve") must beEqualTo(barcode())) and
+        (representatives("orthogonalization", "solve-it") must throwWith[IllegalArgumentException](
+          "gram-schmidt or laplacian-solve"
+        )) and
+        (representatives("orthogonalization", "laplacian-solve") must beEqualTo(representatives())) and
+        (barcode("orthogonalization", "laplacian-solve") must not(beEmpty))
+    }
+
     "refuse a finite field, a zero-length bar request (it has no Basu-Cox chain), and the options of other entry points" in {
       def run(options: String*) = TDA4j.harmonicRepresentativesFromPoints(square, options.toArray)
       (run("field", "Z") must throwWith[IllegalArgumentException]("inner product")) and
         (run("includeZeroLength", "true") must throwWith[IllegalArgumentException]("unrecognized option")) and
-        (run("representativeType", "cocycles") must throwWith[IllegalArgumentException]("unrecognized option"))
+        (run("representativeType", "both") must throwWith[IllegalArgumentException]("cycles or cocycles")) and
+        (TDA4j.harmonicChainBarcodeFromPoints(square, Array("representativeType", "cocycles")) must
+          throwWith[IllegalArgumentException]("unrecognized option"))
     }
   }

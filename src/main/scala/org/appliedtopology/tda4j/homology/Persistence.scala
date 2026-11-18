@@ -277,7 +277,9 @@ object Persistence:
               )
             }
             new PersistenceBar(bar.dim, inLengths(bar.lower), inLengths(bar.upper), Some(chain), pair)
-          val longestEdge = ms.longestDistanceWithin(threshold)
+          // Off the engine's neighbour lists when it has them (no second search); with ranks the lists hold ranks.
+          val longestEdge =
+            (if ranked.isEmpty then engine.longestListedEdge else None).getOrElse(ms.longestDistanceWithin(threshold))
           // Two ranks can be one length: such a pair is zero-length now.
           def keep(bar: PersistenceBar[Double, ?]) = includeZeroLength || ranked.isEmpty || !bar.isZeroLength
           PersistenceDiagram[Simplex[Int], coefficients.C](
@@ -373,7 +375,7 @@ object Persistence:
           PersistenceDiagram[Simplex[Int], coefficients.C](
             made.map(_._1).toList,
             maxDimension,
-            ms.longestDistanceWithin(threshold),
+            run.longestEdge,
             scale,
             Some(kindOf(cycles)),
             cycles

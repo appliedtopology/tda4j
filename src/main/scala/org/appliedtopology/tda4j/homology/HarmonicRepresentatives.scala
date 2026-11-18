@@ -27,16 +27,27 @@ import scala.collection.mutable
   * The chains are computed in coordinates of the harmonic chains that the [[HarmonicChainBarcode]] run keeps alive at
   * the values involved, with a small linear system for each bar (its size is the Betti number at the birth and the
   * death), so the cost is that of the barcode run plus a Betti-number-sized elimination per bar.
+  *
+  * With `representatives = Representatives.Cocycles` each bar gets the harmonic cocycle of its class in cohomology
+  * instead: the same construction on the dual module, whose maps go from a later value to an earlier one (the
+  * orthogonal projection of the harmonic cochains at the later value onto those at the earlier one, the adjoint of the
+  * maps of homology). The dual bar `[s, t)` is born at the last value before `t`, so its representative is the harmonic
+  * cochain at that value, a vector that is a cocycle and orthogonal to every coboundary. The cells' inner product
+  * identifies cochains with chains, so a harmonic cocycle is written in the same coordinates as a harmonic cycle, and
+  * the two differ in which value of the bar they sit at, and in the subspaces they pick out.
   */
 object HarmonicRepresentatives:
 
   /** The ordinary barcode of `stream` in degrees `0..maxDimension` (default as for [[Persistence]]), each bar with the
-    * Basu-Cox harmonic cycle of its birth as its representative.
+    * Basu-Cox harmonic cycle of its birth as its representative (`representatives = Representatives.Cocycles`: its
+    * harmonic cocycle, at the last value of its bar).
     */
   def apply[CellT: OrderedCell](
     stream: StratifiedCellStream[CellT, Double],
     maxDimension: Optional[Int] = Optional.empty,
-    coefficients: Optional[Coefficients] = Optional.empty
+    coefficients: Optional[Coefficients] = Optional.empty,
+    representatives: Representatives = Representatives.Cycles,
+    orthogonalization: HarmonicChainBarcode.Orthogonalization = HarmonicChainBarcode.Orthogonalization.GramSchmidt
   ): PersistenceDiagram[CellT] =
     val degree = HarmonicChainBarcode.degreeFor(stream, maxDimension)
     val field = HarmonicChainBarcode.zeroCharacteristic(coefficients)
@@ -46,18 +57,30 @@ object HarmonicRepresentatives:
       coefficients = field,
       engine = Persistence.Engine.Cohomology
     )
-    ofDiagram(stream, ordinary, field)
+    ofDiagram(stream, ordinary, field, representatives, orthogonalization)
 
   /** The bars of `diagram` (which must be the barcode of `stream` in `coefficients`, from any engine: only the
     * intervals and cells are read, and the numbers of bars with each interval are checked against the harmonic
-    * subspaces) with their representatives replaced by the harmonic cycles at their births.
+    * subspaces) with their representatives replaced by the harmonic cycles at their births (or the harmonic cocycles,
+    * for `representatives = Representatives.Cocycles`). A bar of length zero has no harmonic representative and is
+    * refused: it is not a class of the persistence module.
     */
   def ofDiagram[CellT: OrderedCell](
     stream: StratifiedCellStream[CellT, Double],
     diagram: PersistenceDiagram[CellT],
-    coefficients: Coefficients
+    coefficients: Coefficients,
+    representatives: Representatives = Representatives.Cycles,
+    orthogonalization: HarmonicChainBarcode.Orthogonalization = HarmonicChainBarcode.Orthogonalization.GramSchmidt
   ): PersistenceDiagram[CellT] =
     HarmonicChainBarcode.zeroCharacteristic(Optional(Some(coefficients)))
+    diagram.bars.find(_.isZeroLength).foreach { bar =>
+      throw new IllegalArgumentException(
+        s"HarmonicRepresentatives: the diagram has a bar of length zero in degree ${bar.dim} at ${bar.birth}; a bar " +
+          "that begins and ends at one value is not a class of the persistence module, so it has no harmonic " +
+          "representative. Leave zero-length bars out of the diagram (the default of the engines)"
+      )
+    }
+    val cocycles = representatives == Representatives.Cocycles
     import coefficients.given
     val degree = diagram.maxDimension
     val order = HarmonicChainBarcode.trackedOrder(HarmonicChainBarcode.insertionOrder(stream, degree), degree)
@@ -73,10 +96,23 @@ object HarmonicRepresentatives:
       )
     val groups = diagram.bars.groupBy(bar => (bar.dim, bar.birth, bar.death))
     val wanted = groups.keys.flatMap { (_, birth, death) =>
-      val (j, k) = (level(birth, "birth"), if death.isPosInfinity then values.size - 1 else level(death, "death"))
-      Seq(j, j - 1, k, k - 1).filter(_ >= 0).map(values)
+      val j = level(birth, "birth")
+      if cocycles then
+        // the dual bar lives at the levels j .. k-1 (k = values.size when it is essential): born at k-1, seen from k
+        val k = if death.isPosInfinity then values.size else level(death, "death")
+        Seq(k - 1, k, j, j - 1).filter(l => l >= 0 && l < values.size).map(values)
+      else
+        val k = if death.isPosInfinity then values.size - 1 else level(death, "death")
+        Seq(j, j - 1, k, k - 1).filter(_ >= 0).map(values)
     }.toSet
-    val run = new HarmonicChainBarcode.Run[CellT, coefficients.C](degree, order, includeZeroLength = true, wanted)
+    val run =
+      new HarmonicChainBarcode.Run[CellT, coefficients.C](
+        degree,
+        order,
+        includeZeroLength = true,
+        wanted,
+        orthogonalization
+      )
     run.execute()
     val solver = new Solver[coefficients.C]
     val chains = groups.map { case (key @ (p, birth, death), bars) =>
@@ -84,16 +120,27 @@ object HarmonicRepresentatives:
       val k = if death.isPosInfinity then None else Some(levelOf(death))
       def basisAt(level: Int): Vector[mutable.HashMap[Int, coefficients.C]] =
         if level < 0 then Vector.empty else run.snapshots((p, values(level)))
-      val atBirth = basisAt(j)
-      val before = basisAt(j - 1)
-      // M^{s,t'}: the harmonic chains at s that, at t', are the image of a class born before s
-      def killedBy(level: Int): Vector[Vector[coefficients.C]] =
-        val atLevel = basisAt(level)
-        solver.preimageOfImage(atBirth, before, atLevel)
-      val (larger, smaller) = k match
-        case Some(death) => (killedBy(death), killedBy(death - 1))
-        case None        => (solver.unitVectors(atBirth.size), killedBy(values.size - 1))
-      val subspace = solver.complement(atBirth, larger, smaller)
+      // `host`: the harmonic chains at the value where the representative sits; `larger` and `smaller` are subspaces of it
+      // (in coordinates of `host`) whose quotient is the bar
+      val (host, larger, smaller) =
+        if !cocycles then
+          val atBirth = basisAt(j)
+          val before = basisAt(j - 1)
+          // M^{s,t'}: the harmonic chains at s that, at t', are the image of a class born before s
+          def killedBy(level: Int): Vector[Vector[coefficients.C]] =
+            solver.preimageOfImage(atBirth, before, basisAt(level))
+          k match
+            case Some(death) => (atBirth, killedBy(death), killedBy(death - 1))
+            case None        => (atBirth, solver.unitVectors(atBirth.size), killedBy(values.size - 1))
+        else
+          // the same with the levels reversed: the bar is born at its last level and each map goes to the level below
+          val atTop = basisAt(k.fold(values.size - 1)(_ - 1))
+          val after = k.fold(Vector.empty[mutable.HashMap[Int, coefficients.C]])(basisAt)
+          def killedBy(level: Int): Vector[Vector[coefficients.C]] =
+            solver.preimageOfImage(atTop, after, basisAt(level))
+          if j == 0 then (atTop, solver.unitVectors(atTop.size), killedBy(0))
+          else (atTop, killedBy(j - 1), killedBy(j))
+      val subspace = solver.complement(host, larger, smaller)
       if subspace.size != bars.size then
         throw new IllegalStateException(
           s"HarmonicRepresentatives: ${bars.size} bar(s) of degree $p over [$birth, $death) in the diagram, but the " +
@@ -102,7 +149,7 @@ object HarmonicRepresentatives:
         )
       val vectors = subspace.map(coordinates =>
         val sum = new run.Vec
-        for (x, h) <- coordinates.zip(atBirth) do
+        for (x, h) <- coordinates.zip(host) do
           for (cell, y) <- h do
             val updated = summon[coefficients.C is Field].plus(
               sum.getOrElse(cell, summon[coefficients.C is Field].zero),
@@ -131,7 +178,7 @@ object HarmonicRepresentatives:
       diagram.maxDimension,
       diagram.lastFiltrationValue,
       diagram.scale,
-      representatives = Some(Representatives.Cycles)
+      representatives = Some(representatives)
     )
 
   // `sum` scaled so that its first cell in the cells' own order has coefficient 1, zeros dropped.

@@ -168,7 +168,8 @@ object TDA4jCLI:
       conf.harmonic.toOption.foreach { kind =>
         if kind != "chains" && kind != "representatives" then
           throw new IllegalArgumentException(s"--harmonic takes 'chains' or 'representatives', got '$kind'")
-        val allowed = if kind == "chains" then harmonicOptions + "includeZeroLength" else harmonicOptions
+        val allowed =
+          if kind == "chains" then harmonicOptions + "includeZeroLength" else harmonicOptions + "representativeType"
         val others = Seq(
           "--relative-to" -> conf.relativeTo.isSupplied,
           "--select-landmarks" -> conf.selectLandmarks(),
@@ -368,6 +369,7 @@ object TDA4jCLI:
     add("minPersistenceFraction", conf.minPersistenceFraction)
     add("includeZeroLength", conf.includeZeroLength)
     add("representativeType", conf.representativeType)
+    add("orthogonalization", conf.orthogonalization)
     add("field", conf.field)
     add("prime", conf.prime)
     add("epsilon", conf.epsilon)
@@ -492,7 +494,7 @@ object TDA4jCLI:
         "as --max-filtration-value for step 2 (the JavaPlex tutorial's own 2R recipe)"
     )
 
-  // What `--harmonic` passes to the facade (`includeZeroLength` besides, for `chains`).
+  // What `--harmonic` passes to the facade (`includeZeroLength` besides, for `chains`; `representativeType`, for `representatives`).
   private val harmonicOptions = Set(
     "maxDimension",
     "maxFiltrationValue",
@@ -500,7 +502,8 @@ object TDA4jCLI:
     "epsilon",
     "minPersistence",
     "minPersistenceFraction",
-    "threads"
+    "threads",
+    "orthogonalization"
   )
 
   private val eulerCurveOptions = Set("maxFiltrationValue", "threads")
@@ -576,7 +579,9 @@ object TDA4jCLI:
         Seq(
           "--laplacian-dimension" -> conf.laplacianDimension.isSupplied,
           "--laplacian-from" -> conf.laplacianFrom.isSupplied,
-          "--laplacian-to" -> conf.laplacianTo.isSupplied
+          "--laplacian-to" -> conf.laplacianTo.isSupplied,
+          "--laplacian-target" -> conf.laplacianTarget.isSupplied,
+          "--laplacian-vertex-map" -> conf.laplacianVertexMap.isSupplied
         )
       ),
       (
@@ -757,14 +762,40 @@ object TDA4jCLI:
       value.toOption.getOrElse(throw new IllegalArgumentException(s"--persistent-laplacian needs $flag"))
     val dimension = required("--laplacian-dimension", conf.laplacianDimension)
     val (from, to) = (required("--laplacian-from", conf.laplacianFrom), required("--laplacian-to", conf.laplacianTo))
-    val laplacian = resolved match
-      case ResolvedInput.Points(points)       => TDA4j.persistentLaplacianFromPoints(points, dimension, from, to)
-      case ResolvedInput.Distances(distances) =>
-        TDA4j.persistentLaplacianFromDistanceMatrix(distances, dimension, from, to)
-      case _ =>
-        throw new IllegalArgumentException(
-          s"--persistent-laplacian needs a point cloud or a distance matrix; --input-format=$format reads something else"
-        )
+    def refuse(): Nothing =
+      throw new IllegalArgumentException(
+        s"--persistent-laplacian needs a point cloud or a distance matrix; --input-format=$format reads something else"
+      )
+    val laplacian = conf.laplacianTarget.toOption match
+      case None =>
+        if conf.laplacianVertexMap.isSupplied then
+          throw new IllegalArgumentException("--laplacian-vertex-map goes with --laplacian-target")
+        resolved match
+          case ResolvedInput.Points(points)       => TDA4j.persistentLaplacianFromPoints(points, dimension, from, to)
+          case ResolvedInput.Distances(distances) =>
+            TDA4j.persistentLaplacianFromDistanceMatrix(distances, dimension, from, to)
+          case _ => refuse()
+      case Some(path) =>
+        val vertexMap = conf.laplacianVertexMap.toOption
+          .getOrElse(
+            throw new IllegalArgumentException(
+              "--laplacian-target needs --laplacian-vertex-map, the point of the target that each input point goes to"
+            )
+          )
+          .split(",")
+          .map(entry =>
+            entry.trim.toIntOption.getOrElse(
+              throw new IllegalArgumentException(
+                s"--laplacian-vertex-map takes whole numbers separated by commas; '$entry' is not one"
+              )
+            )
+          )
+        (resolved, resolveInput(format, path)) match
+          case (ResolvedInput.Points(source), ResolvedInput.Points(target)) =>
+            TDA4j.persistentLaplacianOfMapFromPoints(source, target, vertexMap, dimension, from, to)
+          case (ResolvedInput.Distances(source), ResolvedInput.Distances(target)) =>
+            TDA4j.persistentLaplacianOfMapFromDistanceMatrices(source, target, vertexMap, dimension, from, to)
+          case _ => refuse() // the target is read in the input's format, so the two are of one kind
     writeLines(
       conf,
       Seq(
@@ -774,7 +805,8 @@ object TDA4jCLI:
         s"betti-number=${laplacian.bettiNumber()}",
         s"spectral-gap=${if laplacian.hasSpectralGap() then laplacian.spectralGap().toString else "none"}",
         s"eigenvalues=${laplacian.eigenvalues().mkString(",")}"
-      ),
+      ) ++ (if conf.laplacianTarget.isSupplied then Seq(s"weights=${laplacian.weights().mkString(",")}") else Seq.empty)
+        ++ laplacian.kernel().zipWithIndex.map((row, i) => s"kernel-$i=${row.mkString(",")}"),
       out
     )
 

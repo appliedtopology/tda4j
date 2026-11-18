@@ -460,7 +460,11 @@ class PersistentLaplacian:
     """The persistent Laplacian of the Vietoris-Rips complex (see ``persistent_laplacian``): ``matrix`` is symmetric on
     the simplices ``cells`` (tuples of vertex numbers) that have entered by ``start``; its kernel has the dimension
     ``betti_number``, the number of classes of that dimension at ``start`` still there at ``stop``. ``eigenvalues`` are
-    ascending and ``spectral_gap`` is the smallest one that is not zero (``None`` if all are)."""
+    ascending and ``spectral_gap`` is the smallest one that is not zero (``None`` if all are). ``kernel`` is an orthonormal
+    basis of the kernel, the persistent harmonic chains: an array of shape ``(betti_number, len(cells))``. For the
+    Laplacian of a simplicial map (``persistent_laplacian_of_map``) the cells are those of the target that the map hits,
+    ``betti_number`` is the rank of the map on homology, and ``weights`` says how many simplices of the source went onto
+    each cell (the matrix is on the cells scaled to length one, ``kernel`` is in chain coefficients); otherwise they are 1."""
 
     dimension: int
     start: float
@@ -468,8 +472,10 @@ class PersistentLaplacian:
     cells: list
     matrix: np.ndarray
     eigenvalues: np.ndarray
+    kernel: np.ndarray
     betti_number: int
     spectral_gap: object
+    weights: np.ndarray
 
 
 @dataclass(frozen=True, eq=False)

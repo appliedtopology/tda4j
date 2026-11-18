@@ -38,24 +38,22 @@ comparisons must be cheap: `EnumeratingCofaceSimplexStream`/`CubicalGridStream` 
 (`WORKLOG-autonomous-session-2026-09-19.md`).
 
 **VR constructions** (same output contract, alternate engines): `RipserCofaceSimplexStream` (+ `SimplexIndexing`), what
-`VietorisRips(...)` builds by default (project lead: Enumerating is a last resort; the exclusion hooks `keepCriterion` and
-`filtrationValueOverride` come with it, from the base class; `keepCriterion` is forwarded to `LayeredInorderSimplexStream`'s generator, `filtrationValueOverride` is not yet, #184),
+`VietorisRips(...)` builds by default (project lead: Enumerating is a last resort; the hooks `keepCriterion` (forwarded to the generator) and
+`filtrationValueOverride` (not yet, #184) come from the base class),
 `EnumeratingCofaceSimplexStream` (the reference the others are checked against),
-`RecursiveStackVietorisRipsSimplexStream`, `IncrementalVietorisRipsSimplexStream` (Rieser's New-VR, arXiv:2301.07191
-— cross-validation baseline, not a fast engine); `CofacetIterator` for lazy coboundaries. `LayeredInorderSimplexStream` (what
+`RecursiveStackVietorisRipsSimplexStream`, `IncrementalVietorisRipsSimplexStream` (Rieser's New-VR, arXiv:2301.07191;
+a cross-validation baseline, not fast); `CofacetIterator` for lazy coboundaries. `LayeredInorderSimplexStream` (what
 `Implementation.Inorder` builds; arXiv:2411.05495 mirrored, smallest vertex first): each simplex carries only its
 first longest edge (inherited by its cofacets: diameter and case flags from it), candidates from sweep-updated bitset
 balls (`n²/4` bytes), no sort above the edges in general position; tied runs are checked and sorted only when out of
-order. The old `InorderCofaceSimplexStream` (tie order broken, duplicates on tied distances) is deleted (#182).
-Its generator reads only a sorted weighted edge list (`FlagGenerator.ofEdges`, optional per-vertex deadlines), so a
+order. Its generator reads only a sorted weighted edge list (`FlagGenerator.ofEdges`, optional per-vertex deadlines), so a
 coface stream that is the flag complex of a graph can build its flat layers from it (`flatGenerator`: DTM-Rips, sparse
 Rips, edge-collapsed Rips; `filtered-complexes.md`, #190), and so does the default `RipserCofaceSimplexStream` (default
 value, <= 2^15 points: `WORKLOG-cohomology-stream-sort.md`, #251); the stream keeps the generator's `root`s
-(4 bytes a simplex of the top layer) and rebuilds the generator's order from its flat layer by reversing tied runs. `WORKLOG-layered-inorder.md`, `WORKLOG-flag-generator.md`. `FiniteMetricSpace` has
-a VP-tree impl (`VantagePointTree`, `VantagePointQuery`; `WORKLOG-scalajs-numerics-spatial.md`) and `SparseMetricSpace` (+∞ past its cutoff: not a thresholded oracle).
+(4 bytes a simplex of the top layer) and rebuilds the generator's order from its flat layer by reversing tied runs. `WORKLOG-layered-inorder.md`, `WORKLOG-flag-generator.md`. `SparseMetricSpace` is +∞ past its cutoff (not a thresholded oracle).
 
-**Spatial search, enclosing balls and binomials are our own pure Scala** (Scala.js cannot use Java libraries; nothing in
-`src/main/scala` may import one; `WORKLOG-scalajs-numerics-spatial.md`). `VantagePointTree`: `withinDistance` is
+**Spatial search, enclosing balls and binomials are pure Scala** (nothing in `src/main/scala` may import a Java library;
+`WORKLOG-scalajs-numerics-spatial.md`). `VantagePointTree`: `withinDistance` is
 inclusive, `nearest(k)` is the first `k` of the stable sort by distance (ties by construction order, as `BruteForce`),
 balanced and deterministic, pruning slack `1e-12`; `VantagePointQuery` is its `SpatialQuery`; `longestDistanceWithin`: the verb's longest edge (`WORKLOG-longest-edge.md`). `MinimumEnclosingBall`:
 Wolfe's active-set method on the dual (Welzl is exponential in the boundary points), the radius IS the largest distance
@@ -95,22 +93,26 @@ the min with the wrapped stream's). `PersistenceVerbSpec`, `WORKLOG-default-degr
 edges included, is kept. The generator route cuts each generated dimension by the criterion and generates the next from
 what is left, which is the coface loop's answer exactly when the criterion is closed; it is a documented contract, not a
 checked one (a check costs a facet lookup per simplex), and a criterion that breaks it gives unpredictable cells and
-bars. Vertices and edges obey it in every stream. Timing with a criterion: about 1.2x on 6 million cells, equal to some
-tens of ms slower on small complexes (the criterion call per candidate dominates both routes), `WORKLOG-vr-leftovers.md`, #268.
+bars. Vertices and edges obey it in every stream. With a criterion: about 1.2x on 6 million cells (`WORKLOG-vr-leftovers.md`, #268).
 
 **Distance matrices are read from the lower triangle** (project lead, matching ripser.cpp and GUDHI):
 `ExplicitMetricSpace.distance(x, y)` is `dist(max)(min)`, and the packed Ripser engine reads any metric that is not
 symmetric by construction as `d(max, min)`. A non-symmetric file (fractal-r) then gives the same input to every tool.
-`MetricSpaceSpec` pins it with a matrix whose two triangles have different `H_1`.
+`MetricSpaceSpec` pins it (two triangles with different `H_1`).
 A loop over all pairs `a < b` asks `distance(b, a)` (a row of the cache), and takes the space as
 `LayeredInorderSimplexStream.distanceOf(space)`, which calls the concrete `distance(Int, Int)` of `EuclideanMetricSpace`
 and `ExplicitMetricSpace` instead of the boxing generic one (edge pass 2-7x, `WORKLOG-vr-leftovers.md`).
 
-**`EuclideanMetricSpace` owns a snapshot of its points**: ragged or non-finite input is rejected, `pts` and `point(i)` copy, and the Cech stream reads `pointAt` without copying (`WORKLOG-code-review-followup.md`).
+**`EuclideanMetricSpace` snapshots its points**: ragged or non-finite input is rejected, `pts`/`point(i)` copy (`WORKLOG-code-review-followup.md`).
 
 **`EuclideanMetricSpace` caches all n^2 distances only up to `MaxCachedPoints = 8192` (512 MB)**; above that, and with
-`cacheDistances = false`, distances are computed on demand. Before the cap, n^2 overflowed `Int` at 46,341 points
-(clifford50000 died at startup). Never collect all pairwise distances into a collection (the verb's scale is a loop).
+`cacheDistances = false`, distances are computed on demand. Before it, n^2 overflowed `Int` at 46,341 points. Never collect all pairwise distances into a collection (the verb's scale is a loop).
+
+**Above the cache the neighbour lists come from tree queries** (`FiniteMetricSpace.neighbourListsWithin`, a hook, `None`
+by default; #313, `WORKLOG-neighbour-queries.md`): `EuclideanMetricSpace` runs one `VantagePointTree.indicesAndDistancesWithin` per
+point on all threads, the lists of `NeighbourLists.within` bit for bit (squared-difference sums are symmetric), the longest edge
+read off them; it gives up, as `longestDistanceByQueries` does, where a query would measure over n/4 points, and the
+engines then run the serial pass. `NeighbourQueriesSpec`.
 
 **`FiniteMetricSpace.minimumEnclosingRadius`** (default radius of the verb and the streams; the scale of `longerThanFraction()`): an allocation-free
 scan that stops on a point once its farthest distance reaches the best so far; `EuclideanMetricSpace` overrides the hook `scanEnclosingRadius`

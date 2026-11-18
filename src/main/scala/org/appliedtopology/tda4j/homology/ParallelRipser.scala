@@ -44,7 +44,8 @@ private[tda4j] object ParallelRipser:
       maxDimension,
       characteristic,
       edgeTies = edgeTies,
-      blockOrder = blockOrder
+      blockOrder = blockOrder,
+      edgeLists = metricSpace.neighbourListsWithin(threshold, Long.MaxValue)
     )
     val threads = Parallel.threads
     val result =
@@ -60,6 +61,9 @@ private[tda4j] object ParallelRipser:
       .flatMap(d => d.bars.indices.map(i => (d.bars(i), d.degree, d.barColumns(i), d.barRows(i))))
       .sortBy(_._1)
     val bars: IndexedSeq[(Int, Double, Double)] = found.map(_._1)
+
+    // The edges are ranked by length, the longest last.
+    def longestEdge: Double = if space.edgeLength.isEmpty then 0.0 else space.edgeLength.last
 
     def cocycle(i: Int): IndexedSeq[(Array[Int], Int)] =
       val (_, degree, column, _) = found(i)

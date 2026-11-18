@@ -75,6 +75,23 @@ open class VantagePointTree[V](
       collectLargest(0, query, radius, found)
       if found.measured > maxMeasurements then Double.NaN else found.best
 
+  /** The indices (ascending) of the elements at distance at most `radius` from `query`, and the distance to each, as
+    * the walk measured it: the elements `indicesWithinDistance` finds, with their distances, from one walk. Both arrays
+    * are fresh and aligned. `None` as soon as the walk has measured more than `maxMeasurements` distances (a radius so
+    * large that the tree prunes too little to beat a scan of every element, which is the caller's cue to scan). A
+    * negative or `NaN` radius finds nothing.
+    */
+  def indicesAndDistancesWithin(
+    query: V,
+    radius: Double,
+    maxMeasurements: Long
+  ): Option[(Array[Int], Array[Double])] =
+    if size == 0 || !(radius >= 0.0) then Some((new Array[Int](0), new Array[Double](0)))
+    else
+      val found = new VantagePointTree.Within(maxMeasurements)
+      collectWithin(0, query, radius, found)
+      if found.measured > maxMeasurements then None else Some(found.sorted())
+
   /** The indices of the `k` elements nearest to `query`, nearest first, ties by ascending index. Fewer than `k` when
     * the tree holds fewer elements. Throws `IllegalArgumentException` for a negative `k`.
     */
@@ -130,6 +147,24 @@ open class VantagePointTree[V](
       if !found.exhausted && !(d - radius > threshold + slack) then collectLargest(node + 1, query, radius, found)
       if !found.exhausted && !(d + radius < threshold - slack) then
         collectLargest(layout.farther(node), query, radius, found)
+
+  // `collect` keeping each distance too; stops descending once more than `found.cap` distances were measured.
+  private def collectWithin(node: Int, query: V, radius: Double, found: VantagePointTree.Within): Unit =
+    val lo = layout.lo(node)
+    val hi = layout.hi(node)
+    if layout.mid(node) < 0 then
+      var slot = lo
+      while slot < hi do
+        found.offer(measure(query, slot), radius, layout.order(slot))
+        slot += 1
+    else
+      val d = measure(query, lo)
+      found.offer(d, radius, layout.order(lo))
+      val threshold = layout.threshold(node)
+      val slack = VantagePointTree.RelativeSlack * (d + radius + threshold)
+      if !found.exhausted && !(d - radius > threshold + slack) then collectWithin(node + 1, query, radius, found)
+      if !found.exhausted && !(d + radius < threshold - slack) then
+        collectWithin(layout.farther(node), query, radius, found)
 
   private def search(node: Int, query: V, best: VantagePointTree.Nearest): Unit =
     val lo = layout.lo(node)
@@ -206,6 +241,42 @@ object VantagePointTree:
     def offer(d: Double, radius: Double): Unit =
       measured += 1
       if d <= radius && d > best then best = d
+
+  /** The indices and distances within a radius among the `measured` distances of a walk, which is spent once `measured`
+    * passes `cap`.
+    */
+  private final class Within(val cap: Long):
+    private var indices = new Array[Int](8)
+    private var distances = new Array[Double](8)
+    private var count = 0
+    var measured: Long = 0L
+    def exhausted: Boolean = measured > cap
+    def offer(d: Double, radius: Double, index: Int): Unit =
+      measured += 1
+      if d <= radius then
+        if count == indices.length then
+          indices = java.util.Arrays.copyOf(indices, count * 2)
+          distances = java.util.Arrays.copyOf(distances, count * 2)
+        indices(count) = index
+        distances(count) = d
+        count += 1
+
+    /** The found indices ascending, each with its distance: sorted on the index and its position in one `Long`. */
+    def sorted(): (Array[Int], Array[Double]) =
+      val keys = new Array[Long](count)
+      var k = 0
+      while k < count do
+        keys(k) = (indices(k).toLong << 32) | k.toLong
+        k += 1
+      java.util.Arrays.sort(keys)
+      val sortedIndices = new Array[Int](count)
+      val sortedDistances = new Array[Double](count)
+      k = 0
+      while k < count do
+        sortedIndices(k) = (keys(k) >>> 32).toInt
+        sortedDistances(k) = distances((keys(k) & 0xffffffffL).toInt)
+        k += 1
+      (sortedIndices, sortedDistances)
 
   /** The `capacity` best `(distance, index)` pairs seen so far, as a max-heap on that pair: the root is the worst kept
     * candidate, `bound` its distance (infinite while the heap is not full).

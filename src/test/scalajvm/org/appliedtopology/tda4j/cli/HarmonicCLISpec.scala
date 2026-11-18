@@ -69,6 +69,36 @@ class HarmonicCLISpec extends mutable.Specification:
         (byMatrix must beEqualTo(byPoints))
     }
 
+    "carry --orthogonalization to the facade, for both kinds, and refuse it without --harmonic or with a name it lacks" >> {
+      val path = tempFile(".csv")
+      CSV.writePointCloud(path, points)
+      val options = Array("maxDimension", "1", "field", "Q", "orthogonalization", "laplacian-solve")
+      val chainBars = linesOf(TDA4j.harmonicChainBarcodeFromPoints(points, options))
+      val representativeBars = linesOf(TDA4j.harmonicRepresentativesFromPoints(points, options))
+      def cli(kind: String) =
+        run(
+          Seq(
+            "--harmonic",
+            kind,
+            "--max-dimension",
+            "1",
+            "--field",
+            "Q",
+            "--orthogonalization",
+            "laplacian-solve",
+            path
+          )
+        )
+      val (codeC, chains, errC) = cli("chains")
+      val (codeR, representatives, errR) = cli("representatives")
+      val (withoutHarmonic, _, errWithout) = run(Seq("--orthogonalization", "laplacian-solve", path))
+      val (unknown, _, errUnknown) = run(Seq("--harmonic", "chains", "--orthogonalization", "fast", path))
+      ((codeC aka errC) must beEqualTo(0)) and ((codeR aka errR) must beEqualTo(0)) and
+        (chains must beEqualTo(chainBars)) and (representatives must beEqualTo(representativeBars)) and
+        (withoutHarmonic must beEqualTo(1)) and (errWithout must contain("orthogonalization")) and
+        (unknown must beEqualTo(1)) and (errUnknown must contain("gram-schmidt or laplacian-solve"))
+    }
+
     "refuse a finite field, the flags of other complexes, other modes, landmarks, an image and a saved result" >> {
       val path = tempFile(".csv")
       CSV.writePointCloud(path, points)

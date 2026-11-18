@@ -145,9 +145,11 @@ $ tda4j --relative-to 0,3,5 --max-dimension 1 points.csv
 or a distance matrix, and `--harmonic representatives` the ordinary bars with the harmonic cycle at each birth as the
 representative, both written like any diagram (add `--representatives` to see the chains). Harmonic needs an inner
 product, so `--field` is `R` (the default here) or `Q`. They take `--max-dimension`, `--max-filtration-value`,
-`--field`, `--epsilon`, `--min-persistence`, `--min-persistence-fraction`, `--threads` and, for `chains`,
-`--include-zero-length`, and refuse the other flags of the diagram (`--complex`, `--engine`, `--representative-type`,
-`--prime`), `--relative-to`, the landmark flags, images, relations and saved results.
+`--field`, `--epsilon`, `--min-persistence`, `--min-persistence-fraction`, `--threads`, `--orthogonalization`
+(`gram-schmidt`, or `laplacian-solve` for a fraction of the memory on a large complex) and, for `chains`,
+`--include-zero-length`, for `representatives`, `--representative-type` (`cycles` or `cocycles`: the harmonic cocycle
+of each bar), and refuse the other flags of the diagram (`--complex`, `--engine`, `--prime`), `--relative-to`, the
+landmark flags, images, relations and saved results.
 
 ```
 $ tda4j --harmonic representatives --max-dimension 1 --representatives points.csv
@@ -197,13 +199,16 @@ file as `--output-format=csv` writes it. See [products, Hom and duals](barcode-p
 
 `--persistent-laplacian` writes the [persistent Laplacian](persistent-laplacian.md) of the Vietoris-Rips complex of a point
 cloud or a distance matrix, instead of the diagram, as `key=value` lines: `betti-number`, `spectral-gap` (`none` if every
-eigenvalue is zero) and `eigenvalues`, smallest first.
+eigenvalue is zero), `eigenvalues`, smallest first, and `kernel-0`, `kernel-1`, ... one line for each persistent Betti
+number: a basis chain of the kernel, an entry for each simplex of the matrix.
 
 | flag | meaning |
 |---|---|
 | `--laplacian-dimension` | the dimension of the simplices the matrix is on (required) |
 | `--laplacian-from` | the scale the simplices are taken at (required) |
 | `--laplacian-to` | the scale of the complex the chains live in, at least `--laplacian-from` (required) |
+| `--laplacian-target` | write the Laplacian of the [simplicial map](persistent-laplacian.md#of-a-simplicial-map) from the input's complex to the complex of the point cloud or distance matrix in this file (the input's format), at `--laplacian-to`; the output gains a `weights` line |
+| `--laplacian-vertex-map` | with `--laplacian-target`: the target point (counted from 0) that each input point goes to, comma-separated |
 
 ## Discrete Morse reduction
 

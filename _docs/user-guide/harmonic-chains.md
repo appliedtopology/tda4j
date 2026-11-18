@@ -29,6 +29,33 @@ picked out by the filtration's values alone, so it does not depend on how cells 
 that is the only one with its endpoints has a harmonic space of dimension one, and the chain is scaled to 1 at its first
 cell; a group of bars with the same endpoints gets an orthogonal basis of their space.
 
+## Harmonic cocycles
+
+The same construction runs on cohomology: `representatives = Representatives.Cocycles` gives each bar the harmonic
+cocycle of its class instead of the harmonic cycle. Cochains and chains share one coordinate system (the cells are
+orthonormal), so a harmonic cocycle is a vector on the same cells, and the harmonic cochains of a complex are its
+harmonic chains. What differs is where the representative sits and which vector it is. Cocycles restrict from a larger
+complex to a smaller one, so a class is born at the largest value of its bar and dies going down: the bar `[s, t)` is
+born at the last value before `t`, and its representative is the harmonic cochain there. The maps are the orthogonal
+projections of the harmonic cochains at a later value onto those at an earlier one, so the representative is chosen
+orthogonal to other classes than the cycle is.
+
+```scala 3
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+
+val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0))
+val rips = VietorisRips(EuclideanMetricSpace(points), maxDimension = 1)
+
+val cocycles = HarmonicRepresentatives(rips, maxDimension = 1, representatives = Representatives.Cocycles)
+cocycles.dim(1).longest.get.representative.terms   // the harmonic cochain of the loop, at the last value before sqrt(2)
+```
+
+With two loops the difference shows. If a loop `abc` appears at 1, a second loop `abd` at 2 and a triangle fills `abd`
+at 3, the cycle of the long bar `[1, ∞)` is the plain loop `abc`, and its cocycle is `abc` tilted away from `abd`, the
+harmonic cochain of the filled complex; for the short bar `[2, 3)` the cocycle is the plain loop `abd`, and its cycle is
+the tilted one. A cocycle is what circular coordinates are built from; the harmonic one is the smoothest in its class.
+
 ## The harmonic chain barcode
 
 `HarmonicChainBarcode` follows the harmonic chains themselves (Hou, Parsa and Wang, *Tracking the persistence of
@@ -93,11 +120,34 @@ HarmonicChainBarcode.harmonicChains(rips, dimension = 1, value = 2.0, Coefficien
 
 ## Cost
 
-The cost is cubic in the number of cells in the worst case, and the algorithm keeps an orthogonal basis of the cycles in
-memory, so it is meant for the complexes of a few dozen points, or for a complex cut off early with `maxFiltrationValue`.
-The chains are kept sparse. The faster engines do not apply: a harmonic chain depends on the inner product of the cells,
-which a reduction of the complex (discrete Morse theory, an edge collapse) does not keep, so those change the harmonic
-barcode instead of computing it faster.
+The cost is cubic in the number of cells in the worst case. The default keeps an orthogonal basis of all the cycles of a
+degree in memory, and that is what limits it: it grows with every positive cell and holds a dense chain for each. For a
+larger complex, `orthogonalization = HarmonicChainBarcode.Orthogonalization.LaplacianSolve` (on `HarmonicChainBarcode` and on
+`HarmonicRepresentatives`) keeps only the boundaries and finds each new chain by solving a linear system, which takes a
+fraction of the memory. The two give the same chains over the rationals. Over the reals each decision is a comparison with
+the tolerance, so on a large cloud with many nearly tied values they can pair a few bars differently, with the same births and
+deaths; `Coefficients.Rationals` settles which pairing is right, and the solve says what to use instead if it cannot reach
+the tolerance.
+
+```scala 3
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+
+val square = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0))
+val rips = VietorisRips(EuclideanMetricSpace(square), maxDimension = 1)
+
+val solved = HarmonicChainBarcode(
+  rips,
+  maxDimension = 1,
+  coefficients = Coefficients.Rationals,
+  orthogonalization = HarmonicChainBarcode.Orthogonalization.LaplacianSolve
+)
+solved.dim(1).longest.get.representative.terms   // the loop of the four sides, as with the default
+```
+
+The chains are kept sparse. The faster engines do not apply: a harmonic chain depends on the inner product of
+the cells, which a reduction of the complex (discrete Morse theory, an edge collapse) does not keep, so those change the
+harmonic barcode instead of computing it faster.
 
 ## From the other interfaces
 
@@ -109,5 +159,6 @@ barcode instead of computing it faster.
 | [Command line](cli.md#harmonic-chains) | `tda4j --harmonic chains --representatives points.csv`, or `--harmonic representatives` |
 
 The options are `maxDimension` (default 2), `maxFiltrationValue`, `field` (`R`, the default, or `Q`), `epsilon` (the
-tolerance of `R`), `includeZeroLength` (the barcode only), `minPersistence`, `minPersistenceFraction` and `threads`. A
+tolerance of `R`), `orthogonalization` (`gram-schmidt`, the default, or `laplacian-solve`; see Cost), `includeZeroLength`
+(the barcode only), `representativeType` (the representatives only), `minPersistence`, `minPersistenceFraction` and `threads`. A
 finite field, or an option of another computation such as `engine` or `complex`, is an error that names it.
