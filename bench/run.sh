@@ -35,6 +35,11 @@
 #   NODE           node binary for the Scala.js build of TDA4j (20.16 or newer; default: node on PATH); tda4j-js is
 #                  skipped if there is none
 #   SKIP_TDA4J_BUILD=1   reuse the classpath file from a previous setup
+#   RIPSER_PATCHED_REPO, RIPSER_PATCHED_REF, RIPSER_PATCHED_VARIANTS, RIPSER_PATCHED[_<NAME>]_SRC, _FLAGS, _INPUT, _COEFF,
+#   REDZED_PATCHED_REPO, REDZED_PATCHED_REF, REDZED_PATCHED_VARIANTS, REDZED_PATCHED[_<NAME>]_SRC, _FLAGS
+#                  a fork or patched branch of ripser.cpp or RedZeD (a URL or local path; a branch, tag or commit): `setup
+#                  ripser redzed` builds it too, and the rows `ripser.cpp-patched` and `redzed-patched` run beside the stock
+#                  ones (README, "Forked builds"). Unset: no such rows.
 #   RESULTS_DIR    where `run` writes (default: $WORKDIR/results/<timestamp>); bench/final_run.sh names its stages
 #   PIP_CONSTRAINTS   a pip constraints file for `setup python` (`bench.py constraints DIR` writes one from a run's
 #                  env.json), to install the versions an earlier run measured
@@ -82,6 +87,101 @@ setup_ripser() {
   if [ ! -d "$TOOLS/ripser" ]; then git clone --depth 1 https://github.com/Ripser/ripser.git "$TOOLS/ripser"; fi
   (cd "$TOOLS/ripser" && make ripser ripser-coeff)
   "$TOOLS/ripser/ripser" --help >/dev/null 2>&1 || true
+  setup_forked ripser-patched "${RIPSER_PATCHED_REPO:-}" "${RIPSER_PATCHED_REF:-}"
+}
+
+# A fork or patched branch of ripser.cpp or RedZeD, as rows of its own beside the stock one (README, "Forked builds").
+#   setup_forked ripser-patched|redzed-patched REPO [REF]
+# REPO is a URL or a local path, REF a branch, tag or commit (default: the repository's HEAD). It is cloned into
+# $TOOLS/<name>, fetched again at each setup (so a branch that moved is rebuilt), and built exactly as the stock tool is:
+# one binary per variant, in $TOOLS/<name>/.bench (the fork's own files are never overwritten). Variants: the names in
+# RIPSER_PATCHED_VARIANTS / REDZED_PATCHED_VARIANTS ("forest edge"), each with its own RIPSER_PATCHED_<NAME>_SRC, _FLAGS,
+# _INPUT and _COEFF; with no list, one unnamed variant with RIPSER_PATCHED_SRC and so on.
+# Nothing happens where REPO is empty. A failure leaves no binary: the row is reported as missing, the stock rows stand.
+fork_var() { local k="$1_$2"; printf '%s' "${!k:-${3:-}}"; }  # fork_var PREFIX_SUFFIX KEY [DEFAULT]: the variable's value
+
+setup_forked() {
+  local name="$1" repo="$2" ref="${3:-}"
+  if [ -z "$repo" ]; then return; fi
+  local dir="$TOOLS/$name" tool="${1%-patched}"
+  local prefix; prefix="$(printf '%s' "$tool" | tr a-z A-Z)_PATCHED"
+  log "$name: $repo @ ${ref:-HEAD}"
+  rm -rf "$dir/.bench"
+  { [ -d "$dir/.git" ] || git clone --quiet "$repo" "$dir"; } \
+    && git -C "$dir" fetch --quiet origin "${ref:-HEAD}" \
+    && git -C "$dir" checkout --quiet --detach FETCH_HEAD \
+    || { echo "WARNING: $name could not be fetched; it will be reported as missing"; return 0; }
+  echo "$name: built from $(git -C "$dir" rev-parse HEAD)"
+  mkdir -p "$dir/.bench"
+  local list="${prefix}_VARIANTS" variant
+  for variant in ${!list:--}; do
+    local s="" f=""  # s: the variable names' suffix, f: the binary's
+    if [ "$variant" != - ]; then s="_$(printf '%s' "$variant" | tr a-z- A-Z_)"; f="-$variant"; fi
+    local src flags input
+    flags="$(fork_var "$prefix$s" FLAGS)"
+    case "$tool" in
+      ripser)
+        # Compiled as the stock Makefile does (c++ -std=c++11 -Wall -O3 -D NDEBUG), whatever the fork's own Makefile says: the
+        # fork names its source file and flags, relative to the repository. INPUT=binary is for a code that reads only the
+        # binary lower triangle (--format binary, as ripser-forest does); COEFF=0 for one that is Z/2 only.
+        local cxx="${CXX:-c++}" out="$dir/.bench/ripser$f"
+        src="$(fork_var "$prefix$s" SRC ripser.cpp)"; input="$(fork_var "$prefix$s" INPUT text)"
+        (cd "$dir" && $cxx -std=c++11 -Wall -O3 -D NDEBUG $flags "$src" -o "$out") \
+          || { echo "WARNING: $name${f} did not build; it will be reported as missing"; continue; }
+        if [ "$(fork_var "$prefix$s" COEFF 1)" != 0 ]; then
+          (cd "$dir" && $cxx -std=c++11 -Wall -O3 -D NDEBUG -D USE_COEFFICIENTS $flags "$src" -o "$out-coeff") \
+            || echo "WARNING: $name${f} has no coefficient build: its row runs over Z/2 only"
+        fi
+        local smoke=(--dim 1 --format point-cloud) smoke_input="$BENCH/smoke-points.txt"
+        if [ "$input" = binary ]; then
+          smoke_input="$(mktemp)"
+          python3 -I - "$BENCH/smoke-points.txt" "$smoke_input" <<'PY'
+import math, struct, sys
+pts = [[float(x) for x in line.split()] for line in open(sys.argv[1]) if line.strip() and not line.startswith("#")]
+with open(sys.argv[2], "wb") as out:
+    for i in range(len(pts)):
+        for j in range(i):
+            out.write(struct.pack("<f", math.dist(pts[i], pts[j])))
+PY
+          smoke=(--dim 1 --format binary)
+        fi
+        if "$out" "$smoke_input" "${smoke[@]}" >/dev/null; then
+          echo "$variant $input" >> "$dir/.bench/variants"
+        else
+          echo "WARNING: $name${f} failed its smoke test (input $input); it will be reported as missing"
+          rm -f "$out" "$out-coeff"
+        fi
+        if [ "$input" = binary ]; then rm -f "$smoke_input"; fi
+        ;;
+      redzed)
+        # as the stock one is built; the source file and extra flags (a later -std wins) are the fork's, relative to the repository
+        src="$(fork_var "$prefix$s" SRC python/cpp/redzed.cpp)"
+        if (cd "$dir" && g++ -O3 -std=c++17 -DNDEBUG $flags -o "$dir/.bench/redzed$f" "$src"); then
+          echo "$variant -" >> "$dir/.bench/variants"
+        else
+          echo "WARNING: $name${f} did not build; it will be reported as missing"
+        fi
+        ;;
+    esac
+  done
+  return 0  # a fork that failed is reported as missing; it never stops the setup of the others
+}
+
+# The variables the harness reads for the forks `setup_forked` built: <PREFIX>[_<NAME>]_BIN, _COEFF_BIN, _INPUT, and the names.
+export_forks() {
+  local tool="$1" dir="$TOOLS/$1-patched" names="" v input s f
+  local prefix; prefix="$(printf '%s' "$tool" | tr a-z A-Z)_PATCHED"
+  unset "${prefix}_VARIANTS"
+  [ -s "$dir/.bench/variants" ] || return 0
+  export "${prefix}_DIR=$dir"
+  while read -r v input; do
+    s=""; f=""
+    if [ "$v" != - ]; then s="_$(printf '%s' "$v" | tr a-z- A-Z_)"; f="-$v"; names="$names $v"; fi
+    if [ -x "$dir/.bench/$tool$f" ]; then export "${prefix}${s}_BIN=$dir/.bench/$tool$f"; fi
+    if [ -x "$dir/.bench/$tool$f-coeff" ]; then export "${prefix}${s}_COEFF_BIN=$dir/.bench/$tool$f-coeff"; fi
+    if [ "$input" != - ]; then export "${prefix}${s}_INPUT=$input"; fi
+  done < "$dir/.bench/variants"
+  if [ -n "$names" ]; then export "${prefix}_VARIANTS=${names# }"; fi
 }
 
 setup_redzed() {
@@ -93,6 +193,7 @@ setup_redzed() {
   (cd "$TOOLS/redzed" && git checkout --quiet 22ef1bf8696bccad02b041a83863d12d4bd92766) \
     && g++ -O3 -std=c++17 -DNDEBUG -o "$TOOLS/redzed/redzed" "$TOOLS/redzed/python/cpp/redzed.cpp" \
     || { echo "WARNING: RedZeD did not build; it will be reported as missing"; return; }
+  setup_forked redzed-patched "${REDZED_PATCHED_REPO:-}" "${REDZED_PATCHED_REF:-}"
 }
 
 setup_julia() {
@@ -300,6 +401,9 @@ export_env() {
   [ -x "$RIPSER_COEFF_BIN" ] || unset RIPSER_COEFF_BIN
   export REDZED_BIN="$TOOLS/redzed/redzed"
   [ -x "$REDZED_BIN" ] || unset REDZED_BIN
+  # the forked builds exist only where `setup` was given RIPSER_PATCHED_REPO / REDZED_PATCHED_REPO; their rows are "missing" otherwise
+  export_forks ripser
+  export_forks redzed
   if [ -s "$TOOLS/julia.path" ]; then
     export JULIA="$(cat "$TOOLS/julia.path")" RIPSERER_PROJECT="$TOOLS/julia"
   fi

@@ -365,6 +365,51 @@ JVM classes' commit.
   - A case with a radius gives it to every tool: TDA4j's dispatch and DQP build only what lies within it (bars alive at
     the radius are essential), GUDHI gets `max_alpha_square`, and the tree is cut above dimension `dim + 1`.
 
+## Forked builds
+
+A patched ripser.cpp or RedZeD runs as rows of its own beside the stock ones, so every case, field and sweep that runs the stock
+tool runs the fork on the same input. One repository can give several rows: each **variant** is one source file with its own flags,
+built to its own binary and named in the row (`ripser.cpp-patched-<variant>`, `redzed-patched-<variant>`). Name the repository and
+the variants when you run `setup`; this is Ulrich Bauer's repository, with root ripser.cpp built with edge-lexicographic order
+as its own row beside his ripser-forest and two RedZeD codes:
+
+```sh
+export RIPSER_PATCHED_REPO=https://github.com/ubauer/ripser-dev      # a URL or a local path
+export RIPSER_PATCHED_REF=optimize/hybrid-cohomology                 # a branch, tag or commit; default: the repository's HEAD
+export RIPSER_PATCHED_VARIANTS="forest edge"
+export RIPSER_PATCHED_FOREST_SRC=ripser-forest/ripser-forest.cpp
+export RIPSER_PATCHED_FOREST_INPUT=binary                            # text (default) or binary: see below
+export RIPSER_PATCHED_FOREST_COEFF=0                                 # 0: Z/2 only, no coefficient build
+export RIPSER_PATCHED_EDGE_SRC=ripser.cpp
+export RIPSER_PATCHED_EDGE_FLAGS="-DEDGE_LEXICOGRAPHIC -DUSE_ROBINHOOD_HASHMAP -I studies/redzed-transfer/sources -include studies/redzed-transfer/scripts/precision.hpp"
+export REDZED_PATCHED_REPO=$RIPSER_PATCHED_REPO  REDZED_PATCHED_REF=$RIPSER_PATCHED_REF
+export REDZED_PATCHED_VARIANTS="hybrid blocks"
+export REDZED_PATCHED_HYBRID_SRC=hybrid/pruned.cpp
+export REDZED_PATCHED_BLOCKS_SRC=studies/redzed-transfer/sources/redzed-edge-blocks.cpp
+bench/run.sh setup ripser redzed
+bench/run.sh run --tools 'ripser.cpp*,redzed*' ...                   # or no --tools: every available row
+```
+
+This builds the rows `ripser.cpp-patched-forest`, `ripser.cpp-patched-edge`, `redzed-patched-hybrid` and `redzed-patched-blocks`.
+Per variant `<PREFIX>_<NAME>_SRC`, `_FLAGS` (paths relative to the repository; the name is upper case, `-` becomes `_`), and for
+ripser `_INPUT` and `_COEFF`. With no `*_VARIANTS` there is one unnamed variant read from `<PREFIX>_SRC`, `_FLAGS`, ... and its rows
+are `ripser.cpp-patched` and `redzed-patched`.
+
+`setup` clones the repository into `$WORKDIR/tools/ripser-patched` (`redzed-patched`) and fetches the ref again at every setup, so
+a branch that has moved is rebuilt; the binaries are in the clone's `.bench/` and `run.sh` exports their paths to `bench.py`, with no
+further variables. The compile is the stock one with the variant's source file and flags: `c++ -std=c++11 -Wall -O3 -D NDEBUG FLAGS SRC`
+(`CXX` chooses the compiler; the fork's own Makefile is not used), once more with `-D USE_COEFFICIENTS` for the coefficient build
+unless `_COEFF=0`, and for RedZeD `g++ -O3 -std=c++17 -DNDEBUG FLAGS SRC` (default source `python/cpp/redzed.cpp`; a `-std` in the
+flags comes later and wins). `_INPUT=binary` is for a code that reads only the binary lower triangle with `--format binary`: it gets
+the file the RedZeD rows get (float32, made once from the float64 distances and not timed), where a text input has its parse inside
+its time. A variant that fails to build or to pass stock ripser.cpp's command line on `smoke-points.txt` is reported as `missing`
+and the other rows are unaffected; a failed fetch or build removes the old binaries, so a stale build never runs under the new
+label. The commit each fork was built from is `ripser_patched_git` / `redzed_patched_git` in `env.json`. With the variables unset
+there are no such rows and nothing else changes.
+
+A code with a limit of its own (ripser-forest stops above dimension 6 and is Z/2 only) reports it as that row's failure, as any
+tool's limit is.
+
 ## The tools
 
 | tool | how | notes |
@@ -379,6 +424,7 @@ JVM classes' commit.
 | `tda4j-parallel-1t`, `tda4j-parallel-mt` | `PaperBenchmarkDriver engine=parallel threads=N` | the block-parallel experiment `ParallelPackedCohomology` (JVM only): implicit coboundaries, bars only, on 1 thread or every CPU. A simplex is one `Long` key where it fits and a block and an index beyond (o3_4096); it fails on a case whose n × n tables do not fit (clifford50000) |
 | `ripser.cpp` | vanilla build for p = 2, `ripser-coeff` for other primes | the reference for Vietoris–Rips |
 | `redzed` | C++17, built from a pinned commit (`setup redzed`: `g++ -O3 -std=c++17 -DNDEBUG`) | RedZeD (Kapulkin and Kershaw, arXiv:2606.06310; `nkershaw01/RedZeD`, commit `22ef1bf`), Vietoris–Rips only, **Z/2 only**, homology, one thread, bars (`--barcode`) and no representatives. Its input is the binary lower triangle of the distance matrix as float32 (`redzed_io.py`), made once from the float64 distances before the run and not timed, as DIPHA's input is; ripser.cpp's own parse or distance computation is inside its time. It caps the threshold at the enclosing radius itself, drops zero-length bars, and has no overflow check on its 64-bit simplex indices where ripser.cpp throws (the agreement column is the only guard near 2^63 simplices) |
+| `ripser.cpp-patched-<variant>`, `redzed-patched-<variant>` (unnamed: `ripser.cpp-patched`, `redzed-patched`) | a fork or branch of the tool above, built by `setup ripser` / `setup redzed` (see Forked builds) | the same command line and the same cases as the stock row, a row of its own beside it; never the reference, so its agreement column is its barcode against stock ripser.cpp's. Absent ("missing") unless the repository is named |
 | `ripser.py`, `giotto-ph-1t`, `giotto-ph-mt` | pip | giotto-ph multithreaded is reported, never the baseline |
 | `gudhi`, `gudhi-collapse` | pip | edge collapse first in the second variant; on the cubical cases `top_dimensional_cells` (T) or `vertices` (the `_v` cases) |
 | `cripser` | pip | CubicalRipser, Z/2 only; `filtration="T"` (or `tcripser`) on the T cases, the V default on the `_v` ones |

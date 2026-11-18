@@ -1846,6 +1846,114 @@ class ThreadSweepTests(unittest.TestCase):
         self.assertIn("| 2 |  |  |  |  |", lines["ripser.cpp (single-threaded)"])
 
 
+class ForkedBuildTests(unittest.TestCase):
+    """`ripser.cpp-patched` and `redzed-patched`: a fork built by `run.sh setup`, a row of its own beside the stock one."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.dir.cleanup)
+        self.tmp = Path(self.dir.name)
+        self.data = self.tmp / "data"
+        self.data.mkdir()
+        np.savetxt(self.data / "p.txt", np.random.default_rng(1).random((6, 2)))
+        self.case = bench.Case("forked", "vr", "p.txt", "points", 2)
+
+    def row(self, name):
+        return next(opts for n, _, task, opts in bench.TOOLS if n == name and task == "vr")
+
+    def command(self, name, kind, p, **env):
+        with mock.patch.dict(os.environ, env):
+            return bench.command(kind, name, self.row(name), self.case, self.data, p, 0.75, 0, 1, self.tmp / "o.tsv", Namespace())
+
+    def test_the_rows_exist_beside_the_stock_ones_and_are_never_the_reference(self):
+        names = [n for n, _, task, _ in bench.TOOLS if task == "vr"]
+        self.assertIn("ripser.cpp-patched", names)
+        self.assertIn("redzed-patched", names)
+        self.assertEqual(bench.REFERENCE["vr"], "ripser.cpp")
+
+    def test_a_row_is_available_only_when_its_own_binary_is_named(self):
+        ripser, redzed = self.row("ripser.cpp-patched"), self.row("redzed-patched")
+        with mock.patch.dict(os.environ, {"RIPSER_BIN": "/stock/ripser", "REDZED_BIN": "/stock/redzed"}):
+            for var in ("RIPSER_PATCHED_BIN", "REDZED_PATCHED_BIN"):
+                os.environ.pop(var, None)
+            self.assertFalse(bench.available("ripser", ripser, "python"), "the stock binary does not make the fork's row run")
+            self.assertFalse(bench.available("redzed", redzed, "python"))
+            os.environ.update({"RIPSER_PATCHED_BIN": "/fork/ripser", "REDZED_PATCHED_BIN": "/fork/redzed"})
+            self.assertTrue(bench.available("ripser", ripser, "python"))
+            self.assertTrue(bench.available("redzed", redzed, "python"))
+        with mock.patch.dict(os.environ, {"RIPSER_PATCHED_BIN": "/fork/ripser"}):
+            os.environ.pop("RIPSER_BIN", None)
+            self.assertTrue(bench.available("ripser", self.row("ripser.cpp-patched"), "python"))
+            self.assertFalse(bench.available("ripser", self.row("ripser.cpp"), "python"), "and the fork does not make the stock row run")
+
+    def test_ripser_runs_the_forks_binaries_over_z2_and_over_a_prime(self):
+        env = {"RIPSER_BIN": "/stock/ripser", "RIPSER_COEFF_BIN": "/stock/ripser-coeff",
+               "RIPSER_PATCHED_BIN": "/fork/ripser", "RIPSER_PATCHED_COEFF_BIN": "/fork/ripser-coeff"}
+        self.assertEqual(self.command("ripser.cpp-patched", "ripser", 2, **env)[0], "/fork/ripser")
+        fork17 = self.command("ripser.cpp-patched", "ripser", 17, **env)
+        self.assertEqual(fork17[0], "/fork/ripser-coeff")
+        self.assertEqual(fork17[-2:], ["--modulus", "17"])
+        self.assertEqual(self.command("ripser.cpp", "ripser", 2, **env)[0], "/stock/ripser")
+        self.assertEqual(self.command("ripser.cpp", "ripser", 17, **env)[0], "/stock/ripser-coeff")
+        self.assertEqual(self.command("ripser.cpp-patched", "ripser", 2, **env)[1:], self.command("ripser.cpp", "ripser", 2, **env)[1:],
+                         "the same command line: the fork is run as stock ripser.cpp is")
+
+    def test_a_fork_with_no_coefficient_build_has_no_row_over_a_prime(self):
+        with mock.patch.dict(os.environ, {"RIPSER_PATCHED_BIN": "/fork/ripser", "RIPSER_COEFF_BIN": "/stock/ripser-coeff"}):
+            os.environ.pop("RIPSER_PATCHED_COEFF_BIN", None)
+            self.assertIsNone(bench.command("ripser", "ripser.cpp-patched", self.row("ripser.cpp-patched"), self.case, self.data,
+                                            17, 0.75, 0, 1, self.tmp / "o.tsv", Namespace()),
+                              "the stock coefficient build is not a stand-in for the fork's")
+
+    def test_redzed_runs_the_forks_binary_and_only_over_z2(self):
+        cmd = self.command("redzed-patched", "redzed", 2, REDZED_PATCHED_BIN="/fork/redzed", REDZED_BIN="/stock/redzed")
+        self.assertEqual(cmd[0], "/fork/redzed")
+        self.assertEqual(self.row("redzed-patched")["only_p"], 2)
+
+    def test_a_binary_input_fork_gets_the_lower_triangle_the_redzed_rows_get(self):
+        env = {"RIPSER_PATCHED_BIN": "/fork/ripser", "RIPSER_PATCHED_INPUT": "binary"}
+        cmd = self.command("ripser.cpp-patched", "ripser", 2, **env)
+        lower = self.data / "redzed" / "forked.lower"
+        self.assertEqual(cmd, ["/fork/ripser", str(lower), "--dim", "2", "--format", "binary", "--threshold", "0.75"])
+        self.assertEqual(lower.stat().st_size, 4 * 6 * 5 // 2, "float32 entries below the diagonal of 6 points")
+        text = self.command("ripser.cpp-patched", "ripser", 2, RIPSER_PATCHED_BIN="/fork/ripser", RIPSER_PATCHED_INPUT="text")
+        self.assertEqual(text[1:4], [str(self.data / "p.txt"), "--dim", "2"])
+        self.assertIn("point-cloud", text)
+
+    def test_the_stock_row_never_reads_the_forks_input_variable(self):
+        cmd = self.command("ripser.cpp", "ripser", 2, RIPSER_BIN="/stock/ripser", RIPSER_PATCHED_INPUT="binary")
+        self.assertNotIn("binary", cmd)
+
+    def test_named_variants_are_rows_of_their_own_reading_their_own_variables(self):
+        rows = {n: (k, o) for n, k, _, o in bench.fork_rows(
+            {"RIPSER_PATCHED_VARIANTS": "forest edge", "REDZED_PATCHED_VARIANTS": "hybrid-pruned"})}
+        self.assertEqual(sorted(rows), ["redzed-patched-hybrid-pruned", "ripser.cpp-patched-edge", "ripser.cpp-patched-forest"])
+        kind, opts = rows["ripser.cpp-patched-forest"]
+        self.assertEqual((kind, opts["binary"], opts["coeff_binary"], opts["input_env"]),
+                         ("ripser", "RIPSER_PATCHED_FOREST_BIN", "RIPSER_PATCHED_FOREST_COEFF_BIN", "RIPSER_PATCHED_FOREST_INPUT"))
+        kind, opts = rows["redzed-patched-hybrid-pruned"]
+        self.assertEqual((kind, opts["binary"], opts["only_p"]), ("redzed", "REDZED_PATCHED_HYBRID_PRUNED_BIN", 2))
+        self.assertEqual(bench.fork_rows({}), [], "no variants named, no extra rows")
+        env = {"RIPSER_PATCHED_FOREST_BIN": "/f/forest", "RIPSER_PATCHED_EDGE_BIN": "/f/edge", "RIPSER_PATCHED_EDGE_INPUT": "text",
+               "RIPSER_PATCHED_FOREST_INPUT": "binary"}
+        forest = rows["ripser.cpp-patched-forest"][1]
+        edge = rows["ripser.cpp-patched-edge"][1]
+        with mock.patch.dict(os.environ, env):
+            a = bench.command("ripser", "ripser.cpp-patched-forest", forest, self.case, self.data, 2, 0.75, 0, 1, self.tmp / "o", Namespace())
+            b = bench.command("ripser", "ripser.cpp-patched-edge", edge, self.case, self.data, 2, 0.75, 0, 1, self.tmp / "o", Namespace())
+        self.assertEqual((a[0], "binary" in a), ("/f/forest", True))
+        self.assertEqual((b[0], "binary" in b), ("/f/edge", False), "each variant has its own input")
+
+    def test_setup_builds_the_forks_and_the_environment_names_them(self):
+        script = (HERE_BENCH / "run.sh").read_text()
+        for needle in ("RIPSER_PATCHED_REPO", "RIPSER_PATCHED_REF", "REDZED_PATCHED_REPO", "REDZED_PATCHED_REF",
+                       "RIPSER_PATCHED_VARIANTS", "REDZED_PATCHED_VARIANTS", "_SRC", "_FLAGS", "_INPUT", "_COEFF",
+                       "export_forks ripser", "export_forks redzed"):
+            self.assertIn(needle, script)
+        self.assertIn('setup_forked ripser-patched "${RIPSER_PATCHED_REPO:-}"', script)
+        self.assertIn('setup_forked redzed-patched "${REDZED_PATCHED_REPO:-}"', script)
+
+
 class SingleThreadedRowsTests(unittest.TestCase):
     """The primary tables are single-threaded: a TDA4j row runs on the main thread unless it is a multithreaded one."""
 
