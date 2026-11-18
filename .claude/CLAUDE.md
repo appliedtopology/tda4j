@@ -166,8 +166,7 @@ sentinels: `Optional[Double]` for public ones. **No top-level `object`/`class` w
 one page FILE per type and `sbt doc` dies under a POSIX locale (`∆` is `val ∆ : Simplex.type = Simplex`,
 `WORKLOG-package-flatten.md`).
 
-**Writing specs** (shared generators, `===` typing in specs2 5.9, the ScalaCheck `forall` ascription, `.and(` mid-body):
-`rules/testing.md`. Before creating a test file, `ls` for its name: `Write` overwrites silently.
+**Writing specs** (shared generators, specs2 traps): `rules/testing.md`. Before creating a test file, `ls` for its name: `Write` overwrites silently.
 
 ## Naming convention: `tda4j`/`TDA4j`, never `Tda4j`
 
@@ -234,6 +233,7 @@ file before changing that subsystem; this table is the index, in case a rule did
 |---|---|---|
 | `rules/streams.md` | the ordering contract every stream must satisfy (the #1 bug source), VR constructions, `ExplicitStreamBuilder` | `streams/` |
 | `rules/engines.md` | the persistence engines, `Involution`, benchmark specs | `homology/` |
+| `rules/edge-ties.md` | `edgeTies`, `blockOrder`, bench work counts | `ParallelRipser`, `ParallelPackedCohomology` |
 | `rules/harmonic-chains.md` | harmonic chains: barcode, representatives | `Harmonic*` |
 | `rules/barcode.md` | `BarcodeDistance`, `Vectorization`, `BootstrapBand`, `ToMATo` | `barcode/` |
 | `rules/module-maps.md` | maps of barcodes: `MapAlgebra`, `PersistenceMap`, their oracle | `MapAlgebra`, `PersistenceMap` |

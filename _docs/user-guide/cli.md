@@ -66,6 +66,8 @@ Options for one complex:
 | flag | applies to | values | default |
 |---|---|---|---|
 | `--edge-collapse` | `vr` | `true`, `false` | `false`; the same diagram from a smaller complex |
+| `--edge-ties` | `vr` with `ripser` or `parallel-ripser` | `lexicographic`, `reverse-lexicographic`, `colexicographic`, `reverse-colexicographic`, `shuffled` | unset; how edges of one length are ordered, the same bars and a different number of apparent pairs |
+| `--block-order` | `vr` with `parallel-ripser` | `larger-index-first`, `smaller-index-first` | unset, which is `larger-index-first`; which of two simplices under one edge is older, the same bars and possibly other apparent pairs |
 | `--alpha-backend` | `alpha` | `default`, `bowyer-watson`, `helix`, `DQP` | `default`: `bowyer-watson` up to 4 dimensions, `helix` above; `DQP` when it is expected to be faster: with `--max-filtration-value` judged by the radius, without one for points with at least 8 coordinates and a `--max-dimension` at most two below that |
 | `--require-valid-triangulation` | `alpha` with `helix` | `true`, `false` | `false`; `true` also checks for cavities and fails rather than return a triangulation that could not be repaired |
 | `--dtm-k` | `dtm-rips`, `dtm-alpha` | integer | required: the number of nearest neighbours, the point itself included |

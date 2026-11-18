@@ -13,7 +13,8 @@ import scala.jdk.CollectionConverters.ListHasAsScala
   * java -cp $CP org.appliedtopology.tda4j.PaperBenchmarkDriver task=vr input=sphere.txt format=points dim=2 \
   *   [threshold=1.8] [p=2] [engine=auto|ripser|cohomology|chunks|naive|fastcubical|fastalpha|fastalpha-top|blocks|parallel] \
   *   [reps=cycles|cocycles|none] [backend=default|bowyer-watson|helix|dqp] [warmup=2] [trials=5] [out=bars.tsv]
-  *   [read=true] [hold=seconds] [digest=true] [count=true] [threads=N] [facade=true]
+  *   [read=true] [hold=seconds] [digest=true] [count=true] [work=true] [threads=N] [facade=true] \
+  *   [ties=<edge order>] [order=<block order>]
   * }}}
   *
   *   - `task=vr`: points (`format=points`, one point per line) or a full distance matrix (`format=distance`).
@@ -35,10 +36,18 @@ import scala.jdk.CollectionConverters.ListHasAsScala
   *     processor). Without a threshold it stops at the enclosing radius, as `Persistence` does; the edge table and the
   *     complex are built inside the timed region. `engine=parallel wide=true` uses two-word keys even where one Long
   *     would do (what they cost). The distances are tabulated before the timed region as one row of doubles per point
-  *     (8 n^2 bytes, so `--jvm-heap` must hold 29 GB at the limit of 60,000 points).
+  *     (8 n^2 bytes, so `--jvm-heap` must hold 29 GB at the limit of 60,000 points). `ties=` and `order=` choose the
+  *     order of equal-length edges (`EdgeTies`: `lexicographic`, the default, `reverse-lexicographic`,
+  *     `colexicographic`, `reverse-colexicographic`, `shuffled`) and which of two simplices of one block is older
+  *     (`BlockOrder`: `larger-index-first`, the default, `smaller-index-first`); `engine=parallelverb` takes both too.
   *   - `task=vr engine=parallelverb [threads=N]`: the same engine through `Persistence` (`Engine.ParallelRipser`,
   *     cocycles or cycles as `reps` says), on `threads` threads, else on `Parallel.threads` (`sequential=true`: one);
   *     the pool is made inside the timed region.
+  *   - `task=vr work=true [ties=..] [order=..] [threads=N]`: the work of the block-parallel engine, counted: one
+  *     reduction (`threads` defaults to 1, because the number of column additions can depend on how the units split),
+  *     not timed, and one JSON line with, for each degree from 1, the columns, the pivots the degree below cleared, the
+  *     apparent pairs, the columns left to reduce and the column additions, and the bars by degree
+  *     (`bench/count_work.py`). The engine is the one `Engine.ParallelRipser` runs, on the same ranks and keys.
   *   - `task=vr collapse=true`: Vietoris-Rips after `EdgeCollapse.collapse` (the collapse is inside the timed region);
   *     the cross-tool twin of GUDHI's edge collapse.
   *   - `task=sparse eps=0.3`: Sheehy's sparse Rips (`SparseRips`, Cavanna-Jahanseir-Sheehy); points or a distance
@@ -115,6 +124,14 @@ object PaperBenchmarkDriver:
     if opts.get("count").contains("true") then
       countCells(task, opts, dim, threshold)
       return
+    if opts.get("work").contains("true") then
+      countWork(task, opts, dim, threshold, p)
+      return
+    // The order of equal-length edges and the direction inside a block (`engine=parallel`, `engine=parallelverb`).
+    val edgeTies: Option[ParallelPackedCohomology.EdgeTies] =
+      opts.get("ties").map(ParallelPackedCohomology.EdgeTies.parse)
+    val blockOrder: Option[ParallelPackedCohomology.BlockOrder] =
+      opts.get("order").map(ParallelPackedCohomology.BlockOrder.parse)
     var termsRead = 0L
     var coefficientsRead = 0L // facade runs only: the terms read through `cycleCoefficients`
     var held: AnyRef = null
@@ -176,7 +193,16 @@ object PaperBenchmarkDriver:
         val t = threshold.getOrElse(ms.minimumEnclosingRadius)
         () =>
           val space =
-            ParallelPackedCohomology.Space(n, distance, t, dim, p, forceWide = opts.get("wide").contains("true"))
+            ParallelPackedCohomology.Space(
+              n,
+              distance,
+              t,
+              dim,
+              p,
+              forceWide = opts.get("wide").contains("true"),
+              edgeTies = edgeTies.getOrElse(ParallelPackedCohomology.EdgeTies.Lexicographic),
+              blockOrder = blockOrder.getOrElse(ParallelPackedCohomology.BlockOrder.LargerIndexFirst)
+            )
           Parallel
             .withThreads(threads)(ParallelPackedCohomology.persistence(space, threads, 8, cocycles = false))
             .bars
@@ -190,7 +216,9 @@ object PaperBenchmarkDriver:
             maxFiltrationValue = threshold,
             characteristic = p,
             engine = engine,
-            representatives = reps
+            representatives = reps,
+            edgeTies = edgeTies,
+            blockOrder = blockOrder
           ).triples
       case "vr" =>
         opts.getOrElse("format", "points") match
@@ -203,7 +231,9 @@ object PaperBenchmarkDriver:
                 maxFiltrationValue = threshold,
                 characteristic = p,
                 engine = engine,
-                representatives = reps
+                representatives = reps,
+                edgeTies = edgeTies,
+                blockOrder = blockOrder
               ).triples
           case "distance" =>
             val ms: FiniteMetricSpace[Int] = ExplicitMetricSpace(readMatrix(input).map(_.toSeq).toSeq)
@@ -214,7 +244,9 @@ object PaperBenchmarkDriver:
                 maxFiltrationValue = threshold,
                 characteristic = p,
                 engine = engine,
-                representatives = reps
+                representatives = reps,
+                edgeTies = edgeTies,
+                blockOrder = blockOrder
               ).triples
           case other => throw IllegalArgumentException(s"format=$other (points|distance)")
       case "cubical" =>
@@ -477,6 +509,68 @@ object PaperBenchmarkDriver:
       s"""{"tool":"tda4j","task":"$task","count":true,"cells":{$cells},"seconds":${(System
           .nanoTime() - start) / 1e9},""" +
         s""""java":"${System.getProperty("java.version")}"}"""
+    )
+
+  /** The work the block-parallel engine does on a Vietoris-Rips input, counted (`work=true`; `bench/count_work.py`):
+    * one reduction on `threads` threads (default 1: the number of column additions can depend on how the units split),
+    * the bars read out only to count them. One JSON line with, for each degree from 1 (as ripser.cpp's `COUNT_WORK`
+    * prints them): `simplices` (the columns of the degree), `cleared` (pivots of the degree below, which are not
+    * columns), `apparent` (columns with an apparent cofacet, handled without reducing), `reduced` (the rest, which go
+    * through the reduction) and `additions` (column additions of the reduction, all three phases), and the
+    * positive-length bars by degree. The engine, ranks and keys are those of `Engine.ParallelRipser`; no timing is
+    * taken.
+    */
+  private def countWork(task: String, opts: Map[String, String], dim: Int, threshold: Option[Double], p: Int): Unit =
+    require(task == "vr", s"work=true is for task=vr, not $task")
+    val ms = metricSpaceOf(opts)
+    val n = ms.size
+    require(
+      n <= MaxExperimentPoints,
+      s"work=true tabulates the n x n distances: at most $MaxExperimentPoints points, not $n"
+    )
+    val table = Array.tabulate(n)(i => Array.tabulate(n)(j => ms.distance(i, j)))
+    val ties = opts
+      .get("ties")
+      .fold(ParallelPackedCohomology.EdgeTies.Lexicographic)(
+        ParallelPackedCohomology.EdgeTies.parse
+      )
+    val order = opts
+      .get("order")
+      .fold(ParallelPackedCohomology.BlockOrder.LargerIndexFirst)(
+        ParallelPackedCohomology.BlockOrder.parse
+      )
+    val threads = opts.get("threads").fold(1)(_.toInt)
+    val start = System.nanoTime()
+    val space = ParallelPackedCohomology.Space(
+      n,
+      (i, j) => table(i)(j),
+      threshold.getOrElse(ms.minimumEnclosingRadius),
+      dim,
+      p,
+      edgeTies = ties,
+      blockOrder = order
+    )
+    val result = Parallel.withThreads(threads)(
+      ParallelPackedCohomology.persistence(space, threads, if threads == 1 then 1 else 8, cocycles = true)
+    )
+    val degrees = result.degrees.filter(_.degree >= 1).map { d =>
+      val s = d.stats
+      val skipped = s.cleared + s.apparent
+      val additions = s.adds1 + s.adds2a + s.adds2b
+      s""""${d.degree}":{"simplices":${s.columns},"cleared":${s.cleared},"apparent":${s.apparent},""" +
+        s""""reduced":${s.columns - skipped},"additions":$additions}"""
+    }
+    val bars = result.bars
+      .filter((_, birth, death) => death > birth)
+      .groupBy(_._1)
+      .toList
+      .sortBy(_._1)
+      .map((degree, found) => s""""$degree":${found.size}""")
+    println(
+      s"""{"tool":"tda4j","task":"vr","work":true,"edge_ties":"${ties.name}","block_order":"${order.name}",""" +
+        s""""threads":$threads,"p":$p,"threshold":${threshold.getOrElse(ms.minimumEnclosingRadius)},""" +
+        s""""degrees":{${degrees.mkString(",")}},"bars":{${bars.mkString(",")}},""" +
+        s""""seconds":${(System.nanoTime() - start) / 1e9}}"""
     )
 
   /** The metric space of a `format=points` (default) or `format=distance` input. */

@@ -24,6 +24,9 @@
 #   bench/run.sh count-cells [--reference] [--cases a,b] [--verify] [...]   the number of cells of every case's complex,
 #                                   by dimension (count_cells.py); --reference writes bench/cells-reference.csv, which
 #                                   `summarize` joins: a benchmark run never counts
+#   bench/run.sh count-work [--cases a,b] [--tools t,u] [--ties ..] [--orders ..] [...]   the columns each tool reduces and
+#                                   skips, and its column additions, from the counting builds `setup` makes of the forks and
+#                                   from TDA4j's work mode (count_work.py); never timed, never part of a run
 #
 # Environment (all optional):
 #   WORKDIR        scratch space for tools, data and results (default: ./bench-work)
@@ -36,7 +39,8 @@
 #                  skipped if there is none
 #   SKIP_TDA4J_BUILD=1   reuse the classpath file from a previous setup
 #   RIPSER_PATCHED_REPO, RIPSER_PATCHED_REF, RIPSER_PATCHED_VARIANTS, RIPSER_PATCHED[_<NAME>]_SRC, _FLAGS, _INPUT, _COEFF,
-#   REDZED_PATCHED_REPO, REDZED_PATCHED_REF, REDZED_PATCHED_VARIANTS, REDZED_PATCHED[_<NAME>]_SRC, _FLAGS
+#   REDZED_PATCHED_REPO, REDZED_PATCHED_REF, REDZED_PATCHED_VARIANTS, REDZED_PATCHED[_<NAME>]_SRC, _FLAGS; and for the
+#   counting builds `count-work` runs: RIPSER_PATCHED[_<NAME>]_COUNT_SRC, _COUNT_FLAGS, _COUNT_PREP (likewise REDZED_PATCHED)
 #                  a fork or patched branch of ripser.cpp or RedZeD (a URL or local path; a branch, tag or commit): `setup
 #                  ripser redzed` builds it too, and the rows `ripser.cpp-patched` and `redzed-patched` run beside the stock
 #                  ones (README, "Forked builds"). Unset: no such rows.
@@ -97,6 +101,10 @@ setup_ripser() {
 # one binary per variant, in $TOOLS/<name>/.bench (the fork's own files are never overwritten). Variants: the names in
 # RIPSER_PATCHED_VARIANTS / REDZED_PATCHED_VARIANTS ("forest edge"), each with its own RIPSER_PATCHED_<NAME>_SRC, _FLAGS,
 # _INPUT and _COEFF; with no list, one unnamed variant with RIPSER_PATCHED_SRC and so on.
+# Each variant also gets a COUNTING build where its source has the counters (`COUNT_WORK`, or the hybrid's own
+# instrumentation): `<name>-count`, for `count-work`, never timed. COUNT_SRC (default: SRC), COUNT_FLAGS (default: FLAGS; the
+# build adds -D COUNT_WORK) and COUNT_PREP, a shell command run in the repository first that makes the counting source
+# (Bauer's hybrid: `python3 -I hybrid/profile.py`, with COUNT_SRC=hybrid/build/pruned-profile.cpp).
 # Nothing happens where REPO is empty. A failure leaves no binary: the row is reported as missing, the stock rows stand.
 fork_var() { local k="$1_$2"; printf '%s' "${!k:-${3:-}}"; }  # fork_var PREFIX_SUFFIX KEY [DEFAULT]: the variable's value
 
@@ -147,6 +155,24 @@ PY
         fi
         if "$out" "$smoke_input" "${smoke[@]}" >/dev/null; then
           echo "$variant $input" >> "$dir/.bench/variants"
+          # the counting builds: the same compile with -D COUNT_WORK, where the source counts; the smoke test is the same
+          local csrc cflags cprep
+          csrc="$(fork_var "$prefix$s" COUNT_SRC "$src")"; cflags="$(fork_var "$prefix$s" COUNT_FLAGS "$flags")"
+          cprep="$(fork_var "$prefix$s" COUNT_PREP)"
+          if [ -n "$cprep" ]; then (cd "$dir" && bash -c "$cprep") || echo "WARNING: $name${f}: COUNT_PREP failed"; fi
+          if [ -f "$dir/$csrc" ] && grep -q 'COUNT_WORK' "$dir/$csrc"; then
+            (cd "$dir" && $cxx -std=c++11 -Wall -O3 -D NDEBUG $cflags -D COUNT_WORK "$csrc" -o "$out-count") \
+              || echo "WARNING: $name${f} has no counting build"
+            if [ -x "$out-count" ] && ! "$out-count" "$smoke_input" "${smoke[@]}" >/dev/null 2>&1; then
+              echo "WARNING: $name${f}: the counting build failed its smoke test"; rm -f "$out-count"
+            fi
+            if [ -x "$out-count" ] && [ -x "$out-coeff" ]; then
+              (cd "$dir" && $cxx -std=c++11 -Wall -O3 -D NDEBUG -D USE_COEFFICIENTS $cflags -D COUNT_WORK "$csrc" -o "$out-coeff-count") \
+                || echo "WARNING: $name${f} has no coefficient counting build"
+            fi
+          else
+            echo "$name${f}: $csrc has no COUNT_WORK counters: no counting build (set ${prefix}${s}_COUNT_SRC for another source)"
+          fi
         else
           echo "WARNING: $name${f} failed its smoke test (input $input); it will be reported as missing"
           rm -f "$out" "$out-coeff"
@@ -158,6 +184,17 @@ PY
         src="$(fork_var "$prefix$s" SRC python/cpp/redzed.cpp)"
         if (cd "$dir" && g++ -O3 -std=c++17 -DNDEBUG $flags -o "$dir/.bench/redzed$f" "$src"); then
           echo "$variant -" >> "$dir/.bench/variants"
+          # the counting build: a source that counts (COUNT_SRC, made by COUNT_PREP; default SRC when it has the counters)
+          local csrc cflags cprep
+          csrc="$(fork_var "$prefix$s" COUNT_SRC "$src")"; cflags="$(fork_var "$prefix$s" COUNT_FLAGS "$flags")"
+          cprep="$(fork_var "$prefix$s" COUNT_PREP)"
+          if [ -n "$cprep" ]; then (cd "$dir" && bash -c "$cprep") || echo "WARNING: $name${f}: COUNT_PREP failed"; fi
+          if [ -f "$dir/$csrc" ] && grep -q 'COUNT_WORK\|struct WorkCounters' "$dir/$csrc"; then
+            (cd "$dir" && g++ -O3 -std=c++17 -DNDEBUG $cflags -D COUNT_WORK -o "$dir/.bench/redzed$f-count" "$csrc") \
+              || echo "WARNING: $name${f} has no counting build"
+          else
+            echo "$name${f}: $csrc has no counters: no counting build (set ${prefix}${s}_COUNT_SRC for another source)"
+          fi
         else
           echo "WARNING: $name${f} did not build; it will be reported as missing"
         fi
@@ -167,7 +204,8 @@ PY
   return 0  # a fork that failed is reported as missing; it never stops the setup of the others
 }
 
-# The variables the harness reads for the forks `setup_forked` built: <PREFIX>[_<NAME>]_BIN, _COEFF_BIN, _INPUT, and the names.
+# The variables the harness reads for the forks `setup_forked` built: <PREFIX>[_<NAME>]_BIN, _COEFF_BIN, _COUNT_BIN,
+# _COEFF_COUNT_BIN, _INPUT, and the names.
 export_forks() {
   local tool="$1" dir="$TOOLS/$1-patched" names="" v input s f
   local prefix; prefix="$(printf '%s' "$tool" | tr a-z A-Z)_PATCHED"
@@ -179,6 +217,8 @@ export_forks() {
     if [ "$v" != - ]; then s="_$(printf '%s' "$v" | tr a-z- A-Z_)"; f="-$v"; names="$names $v"; fi
     if [ -x "$dir/.bench/$tool$f" ]; then export "${prefix}${s}_BIN=$dir/.bench/$tool$f"; fi
     if [ -x "$dir/.bench/$tool$f-coeff" ]; then export "${prefix}${s}_COEFF_BIN=$dir/.bench/$tool$f-coeff"; fi
+    if [ -x "$dir/.bench/$tool$f-count" ]; then export "${prefix}${s}_COUNT_BIN=$dir/.bench/$tool$f-count"; fi
+    if [ -x "$dir/.bench/$tool$f-coeff-count" ]; then export "${prefix}${s}_COEFF_COUNT_BIN=$dir/.bench/$tool$f-coeff-count"; fi
     if [ "$input" != - ]; then export "${prefix}${s}_INPUT=$input"; fi
   done < "$dir/.bench/variants"
   if [ -n "$names" ]; then export "${prefix}_VARIANTS=${names# }"; fi
@@ -478,10 +518,16 @@ case "$cmd" in
     echo "results -> $RESULTS"
     "$VENV/bin/python" "$BENCH/count_cells.py" --data "$DATA" --out "$RESULTS" --python "$VENV/bin/python" "$@"
     ;;
+  count-work)
+    export_env
+    RESULTS="$WORKDIR/results/work-$(date +%Y%m%d-%H%M%S)"
+    echo "results -> $RESULTS"
+    "$VENV/bin/python" "$BENCH/count_work.py" --data "$DATA" --out "$RESULTS" --python "$VENV/bin/python" "$@"
+    ;;
   all)
     "$0" setup
     "$0" prepare
     "$0" run "$@"
     ;;
-  *) echo "usage: $0 setup [tool...]|prepare|run|all|summarize|merge|anchors|check|constraints|sweep-cubical|sweep-alpha|sweep-threads|sweep-merge|count-cells [options]"; exit 2 ;;
+  *) echo "usage: $0 setup [tool...]|prepare|run|all|summarize|merge|anchors|check|constraints|sweep-cubical|sweep-alpha|sweep-threads|sweep-merge|count-cells|count-work [options]"; exit 2 ;;
 esac

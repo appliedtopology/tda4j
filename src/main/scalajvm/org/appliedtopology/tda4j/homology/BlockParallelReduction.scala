@@ -544,7 +544,14 @@ object BlockParallelReduction:
         val r = math.sqrt(v.map(x => x * x).sum)
         v.map(x => x / r + 0.03 * rng.nextGaussian())
       }
-    case other => throw IllegalArgumentException(s"unknown dataset $other: cube<d>, torus or sphere")
+    // The lattice {0, .., n - 1}^d (n is the side, so n^d points): every distance is the root of an integer, so ties.
+    case lattice if lattice.startsWith("lattice") && lattice.drop(7).nonEmpty && lattice.drop(7).forall(_.isDigit) =>
+      val d = lattice.drop(7).toInt
+      Array.tabulate(math.pow(n, d).round.toInt)(i => Array.tabulate(d)(k => ((i / math.pow(n, k).round) % n).toDouble))
+    // n unit vectors of R^n: every distance is the root of 2 (the simplex with all edges equal).
+    case "equilateral" => Array.tabulate(n)(i => Array.tabulate(n)(j => if i == j then 1.0 else 0.0))
+    case other         =>
+      throw IllegalArgumentException(s"unknown dataset $other: cube<d>, lattice<d>, equilateral, torus or sphere")
 
   def method(name: String): Method = name.split('-').toList match
     case List("seq")              => Method.Sequential

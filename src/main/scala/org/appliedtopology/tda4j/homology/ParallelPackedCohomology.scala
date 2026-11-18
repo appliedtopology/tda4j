@@ -9,12 +9,13 @@ import scala.collection.mutable
   * while their pivots are owned by the units' pairs (phase 2a), then one by one in the sequential order (phase 2b). The
   * pairs, and the reduction log of every column, are those of one sequential reduction in the same order.
   *
-  * A simplex is one `Long` key: its block (1 + the rank of its first longest edge, edges ranked by (length, smaller
-  * end, larger end); 0 for a vertex) above `mask - index` (`index` its combinatorial index; a larger index is older, as
-  * in the packed engine). Within one dimension, ascending keys are the filtration order, oldest first. When the block
-  * and the index do not fit in one `Long` together (`Space.wide`), a key is two words: `mask - index`, which still
-  * names the simplex within its dimension, and the block beside it in every array, heap and column that orders keys;
-  * the order is then by block, then key. Coefficients are `Int`s mod `p`.
+  * A simplex is one `Long` key: its block (1 + the rank of its last longest edge, edges ranked by length and then by an
+  * [[EdgeTies]] order, the lexicographic one unless asked otherwise; 0 for a vertex) above its combinatorial index
+  * `index`, or `mask - index` when a larger index is older (the default, as in the packed engine; [[BlockOrder]]
+  * chooses). Within one dimension, ascending keys are the filtration order, oldest first. When the block and the index
+  * do not fit in one `Long` together (`Space.wide`), a key is the index part alone, which still names the simplex
+  * within its dimension, and the block beside it in every array, heap and column that orders keys; the order is then by
+  * block, then key. Coefficients are `Int`s mod `p`.
   *
   * `persistence(space, threads, unitsPerThread, ...)` cuts each degree into `threads * unitsPerThread` units; they run
   * on the threads `Parallel` has where the call is (`Parallel.withThreads(n)`, else the common pool), one after the
@@ -35,17 +36,109 @@ object ParallelPackedCohomology:
   /** The most edges a `Space` takes: they are indexed by `Int` ranks in arrays. */
   val MaxEdges: Int = Int.MaxValue - 16
 
-  /** The edges within the threshold ranked, and the key encoding. */
-  open class Space(
+  /** How edges of one length are ranked, which decides the edge a simplex is filed under: its block is that of the
+    * last, in this order, of its longest edges. Every order gives the same barcode; they differ in which zero-length
+    * pairs form and so in how many columns need reducing. An edge is `{a, b}` with `a < b`; its combinatorial index is
+    * `C(b, 2) + a`.
+    *
+    *   - `Lexicographic` (default): by `a`, then by `b`, ascending. The simplex's block is the lexicographically
+    *     largest of its longest edges. This is Bauer's `--ties lexicographic` (`ripser-dev`, `hybrid/pruned.cpp`).
+    *   - `ReverseLexicographic`: by `a`, then by `b`, descending.
+    *   - `Colexicographic`: by `b`, then by `a`, ascending: increasing combinatorial index. The block is that of the
+    *     largest-index longest edge: the order of Bauer's hybrid and `ripser-forest` (`--ties increasing`, their
+    *     default).
+    *   - `ReverseColexicographic`: decreasing combinatorial index. The block is that of the smallest-index longest
+    *     edge: Ripser's own order of equal edges, as in `ripser.cpp` built with `EDGE_LEXICOGRAPHIC` (`--ties
+    *     decreasing`).
+    *   - `Shuffled`: by a fixed hash of the combinatorial index (Bauer's `--ties random`): a control that has no
+    *     structure to exploit.
+    */
+  enum EdgeTies:
+    case Lexicographic, ReverseLexicographic, Colexicographic, ReverseColexicographic, Shuffled
+
+  object EdgeTies:
+    /** The option's name as the facades spell it: `lexicographic`, `reverse-lexicographic`, `colexicographic`,
+      * `reverse-colexicographic`, `shuffled`.
+      */
+    def parse(name: String): EdgeTies =
+      values
+        .find(_.name == name)
+        .getOrElse(
+          throw new IllegalArgumentException(
+            s"unknown edge tie order '$name': ${values.map(_.name).mkString(", ")}"
+          )
+        )
+
+    extension (ties: EdgeTies)
+      def name: String = ties match
+        case Lexicographic          => "lexicographic"
+        case ReverseLexicographic   => "reverse-lexicographic"
+        case Colexicographic        => "colexicographic"
+        case ReverseColexicographic => "reverse-colexicographic"
+        case Shuffled               => "shuffled"
+
+    // splitmix64's finalizer on the combinatorial index of the edge {a < b}, compared as a signed Long.
+    private def shuffle(a: Int, b: Int): Long =
+      var z = (b.toLong * (b - 1) / 2 + a) + 0x9e3779b97f4a7c15L
+      z = (z ^ (z >>> 30)) * 0xbf58476d1ce4e5b9L
+      z = (z ^ (z >>> 27)) * 0x94d049bb133111ebL
+      z ^ (z >>> 31)
+
+    /** Whether the edge `{as(x), bs(x)}` comes before `{as(y), bs(y)}` among edges of one length. */
+    private[tda4j] def before(ties: EdgeTies, as: Array[Int], bs: Array[Int]): (Int, Int) => Boolean = ties match
+      case Lexicographic          => (x, y) => as(x) < as(y) || as(x) == as(y) && bs(x) < bs(y)
+      case ReverseLexicographic   => (x, y) => as(y) < as(x) || as(x) == as(y) && bs(y) < bs(x)
+      case Colexicographic        => (x, y) => bs(x) < bs(y) || bs(x) == bs(y) && as(x) < as(y)
+      case ReverseColexicographic => (x, y) => bs(y) < bs(x) || bs(x) == bs(y) && as(y) < as(x)
+      case Shuffled               =>
+        (x, y) =>
+          val (hx, hy) = (shuffle(as(x), bs(x)), shuffle(as(y), bs(y)))
+          hx < hy
+
+  /** Which of two simplices of one dimension filed under the same block (the same last longest edge) enters the
+    * filtration first, by combinatorial index: the index of `{v_0 < ... < v_k}` is `C(v_k, k + 1) + ... + C(v_0, 1)`,
+    * the order of the combinatorial number system. Every direction gives the same barcode; they differ in which pairs
+    * are apparent, since the oldest cofacet of a column and the youngest facet of a cofacet are the ones that add and
+    * drop the largest vertex outside the block's edge in one direction, and the smallest in the other.
+    *
+    *   - `LargerIndexFirst` (default): the larger index is older: Ripser's own order within a diameter. The oldest
+    *     cofacet of a column adds the largest qualifying vertex.
+    *   - `SmallerIndexFirst`: the smaller index is older: the order of Bauer's hybrid and `ripser-forest`
+    *     (`ORDER_CONVENTIONS.md` of `ripser-dev`). The oldest cofacet adds the smallest qualifying vertex.
+    *
+    * Vertices (which share block 0) and the simplices of dimension 1 (one to a block) follow it too, which changes
+    * which vertex of a merging pair is the older and so only the pairing of degree 0, never its bars.
+    */
+  enum BlockOrder:
+    case LargerIndexFirst, SmallerIndexFirst
+
+  object BlockOrder:
+    /** The option's name as the facades spell it: `larger-index-first`, `smaller-index-first`. */
+    def parse(name: String): BlockOrder =
+      values
+        .find(_.name == name)
+        .getOrElse(
+          throw new IllegalArgumentException(
+            s"unknown block order '$name': ${values.map(_.name).mkString(", ")}"
+          )
+        )
+
+    extension (order: BlockOrder)
+      def name: String = order match
+        case LargerIndexFirst  => "larger-index-first"
+        case SmallerIndexFirst => "smaller-index-first"
+
+  /** The edges of a metric within a threshold, ranked by length and then by an [[EdgeTies]] order, with each edge's
+    * rank looked up in a dense `n x n` table (up to [[DenseRankLimit]] points) or in sorted neighbour lists. A rank is
+    * a position in the filtration order of the edges: it is what `Space` files a simplex under, and what
+    * [[EdgeRankedMetricSpace]] hands an engine in place of the length.
+    */
+  open class EdgeRanking(
     val n: Int,
     distance: (Int, Int) => Double,
     val threshold: Double,
-    val maxDim: Int,
-    val p: Int,
-    // Find apparent pairs Ripser's way (every facet's block from its pairs) instead of from the block's edge.
-    val ripserApparent: Boolean = false,
-    // Two-word keys even where one Long would do: for tests of the wide layout.
-    forceWide: Boolean = false,
+    // How edges of one length are ranked.
+    val edgeTies: EdgeTies = EdgeTies.Lexicographic,
     // Neighbour lists even where the dense table would do: for tests of the large-n layout.
     forceSparseRanks: Boolean = false
   ):
@@ -65,11 +158,12 @@ object ParallelPackedCohomology:
           )
           as += a; bs += b; ls += l
       val (a0, b0, l0) = (as.result(), bs.result(), ls.result())
+      val tieBefore = EdgeTies.before(edgeTies, a0, b0)
       val order = SortIndices.sort(
         a0.length,
         (x, y) =>
           val c = java.lang.Double.compare(l0(x), l0(y))
-          c < 0 || c == 0 && (a0(x) < a0(y) || a0(x) == a0(y) && b0(x) < b0(y))
+          c < 0 || c == 0 && tieBefore(x, y)
       )
       (order.map(a0), order.map(b0), order.map(l0))
     val edgeA: Array[Int] = ea
@@ -128,6 +222,26 @@ object ParallelPackedCohomology:
         cur(u) = c
         if c >= 0 && list(c) == v then neighbourRank(a)(c) else -1
 
+    /** Points the cursors `cur(0 until k)` at the start of the neighbour lists of `vs(0 until k)`, before a scan up. */
+    def startUp(cur: Array[Int], vs: Array[Int], k: Int): Unit =
+      if sparseRanks then
+        var i = 0
+        while i < k do
+          cur(i) = 0
+          i += 1
+
+    /** The rank of `{a, v}` for the `u`-th vertex `a` of a column, in a scan where `v` only increases (after
+      * `startUp`).
+      */
+    def rankUp(cur: Array[Int], u: Int, a: Int, v: Int): Int =
+      if !sparseRanks then rank(a * n + v)
+      else
+        val list = neighbours(a)
+        var c = cur(u)
+        while c < list.length && list(c) < v do c += 1
+        cur(u) = c
+        if c < list.length && list(c) == v then neighbourRank(a)(c) else -1
+
     /** The rank of the edge `{a, b}`, or -1 when it is longer than the threshold. */
     def rankOf(a: Int, b: Int): Int =
       if !sparseRanks then rank(a * n + b)
@@ -145,6 +259,51 @@ object ParallelPackedCohomology:
             result = neighbourRank(a)(mid); lo = hi + 1
         result
 
+  /** `base` with the length of every edge within `threshold` replaced by its rank, 1, 2, ... in the order of an
+    * [[EdgeRanking]] (0 on the diagonal, infinity past the threshold). An engine that orders simplices by diameter and
+    * then by index, run on this, orders them by their last edge in that ranking: ripser.cpp's edge-lexicographic order
+    * for `EdgeTies.ReverseColexicographic` (`EDGE_LEXICOGRAPHIC`), and the order of the other `EdgeTies` as they are
+    * named. Give the engine `limit` as its `maxFiltrationValue`, and read what comes back in lengths with `lengthOf`.
+    * Memory: the ranking, a dense table of `n^2` `Int`s up to [[DenseRankLimit]] points, sorted neighbour lists above.
+    */
+  open class EdgeRankedMetricSpace(base: FiniteMetricSpace[Int], threshold: Double, ties: EdgeTies)
+      extends FiniteMetricSpace[Int]:
+    val ranking: EdgeRanking = EdgeRanking(base.size, base.distance(_, _), threshold, ties)
+
+    /** The largest rank: every edge within the threshold is at most this. */
+    def limit: Double = ranking.edgeA.length.toDouble
+
+    /** The length of the edge whose rank `value` is (0 and infinity stay as they are). */
+    def lengthOf(value: Double): Double =
+      if value <= 0.0 || value.isInfinite then value else ranking.edgeLength(value.toInt - 1)
+
+    def distance(x: Int, y: Int): Double =
+      if x == y then 0.0
+      else
+        val r = ranking.rankOf(x min y, x max y)
+        if r < 0 then Double.PositiveInfinity else r + 1.0
+    def size: Int = base.size
+    def elements: Iterable[Int] = Range(0, size)
+    def contains(x: Int): Boolean = 0 <= x && x < size
+
+  /** The edges within the threshold ranked, and the key encoding. */
+  open class Space(
+    nPoints: Int,
+    distance: (Int, Int) => Double,
+    threshold0: Double,
+    val maxDim: Int,
+    val p: Int,
+    // Find apparent pairs Ripser's way (every facet's block from its pairs) instead of from the block's edge.
+    val ripserApparent: Boolean = false,
+    // Two-word keys even where one Long would do: for tests of the wide layout.
+    forceWide: Boolean = false,
+    // Neighbour lists even where the dense table would do: for tests of the large-n layout.
+    forceSparseRanks: Boolean = false,
+    // How edges of one length are ranked.
+    edgeTies: EdgeTies = EdgeTies.Lexicographic,
+    // Which of two simplices of one block is older.
+    val blockOrder: BlockOrder = BlockOrder.LargerIndexFirst
+  ) extends EdgeRanking(nPoints, distance, threshold0, edgeTies, forceSparseRanks):
     /** `binom(q)(v)` = C(v, q), for simplices of up to `maxDim + 2` vertices. */
     val binom: Array[Array[Long]] = Array.tabulate(maxDim + 3, n + 1)((q, v) => SimplexIndexing.binomial(v, q))
     // C(n, q) is not monotone in q: the largest index over every size used.
@@ -154,6 +313,11 @@ object ParallelPackedCohomology:
     /** Whether keys are two words: the block and the index need more than 63 bits together. */
     val wide: Boolean = forceWide || bits + (32 - Integer.numberOfLeadingZeros(edgeA.length + 1)) > 63
     val mask: Long = if bits == 63 then Long.MaxValue else (1L << bits) - 1
+
+    /** Whether the smaller combinatorial index is the older one (`BlockOrder.SmallerIndexFirst`). */
+    val smallerFirst: Boolean = blockOrder == BlockOrder.SmallerIndexFirst
+    // The index part of a key is `index ^ flip`: `mask - index` (the larger index sorts first) or `index`.
+    private val flip: Long = if smallerFirst then 0L else mask
     // Fermat: a^(p-2); products of two residues and sums of residues and such products must fit an Int (p <= MaxPrime).
     require(p <= MaxPrime, s"ParallelPackedCohomology: coefficients are Ints, so p <= $MaxPrime, got $p")
     val inverse: Array[Int] = Array.tabulate(p) { a =>
@@ -171,8 +335,8 @@ object ParallelPackedCohomology:
     def block(key: Long): Int =
       if wide then throw IllegalStateException("a two-word key carries its block beside it")
       (key >>> bits).toInt
-    def index(key: Long): Long = mask - (key & mask)
-    def key(block: Int, index: Long): Long = if wide then mask - index else (block.toLong << bits) | (mask - index)
+    def index(key: Long): Long = (key & mask) ^ flip
+    def key(block: Int, index: Long): Long = if wide then index ^ flip else (block.toLong << bits) | (index ^ flip)
     def value(block: Int): Double = if block == 0 then 0.0 else edgeLength(block - 1)
 
     /** The `size` vertices of the simplex at `index`, ascending, into `out`. */
@@ -422,9 +586,14 @@ object ParallelPackedCohomology:
     count
 
   // The column's apparent cofacet (the oldest cofacet, in the column's block, whose youngest facet is the column), or -1.
-  // The oldest same-block cofacet adds the largest qualifying vertex; the youngest same-block facet of a simplex drops
-  // its largest vertex outside the block's edge.
+  // With the larger index older, the oldest same-block cofacet adds the largest qualifying vertex and the youngest
+  // same-block facet of a simplex drops its largest vertex outside the block's edge; with the smaller index older, the
+  // smallest in both. (For v < v', sigma + v has the smaller index; dropping the smaller vertex leaves the larger index.)
   private def apparentCofacet(space: Space, s: Scratch, k: Int, sigmaIndex: Long, sigmaBlock: Int): Long =
+    if space.smallerFirst then apparentCofacetSmaller(space, s, k, sigmaBlock)
+    else apparentCofacetLarger(space, s, k, sigmaIndex, sigmaBlock)
+
+  private def apparentCofacetLarger(space: Space, s: Scratch, k: Int, sigmaIndex: Long, sigmaBlock: Int): Long =
     import space.*
     if sigmaBlock == 0 then -1L
     else
@@ -457,9 +626,54 @@ object ParallelPackedCohomology:
         v -= 1
       found
 
+  // `apparentCofacet` for the smaller index older: the smallest vertex that gives a same-block cofacet, if it is below
+  // the column's smallest vertex outside the block's edge (else that vertex is the cofacet's youngest facet's, not ours).
+  private def apparentCofacetSmaller(space: Space, s: Scratch, k: Int, sigmaBlock: Int): Long =
+    import space.*
+    if sigmaBlock == 0 then -1L
+    else
+      val r = sigmaBlock - 1
+      val (a, b) = (edgeA(r), edgeB(r))
+      var c = n
+      var i = 0
+      while i < k && c == n do
+        if s.vs(i) != a && s.vs(i) != b then c = s.vs(i)
+        i += 1
+      // The index of sigma + v for v above the pp smallest vertices of sigma: those keep their places (iB), the others
+      // move up one (iA).
+      var iB = 0L
+      var iA = 0L
+      i = 0
+      while i < k do
+        iA += binom(i + 2)(s.vs(i))
+        i += 1
+      var pp = 0
+      startUp(s.cur, s.vs, k)
+      var v = 0
+      var found = -1L
+      while found < 0 && v < c do
+        if pp < k && s.vs(pp) == v then
+          iB += binom(pp + 1)(v)
+          iA -= binom(pp + 2)(v)
+          pp += 1
+        else
+          var ok = true
+          var u = 0
+          while ok && u < k do
+            val q = rankUp(s.cur, u, s.vs(u), v)
+            if q < 0 || q > r then ok = false
+            u += 1
+          if ok then found = key(sigmaBlock, iB + binom(pp + 1)(v) + iA)
+        v += 1
+      found
+
   // The apparent facet of the row `row` (size k + 1, block rowBlock): its youngest same-block facet, if `row` is that
   // facet's oldest same-block cofacet; -1 otherwise. Leaves the facet's vertices in s.vs.
   private def apparentFacet(space: Space, s: Scratch, k: Int, row: Long, rowBlock: Int): Long =
+    if space.smallerFirst then apparentFacetSmaller(space, s, k, row, rowBlock)
+    else apparentFacetLarger(space, s, k, row, rowBlock)
+
+  private def apparentFacetLarger(space: Space, s: Scratch, k: Int, row: Long, rowBlock: Int): Long =
     import space.*
     if rowBlock == 0 then -1L
     else
@@ -493,6 +707,42 @@ object ParallelPackedCohomology:
           v -= 1
         if older then -1L else key(rowBlock, indexOf(s.vs, k))
 
+  // `apparentFacet` for the smaller index older: the facet drops the smallest vertex outside the block's edge, and the
+  // row is its oldest same-block cofacet unless a smaller vertex gives one too.
+  private def apparentFacetSmaller(space: Space, s: Scratch, k: Int, row: Long, rowBlock: Int): Long =
+    import space.*
+    if rowBlock == 0 then -1L
+    else
+      decode(index(row), k + 1, s.ws)
+      val r = rowBlock - 1
+      val (a, b) = (edgeA(r), edgeB(r))
+      var j = 0
+      while j <= k && (s.ws(j) == a || s.ws(j) == b) do j += 1
+      if j > k then -1L
+      else
+        val w = s.ws(j)
+        var t = 0
+        var i = 0
+        while i <= k do
+          if i != j then
+            s.vs(t) = s.ws(i)
+            t += 1
+          i += 1
+        var older = false
+        startUp(s.cur, s.vs, k)
+        var v = 0
+        while !older && v < w do
+          if v != a && v != b then
+            var ok = true
+            var u = 0
+            while ok && u < k do
+              val q = rankUp(s.cur, u, s.vs(u), v)
+              if q < 0 || q > r then ok = false
+              u += 1
+            older = ok
+          v += 1
+        if older then -1L else key(rowBlock, indexOf(s.vs, k))
+
   // The block of the simplex in `vs` (size k): 1 + the largest rank of its edges, as Ripser computes a diameter.
   def blockOf(space: Space, vs: Array[Int], k: Int): Int =
     var top = -1
@@ -506,13 +756,15 @@ object ParallelPackedCohomology:
       i += 1
     top + 1
 
-  // The youngest facet of the simplex in s.ws (size k + 1) with block `block`, Ripser's way: facets by increasing index
-  // (dropping the largest vertex first), each block recomputed from its pairs; its vertices left in s.vs. The dropped
-  // vertex, or -1.
+  // The youngest facet of the simplex in s.ws (size k + 1) with block `block`, Ripser's way: facets in the order of the
+  // block order (increasing index, dropping the largest vertex first, for the larger index older; the smallest first
+  // for the smaller index older), each block recomputed from its pairs; its vertices left in s.vs. The dropped vertex,
+  // or -1.
   private def youngestFacetByPairs(space: Space, s: Scratch, k: Int, block: Int): Int =
     var dropped = -1
-    var j = k
-    while dropped < 0 && j >= 0 do
+    var step = 0
+    while dropped < 0 && step <= k do
+      val j = if space.smallerFirst then step else k - step
       var t = 0
       var i = 0
       while i <= k do
@@ -521,17 +773,19 @@ object ParallelPackedCohomology:
           t += 1
         i += 1
       if blockOf(space, s.vs, k) == block then dropped = s.ws(j)
-      j -= 1
+      step += 1
     dropped
 
   // The vertex of the oldest cofacet of the simplex in s.vs (size k) with block `block`, Ripser's way: every cofacet
-  // from the largest added vertex down until one has that block. -1 if none.
+  // from the largest added vertex down (the smallest up, for the smaller index older) until one has that block. -1 if
+  // none.
   private def oldestCofacetVertexByScan(space: Space, s: Scratch, k: Int, target: Int): Int =
     import space.*
     var found = -1
-    startDown(s.cur, s.vs, k)
-    var v = n - 1
-    while found < 0 && v >= 0 do
+    val up = smallerFirst
+    if up then startUp(s.cur, s.vs, k) else startDown(s.cur, s.vs, k)
+    var v = if up then 0 else n - 1
+    while found < 0 && v >= 0 && v < n do
       var member = false
       var blk = target
       var ok = true
@@ -539,11 +793,11 @@ object ParallelPackedCohomology:
       while ok && u < k do
         if s.vs(u) == v then member = true
         else
-          val q = rankDown(s.cur, u, s.vs(u), v)
+          val q = if up then rankUp(s.cur, u, s.vs(u), v) else rankDown(s.cur, u, s.vs(u), v)
           if q < 0 then ok = false else if q + 1 > blk then blk = q + 1
         u += 1
       if !member && ok && blk == target then found = v
-      v -= 1
+      v = if up then v + 1 else v - 1
     found
 
   private def apparentCofacetByScan(space: Space, s: Scratch, k: Int, sigmaIndex: Long, sigmaBlock: Int): Long =
@@ -866,8 +1120,8 @@ object ParallelPackedCohomology:
       val late = mutable.LongMap.empty[Owner]
       val latePivots = mutable.ArrayBuilder.ofLong()
       if d == 0 then
-        // The elder rule over the edges in filtration order: the older root (the larger vertex) lives, the younger dies
-        // paired with the edge that joins them. These are the pairs of the reduction of degree 0, in the same order of
+        // The elder rule over the edges in filtration order: the older root (the larger vertex, the smaller for
+        // `SmallerIndexFirst`) lives, the younger dies paired with the edge that joins them. These are the pairs of the reduction of degree 0, in the same order of
         // edges; the bar's cocycle is the indicator of the dying component.
         val t0 = System.nanoTime()
         val forest = MergeForest(n)
@@ -877,7 +1131,7 @@ object ParallelPackedCohomology:
           val ra = forest.find(edgeA(r))
           val rb = forest.find(edgeB(r))
           if ra != rb then
-            val (dead, alive) = if ra < rb then (ra, rb) else (rb, ra)
+            val (dead, alive) = if (ra < rb) != smallerFirst then (ra, rb) else (rb, ra)
             forest.kill(dead, alive, r)
             pair(0) = edgeA(r)
             pair(1) = edgeB(r)

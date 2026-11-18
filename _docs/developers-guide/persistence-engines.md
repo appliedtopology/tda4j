@@ -180,6 +180,53 @@ They explain a speed difference between two inputs of the same size: a high
 apparent-pair rate means little reduction work. They are diagnostics, not
 part of any result.
 
+**Equal edge lengths (`edgeTies`).** Ripser orders simplices by diameter and then by combinatorial index, so on a
+lattice or any input with many equal distances, which of two equal edges is the later one decides how many pairs are
+apparent. `ParallelPackedCohomology.EdgeTies` names five orders of the edges of one length (`Lexicographic`,
+`ReverseLexicographic`, `Colexicographic`, `ReverseColexicographic`, `Shuffled`), and a simplex is then filed under its
+last longest edge in that order (the "block" of the parallel engine). Every order gives the same bars; they differ in
+which pairs are apparent and in which zero-length pairs form.
+
+- `ParallelRipser` always has an edge order, since it ranks the edges within the threshold once (length, then the order
+  chosen); `Lexicographic` is its default, and `Persistence`'s `edgeTies` picks another.
+- `PackedRipserCohomologyEngine` has none unless asked. `Persistence(..., engine = Ripser, edgeTies = ...)` and the
+  facades' `edgeTies` run it on an `EdgeRankedMetricSpace`: the metric space whose distance is the rank of the edge.
+  The engine's tests for "the same diameter" then see edge blocks, and its bars are read back in lengths with
+  `lengthOf`. Two ranks of one length give a zero-length bar, which is left out unless `includeZeroLength`.
+- Inside a block the engines order simplices by combinatorial index, and `BlockOrder` says which way
+  (`Persistence.BlockOrder`, `blockOrder`, `--block-order`). `LargerIndexFirst` is the default and Ripser's own
+  convention: the simplex of larger index is older, so a column's apparent cofacet adds the largest vertex that
+  qualifies and its youngest facet drops the largest vertex outside the block's edge. `SmallerIndexFirst` is the mirror
+  image (the smallest vertices, the smaller index older, and the larger root of a merge dies in degree 0). Only
+  `ParallelRipser` has it: the rules for an apparent pair (`apparentCofacet` and `apparentFacet` in
+  `ParallelPackedCohomology`) read the key's index part as the index or as its complement. The sequential engine is
+  always `LargerIndexFirst`, and `Persistence` refuses the other with `Engine.Ripser`.
+- These combinations do the work of Bauer's builds. `ParallelBlockOrderSpec` pins the columns left to
+  reduce against ripser.cpp (`COUNT_WORK`) and ripser-forest (`-DCOUNT_WORK`, `--ties`) builds of ripser-dev at
+  857c9d0 on lattices, and checks every apparent pair against the definition by brute force:
+
+  | `edgeTies` | `blockOrder` | the same work as |
+  |---|---|---|
+  | `ReverseColexicographic` | `LargerIndexFirst` | ripser.cpp built with `EDGE_LEXICOGRAPHIC` |
+  | `Colexicographic` | `SmallerIndexFirst` | ripser-forest `--ties increasing`, its default |
+  | `ReverseColexicographic` | `SmallerIndexFirst` | ripser-forest `--ties decreasing` |
+  | `Lexicographic` | `SmallerIndexFirst` | ripser-forest `--ties lexicographic` |
+  | `Shuffled` | `SmallerIndexFirst` | the hybrid's `--ties random` (a hash of the index, from its source; ripser-forest's `random` hashes something else) |
+
+  Bauer's hybrid (`hybrid/pruned.cpp`) names the last four as its own `--ties` (`ORDER_CONVENTIONS.md`); its engine was
+  read, not run, so its columns are matched through ripser-forest. With the labels reversed the order
+  `Lexicographic` with `SmallerIndexFirst` is `ReverseColexicographic` with `LargerIndexFirst`: the same pairing, the same
+  columns (`ParallelBlockOrderSpec`).
+- Counts are not comparable across tools without care: ripser.cpp's `COUNT_WORK` counts a simplex in an apparent pair as
+  apparent whether it is the column or the row, `ParallelRipser`'s `apparent` counts columns only, and its `cleared`
+  counts every pivot of the degree below. The sequential engine's `apparentPairCount` equals the sum of
+  `ParallelRipser`'s `apparent` over degrees 1 and up in the same order.
+- `ParallelPackedCohomologyDriver` takes `ties=<name>` and `order=<name>` and prints each degree's columns, apparent
+  pairs, cleared pivots, columns left to reduce and additions; `EdgeRankMetricDriver` runs the sequential engine on
+  lengths or on ranks of an order. The benchmark harness counts the same quantities for the forks of ripser.cpp and RedZeD
+  and for every combination above (`bench/count_work.py`, `PaperBenchmarkDriver work=true`; `bench/README.md`, "Counting
+  the work").
+
 ## 5. `CellularCohomologyEngine` — generic cohomology, for every cell type
 
 Persistent *co*homology, generic over `CellT: OrderedCell`: the cohomology counterpart to engine 1. It serves every

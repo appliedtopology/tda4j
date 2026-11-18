@@ -91,7 +91,7 @@ once into a private `ComplexKind`/`EngineKind`/`CoefficientKind` enum before any
   `ParallelRipser` (`parallelVR`) when `Parallel.threads > 1`, no `includeZeroLength`, no `edgeCollapse`, and
   `ParallelRipser.supports`; `engine=ripser` is always `PackedRipserCohomologyEngine`; `engine=parallel-ripser` is mapped to
   `ripser` plus a flag at the top of `dispatchFull` (no `EngineKind` case) and refuses what it cannot do. The CLI mirrors
-  both (`--threads`, `--engine parallel-ripser`). Specs: `TDA4jParallelSpec` (JVM; Scala.js has one thread).
+  both (`--threads`, `--engine parallel-ripser`); `edgeTies`/`--edge-ties` and `blockOrder`/`--block-order`: `rules/edge-ties.md`. Specs: `TDA4jParallelSpec` (JVM; Scala.js has one thread).
 - **Two-step witness recipe**: `selectLandmarksFrom{Points,DistanceMatrix}` → `LandmarkSelectionResult`, then
   `computeFrom{Points,DistanceMatrix}AndLandmarks` (takes that `int[]` directly, never re-selects);
   `coveringRadiusFrom{Points,DistanceMatrix}` queries R for a hand-picked set. CLI: `--select-landmarks`/

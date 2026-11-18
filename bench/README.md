@@ -78,6 +78,56 @@ defines the enclosing radius is in, and a distance matrix is read from its lower
 `--no-jvm` skips TDA4j (no `setup tda4j` needed), `--no-gudhi` skips GUDHI, `--threads N` limits the counter, and `--join
 RESULTS` adds the totals to a finished run's `summary.csv` as `summary_with_cells.csv` (for a run made before the reference existed).
 
+## Counting the work
+
+A time says how long, a count says what was done. `bench/run.sh count-work` (`count_work.py`) runs each Vietoris–Rips tool once per
+case and field with a build that counts, and writes `$WORKDIR/results/work-<timestamp>/`: `work.md` (a table per case and field)
+and `work.csv` (a row per degree and a `total` row, with each tool's own counters unchanged in `raw`). It is never part of a run:
+the counting builds are slower, and TDA4j's work mode is not timed. The three numbers that can be set against each other:
+
+| field | ripser.cpp-shaped build (`-DCOUNT_WORK`) | TDA4j (`PaperBenchmarkDriver work=true`) |
+|---|---|---|
+| `simplices` | `simplices`: every simplex of the degree is a column | `columns` of the degree |
+| `reduced` | `columns`: the columns that go through the reduction | `columns - cleared - apparent` |
+| `skipped` | `simplices - columns`: cleared by a pivot of the degree below, or paired by an apparent pair | `cleared + apparent` |
+| `additions` | `additions + apparent_additions` | the three phases' column additions |
+
+ripser.cpp's own `apparent` and `cleared` are not those of TDA4j (it counts a simplex in an apparent pair as apparent whether it is the
+column or the row, and clears only the pivots that are not apparent), which is why the comparable fields are the three above and not
+those. On the 12 × 12 lattice (`--dim 2 --threshold 10`) ripser.cpp's `-DEDGE_LEXICOGRAPHIC` build and TDA4j with `ties=reverse-colexicographic
+order=larger-index-first` agree degree by degree (121 and 0 columns reduced, 0 additions): that pin is in `test_bench.py`.
+Other tools' counters are of another kind and are not forced into the three: ripser-forest's `columns` is its `reduced` (the rest
+stays in `raw`), and the RedZeD hybrid's (`cells`, `lower_pairs`, `cleared_cells`, `xor_calls`, ...) are raw only. `work.md` also
+lines up the bar counts by degree of every row of a case and says so when they differ: a counting build that finds other bars than
+the rest did not count the same computation.
+
+**The counting builds** are made by `run.sh setup ripser redzed` for each fork variant whose source has the counters: the same compile
+as the timed build plus `-D COUNT_WORK` (ripser) and `<name>-count` beside the timed binary, and `run.sh` exports
+`<VARIABLE>_COUNT_BIN` for it (`RIPSER_PATCHED_EDGE_BIN` -> `RIPSER_PATCHED_EDGE_COUNT_BIN`; `_COEFF_COUNT_BIN` for the coefficient
+build). A variant whose source has none says so at setup and has no row in the count. For a source that is made first (Bauer's hybrid
+instruments `pruned.cpp` with `hybrid/profile.py`), name it per variant: `REDZED_PATCHED_HYBRID_COUNT_PREP="python3 -I hybrid/profile.py"`
+runs in the clone, and `REDZED_PATCHED_HYBRID_COUNT_SRC=hybrid/build/pruned-profile.cpp` is the file built; `_COUNT_FLAGS` replaces the
+variant's `_FLAGS` for the counting build. The stock ripser.cpp has no counters and no count.
+
+**TDA4j's rows** are the block-parallel engine (`Engine.ParallelRipser`) once per edge order and block direction: `--ties` (default all
+five: `lexicographic`, `reverse-lexicographic`, `colexicographic`, `reverse-colexicographic`, `shuffled`) times `--orders` (default both:
+`larger-index-first`, `smaller-index-first`), on `--threads` (default 1: the additions can depend on how the units split). Bauer's
+orders in TDA4j's terms: ripser.cpp's `EDGE_LEXICOGRAPHIC` is `reverse-colexicographic` with `larger-index-first`; the hybrid's
+default (`--ties increasing`, smaller index older) and ripser-forest's `increasing` are `colexicographic` with `smaller-index-first`
+(ripser-forest's columns reduced, in its three orders, are TDA4j's on a 12 × 12 and a 4 × 4 × 4 lattice: `ParallelBlockOrderSpec`); his
+`lexicographic` is `lexicographic` with `smaller-index-first`, and `decreasing` is `reverse-colexicographic` with it.
+The edge order of the one-thread engine (`Engine.Ripser`) has no block direction, and its counters (`apparentPairCount`, ...) are of a
+different kind: it has no count row.
+
+`--cases` names the cases (patterns allowed); without it the count runs the two tie-heavy `experiment` cases, `lattice32` (a 32 × 32
+integer lattice to the threshold 5.1, degrees to 3: Bauer's `grid32 H3 t5.1`) and `equilateral60` (60 points at distance 1, degrees
+to 3). The paper's cases have almost no equal distances, where the order of equal edges changes nothing; these are the inputs where
+it can, and a benchmark run leaves them out unless `--cases` names them. `--tools` selects rows (`tda4j` for all of TDA4j's),
+`--fields 2,17` the primes; a tool with no counting build for a field has no row and is named once at the start. Timing the
+orders is separate: the `experiment` rows `tda4j-parallelverb-1t-ripser-edge`, `-hybrid` and `-lex-smaller` run the same engine
+under three of them, one thread, beside `tda4j-parallelverb-1t` (`--tools tda4j-parallelverb-1t,tda4j-parallelverb-1t-hybrid ...
+--cases lattice32,equilateral60`).
+
 ## The image-engine size sweep
 
 `bench/run.sh sweep-cubical` decides which engine `Persistence(Image(...))` should pick by default. It times:
@@ -322,7 +372,9 @@ JVM classes' commit.
 - **Vietoris–Rips:**
   - the Ripser paper's benchmark: the cases and flags of `Ripser/ripser-benchmark`'s Dockerfile, minus `--ratio`,
     which only filters printed output;
-  - a sphere3 size ladder (48, 96, 192 points).
+  - a sphere3 size ladder (48, 96, 192 points);
+  - two tie-heavy `experiment` cases for the order of equal edges, `lattice32` and `equilateral60` (see "Counting the work"): left
+    out of a run unless `--cases` names them, and out of `count-cells` unless it does.
 - **Inputs are made identical across tools:**
   - **fractal-r is symmetrized.** It is not symmetric as distributed. ripser.cpp reads the lower triangle, so every
     tool gets that lower triangle mirrored.
@@ -405,7 +457,8 @@ the file the RedZeD rows get (float32, made once from the float64 distances and 
 its time. A variant that fails to build or to pass stock ripser.cpp's command line on `smoke-points.txt` is reported as `missing`
 and the other rows are unaffected; a failed fetch or build removes the old binaries, so a stale build never runs under the new
 label. The commit each fork was built from is `ripser_patched_git` / `redzed_patched_git` in `env.json`. With the variables unset
-there are no such rows and nothing else changes.
+there are no such rows and nothing else changes. Where a variant's source counts its work, `setup` also builds a counting twin of it
+that `run.sh count-work` uses (see "Counting the work"); a timed run never runs it.
 
 A code with a limit of its own (ripser-forest stops above dimension 6 and is Z/2 only) reports it as that row's failure, as any
 tool's limit is.
@@ -422,6 +475,7 @@ tool's limit is.
 | `tda4j-cohomology`, `tda4j-fastalpha` | named engines | cohomology on images (on a grid: the packed grid engine, the general engine's output); the dual union-find on alpha (on the default triangulation) |
 | `tda4j-bw`, `tda4j-helix`, `tda4j-dqp` | named alpha backends | `tda4j` uses the default: Bowyer–Watson up to 4 dimensions, Helix above, DQP for a small radius; these name each. Bowyer–Watson is `unsupported` above 4-D; DQP only runs on a case with a radius (untruncated it is about 100 times slower than Helix); `tda4j-fastalpha` takes no radius |
 | `tda4j-parallel-1t`, `tda4j-parallel-mt` | `PaperBenchmarkDriver engine=parallel threads=N` | the block-parallel experiment `ParallelPackedCohomology` (JVM only): implicit coboundaries, bars only, on 1 thread or every CPU. A simplex is one `Long` key where it fits and a block and an index beyond (o3_4096); it fails on a case whose n × n tables do not fit (clifford50000) |
+| `tda4j-parallelverb-1t-ripser-edge`, `-hybrid`, `-lex-smaller` | `PaperBenchmarkDriver engine=parallelverb ties=.. order=..` | `Engine.ParallelRipser` under another order of equal edges and of a block's simplices (`reverse-colexicographic`/`larger-index-first`, `colexicographic`/`smaller-index-first`, `lexicographic`/`smaller-index-first`), one thread, cocycles, beside `tda4j-parallelverb-1t`. `experiment` rows: run only when `--tools` names them |
 | `ripser.cpp` | vanilla build for p = 2, `ripser-coeff` for other primes | the reference for Vietoris–Rips |
 | `redzed` | C++17, built from a pinned commit (`setup redzed`: `g++ -O3 -std=c++17 -DNDEBUG`) | RedZeD (Kapulkin and Kershaw, arXiv:2606.06310; `nkershaw01/RedZeD`, commit `22ef1bf`), Vietoris–Rips only, **Z/2 only**, homology, one thread, bars (`--barcode`) and no representatives. Its input is the binary lower triangle of the distance matrix as float32 (`redzed_io.py`), made once from the float64 distances before the run and not timed, as DIPHA's input is; ripser.cpp's own parse or distance computation is inside its time. It caps the threshold at the enclosing radius itself, drops zero-length bars, and has no overflow check on its 64-bit simplex indices where ripser.cpp throws (the agreement column is the only guard near 2^63 simplices) |
 | `ripser.cpp-patched-<variant>`, `redzed-patched-<variant>` (unnamed: `ripser.cpp-patched`, `redzed-patched`) | a fork or branch of the tool above, built by `setup ripser` / `setup redzed` (see Forked builds) | the same command line and the same cases as the stock row, a row of its own beside it; never the reference, so its agreement column is its barcode against stock ripser.cpp's. Absent ("missing") unless the repository is named |

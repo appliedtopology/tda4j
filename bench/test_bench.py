@@ -37,6 +37,7 @@ import sweep_threads  # noqa: E402  (likewise)
 import sweep_cubical  # noqa: E402
 import sweep_merge  # noqa: E402
 import count_cells  # noqa: E402
+import count_work  # noqa: E402
 import dipha_io  # noqa: E402
 import phat_io  # noqa: E402
 import redzed_io  # noqa: E402
@@ -3216,6 +3217,191 @@ class FacadeRowsTests(unittest.TestCase):
         self.assertIn('(["facade=true"] if lab in FACADE_LABELS else [])', source)
         self.assertEqual(sweep_cubical.FACADE_LABELS, {"facade-fastcubical", "facade-cohomology-cycles"})
         self.assertEqual([e[1:] for e in sweep_cubical.FACADE_ENGINES], [e[1:] for e in sweep_cubical.JS_ENGINES])
+
+
+# ripser.cpp built with -DCOUNT_WORK, on the 12 x 12 lattice (squared distances, --dim 2 --threshold 10): the order of equal
+# edges of Ripser upstream (diameter, then index) and ripser.cpp's -DEDGE_LEXICOGRAPHIC. TDA4j's `work=true` lines on the same
+# input, as `PaperBenchmarkDriver` prints them (the `degrees` object of its JSON line).
+RIPSER_DIAM_WORK = """persistence intervals in dim 0:
+work in dim 1: simplices 1998 apparent 1734 cleared 0 columns 121 sorted 1998 emergent 0 additions 0 apparent_additions 0 pushes 2850
+work in dim 2: simplices 11568 apparent 10876 cleared 121 columns 571 sorted 571 emergent 0 additions 0 apparent_additions 671 pushes 17031
+"""
+RIPSER_EDGE_WORK = """work in dim 1: simplices 1998 apparent 1734 cleared 0 columns 121 sorted 0 emergent 0 additions 0 apparent_additions 0 pushes 2850
+work in dim 2: simplices 11568 apparent 11447 cleared 121 columns 0 sorted 0 emergent 0 additions 0 apparent_additions 0 pushes 0
+"""
+TDA4J_REVERSE_COLEX = {"1": {"simplices": 1998, "cleared": 143, "apparent": 1734, "reduced": 121, "additions": 0},
+                       "2": {"simplices": 11568, "cleared": 1855, "apparent": 9713, "reduced": 0, "additions": 0}}
+TDA4J_LEXICOGRAPHIC = {"1": {"simplices": 1998, "cleared": 143, "apparent": 1734, "reduced": 121, "additions": 121},
+                       "2": {"simplices": 11568, "cleared": 1855, "apparent": 9613, "reduced": 100, "additions": 0}}
+
+
+class WorkCountTests(unittest.TestCase):
+    """bench/count_work.py: the columns each tool reduces and skips, and its column additions, from the counting builds."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.tmp = Path(self.dir.name)
+        (self.tmp / "bars").mkdir()
+        (self.tmp / "logs").mkdir()
+        self.addCleanup(self.dir.cleanup)
+
+    def by_degree(self, text):
+        return {k: count_work.normalized_ripser(c) for k, c in count_work.parse_ripser_work(text).items()}
+
+    def test_ripser_counters_are_read_per_degree_from_stderr(self):
+        counters = count_work.parse_ripser_work(RIPSER_DIAM_WORK)
+        self.assertEqual(sorted(counters), [1, 2], "the `persistence intervals` line is not a counter line")
+        self.assertEqual(counters[2]["apparent_additions"], 671)
+        self.assertEqual(counters[1]["pushes"], 2850)
+
+    def test_ripser_additions_include_the_apparent_ones(self):
+        got = self.by_degree(RIPSER_DIAM_WORK)
+        self.assertEqual(got[2], {"simplices": 11568, "reduced": 571, "skipped": 10997, "additions": 671},
+                         "additions alone is 0 there: the work is in `apparent_additions`")
+        self.assertEqual(got[1], {"simplices": 1998, "reduced": 121, "skipped": 1877, "additions": 0})
+
+    def test_tda4j_skips_the_cleared_pivots_and_the_apparent_columns(self):
+        got = count_work.normalized_tda4j(TDA4J_LEXICOGRAPHIC["2"])
+        self.assertEqual(got, {"simplices": 11568, "reduced": 100, "skipped": 11468, "additions": 0})
+        self.assertEqual(got["reduced"] + got["skipped"], got["simplices"])
+
+    def test_the_same_order_counts_the_same_in_both_tools(self):
+        """The reverse colexicographic order with the larger index older is ripser.cpp's edge-lexicographic order: the
+        comparable fields agree degree by degree, which is what makes the two rows comparable at all."""
+        ours = {int(k): count_work.normalized_tda4j(c) for k, c in TDA4J_REVERSE_COLEX.items()}
+        self.assertEqual(ours, self.by_degree(RIPSER_EDGE_WORK))
+        other = {int(k): count_work.normalized_tda4j(c) for k, c in TDA4J_LEXICOGRAPHIC.items()}
+        self.assertNotEqual(other, self.by_degree(RIPSER_EDGE_WORK), "another order is another count")
+
+    def test_a_total_is_blank_where_a_degree_lacks_the_field(self):
+        full = {1: {"simplices": 5, "reduced": 2, "skipped": 3, "additions": 1}, 2: {"simplices": 7, "reduced": 1, "skipped": 6, "additions": 0}}
+        self.assertEqual(count_work.total(full), {"simplices": 12, "reduced": 3, "skipped": 9, "additions": 1})
+        part = {1: {"reduced": 4}, 2: {"reduced": 5, "skipped": 1}}
+        self.assertEqual(count_work.total(part), {"simplices": "", "reduced": 9, "skipped": "", "additions": ""})
+
+    def test_a_counting_build_is_named_after_the_binary_it_counts(self):
+        self.assertEqual(count_work.count_variable("RIPSER_BIN"), "RIPSER_COUNT_BIN")
+        self.assertEqual(count_work.count_variable("RIPSER_COEFF_BIN"), "RIPSER_COEFF_COUNT_BIN")
+        self.assertEqual(count_work.count_variable("RIPSER_PATCHED_FOREST_BIN"), "RIPSER_PATCHED_FOREST_COUNT_BIN")
+        self.assertEqual(count_work.count_variable("REDZED_PATCHED_HYBRID_BIN"), "REDZED_PATCHED_HYBRID_COUNT_BIN")
+        row = {n: o for n, _, task, o in bench.TOOLS if n == "ripser.cpp" and task == "vr"}["ripser.cpp"]
+        opts = count_work.counting_options("ripser", row)
+        self.assertEqual((opts["binary"], opts["coeff_binary"]), ("RIPSER_COUNT_BIN", "RIPSER_COEFF_COUNT_BIN"))
+        fork = count_work.counting_options("ripser", {"binary": "RIPSER_PATCHED_EDGE_BIN", "coeff_binary": "RIPSER_PATCHED_EDGE_COEFF_BIN"})
+        self.assertEqual((fork["binary"], fork["coeff_binary"]), ("RIPSER_PATCHED_EDGE_COUNT_BIN", "RIPSER_PATCHED_EDGE_COEFF_COUNT_BIN"))
+
+    def test_a_tool_has_a_counting_binary_only_where_the_file_exists(self):
+        fake = self.tmp / "ripser-count"
+        fake.write_text("#!/bin/sh\n")
+        opts = {"binary": "RIPSER_PATCHED_X_BIN", "coeff_binary": "RIPSER_PATCHED_X_COEFF_BIN"}
+        with mock.patch.dict(os.environ, {"RIPSER_PATCHED_X_BIN": "/timed/ripser", "RIPSER_PATCHED_X_COUNT_BIN": str(fake)}):
+            os.environ.pop("RIPSER_PATCHED_X_COEFF_COUNT_BIN", None)
+            self.assertEqual(count_work.counting_binary("ripser", opts, 2), ("RIPSER_PATCHED_X_COUNT_BIN", str(fake)))
+            self.assertIsNone(count_work.counting_binary("ripser", opts, 17), "the Z/2 counting build is not a stand-in for Z/17")
+        with mock.patch.dict(os.environ, {"RIPSER_PATCHED_X_BIN": "/timed/ripser", "RIPSER_PATCHED_X_COUNT_BIN": "/gone/ripser"}):
+            self.assertIsNone(count_work.counting_binary("ripser", opts, 2))
+
+    def fake_tool(self, name, stdout, stderr):
+        script = self.tmp / name
+        script.write_text("#!/usr/bin/env python3\nimport sys\n"
+                          f"sys.stdout.write({stdout!r})\nsys.stderr.write({stderr!r})\n")
+        script.chmod(0o755)
+        return script
+
+    def run_fake(self, kind, tool, stdout, stderr, p=2):
+        case = bench.Case("c", "vr", "c.txt", "points", 2)
+        data = self.tmp / "data"
+        data.mkdir(exist_ok=True)
+        np.savetxt(data / "c.txt", np.random.default_rng(1).random((6, 2)))
+        opts = dict({n: o for n, _, task, o in bench.TOOLS if n == tool and task == "vr"}[tool])
+        script = self.fake_tool("count-" + tool, stdout, stderr)
+        var = count_work.counting_options(kind, opts)["binary"]
+        args = Namespace(timeout=60, pin_cpus=0)
+        env = {"RIPSER_BIN": "/timed/never-run", "REDZED_BIN": "/timed/never-run", var: str(script)}
+        with mock.patch.dict(os.environ, env):
+            return count_work.count_binary_row(case, data, p, 0.75, tool, kind, opts, args, self.tmp)
+
+    BARS = "persistence intervals in dim 0:\n [0,0.5)\n [0, )\npersistence intervals in dim 1:\n [0.25,0.5)\n"
+
+    def test_a_ripser_shaped_build_gives_a_row_per_degree_and_a_total(self):
+        rows = self.run_fake("ripser", "ripser.cpp", self.BARS, RIPSER_DIAM_WORK)
+        self.assertEqual([r["degree"] for r in rows], ["1", "2", "total"])
+        total = rows[-1]
+        self.assertEqual((total["status"], total["simplices"], total["reduced"], total["skipped"], total["additions"]),
+                         ("ok", 13566, 692, 12874, 671))
+        self.assertEqual(json.loads(total["bars"]), {"0": 2, "1": 1})
+        self.assertEqual(json.loads(rows[1]["raw"])["apparent_additions"], 671, "the tool's own counters are kept")
+
+    def test_the_forest_counts_its_columns_and_the_hybrid_only_its_own_counters(self):
+        forest = {"columns": 961, "streams": 10, "heads": 12, "lower_skipped": 99, "critical_cells": 961}
+        rows = self.run_fake("ripser", "ripser.cpp", self.BARS, "WORK " + json.dumps(forest) + "\n")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual((rows[0]["reduced"], rows[0]["skipped"], rows[0]["additions"], rows[0]["simplices"]), (961, "", "", ""))
+        self.assertEqual(json.loads(rows[0]["raw"]), forest)
+        hybrid = {"cells": 721324, "xor_calls": 961, "lower_pairs": 36924, "cleared_cells": 7}
+        rows = self.run_fake("redzed", "redzed", "H0 1 1 0\nBAR 0 0 inf\nBAR 1 0.25 0.5\n", "WORK " + json.dumps(hybrid) + "\n")
+        self.assertEqual((rows[0]["reduced"], rows[0]["skipped"], rows[0]["additions"]), ("", "", ""),
+                         "cells, pairs and xors are not columns reduced, skipped and added")
+        self.assertEqual(json.loads(rows[0]["raw"])["xor_calls"], 961)
+        self.assertEqual(json.loads(rows[0]["bars"]), {"0": 1, "1": 1})
+
+    def test_a_build_that_counts_nothing_is_an_error_not_a_zero(self):
+        rows = self.run_fake("ripser", "ripser.cpp", self.BARS, "")
+        self.assertEqual(rows[0]["status"], "error(output)")
+        self.assertEqual(rows[0]["reduced"], "")
+
+    def test_rows_set_the_tools_side_by_side_and_flag_other_bars(self):
+        case = bench.Case("c", "vr", "c.txt", "points", 2)
+        a = count_work.rows_of(case, 2, "ripser.cpp-patched-edge", "", self.by_degree(RIPSER_EDGE_WORK), {}, None, {"0": 3, "1": 2}, 1.0, 0.1)
+        ours = {int(k): count_work.normalized_tda4j(c) for k, c in TDA4J_LEXICOGRAPHIC.items()}
+        b = count_work.rows_of(case, 2, "tda4j", "ties=lexicographic order=larger-index-first", ours, {}, None, {"0": 3, "1": 2}, 1.0, 0.1)
+        count_work.write_outputs(self.tmp, a + b)
+        with open(self.tmp / "work.csv") as f:
+            rows = list(csv.DictReader(f))
+        self.assertEqual(len(rows), 6)
+        md = (self.tmp / "work.md").read_text()
+        self.assertIn("| tda4j (ties=lexicographic order=larger-index-first) | 13,566 | 221 | 13,345 |", md)
+        self.assertNotIn("differ between these rows", md)
+        c = count_work.rows_of(case, 2, "ripser.cpp-patched-diam", "", self.by_degree(RIPSER_DIAM_WORK), {}, None, {"0": 3, "1": 5}, 1.0, 0.1)
+        count_work.write_outputs(self.tmp, a + b + c)
+        self.assertIn("differ between these rows", (self.tmp / "work.md").read_text())
+
+    def test_the_tie_heavy_cases_are_experiment_cases_and_the_default_of_the_count(self):
+        names = [c.name for c in bench.CASES if c.experiment]
+        self.assertEqual(names, ["lattice32", "equilateral60"])
+        self.assertEqual([c.name for c in count_work.selected_cases("")], names)
+        self.assertEqual([c.name for c in count_work.selected_cases("o3_1024")], ["o3_1024"])
+        self.assertNotIn("lattice32", [c.name for c in bench.cases_wanted("")], "a benchmark run does not time them unasked")
+        self.assertNotIn("lattice32", [c.name for c in bench.cases_wanted("lat*")], "nor by a pattern")
+        self.assertIn("lattice32", [c.name for c in bench.cases_wanted("lattice32,o3_1024")])
+
+    def test_the_order_rows_pass_their_order_to_the_driver_and_are_experiment_rows(self):
+        rows = {n: o for n, k, task, o in bench.TOOLS if k == "tda4j" and task == "vr" and "ties" in o}
+        self.assertEqual(sorted(rows), ["tda4j-parallelverb-1t-hybrid", "tda4j-parallelverb-1t-lex-smaller",
+                                        "tda4j-parallelverb-1t-ripser-edge"])
+        self.assertTrue(all(o["experiment"] and o["engine"] == "parallelverb" for o in rows.values()))
+        self.assertEqual((rows["tda4j-parallelverb-1t-hybrid"]["ties"], rows["tda4j-parallelverb-1t-hybrid"]["order"]),
+                         ("colexicographic", "smaller-index-first"))
+        case = bench.Case("c", "vr", "c.txt", "points", 2)
+        (self.tmp / "cp.txt").write_text("classes")
+        args = Namespace(jvm_heap="1g", jvm_opts="")
+        default = next(o for n, _, task, o in bench.TOOLS if n == "tda4j-parallelverb-1t" and task == "vr")
+        with mock.patch.dict(os.environ, {"TDA4J_CP": str(self.tmp / "cp.txt")}):
+            cmd = bench.command("tda4j", "tda4j-parallelverb-1t-hybrid", rows["tda4j-parallelverb-1t-hybrid"], case, self.tmp, 2,
+                                0.75, 0, 1, self.tmp / "o.tsv", args)
+            plain = bench.command("tda4j", "tda4j-parallelverb-1t", default, case, self.tmp, 2, 0.75, 0, 1, self.tmp / "o.tsv", args)
+        self.assertIn("ties=colexicographic", cmd)
+        self.assertIn("order=smaller-index-first", cmd)
+        self.assertIn("engine=parallelverb", cmd)
+        self.assertIn("sequential=true", cmd, "a one-thread row")
+        self.assertFalse([a for a in plain if a.startswith(("ties=", "order="))], "the default row names no order")
+
+    def test_setup_builds_and_exports_the_counting_binaries(self):
+        script = (HERE_BENCH / "run.sh").read_text()
+        for needle in ("_COUNT_SRC", "_COUNT_FLAGS", "_COUNT_PREP", "-D COUNT_WORK", '-count"', "_COUNT_BIN", "_COEFF_COUNT_BIN",
+                       "count-work)", "count_work.py"):
+            self.assertIn(needle, script)
+
 
 
 if __name__ == "__main__":
