@@ -183,7 +183,7 @@ val jvmSettings: Seq[Setting[?]] = Seq(
     "github://appliedtopology/tda4j/scala",
     "-Yapi-subdirectory",
     "-project-logo",
-    "_assets/images/header-icon.svg",
+    "_assets/images/header-mark.svg",
     "-doc-canonical-base-url",
     "https://tda4j.appliedtopology.org",
     "-social-links:github::https://github.com/appliedtopology/tda4j",
@@ -280,8 +280,8 @@ val patchDocFavicon: Seq[Setting[?]] = Seq(
     val allHTML = (docDir ** "*.html").get()
     allHTML.filter(_.isFile).foreach { file =>
       val content = sbt.IO.read(file)
-      val patched = content.replace(
-        "<link rel=\"shortcut icon\" type=\"image/x-icon\" href=\"favicon.ico\">",
+      val patched = content.replaceAll(
+        "<link rel=\"shortcut icon\" type=\"image/x-icon\" href=\"(?:\\.\\./)*favicon\\.ico\">",
         """
           |<link rel="shortcut icon" type="image/svg+xml" href="/images/header-icon.svg"/>
           |<link rel="apple-touch-icon" sizes="180x180" href="/images/header-icon-180.png"/>
@@ -301,9 +301,22 @@ val patchDocFavicon: Seq[Setting[?]] = Seq(
           |<link rel="icon" sizes="128x128" type="image/png" href="/images/header-icon-dark-128.png" media="(prefers-color-scheme: dark)" />
           |<link rel="icon" sizes="256x256" type="image/png" href="/images/header-icon-dark-256.png" media="(prefers-color-scheme: dark)" />
           |<link rel="manifest" href="/images/manifest-dark.json" media="(prefers-color-scheme: dark)" />
-          |        |""".stripMargin
+          |<style>
+          |  /* Match the large-ring horizontal lockup while retaining the header's live project name. */
+          |  #header .logo-container .project-logo { max-width: 73.6px; margin-right: 7.2px; }
+          |  #header .logo-container .project-logo img { display: block; width: 73.6px; height: 44.8px; }
+          |  #header .logo-container .project-name { margin-right: 0; font: 700 22.4px/1.1 'JetBrains Mono', monospace; color: #1a729b; }
+          |  #header .logo-container .wordmark-accent { margin: 0; color: #d6a20a; }
+          |  :root.theme-dark #header .logo-container .project-name { color: #81bde0; }
+          |  :root.theme-dark #header .logo-container .wordmark-accent { color: #f0c647; }
+          |</style>
+          |""".stripMargin
       )
-      if (patched != content) sbt.IO.write(file, patched)
+      val branded = patched.replaceFirst(
+        "<span class=\"project-name h300\">tda4j</span>",
+        "<span class=\"project-name h300\">tda<span class=\"wordmark-accent\">4</span>j</span>"
+      )
+      if (branded != content) sbt.IO.write(file, branded)
     }
     val favicon = (docDir ** "favicon.ico").get().foreach(file => sbt.IO.delete(file))
     docDir

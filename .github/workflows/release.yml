@@ -7,7 +7,7 @@ name: Release
 # release` doesn't: building the fat jar, the demo REPL jar, the npm package and the Python wheel, attaching every release artifact to a
 # GitHub Release, publishing that version's docs snapshot under its own path on GitHub Pages, and publishing the npm package
 # and (once it is set up) the Python package. `sbt release` publishes both Maven artifacts, `tda4j_3` (JVM)
-# and `tda4j_sjs1_3` (Scala.js).
+# and `tda4j_sjs1_3` (Scala.js). A second job (demo.yml) then publishes the demo's web page and container image.
 
 on:
   workflow_dispatch:
@@ -241,3 +241,15 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: python/dist/
+
+  # The demo for people who install nothing: the page that runs the REPL in a browser (the docs site's /playground/)
+  # and the container image (ghcr.io). After the release, in a job of its own: a failure here shows on the run and
+  # leaves the release complete. This workflow's `concurrency` group covers the job's push to gh-pages.
+  demo:
+    needs: release
+    permissions:
+      contents: write
+      packages: write
+    uses: ./.github/workflows/demo.yml
+    with:
+      ref: ${{ github.event.inputs.tag || github.ref_name }}

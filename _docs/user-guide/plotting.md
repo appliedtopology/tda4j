@@ -32,6 +32,28 @@ no windows to manage, and the REPL exits as usual. On a remote machine or in a c
 forward the port (`ssh -L 8337:localhost:8337 host`) and open it locally. Set `TDA4J_PLOT_BROWSER=none` (or the system property
 `tda4j.plot.browser=none`) to never open a browser, and the system property `tda4j.plot.port` (or `TDA4J_PLOT_PORT`) for another port.
 
+The server answers only programs on your own machine. Where the page has to be read from elsewhere and the port cannot be
+forwarded (a container that publishes the port to its host), set `TDA4J_PLOT_HOST` (or the system property
+`tda4j.plot.host`) to the address to listen on; `0.0.0.0` is every address the machine has. The page has no password, so
+whoever reaches the port sees the plots.
+
+A program that runs your code for you and has its own place for plots (a notebook, a page that hosts a REPL) takes
+them with `Plot.viewWith`: every `view()` inside its block goes to the function it was given, and the viewer does not
+start.
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val square = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0))
+val pages = scala.collection.mutable.ArrayBuffer.empty[String]
+
+Plot.viewWith(plot => pages += plot.html()) {
+  Plot.barcode(Persistence(square)).view()      // goes to `pages`, not to a browser tab
+}
+```
+
 ## Into files: `save`
 
 ```scala
@@ -235,6 +257,362 @@ Plot.cycle(points, loop.representative).over(Plot.complex(points, loop.birth)).v
 A cocycle of a bar lives on the complex where the bar dies, so it has edges right across the data; restricted to the
 complex at the bar's birth (`at = loop.birth`) it shows the edges that cut the loop as it closes. A result's
 `plotRepresentative(i)` draws a cocycle that way, and `plotRepresentative(i, Inf)` draws it whole.
+
+## A slider through the filtration
+
+`Plot.filtration` is a page with a slider for the scale. On the left, the complex at that scale: the balls around the
+points and the edges and triangles that have come in by then. On the right, the persistence diagram, where each class is a
+vertical segment from the diagonal up to the horizontal line that follows the slider, and becomes a point once the line
+passes its death. Classes that never die grow with the line.
+
+<div class="tabset">
+<div class="tab" data-lang="Scala">
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val points = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
+Plot.filtration(points, max = 1.0).withTitle("A noisy circle").withPlay(10.0).save("filtration.html")
+```
+
+</div>
+<div class="tab" data-lang="MATLAB">
+
+```matlab
+import org.appliedtopology.tda4j.matlab.*;
+
+points = readmatrix('_docs/tutorials/data/noisy-circle.csv');
+result = TDA4j.computeFromPoints(points, {'maxDimension', '1'});
+
+result.plotFiltration(1.0).withTitle('A noisy circle').withPlay(10.0).save('filtration.html');
+```
+
+</div>
+<div class="tab" data-lang="Python">
+
+```python
+import tda4j
+import numpy as np
+
+points = np.loadtxt("_docs/tutorials/data/noisy-circle.csv", delimiter=",")
+result = tda4j.persistence(points, max_dimension=1)
+page = result.plot_filtration(1.0).with_title("A noisy circle").with_play(10.0)
+page.save("filtration.html")
+```
+
+</div>
+</div>
+
+From the command line, `tda4j --max-dimension 1 --plot filtration --at 1.0 --output filtration.html points.csv` writes the same page.
+
+The page is one HTML file with its script inside: open it in a browser, send it by mail or put it on a web server. It needs
+no network and no library. Drag the slider, use the arrow keys, or press play (`withPlay(seconds)` sets how long a sweep
+takes). It follows the reader's light or dark setting like every page. The scale runs from 0 to `max`; the Scala
+call takes the largest scale as `max`, the facades as their argument. Options of `Plot.filtration`:
+
+| option | does |
+|---|---|
+| `kind = Cech`, `AlphaShapes` | another complex (balls of radius equal to the scale instead of half of it) |
+| `balls = false` | no balls |
+| `barcode = true` | the barcode with a movable vertical line instead of the diagram: each bar grows until the line passes its death |
+| `stops = true` | the slider steps through the values at which the complex changes, one step for each change of the picture |
+| `start` | where the slider begins |
+| `link = true` | the diagram (and the barcode) are [linked](#exploring-a-barcode) to each other and to the complex, where a chosen class draws its cycle; the pictures zoom |
+| `maxCells` | the page holds every edge and triangle up to `max`; asked for more than this (200,000 by default), it refuses and says to lower `max` |
+| `canvas` | up to 20,000 cells the complex is an SVG with axes, one element for each cell. Above that it is a canvas, a flat picture seen from above with an x axis, a y axis and gridlines: a drag pans it, the wheel zooms about the pointer, the numbers and the gridlines follow, and it takes about a seventh of the bytes and a hundredth of the elements. `canvas = true` or `false` chooses either way |
+
+`Plot.filtration3D(points)` is the same with the complex in 3-D, a canvas to turn and zoom beside the diagram;
+`result.plotFiltration3D(max)` from a result, `--plot filtration-3d` on the command line. The balls grow with the slider.
+The frame is fitted to the points, so a ball larger than the picture is cut at its edge. With `link = true` the canvas is
+linked like the flat page: a class chosen in the diagram or the barcode draws its cycle in the canvas, pointing at an item
+of the canvas chooses it, and the items that are chosen get a halo. On a touch screen one finger turns the canvas (it does
+not scroll the page: scroll from outside it) and two fingers pinch to zoom. `Plot.filtrationOf(points, stream,
+bars)` takes a complex and a diagram of your own, for instance a witness complex or one whose diagram you computed with
+another engine.
+
+### Frames, a video and a slide
+
+An interactive page works in a browser and nowhere else, so the same plot also gives still pictures. `page.at(0.6)` is the
+picture with the slider at 0.6, `page.frames(60)` sixty of them from the smallest scale to the largest, and
+`page.saveFrames("frames", 60)` writes them as `frame-0000.svg` and on. The axes are fixed across frames, so nothing jumps
+when they are played. Each frame is built from the same rules as the page (a cell is shown from the value at which it
+enters, a class from its birth), so a frame at a scale shows the cells that `Plot.complex` shows at that scale.
+
+The other languages write the same frames. Python: `page.save_frames("frames", 60)`. JavaScript: `chart.saveFrames("frames", 60)`
+on Node.js writes the files, and `chart.frames(60)` returns the 60 SVG documents as strings, in a browser too. On the
+command line `--frames 60` with `--plot filtration --at 1.0` writes them into the folder that `--output` names (a folder,
+not a file):
+
+```bash
+tda4j --max-dimension 1 --plot filtration --at 1.0 --frames 60 --output frames points.csv
+```
+
+The frames are SVG. A video needs pictures: convert them and let `ffmpeg` join them. A paper-white background (`withPalette("print")`
+and `withStyle("print")`) keeps the video from showing a transparent background as black:
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val points = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
+val page = Plot.filtration(points, max = 1.0).withPalette("print").withStyle("print")
+page.saveFrames("frames", 60)
+```
+
+```bash
+pip install cairosvg
+python3 -c "
+import cairosvg, glob, os
+os.makedirs('png', exist_ok=True)
+for f in sorted(glob.glob('frames/frame-*.svg')):
+    cairosvg.svg2png(url=f, write_to='png/' + os.path.basename(f)[:-4] + '.png', scale=2)"
+
+# an MP4 (H.264, plays in PowerPoint, Keynote and every browser); 12 pictures a second
+ffmpeg -framerate 12 -i png/frame-%04d.png -c:v libx264 -pix_fmt yuv420p \
+  -vf "pad=ceil(iw/2)*2:ceil(ih/2)*2" -movflags +faststart filtration.mp4
+
+# or a GIF
+ffmpeg -framerate 12 -i png/frame-%04d.png \
+  -vf "split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=5" filtration.gif
+```
+
+(`ffmpeg` and `cairosvg` are separate programs; the commands were run with ffmpeg 6.1 and cairosvg 2.9 on 60 frames of a
+noisy circle, and give a 1132 by 558 MP4 of 5 seconds at 12 pictures a second.) Chromium or Inkscape make the PNGs just as well, see [PNG and PDF](#png-and-pdf). The
+stills show only the behaviors the library knows. A page with a script of your own (below) is recorded by driving the
+page itself: this Playwright script moves the slider through its range and takes a screenshot of the page at each
+step, which `ffmpeg` joins as above:
+
+```js
+// node record.mjs filtration.html shots 60   (npm install playwright)
+import { chromium } from 'playwright';
+import fs from 'fs';
+const [file, dir, count] = process.argv.slice(2);
+fs.mkdirSync(dir, { recursive: true });
+const browser = await chromium.launch();
+const page = await browser.newPage({ viewport: { width: 1200, height: 640 }, deviceScaleFactor: 2 });
+await page.goto('file://' + process.cwd() + '/' + file);
+const root = page.locator('.tda4j-ia');
+const { n, min, max } = await root.evaluate(el => el.tda4j.controls[0]);
+for (let i = 0; i < +count; i++) {
+  await root.evaluate((el, name, v) => el.tda4j.set(name, v), n, min + (max - min) * i / (count - 1));
+  await root.screenshot({ path: `${dir}/shot-${String(i).padStart(4, '0')}.png` });
+}
+await browser.close();
+```
+
+**In PowerPoint.** A slide cannot run the page: PowerPoint has no way to embed HTML and script, and an SVG on a slide is a
+still picture. What does work is the video: *Insert > Video > This Device* takes the MP4 and plays it in the slide show
+(*Playback > Start: Automatically* starts it without a click). Where the slide
+should stay still while you talk, put one frame on each of several slides (`page.at(0.3)`, `page.at(0.6)`, ... saved as SVG or
+PNG): the picture changes when you click, and it is exactly the picture the page shows. A deck can also be made by a
+script: with `python-pptx`, `slide.shapes.add_movie("filtration.mp4", left, top, width, height,
+poster_frame_image="png/frame-0059.png", mime_type="video/mp4")` embeds the video and a poster frame, and LibreOffice opens
+the result and shows the poster (the video itself was not played, and nothing here was tried in PowerPoint itself). For a page
+that really moves in front of an audience, switch to the browser (Alt+Tab, or a hyperlink on the slide to the file).
+Microsoft's *Web Viewer* add-in can show a web page inside a slide, but only an `https` address and with an internet
+connection, so the page has to be on a server first, and Microsoft has changed what the add-in does more than once: test
+it on the machine you present from before relying on it.
+
+**In reveal.js.** The page is plain HTML and script, so a [reveal.js](https://revealjs.com) deck runs it, and the slide
+moves with the slider. Either point a slide at the saved page, or paste `page.fragment()` into the slide's source:
+
+```html
+<section><iframe class="r-stretch" data-src="filtration.html" style="width:100%;border:0"></iframe></section>
+```
+
+Pages written by separate runs can share one deck: each page's element ids carry a token drawn per run, so a second page's
+slider never drives the first's picture. A page fits the room it is given: the panels sit side by side at their own size
+(1132 pixels for the two default ones) when there is room, shrink together when there is less, and stack below about 650
+pixels. The arrow keys move a focused slider and leave the slide where it is. This was tried in Chromium with reveal.js
+5.2.1; Firefox and Safari were not, and a fragment put in with `innerHTML` does not run its script (the browser skips it).
+
+### Interactivity of your own
+
+The page is built from small values, with the same chained style as the rest of the plots. A **control** is a slider with
+a name. A **behavior** says what a control does to an item of a mark, and a **panel** is a figure (or a 3-D scene) with
+behaviors attached to the items of its marks, either one for all items or one for each, as `paints` work. An
+`Interactive` is panels and controls side by side:
+
+| behavior | the item |
+|---|---|
+| `Behavior.shownFrom(c, v)`, `shownUntil(c, v)`, `shownBetween(c, a, b)` | is there while the value of control `c` is at least `v`, below `v`, or from `a` up to but not including `b` |
+| `Behavior.followsX(c)`, `followsY(c, lo, hi, ends)`, `followsZ(c, lo, hi, ends)` | has this coordinate equal to the value of `c`, held between `lo` and `hi`: a movable line, a bar that grows, and in a 3-D scene a plane that rises (`followsZ`) |
+| `Behavior.radius(c, factor)` | for the discs of a mark: radius is `factor` times the value (data units; linear axes only) |
+| `Behavior.custom(kind, c, args*)` | whatever your script says (below) |
+
+`a + b` puts several behaviors on one item. This shows a point cloud one point at a time, and writes the same thing as
+40 still frames:
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val points = Array.tabulate(40)(i => Array(math.cos(i * 0.157), math.sin(i * 0.157)))
+val cloud = points.map(p => (p(0), p(1))).toIndexedSeq
+
+val reveal = Panel(Plot.points(points)).reactEach(
+  Mark.Points(cloud, IndexedSeq(Paint.Series(1)), radius = 6),
+  cloud.indices.map(i => Reaction(Vector(Behavior.shownFrom("t", i.toDouble))))
+)
+val page = Interactive().withSlider("t", 0, 39).withPanel(reveal).withTitle("One point at a time")
+
+page.save("reveal.html")
+page.saveFrames("reveal-frames", 40)
+```
+
+Behaviors that the library cannot know are written in JavaScript: `withScript(js)` runs your script on the page, where
+`tda4j` is the page's controller with `get(name)`, `set(name, value)`, `onChange(name, f)` and `reactor(kind, f)`, which
+says what a `Behavior.custom(kind, ...)` does to its item (`f(item, behavior, value)`, `item.el` the SVG element). Each change
+of a control is also announced as a `tda4j:change` event on the page's element, for anything else on the page. A
+frame shows the item as it was drawn, without the effect of a custom behavior. A behavior the page cannot carry out
+(a `radius` on a logarithmic axis) is refused when the panel is built, with the reason.
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val points = Array.tabulate(40)(i => Array(math.cos(i * 0.157), math.sin(i * 0.157)))
+val cloud = points.map(p => (p(0), p(1))).toIndexedSeq
+
+val glowing = Panel(Plot.points(points)).react(
+  Mark.Points(cloud, IndexedSeq(Paint.Series(2)), radius = 8),
+  Behavior.custom("glow", "t")
+)
+Interactive()
+  .withSlider("t", 0, 1)
+  .withPanel(glowing)
+  .withScript("tda4j.reactor('glow', (item, behavior, v) => { item.el.style.opacity = v; })")
+  .save("glow.html")
+```
+
+Every plot tweak of this page reaches every panel: `page.withPalette("print")`, `withStyle`, `withTextScale`, `withSetting`.
+`Panel.sweepDiagram(figure, control)` and `Panel.sweepBarcode(figure, control)` turn a diagram or a barcode into the
+sweeping panel of this page, for a page of your own.
+
+## Exploring a barcode
+
+`Plot.exploreOn(points, bars)` is a page of three pictures that know about each other: the point cloud, the persistence
+diagram and the barcode. Point at a class in the diagram or the barcode and it lights up in the other one, and its
+representative cycle is drawn on the points. A click keeps the class chosen (a shift-click adds another, a click on the
+background lets them all go), dragging a rectangle over a diagram or a barcode chooses every class it touches, and the
+page lists what is chosen under the pictures. Every picture zooms and pans.
+
+<div class="tabset">
+<div class="tab" data-lang="Scala">
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val points = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
+val d = Persistence(points, maxDimension = 1)
+Plot.exploreOn(points, d).withTitle("A noisy circle").save("explore.html")
+```
+
+</div>
+<div class="tab" data-lang="MATLAB">
+
+```matlab
+import org.appliedtopology.tda4j.matlab.*;
+
+points = readmatrix('_docs/tutorials/data/noisy-circle.csv');
+result = TDA4j.computeFromPoints(points, {'maxDimension', '1'});
+
+result.plotExplore().withTitle('A noisy circle').save('explore.html');
+```
+
+</div>
+<div class="tab" data-lang="Python">
+
+```python
+import tda4j
+import numpy as np
+
+points = np.loadtxt("_docs/tutorials/data/noisy-circle.csv", delimiter=",")
+result = tda4j.persistence(points, max_dimension=1)
+result.plot_explore().with_title("A noisy circle").save("explore.html")
+```
+
+</div>
+</div>
+
+On the command line, `tda4j --max-dimension 1 --plot explore --output explore.html points.csv` writes the same page.
+`Plot.explore(bars)` is the diagram and the barcode without the points, and `Plot.filtration(points, link = true)` is the
+slider page above with the same links, so that a class chosen in the diagram draws its cycle on the complex at the
+scale the slider shows. The cycles are the bars' representatives (`Persistence` records cycles by default; a cocycle is
+drawn as it is). A page holds every cell of every cycle, so `maxCycleCells` (20,000) keeps the most persistent bars' cycles
+and leaves the rest of the classes lit up in the diagram and the barcode without a cycle; the cloud's subtitle says so.
+
+**Zoom and pan.** Each picture has buttons in its corner: `+` and `−` zoom about the middle, `1:1` shows everything, and
+`Ctrl` (`Cmd` on a Mac) with the mouse wheel zooms about the pointer, which keeps the point under it where it was. Dragging
+pans; in a picture where dragging also chooses classes, the button `pan` switches what a drag does. On a touch screen two
+fingers pinch and drag the picture (the distance between them zooms, their midpoint pans), one finger scrolls the page as it
+does everywhere, and a tap chooses. A picture where a drag chooses has a `touch` button: while it is on, one finger draws the
+rectangle (and a second finger landing is a pinch, which drops it). From the keyboard, `Tab` reaches a picture; `+` and `-` zoom about the middle, `0` shows
+everything, and the arrow keys pan where a drag pans (`Shift` goes further). In a picture where a drag chooses, the arrow keys
+move a cross over it instead, `]` and `[` (or `Page Down` and `Page Up`) put the cross on the next and the previous item the
+rectangle can choose, left to right and top to bottom, `Home` and `End` on the first and the last, `Enter` sets one corner of
+the rectangle and a second `Enter` chooses what it touches (`Shift` adds to what is chosen), and `Escape` lets go. Two items
+make a rectangle, however far apart they are: step to one, `Enter`, step to the other, `Enter`. The axes follow: new
+gridlines and numbers for the range shown, written as the plot writes them, while lines keep their width and points their
+size. Zooming stops at 1/200 of the picture, and the picture of an equal-aspect plot keeps its aspect (the barcode zooms
+along the filtration only, and keeps all its rows). What the window cuts away cannot be pointed at or chosen. A page that
+only zooms needs no slider: `Interactive().withPanel(Panel(figure).zoomable())`, or `page.zoomable()` on any page, which
+makes zoomable every flat panel whose axes the page can draw again: linear, logarithmic, square-root, symmetric-log and
+reversed axes, with their number formats, number style, slanted labels and minor ticks. Three things it cannot draw again: a
+transform of your own, a logarithmic axis with a `-∞` line for what is at 0, and a number format other than `%f` and `%e` (with
+the flags `-`, `+`, `0` and `,`, a width and a precision). `Panel.zoomable` refuses them with the reason, and `zoomable()`
+leaves those panels as they are. The 3-D canvases have a zoom of their own.
+
+**Stills.** A viewer's choice is a value like a slider's: `page.at(PageState().select("class", 3).zoom(1, Window(-0.1, 0.6,
+0.1, 0.8)))` is the picture with class 3 chosen (the key is the position of the bar in the list given) and the second
+picture, the diagram, showing that range (an equal-aspect picture widens one range of a window to keep its aspect, as the page
+does).
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val points = CSV.readPointCloud("_docs/tutorials/data/noisy-circle.csv")
+val d = Persistence(points, maxDimension = 1)
+val page = Plot.exploreOn(points, d)
+val chosen = d.bars.indices.maxBy(k => d.bars(k).persistence)
+page.at(PageState().select("class", chosen).zoom(1, Window(-0.1, 0.6, 0.1, 0.8))).save("explore-still.svg")
+```
+
+A rectangle that a viewer has dragged out is part of the state too: `PageState().brush(panel, Window(x0, x1, y0, y1))` draws it
+in a brushable panel, a dashed box in the picture's own units, and `select` gives what it touches, as the page does. Both are
+needed to show what a viewer who dragged a rectangle sees.
+
+### Selections of your own
+
+A **selection** is to a viewer's pointer what a slider is to a slider's value: a named set of whole-number keys that panels
+choose from and react to. `Panel.selecting(mark, name, keys)` makes the items of a mark choose the key `keys(i)` while the
+pointer is on them and lights a translucent halo round them while their key is chosen by anyone, `brushable(name)` lets a
+drag choose (on a 3-D canvas the `box` button makes a drag draw the rectangle, in the plane of the view, instead of turning the
+picture), and `Behavior.selected(name, key)` shows an item (a cycle, a label) only while a key is chosen, together with
+`shownFrom` and `followsY`, so a page can have both a slider and a selection. `Interactive.withSelection(Selection(name))`
+declares the selection (`withList`, `withLabels(...)`, `clickOnly`, `hoverOnly` change how it behaves and what the page
+writes under the pictures). On the page, `tda4j.selection(name)` gives the chosen keys to a script of your own, `tda4j.onChange(name, f)` calls `f` with
+the keys at every change, and the change is also announced as a `tda4j:change` event whose `value` is the array of keys. The
+zoom has `tda4j.zoom(panel, [x0, x1, y0, y1])`, `tda4j.window(panel)` and `tda4j.resetZoom(panel)` (panels counted from 0), and
+each new window is announced as a `tda4j:zoom` event. The rectangle of a brushable panel is `tda4j.brush(panel, [x0, x1, y0,
+y1])` (no argument clears it), and `tda4j.pointAt(panel, clientX, clientY)` is the data under a point of the window. `Plot.explore`
+is built from exactly these pieces, so it is the example to read.
+
+These pages are checked in Chromium, Firefox and WebKit (Safari's engine) on every change: the page's picture at each state
+is compared with the still the library draws for the same state. Touch gestures are checked in Chromium with touch events
+that a script sends, not on a phone, and not in Firefox or WebKit; Safari on an iPhone was not tried. What these pages do not
+have: a rectangle on a 3-D canvas lies in the plane of the view, so it is dropped when the picture turns, zooms or pans, and a
+touch screen draws a rectangle only after the `touch` or `box` button (one finger scrolls the page or turns the picture
+otherwise).
 
 ## Customizing a plot
 
@@ -682,6 +1060,81 @@ scene.save("helix.svg")
 
 From MATLAB it is `scene.withCamera(20, 10, 1.3)` and `scene.withSetting('camera.zoom=1.3')`; on the command line,
 `--plot input-3d --set camera.azimuth=20 --set camera.zoom=1.3`.
+
+A scene seen from above (`azimuth = 0, elevation = 90`) is a flat picture, and `withAxes` gives it an x axis and a y axis with
+numbers at round values of the plane's coordinates, gridlines at the numbers and what lies beyond the axes clipped. On a page the
+numbers and the gridlines follow the pan and the zoom; a scene with axes asks for the view from above and says so otherwise.
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val flat = Scene(
+  Vector(Layer.Points(IndexedSeq((-2.0, -1.0, 0.0), (0.0, 1.0, 0.0), (2.0, 0.0, 0.0)), IndexedSeq(Paint.Ink), 4.0)),
+  azimuth = 0,
+  elevation = 90,
+  turns = false
+).withAxes
+flat.save("flat.svg")
+```
+
+The axes take what a figure's take, with three exceptions below. `withXLabel` and `withYLabel` (or `Labels(x = ..., y = ...)`)
+write the names beside the numbers. `withXScale`, `withYScale` and `withXYScale` (or `Scale.x/y/xy`) set an axis:
+
+| option | what it does on a flat picture |
+|---|---|
+| `transform` | `Log10`, `Sqrt` or `SymLog(c)`. A log axis needs positive numbers; a symmetric log keeps zero and the negative ones. The picture is the data after the transforms, with one scale on both axes |
+| `min`, `max`, `padding` | the range the picture opens on, in data units, and what the `0` key returns to. An end that is not given is the data's, padded by `padding` (default 0.04) of their extent. The picture keeps equal units on both axes, so the range is widened to the shape of the plot area, and the pan and the zoom move off it. Without any of the three, the picture is fitted to its points |
+| `breaks`, `format` | where the numbers stand (those that are in view) and a printf pattern for them: `%f` and `%e`, with the flags `-`, `+`, `0` and `,`, a width and a precision |
+| `reverse` | runs the axis the other way: the points, the numbers and the gridlines are mirrored together |
+| `visible` | `false` leaves out the axis: its line, numbers, label and gridlines, and the room they took |
+| `grid` | `false` removes the gridlines of an axis; `Lines.grid(...)` restyles them |
+
+The page writes the same numbers as the file, and they follow the pan and the zoom. Three things stay with a `Figure` and are
+refused here, with the way out: `position` and `crossesAt` (the axes of a canvas stay at the foot and the left edge of its plot
+area), and `minusInfinity` (a canvas that pans has no place for a `-∞` line: a point at zero on a log axis is refused, and
+`SymLog` keeps it); so is a transform of your own, which has no ticks a page can draw. A control that moves an item
+(`Behavior.Follows`) works on any axis: its value goes through the axis, so on a square-root axis the item is at the root.
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val birth = IndexedSeq.tabulate(12)(i => math.pow(10, -2.0 + 0.4 * i))
+val loglog = Scene(
+  Vector(Layer.Points(birth.map(b => (b, 3 * b, 0.0)), IndexedSeq(Paint.Ink), 4.0)),
+  azimuth = 0,
+  elevation = 90,
+  turns = false
+).withAxes
+  .withXYScale(Transform.Log10)
+  .withLabels(x = "birth", y = "death")
+loglog.save("loglog.svg")
+```
+
+A range, the breaks and a format, and an axis that runs backwards:
+
+```scala
+import scala.language.experimental.modularity
+import org.appliedtopology.tda4j.*
+import org.appliedtopology.tda4j.plot.*
+
+val spread = IndexedSeq.tabulate(20)(i => (i - 4.0, 1.0 + 0.4 * i, 0.0))
+val window = Scene(
+  Vector(Layer.Points(spread, IndexedSeq(Paint.Ink), 4.0)),
+  azimuth = 0,
+  elevation = 90,
+  turns = false
+).withAxes
+  .withXScale(min = 0.0, max = 8.0, breaks = Seq(0.0, 2.0, 4.0, 6.0, 8.0), format = "%.1f")
+  .withYScale(reverse = true)
+  .withTitle("Opens on x from 0 to 8")
+window.save("window.svg")
+```
+
+From MATLAB, `scene.withXLabel('birth').withXScale('log')` and `scene.withXRange(0, 8)`.
 
 ### For a paper, and for a page of either color
 

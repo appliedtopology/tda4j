@@ -55,7 +55,7 @@ elements once it grows on Scala.js: keep a stack or queue in an `Int` array, or 
 
 ## The seams
 
-`Parallel` (`threads`, `foreach`, `map`, `ranges`, `both`, `sort`, `sortLongs`, `sortInts`, `tasks`, `withThreads`, `limit`, `sequentially`; in order on JS; every user must give the same result for any split, `Parallel.byDefault` is the default of the `parallelFiltrationValue` flags), `FiltrationCache` (`TrieMap` on the JVM, `HashMap` on JS: `TrieMap` does not link on Scala.js),
+`Parallel` (`threads`, `foreach`, `map`, `ranges`, `both`, `sort`, `sortLongs`, `sortInts`, `tasks`, `withThreads`, `limit`, `sequentially`; in order on JS; every user must give the same result for any split, `Parallel.byDefault` is the default of the `parallelFiltrationValue` flags; on the JVM `threads` is the common pool's workers and the caller, within the processors unless the pool's system property sized it, and at 1 every step, `ranges` too, runs on the caller: `WORKLOG-one-processor-threads.md`), `FiltrationCache` (`TrieMap` on the JVM, `HashMap` on JS: `TrieMap` does not link on Scala.js),
 `plot.RootText` (`java.util.Locale` does not exist on Scala.js: lower-case keywords with `.lowerRoot`, format with
 `RootText.format`, locale symbols from `Intl`), `cli.ProcessExit` (`System.exit` does not exist there), `FileAccess` (Node `fs` found with `process.getBuiltinModule`, so a bundle loads in a browser
 and only the file calls fail, with a message that says why; failures are `java.io.IOException`s on both platforms),

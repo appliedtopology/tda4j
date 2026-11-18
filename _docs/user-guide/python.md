@@ -94,10 +94,15 @@ result.plot_barcode()      # a figure; in a notebook it shows itself, `.save("ba
 * `landscape`, `betti_curve`, `silhouette`, `persistence_entropy`, `persistence_image` (see [vectorization](vectorization.md)).
 * `boundary()` and `cells()`: the filtered complex as a boundary matrix in coordinate form, and its cells.
 * `plot_barcode()`, `plot_diagram()`, `plot_landscape(dim)`, `plot_persistence_image(dim)`, `plot_input()`, `plot_complex(at)`,
-  `plot_representative(i)` and the `_3d` variants return a `Plot`: `svg()` and `html()` give its text, `save(path)` writes an
+  `plot_filtration(max)`, `plot_representative(i)` and the `_3d` variants return a `Plot`: `svg()` and `html()` give its text, `save(path)` writes an
   `.svg` or `.html` file, `view()` opens it in the library's live viewer, and a notebook shows it. The [tweaks](plotting.md) that
   take plain arguments are methods in snake_case that return a new plot: `plot.with_title("A circle").with_size(800, 600)`. `tda4j.side(a, b)`
-  puts plots in one row, and `tda4j.set_plot_defaults("palette=print")` changes the look of the next ones.
+  puts plots in one row, and `tda4j.set_plot_defaults("palette=print")` changes the look of the next ones. `plot_filtration(max)` is a page
+  with a slider for the scale beside the persistence diagram (`save("page.html")`; `save_frames(directory, count)` writes a still
+  picture at each of `count` scales, for a video or the slides of a talk, see [a slider through the filtration](plotting.md#a-slider-through-the-filtration)).
+  `plot_explore()` and `plot_linked_filtration(max)` are pages whose pictures are linked, zoom and choose classes (see
+  [exploring a barcode](plotting.md#exploring-a-barcode)). A notebook shows these pages, and `plot_filtration`'s, as the live page
+  (a Jupyter notebook has to be trusted to run its scripts); every other plot shows as its SVG.
 * `save(path)`, to be read back by `load_result`.
 
 ### Tutorials

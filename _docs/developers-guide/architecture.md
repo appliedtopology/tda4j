@@ -585,7 +585,9 @@ the sort of each dimension of a flat-array stream, the build of the cohomology e
 reduction of the death dimensions in the cycle representatives. `Parallel.sequentially { ... }` runs everything called
 from the current thread on that thread: the reference run of a test, and `sequential=true` of the benchmark drivers.
 `-Djava.util.concurrent.ForkJoinPool.common.parallelism=N` sets the number of workers for the whole library; `0` is
-sequential. `Parallel.withThreads(n) { ... }` runs its body on a fork-join pool of `n` threads instead (`1` is
+sequential. `Parallel.threads` is those workers and the calling thread, which works beside them; without the property
+it is no more than the processors of the machine, so one processor is one thread although the JVM's pool has a worker
+there (`Parallel.commonThreads`). Every step runs on the calling thread when the count is 1. `Parallel.withThreads(n) { ... }` runs its body on a fork-join pool of `n` threads instead (`1` is
 `sequentially`), which is what the `threads` option of `Persistence`, the MATLAB facade and the CLI call: `Parallel.threads`
 inside it is `n`, and work that outlives the call (a representative built when first read) carries the count with
 `Parallel.limit` and `Parallel.limited`. A body that already runs on a fork-join pool of `n` threads just runs. Scala.js

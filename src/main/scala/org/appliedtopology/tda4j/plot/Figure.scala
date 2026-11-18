@@ -145,6 +145,15 @@ object Mark:
     /** The line `x = value`. */
     def vertical(value: Double): Rule = Rule(value, vertical = true)
 
+  /** A rectangle `(x0, y0, x1, y1)` over part of the plot, a translucent fill with a dashed outline: a region of
+    * interest, or the rectangle a viewer has dragged out ([[PageState.brush]]). Like a [[Rule]] it takes no part in
+    * choosing the visible range.
+    */
+  final case class Region(box: (Double, Double, Double, Double), paint: Paint = Paint.Series(0), tip: String = "")
+      extends Mark:
+    def paints: IndexedSeq[Paint] = IndexedSeq(paint)
+    def tips: IndexedSeq[String] = if tip.isEmpty then IndexedSeq.empty else IndexedSeq(tip)
+
 /** Where an axis puts its ticks. */
 enum Ticks:
   /** Round values over the visible range. */

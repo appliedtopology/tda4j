@@ -45,6 +45,21 @@ class PlotCLISpec extends Specification:
   /** Each SVG render numbers its clip path; two renders of one figure differ only there. */
   private def normalized(svg: String): String = svg.replaceAll("tda4j[0-9]+", "tda4jN")
 
+  /** A page names its wrapper by run and number (`tda4jia-1k2f-2`) and its pictures under that, apart from the clip
+    * paths.
+    */
+  private def numbered(page: String): String =
+    page.replaceAll("tda4jia-[0-9a-z]+-[0-9]+", "tda4jN").replaceAll("tda4j[0-9]+", "tda4jN")
+
+  /** Where two long texts first differ, with a little of each; `None` when they are equal. */
+  private def firstDifference(a: String, b: String): Option[String] =
+    if a == b then None
+    else
+      val i = a.zip(b).indexWhere((x, y) => x != y) match
+        case -1 => math.min(a.length, b.length)
+        case k  => k
+      Some(s"differ at $i: ${a.slice(i - 60, i + 80)} <> ${b.slice(i - 60, i + 80)}")
+
   private val circle =
     val rng = scala.util.Random(11)
     Array.tabulate(30) { i =>
@@ -116,6 +131,68 @@ class PlotCLISpec extends Specification:
         (run("--max-dimension", "1", "--plot", "complex", "--at", "0.5", "--output", complex, circleFile)._1 must
           beEqualTo(0)) and
         (read(complex).toLowerCase must startWith("<!doctype html>"))
+    }
+    "write the page with a slider for --plot filtration, the same one the facade builds, and its first still as an .svg" >> {
+      val (page, still) = (tempPath(".html"), tempPath(".svg"))
+      val args = Seq("--max-dimension", "1", "--plot", "filtration", "--at", "0.8")
+      val expected = direct.plotFiltration(0.8)
+      val built = expected.html()
+      (run(args ++ Seq("--output", page, circleFile)*)._1 must beEqualTo(0)) and
+        (firstDifference(numbered(read(page)), numbered(built)) must beNone) and
+        (read(page).contains("type=\"range\"") must beTrue) and
+        (run(args ++ Seq("--output", still, circleFile)*)._1 must beEqualTo(0)) and
+        (firstDifference(numbered(read(still)), numbered(expected.svgFile(plot.Theme.Light))) must beNone) and
+        (run("--max-dimension", "1", "--plot", "filtration-3d", "--at", "0.8", "--output", page, circleFile)._1 must
+          beEqualTo(0)) and
+        (read(page).contains("<canvas") must beTrue)
+    }
+    "write --frames still pictures of --plot filtration into the directory --output names, the ones the facade writes" >> {
+      val made = Files.createTempDirectory("plot-cli-frames").resolve("not-yet").toString
+      val args = Seq("--max-dimension", "1", "--plot", "filtration", "--at", "0.8", "--frames", "3")
+      val written = direct.plotFiltration(0.8).saveFrames(Files.createTempDirectory("plot-cli-direct").toString, 3)
+      val err = stderrOf(run(args ++ Seq("--output", made, circleFile)*)._1 must beEqualTo(0))
+      val names =
+        Files.list(Paths.get(made)).toArray.map(_.asInstanceOf[java.nio.file.Path].getFileName.toString).sorted.toSeq
+      (names must beEqualTo(Seq("frame-0000.svg", "frame-0001.svg", "frame-0002.svg"))) and
+        (err must contain("wrote 3 frames")) and
+        (firstDifference(
+          numbered(read(s"$made/frame-0002.svg")),
+          numbered(read(written(2)))
+        ) must beNone) and
+        // the complex grows with the slider: the last frame has more lines than the first, not the same picture three times
+        (("<line".r.findAllIn(read(s"$made/frame-0000.svg")).size) must
+          beLessThan("<line".r.findAllIn(read(s"$made/frame-0002.svg")).size)) and
+        (run(args.dropRight(2) ++ Seq("--frames", "2", "--theme", "dark", "--output", made, circleFile)*)._1 must
+          beEqualTo(0)) and
+        (firstDifference(
+          numbered(read(s"$made/frame-0001.svg")),
+          numbered(
+            read(
+              direct.plotFiltration(0.8).saveFrames(Files.createTempDirectory("plot-cli-dark").toString, 2, "dark")(1)
+            )
+          )
+        ) must beNone) and
+        (numbered(read(s"$made/frame-0001.svg")) must
+          not(
+            beEqualTo(
+              numbered(
+                read(direct.plotFiltration(0.8).saveFrames(Files.createTempDirectory("plot-cli-light").toString, 2)(1))
+              )
+            )
+          ))
+    }
+    "write the linked views for --plot explore and --plot linked-filtration, the same pages the facade builds" >> {
+      val (page, linked) = (tempPath(".html"), tempPath(".html"))
+      val bases = Seq("--max-dimension", "1")
+      val explored = direct.plotExplore().html()
+      val sweep = direct.plotLinkedFiltration(0.8).html()
+      (run(bases ++ Seq("--plot", "explore", "--output", page, circleFile)*)._1 must beEqualTo(0)) and
+        (firstDifference(numbered(read(page)), numbered(explored)) must beNone) and
+        (read(page).contains("data-brush=\"class\"") must beTrue) and
+        (run(bases ++ Seq("--plot", "linked-filtration", "--at", "0.8", "--output", linked, circleFile)*)._1 must
+          beEqualTo(0)) and
+        (firstDifference(numbered(read(linked)), numbered(sweep)) must beNone) and
+        (read(linked).contains("type=\"range\"") must beTrue)
     }
     "write a page to the temporary directory without --output, and say where" >> {
       val err = stderrOf {
@@ -194,7 +271,19 @@ class PlotCLISpec extends Specification:
         (fails("--plot", "landscape", "--bar", "0") must beEqualTo(1)) and
         (fails("--plot", "representative", "--bar", "0", "--dimension", "1") must beEqualTo(1)) and
         (fails("--plot", "complex") must beEqualTo(1)) and
+        (fails("--plot", "filtration") must beEqualTo(1)) and
+        (fails("--plot", "filtration,diagram", "--at", "1") must beEqualTo(1)) and
+        (fails("--plot", "linked-filtration") must beEqualTo(1)) and
+        (fails("--plot", "explore", "--at", "1") must beEqualTo(1)) and
+        (fails("--plot", "explore,diagram") must beEqualTo(1)) and
         (fails("--plot", "bars") must beEqualTo(1)) and
+        (fails("--frames", "3", "--output", tempPath("")) must beEqualTo(1)) and
+        (fails("--plot", "diagram", "--frames", "3", "--output", tempPath("")) must beEqualTo(1)) and
+        (fails("--plot", "filtration", "--at", "1", "--frames", "3") must beEqualTo(1)) and
+        (fails("--plot", "filtration", "--at", "1", "--frames", "1", "--output", tempPath("")) must beEqualTo(1)) and
+        (fails("--plot", "filtration", "--at", "1", "--frames", "3", "--output", tempPath(".svg")) must beEqualTo(
+          1
+        )) and
         (fails("--plot", "diagram", "--output", tempPath(".png")) must beEqualTo(1)) and
         (fails("--plot", "diagram", "--output-format", "csv") must beEqualTo(1)) and
         (fails("--plot", "diagram", "--representatives") must beEqualTo(1)) and

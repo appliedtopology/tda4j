@@ -39,6 +39,15 @@ const sizes = [16, 32, 48, 64, 96, 128, 180, 192, 256, 512];
 
 (async () => {
   for (const [from, to] of Object.entries(copies)) fs.copyFileSync(path.join(__dirname, from), path.join(out, to));
+  // The site keeps its project name as HTML text. Export only the large-ring symbol beside it.
+  // ScalaDoc discovers the dark project logo by the _dark suffix (not -dark).
+  for (const [master, target] of [["horizontal-logo.svg", "header-mark.svg"], ["horizontal-logo-dark.svg", "header-mark_dark.svg"]]) {
+    const svg = fs.readFileSync(path.join(__dirname, master), "utf8")
+      .replace('width="400" height="160" viewBox="0 0 400 160"', 'width="184" height="112" viewBox="0 20 184 112"')
+      .replace(/  <style>.*<\/style>\n/, "")
+      .replace(/  <text[^]*?<\/text>\n/, "");
+    fs.writeFileSync(path.join(out, target), svg);
+  }
   const browser = await chromium.launch();
   const page = await browser.newPage();
   for (const [prefix, [source, bg]] of Object.entries(pngs)) {

@@ -237,6 +237,17 @@ object Lines:
         case "minorGrid" => e.copy(minorGrid = e.minorGrid.merge(change))
         case "axis"      => e.copy(axis = e.axis.merge(change))
         case _           => e.copy(frame = e.frame.merge(change)))
+    // a picture with axes has gridlines; its axis lines and frame are not styled
+    override def onScene(sc: Scene): Scene =
+      if which != "grid" then
+        throw UnsupportedOperationException(
+          s"$this: a picture seen from above has gridlines (Lines.grid) but no styled axis lines, minor grid or frame"
+        )
+      else if !sc.axes then
+        throw UnsupportedOperationException(
+          s"$this: a 3-D scene has no axes; a flat picture seen from above has gridlines after withAxes()"
+        )
+      else sc.copy(elements = sc.elements.copy(grid = sc.elements.grid.merge(change)))
     override def toString: String = s"Lines.$which($change)"
 
   private final case class TickChange(which: String, minor: Boolean, change: TickStyle) extends Tweak:

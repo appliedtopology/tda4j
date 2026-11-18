@@ -7,10 +7,13 @@ import java.util.stream.IntStream
 /** Runs independent work items on the common fork-join pool. The Scala.js build has the same object and runs them one
   * after the other (`src/main/scalajs`): JavaScript has no threads to share the work between.
   *
-  * The pool is the JVM's common pool, so `-Djava.util.concurrent.ForkJoinPool.common.parallelism=N` limits every
-  * parallel step of the library at once (`1` runs them all on the calling thread); [[withThreads]] runs a body on a
-  * pool of its own size instead, and a body already running on a fork-join pool of yours uses that pool. Every user of
-  * this object computes the same result however the work is split: a step may be faster in parallel, never different.
+  * The pool is the JVM's common pool, and the thread that calls a step works beside the pool's workers. Left to itself
+  * the pool is sized for the processors of the machine, and on one processor every step runs on the calling thread.
+  * `-Djava.util.concurrent.ForkJoinPool.common.parallelism=N` sizes it for every parallel step of the library at once:
+  * `N` workers beside the calling thread, so `0` runs every step on the calling thread. [[withThreads]] runs a body on
+  * a pool of its own size instead, and a body already running on a fork-join pool of yours uses that pool. Every user
+  * of this object computes the same result however the work is split: a step may be faster in parallel, never
+  * different.
   */
 // Restricted: a public top-level `Parallel` would join every user's `import org.appliedtopology.tda4j.*`.
 private[tda4j] object Parallel:
@@ -21,12 +24,38 @@ private[tda4j] object Parallel:
   private def ownPool: Option[ForkJoinPool] =
     Option(ForkJoinTask.getPool()).filter(_ ne ForkJoinPool.commonPool())
 
+  // What this JVM was started with, read once, as the common pool reads both once.
+  private val commonPreset: Option[Int] =
+    presetWorkers(Option(System.getProperty("java.util.concurrent.ForkJoinPool.common.parallelism")))
+  private val processors: Int = Runtime.getRuntime.availableProcessors
+
+  /** The workers that the system property `java.util.concurrent.ForkJoinPool.common.parallelism` asks the common pool
+    * for, read as the JDK reads it: a number below 0 is 0, and a value that is not a number is no value.
+    */
+  def presetWorkers(property: Option[String]): Option[Int] = property.flatMap(_.toIntOption).map(math.max(0, _))
+
+  /** The threads that share a step on the common pool: its workers and the calling thread.
+    *
+    *   - A pool that `preset` sized (see [[presetWorkers]]) is taken at its word, whatever the machine has: its workers
+    *     and the caller, and the caller alone for a pool of 0.
+    *   - A pool nobody sized counts for no more than the `processors`. The JVM gives it one worker even on one
+    *     processor, where that worker and the caller would take turns.
+    *
+    * @param reported
+    *   the pool's `getParallelism`, which is never below 1: a pool with no workers reports 1, as a pool with one does
+    */
+  def commonThreads(reported: Int, preset: Option[Int], processors: Int): Int = preset match
+    case Some(0) => 1
+    case Some(_) => reported + 1
+    case None    => math.max(1, math.min(reported + 1, processors))
+
   /** The number of threads a step can use here: 1 inside `sequentially`; the size of the pool inside `withThreads` (or
-    * of a fork-join pool the caller runs on); else the common pool's workers and the caller.
+    * of a fork-join pool the caller runs on); else the common pool's workers and the caller ([[commonThreads]]).
     */
   def threads: Int =
     if forcedSequential.get() eq java.lang.Boolean.TRUE then 1
-    else ownPool.fold(ForkJoinPool.commonPool().getParallelism + 1)(_.getParallelism)
+    else
+      ownPool.fold(commonThreads(ForkJoinPool.commonPool().getParallelism, commonPreset, processors))(_.getParallelism)
 
   /** The thread count a surrounding `withThreads` or `sequentially` fixed, to carry into work that runs later (a
     * representative built when it is first read); `None` when nothing was fixed.
@@ -96,10 +125,12 @@ private[tda4j] object Parallel:
       finally other.join()
 
   /** `f(from, until)` on consecutive ranges of at least `grain` indices that together cover `0 until count`, possibly
-    * at the same time; one call when the work is too small to share.
+    * at the same time; one call when the work is too small to share, or when there is one thread.
     */
   def ranges(count: Int, grain: Int)(f: (Int, Int) => Unit): Unit =
-    val parts = math.min(threads * 4, count / math.max(1, grain))
+    val shared = threads
+    // Four pieces a thread, so that uneven pieces even out; on one thread a piece would only go to the common pool.
+    val parts = if shared == 1 then 1 else math.min(shared * 4, count / math.max(1, grain))
     if parts <= 1 then f(0, count)
     else
       val size = (count + parts - 1) / parts

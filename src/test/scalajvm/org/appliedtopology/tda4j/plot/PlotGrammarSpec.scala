@@ -2189,8 +2189,8 @@ class PlotGrammarSpec extends Specification:
     }
     "start a page's canvas there, which can still be turned and zoomed" in {
       val page = (scene + Camera(azimuth = 90, elevation = 10, zoom = 1.5)).fragment(Theme.Light)
-      page must contain(s"let az=${math.toRadians(90.0)},el=${math.toRadians(10.0)},zoom=1.5;")
-      scene.fragment(Theme.Light) must contain("zoom=1;") // as it always was
+      page must contain(s"let az=${math.toRadians(90.0)},el=${math.toRadians(10.0)},zoom=1.5,")
+      scene.fragment(Theme.Light) must contain("zoom=1,") // as it always was
       page must contain("drag to turn, scroll to zoom")
     }
     "change only what is given, and commute with the rest" in {

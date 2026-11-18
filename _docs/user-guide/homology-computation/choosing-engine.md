@@ -44,10 +44,11 @@ hole is. The [scaling up](../../tutorials/scaling-up.md) tutorial compares the f
 ### Parallel Ripser
 
 `Engine.ParallelRipser` cuts Ripser's reduction into blocks that run on every processor. `Engine.Auto` chooses it
-instead of `Ripser` for the Vietoris-Rips complex of points or a metric space whenever there is more than one thread,
-and ask for it by name to use it on one thread too. `Persistence(points, threads = 4)` limits one call to four threads
-(`threads = 1` is plain `Ripser` under `Auto`); `-Djava.util.concurrent.ForkJoinPool.common.parallelism=N` sets the
-default for the whole program (`0` is one thread). MATLAB and Java take the option `threads` and `engine=parallel-ripser`,
+instead of `Ripser` for the Vietoris-Rips complex of points or a metric space whenever there is more than one thread
+(a machine with one processor has one), and ask for it by name to use it on one thread too.
+`Persistence(points, threads = 4)` limits one call to four threads (`threads = 1` is plain `Ripser` under `Auto`);
+`-Djava.util.concurrent.ForkJoinPool.common.parallelism=N` sets the default for the whole program: `N` worker threads
+beside the one that calls, so `0` is one thread. MATLAB and Java take the option `threads` and `engine=parallel-ripser`,
 the command line `--threads` and `--engine parallel-ripser`, and an unset engine goes parallel there too ([MATLAB](../matlab.md#threads)).
 
 * The bars are those of `Engine.Ripser`. The representatives are valid but need not be the same chains: simplices of
