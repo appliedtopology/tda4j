@@ -31,12 +31,12 @@ jobs on the fourth core and load above 8 during part of the runs; the pairs were
   orthogonal to this chain?) answered differently from Gram-Schmidt: different bar counts. Now every residual entry must be
   zero after scaling by 2^10, i.e. 1e-12; the cap is `2*unknowns+50` iterations and the error says to use `Rationals` or
   `GramSchmidt`.
-- *The two still pair a few bars differently over the reals on large near-tie clouds.* Same births and deaths, different
-  pairing (and so a different number of zero-length bars, which are dropped): at 60 and 80 points no difference; 100 points
+- *The two still pair a few bars differently over the reals on large near-tie clouds.* A different pairing, and so a different
+  number of zero-length bars, which are dropped: at 60 and 80 points no difference; 100 points
   44 of 641 listing lines, 200 points 32 of 1,424; 70 and 90 points 476 against 471 and 534 against 532 bars. Every decision
   of the algorithm is a test of the form `isEqual(x, 0)` at an absolute `1e-9`, and a cycle that is almost orthogonal to a
   boundary is judged by rounding.
-  **Exact rational reference** (Gram-Schmidt over `Coefficients.Rationals`, the arbiter): did not finish, see "The exact reference and the decision" below.
+  **Exact rational reference** (Gram-Schmidt over `Coefficients.Rationals`, the arbiter): finished at 70 points only, see "The exact reference and the decision" below.
 
 ## #307
 
@@ -73,17 +73,24 @@ over `Q` (bar for bar, cell for cell the same) and refuse a name that is neither
 
 ## The exact reference and the decision
 
-The exact arbiter for the near-tie pairing (#353) (Gram-Schmidt over `Coefficients.Rationals` on the clouds where the two real runs
-differ: 70, 90 and 100 points) did not finish. Rational Gram-Schmidt grows the numerators of the basis chains with every positive
-cell: the 90 and 100 point runs were stopped after 20 and 49 CPU minutes with no output, and the 70 point run was still going
-when the PR was opened (`bars-70-exact.txt`, if it finished, is in the scratchpad of the session, not kept). So which of the two real
-pairings is the exact one is **unmeasured**; what is known is that they differ only in the pairing, never in the births and deaths,
-and that they are equal over the rationals (`HarmonicOrthogonalizationSpec`: random orders and tie-heavy Rips filtrations).
+The arbiter for the near-tie pairing is Gram-Schmidt over `Coefficients.Rationals` (#353). Rational Gram-Schmidt grows the
+numerators with every positive cell, so it finished on one cloud only: 70 points (radius 0.37, 4,578 cells, 2,058 s on one core,
+470 bars). The 90 and 100 point runs were stopped after 20 and 49 CPU minutes with no output.
 
-Decision: the default stays `GramSchmidt`. A default flip would change which bars come out of every existing real-coefficient
-harmonic run, on evidence that does not say the other pairing is the better one; the solve is the option for the complexes where
-the basis is what limits the run (4 to 5 times less heap, faster from 100 points). If someone settles the reference (a smaller cloud
-that still shows a difference, or an exact run left overnight), the default can be revisited with that number in hand.
+On that cloud the real runs against the exact barcode (bars listed as degree, birth, death; zero-length bars dropped):
+
+| run | bars | in the run, not in the exact barcode | in the exact barcode, not in the run |
+|---|---|---|---|
+| Gram-Schmidt, reals | 476 | 24 | 18 |
+| Laplacian solve, reals | 471 | 3 | 2 |
+
+So where the reference exists the solve is the closer one; Gram-Schmidt over the reals, whose basis accumulates rounding error
+with every positive cell, mispairs about eight times as many bars. One cloud is one data point.
+
+Decision: the default stays `GramSchmidt` in this PR. A default is a behaviour change for every existing real-coefficient
+harmonic run, the evidence is one cloud, and the rational cost of the solve was not measured; the solve is the opt-in for memory
+and, on this one cloud, for accuracy. The flip is the default value of `orthogonalization` in four places in
+`HarmonicChainBarcode`, two in `HarmonicRepresentatives` and the facade's parse (`TDA4j.harmonic`); #353 holds the question.
 
 Unverified: the stopping rule of the solve over the reals on clouds far larger than 200 points (the cap `2 * unknowns + 50`
 iterations has not been hit in any run).

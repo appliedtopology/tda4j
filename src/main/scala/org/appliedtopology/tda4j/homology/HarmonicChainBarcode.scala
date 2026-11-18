@@ -52,8 +52,8 @@ object HarmonicChainBarcode:
     * memory). Both give the same chain: the one cycle with coefficient 1 on the cell that is orthogonal to the cycles
     * of the complex before it. Over the rationals the two agree term for term. Over the reals every decision of the
     * algorithm is a test against the field's tolerance, so on a large complex with many near ties a cycle that is
-    * almost orthogonal to a boundary can be judged differently by the two, and a few bars are then paired differently
-    * (the births and deaths are the same); `Coefficients.Rationals` settles which pairing is right.
+    * almost orthogonal to a boundary can be judged differently by the two, and a few bars are then paired differently;
+    * `Coefficients.Rationals` gives the exact pairing.
     *
     *   - `GramSchmidt`: the orthogonal basis of all the cycles of the degree is kept, and the new chain is
     *     orthogonalised against it. The basis grows with every positive cell and holds a dense chain for each.

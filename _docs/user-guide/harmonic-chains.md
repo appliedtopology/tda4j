@@ -125,9 +125,8 @@ degree in memory, and that is what limits it: it grows with every positive cell 
 larger complex, `orthogonalization = HarmonicChainBarcode.Orthogonalization.LaplacianSolve` (on `HarmonicChainBarcode` and on
 `HarmonicRepresentatives`) keeps only the boundaries and finds each new chain by solving a linear system, which takes a
 fraction of the memory. The two give the same chains over the rationals. Over the reals each decision is a comparison with
-the tolerance, so on a large cloud with many nearly tied values they can pair a few bars differently, with the same births and
-deaths; `Coefficients.Rationals` settles which pairing is right, and the solve says what to use instead if it cannot reach
-the tolerance.
+the tolerance, so on a large cloud with many nearly tied values they can pair a few bars differently; `Coefficients.Rationals` gives the
+exact pairing, and the solve says what to use instead if it cannot reach the tolerance.
 
 ```scala 3
 import scala.language.experimental.modularity

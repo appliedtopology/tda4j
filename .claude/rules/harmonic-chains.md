@@ -35,7 +35,7 @@ Derivation, probes and decisions: `WORKLOG-harmonic-chains.md`. Developer's Guid
 - **`Orthogonalization`** (#305): `GramSchmidt` (default) keeps an orthogonal basis of all the cycles of a degree;
   `LaplacianSolve` keeps the boundaries and solves `(d d^T) y = -d e_sigma` for `z = e_sigma + d^T y` by conjugate gradient.
   Over `Q` the two are equal term for term (`HarmonicOrthogonalizationSpec`); over `R` every decision is `isEqual(x, 0)` at an
-  absolute `1e-9`, so on large near-tie clouds the two can PAIR a few bars differently (same births and deaths). The solve's
+  absolute `1e-9`, so on large near-tie clouds the two can PAIR a few bars differently (on the one 70-point cloud with an exact reference: 42 listing lines off for Gram-Schmidt, 5 for the solve; `WORKLOG-harmonic-solve-cocycles.md`, #353). The solve's
   residual has to be zero at 2^-10 of that tolerance, else the next test answers differently; it stops with an error that
   names the alternatives. Measurements, and the exact reference that arbitrates: `WORKLOG-harmonic-solve-cocycles.md`.
   Facade key `orthogonalization` (`gram-schmidt`, `laplacian-solve`), CLI `--orthogonalization`.

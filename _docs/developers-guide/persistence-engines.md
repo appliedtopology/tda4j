@@ -387,8 +387,8 @@ boundary of the cells of the degree that entered before the cell, the chain is `
 solved by conjugate gradient (exact over the rationals, where it finishes in as many steps as the rank), and the memory is the
 boundaries and an index of the cofaces. Over the rationals the two give the same chains, term for term. Over the reals every
 decision of the algorithm is a comparison with the field's tolerance, so on a large complex with many nearly tied values a
-cycle that is almost orthogonal to a boundary can be judged differently, and the two can pair a few bars differently (the
-births and deaths are the same). The solve therefore stops only when its residual is zero to far below the tolerance, and
+cycle that is almost orthogonal to a boundary can be judged differently, and the two can pair a few bars differently,
+and `Coefficients.Rationals` gives the exact pairing. The solve therefore stops only when its residual is zero to far below the tolerance, and
 says what to use instead if it cannot get there. A negative cell ends the oldest alive chain that is not orthogonal to its boundary, and subtracts a multiple
 of it from the others that are not. The invariants that the specs test, against oracles that share no code with the
 algorithm: the number of bars alive at each value is the Betti number there; the births and deaths are those of the
