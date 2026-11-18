@@ -9,7 +9,7 @@
     bench.py constraints RESULTS                         a pip constraints file from the run's env.json
 
 Normally driven by bench/run.sh, which builds the tools and sets the environment variables read here
-(TDA4J_CP, TDA4J_JS, NODE, RIPSER_BIN, RIPSER_COEFF_BIN, RIPSER_PATCHED_BIN, RIPSER_PATCHED_COEFF_BIN, REDZED_BIN, REDZED_PATCHED_BIN, JULIA, RIPSERER_PROJECT, JAVAPLEX_JAR, JAVAPLEX_BUILD). A tool
+(TDA4J_CP, TDA4J_JS, NODE, RIPSER_BIN, RIPSER_COEFF_BIN, RIPSER_PATCHED_BIN, RIPSER_PATCHED_COEFF_BIN, REDZED_BIN, REDZED_PATCHED_BIN, the named variants' RIPSER_PATCHED_<NAME>_BIN and so on, JULIA, RIPSERER_PROJECT, JAVAPLEX_JAR, JAVAPLEX_BUILD). A tool
 whose variable is unset, or whose Python package is missing, is skipped and listed as `missing`.
 
 The `tda4j-js*` tools are the Scala.js build, packaged as the npm package and run on Node.js
@@ -330,6 +330,26 @@ TOOLS += [
 # rows: run only by their own names in --tools (`tda4j-js,tda4j,tda4j-facade`).
 TOOLS += [(name.replace("tda4j-js", "tda4j-facade", 1), "tda4j", task, dict(opts, facade=True, experiment=True))
           for name, kind, task, opts in TOOLS if kind == "tda4j-js"]
+def fork_rows(environ):
+    """The rows of the named variants of a forked build (README, "Forked builds"): `ripser.cpp-patched-<name>` and
+    `redzed-patched-<name>` for each name in RIPSER_PATCHED_VARIANTS / REDZED_PATCHED_VARIANTS, which run.sh sets from what
+    `setup` built. Each reads its own variables, RIPSER_PATCHED_<NAME>_BIN and so on (NAME upper case, - as _). The unnamed
+    variant's rows are in TOOLS."""
+    rows = []
+    for tool, kind, prefix in (("ripser.cpp", "ripser", "RIPSER_PATCHED"), ("redzed", "redzed", "REDZED_PATCHED")):
+        for name in environ.get(f"{prefix}_VARIANTS", "").split():
+            var = f"{prefix}_{name.upper().replace('-', '_')}"
+            opts = {"binary": f"{var}_BIN"}
+            if kind == "ripser":
+                opts.update({"coeff_binary": f"{var}_COEFF_BIN", "input_env": f"{var}_INPUT"})
+            else:
+                opts["only_p"] = 2
+            rows.append((f"{tool}-patched-{name}", kind, "vr", opts))
+    return rows
+
+
+TOOLS += fork_rows(os.environ)
+
 REFERENCE = {"vr": "ripser.cpp", "cubical": "gudhi", "alpha": "gudhi", "cech": "gudhi", "dtm": "gudhi",
              "witness": "gudhi", "sparse": "ripser.cpp", "dowker": "gudhi"}
 CHARACTERISTIC_ZERO = {name for name, _, _, opts in TOOLS if opts.get("char0")}
@@ -1322,10 +1342,10 @@ def write_env(out, args):
         "ripser_git": cmd_out(["git", "-C", str(Path(os.environ.get("RIPSER_BIN", ".")).parent), "rev-parse", "HEAD"]),
         "redzed_git": cmd_out(["git", "-C", str(Path(os.environ.get("REDZED_BIN", ".")).parent), "rev-parse", "HEAD"]),
         # the forked builds (README, "Forked builds"): the commit each was built from, "" where there is none
-        "ripser_patched_git": cmd_out(["git", "-C", str(Path(os.environ.get("RIPSER_PATCHED_BIN", ".")).parent), "rev-parse", "HEAD"])
-        if os.environ.get("RIPSER_PATCHED_BIN") else "",
-        "redzed_patched_git": cmd_out(["git", "-C", str(Path(os.environ.get("REDZED_PATCHED_BIN", ".")).parent), "rev-parse", "HEAD"])
-        if os.environ.get("REDZED_PATCHED_BIN") else "",
+        "ripser_patched_git": cmd_out(["git", "-C", os.environ["RIPSER_PATCHED_DIR"], "rev-parse", "HEAD"])
+        if os.environ.get("RIPSER_PATCHED_DIR") else "",
+        "redzed_patched_git": cmd_out(["git", "-C", os.environ["REDZED_PATCHED_DIR"], "rev-parse", "HEAD"])
+        if os.environ.get("REDZED_PATCHED_DIR") else "",
         **revision(classes_directory()),
         **js_revision(os.environ.get("TDA4J_JS_GIT"), checkout_of(classes_directory())),
         "jvm_flags": jvm_flags(args.jvm_heap, args.jvm_opts, getattr(args, "jvm_fixed_heap", False)),

@@ -1924,13 +1924,31 @@ class ForkedBuildTests(unittest.TestCase):
         cmd = self.command("ripser.cpp", "ripser", 2, RIPSER_BIN="/stock/ripser", RIPSER_PATCHED_INPUT="binary")
         self.assertNotIn("binary", cmd)
 
+    def test_named_variants_are_rows_of_their_own_reading_their_own_variables(self):
+        rows = {n: (k, o) for n, k, _, o in bench.fork_rows(
+            {"RIPSER_PATCHED_VARIANTS": "forest edge", "REDZED_PATCHED_VARIANTS": "hybrid-pruned"})}
+        self.assertEqual(sorted(rows), ["redzed-patched-hybrid-pruned", "ripser.cpp-patched-edge", "ripser.cpp-patched-forest"])
+        kind, opts = rows["ripser.cpp-patched-forest"]
+        self.assertEqual((kind, opts["binary"], opts["coeff_binary"], opts["input_env"]),
+                         ("ripser", "RIPSER_PATCHED_FOREST_BIN", "RIPSER_PATCHED_FOREST_COEFF_BIN", "RIPSER_PATCHED_FOREST_INPUT"))
+        kind, opts = rows["redzed-patched-hybrid-pruned"]
+        self.assertEqual((kind, opts["binary"], opts["only_p"]), ("redzed", "REDZED_PATCHED_HYBRID_PRUNED_BIN", 2))
+        self.assertEqual(bench.fork_rows({}), [], "no variants named, no extra rows")
+        env = {"RIPSER_PATCHED_FOREST_BIN": "/f/forest", "RIPSER_PATCHED_EDGE_BIN": "/f/edge", "RIPSER_PATCHED_EDGE_INPUT": "text",
+               "RIPSER_PATCHED_FOREST_INPUT": "binary"}
+        forest = rows["ripser.cpp-patched-forest"][1]
+        edge = rows["ripser.cpp-patched-edge"][1]
+        with mock.patch.dict(os.environ, env):
+            a = bench.command("ripser", "ripser.cpp-patched-forest", forest, self.case, self.data, 2, 0.75, 0, 1, self.tmp / "o", Namespace())
+            b = bench.command("ripser", "ripser.cpp-patched-edge", edge, self.case, self.data, 2, 0.75, 0, 1, self.tmp / "o", Namespace())
+        self.assertEqual((a[0], "binary" in a), ("/f/forest", True))
+        self.assertEqual((b[0], "binary" in b), ("/f/edge", False), "each variant has its own input")
+
     def test_setup_builds_the_forks_and_the_environment_names_them(self):
         script = (HERE_BENCH / "run.sh").read_text()
-        for needle in ("RIPSER_PATCHED_REPO", "RIPSER_PATCHED_REF", "RIPSER_PATCHED_SRC", "RIPSER_PATCHED_FLAGS",
-                       "RIPSER_PATCHED_INPUT", "RIPSER_PATCHED_COEFF", "REDZED_PATCHED_REPO", "REDZED_PATCHED_REF",
-                       "REDZED_PATCHED_SRC", "REDZED_PATCHED_FLAGS",
-                       'export RIPSER_PATCHED_BIN="$TOOLS/ripser-patched/ripser"',
-                       'export REDZED_PATCHED_BIN="$TOOLS/redzed-patched/redzed"'):
+        for needle in ("RIPSER_PATCHED_REPO", "RIPSER_PATCHED_REF", "REDZED_PATCHED_REPO", "REDZED_PATCHED_REF",
+                       "RIPSER_PATCHED_VARIANTS", "REDZED_PATCHED_VARIANTS", "_SRC", "_FLAGS", "_INPUT", "_COEFF",
+                       "export_forks ripser", "export_forks redzed"):
             self.assertIn(needle, script)
         self.assertIn('setup_forked ripser-patched "${RIPSER_PATCHED_REPO:-}"', script)
         self.assertIn('setup_forked redzed-patched "${REDZED_PATCHED_REPO:-}"', script)
