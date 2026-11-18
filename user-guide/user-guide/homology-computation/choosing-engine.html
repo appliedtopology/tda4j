@@ -241,4 +241,49 @@
    <li>JavaScript has one thread: <code>Auto</code> never chooses it there, and the engine by name runs on that one thread with the same bars.</li>
   </ul>
  </section>
-</main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#which-persistence-engine">Which persistence engine?</a><ul><li><a href="#parallel-ripser">Parallel Ripser</a></li></ul></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>
+ <section id="equal-edge-lengths-edgeties">
+  <h3 class="h400"><a href="#equal-edge-lengths-edgeties" class="anchor"></a>Equal edge lengths: <code>edgeTies</code></h3>
+  <p>When many distances are equal (points on a grid, a graph metric, integer distances), the order of equal edges decides how many pairs Ripser finds as apparent pairs, which are paired without any reduction. Both Ripser engines take <code>edgeTies</code> (<code>Persistence.EdgeTies</code>; MATLAB and Java <code>edgeTies</code>, the command line <code>--edge-ties</code>, spelled <code>reverse-colexicographic</code> there) to order simplices by their last edge, the last in this order of its longest edges. An edge is <code>{a, b}</code> with <code>a &lt; b</code>, and its index is <code>C(b, 2) + a</code>:</p>
+  <table>
+   <thead>
+    <tr>
+     <th><code>edgeTies</code></th>
+     <th>the order of the edges of one length</th>
+     <th>also known as</th>
+    </tr>
+   </thead>
+   <tbody>
+    <tr>
+     <td><code>Lexicographic</code></td>
+     <td>by <code>a</code>, then by <code>b</code></td>
+     <td>the default of <code>ParallelRipser</code></td>
+    </tr>
+    <tr>
+     <td><code>ReverseLexicographic</code></td>
+     <td>by <code>a</code>, then by <code>b</code>, descending</td>
+     <td></td>
+    </tr>
+    <tr>
+     <td><code>Colexicographic</code></td>
+     <td>by index, ascending</td>
+     <td>Bauer's <code>ripser-forest</code> and hybrid default, <code>--ties increasing</code></td>
+    </tr>
+    <tr>
+     <td><code>ReverseColexicographic</code></td>
+     <td>by index, descending</td>
+     <td><code>ripser.cpp</code> built with <code>EDGE_LEXICOGRAPHIC</code>, <code>--ties decreasing</code></td>
+    </tr>
+    <tr>
+     <td><code>Shuffled</code></td>
+     <td>by a fixed hash of the index</td>
+     <td>a control with no structure, <code>--ties random</code></td>
+    </tr>
+   </tbody>
+  </table>
+  <p>The bars never depend on it; the representatives can, and are valid either way. Unset, <code>ParallelRipser</code> uses <code>Lexicographic</code> and <code>Ripser</code> orders simplices by diameter alone (the same as asking for no edge order at all). On inputs without equal distances (random points) no setting changes anything. On a lattice the reverse orders leave fewer columns to reduce, and the sequential engine runs faster with them; whether a different order is worth the change on your input is a question for a trial run, since the bars are the same. The <a href="../../../developers-guide/persistence-engines.html">developer's guide</a> says what each order does.</p>
+ </section>
+ <section id="which-simplex-of-a-block-is-older-blockorder">
+  <h3 class="h400"><a href="#which-simplex-of-a-block-is-older-blockorder" class="anchor"></a>Which simplex of a block is older: <code>blockOrder</code></h3>
+  <p>The simplices filed under one edge (a block) are ordered by combinatorial index, and <code>blockOrder</code> (<code>Persistence.BlockOrder</code>; MATLAB and Java <code>blockOrder</code>, the command line <code>--block-order</code>) says which way. With <code>LargerIndexFirst</code>, the default and Ripser's own convention, the simplex of larger index is the older; with <code>SmallerIndexFirst</code> the one of smaller index is. The two are different orders of the same simplices: the bars are the same, the apparent pairs and the representatives can differ, and so can the number of columns left to reduce. It is read by <code>ParallelRipser</code> only; <code>Auto</code> goes there when you ask for <code>SmallerIndexFirst</code> and the input allows it, and <code>Ripser</code> by name refuses it. Together with <code>edgeTies</code> it reaches every order of the Ripser family that Ripser's <code>EDGE_LEXICOGRAPHIC</code> build and Bauer's <code>ripser-forest</code> and hybrid code use (see the developer's guide for which pair is which); like <code>edgeTies</code> it does nothing on inputs without equal distances.</p>
+ </section>
+</main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#which-persistence-engine">Which persistence engine?</a><ul><li><a href="#parallel-ripser">Parallel Ripser</a></li><li><a href="#equal-edge-lengths-edgeties">Equal edge lengths: edgeTies</a></li><li><a href="#which-simplex-of-a-block-is-older-blockorder">Which simplex of a block is older: blockOrder</a></li></ul></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>

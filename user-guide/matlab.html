@@ -437,6 +437,16 @@
      <td><code>true</code>, <code>false</code></td>
      <td><code>false</code> (<code>vr</code> only; the same result from a smaller complex)</td>
     </tr>
+    <tr>
+     <td><code>edgeTies</code></td>
+     <td><code>lexicographic</code>, <code>reverse-lexicographic</code>, <code>colexicographic</code>, <code>reverse-colexicographic</code>, <code>shuffled</code></td>
+     <td>unset (<code>vr</code> with <code>ripser</code> or <code>parallel-ripser</code>; how edges of one length are ordered, the same bars and a different number of apparent pairs, see <a href="user-guide/homology-computation/choosing-engine.html">choosing an engine</a>)</td>
+    </tr>
+    <tr>
+     <td><code>blockOrder</code></td>
+     <td><code>larger-index-first</code>, <code>smaller-index-first</code></td>
+     <td>unset, which is <code>larger-index-first</code> (<code>vr</code> with <code>parallel-ripser</code>, or no <code>engine</code> at all: asking for <code>smaller-index-first</code> makes it the default engine; which of two simplices under one edge is older, the same bars and possibly other apparent pairs, see <a href="user-guide/homology-computation/choosing-engine.html">choosing an engine</a>)</td>
+    </tr>
    </tbody>
   </table>
   <p>Which engine goes with which complex: <code>ripser</code> needs <code>vr</code> or the lazy witness complex; <code>parallel-ripser</code> needs <code>vr</code>; <code>chunks</code> works with every complex except <code>alpha</code>, <code>dtm-alpha</code>, the general witness complex and relations; <code>naive</code> and <code>cohomology</code> work with all; <code>fast-cubical</code> is for images of dimension 2 and up, <code>fast-alpha</code> for <code>alpha</code> with the <code>bowyer-watson</code> or <code>helix</code> backend. A mismatch, an unknown option or an unknown value throws an <code>IllegalArgumentException</code> that names it.</p>

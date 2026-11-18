@@ -205,6 +205,58 @@
    <li><code>totalSimplexCount</code>, the simplices the run assembled over all dimensions.</li>
   </ul>
   <p>They explain a speed difference between two inputs of the same size: a high apparent-pair rate means little reduction work. They are diagnostics, not part of any result.</p>
+  <p><strong>Equal edge lengths (<code>edgeTies</code>).</strong> Ripser orders simplices by diameter and then by combinatorial index, so on a lattice or any input with many equal distances, which of two equal edges is the later one decides how many pairs are apparent. <code>ParallelPackedCohomology.EdgeTies</code> names five orders of the edges of one length (<code>Lexicographic</code>, <code>ReverseLexicographic</code>, <code>Colexicographic</code>, <code>ReverseColexicographic</code>, <code>Shuffled</code>), and a simplex is then filed under its last longest edge in that order (the "block" of the parallel engine). Every order gives the same bars; they differ in which pairs are apparent and in which zero-length pairs form.</p>
+  <ul>
+   <li>
+    <p><code>ParallelRipser</code> always has an edge order, since it ranks the edges within the threshold once (length, then the order chosen); <code>Lexicographic</code> is its default, and <code>Persistence</code>'s <code>edgeTies</code> picks another.</p></li>
+   <li>
+    <p><code>PackedRipserCohomologyEngine</code> has none unless asked. <code>Persistence(..., engine = Ripser, edgeTies = ...)</code> and the facades' <code>edgeTies</code> run it on an <code>EdgeRankedMetricSpace</code>: the metric space whose distance is the rank of the edge. The engine's tests for "the same diameter" then see edge blocks, and its bars are read back in lengths with <code>lengthOf</code>. Two ranks of one length give a zero-length bar, which is left out unless <code>includeZeroLength</code>.</p></li>
+   <li>
+    <p>Inside a block the engines order simplices by combinatorial index, and <code>BlockOrder</code> says which way (<code>Persistence.BlockOrder</code>, <code>blockOrder</code>, <code>--block-order</code>). <code>LargerIndexFirst</code> is the default and Ripser's own convention: the simplex of larger index is older, so a column's apparent cofacet adds the largest vertex that qualifies and its youngest facet drops the largest vertex outside the block's edge. <code>SmallerIndexFirst</code> is the mirror image (the smallest vertices, the smaller index older, and the larger root of a merge dies in degree 0). Only <code>ParallelRipser</code> has it: the rules for an apparent pair (<code>apparentCofacet</code> and <code>apparentFacet</code> in <code>ParallelPackedCohomology</code>) read the key's index part as the index or as its complement. The sequential engine is always <code>LargerIndexFirst</code>, and <code>Persistence</code> refuses the other with <code>Engine.Ripser</code>.</p></li>
+   <li>
+    <p>These combinations do the work of Bauer's builds. <code>ParallelBlockOrderSpec</code> pins the columns left to reduce against ripser.cpp (<code>COUNT_WORK</code>) and ripser-forest (<code>-DCOUNT_WORK</code>, <code>--ties</code>) builds of ripser-dev at 857c9d0 on lattices, and checks every apparent pair against the definition by brute force:</p>
+    <table>
+     <thead>
+      <tr>
+       <th><code>edgeTies</code></th>
+       <th><code>blockOrder</code></th>
+       <th>the same work as</th>
+      </tr>
+     </thead>
+     <tbody>
+      <tr>
+       <td><code>ReverseColexicographic</code></td>
+       <td><code>LargerIndexFirst</code></td>
+       <td>ripser.cpp built with <code>EDGE_LEXICOGRAPHIC</code></td>
+      </tr>
+      <tr>
+       <td><code>Colexicographic</code></td>
+       <td><code>SmallerIndexFirst</code></td>
+       <td>ripser-forest <code>--ties increasing</code>, its default</td>
+      </tr>
+      <tr>
+       <td><code>ReverseColexicographic</code></td>
+       <td><code>SmallerIndexFirst</code></td>
+       <td>ripser-forest <code>--ties decreasing</code></td>
+      </tr>
+      <tr>
+       <td><code>Lexicographic</code></td>
+       <td><code>SmallerIndexFirst</code></td>
+       <td>ripser-forest <code>--ties lexicographic</code></td>
+      </tr>
+      <tr>
+       <td><code>Shuffled</code></td>
+       <td><code>SmallerIndexFirst</code></td>
+       <td>the hybrid's <code>--ties random</code> (a hash of the index, from its source; ripser-forest's <code>random</code> hashes something else)</td>
+      </tr>
+     </tbody>
+    </table>
+    <p>Bauer's hybrid (<code>hybrid/pruned.cpp</code>) names the last four as its own <code>--ties</code> (<code>ORDER_CONVENTIONS.md</code>); its engine was read, not run, so its columns are matched through ripser-forest. With the labels reversed the order <code>Lexicographic</code> with <code>SmallerIndexFirst</code> is <code>ReverseColexicographic</code> with <code>LargerIndexFirst</code>: the same pairing, the same columns (<code>ParallelBlockOrderSpec</code>).</p></li>
+   <li>
+    <p>Counts are not comparable across tools without care: ripser.cpp's <code>COUNT_WORK</code> counts a simplex in an apparent pair as apparent whether it is the column or the row, <code>ParallelRipser</code>'s <code>apparent</code> counts columns only, and its <code>cleared</code> counts every pivot of the degree below. The sequential engine's <code>apparentPairCount</code> equals the sum of <code>ParallelRipser</code>'s <code>apparent</code> over degrees 1 and up in the same order.</p></li>
+   <li>
+    <p><code>ParallelPackedCohomologyDriver</code> takes <code>ties=&lt;name&gt;</code> and <code>order=&lt;name&gt;</code> and prints each degree's columns, apparent pairs, cleared pivots, columns left to reduce and additions; <code>EdgeRankMetricDriver</code> runs the sequential engine on lengths or on ranks of an order. The benchmark harness counts the same quantities for the forks of ripser.cpp and RedZeD and for every combination above (<code>bench/count_work.py</code>, <code>PaperBenchmarkDriver work=true</code>; <code>bench/README.md</code>, "Counting the work").</p></li>
+  </ul>
  </section>
  <section id="5-cellularcohomologyengine--generic-cohomology-for-every-cell-type">
   <h2 class="h500"><a href="#5-cellularcohomologyengine--generic-cohomology-for-every-cell-type" class="anchor"></a>5. <code>CellularCohomologyEngine</code> — generic cohomology, for every cell type</h2>
