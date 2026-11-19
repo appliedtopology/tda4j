@@ -493,7 +493,7 @@
  </section>
  <section id="harmonic-chains">
   <h2 class="h500"><a href="#harmonic-chains" class="anchor"></a>Harmonic chains</h2>
-  <p><code>--harmonic chains</code> writes the <a href="harmonic-chains.html">harmonic chain barcode</a> of the Vietoris-Rips complex of a point cloud or a distance matrix, and <code>--harmonic representatives</code> the ordinary bars with the harmonic cycle at each birth as the representative, both written like any diagram (add <code>--representatives</code> to see the chains). Harmonic needs an inner product, so <code>--field</code> is <code>R</code> (the default here) or <code>Q</code>. They take <code>--max-dimension</code>, <code>--max-filtration-value</code>, <code>--field</code>, <code>--epsilon</code>, <code>--min-persistence</code>, <code>--min-persistence-fraction</code>, <code>--threads</code> and, for <code>chains</code>, <code>--include-zero-length</code>, and refuse the other flags of the diagram (<code>--complex</code>, <code>--engine</code>, <code>--representative-type</code>, <code>--prime</code>), <code>--relative-to</code>, the landmark flags, images, relations and saved results.</p>
+  <p><code>--harmonic chains</code> writes the <a href="harmonic-chains.html">harmonic chain barcode</a> of the Vietoris-Rips complex of a point cloud or a distance matrix, and <code>--harmonic representatives</code> the ordinary bars with the harmonic cycle at each birth as the representative, both written like any diagram (add <code>--representatives</code> to see the chains). Harmonic needs an inner product, so <code>--field</code> is <code>R</code> (the default here) or <code>Q</code>. They take <code>--max-dimension</code>, <code>--max-filtration-value</code>, <code>--field</code>, <code>--epsilon</code>, <code>--min-persistence</code>, <code>--min-persistence-fraction</code>, <code>--threads</code>, <code>--orthogonalization</code> (<code>gram-schmidt</code>, or <code>laplacian-solve</code> for a fraction of the memory on a large complex) and, for <code>chains</code>, <code>--include-zero-length</code>, for <code>representatives</code>, <code>--representative-type</code> (<code>cycles</code> or <code>cocycles</code>: the harmonic cocycle of each bar), and refuse the other flags of the diagram (<code>--complex</code>, <code>--engine</code>, <code>--prime</code>), <code>--relative-to</code>, the landmark flags, images, relations and saved results.</p>
   <div class="snippet mono-small-block">
    <pre><code class="language-"><span line-number="1" class=""><span class="tooltip-container"></span>$ tda4j --harmonic representatives --max-dimension 1 --representatives points.csv
 </span></code></pre>
@@ -572,7 +572,7 @@
  </section>
  <section id="the-persistent-laplacian">
   <h2 class="h500"><a href="#the-persistent-laplacian" class="anchor"></a>The persistent Laplacian</h2>
-  <p><code>--persistent-laplacian</code> writes the <a href="persistent-laplacian.html">persistent Laplacian</a> of the Vietoris-Rips complex of a point cloud or a distance matrix, instead of the diagram, as <code>key=value</code> lines: <code>betti-number</code>, <code>spectral-gap</code> (<code>none</code> if every eigenvalue is zero) and <code>eigenvalues</code>, smallest first.</p>
+  <p><code>--persistent-laplacian</code> writes the <a href="persistent-laplacian.html">persistent Laplacian</a> of the Vietoris-Rips complex of a point cloud or a distance matrix, instead of the diagram, as <code>key=value</code> lines: <code>betti-number</code>, <code>spectral-gap</code> (<code>none</code> if every eigenvalue is zero), <code>eigenvalues</code>, smallest first, and <code>kernel-0</code>, <code>kernel-1</code>, ... one line for each persistent Betti number: a basis chain of the kernel, an entry for each simplex of the matrix.</p>
   <table>
    <thead>
     <tr>
@@ -592,6 +592,14 @@
     <tr>
      <td><code>--laplacian-to</code></td>
      <td>the scale of the complex the chains live in, at least <code>--laplacian-from</code> (required)</td>
+    </tr>
+    <tr>
+     <td><code>--laplacian-target</code></td>
+     <td>write the Laplacian of the <a href="persistent-laplacian.html#of-a-simplicial-map">simplicial map</a> from the input's complex to the complex of the point cloud or distance matrix in this file (the input's format), at <code>--laplacian-to</code>; the output gains a <code>weights</code> line</td>
+    </tr>
+    <tr>
+     <td><code>--laplacian-vertex-map</code></td>
+     <td>with <code>--laplacian-target</code>: the target point (counted from 0) that each input point goes to, comma-separated</td>
     </tr>
    </tbody>
   </table>

@@ -174,6 +174,23 @@
   <div class="buttons"></div>
  </div>
  <p><code>HarmonicRepresentatives(stream, maxDimension)</code> gives the ordinary barcode, bar for bar, and replaces each bar's representative by the harmonic cycle at the bar's birth (Basu and Cox, <em>Harmonic persistent homology</em>). The cycle is picked out by the filtration's values alone, so it does not depend on how cells of equal value are ordered. A bar that is the only one with its endpoints has a harmonic space of dimension one, and the chain is scaled to 1 at its first cell; a group of bars with the same endpoints gets an orthogonal basis of their space.</p>
+ <section id="harmonic-cocycles">
+  <h2 class="h500"><a href="#harmonic-cocycles" class="anchor"></a>Harmonic cocycles</h2>
+  <p>The same construction runs on cohomology: <code>representatives = Representatives.Cocycles</code> gives each bar the harmonic cocycle of its class instead of the harmonic cycle. Cochains and chains share one coordinate system (the cells are orthonormal), so a harmonic cocycle is a vector on the same cells, and the harmonic cochains of a complex are its harmonic chains. What differs is where the representative sits and which vector it is. Cocycles restrict from a larger complex to a smaller one, so a class is born at the largest value of its bar and dies going down: the bar <code>[s, t)</code> is born at the last value before <code>t</code>, and its representative is the harmonic cochain there. The maps are the orthogonal projections of the harmonic cochains at a later value onto those at an earlier one, so the representative is chosen orthogonal to other classes than the cycle is.</p>
+  <div class="snippet mono-small-block" scala-snippet="" runnable="">
+   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import scala.language.experimental.modularity
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.*
+</span><span line-number="3" class=""><span class="tooltip-container"></span>
+</span><span line-number="4" class=""><span class="tooltip-container"></span>val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0))
+</span><span line-number="5" class=""><span class="tooltip-container"></span>val rips = VietorisRips(EuclideanMetricSpace(points), maxDimension = 1)
+</span><span line-number="6" class=""><span class="tooltip-container"></span>
+</span><span line-number="7" class=""><span class="tooltip-container"></span>val cocycles = HarmonicRepresentatives(rips, maxDimension = 1, representatives = Representatives.Cocycles)
+</span><span line-number="8" class=""><span class="tooltip-container"></span>cocycles.dim(1).longest.get.representative.terms   // the harmonic cochain of the loop, at the last value before sqrt(2)
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+  <p>With two loops the difference shows. If a loop <code>abc</code> appears at 1, a second loop <code>abd</code> at 2 and a triangle fills <code>abd</code> at 3, the cycle of the long bar <code>[1, ∞)</code> is the plain loop <code>abc</code>, and its cocycle is <code>abc</code> tilted away from <code>abd</code>, the harmonic cochain of the filled complex; for the short bar <code>[2, 3)</code> the cocycle is the plain loop <code>abd</code>, and its cycle is the tilted one. A cocycle is what circular coordinates are built from; the harmonic one is the smoothest in its class.</p>
+ </section>
  <section id="the-harmonic-chain-barcode">
   <h2 class="h500"><a href="#the-harmonic-chain-barcode" class="anchor"></a>The harmonic chain barcode</h2>
   <p><code>HarmonicChainBarcode</code> follows the harmonic chains themselves (Hou, Parsa and Wang, <em>Tracking the persistence of harmonic chains</em>). The harmonic cycles of the complex change whenever a cell enters, and a cycle stops being harmonic as soon as it is no longer orthogonal to the boundaries, which is before it becomes a boundary. A bar of this barcode is a cycle that stays harmonic for its whole life, and the representative is that one cycle.</p>
@@ -243,7 +260,25 @@
  </section>
  <section id="cost">
   <h2 class="h500"><a href="#cost" class="anchor"></a>Cost</h2>
-  <p>The cost is cubic in the number of cells in the worst case, and the algorithm keeps an orthogonal basis of the cycles in memory, so it is meant for the complexes of a few dozen points, or for a complex cut off early with <code>maxFiltrationValue</code>. The chains are kept sparse. The faster engines do not apply: a harmonic chain depends on the inner product of the cells, which a reduction of the complex (discrete Morse theory, an edge collapse) does not keep, so those change the harmonic barcode instead of computing it faster.</p>
+  <p>The cost is cubic in the number of cells in the worst case. The default keeps an orthogonal basis of all the cycles of a degree in memory, and that is what limits it: it grows with every positive cell and holds a dense chain for each. For a larger complex, <code>orthogonalization = HarmonicChainBarcode.Orthogonalization.LaplacianSolve</code> (on <code>HarmonicChainBarcode</code> and on <code>HarmonicRepresentatives</code>) keeps only the boundaries and finds each new chain by solving a linear system, which takes a fraction of the memory. The two give the same chains over the rationals. Over the reals each decision is a comparison with the tolerance, so on a large cloud with many nearly tied values they can pair a few bars differently; <code>Coefficients.Rationals</code> gives the exact pairing, and the solve says what to use instead if it cannot reach the tolerance.</p>
+  <div class="snippet mono-small-block" scala-snippet="" runnable="">
+   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import scala.language.experimental.modularity
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.*
+</span><span line-number="3" class=""><span class="tooltip-container"></span>
+</span><span line-number="4" class=""><span class="tooltip-container"></span>val square = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0))
+</span><span line-number="5" class=""><span class="tooltip-container"></span>val rips = VietorisRips(EuclideanMetricSpace(square), maxDimension = 1)
+</span><span line-number="6" class=""><span class="tooltip-container"></span>
+</span><span line-number="7" class=""><span class="tooltip-container"></span>val solved = HarmonicChainBarcode(
+</span><span line-number="8" class=""><span class="tooltip-container"></span>  rips,
+</span><span line-number="9" class=""><span class="tooltip-container"></span>  maxDimension = 1,
+</span><span line-number="10" class=""><span class="tooltip-container"></span>  coefficients = Coefficients.Rationals,
+</span><span line-number="11" class=""><span class="tooltip-container"></span>  orthogonalization = HarmonicChainBarcode.Orthogonalization.LaplacianSolve
+</span><span line-number="12" class=""><span class="tooltip-container"></span>)
+</span><span line-number="13" class=""><span class="tooltip-container"></span>solved.dim(1).longest.get.representative.terms   // the loop of the four sides, as with the default
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+  <p>The chains are kept sparse. The faster engines do not apply: a harmonic chain depends on the inner product of the cells, which a reduction of the complex (discrete Morse theory, an edge collapse) does not keep, so those change the harmonic barcode instead of computing it faster.</p>
  </section>
  <section id="from-the-other-interfaces">
   <h2 class="h500"><a href="#from-the-other-interfaces" class="anchor"></a>From the other interfaces</h2>
@@ -273,6 +308,6 @@
     </tr>
    </tbody>
   </table>
-  <p>The options are <code>maxDimension</code> (default 2), <code>maxFiltrationValue</code>, <code>field</code> (<code>R</code>, the default, or <code>Q</code>), <code>epsilon</code> (the tolerance of <code>R</code>), <code>includeZeroLength</code> (the barcode only), <code>minPersistence</code>, <code>minPersistenceFraction</code> and <code>threads</code>. A finite field, or an option of another computation such as <code>engine</code> or <code>complex</code>, is an error that names it.</p>
+  <p>The options are <code>maxDimension</code> (default 2), <code>maxFiltrationValue</code>, <code>field</code> (<code>R</code>, the default, or <code>Q</code>), <code>epsilon</code> (the tolerance of <code>R</code>), <code>orthogonalization</code> (<code>gram-schmidt</code>, the default, or <code>laplacian-solve</code>; see Cost), <code>includeZeroLength</code> (the barcode only), <code>representativeType</code> (the representatives only), <code>minPersistence</code>, <code>minPersistenceFraction</code> and <code>threads</code>. A finite field, or an option of another computation such as <code>engine</code> or <code>complex</code>, is an error that names it.</p>
  </section>
-</main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#the-harmonic-chain-barcode">The harmonic chain barcode</a></li><li><a href="#coefficients">Coefficients</a></li><li><a href="#cost">Cost</a></li><li><a href="#from-the-other-interfaces">From the other interfaces</a></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>
+</main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#harmonic-cocycles">Harmonic cocycles</a></li><li><a href="#the-harmonic-chain-barcode">The harmonic chain barcode</a></li><li><a href="#coefficients">Coefficients</a></li><li><a href="#cost">Cost</a></li><li><a href="#from-the-other-interfaces">From the other interfaces</a></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>

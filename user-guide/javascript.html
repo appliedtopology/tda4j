@@ -229,7 +229,7 @@
     </tr>
     <tr>
      <td><code>harmonicChainBarcode(points, options)</code>, <code>harmonicRepresentatives(points, options)</code></td>
-     <td>a <code>Result</code> of the <a href="harmonic-chains.html">harmonic chains</a> of the Vietoris-Rips complex: the harmonic chain barcode, or the ordinary bars with harmonic representatives (<code>representative(i)</code> is the harmonic cycle); <code>...FromDistances</code> for a distance matrix. <code>field</code> is <code>"R"</code> (the default here) or <code>"Q"</code></td>
+     <td>a <code>Result</code> of the <a href="harmonic-chains.html">harmonic chains</a> of the Vietoris-Rips complex: the harmonic chain barcode, or the ordinary bars with harmonic representatives (<code>representative(i)</code> is the harmonic cycle); <code>...FromDistances</code> for a distance matrix. <code>field</code> is <code>"R"</code> (the default here) or <code>"Q"</code>; <code>representativeType: "cocycles"</code> gives <code>harmonicRepresentatives</code> the harmonic cocycles</td>
     </tr>
     <tr>
      <td><code>inclusionMap(points, subsample, options)</code>, <code>simplicialMap(sourcePoints, targetPoints, vertexMap, options)</code></td>
@@ -254,6 +254,10 @@
     <tr>
      <td><code>persistentLaplacian(points, dimension, from, to)</code>, <code>persistentLaplacianFromDistances(distances, dimension, from, to)</code></td>
      <td>the <a href="persistent-laplacian.html">persistent Laplacian</a> of the Vietoris-Rips complex: an object with <code>matrix</code>, <code>eigenvalues</code> (smallest first), <code>bettiNumber</code>, <code>spectralGap</code> (<code>undefined</code> if every eigenvalue is zero) and <code>cells</code></td>
+    </tr>
+    <tr>
+     <td><code>persistentLaplacianOfMap(sourcePoints, targetPoints, vertexMap, dimension, from, to)</code>, <code>persistentLaplacianOfMapFromDistances(sourceDistances, targetDistances, vertexMap, dimension, from, to)</code></td>
+     <td>the <a href="persistent-laplacian.html#of-a-simplicial-map">persistent Laplacian of a simplicial map</a> between the Vietoris-Rips complexes of two spaces: <code>vertexMap[i]</code> is the index of the target point that source point <code>i</code> goes to; the same object, with <code>weights</code>, and <code>bettiNumber</code> the rank of the map on homology</td>
     </tr>
     <tr>
      <td><code>morseReduction(points, options)</code>, <code>morseReductionFromDistances(distances, options)</code></td>

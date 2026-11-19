@@ -174,7 +174,45 @@
 </span></code></pre>
   <div class="buttons"></div>
  </div>
- <p><code>PersistentLaplacian(stream, dimension, from, to)</code> takes any stream of cells, a Vietoris-Rips complex or a stream you built, and returns a result with <code>cells</code> (the simplices at <code>from</code>, the rows and columns of the matrix), <code>matrix</code>, <code>eigenvalues</code> (smallest first), <code>bettiNumber</code> and <code>spectralGap</code>. The stream has to hold the cells one dimension above <code>dimension</code>: a Vietoris-Rips complex built with <code>maxDimension = k</code> serves dimensions up to <code>k</code>.</p>
+ <p><code>PersistentLaplacian(stream, dimension, from, to)</code> takes any stream of cells, a Vietoris-Rips complex or a stream you built, and returns a result with <code>cells</code> (the simplices at <code>from</code>, the rows and columns of the matrix), <code>matrix</code>, <code>eigenvalues</code> (smallest first), <code>bettiNumber</code>, <code>spectralGap</code> and <code>kernel</code>. The stream has to hold the cells one dimension above <code>dimension</code>: a Vietoris-Rips complex built with <code>maxDimension = k</code> serves dimensions up to <code>k</code>.</p>
+ <section id="the-kernel">
+  <h2 class="h500"><a href="#the-kernel" class="anchor"></a>The kernel</h2>
+  <p>The kernel of the matrix is a space of chains on the cells at <code>from</code>: the cycles there that are orthogonal to the boundaries of the chains of the complex at <code>to</code> whose own boundary lies at <code>from</code>. Their classes are a basis of what survives from <code>from</code> to <code>to</code>, and when nothing enters in between they are the harmonic chains of the complex. <code>kernel</code> is an orthonormal basis of it, one chain for each persistent Betti number. The space is canonical; the basis is not, unless the dimension is one, where the chain is fixed up to sign (the sign makes its first entry positive).</p>
+  <div class="snippet mono-small-block" scala-snippet="" runnable="">
+   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import scala.language.experimental.modularity
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.*
+</span><span line-number="3" class=""><span class="tooltip-container"></span>
+</span><span line-number="4" class=""><span class="tooltip-container"></span>val square = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(1.0, 1.0), Array(0.0, 1.0))
+</span><span line-number="5" class=""><span class="tooltip-container"></span>val complex = VietorisRips(EuclideanMetricSpace(square), maxDimension = 1)
+</span><span line-number="6" class=""><span class="tooltip-container"></span>
+</span><span line-number="7" class=""><span class="tooltip-container"></span>val loop = PersistentLaplacian(complex, dimension = 1, from = 1.0, to = 1.0)
+</span><span line-number="8" class=""><span class="tooltip-container"></span>loop.kernel.head.terms.map((side, c) =&gt; side.underlying.toList -&gt; c)   // the four sides, each 1/2 in absolute value
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+ </section>
+ <section id="of-a-simplicial-map">
+  <h2 class="h500"><a href="#of-a-simplicial-map" class="anchor"></a>Of a simplicial map</h2>
+  <p>An inclusion of one complex in a larger one is not the only map with a persistent Laplacian: every simplicial map <code>f</code> from a complex <code>K</code> to a complex <code>L</code> has one (Gülen, Mémoli, Wan and Wang). It is a matrix on the <code>k</code>-simplices of <code>L</code> that <code>f</code> hits, and its kernel has the dimension of the rank of <code>H_k(K) → H_k(L)</code>. A map of vertices is simplicial if it sends every simplex of <code>K</code> to a simplex of <code>L</code>; the simplices it squeezes (two vertices on one image) go to zero.</p>
+  <div class="snippet mono-small-block" scala-snippet="" runnable="">
+   <pre><code class="language-scala"><span line-number="1" class=""><span class="tooltip-container"></span>import scala.language.experimental.modularity
+</span><span line-number="2" class=""><span class="tooltip-container"></span>import org.appliedtopology.tda4j.*
+</span><span line-number="3" class=""><span class="tooltip-container"></span>
+</span><span line-number="4" class=""><span class="tooltip-container"></span>// a square 0-1-2-3 folded onto the triangle 0-1-2 by sending the vertex 3 to 0
+</span><span line-number="5" class=""><span class="tooltip-container"></span>val square = Seq(Simplex(0), Simplex(1), Simplex(2), Simplex(3),
+</span><span line-number="6" class=""><span class="tooltip-container"></span>                 Simplex(0, 1), Simplex(1, 2), Simplex(2, 3), Simplex(0, 3))
+</span><span line-number="7" class=""><span class="tooltip-container"></span>val triangle = Seq(Simplex(0), Simplex(1), Simplex(2), Simplex(0, 1), Simplex(1, 2), Simplex(0, 2))
+</span><span line-number="8" class=""><span class="tooltip-container"></span>
+</span><span line-number="9" class=""><span class="tooltip-container"></span>val fold = PersistentLaplacian.ofMap(square, triangle, dimension = 1)(v =&gt; if v == 3 then 0 else v)
+</span><span line-number="10" class=""><span class="tooltip-container"></span>fold.bettiNumber   // 1: the loop of the square goes to the loop of the triangle
+</span><span line-number="11" class=""><span class="tooltip-container"></span>fold.eigenvalues   // 0, 2, 3
+</span><span line-number="12" class="snippet-warn tooltip"><span class="tooltip-container" label="A pure expression does nothing in statement position"></span>fold.cells         // the three edges of the triangle: the edge 3-0 is squeezed, 2-3 lands on 0-2
+</span></code></pre>
+   <div class="buttons"></div>
+  </div>
+  <p><code>PersistentLaplacian.ofMap(source, target, dimension)(vertexMap)</code> takes the two complexes as collections of simplices (all their dimensions, or the three from <code>dimension - 1</code> to <code>dimension + 1</code>) and returns the same result as <code>PersistentLaplacian(...)</code>: <code>cells</code>, <code>matrix</code>, <code>eigenvalues</code>, <code>bettiNumber</code>, <code>spectralGap</code> and <code>kernel</code>, with <code>weights</code> besides. A vertex map that is not simplicial is an error that names the simplex. With a stream in place of each collection and a filtration value for each, <code>ofMap(source, from, target, to, dimension)(vertexMap)</code> takes the simplices that have entered by those values: for a filtered complex and the identity as the vertex map it is the persistent Laplacian above, entry for entry.</p>
+  <p>Where <code>f</code> sends several <code>k</code>-simplices onto one, the simplex of <code>L</code> counts for as many: its weight is their number, its chain has the length <code>1 / sqrt(weight)</code>, and the map of chains is then an isometry on what it does not kill, which the construction needs. The matrix is in the orthonormal basis of those chains (the paper's matrix is the same one in the basis of unscaled chains, and the two are conjugate by the weights); <code>kernel</code> gives chains on the cells again. Without such a merge, and in particular for an inclusion, every weight is 1. The source has to hold its simplices of dimension <code>k + 1</code> as well, for their weights in <code>L</code>: they change the eigenvalues, never the kernel.</p>
+ </section>
  <section id="what-it-is">
   <h2 class="h500"><a href="#what-it-is" class="anchor"></a>What it is</h2>
   <p>Take the chains of the complex <code>K_to</code> whose boundary lies in the complex <code>K_from</code>, and the boundary map from them into the chains of <code>K_from</code>. With the cells as an orthonormal basis, that map has an adjoint, and the persistent Laplacian is the map composed with its adjoint, plus the down Laplacian <code>∂ᵀ∂</code> of <code>K_from</code>. When nothing enters between <code>from</code> and <code>to</code> it is the Hodge Laplacian <code>∂∂ᵀ + ∂ᵀ∂</code>. The coefficients are real numbers, and the matrices are dense: dimensions up to a few thousand cells are fine, which is what a Vietoris-Rips complex of a few dozen points has.</p>
@@ -192,21 +230,21 @@
    <tbody>
     <tr>
      <td><a href="matlab.html">MATLAB and Java</a></td>
-     <td><code>TDA4j.persistentLaplacianFromPoints(points, dimension, from, to)</code> and <code>...FromDistanceMatrix</code>: a <code>PersistentLaplacianResult</code> with <code>matrix()</code>, <code>eigenvalues()</code>, <code>bettiNumber()</code>, <code>spectralGap()</code> (<code>NaN</code> if there is none; <code>hasSpectralGap()</code>), <code>cells()</code></td>
+     <td><code>TDA4j.persistentLaplacianFromPoints(points, dimension, from, to)</code> and <code>...FromDistanceMatrix</code>; for a simplicial map <code>TDA4j.persistentLaplacianOfMapFromPoints(sourcePoints, targetPoints, vertexMap, dimension, from, to)</code> and <code>...FromDistanceMatrices</code>: a <code>PersistentLaplacianResult</code> with <code>matrix()</code>, <code>eigenvalues()</code>, <code>kernel()</code> (one row for each persistent Betti number, an entry for each of <code>cells()</code>), <code>bettiNumber()</code>, <code>spectralGap()</code> (<code>NaN</code> if there is none; <code>hasSpectralGap()</code>), <code>cells()</code></td>
     </tr>
     <tr>
      <td><a href="javascript.html">JavaScript</a></td>
-     <td><code>persistentLaplacian(points, dimension, from, to)</code> and <code>persistentLaplacianFromDistances</code>: an object with <code>matrix</code>, <code>eigenvalues</code>, <code>bettiNumber</code>, <code>spectralGap</code> and <code>cells</code></td>
+     <td><code>persistentLaplacian(points, dimension, from, to)</code> and <code>persistentLaplacianFromDistances</code>; for a simplicial map <code>persistentLaplacianOfMap(sourcePoints, targetPoints, vertexMap, dimension, from, to)</code> and <code>persistentLaplacianOfMapFromDistances</code>: an object with <code>matrix</code>, <code>eigenvalues</code>, <code>kernel</code>, <code>bettiNumber</code>, <code>spectralGap</code> and <code>cells</code></td>
     </tr>
     <tr>
      <td><a href="python.html">Python</a></td>
-     <td><code>tda4j.persistent_laplacian(points, dimension, start, stop)</code> and <code>persistent_laplacian_from_distances</code>: the same attributes, <code>betti_number</code> and <code>spectral_gap</code> (<code>None</code> if all are zero)</td>
+     <td><code>tda4j.persistent_laplacian(points, dimension, start, stop)</code> and <code>persistent_laplacian_from_distances</code>; for a simplicial map <code>persistent_laplacian_of_map(source_points, target_points, vertex_map, dimension, start, stop)</code> and <code>..._from_distances</code>: the same attributes, <code>betti_number</code>, <code>spectral_gap</code> (<code>None</code> if all are zero) and <code>kernel</code> (an array of shape <code>(betti_number, len(cells))</code>)</td>
     </tr>
     <tr>
      <td><a href="cli.html#the-persistent-laplacian">Command line</a></td>
-     <td><code>tda4j --persistent-laplacian --laplacian-dimension 1 --laplacian-from 1 --laplacian-to 1 points.csv</code></td>
+     <td><code>tda4j --persistent-laplacian --laplacian-dimension 1 --laplacian-from 1 --laplacian-to 1 points.csv</code>; for a simplicial map add <code>--laplacian-target other.csv --laplacian-vertex-map 0,1,1,0</code></td>
     </tr>
    </tbody>
   </table>
  </section>
-</main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#what-it-is">What it is</a></li><li><a href="#from-the-other-interfaces">From the other interfaces</a></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>
+</main></div><div id="toc" class="body-small"><div id="toc-container"><span class="toc-title h200">In this article</span><nav class="toc-nav"><ul class="toc-list"><li><a href="#the-kernel">The kernel</a></li><li><a href="#of-a-simplicial-map">Of a simplicial map</a></li><li><a href="#what-it-is">What it is</a></li><li><a href="#from-the-other-interfaces">From the other interfaces</a></li></ul></nav></div></div></div><div id="footer" class="body-small mobile-footer"><div class="left-container">Generated with</div><div class="right-container"><a href="https://github.com/appliedtopology/tda4j"><button class="icon-button gh"></button></a><div class="text">TDA4j is built by the TDA @ CUNY workgroup</div></div><div class="text-mobile">TDA4j is built by the TDA @ CUNY workgroup</div></div></div></div></body></html>

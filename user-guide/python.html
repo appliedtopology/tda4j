@@ -236,7 +236,7 @@
     </tr>
     <tr>
      <td><code>harmonic_chain_barcode(points, **options)</code>, <code>harmonic_representatives(points, **options)</code></td>
-     <td>a <code>Result</code> of the <a href="harmonic-chains.html">harmonic chains</a> of the Vietoris-Rips complex: the harmonic chain barcode, or the ordinary bars with harmonic representatives (<code>representative(i)</code> is the harmonic cycle); <code>harmonic_chain_barcode_from_distances</code> and <code>harmonic_representatives_from_distances</code> for a distance matrix. <code>field</code> is <code>"R"</code> (the default here) or <code>"Q"</code></td>
+     <td>a <code>Result</code> of the <a href="harmonic-chains.html">harmonic chains</a> of the Vietoris-Rips complex: the harmonic chain barcode, or the ordinary bars with harmonic representatives (<code>representative(i)</code> is the harmonic cycle); <code>harmonic_chain_barcode_from_distances</code> and <code>harmonic_representatives_from_distances</code> for a distance matrix. <code>field</code> is <code>"R"</code> (the default here) or <code>"Q"</code>; <code>representative_type="cocycles"</code> gives <code>harmonic_representatives</code> the harmonic cocycles</td>
     </tr>
     <tr>
      <td><code>inclusion_map(points, subsample, **options)</code>, <code>simplicial_map(source_points, target_points, vertex_map, **options)</code></td>
@@ -265,6 +265,10 @@
     <tr>
      <td><code>persistent_laplacian(points, dimension, start, stop)</code>, <code>persistent_laplacian_from_distances(distances, dimension, start, stop)</code></td>
      <td>the <a href="persistent-laplacian.html">persistent Laplacian</a> of the Vietoris-Rips complex: <code>matrix</code>, <code>eigenvalues</code> (ascending), <code>betti_number</code>, <code>spectral_gap</code> (<code>None</code> if every eigenvalue is zero) and <code>cells</code></td>
+    </tr>
+    <tr>
+     <td><code>persistent_laplacian_of_map(source_points, target_points, vertex_map, dimension, start, stop)</code>, <code>persistent_laplacian_of_map_from_distances(source_distances, target_distances, vertex_map, dimension, start, stop)</code></td>
+     <td>the <a href="persistent-laplacian.html#of-a-simplicial-map">persistent Laplacian of a simplicial map</a> between the Vietoris-Rips complexes of two spaces: <code>vertex_map[i]</code> is the index of the target point that source point <code>i</code> goes to; the same result, with <code>weights</code>, and <code>betti_number</code> the rank of the map on homology</td>
     </tr>
     <tr>
      <td><code>morse_reduction(points, **options)</code>, <code>morse_reduction_from_distances(distances, **options)</code></td>
