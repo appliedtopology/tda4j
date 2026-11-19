@@ -236,9 +236,19 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     descr = "harmonic chains of the Vietoris-Rips complex of a point cloud or a distance matrix: 'chains' for the " +
       "harmonic chain barcode, whose bars carry a cycle that stays harmonic (orthogonal to all boundaries) for the " +
       "bar's whole life, or 'representatives' for the ordinary bars with the harmonic cycle of the bar's birth as " +
-      "representative. Harmonic needs an inner product, so --field is R (the default here) or Q; --max-dimension, " +
-      "--max-filtration-value, --epsilon, --min-persistence, --min-persistence-fraction, --threads and, for " +
-      "'chains', --include-zero-length apply (--complex, --engine and --representative-type are not offered)"
+      "representative (--representative-type cocycles: the harmonic cocycle at the last value of the bar's life). " +
+      "Harmonic needs an inner product, so --field is R (the default here) or Q; --max-dimension, " +
+      "--max-filtration-value, --epsilon, --min-persistence, --min-persistence-fraction, --threads, " +
+      "--orthogonalization and, for 'chains', --include-zero-length, for 'representatives', --representative-type " +
+      "apply (--complex and --engine are not offered)"
+  )
+  val orthogonalization: ScallopOption[String] = opt[String](
+    name = "orthogonalization",
+    noshort = true,
+    descr = "with --harmonic: gram-schmidt (default) keeps an orthogonal basis of all the cycles of a degree, " +
+      "laplacian-solve keeps only the boundaries and solves for each new chain, which takes a fraction of the memory " +
+      "on a large complex. Over R the two can pair a few bars differently when many values nearly tie (--field Q " +
+      "settles it)"
   )
   val inclusionOf: ScallopOption[String] = opt[String](
     name = "inclusion-of",
@@ -457,6 +467,20 @@ class TDA4jConf(arguments: Seq[String]) extends ScallopConf(arguments):
     noshort = true,
     descr =
       "for --persistent-laplacian: the scale of the complex the chains live in, at least --laplacian-from (required)"
+  )
+  val laplacianTarget: ScallopOption[String] = opt[String](
+    name = "laplacian-target",
+    noshort = true,
+    descr = "for --persistent-laplacian: write the Laplacian of the simplicial map from the input's complex, at " +
+      "--laplacian-from, to the complex of the point cloud or distance matrix in this file (the same format as the " +
+      "input), at --laplacian-to, as --laplacian-vertex-map sends the points; its persistent Betti number is the " +
+      "rank of the map on homology"
+  )
+  val laplacianVertexMap: ScallopOption[String] = opt[String](
+    name = "laplacian-vertex-map",
+    noshort = true,
+    descr = "for --laplacian-target: the number of the point of the target that each point of the input goes to, " +
+      "as a comma-separated list with one entry for each point of the input, counted from 0"
   )
 
   // Discrete Morse reduction: a mode of its own. Declared last and without short flags, as above.

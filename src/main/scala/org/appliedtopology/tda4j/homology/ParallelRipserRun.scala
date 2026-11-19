@@ -10,6 +10,11 @@ private[tda4j] trait ParallelRipserRun:
   /** `(degree, birth, death)` of the bars of positive length, sorted; `death` is infinity for an essential class. */
   def bars: IndexedSeq[(Int, Double, Double)]
 
+  /** The longest edge within the threshold (`0.0` when there is none): what `FiniteMetricSpace.longestDistanceWithin`
+    * finds, read off the edges the run ranked instead of by a pass of its own.
+    */
+  def longestEdge: Double
+
   /** The cocycle of bar `i` of `bars`: the vertices (ascending) of each simplex of the cochain with its coefficient in
     * `1 until p`. Built when asked for, from the reduction's log; safe to call from several threads.
     */

@@ -104,6 +104,14 @@ trait FiniteMetricSpace[VertexT]:
       i += 1
     longest
 
+  /** Each point's neighbours within `threshold`, ascending, with their distances ([[NeighbourLists]]), when this space
+    * finds them faster than the pass over all pairs (`NeighbourLists.within`, which is what a caller runs on `None`):
+    * the lists the pass would build, entry for entry and to the last bit of each distance. `None` when the space has no
+    * faster way, or when there would be more than `maxEntries` directed pairs (the lists would not be sparse).
+    * [[EuclideanMetricSpace]] answers by one neighbour query per point on a cloud too big to cache its distances.
+    */
+  def neighbourListsWithin(threshold: Double, maxEntries: Long): Option[NeighbourLists] = None
+
 /** Convenience functionality for metric spaces.
   */
 object FiniteMetricSpace:
@@ -348,6 +356,61 @@ open class EuclideanMetricSpace(coordinates: Array[Array[Double]], val cacheDist
       longest(x) = row
     }
     longest.foldLeft(0.0)(math.max)
+
+  /** The same lists as `NeighbourLists.within(size, threshold, maxEntries)(distance)`, found by one query per point on
+    * the vantage-point tree, the points on all threads, when the space is too big to cache its distances (above that
+    * the pass costs `n^2 / 2` distances and the queries a few hundred per point). `None` below that size, when a query
+    * would measure more than a quarter of the points (the tree stops paying: the same rule as
+    * [[longestDistanceByQueries]]), or when there are more than `maxEntries` directed pairs.
+    */
+  override def neighbourListsWithin(threshold: Double, maxEntries: Long): Option[NeighbourLists] =
+    if size <= EuclideanMetricSpace.MaxCachedPoints then None else neighbourListsByQueries(threshold, maxEntries)
+
+  /** The neighbour lists by one query per point (see [[neighbourListsWithin]]), whatever the size of the space. */
+  def neighbourListsByQueries(threshold: Double, maxEntries: Long): Option[NeighbourLists] =
+    val n = size
+    val limit = math.min(maxEntries, Int.MaxValue.toLong - 8)
+    val tree = indexTree // built once, before the threads ask for it
+    val cap = math.max(1L, n / 4L)
+    val found = new Array[Array[Int]](n)
+    val distances = new Array[Array[Double]](n)
+    val entries = new java.util.concurrent.atomic.AtomicLong(0L)
+    val gaveUp = new java.util.concurrent.atomic.AtomicBoolean(false)
+    Parallel.tasks(n) { i =>
+      if !gaveUp.get() then
+        tree.indicesAndDistancesWithin(i, threshold, cap) match
+          case None            => gaveUp.set(true)
+          case Some((ixs, ds)) =>
+            // the point finds itself (distance 0, at most the threshold): not its own neighbour
+            val self = java.util.Arrays.binarySearch(ixs, i)
+            val keep = if self >= 0 then ixs.length - 1 else ixs.length
+            if entries.addAndGet(keep.toLong) > limit then gaveUp.set(true)
+            else if self < 0 then
+              found(i) = ixs
+              distances(i) = ds
+            else
+              found(i) = java.util.Arrays.copyOf(ixs, keep)
+              distances(i) = java.util.Arrays.copyOf(ds, keep)
+              System.arraycopy(ixs, self + 1, found(i), self, keep - self)
+              System.arraycopy(ds, self + 1, distances(i), self, keep - self)
+    }
+    if gaveUp.get() then None
+    else
+      val offsets = new Array[Int](n + 1)
+      var i = 0
+      while i < n do
+        offsets(i + 1) = offsets(i) + found(i).length
+        i += 1
+      val targets = new Array[Int](offsets(n))
+      val lengths = new Array[Double](offsets(n))
+      i = 0
+      while i < n do
+        System.arraycopy(found(i), 0, targets, offsets(i), found(i).length)
+        System.arraycopy(distances(i), 0, lengths, offsets(i), found(i).length)
+        found(i) = null // a row is dropped as soon as it is copied: the rows and the lists are not both live at the end
+        distances(i) = null
+        i += 1
+      Some(NeighbourLists(offsets, targets, lengths))
 
 object EuclideanMetricSpace:
   /** The largest point count whose distances are cached: `8192^2` doubles is 512 MB. */

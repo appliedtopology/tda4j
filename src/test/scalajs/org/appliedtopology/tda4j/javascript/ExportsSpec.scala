@@ -95,7 +95,33 @@ class ExportsSpec extends Specification:
       (alive.bettiNumber must beEqualTo(1)) and (gone.bettiNumber must beEqualTo(0)) and
         (alive.eigenvalues.length must beEqualTo(4)) and (alive.matrix.length must beEqualTo(4)) and
         (alive.cells.length must beEqualTo(4)) and (alive.spectralGap.isDefined must beTrue) and
+        (alive.kernel.length must beEqualTo(1)) and (alive.kernel(0).length must beEqualTo(4)) and
+        (gone.kernel.length must beEqualTo(0)) and
         (Exports.persistentLaplacian(square, 1, 2.0, 1.0) must throwA[js.JavaScriptException])
+    }
+
+  "persistentLaplacianOfMap" should
+    "fold the square onto a segment as the facade does: one simplex of weight 2, and a map that is not simplicial is refused" >> {
+      val square = js.Array(js.Array(0.0, 0.0), js.Array(1.0, 0.0), js.Array(1.0, 1.0), js.Array(0.0, 1.0))
+      val segment = js.Array(js.Array(0.0, 0.0), js.Array(1.0, 0.0))
+      val folded = Exports.persistentLaplacianOfMap(square, segment, js.Array(0, 1, 1, 0), 1, 1.0, 1.0)
+      val identity = js.Array(0, 1, 2, 3)
+      (folded.weights.toSeq must beEqualTo(Seq(2.0))) and (folded.cells.length must beEqualTo(1)) and
+        (folded.bettiNumber must beEqualTo(0)) and (math.abs(folded.matrix(0)(0) - 2.0) < 1e-9 must beTrue) and
+        (Exports.persistentLaplacianOfMap(square, square, identity, 1, 1.0, 1.0).bettiNumber must beEqualTo(1)) and
+        (Exports
+          .persistentLaplacianOfMapFromDistances(
+            js.Array(js.Array(0.0, 1.0), js.Array(1.0, 0.0)),
+            js.Array(js.Array(0.0, 1.0), js.Array(1.0, 0.0)),
+            js.Array(0, 1),
+            0,
+            1.0,
+            1.0
+          )
+          .bettiNumber must beEqualTo(1)) and
+        (Exports.persistentLaplacianOfMap(square, square, js.Array(0, 1), 1, 1.0, 1.0) must throwA[
+          js.JavaScriptException
+        ])
     }
 
   "morseReduction" should

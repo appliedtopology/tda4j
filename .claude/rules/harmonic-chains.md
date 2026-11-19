@@ -27,6 +27,19 @@ Derivation, probes and decisions: `WORKLOG-harmonic-chains.md`. Developer's Guid
 - **Facade pairing**: `fromBars` reads a chain as `chain.terms` (cell order). `cycleVertices(i)` and `cycleCoefficients(i)`
   are two provider calls: `collapseAll` + `rawEntries` twice gave a heap order that differed between the calls and put a
   coefficient on another cell's vertices (`RepresentativePairingSpec`).
-- **Limits**: memory is the orthogonal cycle basis of all cycles of a degree (a down-Laplacian solve is an untested
-  alternative), cost cubic in the cells in the worst case; cycles only (no cocycle variant); the Gülen-Mémoli-Wan poset
-  construction is not built.
+- **Cocycles** (`HarmonicRepresentatives(.., representatives = Representatives.Cocycles)`, #307): cochains and chains share the
+  orthonormal coordinates, so the harmonic cochains are the harmonic chains; the module maps of cohomology are the orthogonal
+  projections to an EARLIER level, so a bar `[s, t)` is born at the last value before `t` and Basu-Cox runs with the levels
+  reversed. The diagram's marker records the kind. The harmonic chain barcode stays cycles only. A zero-length bar is
+  refused (`ofDiagram`): it is not a class of the module.
+- **`Orthogonalization`** (#305): `GramSchmidt` (default) keeps an orthogonal basis of all the cycles of a degree;
+  `LaplacianSolve` keeps the boundaries and solves `(d d^T) y = -d e_sigma` for `z = e_sigma + d^T y` by conjugate gradient.
+  Over `Q` the two are equal term for term (`HarmonicOrthogonalizationSpec`); over `R` every decision is `isEqual(x, 0)` at an
+  absolute `1e-9`, so on large near-tie clouds the two can PAIR a few bars differently (on the one 70-point cloud with an exact reference: 42 listing lines off for Gram-Schmidt, 5 for the solve; `WORKLOG-harmonic-solve-cocycles.md`, #353). The solve's
+  residual has to be zero at 2^-10 of that tolerance, else the next test answers differently; it stops with an error that
+  names the alternatives. Measurements, and the exact reference that arbitrates: `WORKLOG-harmonic-solve-cocycles.md`.
+  Facade key `orthogonalization` (`gram-schmidt`, `laplacian-solve`), CLI `--orthogonalization`.
+- **Limits**: cost is cubic in the cells in the worst case; the memory is the orthogonal cycle basis of all cycles of a degree
+  (`GramSchmidt`) or the boundaries of the degree (`LaplacianSolve`); the harmonic chain barcode is cycles only; a finite
+  field is refused. The persistent Laplacian of a simplicial map is `PersistentLaplacian.ofMap` (`rules/module-maps.md`); the
+  Gülen-Mémoli-Wan poset-filtration Laplacian is not built.

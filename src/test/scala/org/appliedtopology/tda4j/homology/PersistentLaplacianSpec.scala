@@ -109,6 +109,80 @@ class PersistentLaplacianSpec extends Specification:
     }
   }
 
+  "the kernel of the persistent Laplacian" should {
+    // Vertices a, b, c, d = 0..3 at 0; the loop abc at 1; the edges ad, bd at 2; the triangle abd, which fills the second loop, at 3.
+    val twoLoops = explicit(
+      List(0, 1, 2, 3).map(v => (0.0, Simplex(v))) ++ List(
+        (1.0, Simplex(0, 1)),
+        (1.0, Simplex(1, 2)),
+        (1.0, Simplex(0, 2)),
+        (2.0, Simplex(0, 3)),
+        (2.0, Simplex(1, 3)),
+        (3.0, Simplex(0, 1, 3))
+      )*
+    )
+    def chainEntries(c: Chain[Simplex[Int], Double]): Map[Simplex[Int], Double] = c.terms.toMap
+
+    "be the harmonic chain of the complex where nothing enters between the two values: the hollow triangle's loop" in {
+      val laplacian = PersistentLaplacian(twoLoops, dimension = 1, from = 1.0, to = 1.0)
+      val loop = chainEntries(laplacian.kernel.head)
+      (laplacian.kernel.size must beEqualTo(1)) and
+        (loop.keySet must beEqualTo(Set(Simplex(0, 1), Simplex(1, 2), Simplex(0, 2)))) and
+        (loop.map((c, x) => c -> math.round(x * math.sqrt(3.0) * 1e9) / 1e9) must beEqualTo(
+          Map(Simplex(0, 1) -> 1.0, Simplex(1, 2) -> 1.0, Simplex(0, 2) -> -1.0)
+        ))
+    }
+
+    "be the loop that survives the filling of the other, tilted away from it, when the pair of values spans the filling" in {
+      // K_2 has the loops abc and abd; at 3 the triangle abd fills the second. The persistent kernel of 2 -> 3 is the
+      // harmonic chain of K_3 seen in K_2: abc - 1/3 abd, normalized.
+      val laplacian = PersistentLaplacian(twoLoops, dimension = 1, from = 2.0, to = 3.0)
+      val kernel = chainEntries(laplacian.kernel.head)
+      val expected = Map(
+        Simplex(0, 1) -> 2.0 / 3.0,
+        Simplex(1, 2) -> 1.0,
+        Simplex(0, 2) -> -1.0,
+        Simplex(1, 3) -> -1.0 / 3.0,
+        Simplex(0, 3) -> 1.0 / 3.0
+      ).map((c, x) => c -> x * math.sqrt(3.0 / 8.0))
+      (laplacian.kernel.size must beEqualTo(1)) and
+        (kernel.keySet must beEqualTo(expected.keySet)) and
+        (kernel.forall((c, x) => math.abs(x - expected(c)) < 1e-9) must beTrue)
+    }
+
+    "be empty before any cell has entered, and a basis of the vertices of a complex with no edge" in {
+      val points = Array(Array(0.0, 0.0), Array(1.0, 0.0), Array(2.0, 0.0))
+      val separate = VietorisRips(EuclideanMetricSpace(points), maxDimension = 1, maxFiltrationValue = 0.5)
+      (PersistentLaplacian(twoLoops, dimension = 1, from = 3.0, to = 3.0).kernel.size must beEqualTo(1)) and
+        (PersistentLaplacian(twoLoops, dimension = 1, from = 0.0, to = 3.0).kernel must beEmpty) and
+        (PersistentLaplacian(separate, dimension = 0, from = 0.0, to = 0.5).kernel.size must beEqualTo(3))
+    }
+
+    "be orthonormal vectors the matrix sends to zero, as many as the persistent Betti number, for every pair of values" in {
+      val failures = for
+        seed <- 0L until 4L
+        points = cloud(7, seed + 40)
+        rips = VietorisRips(EuclideanMetricSpace(points), maxDimension = 2, maxFiltrationValue = 100.0)
+        values = rips.iterator.map(rips.filtrationValue).toList.distinct.sorted
+        k <- 0 to 2
+        s <- values
+        t <- values
+        if s <= t
+        laplacian = PersistentLaplacian(rips, k, s, t)
+        vectors = laplacian.kernel.map(v => laplacian.cells.map(c => chainEntries(v).getOrElse(c, 0.0)))
+        image = vectors.map(v => laplacian.matrix.toArray.map(row => row.zip(v).map(_ * _).sum))
+        gram = vectors.map(a => vectors.map(b => a.zip(b).map(_ * _).sum))
+        orthonormal = gram.indices.forall(i =>
+          gram.indices.forall(j => math.abs(gram(i)(j) - (if i == j then 1.0 else 0.0)) < 1e-8)
+        )
+        killed = image.forall(_.forall(x => math.abs(x) < 1e-8))
+        if vectors.size != laplacian.bettiNumber || !orthonormal || !killed
+      yield s"seed $seed, dimension $k, from $s to $t: ${vectors.size} vectors, Betti ${laplacian.bettiNumber}, " +
+        s"orthonormal $orthonormal, killed $killed"
+      failures.take(2) must beEmpty
+    }
+  }
+
   /** The library's matrix against the Schur complement computed from the boundary matrices of the brute-force complex:
     * none if the matrix to invert is singular, `Some(None)` if the two agree.
     */

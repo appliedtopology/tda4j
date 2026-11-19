@@ -296,7 +296,7 @@ cocycles only. `computeAllRepresentatives` forces the chains before returning (c
 `Engine.Auto` chooses the engine when `Parallel.threads > 1`, the input is a Vietoris-Rips metric space, there is no
 `includeZeroLength`, and `ParallelRipser.supports` (a prime up to 46,000, indices that fit 63
 bits). Edge ranks are a dense `n x n` table up to `DenseRankLimit` (4,096) points and sorted neighbour lists above it, so memory
-follows the edges within the threshold; the one `n`-squared cost left is the distance pass that builds the edge list. `Persistence`'s `threads` option runs the call in `Parallel.withThreads(n)` (a fork-join pool of that size on the
+follows the edges within the threshold. The edge list comes from the space's `neighbourListsWithin`: a Euclidean cloud above the distance cache (`MaxCachedPoints`, 8,192 points) answers with one vantage-point-tree query per point on all threads, and the lists, and the longest edge the verb reads off them, are those of the pass over all pairs bit for bit; where a query would measure more than a quarter of the points (a threshold that keeps most pairs), or for any other space, the `n`-squared pass builds them. `Persistence`'s `threads` option runs the call in `Parallel.withThreads(n)` (a fork-join pool of that size on the
 JVM, none in JavaScript), and the lazy chains keep the count they were made under (`Parallel.limit`, `Parallel.limited`).
 The MATLAB facade and the CLI do the same through `threads`, and send an unset `engine` for the Vietoris-Rips complex over
 `Z/p` (no `includeZeroLength`, no `edgeCollapse`) to this engine when `Parallel.threads > 1` (`parallelVR`); `engine=ripser`
@@ -379,10 +379,17 @@ harmonic chains `ker ∂_p ∩ ker ∂_{p+1}ᵀ` along a simplex-wise filtration
 
 `HarmonicChainBarcode` is Algorithm 1 of Hou, Parsa and Wang. One `Run` inserts the cells in the order value, then
 dimension, then the stream's order within a dimension (`insertionOrder`; `ofOrder` takes any order). A positive cell
-creates a harmonic cycle: the cycle that the standard reduction records for it (the `V` column), made orthogonal to an
-orthogonal basis of all cycles of its degree kept so far (Gram-Schmidt, no square roots, so it is exact over the
-rationals); it is the unique cycle with coefficient 1 on the birth cell that is orthogonal to the older cycles, which is the
-paper's `φ`. A negative cell ends the oldest alive chain that is not orthogonal to its boundary, and subtracts a multiple
+creates a harmonic cycle: the unique cycle with coefficient 1 on the birth cell that is orthogonal to the older cycles,
+which is the paper's `φ`. `Orthogonalization` chooses how it is found. `GramSchmidt` (the default) takes the cycle that the
+standard reduction records for the cell (the `V` column) and makes it orthogonal to an orthogonal basis of all cycles of the
+degree kept so far (no square roots, so it is exact over the rationals). `LaplacianSolve` keeps no basis: with `∂` the
+boundary of the cells of the degree that entered before the cell, the chain is `z = e_σ + ∂ᵀy` where `(∂∂ᵀ) y = -∂ e_σ`,
+solved by conjugate gradient (exact over the rationals, where it finishes in as many steps as the rank), and the memory is the
+boundaries and an index of the cofaces. Over the rationals the two give the same chains, term for term. Over the reals every
+decision of the algorithm is a comparison with the field's tolerance, so on a large complex with many nearly tied values a
+cycle that is almost orthogonal to a boundary can be judged differently, and the two can pair a few bars differently,
+and `Coefficients.Rationals` gives the exact pairing. The solve therefore stops only when its residual is zero to far below the tolerance, and
+says what to use instead if it cannot get there. A negative cell ends the oldest alive chain that is not orthogonal to its boundary, and subtracts a multiple
 of it from the others that are not. The invariants that the specs test, against oracles that share no code with the
 algorithm: the number of bars alive at each value is the Betti number there; the births and deaths are those of the
 ordinary barcode; every chain is a cycle orthogonal to all boundaries at every value of its bar (Definition 11 of the
@@ -392,12 +399,16 @@ paper); the barcode equals the one read off the zigzag of the harmonic spaces by
 Cox). It reuses the `Run`'s snapshots of the harmonic chains at the values involved, and for each group of bars with one
 pair of endpoints solves `P^{s,t} = M^{s,t} ∩ (N^{s,t})^⊥` in coordinates of the chains at the birth value; the specs check it
 against the definition of `P` written out in chain coordinates over the rationals. It depends on the filtration's values
-and not on how equal values are ordered.
+and not on how equal values are ordered. With `representatives = Representatives.Cocycles` it gives the harmonic cocycle of
+each bar instead: cochains and chains share one coordinate system (the cells are orthonormal), so the harmonic cochains are
+the harmonic chains, but the maps of the persistence module of cohomology go from a later value to an earlier one and are the
+orthogonal projections of the harmonic spaces, so the bar `[s, t)` is born, in cohomology, at the last value before `t`, and the
+same construction runs with the values reversed.
 
 What does not carry over from the engines above: clearing and apparent pairs give each cell's sign but not the
 pairing the harmonic rule chooses, and a reduction of the complex (discrete Morse theory, edge collapse) changes the inner
-product, so it changes the harmonic barcode. The memory is the orthogonal cycle basis; the cost is cubic in the number
-of cells in the worst case.
+product, so it changes the harmonic barcode. The cost is cubic in the number of cells in the worst case; the memory is the
+orthogonal cycle basis of a degree with `GramSchmidt` and the boundaries of the degree with `LaplacianSolve`.
 
 ## Querying a run: the cursor
 

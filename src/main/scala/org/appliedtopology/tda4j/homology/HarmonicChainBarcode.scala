@@ -48,6 +48,24 @@ import scala.collection.mutable
   */
 object HarmonicChainBarcode:
 
+  /** How the chain a positive cell creates is made orthogonal to every older cycle (the step of Algorithm 1 that costs
+    * memory). Both give the same chain: the one cycle with coefficient 1 on the cell that is orthogonal to the cycles
+    * of the complex before it. Over the rationals the two agree term for term. Over the reals every decision of the
+    * algorithm is a test against the field's tolerance, so on a large complex with many near ties a cycle that is
+    * almost orthogonal to a boundary can be judged differently by the two, and a few bars are then paired differently;
+    * `Coefficients.Rationals` gives the exact pairing.
+    *
+    *   - `GramSchmidt`: the orthogonal basis of all the cycles of the degree is kept, and the new chain is
+    *     orthogonalised against it. The basis grows with every positive cell and holds a dense chain for each.
+    *   - `LaplacianSolve`: nothing is kept but the boundaries and an index of the cofaces. With `z = e_σ + ∂ᵀ y`, `y`
+    *     solves `(∂ ∂ᵀ) y = -∂σ` on the cells of the degree below, the boundary `∂` being that of the cells of `σ`'s
+    *     dimension that entered before it (conjugate gradient, which finishes exactly over the rationals). The memory
+    *     is a fraction of the basis; over the reals the solve stops when its residual is zero to the field's tolerance,
+    *     and gives up with an error that names the alternatives if it does not get there.
+    */
+  enum Orthogonalization:
+    case GramSchmidt, LaplacianSolve
+
   /** The harmonic chain barcode of `stream` in degrees `0..maxDimension` (default: the stream's own degree limit if it
     * has one, else 2, as for [[Persistence]]). The cells of dimension `maxDimension + 1` are the ones that close
     * classes of degree `maxDimension`, so a stream built with `VietorisRips(points, maxDimension = k)` holds them for
@@ -57,10 +75,11 @@ object HarmonicChainBarcode:
     stream: StratifiedCellStream[CellT, Double],
     maxDimension: Optional[Int] = Optional.empty,
     coefficients: Optional[Coefficients] = Optional.empty,
-    includeZeroLength: Boolean = false
+    includeZeroLength: Boolean = false,
+    orthogonalization: Orthogonalization = Orthogonalization.GramSchmidt
   ): PersistenceDiagram[CellT] =
     val degree = degreeFor(stream, maxDimension)
-    ofOrder(insertionOrder(stream, degree), degree, coefficients, includeZeroLength)
+    ofOrder(insertionOrder(stream, degree), degree, coefficients, includeZeroLength, orthogonalization)
 
   // The top degree asked for, checked against what the stream was built for (as the verb does).
   private[tda4j] def degreeFor[CellT: OrderedCell](
@@ -89,7 +108,8 @@ object HarmonicChainBarcode:
     stream: StratifiedCellStream[CellT, Double],
     dimension: Int,
     value: Double,
-    coefficients: Coefficients
+    coefficients: Coefficients,
+    orthogonalization: Orthogonalization = Orthogonalization.GramSchmidt
   ): Vector[Chain[CellT, coefficients.C]] =
     zeroCharacteristic(Optional(Some(coefficients)))
     import coefficients.given
@@ -98,7 +118,8 @@ object HarmonicChainBarcode:
     order.map(_._2).filter(_ <= value).lastOption match
       case None        => Vector.empty
       case Some(level) =>
-        val run = new Run[CellT, coefficients.C](degree, order, includeZeroLength = true, Set(level))
+        val run =
+          new Run[CellT, coefficients.C](degree, order, includeZeroLength = true, Set(level), orthogonalization)
         run.execute()
         run.chainsAt(dimension, level)
 
@@ -130,13 +151,15 @@ object HarmonicChainBarcode:
     order: Seq[(CellT, Double)],
     maxDimension: Int,
     coefficients: Optional[Coefficients] = Optional.empty,
-    includeZeroLength: Boolean = false
+    includeZeroLength: Boolean = false,
+    orthogonalization: Orthogonalization = Orthogonalization.GramSchmidt
   ): PersistenceDiagram[CellT] =
     require(maxDimension >= 0, s"HarmonicChainBarcode: maxDimension must be >= 0, got $maxDimension")
     val field = zeroCharacteristic(coefficients)
     import field.given
     val tracked = trackedOrder(order, maxDimension)
-    val bars = new Run[CellT, field.C](maxDimension, tracked, includeZeroLength).execute()
+    val bars =
+      new Run[CellT, field.C](maxDimension, tracked, includeZeroLength, orthogonalization = orthogonalization).execute()
     PersistenceDiagram[CellT, field.C](
       bars,
       maxDimension,
@@ -178,7 +201,8 @@ object HarmonicChainBarcode:
     maxDimension: Int,
     val order: Vector[(CellT, Double)],
     includeZeroLength: Boolean,
-    snapshotValues: Set[Double] = Set.empty
+    snapshotValues: Set[Double] = Set.empty,
+    orthogonalization: Orthogonalization = Orthogonalization.GramSchmidt
   )(using
     cells: CellT is OrderedCell,
     fr: F is Field
@@ -209,8 +233,14 @@ object HarmonicChainBarcode:
       result
 
     // The orthogonal cycle basis of each degree: one chain for each cell that created a cycle, each orthogonal to the
-    // ones before (so a basis of the cycles of the complex now), with its squared length.
+    // ones before (so a basis of the cycles of the complex now), with its squared length. Only `GramSchmidt` fills it.
     private val cycleBasis = Array.fill(maxDimension + 1)(mutable.ArrayBuffer.empty[(Vec, F)])
+
+    // `LaplacianSolve` keeps the boundaries instead: of each cell of dimension 1 to `maxDimension` entered so far, and
+    // for each face the cells that have it (with the coefficient), which are the two halves of `∂ ∂ᵀ`.
+    private val boundaries = mutable.HashMap.empty[Int, Vec]
+    private val cofaces = mutable.HashMap.empty[Int, mutable.ArrayBuffer[(Int, F)]]
+    private val entered = new Array[Int](maxDimension + 2) // cells entered so far, by dimension
 
     // The reduced boundaries of the cells of dimension `d + 1`, by pivot (their highest face), each with the chain of
     // `d + 1`-cells that has it as its boundary (the standard reduction of the boundary matrix, the second part kept).
@@ -272,13 +302,87 @@ object HarmonicChainBarcode:
       if residue.isEmpty then
         // `chain` is a new cycle, and the cell is positive: it begins a bar of degree p (past the top degree nothing is tracked)
         if p <= maxDimension then
-          val basis = cycleBasis(p)
-          for (z, norm) <- basis do add(chain, fr.negate(fr.divide(dot(chain, z), norm)), z)
-          basis += ((vec(chain), dot(chain, chain)))
-          alive(p) += Born(i, chain)
+          orthogonalization match
+            case Orthogonalization.GramSchmidt =>
+              val basis = cycleBasis(p)
+              for (z, norm) <- basis do add(chain, fr.negate(fr.divide(dot(chain, z), norm)), z)
+              basis += ((vec(chain), dot(chain, chain)))
+              alive(p) += Born(i, chain)
+            case Orthogonalization.LaplacianSolve =>
+              alive(p) += Born(i, cycleBySolve(i, p, boundary))
       else
         reduced(p - 1)(pivot) = (residue, chain)
         close(i, p - 1, boundary)
+      if orthogonalization == Orthogonalization.LaplacianSolve && p >= 1 && p <= maxDimension then
+        boundaries(i) = boundary
+        for (face, coefficient) <- boundary do
+          cofaces.getOrElseUpdate(face, mutable.ArrayBuffer.empty) += ((i, coefficient))
+      entered(p) += 1
+
+    // The cycle through the cell `i` (of dimension `p`, a positive cell) that is orthogonal to the cycles of the cells
+    // before it: `e_i + ∂ᵀ y` with `(∂ ∂ᵀ) y = -∂ e_i`, `∂` on the cells of dimension `p` entered before `i`. It
+    // is a cycle because `∂ (e_i + ∂ᵀ y) = ∂ e_i + ∂ ∂ᵀ y = 0`, orthogonal to the older cycles because `∂ᵀ y` is in the
+    // row space of `∂`, which is their orthogonal complement among the chains of the older cells, and it is the one
+    // chain with those properties and coefficient 1 on `e_i` (two of them differ by an older cycle orthogonal to
+    // all of them), so it is the Gram-Schmidt step's chain.
+    private def cycleBySolve(i: Int, p: Int, boundary: Vec): Vec =
+      val chain = vec(Seq(i -> fr.one))
+      if p >= 1 then
+        val y = solveLaplacian(vec(boundary.map((face, x) => face -> fr.negate(x))), entered(p - 1))
+        for (face, potential) <- y; (cell, coefficient) <- cofaces.getOrElse(face, Nil) do
+          val updated = fr.plus(chain.getOrElse(cell, fr.zero), fr.times(coefficient, potential))
+          if fr.isEqual(updated, fr.zero) then chain.remove(cell) else chain.update(cell, updated)
+      chain
+
+    // `(∂ ∂ᵀ) v` on the cells of the degree below `p`, `∂` on the cells of dimension `p` entered so far: through the
+    // cofaces of the support of `v`, then the boundaries of the cells reached; the work follows the support.
+    private def laplacian(v: Vec): Vec =
+      val through = new Vec
+      for (face, x) <- v; (cell, coefficient) <- cofaces.getOrElse(face, Nil) do
+        through.update(cell, fr.plus(through.getOrElse(cell, fr.zero), fr.times(coefficient, x)))
+      val result = new Vec
+      for (cell, y) <- through; (face, coefficient) <- boundaries(cell) do
+        result.update(face, fr.plus(result.getOrElse(face, fr.zero), fr.times(coefficient, y)))
+      result.filterInPlace((_, x) => x != fr.zero)
+
+    // `L y = b` for the symmetric positive semidefinite `L` of `laplacian` and a `b` in its range (so a solution
+    // exists), by conjugate gradient from `y = 0` until every entry of the residual is zero for the field: exactly
+    // over the rationals, in at most `rank L <= unknowns` steps; to the field's tolerance over the reals, where the
+    // recurrence must not drop small entries (it would stop the directions being conjugate: only exact zeros leave a
+    // vector) and may take a few more steps than unknowns. `unknowns` is the number of cells below.
+    private def solveLaplacian(b: Vec, unknowns: Int): Vec =
+      // into += factor * from, dropping only the entries that are exactly zero
+      def accumulate(into: Vec, factor: F, from: collection.Map[Int, F]): Unit =
+        for (k, x) <- from do
+          val updated = fr.plus(into.getOrElse(k, fr.zero), fr.times(factor, x))
+          if updated == fr.zero then into.remove(k) else into.update(k, updated)
+      // Zero for the field after scaling by 2^10: exact fields are unmoved, and the tolerance of an approximate one
+      // tightens a thousandfold, so that the cycle is orthogonal to the older ones well inside the tolerance with which
+      // `close` later tells whether a boundary is orthogonal to a cycle.
+      val scale = (1 to 10).foldLeft(fr.one)((x, _) => fr.plus(x, x))
+      def converged(r: Vec): Boolean = r.valuesIterator.forall(x => fr.isEqual(fr.times(x, scale), fr.zero))
+      val y = new Vec
+      val r = vec(b)
+      val direction = vec(r)
+      var rho = dot(r, r)
+      var steps = 0
+      while !converged(r) do
+        steps += 1
+        if steps > 2 * unknowns + 50 then
+          throw new IllegalStateException(
+            s"HarmonicChainBarcode: the conjugate gradient solve for a new cycle did not converge in $steps steps; " +
+              "try Coefficients.Rationals, or Orthogonalization.GramSchmidt"
+          )
+        val image = laplacian(direction)
+        val alpha = fr.divide(rho, dot(direction, image))
+        accumulate(y, alpha, direction)
+        accumulate(r, fr.negate(alpha), image)
+        val next = dot(r, r)
+        val beta = fr.divide(next, rho)
+        for (k, x) <- direction.toSeq do direction.update(k, fr.times(beta, x))
+        accumulate(direction, fr.one, r)
+        rho = next
+      y
 
     // The cell numbered `i` is negative: it closes a class of degree d. The oldest harmonic chain that is not orthogonal
     // to its boundary ends; the others that are not have a multiple of it subtracted, so that they are orthogonal.

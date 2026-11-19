@@ -99,6 +99,8 @@ __all__ = [
     "persistence_from_relation",
     "persistent_laplacian",
     "persistent_laplacian_from_distances",
+    "persistent_laplacian_of_map",
+    "persistent_laplacian_of_map_from_distances",
     "product_bars",
     "relative_persistence",
     "relative_persistence_from_distances",
@@ -228,7 +230,9 @@ def harmonic_chain_barcode(points, **options) -> Result:
 
     Harmonic needs an inner product, so ``field`` is ``"R"`` (the default here; ``epsilon`` is the tolerance) or ``"Q"``
     (exact rational numbers), and ``"Z"`` is an error. Options: ``max_dimension``, ``max_filtration_value``, ``field``,
-    ``epsilon``, ``include_zero_length`` and the bar options."""
+    ``epsilon``, ``orthogonalization`` (``"gram-schmidt"``, the default, or ``"laplacian-solve"``, which keeps only the
+    boundaries and takes a fraction of the memory on a large complex; over ``"R"`` the two can pair a few bars
+    differently when many values nearly tie), ``include_zero_length`` and the bar options."""
     return Result(_java().harmonicChainBarcodeFromPoints(_jvm.points_in(points), _jvm.options_in(options)))
 
 
@@ -245,7 +249,8 @@ def harmonic_representatives(points, **options) -> Result:
     """The ordinary barcode of the Vietoris-Rips complex of a point cloud, the representative of each bar the harmonic
     cycle at its birth (Basu and Cox): picked out by the persistence module alone, so it does not depend on the order
     of cells of equal value. The options of ``harmonic_chain_barcode`` except ``include_zero_length`` (a bar of length
-    zero has no such cycle)."""
+    zero has no such cycle), and ``representative_type="cocycles"`` for the harmonic cocycle of each bar (at the last
+    value of its life) instead of its cycle."""
     return Result(_java().harmonicRepresentativesFromPoints(_jvm.points_in(points), _jvm.options_in(options)))
 
 
@@ -519,8 +524,10 @@ def _laplacian(java) -> PersistentLaplacian:
         cells=[tuple(int(v) for v in cell) for cell in java.cells()],
         matrix=_jvm.matrix_out(java.matrix(), int(java.size())),
         eigenvalues=_jvm.vector_out(java.eigenvalues()),
+        kernel=_jvm.matrix_out(java.kernel(), int(java.size())),
         betti_number=int(java.bettiNumber()),
         spectral_gap=float(java.spectralGap()) if java.hasSpectralGap() else None,
+        weights=_jvm.vector_out(java.weights()),
     )
 
 
@@ -539,6 +546,45 @@ def persistent_laplacian_from_distances(distances, dimension: int, start: float,
     return _laplacian(
         _java().persistentLaplacianFromDistanceMatrix(
             _jvm.points_in(distances, "distances"), int(dimension), float(start), float(stop)
+        )
+    )
+
+
+@translating
+def persistent_laplacian_of_map(
+    source_points, target_points, vertex_map, dimension: int, start: float, stop: float
+) -> PersistentLaplacian:
+    """The persistent Laplacian of a simplicial map between two Vietoris-Rips complexes: ``vertex_map[i]`` is the index of
+    the point of ``target_points`` that the point ``i`` of ``source_points`` goes to, the complex of the source is taken at
+    the scale ``start`` and that of the target at ``stop``. The matrix is on the simplices of the given dimension of the
+    target that the map hits, and its kernel has the dimension of the rank of the map on homology (``betti_number``). The
+    map has to be simplicial; if it is not, this says which simplex has no image. A simplex that several simplices of the
+    source go onto counts for as many (``weights``)."""
+    return _laplacian(
+        _java().persistentLaplacianOfMapFromPoints(
+            _jvm.points_in(source_points, "source_points"),
+            _jvm.points_in(target_points, "target_points"),
+            _jvm.ints_in(vertex_map, "vertex_map"),
+            int(dimension),
+            float(start),
+            float(stop),
+        )
+    )
+
+
+@translating
+def persistent_laplacian_of_map_from_distances(
+    source_distances, target_distances, vertex_map, dimension: int, start: float, stop: float
+) -> PersistentLaplacian:
+    """``persistent_laplacian_of_map`` for two matrices of distances."""
+    return _laplacian(
+        _java().persistentLaplacianOfMapFromDistanceMatrices(
+            _jvm.points_in(source_distances, "source_distances"),
+            _jvm.points_in(target_distances, "target_distances"),
+            _jvm.ints_in(vertex_map, "vertex_map"),
+            int(dimension),
+            float(start),
+            float(stop),
         )
     )
 

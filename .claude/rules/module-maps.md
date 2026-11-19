@@ -73,4 +73,15 @@ paths:
   `t < d`; `from`/`to` compare with `<=`, so the cells are those with value `<= s` (a `<` here is the first thing the barcode oracle catches).
 - The chains are those of `K_t` with boundary in `K_s`, NOT the cells of `K_s`: the projector is the whole content (`PersistentLaplacianSpec`,
   the three-vertex example). Real coefficients, dense matrices, orthonormal cell basis; the stream needs its cells one dimension up.
+- **`Result` and `MapResult` share `Spectrum`** (matrix, eigenvalues, `bettiNumber`, `spectralGap`, `kernel` as chains, `weights`); every rank
+  has an absolute floor of `1e-9` (`FloorOfRank`), because `DenseMatrix.svd.rank` is relative to the largest singular value and a
+  matrix that is zero to rounding counts its noise as rank (it silently zeroed the up part of the map Laplacian).
+- **`PersistentLaplacian.ofMap`** (Gülen-Mémoli-Wan-Wang, `WORKLOG-persistent-laplacian-map.md`): the Laplacian of a simplicial map on the `k`-simplices
+  of the target that it hits. Unit weights on the source, `w(tau)` = number of simplices mapped onto `tau` for the target (so `F` is a
+  partial isometry in orthonormal coordinates); `Delta = (F B Q)(F B Q)^T + (E Q')(E Q')^T`, `Q`/`Q'` null-space bases. The up part
+  takes the boundaries of the target that are images of CYCLES of the source, not of any chain: an inclusion cannot tell the two apart
+  (a boundary inside the image is a cycle of the source), so only a map whose image holds a cycle of the target that no
+  cycle of the source maps onto catches it (`three separate edges onto the sides of a triangle`). Oracles: the paper's Example 13/15/16 matrix,
+  the inclusion Laplacian, and the rank of the map on homology from boundary matrices over `Z/32003`. The source needs its
+  `(k+1)`-simplices (they weight the target's). Facades: `persistentLaplacianOfMap...`; not built: weights on the source.
 

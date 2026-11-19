@@ -128,6 +128,31 @@ object ParallelPackedCohomology:
         case LargerIndexFirst  => "larger-index-first"
         case SmallerIndexFirst => "smaller-index-first"
 
+  // The edges `{a, b}` with `a < b` of neighbour lists, in the order the pass over all pairs collects them (`b` ascending,
+  // then `a` ascending): a list is ascending, so the entries below `b` open the list of `b`.
+  private def lowerEdges(lists: NeighbourLists, n: Int): (Array[Int], Array[Int], Array[Double]) =
+    val count = lists.entryCount / 2
+    val as = new Array[Int](count)
+    val bs = new Array[Int](count)
+    val ls = new Array[Double](count)
+    var k = 0
+    var b = 0
+    while b < n do
+      var e = lists.offsets(b)
+      val end = lists.offsets(b + 1)
+      while e < end && lists.targets(e) < b do
+        as(k) = lists.targets(e)
+        bs(k) = b
+        ls(k) = lists.distances(e)
+        k += 1
+        e += 1
+      b += 1
+    require(
+      k == count,
+      s"ParallelPackedCohomology: neighbour lists that are not symmetric ($k edges below, $count pairs)"
+    )
+    (as, bs, ls)
+
   /** The edges of a metric within a threshold, ranked by length and then by an [[EdgeTies]] order, with each edge's
     * rank looked up in a dense `n x n` table (up to [[DenseRankLimit]] points) or in sorted neighbour lists. A rank is
     * a position in the filtration order of the edges: it is what `Space` files a simplex under, and what
@@ -140,24 +165,31 @@ object ParallelPackedCohomology:
     // How edges of one length are ranked.
     val edgeTies: EdgeTies = EdgeTies.Lexicographic,
     // Neighbour lists even where the dense table would do: for tests of the large-n layout.
-    forceSparseRanks: Boolean = false
+    forceSparseRanks: Boolean = false,
+    // The neighbours of every point within the threshold, when the metric finds them faster than the pass over all pairs
+    // (`FiniteMetricSpace.neighbourListsWithin`): the edges are read off them, in the order the pass collects them. By
+    // name, so a caller does not hold the lists while the engine runs.
+    edgeLists: => Option[NeighbourLists] = None
   ):
     val sparseRanks: Boolean = forceSparseRanks || n > DenseRankLimit
     val rank: Array[Int] = if sparseRanks then new Array[Int](0) else Array.fill(n * n)(-1)
     private val (ea, eb, el) =
-      val as = mutable.ArrayBuilder.ofInt()
-      val bs = mutable.ArrayBuilder.ofInt()
-      val ls = mutable.ArrayBuilder.ofDouble()
-      for b <- 0 until n; a <- 0 until b do
-        val l =
-          distance(b, a) // the larger first, as ripser.cpp and `ExplicitMetricSpace` read it; a row of a cached matrix
-        if l <= threshold then
-          require(
-            as.length < MaxEdges,
-            s"ParallelPackedCohomology: more than $MaxEdges edges within the threshold; lower the filtration value"
-          )
-          as += a; bs += b; ls += l
-      val (a0, b0, l0) = (as.result(), bs.result(), ls.result())
+      val (a0, b0, l0) = edgeLists match
+        case Some(lists) => lowerEdges(lists, n)
+        case None        =>
+          val as = mutable.ArrayBuilder.ofInt()
+          val bs = mutable.ArrayBuilder.ofInt()
+          val ls = mutable.ArrayBuilder.ofDouble()
+          for b <- 0 until n; a <- 0 until b do
+            // the larger first, as ripser.cpp and `ExplicitMetricSpace` read it; a row of a cached matrix
+            val l = distance(b, a)
+            if l <= threshold then
+              require(
+                as.length < MaxEdges,
+                s"ParallelPackedCohomology: more than $MaxEdges edges within the threshold; lower the filtration value"
+              )
+              as += a; bs += b; ls += l
+          (as.result(), bs.result(), ls.result())
       val tieBefore = EdgeTies.before(edgeTies, a0, b0)
       val order = SortIndices.sort(
         a0.length,
@@ -268,7 +300,14 @@ object ParallelPackedCohomology:
     */
   open class EdgeRankedMetricSpace(base: FiniteMetricSpace[Int], threshold: Double, ties: EdgeTies)
       extends FiniteMetricSpace[Int]:
-    val ranking: EdgeRanking = EdgeRanking(base.size, base.distance(_, _), threshold, ties)
+    val ranking: EdgeRanking =
+      EdgeRanking(
+        base.size,
+        base.distance(_, _),
+        threshold,
+        ties,
+        edgeLists = base.neighbourListsWithin(threshold, Long.MaxValue)
+      )
 
     /** The largest rank: every edge within the threshold is at most this. */
     def limit: Double = ranking.edgeA.length.toDouble
@@ -302,8 +341,10 @@ object ParallelPackedCohomology:
     // How edges of one length are ranked.
     edgeTies: EdgeTies = EdgeTies.Lexicographic,
     // Which of two simplices of one block is older.
-    val blockOrder: BlockOrder = BlockOrder.LargerIndexFirst
-  ) extends EdgeRanking(nPoints, distance, threshold0, edgeTies, forceSparseRanks):
+    val blockOrder: BlockOrder = BlockOrder.LargerIndexFirst,
+    // The neighbours within the threshold when the metric finds them faster than the pass over all pairs: see `EdgeRanking`.
+    edgeLists: => Option[NeighbourLists] = None
+  ) extends EdgeRanking(nPoints, distance, threshold0, edgeTies, forceSparseRanks, edgeLists):
     /** `binom(q)(v)` = C(v, q), for simplices of up to `maxDim + 2` vertices. */
     val binom: Array[Array[Long]] = Array.tabulate(maxDim + 3, n + 1)((q, v) => SimplexIndexing.binomial(v, q))
     // C(n, q) is not monotone in q: the largest index over every size used.
