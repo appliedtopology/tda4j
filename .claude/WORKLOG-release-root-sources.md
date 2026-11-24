@@ -56,3 +56,11 @@ Not checked here: `sonaUpload`, `sonaRelease` (credentials), the GitHub Actions 
   `OutOfMemoryError` in the compiler's class writer; 6 GB was fine. A local `sbt` script reads `.jvmopts` (2 GB), which was
   enough for CI and local runs before; if Mikael's machine hits an OutOfMemoryError in `Test/compile`, raise it.
 - The shallow clone of this container needs `receive.shallowUpdate true` on a scratch bare remote to take a push.
+
+## CI on the pull request (#357)
+
+Every check was green except the JVM `test` job, twice: an `OutOfMemoryError` in `BowyerWatsonSpec` on a runner that was 1.5-100x
+slower than usual, then, on the one re-run, 261 of 262 specs and a silent stall in `MatlabTabsSpec` until the 30-minute timeout.
+The same sources pass on `scala` in a manual run (4 min 19 s), with the same runner image and disk cache, and the diff cannot
+change what that job compiles or runs. `MatlabTabsSpec` alone, 18 runs under four times oversubscription: no hang. Cause not
+found; the evidence and the open questions are in issue #358.
