@@ -383,11 +383,21 @@ lazy val tda4j = (projectMatrix in file("."))
 
 // The root aggregates both builds (`sbt test`, `clean`, `scalafmtAll` and `publishSigned` reach each); it publishes nothing
 // itself. A command that means something for one platform names its project: `tda4j/doc`, `tda4jJS/npmPack`.
+//
+// It compiles nothing either, and that needs saying: its base directory is the checkout's, so sbt gives it the default
+// `src/{main,test}/scala` too. Those are the matrix rows' sources, and compiled as the root's own they have neither the
+// libraries nor the compiler flags of `commonSettings` ("Not found: cats", "Illegal context bound: ... does not take type
+// parameters"), so every unqualified `sbt test`, `sbt "clean ; test"` and `sbt release` (whose `runTest` is the root's
+// `test`) failed on that third copy before reaching a spec.
 lazy val root = (project in file("."))
   .aggregate(tda4j.projectRefs *)
   .settings(
     name := "tda4j-root",
-    publish / skip := true
+    publish / skip := true,
+    Compile / unmanagedSourceDirectories := Nil,
+    Compile / unmanagedResourceDirectories := Nil,
+    Test / unmanagedSourceDirectories := Nil,
+    Test / unmanagedResourceDirectories := Nil
   )
 
 // No `mimaBinaryIssueFilters`: 0.7.0 starts a fresh series, whose baseline is empty (see mimaBaselineVersions). A
