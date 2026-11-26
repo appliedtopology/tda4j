@@ -159,6 +159,41 @@ node3 -> node2;
           </div>
          </div>
         </div>
+        <div class="documentableElement" id="stableByKey-fffffcdb">
+         <div class="documentableElement-expander">
+          <button class="icon-button ar show-content"></button>
+          <div class="header monospace mono-medium">
+           <div class="signature">
+            <span class="modifiers"></span><span class="kind"><span t="k">def </span></span><a href="SortIndices$.html#stableByKey-fffffcdb" t="n" class="documentableName ">stableByKey</a>(<span t="k"></span><span t="k"></span><span data-unresolved-link="" t="n">keys</span>: <span data-unresolved-link="" t="t">Array</span>[<span data-unresolved-link="" t="t">Double</span>], <span t="k"></span><span data-unresolved-link="" t="n">arrangement</span>: <span data-unresolved-link="" t="t">Array</span>[<span data-unresolved-link="" t="t">Int</span>]): <span data-unresolved-link="" t="t">Array</span>[<span data-unresolved-link="" t="t">Int</span>]
+           </div>
+          </div>
+         </div>
+         <div class="docs">
+          <span class="modifiers"></span>
+          <div>
+           <div class="originInfo"></div>
+           <div class="memberDocumentation">
+            <div class="documentableBrief doc">
+             <p>The elements of <code>arrangement</code> (indices into <code>keys</code>) stably sorted by <code>keys</code>, smallest first, as <code>java.lang.Double.compare</code> orders them: equal keys stay in the order of <code>arrangement</code>. The keys travel with the indices through the merges, so every pass reads memory in sequence and no comparison goes through a function: this is the sort of the edges of a complex by length, whose ties <code>arrangement</code> has already put in the order wanted.</p>
+            </div>
+            <div class="cover">
+             <div class="doc">
+              <p>The elements of <code>arrangement</code> (indices into <code>keys</code>) stably sorted by <code>keys</code>, smallest first, as <code>java.lang.Double.compare</code> orders them: equal keys stay in the order of <code>arrangement</code>. The keys travel with the indices through the merges, so every pass reads memory in sequence and no comparison goes through a function: this is the sort of the edges of a complex by length, whose ties <code>arrangement</code> has already put in the order wanted.</p>
+             </div>
+             <h2 class="h200">Attributes</h2>
+             <dl class="attributes attributes-small">
+              <dt class="body-small">
+               Source
+              </dt>
+              <dd class="body-medium">
+               <a href="https://github.com/appliedtopology/tda4j/blob/scala/src/main/scala/org/appliedtopology/tda4j/homology/SortIndices.scala#L47" target="_blank">SortIndices.scala</a>
+              </dd>
+             </dl>
+            </div>
+           </div>
+          </div>
+         </div>
+        </div>
        </div>
       </section>
      </div>
