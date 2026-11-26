@@ -56,3 +56,7 @@ difference as an `Option[String]` (`must beNone`), or collect the failures (`wro
 (`WORKLOG-layered-inorder.md`).
 The rendering also costs time: `beEqualTo` on a 5,000-element listing took 3.5 s; where the failure text is not needed,
 `(a == b) must beTrue` (`WORKLOG-test-suite-audit.md`).
+It builds an edit-distance table of the two sides when they are EQUAL too: two listings of 8,400 bars held 1.4 GB live
+and turned #357's merge-queue runs red with `OutOfMemoryError` in whichever spec allocated next. A spec that holds a
+listing of thousands of entries compares it with `==`; to tell whether one spec is the hog, run it alone at `-Xmx512M`
+(`WORKLOG-test-heap-neighbour-queries.md`).

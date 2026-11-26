@@ -69,6 +69,13 @@ jobs:
       # Fix locally with `sbt scalafmtAll scalafmtSbt`.
       - name: Formatting
         run: sbt --server "scalafmtSbtCheck ; scalafmtCheck ; Test / scalafmtCheck"
+      # The root project only aggregates the two platform builds and compiles nothing of its own. Its base directory is the
+      # checkout's, so unless `build.sbt` empties its source directories it gets `src/{main,test}/scala` too, and every
+      # unqualified `sbt test`, `sbt "clean ; test"` and `sbt release` dies on that third copy of the sources, which has none of
+      # the libraries and compiler flags of the platform builds. `aggregate := false` keeps the compile on the root alone: with no
+      # sources this takes seconds, with them it fails with the errors a release meets.
+      - name: The root project has no sources
+        run: sbt --server "set root / Compile / compile / aggregate := false ; set root / Test / compile / aggregate := false ; root/Test/compile"
 
   # A pull request's changelog entry is a file in changelog.d/ (changelog.d/README.md), not a line of CHANGELOG.md: two pull
   # requests that add to the same list conflict, and the merge queue drops the second. No build, so it runs on every pull

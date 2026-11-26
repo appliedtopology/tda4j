@@ -84,8 +84,10 @@ class NeighbourQueriesEnginesSpec extends Specification:
       (order, flat(fromLists) == flat(fromPass), fromLists.edgeA.length)
     }
     val runs = Seq(fast, slow).map(ParallelRipser.run(_, 1, t, 17, withPairs = false))
+    // `==` and a Boolean, not `beEqualTo` on the two listings: specs2 builds an edit-distance table of them, even when
+    // they are equal, and 8,000 x 8,000 bars is 1.4 GB (`rules/testing.md`, "Compare big values")
     (rankings.filter(!_._2) must beEmpty) and (rankings.map(_._3).distinct.size must beEqualTo(1)) and
-      (runs.head.bars must beEqualTo(runs.last.bars)) and (runs.head.longestEdge must beEqualTo(scanLongest)) and
+      ((runs.head.bars == runs.last.bars) must beTrue) and (runs.head.longestEdge must beEqualTo(scanLongest)) and
       (runs.last.longestEdge must beEqualTo(scanLongest))
   }
 

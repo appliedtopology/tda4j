@@ -24,7 +24,7 @@ after every job below passes locally.
 
 | CI job (workflow) | what CI runs | run locally | fix |
 |---|---|---|---|
-| `lint` (`lint.yml`) | `sbt "scalafmtSbtCheck ; scalafmtCheck ; Test / scalafmtCheck"` | the same | `sbt scalafmtAll scalafmtSbt` |
+| `lint` (`lint.yml`) | `sbt "scalafmtSbtCheck ; scalafmtCheck ; Test / scalafmtCheck"`, then `sbt "set root / Compile / compile / aggregate := false ; set root / Test / compile / aggregate := false ; root/Test/compile"` (the root project must compile no sources: a source in it fails an unqualified `sbt test` and `sbt release`) | the same | `sbt scalafmtAll scalafmtSbt`; for the second, keep `build.sbt`'s `root` free of source directories |
 | `test` (`test.yml`) | `sbt "clean ; tda4j/test"` on a fresh runner, then `sbt tda4j/assembly` and the jar run on `noisy-circle.csv` (exactly one degree-1 bar) | `sbt clean tda4j/testFull`; `sbt tda4j/assembly` and the same run | root-cause it; never skip, disable or loosen a test |
 | `test-js` (`test.yml`) | `sbt "clean ; tda4jJS/test"` with Node 22 | the same (Node 20.16 or newer) | root-cause it; a spec that needs a JVM moves to `src/test/scalajvm`, a failure on shared code is fixed in the shared code (`rules/scalajs.md`) |
 | `npm-package` (`test.yml`) | `sbt tda4jJS/npmPack`, then install the tarball into an empty project and run the library and `npx tda4j` | the same | the step that failed names it |

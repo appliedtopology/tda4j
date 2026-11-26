@@ -34,6 +34,10 @@ checkout files through `checkout` (the build's base directory), never `baseDirec
   `fastLinkJS`), not at `compile`. Run a link after touching shared code.
 - Scala.js forbids binding `js.Dynamic.global` to a value (`val g = js.Dynamic.global` fails to compile): select from it
   in place (`js.Dynamic.global.process`), test existence with `js.typeOf`.
+- **The root project has no sources of its own**: `build.sbt` empties its source and resource directories, and `lint.yml`
+  checks it. Its base directory is the checkout's, so by default it compiles `src/` a third time without the libraries
+  and compiler flags of `commonSettings`, and an unqualified `sbt test`, `sbt "clean ; test"` or `sbt release` (whose
+  `runTest` is the root's `test`) fails on "Not found: cats" and "Illegal context bound" (`WORKLOG-release-root-sources.md`).
 - A name that exists on both platforms (an object `FileAccess`, a trait `CubicalImagePlatform`) is defined once in
   `scalajvm` and once in `scalajs`, with the same API and a restricted (`private[tda4j]`) visibility; never in `scala`.
 
