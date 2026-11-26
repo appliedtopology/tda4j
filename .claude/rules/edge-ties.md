@@ -2,6 +2,10 @@
 paths:
   - "src/main/scala/org/appliedtopology/tda4j/homology/ParallelPackedCohomology.scala"
   - "src/main/scala/org/appliedtopology/tda4j/homology/ParallelRipser.scala"
+  - "src/main/scala/org/appliedtopology/tda4j/homology/ForestColumns.scala"
+  - "src/main/scala/org/appliedtopology/tda4j/homology/CofacetStreams.scala"
+  - "src/test/scalajvm/org/appliedtopology/tda4j/homology/ParallelForestColumnsSpec.scala"
+  - "src/test/scalajvm/org/appliedtopology/tda4j/homology/ParallelCofacetStreamsSpec.scala"
   - "src/test/scalajvm/org/appliedtopology/tda4j/homology/ParallelEdgeTiesSpec.scala"
   - "src/test/scalajvm/org/appliedtopology/tda4j/homology/ParallelBlockOrderSpec.scala"
   - "src/test/scala/org/appliedtopology/tda4j/matlab/EdgeTiesFacadeSpec.scala"
@@ -45,3 +49,14 @@ on tie-heavy input, is nil on generic input, and is within noise for `ParallelRi
   defined per tool in the worklog; ripser-forest's and the hybrid's own counters are raw (forest's `columns` is its `reduced`).
   The tie-heavy inputs are `experiment` cases (`lattice32`, `equilateral60`): the paper's cases have no equal distances to show
   anything. A change to `Stats` or to a counting build's output format updates the parsers and `WorkCountTests`.
+- **Columns by the maximal-facet forest, working columns as cofacet streams** (`ForestColumns`, `CofacetStreams.scala`; the edge-block paper's
+  forest and stream results, `WORKLOG-paper-optimizations.md`). `Space.forestColumns` finds the columns of a degree without listing
+  its simplices: the leaves of the forest that are not minimal children, in one depth-first pass per step over an adjacency bit
+  matrix that grows with the edges (vertex order: label order for `SmallerIndexFirst`, reversed for `LargerIndexFirst`). It applies
+  with one-word keys, dense ranks and apparent pairs from the block's edge, and not when the run keeps its pairs (cycles need the
+  zero-length apparent pairs as pivots). `Space.streams` keeps a working column as lazy `CofacetStream`s in a heap (the cofacets of
+  a column in filtration order, by walking the neighbour lists sorted by edge rank), so a reduced column is stored as its `V`
+  (`Owner.vKeys`, `lead`), never as `R`: read `R` as the coboundary of the cocycle (`coboundaryOf`), or from a `streams = false` run.
+  The reduction is term for term the heap run's (pairs, logs, additions, cocycles: `ParallelCofacetStreamsSpec`, mutation-checked;
+  two mutants survive and are equivalent: the bound-before-cofacet tie-break and `<` for `<=` in the `pp` walk). Both default on.
+  The edge ranking sorts by length with a primitive stable merge after arranging the ties (`EdgeTies.sortByLength`).

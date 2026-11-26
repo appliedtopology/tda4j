@@ -92,6 +92,10 @@ the counting builds are slower, and TDA4j's work mode is not timed. The three nu
 | `skipped` | `simplices - columns`: cleared by a pivot of the degree below, or paired by an apparent pair | `cleared + apparent` |
 | `additions` | `additions + apparent_additions` | the three phases' column additions |
 
+TDA4j's count lists every simplex of a degree as a column, as ripser.cpp does; the engine itself (`Engine.ParallelRipser`) never lists
+them, it finds the columns by the maximal-facet forest (`ForestColumns`), and `forest=true` counts those instead (`simplices` is then the
+forest's leaves and `apparent` is 0; `reduced` and `additions` are the same either way, `ParallelForestColumnsSpec`).
+
 ripser.cpp's own `apparent` and `cleared` are not those of TDA4j (it counts a simplex in an apparent pair as apparent whether it is the
 column or the row, and clears only the pivots that are not apparent), which is why the comparable fields are the three above and not
 those. On the 12 × 12 lattice (`--dim 2 --threshold 10`) ripser.cpp's `-DEDGE_LEXICOGRAPHIC` build and TDA4j with `ties=reverse-colexicographic

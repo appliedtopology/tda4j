@@ -50,13 +50,13 @@ longer stream's bars up to the limit; the fast cubical/alpha engines take `maxDi
    tree (`ChainPackedRipserReference`) term for term, essentials included (`PackedWorkingColumnSpec`): re-run it after any
    change to the reduction (`WORKLOG-vr-working-column.md`). The heap needs ONE diameter per simplex: non-trusted metrics
    are read as `d(max, min)` (else an asymmetric one grows the column until OOM); Euclidean/Explicit are read as given
-   (canonicalizing breaks the distance cache's row-wise walk). Edge-block units on threads are exact (#192, #194; a binary tree over them does not shorten the serial rest:
-   `WORKLOG-tree-merge.md`); `Engine.ParallelRipser` runs them from the verb (`Auto` picks it with `Parallel.threads > 1` when it applies: prime
+   (the distance cache is read by rows). Edge-block units on threads are exact (#192, #194, `WORKLOG-tree-merge.md`); `Engine.ParallelRipser` runs them from the verb (`Auto` picks it with `Parallel.threads > 1` when it applies: prime
    <= 46,000, no `includeZeroLength`; edge ranks are dense up to `DenseRankLimit` = 4,096 points, sorted neighbour lists
    above: `WORKLOG-sparse-ranks.md`; facade and CLI likewise for an unset `engine`; `threads` runs under
    `Parallel.withThreads`). Its representatives are `LazyChain`s (cocycles from the logs; cycles from one parallel
    `Involution` pass), so they may differ from `Ripser`'s in ties; shared code (one thread on Scala.js). Compare pivots
-   with `Ordering.Long` explicitly where the chains' reversed `given` is in scope (`WORKLOG-parallelism.md`). Under a sparse threshold cofacets come from per-vertex
+   with `Ordering.Long` explicitly where the chains' reversed `given` is in scope (`WORKLOG-parallelism.md`). Its columns are
+   found by the maximal-facet forest and its working columns are cofacet streams (`rules/edge-ties.md`). Under a sparse threshold cofacets come from per-vertex
    NEIGHBOUR LISTS (`NeighbourLists`) in the all-vertex scan's order with bit-identical diameters (`NeighbourListsSpec`).
    A uniform sign flip of every coboundary changes no output: sign mutations must be non-uniform. Per-simplex state is
    PRIMITIVE (`Level`, `Pairing` rows, `ClearedSet`, `LongIntMap`; `WORKLOG-packed-engine-memory.md`): no per-pair object.

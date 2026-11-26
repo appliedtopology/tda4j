@@ -37,6 +37,28 @@ class SortIndicesSpec extends Specification:
       failures.take(3) must beEmpty
     }
 
+    "sort by key on primitive arrays, keeping the arrangement's order among equal keys, as the comparison sort does" in {
+      val rng = new scala.util.Random(33L)
+      val failures = for
+        n <- sizes
+        (name, ints) <- inputs(n, rng)
+        // Doubles with a negative zero and its twin, the one place `Double.compare` and `<` part
+        keys = ints.map(i => if i % 7 == 3 then -0.0 else if i % 7 == 4 then 0.0 else i.toDouble)
+        // an arrangement that is not the identity
+        arrangement = rng.shuffle(keys.indices.toList).toArray
+        expected = SortIndices
+          .sort(
+            n,
+            (x, y) =>
+              val c = java.lang.Double.compare(keys(arrangement(x)), keys(arrangement(y)))
+              c < 0
+          )
+          .map(arrangement)
+        if !java.util.Arrays.equals(SortIndices.stableByKey(keys, arrangement), expected)
+      yield s"$name, $n keys"
+      failures.take(3) must beEmpty
+    }
+
     "keep equal keys in their original order when a descending comparison is asked for" in {
       val rng = new scala.util.Random(32L)
       val keys = Array.fill(500)(rng.nextInt(5))

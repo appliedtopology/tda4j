@@ -25,9 +25,19 @@ class ParallelPackedCohomologySpec extends Specification with ScalaCheck:
     threshold: Double,
     p: Int,
     ripserApparent: Boolean = false,
-    wide: Boolean = false
+    wide: Boolean = false,
+    streams: Boolean = true
   ) =
-    Space(metricSpace.size, metricSpace.distance(_, _), threshold, maxDim, p, ripserApparent, forceWide = wide)
+    Space(
+      metricSpace.size,
+      metricSpace.distance(_, _),
+      threshold,
+      maxDim,
+      p,
+      ripserApparent,
+      forceWide = wide,
+      streams = streams
+    )
 
   private def reduce(sp: Space, threads: Int, unitsPerThread: Int): Result =
     Parallel.withThreads(threads)(persistence(sp, threads, unitsPerThread, cocycles = true, keepPairs = true))
@@ -101,8 +111,11 @@ class ParallelPackedCohomologySpec extends Specification with ScalaCheck:
   // delta(V) = R for every column the reduction changed: R its stored reduced column, or zero for an essential one.
   private def cocyclesValid(metricSpace: FiniteMetricSpace[Int], p: Int, wide: Boolean = false): TestResult =
     val sp = space(metricSpace, 2, Double.PositiveInfinity, p, wide = wide)
+    // the reduced columns come from the run that keeps every entry of them (cofacet streams store only V)
+    val storing = space(metricSpace, 2, Double.PositiveInfinity, p, wide = wide, streams = false)
     TestResult.foreach(Seq((1, 1), (3, 1000))) { (t, u) =>
       val r = reduce(sp, t, u)
+      val stored = reduce(storing, t, u)
       TestResult
         .foreach(r.degrees) { d =>
           val essential = d.essential.toSet
@@ -110,7 +123,7 @@ class ParallelPackedCohomologySpec extends Specification with ScalaCheck:
             val expected =
               if essential(c) then Map.empty[Long, Int]
               else
-                val o = d.reduced(c)
+                val o = stored.degrees(d.degree).reduced(c)
                 o.keys.zip(o.coefs).toMap
             coboundaryOf(sp, d.degree + 1, cocycle(d, p, c)) == expected
           }
