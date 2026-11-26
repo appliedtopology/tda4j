@@ -2,6 +2,8 @@ package org.appliedtopology.tda4j
 
 import cats.Show
 
+import scala.compiletime.asMatchable
+
 /** A vector of `Double`s of fixed length: the point and direction type of the geometric code (`AlphaShapes.Point`,
   * [[Hyperplane]], [[Hypersphere]]) and the right-hand side of [[DenseMatrix]] solves.
   *
@@ -67,7 +69,7 @@ final class DenseVector private (private val entries: Array[Double]):
       s"cannot $action vectors of different lengths (${entries.length} and ${that.entries.length})"
     )
 
-  override def equals(other: Any): Boolean = other match
+  override def equals(other: Any): Boolean = other.asMatchable match
     case that: DenseVector =>
       (this eq that) || (entries.length == that.entries.length && {
         var same = true

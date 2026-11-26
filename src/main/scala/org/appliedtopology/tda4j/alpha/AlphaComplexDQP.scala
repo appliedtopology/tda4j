@@ -1072,7 +1072,10 @@ open class AlphaComplexDQPBuilder(
     for k <- 2 to maxDimension do solveDimension(k, buildCandidates(k, nbrs, alive, presentRows))
 
     if settings.enforceMonotonicity then
-      for k <- 1 to maxDimension do clampMonotone(k, present, rowValues, vertexValues)
+      // wrapped, not converted: the implicit Array to IndexedSeq conversion copies on every call
+      val presentSeq = ArraySeq.unsafeWrapArray(present)
+      val rowValuesSeq = ArraySeq.unsafeWrapArray(rowValues)
+      for k <- 1 to maxDimension do clampMonotone(k, presentSeq, rowValuesSeq, vertexValues)
 
     // cellsOfDimension/iterateDimension hand out byDim(k) directly, and this order must be the exact
     // reverse of AlphaShapeDQP.filtrationOrdering (ascending weight -- monotonic in radius via radiusOf,

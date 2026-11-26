@@ -2,6 +2,8 @@ package org.appliedtopology.tda4j
 
 import cats.Show
 
+import scala.compiletime.asMatchable
+
 /** A matrix of `Double`s, stored by rows, with the two decompositions the geometric code needs: [[svd]] (singular
   * values, null directions, least squares solutions) and [[lu]] (square solves). Small and dense on purpose: it serves
   * the matrices of a handful of points in a few dimensions, and the matrices of finitely presented persistence modules;
@@ -99,7 +101,7 @@ final class DenseMatrix private (val rows: Int, val cols: Int, private val data:
   def lu(singularityThreshold: Double = DenseMatrix.DefaultSingularityThreshold): DenseMatrix.LuDecomposition =
     DenseMatrix.LuDecomposition.of(this, singularityThreshold)
 
-  override def equals(other: Any): Boolean = other match
+  override def equals(other: Any): Boolean = other.asMatchable match
     case that: DenseMatrix =>
       (this eq that) || (rows == that.rows && cols == that.cols && {
         var same = true

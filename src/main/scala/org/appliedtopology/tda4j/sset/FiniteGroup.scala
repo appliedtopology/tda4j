@@ -27,7 +27,7 @@ open class FiniteMonoid(val table: Array[Array[Int]], val names: IndexedSeq[Stri
       val assoc =
         (for a <- 0 until n; b <- 0 until n; c <- 0 until n if table(table(a)(b))(c) != table(a)(table(b)(c))
         yield s"not associative at ($a,$b,$c)").take(1)
-      range ++ unit ++ assoc
+      range.toSeq ++ unit ++ assoc
 
 /** A finite monoid whose every element has an inverse. */
 open class FiniteGroup(table: Array[Array[Int]], names: IndexedSeq[String]) extends FiniteMonoid(table, names):
