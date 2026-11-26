@@ -31,7 +31,8 @@ class ParallelEdgeTiesSpec extends Specification:
     p: Int = 17,
     ripserApparent: Boolean = false,
     wide: Boolean = false,
-    sparse: Boolean = false
+    sparse: Boolean = false,
+    streams: Boolean = true
   ) =
     Space(
       metricSpace.size,
@@ -42,7 +43,8 @@ class ParallelEdgeTiesSpec extends Specification:
       ripserApparent,
       forceWide = wide,
       forceSparseRanks = sparse,
-      edgeTies = ties
+      edgeTies = ties,
+      streams = streams
     )
 
   private def reduce(sp: Space, threads: Int = 1, unitsPerThread: Int = 1): Result =
@@ -96,6 +98,38 @@ class ParallelEdgeTiesSpec extends Specification:
         (lengths must beEqualTo(lengths.sorted))
           .and(edges(sp).toSet.size must beEqualTo(21))
           .and(edges(sp).map((a, b) => metric.distance(b, a)) must beEqualTo(lengths))
+      }
+    }
+
+    // The ranking sorts primitive arrays after arranging the ties (`EdgeTies.sortByLength`); the comparison that says
+    // "by length, then by the order" is the definition.
+    "rank the edges as the comparison of length and order says, from every kind of listing" in {
+      val rng = scala.util.Random(41L)
+      val metrics = Seq(
+        ("equilateral", equilateral(9)),
+        ("integer", integerMetric(11, 5L)),
+        ("lattice", lattice(5)),
+        ("random", EuclideanMetricSpace(Array.fill(30)(Array.fill(3)(rng.nextDouble()))))
+      )
+      TestResult.foreach(metrics) { (name, metric) =>
+        TestResult.foreach(all) { ties =>
+          val n = metric.size
+          // The listing of the pass over all pairs, and the same edges in a listing of another order
+          val listed = (for b <- 0 until n; a <- 0 until b yield (a, b)).toArray
+          TestResult.foreach(Seq(listed, rng.shuffle(listed.toList).toArray)) { listing =>
+            val as = listing.map(_._1)
+            val bs = listing.map(_._2)
+            val ls = listing.map((a, b) => metric.distance(b, a))
+            val before = EdgeTies.before(ties, as, bs)
+            val expected = SortIndices.sort(
+              as.length,
+              (x, y) =>
+                val c = java.lang.Double.compare(ls(x), ls(y))
+                c < 0 || c == 0 && before(x, y)
+            )
+            (EdgeTies.sortByLength(ties, as, bs, ls).toSeq == expected.toSeq).aka(s"$name, $ties") must beTrue
+          }
+        }
       }
     }
 
@@ -160,13 +194,15 @@ class ParallelEdgeTiesSpec extends Specification:
         TestResult.foreach(all) { ties =>
           val sp = space(grid, ties, p = p)
           val r = reduce(sp, 3, 1000)
+          // the reduced columns, stored by the run that keeps every entry of them (cofacet streams store only V)
+          val stored = reduce(space(grid, ties, p = p, streams = false), 3, 1000)
           TestResult.foreach(r.degrees) { d =>
             val essential = d.essential.toSet
             val wrong = d.logs.keys.toSeq.filterNot { c =>
               val expected =
                 if essential(c) then Map.empty[Long, Int]
                 else
-                  val o = d.reduced(c)
+                  val o = stored.degrees(d.degree).reduced(c)
                   o.keys.zip(o.coefs).toMap
               coboundaryOf(sp, d.degree + 1, cocycle(d, p, c)) == expected
             }

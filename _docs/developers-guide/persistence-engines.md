@@ -227,6 +227,20 @@ which pairs are apparent and in which zero-length pairs form.
   and for every combination above (`bench/count_work.py`, `PaperBenchmarkDriver work=true`; `bench/README.md`, "Counting
   the work").
 
+**Columns and cofacets without listing simplices.** `ParallelRipser` neither lists the simplices of a degree to find its
+columns nor keeps a working column as a heap of every entry it has collected. The simplices filed under one edge `e` are
+`e` together with a clique of the lune graph of `e`: the vertices joined to both ends of `e` by earlier edges. `ForestColumns`
+walks these cliques depth first over an adjacency bit matrix that grows with the edges. A simplex with a child is the facet of
+an apparent pair with its smallest child, so a column is a leaf that is not a minimal child, and the apparent columns are
+never visited. A working column is a set of `CofacetStream`s: the cofacets of one column come in filtration order, those in
+its own block first (ordered by the added vertex), then one to a block in the order of the edge that completes them, found by
+walking the neighbour lists of its vertices (sorted by edge rank) together and only as far as the reduction asks. A reduced
+column is stored as the column `V` of what was added to it, and its reduced column is the coboundary of that. Both are on by
+default (`Space.forestColumns`, `Space.streams`); with either off the engine does what it did before, and the specs hold the
+two equal pair for pair, addition for addition and cocycle for cocycle (`ParallelCofacetStreamsSpec`,
+`ParallelForestColumnsSpec`). A run that keeps its pairs, which is what cycles need, lists the simplices, because the
+pairing must hold the apparent pairs.
+
 ## 5. `CellularCohomologyEngine` — generic cohomology, for every cell type
 
 Persistent *co*homology, generic over `CellT: OrderedCell`: the cohomology counterpart to engine 1. It serves every

@@ -40,14 +40,19 @@ import scala.jdk.CollectionConverters.ListHasAsScala
   *     order of equal-length edges (`EdgeTies`: `lexicographic`, the default, `reverse-lexicographic`,
   *     `colexicographic`, `reverse-colexicographic`, `shuffled`) and which of two simplices of one block is older
   *     (`BlockOrder`: `larger-index-first`, the default, `smaller-index-first`); `engine=parallelverb` takes both too.
+  *     `forest=false` and `streams=false` switch off the column search by the maximal-facet forest (`ForestColumns`)
+  *     and the lazy cofacet streams (`CofacetStream`), for an A/B against the engine as it was (the bars are
+  *     identical).
   *   - `task=vr engine=parallelverb [threads=N]`: the same engine through `Persistence` (`Engine.ParallelRipser`,
   *     cocycles or cycles as `reps` says), on `threads` threads, else on `Parallel.threads` (`sequential=true`: one);
   *     the pool is made inside the timed region.
-  *   - `task=vr work=true [ties=..] [order=..] [threads=N]`: the work of the block-parallel engine, counted: one
-  *     reduction (`threads` defaults to 1, because the number of column additions can depend on how the units split),
-  *     not timed, and one JSON line with, for each degree from 1, the columns, the pivots the degree below cleared, the
-  *     apparent pairs, the columns left to reduce and the column additions, and the bars by degree
-  *     (`bench/count_work.py`). The engine is the one `Engine.ParallelRipser` runs, on the same ranks and keys.
+  *   - `task=vr work=true [ties=..] [order=..] [threads=N] [forest=true]`: the work of the block-parallel engine,
+  *     counted: one reduction (`threads` defaults to 1, because the number of column additions can depend on how the
+  *     units split), not timed, and one JSON line with, for each degree from 1, the columns, the pivots the degree
+  *     below cleared, the apparent pairs, the columns left to reduce and the column additions, and the bars by degree
+  *     (`bench/count_work.py`). The engine is the one `Engine.ParallelRipser` runs, on the same ranks and keys. Every
+  *     simplex is a column unless `forest=true`, which counts the leaves of the maximal-facet forest as the engine
+  *     finds them (`ForestColumns`; the apparent columns are never visited, so `apparent` is 0).
   *   - `task=vr collapse=true`: Vietoris-Rips after `EdgeCollapse.collapse` (the collapse is inside the timed region);
   *     the cross-tool twin of GUDHI's edge collapse.
   *   - `task=sparse eps=0.3`: Sheehy's sparse Rips (`SparseRips`, Cavanna-Jahanseir-Sheehy); points or a distance
@@ -201,7 +206,11 @@ object PaperBenchmarkDriver:
               p,
               forceWide = opts.get("wide").contains("true"),
               edgeTies = edgeTies.getOrElse(ParallelPackedCohomology.EdgeTies.Lexicographic),
-              blockOrder = blockOrder.getOrElse(ParallelPackedCohomology.BlockOrder.LargerIndexFirst)
+              blockOrder = blockOrder.getOrElse(ParallelPackedCohomology.BlockOrder.LargerIndexFirst),
+              // `forest=false` lists every simplex of a degree and `streams=false` keeps working columns in heaps of
+              // entries: the engine as it was before the maximal-facet forest and the cofacet streams (A/B).
+              forestColumns = opts.get("forest").forall(_ == "true"),
+              streams = opts.get("streams").forall(_ == "true")
             )
           Parallel
             .withThreads(threads)(ParallelPackedCohomology.persistence(space, threads, 8, cocycles = false))
@@ -548,7 +557,10 @@ object PaperBenchmarkDriver:
       dim,
       p,
       edgeTies = ties,
-      blockOrder = order
+      blockOrder = order,
+      // The columns of a degree are all its simplices, as ripser.cpp's `COUNT_WORK` counts them; `forest=true` counts the
+      // forest's leaves instead (`ForestColumns`: the simplices with a child are never visited, so `apparent` is 0).
+      forestColumns = opts.get("forest").contains("true")
     )
     val result = Parallel.withThreads(threads)(
       ParallelPackedCohomology.persistence(space, threads, if threads == 1 then 1 else 8, cocycles = true)

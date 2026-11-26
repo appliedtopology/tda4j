@@ -48,7 +48,8 @@ class ParallelBlockOrderSpec extends Specification:
     p: Int = 17,
     ripserApparent: Boolean = false,
     wide: Boolean = false,
-    sparse: Boolean = false
+    sparse: Boolean = false,
+    streams: Boolean = true
   ) =
     Space(
       metricSpace.size,
@@ -60,7 +61,8 @@ class ParallelBlockOrderSpec extends Specification:
       forceWide = wide,
       forceSparseRanks = sparse,
       edgeTies = edgeTies,
-      blockOrder = blockOrder
+      blockOrder = blockOrder,
+      streams = streams
     )
 
   private def reduce(sp: Space, threads: Int = 1, unitsPerThread: Int = 1): Result =
@@ -304,13 +306,15 @@ class ParallelBlockOrderSpec extends Specification:
         TestResult.foreach(orders) { o =>
           val sp = space(grid, EdgeTies.Colexicographic, o, p = p)
           val r = reduce(sp, 3, 1000)
+          // the reduced columns, stored by the run that keeps every entry of them (cofacet streams store only V)
+          val stored = reduce(space(grid, EdgeTies.Colexicographic, o, p = p, streams = false), 3, 1000)
           TestResult.foreach(r.degrees) { d =>
             val essential = d.essential.toSet
             val wrong = d.logs.keys.toSeq.filterNot { c =>
               val expected =
                 if essential(c) then Map.empty[Long, Int]
                 else
-                  val owner = d.reduced(c)
+                  val owner = stored.degrees(d.degree).reduced(c)
                   owner.keys.zip(owner.coefs).toMap
               coboundaryOf(sp, d.degree + 1, cocycle(d, p, c)) == expected
             }

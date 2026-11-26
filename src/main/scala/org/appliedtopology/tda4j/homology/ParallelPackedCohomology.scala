@@ -84,6 +84,65 @@ object ParallelPackedCohomology:
       z = (z ^ (z >>> 27)) * 0x94d049bb133111ebL
       z ^ (z >>> 31)
 
+    /** The edges `{as(x), bs(x)}` of lengths `ls(x)`, as the indices `x` in the order of an [[EdgeRanking]]: by length,
+      * then by `ties`. Edges listed as the pass over all pairs lists them (`bs` ascending, then `as`) are put in the
+      * order of `ties` first, by reversing or by one counting sort, and then sorted by length alone with a stable sort
+      * on primitive arrays; any other listing, and `Shuffled`, go through the comparison `before`.
+      */
+    private[tda4j] def sortByLength(ties: EdgeTies, as: Array[Int], bs: Array[Int], ls: Array[Double]): Array[Int] =
+      val m = as.length
+      def colexicographic: Boolean =
+        var x = 1
+        var ok = true
+        while ok && x < m do
+          ok = bs(x - 1) < bs(x) || bs(x - 1) == bs(x) && as(x - 1) < as(x)
+          x += 1
+        ok
+      def reversed(order: Array[Int]): Array[Int] =
+        var lo = 0
+        var hi = order.length - 1
+        while lo < hi do
+          val t = order(lo)
+          order(lo) = order(hi)
+          order(hi) = t
+          lo += 1
+          hi -= 1
+        order
+      // By `as` and then `bs`: a stable counting sort by `as` of the listing, which is by `bs`.
+      def lexicographic: Array[Int] =
+        val start = new Array[Int](math.max(as.maxOption.getOrElse(0), 0) + 2)
+        var x = 0
+        while x < m do
+          start(as(x) + 1) += 1
+          x += 1
+        x = 0
+        while x < start.length - 1 do
+          start(x + 1) += start(x)
+          x += 1
+        val order = new Array[Int](m)
+        x = 0
+        while x < m do
+          order(start(as(x))) = x
+          start(as(x)) += 1
+          x += 1
+        order
+      if ties == Shuffled || !colexicographic then
+        val tieBefore = before(ties, as, bs)
+        SortIndices.sort(
+          m,
+          (x, y) =>
+            val c = java.lang.Double.compare(ls(x), ls(y))
+            c < 0 || c == 0 && tieBefore(x, y)
+        )
+      else
+        val arrangement = ties match
+          case Colexicographic        => Array.range(0, m)
+          case ReverseColexicographic => reversed(Array.range(0, m))
+          case Lexicographic          => lexicographic
+          case ReverseLexicographic   => reversed(lexicographic)
+          case Shuffled               => throw IllegalStateException("handled above")
+        SortIndices.stableByKey(ls, arrangement)
+
     /** Whether the edge `{as(x), bs(x)}` comes before `{as(y), bs(y)}` among edges of one length. */
     private[tda4j] def before(ties: EdgeTies, as: Array[Int], bs: Array[Int]): (Int, Int) => Boolean = ties match
       case Lexicographic          => (x, y) => as(x) < as(y) || as(x) == as(y) && bs(x) < bs(y)
@@ -190,14 +249,16 @@ object ParallelPackedCohomology:
               )
               as += a; bs += b; ls += l
           (as.result(), bs.result(), ls.result())
-      val tieBefore = EdgeTies.before(edgeTies, a0, b0)
-      val order = SortIndices.sort(
-        a0.length,
-        (x, y) =>
-          val c = java.lang.Double.compare(l0(x), l0(y))
-          c < 0 || c == 0 && tieBefore(x, y)
-      )
-      (order.map(a0), order.map(b0), order.map(l0))
+      val order = EdgeTies.sortByLength(edgeTies, a0, b0, l0)
+      val m = order.length
+      val (as, bs, ls) = (new Array[Int](m), new Array[Int](m), new Array[Double](m))
+      var r = 0
+      while r < m do
+        as(r) = a0(order(r))
+        bs(r) = b0(order(r))
+        ls(r) = l0(order(r))
+        r += 1
+      (as, bs, ls)
     val edgeA: Array[Int] = ea
     val edgeB: Array[Int] = eb
     val edgeLength: Array[Double] = el
@@ -342,6 +403,12 @@ object ParallelPackedCohomology:
     edgeTies: EdgeTies = EdgeTies.Lexicographic,
     // Which of two simplices of one block is older.
     val blockOrder: BlockOrder = BlockOrder.LargerIndexFirst,
+    // Find the columns of each degree by the maximal-facet forest (`ForestColumns`) instead of listing every simplex of the
+    // degree and testing it, where that applies; `false` is the listing, the oracle of the specs.
+    val forestColumns: Boolean = true,
+    // Keep a working column as lazily generated cofacet streams (`CofacetStream`) instead of every entry of every added
+    // coboundary, where that applies; `false` is the eager heap, the oracle of the specs.
+    val streams: Boolean = true,
     // The neighbours within the threshold when the metric finds them faster than the pass over all pairs: see `EdgeRanking`.
     edgeLists: => Option[NeighbourLists] = None
   ) extends EdgeRanking(nPoints, distance, threshold0, edgeTies, forceSparseRanks, edgeLists):
@@ -357,6 +424,12 @@ object ParallelPackedCohomology:
 
     /** Whether the smaller combinatorial index is the older one (`BlockOrder.SmallerIndexFirst`). */
     val smallerFirst: Boolean = blockOrder == BlockOrder.SmallerIndexFirst
+
+    /** Whether a working column is a set of cofacet streams: one-word keys and apparent pairs from the block's edge. */
+    val byStreams: Boolean = streams && !wide && !ripserApparent
+
+    /** The neighbours of every vertex by the rank of their edges, which the streams walk (made when first needed). */
+    lazy val rankedNeighbours: RankedNeighbours = RankedNeighbours.of(this)
     // The index part of a key is `index ^ flip`: `mask - index` (the larger index sorts first) or `index`.
     private val flip: Long = if smallerFirst then 0L else mask
     // Fermat: a^(p-2); products of two residues and sums of residues and such products must fit an Int (p <= MaxPrime).
@@ -496,7 +569,13 @@ object ParallelPackedCohomology:
     val keys: Array[Long],
     val coefs: Array[Int],
     val blocks: Array[Int] = null,
-    val pivotBlock: Int = -1
+    val pivotBlock: Int = -1,
+    // With cofacet streams, the reduced column is not stored: it is the coboundary of the column `V` of what was added
+    // to it (`vKeys`, `vCoefs`; `null` when nothing was, then V is the column alone), and `lead` is its coefficient at
+    // the pivot.
+    val vKeys: Array[Long] = null,
+    val vCoefs: Array[Int] = null,
+    val lead: Int = 0
   )
 
   /** A column whose pivot left its unit: its working column (`blocks` as in `Owner`) and its reduction log so far. */
@@ -509,6 +588,10 @@ object ParallelPackedCohomology:
     val log: Log
   ):
     var additions = 0
+    // With cofacet streams: the streams of the working column, and the columns added so far with their factors.
+    private[tda4j] var streamsOf: Array[CofacetStream] = null
+    private[tda4j] var addedOwners: Array[Owner] = null
+    private[tda4j] var addedFactors: Array[Int] = null
 
   /** The columns added to one column, with their factors: V = column + sum of factor * V(added). */
   open class Log:
@@ -540,8 +623,22 @@ object ParallelPackedCohomology:
     val cofBlock = new Array[Int](space.n)
     val cofCoef = new Array[Int](space.n)
     val heap = Heap(space.wide, space.bits)
+    val col = StreamColumn(space.p)
     var added = 0
     var rowBlock = -1 // the block of the pivot `run` returned last
+    // The coefficient of a row in the coboundary of its apparent facet, as `apparentFacet` last found it.
+    var leadCoef = 0
+    // The columns added to the working column of the streams, with their factors.
+    var addedOwners = new Array[Owner](16)
+    var addedFactors = new Array[Int](16)
+    var nAdded = 0
+    def noteAdded(owner: Owner, factor: Int): Unit =
+      if nAdded == addedOwners.length then
+        addedOwners = java.util.Arrays.copyOf(addedOwners, 2 * nAdded)
+        addedFactors = java.util.Arrays.copyOf(addedFactors, 2 * nAdded)
+      addedOwners(nAdded) = owner
+      addedFactors(nAdded) = factor
+      nAdded += 1
 
   private val DEFER = Long.MinValue
 
@@ -725,6 +822,7 @@ object ParallelPackedCohomology:
       while j >= 0 && (s.ws(j) == a || s.ws(j) == b) do j -= 1
       if j < 0 then -1L
       else
+        s.leadCoef = if (j & 1) == 0 then 1 else p - 1
         val w = s.ws(j)
         var t = 0
         var i = 0
@@ -761,6 +859,7 @@ object ParallelPackedCohomology:
       while j <= k && (s.ws(j) == a || s.ws(j) == b) do j += 1
       if j > k then -1L
       else
+        s.leadCoef = if (j & 1) == 0 then 1 else p - 1
         val w = s.ws(j)
         var t = 0
         var i = 0
@@ -946,6 +1045,81 @@ object ParallelPackedCohomology:
           if log != null then log.add(owner.column, f)
     result
 
+  // A stream of the cofacets of `column` (size k), times `factor`, from the key `start` on (exclusive).
+  private def streamOf(space: Space, column: Long, columnBlock: Int, k: Int, factor: Int, start: Long): CofacetStream =
+    val vs = new Array[Int](k)
+    space.decode(space.index(column), k, vs)
+    CofacetStream(space, vs, columnBlock, factor, start)
+
+  // `run` on cofacet streams: the working column is the sum of the streams, the pivot its smallest non-cancelling key.
+  // To cancel an owned pivot, the owner's reduced column, the coboundary of its V column, is added as one stream for
+  // each column of V, each starting after the pivot: the entries up to it cancel in the sum. The result is as for `run`;
+  // the columns added, with their factors, are kept in `s` for the V column of this one.
+  private def runStreams(
+    space: Space,
+    s: Scratch,
+    k: Int,
+    lookup: (Long, Int) => Owner | Null,
+    highBlock: Int,
+    log: Log | Null
+  ): Long =
+    val p = space.p
+    var result = Long.MaxValue
+    var steps = 0
+    while result == Long.MaxValue do
+      steps += 1
+      if steps > 10_000_000 then throw IllegalStateException("the reduction of a column does not terminate")
+      val row = s.col.pivot()
+      if row < 0 then result = -1L
+      else
+        val rowBlock = space.block(row)
+        if rowBlock > highBlock then result = DEFER
+        else
+          val known = lookup(row, rowBlock)
+          val owner =
+            if known != null then known
+            else
+              val facet = apparentFacet(space, s, k, row, rowBlock)
+              if facet >= 0 then Owner(facet, rowBlock, null, null, lead = s.leadCoef) else null
+          if owner == null then
+            result = row
+            s.rowBlock = rowBlock
+          else
+            val f = (p - s.col.pivotCoefficient) * space.inverse(owner.lead) % p
+            s.col.cancel(row)
+            if owner.vKeys == null then s.col.add(streamOf(space, owner.column, owner.columnBlock, k, f, row))
+            else
+              var i = 0
+              while i < owner.vKeys.length do
+                val factor = f * owner.vCoefs(i) % p
+                if factor != 0 then
+                  s.col.add(streamOf(space, owner.vKeys(i), space.block(owner.vKeys(i)), k, factor, row))
+                i += 1
+            s.noteAdded(owner, f)
+            s.added += 1
+            if log != null then log.add(owner.column, f)
+    result
+
+  // The owner of a column that ended in a pivot, in a run on streams: V = column + sum of factor * V(added).
+  private def ownerOf(space: Space, s: Scratch, column: Long, columnBlock: Int, rowBlock: Int): Owner =
+    val lead = s.col.pivotCoefficient
+    if s.nAdded == 0 then Owner(column, columnBlock, null, null, null, rowBlock, null, null, lead)
+    else
+      val v = ModMap(space.p)
+      v.add(column, 1)
+      var i = 0
+      while i < s.nAdded do
+        val (o, f) = (s.addedOwners(i), s.addedFactors(i))
+        if o.vKeys == null then v.add(o.column, f)
+        else
+          var j = 0
+          while j < o.vKeys.length do
+            v.add(o.vKeys(j), f * o.vCoefs(j) % space.p)
+            j += 1
+        i += 1
+      val (ks, cs) = v.nonZero()
+      Owner(column, columnBlock, null, null, null, rowBlock, ks, cs, lead)
+
   // The tasks run one after the other when `threads` is 1, else on the threads `Parallel` has here.
   private def parallel(threads: Int, tasks: Int)(body: Int => Unit): Unit =
     if threads == 1 then (0 until tasks).foreach(body) else Parallel.tasks(tasks)(body)
@@ -1080,11 +1254,25 @@ object ParallelPackedCohomology:
     var cleared: Array[Long] = Array.empty
     val degrees = Vector.newBuilder[Degree]
     var assembleNanos = 0L
+    // The columns of every degree at once, when the forest finds them: then no level lists every simplex of a degree, and
+    // the columns are neither apparent nor the minimal child of an apparent pair. The pairs of the apparent simplices are
+    // not found, so a run that keeps its pairs lists the simplices.
+    val byForest = forestColumns && !keepPairs && ForestColumns.applies(space)
+    val forestOf: Array[Array[Long]] =
+      if byForest then
+        val started = System.nanoTime()
+        val found = ForestColumns.compute(space, threads)
+        assembleNanos = System.nanoTime() - started
+        found
+      else null
+    val byStreams = space.byStreams
     for d <- 0 to maxDim do
       val k = d + 1
+      if byForest && d > 0 then level = forestOf(d)
       val isCleared = (c: Long) => java.util.Arrays.binarySearch(cleared, c) >= 0
       val stats = Stats(d, level.length, cleared.length)
       stats.nanosAssemble = assembleNanos
+      if byForest then assembleNanos = 0L // the forest's time is shown once, with degree 1
       val degree = Degree(d, stats)
       val (keysOfLevel, blocksOfLevel) = (level, levelBlocks)
       def levelBlock(pos: Int): Int = if wide then blocksOfLevel(pos) else block(keysOfLevel(pos))
@@ -1112,12 +1300,40 @@ object ParallelPackedCohomology:
             val blk = levelBlock(pos)
             decode(idx, k, s.vs)
             val tau =
-              if ripserApparent then apparentCofacetByScan(space, s, k, idx, blk)
+              if byForest then -1L
+              else if ripserApparent then apparentCofacetByScan(space, s, k, idx, blk)
               else apparentCofacet(space, s, k, idx, blk)
             if tau >= 0 then
               unit.apparent += 1
               unit.pivots += tau
               if keepPairs then unit.pairs += ((column, tau))
+            else if byStreams then
+              s.col.clear()
+              s.nAdded = 0
+              s.col.add(streamOf(space, column, blk, k, 1, Long.MinValue))
+              s.added = 0
+              val log = if cocycles then Log() else null
+              val row = runStreams(space, s, k, lookup, unit.highBlock, log)
+              unit.additions += s.added
+              if row == DEFER then
+                val df = Deferred(column, blk, null, null, null, log)
+                df.streamsOf = s.col.streams
+                df.addedOwners = java.util.Arrays.copyOf(s.addedOwners, s.nAdded)
+                df.addedFactors = java.util.Arrays.copyOf(s.addedFactors, s.nAdded)
+                unit.deferred += df
+              else
+                if log != null && log.length > 0 then unit.logs(column) = log
+                if row < 0 then
+                  unit.essential += column
+                  unit.essentialBlocks += blk
+                  if keepPairs then unit.pairs += ((column, -1L))
+                else
+                  val owner = ownerOf(space, s, column, blk, s.rowBlock)
+                  if s.added > 0 then unit.reduced(column) = owner
+                  unit.owners(row) = owner
+                  unit.pivots += row
+                  unit.claimed += 1
+                  if keepPairs then unit.pairs += ((column, row))
             else
               s.heap.clear()
               val count = cofacets(space, s, k, idx, blk)
@@ -1215,19 +1431,32 @@ object ParallelPackedCohomology:
         val s = scratch.get()
         for i <- c * slice until math.min(deferred.length, (c + 1) * slice) do
           val df = deferred(i)
-          s.heap.clear()
-          for j <- df.keys.indices do
-            s.heap.push(df.keys(j), if df.blocks != null then df.blocks(j) else 0, df.coefs(j))
-          s.added = 0
-          // An unowned pivot here may still be owned by a deferred column: stop and leave it to phase 2b.
-          val row = run(space, s, k, lookupUnits, Int.MaxValue, df.log)
-          adds2a(i) = s.added
-          df.additions = s.added
-          if row == -1L then emptied(i) = true
-          val (ks, cs, bs) = s.heap.drain(p)
-          df.keys = ks
-          df.coefs = cs
-          df.blocks = bs
+          if byStreams then
+            s.col.load(df.streamsOf)
+            s.nAdded = 0
+            for j <- df.addedOwners.indices do s.noteAdded(df.addedOwners(j), df.addedFactors(j))
+            s.added = 0
+            val row = runStreams(space, s, k, lookupUnits, Int.MaxValue, df.log)
+            adds2a(i) = s.added
+            df.additions = s.added
+            if row == -1L then emptied(i) = true
+            df.streamsOf = s.col.streams
+            df.addedOwners = java.util.Arrays.copyOf(s.addedOwners, s.nAdded)
+            df.addedFactors = java.util.Arrays.copyOf(s.addedFactors, s.nAdded)
+          else
+            s.heap.clear()
+            for j <- df.keys.indices do
+              s.heap.push(df.keys(j), if df.blocks != null then df.blocks(j) else 0, df.coefs(j))
+            s.added = 0
+            // An unowned pivot here may still be owned by a deferred column: stop and leave it to phase 2b.
+            val row = run(space, s, k, lookupUnits, Int.MaxValue, df.log)
+            adds2a(i) = s.added
+            df.additions = s.added
+            if row == -1L then emptied(i) = true
+            val (ks, cs, bs) = s.heap.drain(p)
+            df.keys = ks
+            df.coefs = cs
+            df.blocks = bs
       }
       stats.nanos2a = System.nanoTime() - t2
       stats.adds2a = adds2a.sum
@@ -1245,6 +1474,14 @@ object ParallelPackedCohomology:
         val log = df.log
         val row =
           if emptied(i) then -1L
+          else if byStreams then
+            s.col.load(df.streamsOf)
+            s.nAdded = 0
+            for j <- df.addedOwners.indices do s.noteAdded(df.addedOwners(j), df.addedFactors(j))
+            s.added = 0
+            val r = runStreams(space, s, k, lookupAll, Int.MaxValue, log)
+            adds2b += s.added
+            r
           else
             s.heap.clear()
             for j <- df.keys.indices do
@@ -1260,8 +1497,11 @@ object ParallelPackedCohomology:
           if keepPairs then degree.pairs += ((df.column, -1L))
         else
           val rowBlock = s.rowBlock
-          val (ks, cs, bs) = s.heap.drain(p)
-          val owner = Owner(df.column, df.columnBlock, ks, cs, bs, rowBlock)
+          val owner =
+            if byStreams then ownerOf(space, s, df.column, df.columnBlock, rowBlock)
+            else
+              val (ks, cs, bs) = s.heap.drain(p)
+              Owner(df.column, df.columnBlock, ks, cs, bs, rowBlock)
           degree.reduced(df.column) = owner
           late(row) = owner
           latePivots += row
@@ -1295,7 +1535,7 @@ object ParallelPackedCohomology:
         System.arraycopy(chunk, 0, cleared, at, chunk.length)
         at += chunk.length
       sort(cleared, threads)
-      if d < maxDim then
+      if d < maxDim && !byForest then
         val (next, nextBlocks, elapsed) = assembleNextLevel(space, level, levelBlocks, k, threads, scratch)
         level = next
         levelBlocks = nextBlocks
